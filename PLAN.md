@@ -3,27 +3,29 @@
 ## 1. Purpose and relationship to the roadmap
 
 This is the detailed implementation plan for Phase 0 of
-[TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md). It converts the architectural decisions into
-a working, tested React repository that later map, catalog, planning, elevation,
-and Sentinel features can extend safely.
+[TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md). It converts the architectural decisions into a
+working, tested React repository that later map, catalog, planning, elevation, and
+Sentinel features can extend safely.
 
-This phase establishes infrastructure and one thin vertical smoke path. It does
-not implement the product features from later phases.
+This phase establishes infrastructure and one thin vertical smoke path. It does not
+implement the product features from later phases.
 
 ## 2. Phase status and Git boundary
 
-- Status: **planned; not implemented**.
+- Status: **implemented and verified on `feature/basic-project-infrastructure`; awaiting
+  maintainer approval**.
 - Planning branch: `feature/basic-project-infrastructure-plan`.
 - Implementation must occur on a feature branch, normally
   `feature/basic-project-infrastructure`.
 - `main` must remain unchanged until the user explicitly approves a verified
   feature-branch state.
-- No remote, push, pull request, deployment, or branch-protection change is part
-  of this phase unless separately requested.
+- A private GitHub remote was created by explicit request. No push, pull request,
+  deployment, or branch-protection change is part of this phase unless separately
+  requested.
 
-If implementation starts from this planning branch, either continue on it with a
-clearly documented commit history or create the dedicated implementation branch
-before changing application files. Do not switch to `main` to begin work.
+If implementation starts from this planning branch, either continue on it with a clearly
+documented commit history or create the dedicated implementation branch before changing
+application files. Do not switch to `main` to begin work.
 
 ## 3. Required outcome
 
@@ -34,18 +36,18 @@ documented command set that:
 - Renders a Material UI map-workbench shell in current Chrome.
 - Mounts a minimal network-free MapLibre canvas to prove WebGL integration.
 - Constructs application services through an explicit composition root.
-- Provides typed configuration, HTTP, query, local-state, persistence, and
-  diagnostics foundations.
+- Provides typed configuration, HTTP, query, local-state, persistence, and diagnostics
+  foundations.
 - Captures startup and React failures and exports a sanitized diagnostics bundle.
-- Runs automatic unit, component, infrastructure, accessibility, and Chromium
-  smoke tests.
+- Runs automatic unit, component, infrastructure, accessibility, and Chromium smoke
+  tests.
 - Builds static GitHub Pages-compatible assets.
 - Runs the same required checks automatically in GitHub Actions.
 
 ## 4. Fixed decisions
 
-These decisions are already approved by the top-level plan and should not be
-reopened during Phase 0 without a concrete blocker:
+These decisions are already approved by the top-level plan and should not be reopened
+during Phase 0 without a concrete blocker:
 
 - React functional components with strict TypeScript.
 - Vite static build; no SSR framework.
@@ -63,9 +65,9 @@ reopened during Phase 0 without a concrete blocker:
 - Current stable desktop Chrome as the supported runtime.
 - Production-safe developer mode with no automatic telemetry upload.
 
-Versions must be current stable and mutually compatible at implementation time,
-then pinned by `pnpm-lock.yaml`. Do not use `latest` ranges, prereleases, or
-unreviewed upgrade automation during the initial scaffold.
+Versions must be current stable and mutually compatible at implementation time, then
+pinned by `pnpm-lock.yaml`. Do not use `latest` ranges, prereleases, or unreviewed
+upgrade automation during the initial scaffold.
 
 ## 5. Phase non-goals
 
@@ -83,8 +85,8 @@ unreviewed upgrade automation during the initial scaffold.
 
 ## 6. Target repository structure
 
-Create files only when they contain real configuration, code, tests, or
-documentation. Do not add empty directories merely to match this diagram.
+Create files only when they contain real configuration, code, tests, or documentation.
+Do not add empty directories merely to match this diagram.
 
 ```text
 georgia-routing-planner/
@@ -164,8 +166,8 @@ georgia-routing-planner/
   AGENTS.md
 ```
 
-Exact file grouping may change if the implementation reveals a clearer boundary,
-but the dependency direction from AGENTS.md must remain intact.
+Exact file grouping may change if the implementation reveals a clearer boundary, but the
+dependency direction from AGENTS.md must remain intact.
 
 ## 7. Work packages
 
@@ -173,15 +175,15 @@ but the dependency direction from AGENTS.md must remain intact.
 
 Create:
 
-- `.gitignore` for Node, Vite, Playwright, coverage, local environment files,
-  generated catalog/diagnostic artifacts, and IDE noise.
-- `.gitattributes` that normalizes text files to LF while allowing Windows scripts
-  to opt into CRLF if any are later required.
+- `.gitignore` for Node, Vite, Playwright, coverage, local environment files, generated
+  catalog/diagnostic artifacts, and IDE noise.
+- `.gitattributes` that normalizes text files to LF while allowing Windows scripts to
+  opt into CRLF if any are later required.
 - `.editorconfig` for UTF-8, final newlines, spaces, and consistent indentation.
-- A Node version declaration using one conventional file supported by local/CI
-  tooling, pinned to the selected active LTS line.
-- `package.json` with `private: true`, ESM mode, package-manager declaration,
-  engine constraint, repository scripts, and no publish intent.
+- A Node version declaration using one conventional file supported by local/CI tooling,
+  pinned to the selected active LTS line.
+- `package.json` with `private: true`, ESM mode, package-manager declaration, engine
+  constraint, repository scripts, and no publish intent.
 
 Verification:
 
@@ -191,19 +193,19 @@ Verification:
 
 ### P0.2 Scaffold React, TypeScript, and Vite without overwriting documents
 
-Add the minimum Vite React files manually or scaffold into a temporary directory
-and apply the result selectively. Never run a generator that overwrites README,
-plans, AGENTS.md, Git history, or unrelated files.
+Add the minimum Vite React files manually or scaffold into a temporary directory and
+apply the result selectively. Never run a generator that overwrites README, plans,
+AGENTS.md, Git history, or unrelated files.
 
 Configure:
 
 - React Fast Refresh using the standard supported Vite React plugin.
 - Static asset base derived safely for local development and GitHub Pages.
-- Build-time constants for app version, commit hash, build timestamp, and build
-  mode. Missing Git metadata must degrade safely in local archives/builds.
+- Build-time constants for app version, commit hash, build timestamp, and build mode.
+  Missing Git metadata must degrade safely in local archives/builds.
 - Source aliases only where they improve imports without hiding layer boundaries.
-- Production sourcemap policy: generate private CI/debug artifacts if useful, but
-  do not expose sources unintentionally on a public deployment.
+- Production sourcemap policy: generate private CI/debug artifacts if useful, but do not
+  expose sources unintentionally on a public deployment.
 
 Verification:
 
@@ -213,8 +215,8 @@ Verification:
 
 ### P0.3 Configure strict TypeScript
 
-Use project references or separated app/Node configurations where necessary.
-Enable at minimum:
+Use project references or separated app/Node configurations where necessary. Enable at
+minimum:
 
 - `strict`
 - `noUncheckedIndexedAccess`
@@ -226,14 +228,14 @@ Enable at minimum:
 - `noUnusedParameters`, with a documented convention for intentional omissions
 - modern DOM and ECMAScript libraries compatible with current Chrome
 
-Keep Node-only tools out of the browser compilation graph. Keep test globals
-explicit rather than leaking them into production types.
+Keep Node-only tools out of the browser compilation graph. Keep test globals explicit
+rather than leaking them into production types.
 
 Verification:
 
 - `pnpm typecheck` checks application, tests, configuration, and tools as intended.
-- A deliberate `any`, unchecked index access, and invalid optional assignment each
-  fail in a temporary verification or dedicated configuration test.
+- A deliberate `any`, unchecked index access, and invalid optional assignment each fail
+  in a temporary verification or dedicated configuration test.
 
 ### P0.4 Configure formatting and linting
 
@@ -248,8 +250,8 @@ Add flat ESLint configuration with TypeScript and React rules. Include:
 - Focused architectural import restrictions so `domain` cannot import UI,
   infrastructure, storage, or map packages.
 
-Use Prettier for formatting and ESLint for code quality; do not make them fight
-over formatting rules.
+Use Prettier for formatting and ESLint for code quality; do not make them fight over
+formatting rules.
 
 Verification:
 
@@ -279,9 +281,8 @@ Initial development dependencies:
 - Mock Service Worker and `fake-indexeddb`
 - Playwright test and axe Playwright integration
 
-Turf and GPX/XML packages may be deferred until the first phase that uses them;
-do not install unused production packages merely because they appear in the
-top-level stack.
+Turf and GPX/XML packages may be deferred until the first phase that uses them; do not
+install unused production packages merely because they appear in the top-level stack.
 
 Verification:
 
@@ -301,11 +302,11 @@ Implement a small explicit composition root that constructs:
 - Dexie `AppDatabase` with an initial versioned schema.
 - Any small application services required by the shell.
 
-Expose dependencies through a typed `ApplicationServicesContext`. Fail fast with
-a useful typed error if a feature uses services outside the provider.
+Expose dependencies through a typed `ApplicationServicesContext`. Fail fast with a
+useful typed error if a feature uses services outside the provider.
 
-Do not add a dependency-injection framework, service locator, `Utils` class, or a
-single giant `AppService`.
+Do not add a dependency-injection framework, service locator, `Utils` class, or a single
+giant `AppService`.
 
 Verification:
 
@@ -318,8 +319,7 @@ Verification:
 Create a desktop-first shell containing:
 
 - Top `AppBar` with project name and disabled/placeholder global actions.
-- Left drawer with `Tracks`, `Plan`, and `Satellite` tabs and intentional empty
-  states.
+- Left drawer with `Tracks`, `Plan`, and `Satellite` tabs and intentional empty states.
 - Main map area.
 - Collapsible bottom elevation placeholder.
 - Settings entry.
@@ -332,20 +332,20 @@ Define one MUI theme with:
 - Visible keyboard focus and adequate contrast.
 - A restrained earth/satellite color direction without custom branding work.
 
-Use MUI layout primitives first. Limit CSS modules to the viewport shell and map
-sizing. Do not introduce Tailwind or another component/design library.
+Use MUI layout primitives first. Limit CSS modules to the viewport shell and map sizing.
+Do not introduce Tailwind or another component/design library.
 
 Verification:
 
 - Shell fits the supported Chrome viewport without accidental page scrolling.
-- Drawer, tabs, developer-mode activation, and elevation collapse work by mouse
-  and keyboard.
+- Drawer, tabs, developer-mode activation, and elevation collapse work by mouse and
+  keyboard.
 - Component/axe tests find no known serious accessibility violations.
 
 ### P0.8 Add a network-free MapLibre smoke canvas
 
-Render MapLibre through `react-map-gl/maplibre` using an inline or local empty
-style with a background layer only. It must make no public tile request.
+Render MapLibre through `react-map-gl/maplibre` using an inline or local empty style
+with a background layer only. It must make no public tile request.
 
 Isolate the map behind the first small facade/adapter and capture:
 
@@ -354,8 +354,8 @@ Isolate the map behind the first small facade/adapter and capture:
 - Camera snapshot for diagnostics.
 - Clean unmount/listener removal.
 
-This smoke canvas proves dependency compatibility and lifecycle handling. Real
-OSM sources, terrain, styles, and map interactions belong to Phase 1.
+This smoke canvas proves dependency compatibility and lifecycle handling. Real OSM
+sources, terrain, styles, and map interactions belong to Phase 1.
 
 Verification:
 
@@ -370,11 +370,11 @@ Create:
 - An initial Dexie database class with explicit version 1 schema for settings and
   bounded diagnostics only, unless a simpler schema is justified.
 - A tiny Zustand store for UI state such as active tab and drawer state.
-- QueryClient configuration for remote state, even though no production remote
-  query is made yet.
+- QueryClient configuration for remote state, even though no production remote query is
+  made yet.
 
-Keep one authoritative owner per state value. Do not store domain class instances
-or MapLibre objects in Zustand, TanStack Query, or Dexie.
+Keep one authoritative owner per state value. Do not store domain class instances or
+MapLibre objects in Zustand, TanStack Query, or Dexie.
 
 Verification:
 
@@ -405,13 +405,13 @@ Add non-destructive Phase 0 health checks for:
 - IndexedDB read/write and storage estimate.
 - Build/configuration consistency.
 
-Remote provider, catalog, elevation, and terrain health checks are added in their
-own phases.
+Remote provider, catalog, elevation, and terrain health checks are added in their own
+phases.
 
 Verification:
 
-- Fake secrets, headers, coordinates, filenames, and GPX-like metadata are removed
-  from exported bundles.
+- Fake secrets, headers, coordinates, filenames, and GPX-like metadata are removed from
+  exported bundles.
 - A thrown component error and unhandled rejection appear in the bundle.
 - Ring-buffer and persisted diagnostic limits are tested.
 - Logging failure cannot crash the primary application.
@@ -426,15 +426,13 @@ Create a Node-only CLI that:
 - Prints build/browser summary, fatal/recent errors, failed health checks, slow
   operations, map state, storage state, and likely next investigation areas.
 - Omits fields classified as sensitive.
-- Returns a non-zero exit code for invalid/unsupported input with an actionable
-  message.
+- Returns a non-zero exit code for invalid/unsupported input with an actionable message.
 
 Verification:
 
 - Golden valid, redacted, malformed, and unsupported-version fixtures.
 - `pnpm diagnostics:inspect -- <fixture>` produces deterministic output.
-- A bundle exported by the browser can be consumed by the CLI in an end-to-end
-  test.
+- A bundle exported by the browser can be consumed by the CLI in an end-to-end test.
 
 ### P0.12 Configure automatic tests
 
@@ -454,8 +452,8 @@ browser flows:
 - Trigger a controlled component failure and export diagnostics.
 - Run axe checks on shell, settings, and developer drawer.
 
-Enforce the coverage thresholds from TOP_LVL_PLAN.md. Keep synthetic fixtures free
-of real personal tracks and external-network dependencies.
+Enforce the coverage thresholds from TOP_LVL_PLAN.md. Keep synthetic fixtures free of
+real personal tracks and external-network dependencies.
 
 Verification:
 
@@ -483,11 +481,11 @@ pnpm build
 pnpm check
 ```
 
-Catalog commands may initially return a clear not-yet-implemented message or be
-added in Phase 2; do not create misleading scripts that appear to audit real data.
+Catalog commands may initially return a clear not-yet-implemented message or be added in
+Phase 2; do not create misleading scripts that appear to audit real data.
 
-`pnpm check` must be non-destructive and suitable for CI. Document whether it
-includes Playwright or whether CI calls `pnpm e2e` separately after `pnpm build`.
+`pnpm check` must be non-destructive and suitable for CI. Document whether it includes
+Playwright or whether CI calls `pnpm e2e` separately after `pnpm build`.
 
 ### P0.14 Add GitHub Actions checks and guarded Pages workflow
 
@@ -502,8 +500,8 @@ includes Playwright or whether CI calls `pnpm e2e` separately after `pnpm build`
 7. Install/use pinned Playwright Chromium and run browser/axe tests.
 8. Upload bounded failure artifacts.
 
-Use dependency caching supplied by the pnpm/Node actions without caching
-`node_modules` as an opaque mutable artifact.
+Use dependency caching supplied by the pnpm/Node actions without caching `node_modules`
+as an opaque mutable artifact.
 
 `pages.yml` must:
 
@@ -514,8 +512,8 @@ Use dependency caching supplied by the pnpm/Node actions without caching
 - Upload only the static `dist` output.
 - Run a post-deployment bootstrap smoke check when a real Pages URL is configured.
 
-No actual deployment is authorized during Phase 0 planning or implementation
-unless the user separately requests it.
+No actual deployment is authorized during Phase 0 planning or implementation unless the
+user separately requests it.
 
 ### P0.15 Documentation and backend-developer handoff
 
@@ -527,8 +525,8 @@ Update README with:
 - How to run each test layer.
 - How to activate developer mode and inspect a bundle.
 - How GitHub Pages base paths work.
-- The current feature branch and approval status only when appropriate; avoid
-  stale permanent branch text in product documentation.
+- The current feature branch and approval status only when appropriate; avoid stale
+  permanent branch text in product documentation.
 
 Add a short architecture decision record only for a decision that is not already
 captured clearly in README, TOP_LVL_PLAN, PLAN, or AGENTS.
@@ -558,19 +556,19 @@ Disallowed examples:
 
 ## 9. Test and acceptance matrix
 
-| Capability | Unit/component evidence | Browser/CI evidence |
-| --- | --- | --- |
-| Strict configuration | Configuration/type fixtures fail correctly | CI typecheck required |
-| Architecture boundary | ESLint or boundary test | CI lint required |
-| Application shell | RTL behavior and axe tests | Chromium shell/reload flow |
-| Local map smoke | Fake facade component states | Real network-free MapLibre canvas |
-| Composition root | Fakes replace ports cleanly | App boots from production bundle |
-| Dexie | `fake-indexeddb` schema/migration tests | Settings survive reload |
-| HTTP foundation | MSW success/error/cancel tests | No unexpected external requests |
-| Diagnostics | schema, redaction, bounds, error tests | Record/export controlled failure |
-| Diagnostics CLI | valid/invalid/golden CLI tests | Browser bundle accepted by CLI |
-| GitHub Pages path | Vite config tests where useful | Build served and reloaded under subpath |
-| Accessibility | RTL/axe targeted checks | Playwright axe plus keyboard smoke |
+| Capability            | Unit/component evidence                    | Browser/CI evidence                     |
+| --------------------- | ------------------------------------------ | --------------------------------------- |
+| Strict configuration  | Configuration/type fixtures fail correctly | CI typecheck required                   |
+| Architecture boundary | ESLint or boundary test                    | CI lint required                        |
+| Application shell     | RTL behavior and axe tests                 | Chromium shell/reload flow              |
+| Local map smoke       | Fake facade component states               | Real network-free MapLibre canvas       |
+| Composition root      | Fakes replace ports cleanly                | App boots from production bundle        |
+| Dexie                 | `fake-indexeddb` schema/migration tests    | Settings survive reload                 |
+| HTTP foundation       | MSW success/error/cancel tests             | No unexpected external requests         |
+| Diagnostics           | schema, redaction, bounds, error tests     | Record/export controlled failure        |
+| Diagnostics CLI       | valid/invalid/golden CLI tests             | Browser bundle accepted by CLI          |
+| GitHub Pages path     | Vite config tests where useful             | Build served and reloaded under subpath |
+| Accessibility         | RTL/axe targeted checks                    | Playwright axe plus keyboard smoke      |
 
 ## 10. Coverage and quality gates
 
@@ -607,8 +605,8 @@ Commits remain on the implementation feature branch. A reasonable sequence is:
 9. `docs: document infrastructure and development workflow`
 
 Combine or split commits when it improves reviewability. Do not commit broken
-intermediate states merely to match this list. Every commit intended for review
-should compile or clearly state why it is an intentionally preparatory commit.
+intermediate states merely to match this list. Every commit intended for review should
+compile or clearly state why it is an intentionally preparatory commit.
 
 ## 12. Approval checklist
 
@@ -625,8 +623,8 @@ Before asking for approval to integrate into `main`, report:
 - Known limitations, deferred work, and any deviation from this plan.
 - Confirmation that no public deployment, secret, or personal GPX data was added.
 
-Remain on the feature branch after presenting the result. Update `main` only after
-the user explicitly approves integration.
+Remain on the feature branch after presenting the result. Update `main` only after the
+user explicitly approves integration.
 
 ## 13. Definition of Phase 0 done
 
@@ -640,12 +638,11 @@ Phase 0 is done only when:
    demonstrated by real code and tests.
 5. Persistence, HTTP, remote-query, and transient-state foundations exist without
    absorbing business logic.
-6. Developer mode captures startup/component failures and exports a correctly
-   redacted bundle readable by the CLI.
+6. Developer mode captures startup/component failures and exports a correctly redacted
+   bundle readable by the CLI.
 7. GitHub Actions defines protected automatic checks and the Pages workflow cannot
    publish a feature branch.
-8. Documentation is sufficient for a backend developer to run, test, navigate,
-   and diagnose the frontend.
-9. The verified state is committed on a feature branch and presented for user
-   approval.
+8. Documentation is sufficient for a backend developer to run, test, navigate, and
+   diagnose the frontend.
+9. The verified state is committed on a feature branch and presented for user approval.
 10. No commit or merge has been made to `main` without that approval.

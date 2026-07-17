@@ -1,0 +1,82 @@
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test } from '@playwright/test';
+
+test('loads and reloads the network-free shell under a repository subpath', async ({
+  page,
+}) => {
+  const externalRequests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.protocol.startsWith('http') && url.hostname !== '127.0.0.1') {
+      externalRequests.push(request.url());
+    }
+  });
+
+  await page.goto('?developer=1');
+
+  await expect(
+    page.getByRole('heading', { name: 'Georgia Routing Planner' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('map-smoke-canvas')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  await page.getByRole('tab', { name: 'Plan' }).click();
+  await expect(page.getByRole('heading', { name: 'No active plan' })).toBeVisible();
+  await page.getByRole('button', { name: 'Collapse elevation profile' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Expand elevation profile' }),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'Georgia Routing Planner' }),
+  ).toBeVisible();
+  expect(externalRequests).toEqual([]);
+});
+
+test('has no serious accessibility violations in the shell and settings', async ({
+  page,
+}) => {
+  await page.goto('?developer=1');
+  await expect(
+    page.getByRole('heading', { name: 'Georgia Routing Planner' }),
+  ).toBeVisible();
+
+  const shellResults = await new AxeBuilder({ page }).analyze();
+  expect(
+    shellResults.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+
+  await page.getByRole('button', { name: 'Open settings' }).click();
+  const settingsDialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(settingsDialog).toBeVisible();
+  await expect
+    .poll(() =>
+      settingsDialog.evaluate((dialog) => {
+        let element: Element | null = dialog;
+
+        while (element) {
+          if (Number.parseFloat(getComputedStyle(element).opacity) < 1) {
+            return false;
+          }
+          element = element.parentElement;
+        }
+
+        return true;
+      }),
+    )
+    .toBe(true);
+  const settingsResults = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .analyze();
+  expect(
+    settingsResults.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+});

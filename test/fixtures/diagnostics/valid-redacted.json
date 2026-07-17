@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-07-18T00:00:00.000Z",
+  "build": {
+    "appVersion": "0.0.0",
+    "commit": "abc123",
+    "timestamp": "2026-07-18T00:00:00.000Z",
+    "mode": "production"
+  },
+  "runtime": {
+    "userAgent": "Synthetic Chrome",
+    "language": "en",
+    "online": true
+  },
+  "reproductionNotes": "Storage failed after a reload.",
+  "healthChecks": [
+    {
+      "name": "IndexedDB",
+      "status": "fail",
+      "durationMs": 5,
+      "summary": "Probe failed.",
+      "remediation": "Check storage permissions."
+    }
+  ],
+  "events": [
+    {
+      "id": "event-1",
+      "timestamp": "2026-07-18T00:00:01.000Z",
+      "level": "error",
+      "name": "storage.failed",
+      "message": "Storage unavailable.",
+      "data": {
+        "durationMs": 1200,
+        "status": "failed"
+      }
+    }
+  ]
+}

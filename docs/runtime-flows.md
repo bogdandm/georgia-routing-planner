@@ -29,6 +29,12 @@ a fatal alert without contacting the provider. Camera failure is recoverable: th
 uses `defaultGeorgiaCamera`. The facade registers native listeners exactly once and
 removes them during teardown.
 
+The Satellite contextual panel subscribes to the existing serializable map snapshot and
+shows the settled viewport center inside a compact source selector. Viewport is the
+current source; Marker is visible but disabled until saved-marker behavior exists. The
+panel never receives the native MapLibre object and falls back to `defaultGeorgiaCamera`
+before the first snapshot is available.
+
 ## Settled camera write
 
 1. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch.

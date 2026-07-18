@@ -36,10 +36,10 @@ src/
   infrastructure/          HTTP, IndexedDB, clock, and ID implementations
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
-    shell/                 desktop workbench and settings
+    shell/                 compact navigation rail, contextual panels, and settings
     map/                   map UI, pure style, facade, terrain, and camera coordination
     developer-tools/       local support and diagnostic UI
-    theme/                 Material UI theme
+    theme/                 shared color tokens and Material UI theme
     styles/                application-level CSS
 e2e/                       built-app Chromium workflows and provider fixtures
 test/                      shared fixtures, fakes, setup, and repository-policy tests
@@ -76,6 +76,12 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
 the native map instance to be recreated.
+
+`WorkspaceShell` only composes the persistent regions. `WorkspaceRail` owns feature
+navigation and global actions, while `WorkspaceSidebar` owns the active section's honest
+ready/deferred presentation. Shared palette values live in `appColors.ts` so the MUI
+theme and pure MapLibre style use the same visual vocabulary without introducing a
+second styling system.
 
 ## Map boundary
 

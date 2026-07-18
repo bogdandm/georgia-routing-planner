@@ -5,11 +5,20 @@ make current boundaries explicit.
 
 ## Desktop workspace
 
-The Material UI shell provides Tracks, Plan, and Satellite sections, a persistent map,
-an elevation panel placeholder, settings, and an opt-in developer drawer. The three
-product sections are deliberate empty states until their roadmap phases.
+The Material UI shell follows a map-first desktop workbench: a compact quick-access rail
+owns section navigation and settings, a contextual panel owns the active Tracks,
+Satellite, or Plan controls, and the persistent map uses the remaining viewport. The
+shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette, with
+derived surface, border, status, and tag colors. Native map navigation remains on the
+right; the 2D/3D terrain control is directly below it.
+
+The contextual controls are intentionally disabled where their roadmap feature is not
+implemented. They communicate the future layout without presenting synthetic catalog,
+plan, or imagery results. The previous full-width app bar, elevation placeholder, and
+generic privacy notice are not part of the current shell.
 
 - Owner: `src/presentation/shell`.
+- Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
 - Durable setting: developer-mode preference in Dexie.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.

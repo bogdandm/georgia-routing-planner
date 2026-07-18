@@ -1,10 +1,6 @@
-export interface MapCamera {
-  readonly longitude: number;
-  readonly latitude: number;
-  readonly zoom: number;
-  readonly bearing: number;
-  readonly pitch: number;
-}
+import type { MapCamera } from '@/application/ports/MapCameraRepository';
+
+export type { MapCamera } from '@/application/ports/MapCameraRepository';
 
 export type TerrainMode = 'flat' | 'terrain';
 

@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { createTestServices } from '../../../test/helpers/createTestServices';
@@ -75,7 +75,8 @@ describe('MapLibreFacade', () => {
   it('owns lifecycle listeners, updates snapshots, and cleans up deterministically', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
-    const facade = new MapLibreFacade(services.logger);
+    const onCameraSettled = vi.fn();
+    const facade = new MapLibreFacade(services.logger, onCameraSettled);
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
@@ -105,6 +106,14 @@ describe('MapLibreFacade', () => {
     });
     expect(nativeMap.showCollisionBoxes).toBe(true);
     expect(nativeMap.showTileBoundaries).toBe(true);
+    expect(onCameraSettled).toHaveBeenCalledOnce();
+    expect(onCameraSettled).toHaveBeenCalledWith({
+      longitude: 44.8,
+      latitude: 41.7,
+      zoom: 8,
+      bearing: 12,
+      pitch: 35,
+    });
 
     facade.destroy();
     expect(nativeMap.listenerCount()).toBe(0);

@@ -56,4 +56,35 @@ describe('MapWorkspace', () => {
       'fatal',
     );
   });
+
+  it('restores the camera before mounting the map canvas', async () => {
+    const restoredCamera = {
+      longitude: 45.2,
+      latitude: 42.4,
+      zoom: 10,
+      bearing: 18,
+      pitch: 25,
+    };
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () => Promise.resolve(restoredCamera),
+        save: () => Promise.resolve(),
+      },
+    };
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace
+          facade={new FakeMapFacade()}
+          mapCanvas={(initialCamera) => (
+            <div>Restored zoom {String(initialCamera.zoom)}</div>
+          )}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.queryByText('Restored zoom 10')).not.toBeInTheDocument();
+    await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
+  });
 });

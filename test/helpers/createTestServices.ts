@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
@@ -56,6 +57,7 @@ export function createTestServices(): RuntimeServices {
     httpClient: createHttpClient(logger),
     idGenerator,
     logger,
+    mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
     mapProviderConfiguration: {
       status: 'valid',
       value: parseMapProviderConfiguration(

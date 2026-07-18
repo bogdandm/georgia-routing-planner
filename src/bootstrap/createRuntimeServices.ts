@@ -4,6 +4,7 @@ import type { KyInstance } from 'ky';
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
   loadMapProviderConfiguration,
@@ -15,6 +16,7 @@ import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnostic
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
+import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 
@@ -27,6 +29,7 @@ export interface RuntimeServices {
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
+  readonly mapCameraRepository: MapCameraRepository;
   readonly queryClient: QueryClient;
 }
 
@@ -43,6 +46,7 @@ export function createRuntimeServices(): RuntimeServices {
     buildInfo.mode !== 'production' || developerFlag === '1',
   );
   const database = new AppDatabase(logger);
+  const mapCameraRepository = new DexieMapCameraRepository(database, clock, logger);
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
     new URL(import.meta.env.BASE_URL, globalThis.location.origin).toString(),
@@ -106,6 +110,7 @@ export function createRuntimeServices(): RuntimeServices {
     httpClient: createHttpClient(logger),
     idGenerator,
     logger,
+    mapCameraRepository,
     mapProviderConfiguration,
     queryClient,
   };

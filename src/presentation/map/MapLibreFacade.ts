@@ -29,7 +29,10 @@ export class MapLibreFacade implements MapFacade {
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
   #firstIdleRecorded = false;
 
-  public constructor(private readonly logger: DiagnosticLogger) {}
+  public constructor(
+    private readonly logger: DiagnosticLogger,
+    private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
+  ) {}
 
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
@@ -119,7 +122,9 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMoveEnd = (): void => {
     if (this.#map !== null) {
-      this.updateSnapshot({ camera: this.readCamera(this.#map) });
+      const camera = this.readCamera(this.#map);
+      this.updateSnapshot({ camera });
+      this.onCameraSettled(camera);
     }
   };
 

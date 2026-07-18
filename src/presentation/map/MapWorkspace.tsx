@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
@@ -13,12 +14,13 @@ import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { MapStatusOverlay } from '@/presentation/map/MapStatusOverlay';
+import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
-import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
+import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
 
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
-  readonly mapCanvas?: ReactNode;
+  readonly mapCanvas?: ReactNode | ((initialCamera: MapCamera) => ReactNode);
 }
 
 const unavailableMapStyle: StyleSpecification = {
@@ -28,10 +30,26 @@ const unavailableMapStyle: StyleSpecification = {
 };
 
 export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspaceProps) {
-  const { logger, mapProviderConfiguration } = useRuntimeServices();
+  const { logger, mapCameraRepository, mapProviderConfiguration } =
+    useRuntimeServices();
+  const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
+  const [cameraMessage, setCameraMessage] = useState<string | null>(null);
+  const cameraPersistence = useMemo(
+    () =>
+      new SettledCameraPersistence(mapCameraRepository, logger, () => {
+        setCameraMessage(
+          'The current camera could not be saved. Map interaction is still available.',
+        );
+      }),
+    [logger, mapCameraRepository],
+  );
   const facade = useMemo(
-    () => suppliedFacade ?? new MapLibreFacade(logger),
-    [logger, suppliedFacade],
+    () =>
+      suppliedFacade ??
+      new MapLibreFacade(logger, (camera) => {
+        cameraPersistence.schedule(camera);
+      }),
+    [cameraPersistence, logger, suppliedFacade],
   );
   const subscribe = useCallback(
     (listener: () => void) => facade.subscribe(listener),
@@ -57,10 +75,42 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
   );
 
   useEffect(() => {
+    let active = true;
+    void mapCameraRepository
+      .load()
+      .then((camera) => {
+        if (active) {
+          setRestoredCamera(camera ?? defaultGeorgiaCamera);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          logger.log({ level: 'warn', name: 'storage.map-camera.load-failed' });
+          setCameraMessage(
+            'The saved camera could not be restored. The Georgia overview is shown instead.',
+          );
+          setRestoredCamera(defaultGeorgiaCamera);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [logger, mapCameraRepository]);
+
+  useEffect(() => {
     return () => {
       facade.destroy();
+      cameraPersistence.destroy();
     };
-  }, [facade]);
+  }, [cameraPersistence, facade]);
+
+  const resolvedMapCanvas: ReactNode =
+    restoredCamera !== null && typeof mapCanvas === 'function'
+      ? mapCanvas(restoredCamera)
+      : typeof mapCanvas === 'function'
+        ? null
+        : mapCanvas;
 
   return (
     <Box
@@ -76,12 +126,12 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
           {mapProviderConfiguration.message} The basemap was not started. Check the
           deployment configuration or open developer diagnostics.
         </Alert>
-      ) : (
-        (mapCanvas ?? (
+      ) : restoredCamera === null ? null : (
+        (resolvedMapCanvas ?? (
           <Map
             ref={handleMapRef}
             attributionControl={{ compact: false }}
-            initialViewState={defaultGeorgiaCamera}
+            initialViewState={restoredCamera}
             mapStyle={mapStyle}
             reuseMaps={false}
             style={{ width: '100%', height: '100%' }}
@@ -95,6 +145,17 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
           </Map>
         ))
       )}
+      {cameraMessage !== null && mapProviderConfiguration.status === 'valid' ? (
+        <Alert
+          severity="warning"
+          onClose={() => {
+            setCameraMessage(null);
+          }}
+          sx={{ position: 'absolute', left: 16, right: 16, bottom: 16 }}
+        >
+          {cameraMessage}
+        </Alert>
+      ) : null}
       {mapProviderConfiguration.status === 'valid' ? (
         <MapStatusOverlay snapshot={snapshot} />
       ) : null}

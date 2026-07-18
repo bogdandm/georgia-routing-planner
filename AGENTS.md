@@ -104,6 +104,28 @@ Rules:
 
 ## Penpot design review workflow
 
+The canonical workspace prototype is
+[prototype 2](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334).
+Use it as the standing visual and interaction reference without asking the maintainer to
+provide the link again.
+
+Keep the prototype, active `PLAN.md`, stable feature documentation, and implemented UI
+consistent:
+
+- When review changes implemented UI layout, feature placement, or interaction
+  hierarchy, reflect the same reviewed change in the prototype and update the active
+  plan and stable documentation in the same workstream.
+- When review changes the prototype, reflect the accepted contract in the active plan,
+  stable documentation, and implementation that is currently in scope.
+- Preserve prototype features that are not implemented yet. Never replace them with the
+  application's temporary disabled controls, empty states, placeholders, or reduced
+  behavior merely to make the prototype resemble the current build.
+- Treat sample content in the prototype as illustrative unless review explicitly makes a
+  value part of the product contract. Keep computed counts, dates, coverage, and status
+  labels internally consistent when editing sample content.
+- Keep delivery sequencing and work-package progress in `PLAN.md`; keep durable
+  behavior, ownership, and failure contracts in `README.md`, `docs/`, code, and tests.
+
 When a task edits a Penpot file:
 
 - Inspect the current Penpot hierarchy before editing and preserve reviewer-made

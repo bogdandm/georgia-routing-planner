@@ -155,6 +155,27 @@ The adapter must expose raster tiles/texture data to MapLibre without changing c
 search or scene-selection workflows. STAC search, scene choice, caching, imagery UI, and
 production COG decoding remain intentionally deferred.
 
+## Phase 1 verification record
+
+The required Chromium suite uses generated local vector, glyph, and DEM fixtures and
+passed on `feature/map-foundation` on 2026-07-18. It exercises the production style,
+camera reload, 2D/3D transitions, terrain retry, vector failure, WebGL context
+loss/restoration, diagnostics, attribution focus, accessibility, and rejection of every
+unexpected public request. Public-provider availability is deliberately outside that
+required gate.
+
+The live checks recorded above independently confirmed anonymous browser CORS for the
+OpenFreeMap TileJSON and AWS terrain range request. A combined local Vite smoke in the
+Codex in-app Chrome reached the application shell, but that embedded browser exposed no
+IndexedDB API. The observation found a startup resilience gap: a non-settling camera
+read could indefinitely delay MapLibre mount. The implementation now bounds that read
+and falls back to the Georgia overview with a storage warning, with component coverage.
+
+The in-app browser's local-navigation policy prevented a post-fix live-provider rerun.
+Therefore the checklist below remains a required normal-desktop-Chrome verification
+before merge or public release; do not treat the separate endpoint and deterministic
+fixture evidence as a completed real-provider application smoke.
+
 ## Manual revalidation checklist
 
 1. Open the GitHub Pages and local origins in current stable desktop Chrome.

@@ -13,7 +13,9 @@ and Sentinel-2 imagery. It does not implement those later product features.
 
 ## 2. Phase status and Git boundary
 
-- Status: **planned; implementation has not started**.
+- Status: **implemented and automatically verified on `feature/map-foundation`; awaiting
+  maintainer approval and the normal-Chrome real-provider revalidation documented
+  below**.
 - Phase 0 is merged into `main` at the start of this plan.
 - Planning branch: `docs/phase-1-map-foundation-plan`.
 - Implementation must occur on a feature branch, normally `feature/map-foundation`.
@@ -25,6 +27,48 @@ and Sentinel-2 imagery. It does not implement those later product features.
 Phase 1 must be delivered as a sequence of small, reviewable commits. It must not be
 collapsed into one phase-sized implementation commit. Every implementation commit must
 include its relevant tests and leave the repository in a buildable, testable state.
+
+### Implementation outcome (2026-07-18)
+
+- Work packages P1.1 through P1.12 are implemented as focused commits on
+  `feature/map-foundation`; `main` remains unchanged.
+- The production defaults are OpenFreeMap/OpenMapTiles vectors plus AWS Open Data Mapzen
+  Terrarium DEM, behind a versioned Zod configuration boundary with a tracked valid
+  example.
+- Camera restoration, settled persistence, terrain transitions, provider failures,
+  MapLibre/WebGL lifecycle evidence, health checks, and the developer Map view are
+  implemented with bounded failure behavior.
+- Diagnostics schema version 2 adds a coarse (`0.1` degree) exported camera and safe map
+  snapshot; the inspection CLI migrates supported Phase 0 version 1 bundles.
+- Required browser tests use generated vector/DEM fixtures and reject unexpected public
+  requests. No runtime or development dependency was added.
+- Anonymous CORS checks succeeded for the selected vector, terrain, and Sentinel COG
+  endpoints. The combined post-fix real-provider application smoke remains outstanding
+  because the available in-app Chrome disabled IndexedDB and then blocked local
+  renavigation; [docs/map-providers.md](./docs/map-providers.md) records the observation
+  and normal-Chrome checklist.
+- No push, pull request, deployment, merge, provider secret, or personal GPX data is
+  part of this implementation.
+
+### Automated acceptance evidence (2026-07-18)
+
+- `pnpm repo:audit`, `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+  `pnpm test:integration`, `pnpm test:coverage`, `pnpm build`, `pnpm e2e`, and the
+  aggregate `pnpm check` pass on the implementation branch.
+- Unit/component evidence: 18 files and 77 tests passed. Integration evidence: 1 file
+  and 1 test passed. Chromium evidence: all 8 required flows passed against the built
+  repository-subpath application with local provider fixtures.
+- Coverage is 90.13% statements, 85.91% branches, 87.01% functions, and 89.85% lines.
+- The production provider example parses through the same Zod boundary used at startup.
+- The production build transforms 1,129 modules. Its largest emitted assets are the
+  application chunk at 785.89 kB and the isolated MapLibre chunk at 1,027.74 kB before
+  gzip (243.86 kB and 272.98 kB after gzip in the observed run). Vite reports its
+  advisory 500 kB chunk warning; no new dependency was introduced and code splitting is
+  deferred as a documented optimization rather than a Phase 1 correctness blocker.
+- The first local eight-worker browser run found that the camera scenario's 5-second
+  ready assertion was too tight under concurrent map startup. The test now uses a
+  bounded 15-second readiness window, consistent with the plan's requirement to avoid
+  brittle first-load timing thresholds; the full rerun passed 8 of 8.
 
 ## 3. Required outcome
 
@@ -645,6 +689,8 @@ smaller than the phase. Each commit includes the listed tests and must pass at l
 | `feat(diagnostics): capture bounded map and WebGL evidence` | Add aggregation, snapshot state, health hooks, bundle schema/version migration, and redaction                                  | Diagnostics/schema/CLI compatibility/integration tests    |
 | `feat(developer-tools): expose map diagnostics`             | Add developer map view, safe debug flags, health states, accessible feedback                                                   | RTL/axe and developer-mode E2E                            |
 | `test(map): harden MapLibre provider failure workflows`     | Add remaining real-map context-loss, network-isolation, and lifecycle regression cases                                         | Full `pnpm e2e` and coverage gates                        |
+| `fix(map): fall back when camera storage stalls`            | Bound initial camera restoration so unavailable browser storage cannot block MapLibre mount                                    | Component tests, typecheck, and lint                      |
+| `test(map): allow bounded startup under browser load`       | Replace the camera flow's brittle 5-second ready assertion with a bounded load-tolerant window                                 | Formatting and full `pnpm e2e`                            |
 | `docs: document Phase 1 map operation`                      | Record configuration, attribution, manual checks, README status, and plan outcome                                              | Formatting/link review and full `pnpm check`              |
 
 Small adjustments to this sequence are allowed when a reviewable dependency boundary

@@ -10,11 +10,13 @@ turn-by-turn routing.
 
 ## Status
 
-Phase 0 infrastructure is implemented and verified on a feature branch and is awaiting
-maintainer approval. The current vertical smoke path provides a strict React/TypeScript
-application, a Material UI workbench shell, a network-free MapLibre canvas, local
-settings persistence, typed service composition, diagnostics export, and automatic
-tests. Product features remain assigned to later roadmap phases.
+Phase 1 map foundation is implemented and automatically verified on
+`feature/map-foundation` and is awaiting maintainer approval. The final real-provider
+revalidation in normal desktop Chrome remains documented below. The application now
+provides a validated OpenStreetMap vector basemap, a resilient 2D/3D terrain control,
+durable settled-camera restoration, provider failure feedback, and bounded map/WebGL
+diagnostics. Catalog, planning, and satellite product features remain assigned to later
+roadmap phases.
 
 See [TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md) for the product roadmap, [PLAN.md](./PLAN.md)
 for the detailed plan for the active implementation phase, and [AGENTS.md](./AGENTS.md)
@@ -37,8 +39,10 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The local development URL printed by Vite serves the application from `/`. No public map
-or data provider is contacted by the Phase 0 canvas.
+The local development URL printed by Vite serves the application from `/`. Development
+uses the public provider defaults unless `VITE_MAP_PROVIDER_CONFIGURATION` supplies a
+validated replacement. Unit, integration, and browser tests use controlled local
+fixtures and never depend on a public provider.
 
 Playwright uses its own pinned Chromium build. Install it before the first local browser
 test:
@@ -60,7 +64,7 @@ pnpm e2e
 | `pnpm test:watch`                           | Run Vitest in watch mode.                                                |
 | `pnpm test`                                 | Run unit and React component tests.                                      |
 | `pnpm test:integration`                     | Run controlled HTTP/IndexedDB adapter tests.                             |
-| `pnpm test:coverage`                        | Enforce the Phase 0 coverage thresholds.                                 |
+| `pnpm test:coverage`                        | Enforce the repository coverage thresholds.                              |
 | `pnpm e2e`                                  | Build and test the Pages-like subpath in Chromium with axe.              |
 | `pnpm diagnostics:inspect -- <bundle.json>` | Validate and summarize an exported diagnostics bundle.                   |
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
@@ -69,7 +73,7 @@ pnpm e2e
 `catalog:audit` and `catalog:build` intentionally return a clear, non-destructive Phase
 2 placeholder error. They do not pretend that catalog processing exists yet.
 
-## Phase 0 application structure
+## Application structure
 
 The composition root in `src/bootstrap/createRuntimeServices.ts` is the only place that
 constructs browser adapters and connects them to application-facing ports. Presentation
@@ -91,15 +95,53 @@ React components render states and translate user events into named operations. 
 not call `fetch`, Dexie, or future domain calculations directly. Application/domain code
 is protected from UI, storage, HTTP, and map imports by ESLint restrictions.
 
+## Map providers and configuration
+
+The replaceable Phase 1 defaults are:
+
+- OpenFreeMap's OpenMapTiles-compatible TileJSON and glyph endpoints for the vector
+  basemap.
+- AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for optional 3D terrain.
+
+Neither default uses a credential. Provider evidence, licensing, attribution, and
+replacement constraints are recorded in
+[docs/map-providers.md](./docs/map-providers.md). The application includes a complete
+validated override example in
+[docs/map-provider-configuration.example.json](./docs/map-provider-configuration.example.json).
+For example, PowerShell can load that file before starting Vite:
+
+```powershell
+$env:VITE_MAP_PROVIDER_CONFIGURATION = Get-Content -Raw docs/map-provider-configuration.example.json
+pnpm dev
+```
+
+The value is public build-time JSON. It must not contain secrets, authorization headers,
+private query tokens, or confidential account identifiers. HTTPS and relative
+application paths are accepted. An invalid override fails closed before MapLibre mounts
+and presents a safe configuration message without echoing the input or its URLs.
+
+Provider attribution remains visible in MapLibre. The OpenFreeMap/OpenMapTiles/OSM
+credits are shown in 2D; Mapzen/AWS terrain attribution is added when the DEM source is
+used.
+
 ## Developer mode and diagnostics
 
 Developer mode is disabled by default. Enable it in Settings or add `?developer=1` to
 the application URL. The URL flag remains available when persisted settings are broken.
 
-The developer drawer shows build information, recent bounded events, and non-destructive
-browser/WebGL/IndexedDB/storage health checks. “Download diagnostics” exports a
-versioned JSON file locally. Nothing is uploaded. The export pipeline allowlists fields
-and removes tokens, headers, local Windows paths, GPX filenames, and coordinate pairs.
+The developer drawer shows build information, recent bounded events, non-destructive
+browser/WebGL/IndexedDB/storage health checks, and a dedicated Map view. The Map view
+shows the exact current camera locally, ordered source/layer IDs, terrain state,
+aggregated provider failures, WebGL capabilities, and developer-only MapLibre debug
+flags. Provider reachability is checked only after the user explicitly requests it;
+normal startup never waits for an optional provider probe.
+
+“Download diagnostics” exports a schema-version 2 JSON file locally. Nothing is
+uploaded. The export pipeline allowlists fields and removes tokens, headers, local
+Windows paths, GPX filenames, route geometry, and exact coordinates. Exported camera
+longitude/latitude are rounded to `0.1` degree; the exact persisted camera remains
+local. The inspection CLI accepts current bundles and migrates supported Phase 0 version
+1 bundles before summarizing them.
 
 Inspect a received bundle without evaluating its content:
 
@@ -109,6 +151,31 @@ pnpm diagnostics:inspect -- diagnostics-2026-07-18T10-00-00.000Z.json
 
 Invalid JSON and unsupported schema versions return a non-zero exit code with an
 actionable message.
+
+## Manual Phase 1 verification
+
+After `pnpm dev`, use current stable desktop Chrome to:
+
+1. Confirm the map reaches ready state and OpenFreeMap/OpenMapTiles/OSM attribution is
+   visible and keyboard reachable.
+2. Pan, zoom, rotate, and pitch, wait for movement to settle, reload, and confirm the
+   camera restores.
+3. Toggle 3D on and off, confirming the map is not replaced, the camera intent is
+   preserved, and terrain attribution is visible while 3D is active.
+4. Enable developer mode, inspect the Map tab, run the explicit provider checks, and
+   validate an exported bundle with `pnpm diagnostics:inspect -- <bundle.json>`.
+5. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
+   context, accessibility, and public-network isolation behavior.
+
+Known Phase 1 operating limits:
+
+- OpenFreeMap currently has no SLA and its inspected vector source stops at zoom 14.
+- The AWS S3 terrain endpoint has no SLA; native DEM coverage stops at zoom 15 and
+  higher map zooms overzoom that data.
+- There is no silent provider failover, offline-region download, or tile pre-cache.
+- A storage outage falls back to the Georgia overview after a bounded wait; the current
+  camera may not persist until storage recovers.
+- Sentinel-2 selection and rendering remain deferred to the imagery phase.
 
 ## GitHub Pages base paths
 

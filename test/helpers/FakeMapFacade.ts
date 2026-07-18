@@ -12,6 +12,9 @@ export class FakeMapFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
+  public terrainModeRequests: TerrainMode[] = [];
+  public terrainTransition:
+    ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
   public snapshot: MapDiagnosticsSnapshot = {
     lifecycle: 'loading',
     camera: defaultGeorgiaCamera,
@@ -40,6 +43,10 @@ export class FakeMapFacade implements MapFacade {
   }
 
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {
+    this.terrainModeRequests.push(mode);
+    if (this.terrainTransition !== null) {
+      return this.terrainTransition(mode);
+    }
     this.setSnapshot({ terrainMode: mode });
     return Promise.resolve({ status: 'success', mode });
   }

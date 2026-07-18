@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { describe, expect, it } from 'vitest';
 
@@ -86,5 +87,38 @@ describe('MapWorkspace', () => {
 
     expect(screen.queryByText('Restored zoom 10')).not.toBeInTheDocument();
     await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
+  });
+
+  it('keeps 2D usable after terrain failure and retries explicitly', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    let attempts = 0;
+    facade.terrainTransition = (mode) => {
+      attempts += 1;
+      return Promise.resolve(
+        attempts === 1
+          ? { status: 'failed', reason: 'Fixture terrain is unavailable.' }
+          : { status: 'success', mode },
+      );
+    };
+
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Usable 2D map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Usable 2D map');
+    await user.click(screen.getByRole('button', { name: 'Show 3D terrain map' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Fixture terrain is unavailable. The 2D basemap is still available.',
+    );
+    expect(screen.getByText('Usable 2D map')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Retry 3D' }));
+    expect(
+      screen.queryByText('Fixture terrain is unavailable.'),
+    ).not.toBeInTheDocument();
+    expect(facade.terrainModeRequests).toEqual(['terrain', 'terrain']);
   });
 });

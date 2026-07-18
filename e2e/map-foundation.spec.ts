@@ -71,3 +71,35 @@ test('persists a settled camera and restores it before interaction after reload'
   expect(cameraAfterReload?.bearing).toBeCloseTo(cameraBeforeReload?.bearing ?? 0, 4);
   expect(cameraAfterReload?.pitch).toBeCloseTo(cameraBeforeReload?.pitch ?? 0, 4);
 });
+
+test('switches between 2D and synthetic 3D terrain on the same map', async ({
+  page,
+}) => {
+  const terrainRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/elevation-tiles-prod/terrarium/')) {
+      terrainRequests.push(request.url());
+    }
+  });
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+  );
+
+  const flatButton = page.getByRole('button', { name: 'Show flat 2D map' });
+  const terrainButton = page.getByRole('button', {
+    name: 'Show 3D terrain map',
+  });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
+  await expect(page.getByText(/Terrain data:/)).toBeVisible();
+
+  await flatButton.click();
+  await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+  );
+});

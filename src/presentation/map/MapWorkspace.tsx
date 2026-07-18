@@ -1,4 +1,4 @@
-import { Alert, Box } from '@mui/material';
+import { Alert, Box, Button } from '@mui/material';
 import type { StyleSpecification } from 'maplibre-gl';
 import {
   useCallback,
@@ -15,6 +15,10 @@ import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { MapStatusOverlay } from '@/presentation/map/MapStatusOverlay';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
+import {
+  TerrainModeControl,
+  type TerrainControlState,
+} from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
 
@@ -34,6 +38,8 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
     useRuntimeServices();
   const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
+  const [terrainState, setTerrainState] = useState<TerrainControlState>('flat');
+  const [terrainMessage, setTerrainMessage] = useState<string | null>(null);
   const cameraPersistence = useMemo(
     () =>
       new SettledCameraPersistence(mapCameraRepository, logger, () => {
@@ -46,10 +52,19 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
   const facade = useMemo(
     () =>
       suppliedFacade ??
-      new MapLibreFacade(logger, (camera) => {
-        cameraPersistence.schedule(camera);
-      }),
-    [cameraPersistence, logger, suppliedFacade],
+      new MapLibreFacade(
+        logger,
+        (camera) => {
+          cameraPersistence.schedule(camera);
+        },
+        mapProviderConfiguration.status === 'valid'
+          ? {
+              terrain: mapProviderConfiguration.value.terrain,
+              requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
+            }
+          : undefined,
+      ),
+    [cameraPersistence, logger, mapProviderConfiguration, suppliedFacade],
   );
   const subscribe = useCallback(
     (listener: () => void) => facade.subscribe(listener),
@@ -69,6 +84,28 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
     (mapRef: MapRef | null) => {
       if (facade instanceof MapLibreFacade && mapRef !== null) {
         facade.attach(mapRef.getMap());
+      }
+    },
+    [facade],
+  );
+
+  const handleTerrainModeChange = useCallback(
+    async (mode: 'flat' | 'terrain') => {
+      setTerrainState(mode === 'terrain' ? 'enabling' : 'disabling');
+      setTerrainMessage(null);
+      try {
+        const result = await facade.setTerrainMode(mode);
+        if (result.status === 'success') {
+          setTerrainState(result.mode);
+          return;
+        }
+        setTerrainState('failed');
+        setTerrainMessage(result.reason);
+      } catch {
+        setTerrainState('failed');
+        setTerrainMessage(
+          'Terrain could not be enabled. The flat map remains available.',
+        );
       }
     },
     [facade],
@@ -154,6 +191,33 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
           sx={{ position: 'absolute', left: 16, right: 16, bottom: 16 }}
         >
           {cameraMessage}
+        </Alert>
+      ) : null}
+      {restoredCamera !== null && mapProviderConfiguration.status === 'valid' ? (
+        <TerrainModeControl
+          state={terrainState}
+          onModeChange={(mode) => {
+            void handleTerrainModeChange(mode);
+          }}
+        />
+      ) : null}
+      {terrainMessage !== null && mapProviderConfiguration.status === 'valid' ? (
+        <Alert
+          severity="warning"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                void handleTerrainModeChange('terrain');
+              }}
+            >
+              Retry 3D
+            </Button>
+          }
+          sx={{ position: 'absolute', top: 72, left: 12, right: 12, zIndex: 1 }}
+        >
+          {terrainMessage} The 2D basemap is still available.
         </Alert>
       ) : null}
       {mapProviderConfiguration.status === 'valid' ? (

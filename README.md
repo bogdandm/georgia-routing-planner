@@ -1,26 +1,26 @@
 # Georgia Routing Planner
 
-Georgia Routing Planner is a planned local-first web application for exploring Georgia
-with OpenStreetMap data, Sentinel-2 imagery, 3D terrain, a curated GPX track library,
-and simple manual route planning.
+[Open Georgia Routing Planner](https://bogdandm.github.io/georgia-routing-planner/)
+
+Georgia Routing Planner is a local-first web application for exploring Georgia. The
+complete system concept combines OpenStreetMap data, Sentinel-2 imagery, 3D terrain, a
+curated GPX track library, saved markers, layer controls, and straight-line GPX
+creation.
 
 The project name is provisional. In the MVP, "routing" means placing waypoints and
 connecting them with straight segments. It does not mean automatic trail-following or
 turn-by-turn routing.
 
-## Status
+## Current application
 
-Phase 1 map foundation is implemented and automatically verified on
-`feature/map-foundation` and is awaiting maintainer approval. The final real-provider
-revalidation in normal desktop Chrome remains documented below. The application now
-provides a validated OpenStreetMap vector basemap, a resilient 2D/3D terrain control,
-durable settled-camera restoration, provider failure feedback, and bounded map/WebGL
-diagnostics. Catalog, planning, and satellite product features remain assigned to later
-roadmap phases.
+The application provides a compact map workspace with Tracks, Satellite, Markers, and
+Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain;
+durable settled-camera restoration; provider failure feedback; settings; and bounded
+map/WebGL diagnostics. Unavailable feature actions are shown as disabled controls or
+explicit empty states instead of synthetic data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
-[AGENTS.md](./AGENTS.md) for required engineering conventions. `PLAN.md` and
-`TOP_LVL_PLAN.md` are temporary planning artifacts, not sources of project truth.
+[AGENTS.md](./AGENTS.md) for required engineering conventions.
 
 ## Getting started
 
@@ -70,8 +70,8 @@ pnpm e2e
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
 | `pnpm check`                                | Run all non-browser CI checks; CI invokes `pnpm e2e` separately.         |
 
-`catalog:audit` and `catalog:build` intentionally return a clear, non-destructive Phase
-2 placeholder error. They do not pretend that catalog processing exists yet.
+`catalog:audit` and `catalog:build` currently return a clear, non-destructive
+not-implemented error. They do not pretend that catalog processing exists.
 
 ## Application structure
 
@@ -86,18 +86,17 @@ State ownership is deliberate:
 | ------------------------------------------- | ------------------------------------------------- |
 | Component-local presentation state          | React `useState`/`useReducer`                     |
 | Cross-feature transient shell state         | Zustand                                           |
-| Durable settings and future local records   | Dexie/IndexedDB                                   |
-| Future remote/static request state          | TanStack Query                                    |
+| Durable camera and UI settings              | Dexie/IndexedDB                                   |
 | Business rules and workflows                | Domain/application classes and injected ports     |
 | MapLibre lifecycle and imperative map state | The map feature adapter, never a general UI store |
 
 React components render states and translate user events into named operations. They do
-not call `fetch`, Dexie, or future domain calculations directly. Application/domain code
-is protected from UI, storage, HTTP, and map imports by ESLint restrictions.
+not call `fetch`, Dexie, or domain calculations directly. Application/domain code is
+protected from UI, storage, HTTP, and map imports by ESLint restrictions.
 
 ## Map providers and configuration
 
-The replaceable Phase 1 defaults are:
+The replaceable map-provider defaults are:
 
 - OpenFreeMap's OpenMapTiles-compatible TileJSON and glyph endpoints for the vector
   basemap.
@@ -140,7 +139,7 @@ normal startup never waits for an optional provider probe.
 uploaded. The export pipeline allowlists fields and removes tokens, headers, local
 Windows paths, GPX filenames, route geometry, and exact coordinates. Exported camera
 longitude/latitude are rounded to `0.1` degree; the exact persisted camera remains
-local. The inspection CLI accepts current bundles and migrates supported Phase 0 version
+local. The inspection CLI accepts current bundles and migrates supported schema-version
 1 bundles before summarizing them.
 
 Inspect a received bundle without evaluating its content:
@@ -152,7 +151,7 @@ pnpm diagnostics:inspect -- diagnostics-2026-07-18T10-00-00.000Z.json
 Invalid JSON and unsupported schema versions return a non-zero exit code with an
 actionable message.
 
-## Manual Phase 1 verification
+## Manual map verification
 
 After `pnpm dev`, use current stable desktop Chrome to:
 
@@ -167,7 +166,7 @@ After `pnpm dev`, use current stable desktop Chrome to:
 5. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
    context, accessibility, and public-network isolation behavior.
 
-Known Phase 1 operating limits:
+Known operating limits:
 
 - OpenFreeMap currently has no SLA and its inspected vector source stops at zoom 14.
 - The AWS S3 terrain endpoint has no SLA; native DEM coverage stops at zoom 15 and
@@ -175,7 +174,7 @@ Known Phase 1 operating limits:
 - There is no silent provider failover, offline-region download, or tile pre-cache.
 - A storage outage falls back to the Georgia overview after a bounded wait; the current
   camera may not persist until storage recovers.
-- Sentinel-2 selection and rendering remain deferred to the imagery phase.
+- The application does not currently select or render Sentinel-2 imagery.
 
 ## GitHub Pages base paths
 
@@ -193,26 +192,28 @@ The checks workflow runs the frozen install, non-browser checks, production buil
 Chromium smoke flows, and axe checks. No deployment is part of feature-branch
 verification.
 
-## MVP goals
+## Complete system concept
+
+The reviewed system concept includes:
 
 - Display Sentinel-2 imagery with selected OSM trails, roads, labels, boundaries, water,
   shelters, peaks, passes, and other hiking-relevant features above it.
 - Switch between a normal 2D map and pitched 3D terrain without changing engines.
 - Browse, search, filter, and display approximately 1,200 existing GPX tracks.
 - Import an additional GPX file locally without uploading it.
-- Create a plan by adding, moving, and deleting waypoints connected by straight
+- Use `Create GPX` in Tracks to add, move, and delete waypoints connected by straight
   segments.
 - Calculate distance, elevation gain/loss, minimum/maximum elevation, and an interactive
   elevation profile.
-- Save plans and preferences locally in IndexedDB.
-- Export a plan as a standards-compliant GPX file.
+- Save Create GPX drafts and preferences locally in IndexedDB.
+- Export a Create GPX draft as a standards-compliant GPX file.
 - Enable a production-safe developer mode and export a sanitized diagnostics bundle for
   remote troubleshooting.
 - Run as a static application on GitHub Pages.
 - Support current desktop Google Chrome. Safari and legacy browsers are not project
   targets.
 
-## Explicit MVP non-goals
+## System boundaries
 
 - Automatic routing along trails or roads.
 - Accounts, cloud synchronization, or collaborative editing.
@@ -254,16 +255,24 @@ and explicitly denies MSW's optional script.
 
 ## GUI direction
 
-The interface will use a desktop map-workbench layout:
+The approved Penpot concepts are the visual and interaction source of truth. The durable
+workspace contract is recorded in [Features and workspace UX](./docs/features.md); when
+repository prose conflicts with the reviewed Penpot layout, update the prose rather than
+reinterpreting the design.
 
-- A compact left quick-access rail with `Tracks`, `Satellite`, `Markers`, and `Layers`
-  sections plus global settings and opt-in developer diagnostics.
-- A contextual sidebar for the active rail section, with optional adjacent detail panes
-  when a future workflow needs them.
+The interface uses a desktop map-workbench layout:
+
+- A compact left quick-access rail whose primary feature sections are `Tracks`,
+  `Satellite`, `Markers`, and `Layers`; `Settings` and opt-in `Diagnostics` are global
+  actions at the bottom of the rail.
+- A contextual sidebar for the active feature, with an adjacent detail pane for selected
+  tracks or imagery when the reviewed workflow needs one.
 - Manual planning launched by `Create GPX` from Tracks. Planning is a workflow, not a
-  top-level rail section.
+  top-level feature, tab, or rail section.
 - The persistent map as the primary canvas, with place search and 2D/3D controls layered
-  over the map.
+  over it. The 2D/3D selector sits below the right-side navigation/compass controls.
+- Elevation appears only in contextual track or Create GPX details when geometry exists;
+  there is no empty global elevation panel.
 - Contextual dialogs for metadata, destructive confirmation, and application settings.
 - A developer drawer, hidden by default, for logs, map/source state, requests, storage
   health, feature flags, and performance information.
@@ -277,8 +286,8 @@ Material UI cannot express cleanly.
 
 ## Architecture summary
 
-Business rules must not live in React components or Zustand stores. The planned codebase
-follows a lightweight clean architecture:
+Business rules must not live in React components or Zustand stores. The codebase follows
+a lightweight clean architecture:
 
 ```text
 React UI -> application use cases -> domain model
@@ -296,9 +305,9 @@ is not a goal; composition is preferred.
 
 ## Automatic quality gates
 
-Tests are part of normal feature development, not a final stabilization phase. Every
-pull request and relevant branch push runs a GitHub Actions pipeline that installs the
-frozen lockfile and executes:
+Tests are part of normal feature development and are not postponed to final
+stabilization. Every pull request and relevant branch push runs a GitHub Actions
+pipeline that installs the frozen lockfile and executes:
 
 1. Formatting, ESLint, and strict TypeScript checks.
 2. Domain, application, infrastructure, and React component tests.
@@ -313,9 +322,9 @@ branch is considered releasable only when all required checks pass.
 
 ## GPX collection
 
-Tracks have two independent sources. The approximately 1,200 maintainer-selected GPX
-files (under 15 MB total) will be committed to GitHub and processed into a read-only
-static catalog served by the GitHub Pages deployment. A catalog tool will generate:
+The complete system concept gives tracks two independent sources. The approximately
+1,200 maintainer-selected GPX files (under 15 MB total) form a read-only static catalog
+served by the GitHub Pages deployment. Catalog tooling produces:
 
 - Search/filter metadata.
 - Bounds and map centers.
@@ -327,9 +336,10 @@ static catalog served by the GitHub Pages deployment. A catalog tool will genera
 The browser must not fetch and parse all original files at startup.
 
 Separately, a user may import GPX files into that browser. Retained imports, personal
-folders, saved markers, and plans live only in IndexedDB and are never added to GitHub
-or uploaded automatically. The UI combines curated and local tracks without erasing
-their different ownership. See [Data model and storage ownership](docs/data-model.md).
+folders, saved markers, and Create GPX drafts live only in IndexedDB and are never added
+to GitHub or uploaded automatically. The UI combines curated and local tracks without
+erasing their different ownership. See
+[Data model and storage ownership](docs/data-model.md).
 
 ## Deployment model
 
@@ -341,6 +351,6 @@ Developer mode is part of the production application. It is activated explicitly
 settings or a documented URL flag and can export a sanitized JSON diagnostics bundle. No
 logs or usage telemetry are sent anywhere automatically.
 
-If a future feature requires a confidential OAuth client, protected API key, shared
-storage, or server-side processing, it must be introduced as a separate small
-backend/serverless component rather than weakening the static application's security.
+If a requirement introduces a confidential OAuth client, protected API key, shared
+storage, or server-side processing, it must use a separate small backend/serverless
+component rather than weakening the static application's security.

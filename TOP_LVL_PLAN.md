@@ -16,59 +16,149 @@ application. Separately, GPX files imported by a user remain private in that bro
 IndexedDB unless the user explicitly exports them. There is no runtime catalog-editing
 or upload service and local imports are never uploaded automatically.
 
-## 2. Product principles
+## 2. Product and workspace principles
 
-1. **The map is the workspace.** Controls should support the map rather than compete
-   with it.
-2. **Local first.** User-imported GPX files, personal organization, saved markers, and
-   saved plans stay in the browser.
-3. **No hidden magic.** Straight segments are visibly straight, data dates and cloud
-   cover are visible, and calculated elevation states its source.
-4. **Consistent statistics.** Catalog tracks and new plans use the same distance and
-   elevation calculation policy.
-5. **Static by default.** Do not introduce a backend until a required feature cannot be
-   implemented safely as a static application.
-6. **Readable engineering.** Domain behavior is expressed in small TypeScript classes
-   and use cases, not embedded in framework event handlers or state stores.
-7. **Pragmatic presentation.** Use Material UI as the component foundation. Do not spend
-   MVP time on custom animation, ornamental transitions, or a bespoke component system.
-8. **Diagnosable by design.** A user must be able to export enough structured evidence
-   to investigate failures without opening browser developer tools.
+The reviewed Penpot concepts are authoritative for layout, feature placement, control
+grouping, and interaction hierarchy. Repository documentation remains authoritative for
+data, privacy, architecture, and failure contracts. When UI/UX prose conflicts with the
+reviewed design, update the prose to match the design.
+
+### 2.1 The map is the persistent workspace
+
+The map remains mounted and consumes the available canvas while feature navigation,
+sidebars, detail panes, dialogs, and developer tools change around it. Controls support
+the map rather than compete with it.
+
+### 2.2 Local first
+
+User-imported GPX files, personal organization, saved markers, and saved Create GPX
+drafts stay in the browser unless the user explicitly exports them.
+
+### 2.3 No hidden magic
+
+Straight segments are visibly straight, imagery dates and cloud cover are visible, and
+calculated elevation states its source.
+
+### 2.4 Consistent statistics
+
+Catalog tracks and Create GPX drafts use the same versioned distance and elevation
+calculation policy.
+
+### 2.5 Static by default
+
+Do not introduce a backend until a required feature cannot be implemented safely as a
+static application.
+
+### 2.6 Readable engineering
+
+Domain behavior is expressed in small TypeScript classes and use cases, not embedded in
+framework event handlers or state stores.
+
+### 2.7 Compact feature navigation
+
+The quick-access rail has four primary feature destinations: `Tracks`, `Satellite`,
+`Markers`, and `Layers`. `Diagnostics` (when developer mode is active) and `Settings`
+are global rail actions. Manual planning is entered only through `Create GPX` inside
+Tracks; there is no Plan tab, rail item, or separate planning destination. The active
+feature owns a contextual sidebar, and selected tracks or imagery may open an adjacent
+detail pane without replacing the map.
+
+Use Material UI as the component foundation. Do not spend MVP time on custom animation,
+ornamental transitions, or a bespoke component system.
+
+### 2.8 Diagnosable by design
+
+A user must be able to export enough structured evidence to investigate failures without
+opening browser developer tools.
 
 ## 3. Primary user flows
 
 ### 3.1 Explore imagery
 
-1. Open the application at the last used view or a Georgia-wide default.
-2. Search Sentinel-2 L1C/L2A acquisitions intersecting the current viewport or an area
-   around a saved marker.
-3. Choose an acquisition date and compare availability and cloud cover.
-4. View true-color imagery and its footprint with transparent hiking-relevant OSM layers
-   above it.
-5. Toggle terrain and adjust pitch/bearing without losing selected layers.
+#### 3.1.1 Enter the Satellite workspace
+
+Open `Satellite` from the rail without remounting the map. The last settled view or the
+Georgia-wide default remains visible.
+
+#### 3.1.2 Configure the search
+
+Use the compact `Viewport | <coordinates>` selector. Viewport is the default source; a
+saved Marker can become the source when marker data exists. Configure date range,
+cloud-cover threshold, and Sentinel-2 L1C/L2A product choice before searching.
+
+#### 3.1.3 Compare acquisitions and scenes
+
+Search acquisitions intersecting the selected area. Group availability by acquisition
+date and compare concrete scenes by platform, product level, cloud cover, viewport/area
+coverage, and scene-edge warnings. Partial coverage must remain explicit.
+
+#### 3.1.4 Apply and inspect imagery
+
+Apply one concrete true-color scene rather than silently mosaicking candidates. Show its
+footprint and adjacent metadata, including acquisition time, tile/orbit/product
+identity, coverage, and attribution. Provide fit-footprint and hide-imagery actions.
+Keep hiking-relevant OSM layers above imagery, and allow terrain/pitch changes without
+losing the applied scene or other workspace state.
 
 ### 3.2 Browse the track library
 
-1. Open the track library.
-2. Browse both the read-only curated GitHub Pages catalog and GPX tracks retained in the
-   browser.
-3. Browse curated categories or organize tracks into personal nested folders with
-   explicit manual ordering.
-4. Filter and sort by visible map area, name, date added, recorded duration when
-   available, region, length, ascent, maximum elevation, route shape, and curated tags.
-5. Inspect a result's simplified preview before loading its full content.
-6. Open the full track on the map, inspect statistics and elevation, and load or
-   download the original GPX only when requested.
+#### 3.2.1 Enter Tracks
 
-### 3.3 Create a manual plan
+Open `Tracks` from the rail. The contextual sidebar exposes `Create GPX`, Import GPX,
+library search/filter/sort, folders, and track results.
 
-1. Start a new manual plan.
-2. Add, move, remove, and reorder waypoints.
-3. Connect consecutive points with straight geodesic segments.
-4. Sample terrain along the segments and show distance, ascent/descent, and an elevation
-   profile.
-5. Add waypoint names, notes, and display styles.
-6. Save locally or export to GPX.
+#### 3.2.2 Keep source ownership explicit
+
+Browse the read-only curated GitHub Pages catalog and GPX tracks retained in the browser
+in one library. Global and Local source labels remain visible. Personal organization
+never modifies global catalog assets.
+
+#### 3.2.3 Browse and organize folders
+
+Browse curated categories and personal nested folders. Personal folders support explicit
+placement and manual ordering for global or local tracks.
+
+#### 3.2.4 Search, filter, and sort results
+
+Search the combined library and filter or sort by visible map area, name, date added,
+recorded duration when available, region, length, ascent, maximum elevation, route
+shape, source, and curated tags. Results expose compact metrics and colored tags.
+
+#### 3.2.5 Select and preview a track
+
+Selecting a result renders its simplified geometry and selection legend on the map.
+Fit-on-map acts on the selected geometry without fetching every original GPX file.
+
+#### 3.2.6 Inspect track details and elevation
+
+Open an adjacent selected-track detail pane with source, route shape, recorded point
+count, calculation policy, tags, metrics, folder action, and download action. Its
+contextual elevation profile states terrain provenance and sampling policy. Load or
+download the full original GPX only when requested. No empty global elevation panel is
+shown when no track or Create GPX geometry exists.
+
+### 3.3 Create GPX
+
+#### 3.3.1 Start from Tracks
+
+Start manual planning only with `Create GPX` in Tracks. The command begins a workflow;
+it does not navigate to a Plan tab or introduce another top-level feature.
+
+#### 3.3.2 Edit geometry
+
+Add, move, remove, and reorder waypoints. Connect consecutive points with straight
+geodesic segments and make that non-routing behavior explicit.
+
+#### 3.3.3 Edit and persist GPX content
+
+Add waypoint names, notes, and display styles. Save the draft locally, reopen it from
+Tracks, or export a standards-compliant GPX file.
+
+#### 3.3.4 Calculate contextual metrics
+
+Sample terrain along segments and show distance, ascent/descent, minimum/maximum
+elevation, and an elevation profile inside the Create GPX workflow. Reuse the same
+versioned policy and visual vocabulary as selected-track details.
 
 ### 3.4 Import a local GPX
 
@@ -80,22 +170,52 @@ or upload service and local imports are never uploaded automatically.
 4. Store it in IndexedDB and include it in the combined track catalog only when the user
    explicitly chooses to retain it.
 
+Import is a Tracks workflow. Show retention/privacy guidance at the preview or confirm
+step rather than as a generic banner that consumes the workspace when no import is
+active.
+
 ### 3.5 Save and revisit a marker
 
-1. Click the map and choose to create a saved marker.
-2. Set its name, icon, color, and preferred map scale; retain coordinates and optional
-   terrain-derived elevation.
-3. Reopen the marker later to restore its saved location and scale, or use it as a
-   Sentinel search target or a source for a new planning waypoint.
+#### 3.5.1 Add and organize markers
+
+Open `Markers` from the rail. Add a marker from the map or sidebar, search and sort
+saved markers, organize them into groups, and distinguish all markers from markers in
+the current view.
+
+#### 3.5.2 Edit marker details
+
+Edit name, icon, color, coordinates, preferred map scale, and optional terrain-derived
+elevation in the contextual details stack. Reopen the marker later to restore its saved
+location and scale.
+
+#### 3.5.3 Use a marker in another workflow
+
+Use a saved marker as the target for Satellite search, or copy its coordinate and
+supported style/provenance into `Create GPX`. Marker and waypoint identities remain
+separate; later marker edits do not mutate the copied waypoint.
 
 ### 3.6 Diagnose a problem
 
-1. Enable developer mode from Settings or a documented URL parameter.
-2. Reproduce the problem while a bounded diagnostic session records structured events.
-3. Inspect map, network, storage, data, performance, and error summaries.
-4. Export one sanitized diagnostics bundle and attach it to a bug report.
-5. Explicitly opt in if track geometry or other potentially personal data is needed; it
-   is excluded by default.
+#### 3.6.1 Enter Settings and Diagnostics
+
+Open Settings from its global bottom-rail action or enable developer mode with the
+documented URL parameter. When enabled, Diagnostics appears as a separate global rail
+action; it is not a Tracks/Satellite/Markers/Layers subsection.
+
+#### 3.6.2 Inspect and export evidence
+
+Reproduce the problem while a bounded diagnostic session records structured events.
+Inspect map, network, storage, data, performance, and error summaries, then export one
+sanitized diagnostics bundle. Geometry and other potentially personal data remain
+excluded unless the user explicitly opts in.
+
+### 3.7 Control map layers
+
+Open `Layers` from the rail to control supported visibility, opacity, and ordering
+within the typed map-layer bands. The layer surface must preserve provider attribution
+and the required relationship among satellite imagery, hiking references, tracks/Create
+GPX geometry, markers, and interaction highlights. Do not implement a generic layer
+editor or invent detailed controls before a reviewed Layers mockup exists.
 
 ## 4. Technical architecture
 
@@ -395,8 +515,8 @@ The permanent storage and entity contracts are defined in
 ### 6.1 Layer composition
 
 - Keep stable typed layer bands in this order: background, satellite imagery, OSM
-  reference overlays, track previews/selected tracks, plans, saved markers/waypoints,
-  and interaction highlights.
+  reference overlays, track previews/selected tracks, Create GPX geometry, saved
+  markers/waypoints, and interaction highlights.
 - Keep sources, rendering adapters, layer visibility/opacity state, and attribution
   separate so new imagery or overlay providers can be added without changing domain
   entities.
@@ -483,7 +603,7 @@ services at the composition boundary. Test what a user sees and does:
 
 - Loading, empty, ready, partial, disabled, and error states.
 - Track filters and selection.
-- Planner commands, validation, confirmation, and keyboard behavior.
+- Create GPX commands, validation, confirmation, and keyboard behavior.
 - Developer-mode activation, recording, health results, and export confirmation.
 - Accessible names, focus management, and important screen-reader announcements.
 
@@ -512,10 +632,10 @@ Chromium only. Network routes serve local fixtures. Critical tests cover:
 - Cold application start and a direct URL reload.
 - Browse/filter/select a catalog track.
 - Import a GPX fixture and handle an invalid file.
-- Add, move, reorder, and remove planning waypoints.
+- Add, move, reorder, and remove waypoints in Create GPX.
 - Calculate metrics and inspect the elevation profile.
-- Save, reload, export, and reimport a plan.
-- Change Sentinel scenes without losing the plan.
+- Save, reload, export, and reimport a Create GPX draft.
+- Change Sentinel scenes without losing an active Create GPX draft.
 - Toggle terrain without recreating application state.
 - Recover from provider, storage, and map failures.
 - Record/export diagnostics and prove secret/geometry redaction.
@@ -612,6 +732,8 @@ Acceptance:
 Deliver:
 
 - MapLibre React viewport.
+- Compact workspace shell with Tracks, Satellite, Markers, and Layers rail destinations,
+  global Settings/opt-in Diagnostics actions, and honest deferred sidebars.
 - OSM vector basemap/overlay with attribution.
 - Camera persistence.
 - 2D/3D terrain toggle.
@@ -622,6 +744,7 @@ Acceptance:
 
 - Current Chrome can pan, zoom, rotate, pitch, and toggle terrain smoothly.
 - Map lifecycle code is isolated from the rest of the application state.
+- Changing rail sections, dialogs, or Diagnostics does not remount the map.
 
 ### Phase 2: static GPX catalog build
 
@@ -649,6 +772,8 @@ Deliver:
 - Curated categories plus personal nested folders, explicit placement/order, sorting,
   and filtering.
 - Elevation summary/profile for selected tracks.
+- Tracks contextual sidebar and adjacent selected-track detail pane match the reviewed
+  workspace hierarchy.
 
 Acceptance:
 
@@ -658,23 +783,26 @@ Acceptance:
   curated static catalog.
 - Personal organization survives reload without attempting to modify GitHub assets.
 
-### Phase 4: manual planner
+### Phase 4: Create GPX and saved markers
 
 Deliver:
 
 - Add/move/remove/reorder waypoint interaction.
+- `Create GPX` entry inside Tracks with no separate Plan navigation destination.
 - Straight geodesic segments.
 - Distance and elevation sampling.
 - Elevation profile linked to the map position.
 - Local save/load and GPX export.
 - Create/edit/delete saved markers with icons, colors, coordinates, terrain-derived
   elevation, and preferred map scale.
+- Markers sidebar with search, groups/current-view results, and contextual detail
+  editing.
 - Convert or copy a saved marker into a planning waypoint without coupling their
   identities.
 
 Acceptance:
 
-- A plan survives a page reload.
+- A Create GPX draft survives a page reload and remains reachable from Tracks.
 - A saved marker restores its location and preferred map scale after reload.
 - Exported GPX reimports without geometry loss.
 - Calculation services have deterministic unit tests.
@@ -690,10 +818,14 @@ Deliver:
 - Scene footprint/coverage, product level, imagery metadata, and attribution.
 - Cancellable loading and actionable errors.
 - Sanitized request tracing, provider timing, and quota/rate-limit diagnostics.
+- Compact Satellite search sidebar, adjacent results/metadata pane, and Layers controls
+  for supported imagery/reference visibility and opacity while preserving typed
+  ordering.
 
 Acceptance:
 
-- A user can select a different acquisition without resetting the map or plan.
+- A user can select a different acquisition without resetting the map or an active
+  Create GPX draft.
 - Acquisition choices make partial coverage and cloud cover explicit rather than
   implying that one scene covers the entire viewport.
 - Secrets are absent from source code and production assets.
@@ -729,7 +861,7 @@ For one developer using Codex assistance:
 | Map, OSM layers, and terrain                    |                                  4-7 days |
 | Catalog audit/index build tooling               | 3-7 days, depending on source consistency |
 | Catalog interaction and elevation profile       |                                  4-7 days |
-| Manual planner and persistence                  |                                  4-7 days |
+| Create GPX, saved markers, and persistence      |                                  4-7 days |
 | Sentinel scene selection/rendering              |                                  4-8 days |
 | Testing, accessibility, performance, deployment |                                 5-10 days |
 

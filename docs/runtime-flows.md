@@ -29,11 +29,15 @@ a fatal alert without contacting the provider. Camera failure is recoverable: th
 uses `defaultGeorgiaCamera`. The facade registers native listeners exactly once and
 removes them during teardown.
 
-The Satellite contextual panel subscribes to the existing serializable map snapshot and
-shows the settled viewport center inside a compact source selector. Viewport is the
-current source; Marker is visible but disabled until saved-marker behavior exists. The
-panel never receives the native MapLibre object and falls back to `defaultGeorgiaCamera`
-before the first snapshot is available.
+The Satellite contextual sidebar subscribes to the existing serializable map snapshot
+and shows the settled viewport center inside the compact `Viewport | <coordinates>`
+selector. Viewport is the current source; Marker is visible but disabled until
+saved-marker behavior exists. The sidebar never receives the native MapLibre object and
+falls back to `defaultGeorgiaCamera` before the first snapshot is available.
+
+Changing among Tracks, Satellite, Markers, and Layers changes contextual React content,
+not the map owner. Opening Settings or Diagnostics follows the same invariant: the
+existing `MapWorkspace` and native MapLibre instance stay mounted.
 
 ## Settled camera write
 

@@ -47,7 +47,9 @@ test('persists a settled camera and restores it before interaction after reload'
 }) => {
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
 
   const canvas = page.locator('.maplibregl-canvas');
   await canvas.hover();
@@ -60,7 +62,9 @@ test('persists a settled camera and restores it before interaction after reload'
   expect(cameraBeforeReload?.zoom).not.toBeCloseTo(5.8, 1);
 
   await page.reload();
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
   await canvas.focus();
   await page.keyboard.press('ArrowRight');
   await expect

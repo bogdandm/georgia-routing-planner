@@ -422,6 +422,9 @@ export class MapLibreFacade implements MapFacade {
       return { status: 'success', mode };
     } catch {
       map.setTerrain(null);
+      if (map.getSource(mapSourceIds.terrainDem) !== undefined) {
+        map.removeSource(mapSourceIds.terrainDem);
+      }
       map.easeTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,

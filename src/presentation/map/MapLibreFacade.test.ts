@@ -77,6 +77,10 @@ class FakeNativeMap {
     this.#sources.set(id, source);
   }
 
+  public removeSource(id: string): void {
+    this.#sources.delete(id);
+  }
+
   public isSourceLoaded(): boolean {
     return this.sourceLoaded;
   }
@@ -295,5 +299,31 @@ describe('MapLibreFacade', () => {
       recoverableFailures: [],
     });
     expect(services.logger.getEvents().at(-1)?.name).toBe('map.style.failed');
+  });
+
+  it('records WebGL context loss, permits restoration, and removes canvas listeners', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const contextLost = new Event('webglcontextlost', { cancelable: true });
+
+    nativeMap.getCanvas().dispatchEvent(contextLost);
+    expect(contextLost.defaultPrevented).toBe(true);
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'fatal',
+      webGlContext: 'lost',
+    });
+
+    nativeMap.getCanvas().dispatchEvent(new Event('webglcontextrestored'));
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      webGlContext: 'restored',
+    });
+    const snapshotBeforeDestroy = facade.getDiagnosticsSnapshot();
+    facade.destroy();
+    nativeMap.getCanvas().dispatchEvent(new Event('webglcontextlost'));
+    expect(facade.getDiagnosticsSnapshot()).toEqual(snapshotBeforeDestroy);
   });
 });

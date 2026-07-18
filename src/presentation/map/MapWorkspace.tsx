@@ -1,4 +1,4 @@
-import { Box } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 import type { StyleSpecification } from 'maplibre-gl';
 import {
   useCallback,
@@ -7,34 +7,28 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import Map, { type MapRef } from 'react-map-gl/maplibre';
+import Map, { NavigationControl, type MapRef } from 'react-map-gl/maplibre';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { MapStatusOverlay } from '@/presentation/map/MapStatusOverlay';
+import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
-
-const networkFreeStyle: StyleSpecification = {
-  version: 8,
-  name: 'phase-0-network-free',
-  sources: {},
-  layers: [
-    {
-      id: 'background',
-      type: 'background',
-      paint: { 'background-color': '#dbe3d5' },
-    },
-  ],
-};
 
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
   readonly mapCanvas?: ReactNode;
 }
 
+const unavailableMapStyle: StyleSpecification = {
+  version: 8,
+  sources: {},
+  layers: [],
+};
+
 export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspaceProps) {
-  const { logger } = useRuntimeServices();
+  const { logger, mapProviderConfiguration } = useRuntimeServices();
   const facade = useMemo(
     () => suppliedFacade ?? new MapLibreFacade(logger),
     [logger, suppliedFacade],
@@ -45,6 +39,13 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
   );
   const getSnapshot = useCallback(() => facade.getDiagnosticsSnapshot(), [facade]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const mapStyle = useMemo(
+    () =>
+      mapProviderConfiguration.status === 'valid'
+        ? createHikingMapStyle(mapProviderConfiguration.value)
+        : unavailableMapStyle,
+    [mapProviderConfiguration],
+  );
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
@@ -65,19 +66,38 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
     <Box
       aria-label="Map workspace"
       data-testid="map-workspace"
+      data-map-state={
+        mapProviderConfiguration.status === 'invalid' ? 'fatal' : snapshot.lifecycle
+      }
       sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 240 }}
     >
-      {mapCanvas ?? (
-        <Map
-          ref={handleMapRef}
-          attributionControl={false}
-          initialViewState={defaultGeorgiaCamera}
-          mapStyle={networkFreeStyle}
-          reuseMaps={false}
-          style={{ width: '100%', height: '100%' }}
-        />
+      {mapProviderConfiguration.status === 'invalid' ? (
+        <Alert severity="error" sx={{ m: 2 }}>
+          {mapProviderConfiguration.message} The basemap was not started. Check the
+          deployment configuration or open developer diagnostics.
+        </Alert>
+      ) : (
+        (mapCanvas ?? (
+          <Map
+            ref={handleMapRef}
+            attributionControl={{ compact: false }}
+            initialViewState={defaultGeorgiaCamera}
+            mapStyle={mapStyle}
+            reuseMaps={false}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <NavigationControl
+              position="top-right"
+              showCompass
+              showZoom
+              visualizePitch
+            />
+          </Map>
+        ))
       )}
-      <MapStatusOverlay snapshot={snapshot} />
+      {mapProviderConfiguration.status === 'valid' ? (
+        <MapStatusOverlay snapshot={snapshot} />
+      ) : null}
     </Box>
   );
 }

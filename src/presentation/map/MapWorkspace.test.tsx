@@ -32,4 +32,28 @@ describe('MapWorkspace', () => {
     unmount();
     expect(facade.destroyed).toBe(true);
   });
+
+  it('fails safely before mounting MapLibre when provider configuration is invalid', () => {
+    const facade = new FakeMapFacade();
+    const services = {
+      ...createTestServices(),
+      mapProviderConfiguration: {
+        status: 'invalid' as const,
+        message: 'Map provider configuration is invalid (1 validation issue).',
+      },
+    };
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Must not mount</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The basemap was not started');
+    expect(screen.queryByText('Must not mount')).not.toBeInTheDocument();
+    expect(screen.getByTestId('map-workspace')).toHaveAttribute(
+      'data-map-state',
+      'fatal',
+    );
+  });
 });

@@ -2,6 +2,12 @@ import { readFile } from 'node:fs/promises';
 
 import { expect, test } from '@playwright/test';
 
+import { installMapProviderFixtures } from './installMapProviderFixtures';
+
+test.beforeEach(async ({ page }) => {
+  await installMapProviderFixtures(page);
+});
+
 test('captures failures and exports an inspectable redacted bundle', async ({
   page,
 }) => {

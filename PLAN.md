@@ -1,648 +1,603 @@
-# Phase 0 Plan: Basic Project Infrastructure
+# Phase 1 Plan: Map Foundation
 
 ## 1. Purpose and relationship to the roadmap
 
-This is the detailed implementation plan for Phase 0 of
-[TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md). It converts the architectural decisions into a
-working, tested React repository that later map, catalog, planning, elevation, and
-Sentinel features can extend safely.
+This is the detailed implementation plan for Phase 1 of
+[TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md). It replaces the Phase 0 network-free smoke canvas
+with the first production map foundation: a MapLibre viewport backed by validated,
+replaceable OSM and terrain configuration, durable camera state, a resilient 2D/3D
+terrain control, and privacy-safe map diagnostics.
 
-This phase establishes infrastructure and one thin vertical smoke path. It does not
-implement the product features from later phases.
+Phase 1 establishes the map as a stable platform for catalog previews, manual planning,
+and Sentinel-2 imagery. It does not implement those later product features.
 
 ## 2. Phase status and Git boundary
 
-- Status: **implemented and verified on `feature/basic-project-infrastructure`; awaiting
-  maintainer approval**.
-- Planning branch: `feature/basic-project-infrastructure-plan`.
-- Implementation must occur on a feature branch, normally
-  `feature/basic-project-infrastructure`.
+- Status: **planned; implementation has not started**.
+- Phase 0 is merged into `main` at the start of this plan.
+- Planning branch: `docs/phase-1-map-foundation-plan`.
+- Implementation must occur on a feature branch, normally `feature/map-foundation`.
 - `main` must remain unchanged until the user explicitly approves a verified
   feature-branch state.
-- A private GitHub remote was created by explicit request. No push, pull request,
-  deployment, or branch-protection change is part of this phase unless separately
-  requested.
+- No remote push, pull request, deployment, or branch-protection change is included
+  unless separately requested.
 
-If implementation starts from this planning branch, either continue on it with a clearly
-documented commit history or create the dedicated implementation branch before changing
-application files. Do not switch to `main` to begin work.
+Phase 1 must be delivered as a sequence of small, reviewable commits. It must not be
+collapsed into one phase-sized implementation commit. Every implementation commit must
+include its relevant tests and leave the repository in a buildable, testable state.
 
 ## 3. Required outcome
 
-At completion, a clean checkout can install one frozen dependency graph and run a
-documented command set that:
+At completion, the application must:
 
-- Starts a React + TypeScript development server.
-- Renders a Material UI map-workbench shell in current Chrome.
-- Mounts a minimal network-free MapLibre canvas to prove WebGL integration.
-- Constructs application services through an explicit composition root.
-- Provides typed configuration, HTTP, query, local-state, persistence, and diagnostics
-  foundations.
-- Captures startup and React failures and exports a sanitized diagnostics bundle.
-- Runs automatic unit, component, infrastructure, accessibility, and Chromium smoke
-  tests.
-- Builds static GitHub Pages-compatible assets.
-- Runs the same required checks automatically in GitHub Actions.
+- Render one long-lived MapLibre map centered on Georgia with an OSM-derived vector
+  basemap and hiking-relevant overlay layers.
+- Keep required OSM, vector-provider, and terrain attribution visible.
+- Load all provider endpoints and provider-specific source-layer mappings through a
+  validated, replaceable configuration boundary.
+- Restore the last valid camera after reload and fall back safely when persisted data is
+  absent or corrupt.
+- Pan, zoom, rotate, and pitch smoothly in current stable desktop Chrome.
+- Switch between a flat 2D presentation and 3D terrain without recreating the map,
+  replacing its style, or losing the current center, zoom, and bearing.
+- Keep a usable 2D map when terrain is unavailable and give the user actionable,
+  accessible failure feedback.
+- Isolate MapLibre's native object, events, sources, layers, and cleanup inside the map
+  feature adapter/facade.
+- Record bounded lifecycle, source, style, terrain, camera-summary, and WebGL evidence
+  without logging high-frequency events or sensitive URL data.
+- Expose a sanitized map snapshot and map/WebGL health information in developer mode and
+  diagnostics exports.
+- Pass deterministic automatic tests without contacting a public tile, terrain, or
+  imagery provider.
 
 ## 4. Fixed decisions
 
-These decisions are already approved by the top-level plan and should not be reopened
-during Phase 0 without a concrete blocker:
+The following decisions come from the top-level plan and Phase 0 architecture:
 
-- React functional components with strict TypeScript.
-- Vite static build; no SSR framework.
-- Material UI, MUI Icons, and MUI X Charts for the GUI system.
-- MapLibre GL JS through `react-map-gl/maplibre`.
-- Clean architecture with class-based domain/application services and explicit
-  constructor injection.
-- TanStack Query for remote/static query state.
-- `ky` for HTTP transport and Zod for runtime validation.
-- Zustand for transient cross-feature UI state only.
-- Dexie for durable IndexedDB data.
-- Vitest, React Testing Library, Mock Service Worker, `fake-indexeddb`, Playwright
-  Chromium, and axe-based accessibility checks.
-- pnpm with a committed lockfile.
-- Current stable desktop Chrome as the supported runtime.
-- Production-safe developer mode with no automatic telemetry upload.
+- Continue using MapLibre GL JS through `react-map-gl/maplibre`; do not add a second map
+  engine or React map wrapper.
+- Keep React components functional and declarative. MapLibre imperative behavior belongs
+  in a typed map adapter/facade.
+- Use one map instance for the lifetime of the workspace. Tab, drawer, diagnostics, and
+  terrain-state changes must not remount it.
+- Use a MapLibre-compatible vector source for OSM data. Do not make the production
+  basemap depend on the public `tile.openstreetmap.org` raster service.
+- Build a restrained hiking-focused style with centrally defined source and layer IDs.
+  Satellite imagery added later must be able to sit below hiking vectors and labels.
+- Use a `raster-dem` source compatible with MapLibre terrain. Provider encoding, tile
+  size, zoom limits, URLs, and attribution are configuration, not feature constants.
+- Keep the MVP static and anonymous. Public `VITE_*` values cannot contain secrets.
+- Persist durable camera state through the existing Dexie settings repository. Do not
+  mirror the authoritative camera continuously into Zustand.
+- Use the existing typed logger, diagnostics service, health checks, and composition
+  root rather than creating map-specific global services with overlapping ownership.
+- Keep CI deterministic with checked-in synthetic fixtures and Playwright request
+  interception. Public-provider availability is never a required test dependency.
+- Add no runtime dependency unless the implementation demonstrates a concrete gap in
+  MapLibre, React, Zod, Dexie, MUI, and the browser APIs already installed.
 
-Versions must be current stable and mutually compatible at implementation time, then
-pinned by `pnpm-lock.yaml`. Do not use `latest` ranges, prereleases, or unreviewed
-upgrade automation during the initial scaffold.
+## 5. Provider feasibility and configuration gate
 
-## 5. Phase non-goals
+Provider selection is a required Phase 1 gate because anonymous static clients cannot
+protect credentials and provider policies, CORS behavior, schemas, and availability can
+change.
 
-- Real OSM tiles or a hiking overlay style.
-- Sentinel/STAC search or imagery.
-- Production elevation sampling.
-- GPX catalog ingestion or the 1,200-track dataset.
-- GPX import/export behavior beyond optional placeholder interfaces.
-- Manual waypoint planning.
-- Automatic routing.
-- Accounts, synchronization, backend services, OAuth, or telemetry SaaS.
-- Mobile/Safari support.
-- Final branding, custom design system, or complex animations.
-- Deploying an unapproved branch to the public GitHub Pages site.
+Before making a provider the production default, record an evidence-based decision in
+`docs/map-providers.md` covering:
 
-## 6. Target repository structure
+1. Anonymous browser use from the GitHub Pages origin and local development origin.
+2. No secret, confidential token, or referrer-only credential embedded in the bundle.
+3. Published usage policy, attribution text/link, license obligations, and reasonable
+   MVP traffic limits.
+4. HTTPS and CORS behavior for vector metadata/tiles, glyphs, sprites, and DEM tiles.
+5. Vector source-layer names required for paths, roads, water, land cover, boundaries,
+   settlements, peaks, passes, and hiking-relevant points of interest.
+6. DEM encoding (`mapbox` or `terrarium`), tile size, useful zoom range, no-data
+   behavior, and attribution.
+7. Current Chrome behavior for style load, pitch, terrain, and recoverable tile errors.
+8. A replacement/fallback path that requires configuration and style-mapping changes,
+   not changes to React feature workflows.
 
-Create files only when they contain real configuration, code, tests, or documentation.
-Do not add empty directories merely to match this diagram.
+The production application must fail configuration validation with an actionable
+bootstrap/map message rather than silently contacting an unintended endpoint. If no
+acceptable anonymous vector or terrain provider exists, stop at this gate and report the
+constraint; do not work around it by publishing a private key.
+
+The top-level risk register also calls for a small Sentinel COG feasibility spike in
+Phase 1. Time-box a non-product investigation of one public true-color COG in current
+Chrome and record CORS, range-request, render-time, and replacement-adapter findings in
+the same provider document. Do not add STAC search, scene selection, or a production
+satellite UI in this phase.
+
+## 6. Phase non-goals
+
+- Sentinel/STAC search, date/cloud filters, or a user-visible satellite layer.
+- GPX parsing, catalog generation, track previews, track selection, or downloads.
+- Manual waypoints, route segments, route editing, or elevation calculation.
+- Offline regional map packages, service-worker tile caching, or prefetching.
+- Geocoding, directions, automatic routing, or turn-by-turn navigation.
+- Multiple base-style themes or a general-purpose layer editor.
+- 3D buildings, custom terrain meshes, globe projection, or rich animations.
+- Mobile layout or Safari-specific behavior.
+- Exact camera coordinates in default exported diagnostics.
+- Automatic failover between public providers. A clear degraded state is preferable to
+  hidden source switching with different data/licensing semantics.
+- Backend, proxy, OAuth, telemetry upload, or secret management.
+
+## 7. Ownership and architecture
+
+### 7.1 State ownership
+
+| State or behavior                                           | Owner                                  | Persistence         |
+| ----------------------------------------------------------- | -------------------------------------- | ------------------- |
+| Native `Map`/`MapRef`, listeners, sources, layers, controls | Map adapter/facade                     | Never               |
+| Loading, ready, degraded, fatal presentation state          | Map feature component                  | No                  |
+| Current high-frequency camera during gestures               | MapLibre                               | No                  |
+| Last settled, validated camera                              | Map camera repository via Dexie        | Yes                 |
+| 2D/3D control and pending/error state                       | Map feature component/controller       | No in Phase 1       |
+| Last useful map diagnostics snapshot                        | Map diagnostics snapshot store/service | In memory only      |
+| Settings/dialog/drawer state                                | Existing Zustand UI store              | No                  |
+| Provider configuration                                      | Validated application configuration    | Build/runtime asset |
+
+Do not put a native map object, class instance, mutable source, or per-frame camera
+value in Zustand, TanStack Query, Dexie, or the general application-services context.
+
+### 7.2 Map boundary
+
+The presentation feature may expose small typed capabilities such as:
+
+```ts
+interface MapFacade {
+  getCamera(): MapCamera;
+  getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
+  setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
+  setDebugOptions(options: MapDebugOptions): void;
+}
+```
+
+The exact API may change during implementation, but it must remain capability-oriented.
+It must not expose `Map`, `MapRef`, arbitrary `getMap()`, or generic command strings.
+React receives serializable snapshots and typed outcomes. Event handlers translate
+MapLibre events at this boundary and remove every listener on teardown.
+
+### 7.3 Provider configuration boundary
+
+Define and validate a readonly configuration model before constructing a style. It must
+represent at least:
+
+- Vector metadata/tile endpoint information.
+- Provider-specific source-layer mappings.
+- Glyph and sprite endpoints when the chosen style requires them.
+- Vector and OSM attribution.
+- Terrain metadata/tile endpoint, encoding, tile size, zoom limits, and attribution.
+- Conservative request timeout/error-display policy where applicable.
+
+Use Zod at the external boundary and map parsed data into an internal readonly type.
+Configuration errors are typed and safe to show. Never log full tile templates, query
+strings, tokens, headers, or raw configuration objects.
+
+### 7.4 Stable source and layer contract
+
+Centralize stable application IDs instead of scattering string literals. The initial
+order from bottom to top is:
+
+1. Background/land cover.
+2. A reserved future satellite insertion point.
+3. Water and terrain shading, if used.
+4. Administrative boundaries.
+5. Roads.
+6. Hiking paths/tracks/steps.
+7. Hiking points such as shelters, peaks, and passes.
+8. Place and feature labels.
+9. Reserved future catalog tracks, plans, and waypoints above the basemap.
+
+Layer definitions must be deterministic and testable without constructing a WebGL
+context. Provider source-layer names are mapped once in the style factory.
+
+## 8. Target repository shape
+
+Create files only when they contain real behavior, configuration, tests, or fixtures.
+Names may be refined, but ownership should remain recognizable:
 
 ```text
 georgia-routing-planner/
-  .github/
-    workflows/
-      checks.yml
-      pages.yml                 # deploys only approved main
+  docs/
+    map-providers.md
   e2e/
-    app-shell.spec.ts
-    diagnostics.spec.ts
-  public/
-    fixtures/
-      map-style.json            # local network-free test style if useful
+    map-foundation.spec.ts
   src/
     app/
       bootstrap/
         createApplicationServices.ts
-        ApplicationServicesContext.tsx
-        buildInfo.ts
-      theme/
-        createAppTheme.ts
-      App.tsx
-      AppErrorBoundary.tsx
+      configuration/
+        MapProviderConfiguration.ts
     application/
       ports/
-        DiagnosticLogger.ts
-        IdGenerator.ts
-        Clock.ts
+        MapCameraRepository.ts
     diagnostics/
-      logging/
-      redaction/
-      snapshots/
       export/
+        diagnosticBundleSchema.ts
+      snapshots/
+        MapDiagnosticsSnapshotStore.ts
+        HealthCheckService.ts
+    features/
+      map/
+        MapWorkspace.tsx
+        MapFacade.ts
+        MapLibreFacade.ts
+        MapStatusOverlay.tsx
+        TerrainModeControl.tsx
+        mapIds.ts
+        mapStyleFactory.ts
+        mapTypes.ts
     infrastructure/
-      http/
-        createHttpClient.ts
       persistence/
         AppDatabase.ts
-      runtime/
-        BrowserClock.ts
-        CryptoIdGenerator.ts
-    features/
-      app-shell/
-      map/
-      developer-tools/
-    shared/
-      errors/
-      types/
-      ui/
-    main.tsx
-    vite-env.d.ts
+        DexieMapCameraRepository.ts
   test/
     fixtures/
-    setup/
-      vitest.setup.ts
-      mswServer.ts
-  tools/
-    diagnostics/
-      inspectDiagnostics.ts
-  .editorconfig
-  .gitattributes
-  .gitignore
-  eslint.config.js
-  index.html
-  package.json
-  playwright.config.ts
-  pnpm-lock.yaml
-  prettier.config.js
-  tsconfig.json
-  tsconfig.app.json
-  tsconfig.node.json
-  vite.config.ts
-  vitest.config.ts
-  README.md
-  TOP_LVL_PLAN.md
-  PLAN.md
-  AGENTS.md
+      map/
+        provider-configuration.json
+        style-metadata.json
+        vector-tile.pbf
+        terrain-dem.png
 ```
 
-Exact file grouping may change if the implementation reveals a clearer boundary, but the
-dependency direction from AGENTS.md must remain intact.
+The fixture names are illustrative. Keep fixture data synthetic, minimal, licensed for
+repository use, and free of personal GPX or real user-location data.
 
-## 7. Work packages
+## 9. User-visible behavior
 
-### P0.1 Repository hygiene and runtime declaration
+### 9.1 Startup and map loading
 
-Create:
-
-- `.gitignore` for Node, Vite, Playwright, coverage, local environment files, generated
-  catalog/diagnostic artifacts, and IDE noise.
-- `.gitattributes` that normalizes text files to LF while allowing Windows scripts to
-  opt into CRLF if any are later required.
-- `.editorconfig` for UTF-8, final newlines, spaces, and consistent indentation.
-- A Node version declaration using one conventional file supported by local/CI tooling,
-  pinned to the selected active LTS line.
-- `package.json` with `private: true`, ESM mode, package-manager declaration, engine
-  constraint, repository scripts, and no publish intent.
-
-Verification:
-
-- Git sees no dependency cache, build output, test artifact, or local secret.
-- Node and pnpm version errors are understandable.
-- Line endings remain stable on Windows and CI.
-
-### P0.2 Scaffold React, TypeScript, and Vite without overwriting documents
-
-Add the minimum Vite React files manually or scaffold into a temporary directory and
-apply the result selectively. Never run a generator that overwrites README, plans,
-AGENTS.md, Git history, or unrelated files.
-
-Configure:
-
-- React Fast Refresh using the standard supported Vite React plugin.
-- Static asset base derived safely for local development and GitHub Pages.
-- Build-time constants for app version, commit hash, build timestamp, and build mode.
-  Missing Git metadata must degrade safely in local archives/builds.
-- Source aliases only where they improve imports without hiding layer boundaries.
-- Production sourcemap policy: generate private CI/debug artifacts if useful, but do not
-  expose sources unintentionally on a public deployment.
-
-Verification:
-
-- `pnpm dev` renders the application.
-- A production build loads correctly from `/` and a simulated repository subpath.
-- Direct reload does not request assets from the domain root accidentally.
-
-### P0.3 Configure strict TypeScript
-
-Use project references or separated app/Node configurations where necessary. Enable at
-minimum:
-
-- `strict`
-- `noUncheckedIndexedAccess`
-- `exactOptionalPropertyTypes`
-- `noImplicitOverride`
-- `noFallthroughCasesInSwitch`
-- `noImplicitReturns`
-- `noUnusedLocals`
-- `noUnusedParameters`, with a documented convention for intentional omissions
-- modern DOM and ECMAScript libraries compatible with current Chrome
-
-Keep Node-only tools out of the browser compilation graph. Keep test globals explicit
-rather than leaking them into production types.
-
-Verification:
-
-- `pnpm typecheck` checks application, tests, configuration, and tools as intended.
-- A deliberate `any`, unchecked index access, and invalid optional assignment each fail
-  in a temporary verification or dedicated configuration test.
-
-### P0.4 Configure formatting and linting
-
-Add flat ESLint configuration with TypeScript and React rules. Include:
-
-- React Hooks correctness.
-- No floating promises.
-- Safe async/promise use.
-- No explicit `any`.
-- Import/type-import consistency.
-- Unused code checks compatible with the TypeScript compiler.
-- Focused architectural import restrictions so `domain` cannot import UI,
-  infrastructure, storage, or map packages.
-
-Use Prettier for formatting and ESLint for code quality; do not make them fight over
-formatting rules.
-
-Verification:
-
-- `pnpm lint` and `pnpm format:check` run without modifying files.
-- `pnpm format` is the explicit write command.
-- Architectural dependency violations fail lint or a small boundary test.
-
-### P0.5 Install the minimum foundation dependencies
-
-Initial runtime dependencies:
-
-- `react`, `react-dom`
-- `@mui/material`, `@mui/icons-material`, Emotion dependencies
-- `@mui/x-charts`
-- `maplibre-gl`, `react-map-gl`
-- `@tanstack/react-query`
-- `ky`, `zod`, `zustand`, `dexie`
-
-Initial development dependencies:
-
-- TypeScript and React types
-- Vite and its supported React plugin
-- ESLint/type-aware React/TypeScript plugins
-- Prettier
-- Vitest, V8 coverage, jsdom
-- React Testing Library, jest-dom, and user-event
-- Mock Service Worker and `fake-indexeddb`
-- Playwright test and axe Playwright integration
-
-Turf and GPX/XML packages may be deferred until the first phase that uses them; do not
-install unused production packages merely because they appear in the top-level stack.
-
-Verification:
-
-- The frozen lockfile reproduces installation.
-- `pnpm audit` findings are reviewed rather than hidden.
-- The production bundle contains only imports actually used by the shell.
-
-### P0.6 Establish the composition root and architecture boundary
-
-Implement a small explicit composition root that constructs:
-
-- Build/runtime configuration.
-- `DiagnosticLogger` and sinks.
-- `Clock` and `IdGenerator` adapters.
-- One `ky` HTTP client factory without a real provider dependency.
-- TanStack `QueryClient` with deliberate retry/staleness defaults.
-- Dexie `AppDatabase` with an initial versioned schema.
-- Any small application services required by the shell.
-
-Expose dependencies through a typed `ApplicationServicesContext`. Fail fast with a
-useful typed error if a feature uses services outside the provider.
-
-Do not add a dependency-injection framework, service locator, `Utils` class, or a single
-giant `AppService`.
-
-Verification:
-
-- Unit tests construct use cases/services with fakes and no React.
-- A component test replaces the whole service bundle at the provider boundary.
-- Domain/application modules do not import React or browser adapters.
-
-### P0.7 Build the Material UI application shell
-
-Create a desktop-first shell containing:
-
-- Top `AppBar` with project name and disabled/placeholder global actions.
-- Left drawer with `Tracks`, `Plan`, and `Satellite` tabs and intentional empty states.
-- Main map area.
-- Collapsible bottom elevation placeholder.
-- Settings entry.
-- Hidden developer drawer activated through settings and a documented URL flag.
-
-Define one MUI theme with:
-
-- Palette, typography, spacing, shape, elevation, and component defaults.
-- System or bundled-font strategy with no dependency on Google Fonts.
-- Visible keyboard focus and adequate contrast.
-- A restrained earth/satellite color direction without custom branding work.
-
-Use MUI layout primitives first. Limit CSS modules to the viewport shell and map sizing.
-Do not introduce Tailwind or another component/design library.
-
-Verification:
-
-- Shell fits the supported Chrome viewport without accidental page scrolling.
-- Drawer, tabs, developer-mode activation, and elevation collapse work by mouse and
-  keyboard.
-- Component/axe tests find no known serious accessibility violations.
-
-### P0.8 Add a network-free MapLibre smoke canvas
-
-Render MapLibre through `react-map-gl/maplibre` using an inline or local empty style
-with a background layer only. It must make no public tile request.
-
-Isolate the map behind the first small facade/adapter and capture:
-
-- Load/ready/error lifecycle.
-- WebGL availability and context loss where supported.
-- Camera snapshot for diagnostics.
-- Clean unmount/listener removal.
-
-This smoke canvas proves dependency compatibility and lifecycle handling. Real OSM
-sources, terrain, styles, and map interactions belong to Phase 1.
-
-Verification:
-
-- The canvas renders in current Chrome and the Playwright environment.
-- A forced map/WebGL failure produces a stable UI error and diagnostic event.
-- Component tests can replace the map with a fake instead of requiring WebGL.
-
-### P0.9 Establish persistence and state ownership
-
-Create:
-
-- An initial Dexie database class with explicit version 1 schema for settings and
-  bounded diagnostics only, unless a simpler schema is justified.
-- A tiny Zustand store for UI state such as active tab and drawer state.
-- QueryClient configuration for remote state, even though no production remote query is
-  made yet.
-
-Keep one authoritative owner per state value. Do not store domain class instances or
-MapLibre objects in Zustand, TanStack Query, or Dexie.
-
-Verification:
-
-- Dexie repository/migration tests run with `fake-indexeddb`.
-- UI preferences survive a reload where specified.
-- Invalid persisted settings are validated, repaired/reset safely, and logged.
-
-### P0.10 Implement the diagnostics foundation
-
-Implement the minimum useful production diagnostics slice from the top-level plan:
-
-- Typed structured event schema and stable event names.
-- Bounded in-memory ring buffer.
-- Console sink active only through the logging abstraction.
-- Central allowlist redaction.
-- Startup milestones and build/runtime snapshot.
-- Global `error` and `unhandledrejection` capture.
-- React error boundary.
-- Bootstrap fallback that works if React cannot mount.
-- Developer drawer overview/log/health skeleton.
-- JSON diagnostics export with reproduction notes.
-- URL activation that still works when normal persisted settings are broken.
-
-Add non-destructive Phase 0 health checks for:
-
-- JavaScript/browser capability.
-- WebGL/MapLibre initialization.
-- IndexedDB read/write and storage estimate.
-- Build/configuration consistency.
-
-Remote provider, catalog, elevation, and terrain health checks are added in their own
-phases.
-
-Verification:
-
-- Fake secrets, headers, coordinates, filenames, and GPX-like metadata are removed from
-  exported bundles.
-- A thrown component error and unhandled rejection appear in the bundle.
-- Ring-buffer and persisted diagnostic limits are tested.
-- Logging failure cannot crash the primary application.
-
-### P0.11 Implement the diagnostics inspection CLI
-
-Create a Node-only CLI that:
-
-- Accepts one diagnostics JSON path.
-- Parses it as untrusted data with a versioned Zod schema.
-- Never evaluates or dynamically imports bundle content.
-- Prints build/browser summary, fatal/recent errors, failed health checks, slow
-  operations, map state, storage state, and likely next investigation areas.
-- Omits fields classified as sensitive.
-- Returns a non-zero exit code for invalid/unsupported input with an actionable message.
-
-Verification:
-
-- Golden valid, redacted, malformed, and unsupported-version fixtures.
-- `pnpm diagnostics:inspect -- <fixture>` produces deterministic output.
-- A bundle exported by the browser can be consumed by the CLI in an end-to-end test.
-
-### P0.12 Configure automatic tests
-
-Configure Vitest projects or clear test groups for:
-
-- Pure unit tests in a Node environment.
-- React component tests in jsdom.
-- Infrastructure tests with Mock Service Worker and `fake-indexeddb`.
-
-Configure Playwright Chromium against the production Vite build. Initial required
-browser flows:
-
-- Open at a GitHub Pages-like subpath and reload directly.
-- Render shell and network-free map canvas.
-- Change tabs and collapse/expand panels.
-- Activate developer mode by settings and URL.
-- Trigger a controlled component failure and export diagnostics.
-- Run axe checks on shell, settings, and developer drawer.
-
-Enforce the coverage thresholds from TOP_LVL_PLAN.md. Keep synthetic fixtures free of
-real personal tracks and external-network dependencies.
-
-Verification:
-
-- `pnpm test`, `pnpm test:integration`, `pnpm test:coverage`, and `pnpm e2e` pass.
-- Tests fail if external network access is attempted unexpectedly.
-- Playwright retains trace/screenshot/video artifacts on failure only.
-
-### P0.13 Define stable package commands
-
-Implement the command interface required by AGENTS.md:
+Use an explicit state model rather than one boolean:
 
 ```text
-pnpm dev
-pnpm typecheck
-pnpm lint
-pnpm format
+configuration -> style loading -> ready
+       |               |           |
+       v               v           v
+     fatal           fatal      degraded
+```
+
+- `fatal` means there is no usable map, for example invalid provider configuration,
+  WebGL initialization failure, or an unrecoverable style error. Show an accessible map
+  error panel with remediation and diagnostics guidance.
+- `degraded` means the base map remains usable but one source or terrain is unavailable.
+  Keep interaction enabled, show bounded feedback, and provide retry when retry is safe.
+- Do not cover the map permanently for an isolated tile failure.
+- Loading feedback must have an accessible status name and disappear when the map is
+  usable.
+
+### 9.2 Camera persistence
+
+Persist a versioned `MapCamera` containing longitude, latitude, zoom, bearing, and
+pitch. Validate finite numbers and clamp values to supported ranges before use.
+
+- Load the persisted camera before the production map is mounted so the user does not
+  see a default-to-restored jump.
+- Use the documented Georgia-wide camera when no valid record exists.
+- Persist on settled camera events, not every animation frame or pointer movement.
+- Debounce/coalesce writes and flush the last settled value on safe teardown when
+  practical.
+- A corrupt camera record repairs only that record, logs one bounded warning, and falls
+  back to the Georgia default without breaking other settings.
+- A persistence failure leaves the current session usable and produces non-blocking
+  feedback/diagnostics; it must not make map movement fail.
+
+### 9.3 2D/3D terrain
+
+Place an accessible `2D / 3D` MUI control over or immediately beside the map. The native
+map remains the same instance in both modes.
+
+- 2D removes MapLibre terrain and returns pitch to zero while preserving center, zoom,
+  and bearing.
+- 3D ensures the configured DEM source is ready, enables terrain with a documented
+  exaggeration, and restores the last useful nonzero pitch or a conservative default.
+- Disable repeated transitions while a terrain transition is pending.
+- If DEM metadata or tiles fail, return to a usable 2D state and show an actionable
+  error. The user can retry explicitly.
+- Switching modes must not reload the base style or duplicate sources/listeners.
+- Terrain attribution remains visible whenever its data is requested or displayed.
+
+### 9.4 Map controls and attribution
+
+- Enable expected desktop pan, wheel/double-click zoom, rotate, and pitch interactions.
+- Provide MapLibre navigation/compass controls with accessible surrounding labels where
+  native accessibility is insufficient.
+- Keep attribution visible and keyboard reachable; do not set
+  `attributionControl={false}` in the production map.
+- Preserve visible focus and ensure MUI overlays do not block normal map gestures.
+- Do not introduce custom zoom buttons when MapLibre's supported control is adequate.
+
+## 10. Work packages
+
+### P1.1 Retire the smoke-component boundary
+
+Replace `MapSmokeCanvas` with a production-named `MapWorkspace` while initially keeping
+the network-free Phase 0 style. Introduce the smallest typed facade/controller boundary
+needed for lifecycle, camera, terrain, and diagnostic snapshots.
+
+Deliverables:
+
+- A single map instance with explicit mount/load/idle/error/unmount handling.
+- Listener registration and deterministic cleanup owned by the adapter.
+- A fake facade/controller for component tests.
+- Existing shell, diagnostics, accessibility, and no-network tests remain green.
+
+### P1.2 Validate provider feasibility
+
+Complete the vector, DEM, and time-boxed Sentinel COG checks described in Section 5.
+Document exact evidence dates because provider behavior is time-sensitive. Record the
+chosen default and a rejected alternative where useful.
+
+This package changes no product scope. It prevents the implementation from baking in an
+unusable provider or a credential that cannot be kept secret.
+
+### P1.3 Add validated map provider configuration
+
+Add a Zod boundary and internal readonly configuration. Construct it in the composition
+root or a dedicated configuration factory, then inject only the parsed form.
+
+Test:
+
+- Valid production-shaped and local-fixture configurations.
+- Missing endpoints and source-layer mappings.
+- Unsupported DEM encodings and invalid zoom/tile-size values.
+- Relative GitHub Pages base-path handling where local assets are used.
+- Error messages and diagnostics contain no query secrets or full provider payload.
+
+### P1.4 Build the OSM hiking style
+
+Implement a pure style factory using stable source/layer IDs and the parsed provider
+mapping. Use restrained theme-compatible colors and retain room for future imagery,
+tracks, plans, and waypoints.
+
+Cover land/background, water, boundaries, roads, hiking paths, useful hiking POIs, and
+labels only where supported by the selected source. Unsupported optional source layers
+must be documented; do not invent data that the provider does not expose.
+
+Test the produced style shape, source mapping, layer order, visibility defaults,
+attribution, and absence of secrets. Keep production provider I/O outside unit tests.
+
+### P1.5 Persist and restore the camera
+
+Add a small `MapCameraRepository` port and a Dexie-backed adapter using the existing
+settings table unless an index/schema change genuinely requires a database migration. Do
+not increment the Dexie schema version merely for a new key in an existing key-value
+table.
+
+Load the camera before map mount, persist settled moves, repair corrupt records, and
+cover read/write failures. Add fake-indexeddb tests, component behavior tests, and a
+Chromium reload flow.
+
+### P1.6 Implement terrain mode
+
+Add the DEM source and 2D/3D control without replacing the base style or map instance.
+Model transition states explicitly: `flat`, `enabling`, `terrain`, `disabling`, and
+`failed` (or an equivalent discriminated union).
+
+Test successful toggles, repeated clicks, unavailable DEM, source error, retry, camera
+preservation, source/listener deduplication, and teardown during a pending transition.
+
+### P1.7 Add loading and recoverable error feedback
+
+Translate MapLibre errors into typed, user-actionable categories. Distinguish WebGL,
+style/configuration, base-vector, glyph/sprite, and DEM failures as far as the available
+event evidence permits.
+
+- Fatal failures replace the unusable canvas with remediation.
+- Source/terrain failures use a non-blocking alert/snackbar and keep a usable map.
+- Repeated equivalent tile failures are aggregated instead of producing alert storms.
+- Retry actions are explicit and must not create duplicate map instances or listeners.
+- Offline state is described accurately; do not promise offline map availability.
+
+### P1.8 Extend map and WebGL diagnostics
+
+Capture stable, bounded events for:
+
+- Map mount, load, first idle, style ready, and unmount.
+- WebGL capability plus context lost and restored.
+- Terrain enable/disable/failure and duration.
+- Aggregated source/tile errors by safe category and source ID.
+- Settled camera changes at a throttled summary rate.
+- Current ordered source/layer IDs, terrain state, style identity, last idle time, and
+  safe WebGL renderer/capability information.
+
+Do not log continuous render/move events, full URLs, query strings, tile coordinates,
+raw error objects, or exact persisted records.
+
+Extend the versioned diagnostics bundle deliberately. If the schema changes from Phase 0
+version 1, introduce version 2 and a tested v1-to-current compatibility migration in
+`diagnostics:inspect`; do not mutate the meaning of version 1 in place.
+
+The local developer UI may display the exact current camera for immediate inspection,
+but default exported diagnostics must round longitude/latitude to a documented coarse
+precision or omit them. Full route/track geometry remains excluded.
+
+### P1.9 Add developer map inspection and health
+
+Add a `Map` view to the developer drawer, or an equivalently clear map section, showing
+serializable snapshots rather than the native map object. Include:
+
+- Camera, style, ordered sources/layers, terrain mode, and last idle state.
+- Recent aggregated source failures.
+- WebGL version/capability/context state.
+- Supported MapLibre debug flags such as tile boundaries or collision boxes, available
+  only while developer mode is active and reset safely.
+
+Extend health checks with a non-destructive map readiness check and a terrain/provider
+reachability check that runs only on explicit user request. Normal application startup
+must not wait for optional provider health checks.
+
+### P1.10 Harden deterministic browser coverage and documentation
+
+Create synthetic vector and DEM fixtures sufficient to run the production style and
+terrain paths in real Chromium. Intercept every configured provider request and fail the
+test on unexpected public network access.
+
+Update README status, map configuration instructions, attribution/licensing notes,
+manual verification steps, known provider limitations, and diagnostics behavior. Keep
+the top-level roadmap unchanged unless implementation discovers a material product or
+phase-boundary change.
+
+## 11. Automatic test and acceptance matrix
+
+| Concern             | Unit/component/integration evidence                    | Chromium evidence                               |
+| ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| Facade boundary     | Fake facade drives loading/ready/error and cleanup     | Native map initializes once                     |
+| Provider config     | Zod valid/invalid/secret fixtures                      | Local deterministic config loads                |
+| OSM style           | Pure style/source/layer-order assertions               | Synthetic vector feature renders                |
+| Attribution         | Style/config attribution assertions                    | Visible and keyboard-reachable attribution      |
+| Camera              | Validation, clamping, debounce, repository failures    | Pan/zoom/rotate/pitch then reload restores      |
+| Terrain             | Transition reducer/controller and failure tests        | 2D/3D toggles with local DEM                    |
+| Camera preservation | Controller snapshots before/after                      | Center/zoom/bearing preserved across toggle     |
+| Failure feedback    | Fatal/degraded/retry component states                  | Intercepted vector/DEM/WebGL failures recover   |
+| Diagnostics         | Event bounds, aggregation, redaction, schema migration | Developer map view and exported bundle          |
+| Lifecycle cleanup   | Listener/source deduplication tests                    | Remount/retry does not duplicate map or events  |
+| Accessibility       | RTL roles, names, status, focus, axe                   | Keyboard control and serious/critical axe pass  |
+| Network isolation   | Fixture adapters reject unexpected calls               | No unhandled public request in required E2E     |
+| Pages base path     | Configuration/base URL unit tests                      | Production bundle runs under repository subpath |
+
+Required browser scenarios:
+
+1. Open the built application under `/georgia-routing-planner/` with local fixtures and
+   reach a ready map.
+2. Pan, zoom, rotate, and pitch; reload and verify the last settled camera.
+3. Toggle 3D on and off; verify the same map instance and preserved center/zoom/bearing.
+4. Fail the DEM request; verify the base map remains usable, a concise error appears,
+   and retry can enable terrain after the fixture recovers.
+5. Fail required style/vector metadata; verify a fatal or degraded state appropriate to
+   the failure and useful diagnostics.
+6. Trigger WebGL context loss/restoration in a controlled way where Chromium supports
+   it; verify UI and bounded events.
+7. Enable developer mode, inspect map state, export diagnostics, and validate it with
+   `pnpm diagnostics:inspect`.
+8. Assert no unexpected public network request and no serious/critical axe violation in
+   the Phase 1 controls and failure states.
+
+## 12. Performance, privacy, and reliability limits
+
+- Record a first-load and first-idle duration in diagnostics, but do not set a brittle
+  CI millisecond threshold on shared runners.
+- Camera persistence and diagnostic snapshot updates must occur on settled/throttled
+  events, never per animation frame.
+- Aggregate identical source errors over a bounded time window and retain only capped
+  counts plus representative safe categories.
+- Keep the existing logger ring-buffer cap. Any increase requires measured evidence and
+  an explicit memory bound.
+- Never export full tile URLs, query strings, access tokens, authorization headers,
+  sprite/glyph payloads, tile coordinates, or raw MapLibre error objects.
+- Export only stable source/layer IDs and provider origins or approved labels.
+- Treat camera longitude/latitude as potentially personal. Default bundle precision must
+  be coarse and covered by redaction tests.
+- Revoke listeners, subscriptions, timers, and pending persistence work on teardown.
+- Pass `AbortSignal` through explicit provider probes. MapLibre-owned internal tile
+  cancellation remains within the adapter and is not reimplemented.
+
+## 13. Quality gates
+
+Every implementation commit runs the narrow tests for its behavior. Before presenting
+Phase 1 for approval, run:
+
+```text
 pnpm format:check
-pnpm test:watch
+pnpm lint
+pnpm typecheck
 pnpm test
 pnpm test:integration
 pnpm test:coverage
-pnpm e2e
-pnpm diagnostics:inspect -- <bundle.json>
 pnpm build
+pnpm e2e
 pnpm check
 ```
 
-Catalog commands may initially return a clear not-yet-implemented message or be added in
-Phase 2; do not create misleading scripts that appear to audit real data.
+The final state must also satisfy:
 
-`pnpm check` must be non-destructive and suitable for CI. Document whether it includes
-Playwright or whether CI calls `pnpm e2e` separately after `pnpm build`.
+- Existing global and domain/application coverage thresholds remain enforced.
+- No required test contacts a public vector, terrain, OSM, or imagery endpoint.
+- Current stable desktop Chrome passes the real-provider manual smoke check documented
+  with the provider decision date.
+- Required attribution is visible in both 2D and 3D.
+- Bundle inspection accepts both a new Phase 1 bundle and the checked-in Phase 0 v1
+  fixture when a schema migration was introduced.
+- Production build works under the GitHub Pages base path.
+- No secret, personal GPX data, exact default-export camera, or unbounded map event data
+  appears in logs, fixtures, build output, or diagnostics.
 
-### P0.14 Add GitHub Actions checks and guarded Pages workflow
+## 14. Planned commit sequence
 
-`checks.yml` runs on pull requests and relevant branch pushes:
+Implementation occurs on `feature/map-foundation`. The sequence below is intentionally
+smaller than the phase. Each commit includes the listed tests and must pass at least
+`pnpm typecheck`, `pnpm lint`, and the relevant Vitest suite before the next commit.
 
-1. Checkout.
-2. Install the pinned Node LTS and pnpm.
-3. `pnpm install --frozen-lockfile`.
-4. Format, lint, and type checks.
-5. Unit/component/infrastructure tests with enforced coverage.
-6. Production build using a Pages-like base path.
-7. Install/use pinned Playwright Chromium and run browser/axe tests.
-8. Upload bounded failure artifacts.
+| Commit                                                      | Scope                                                                                                                      | Commit-level verification                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `refactor(map): isolate the MapLibre lifecycle`             | Rename the smoke surface, introduce the typed facade boundary, lifecycle cleanup, and fake while retaining the local style | Existing shell/E2E plus facade/component tests            |
+| `feat(config): validate map provider configuration`         | Add Zod configuration, safe errors, composition, and fixture config                                                        | Config unit tests, secret-redaction tests, build          |
+| `feat(map): render the OSM hiking basemap`                  | Add pure style factory, stable IDs/layer order, attribution, loading/degraded states                                       | Style tests, component tests, local-vector Chromium smoke |
+| `feat(map): persist settled camera state`                   | Add camera value/schema, repository port/adapter, restore/debounce/repair behavior                                         | Unit, fake-indexeddb, component, reload E2E               |
+| `feat(map): add resilient 2D and 3D terrain modes`          | Add DEM source, MUI toggle, transitions, fallback, retry, and camera preservation                                          | Transition/component tests and local-DEM E2E              |
+| `feat(diagnostics): capture bounded map and WebGL evidence` | Add aggregation, snapshot state, health hooks, bundle schema/version migration, and redaction                              | Diagnostics/schema/CLI compatibility/integration tests    |
+| `feat(developer-tools): expose map diagnostics`             | Add developer map view, safe debug flags, health states, accessible feedback                                               | RTL/axe and developer-mode E2E                            |
+| `test(map): harden MapLibre provider failure workflows`     | Add remaining real-map error, context-loss, network-isolation, and lifecycle regression cases                              | Full `pnpm e2e` and coverage gates                        |
+| `docs: document Phase 1 providers and map operation`        | Record provider/COG evidence, configuration, attribution, manual checks, README status, and plan outcome                   | Formatting/link review and full `pnpm check`              |
 
-Use dependency caching supplied by the pnpm/Node actions without caching `node_modules`
-as an opaque mutable artifact.
+Small adjustments to this sequence are allowed when a reviewable dependency boundary
+requires them, but the following rules are not optional:
 
-`pages.yml` must:
+- Do not squash all Phase 1 work into one mega-commit.
+- Do not create artificially tiny commits that leave dead code, unused configuration,
+  disabled tests, or a broken build.
+- Keep tests with the production behavior they verify; do not defer most tests to the
+  final hardening commit.
+- The hardening commit covers cross-cutting browser cases, not missing unit tests from
+  earlier behavior.
+- Documentation-only feasibility evidence may stand alone, but code commits remain
+  independently executable and reviewable.
 
-- Be incapable of deploying feature branches to the production Pages environment.
-- Build/deploy only an approved `main` commit, or be manually disabled until the
-  repository remote and approval workflow exist.
-- Re-run or depend on required checks for the exact commit.
-- Upload only the static `dist` output.
-- Run a post-deployment bootstrap smoke check when a real Pages URL is configured.
+## 15. Approval checklist
 
-No actual deployment is authorized during Phase 0 planning or implementation unless the
-user separately requests it.
+Before asking to integrate Phase 1 into `main`, report:
 
-### P0.15 Documentation and backend-developer handoff
+- Active branch and the ordered commit list.
+- Chosen vector/terrain providers, evidence date, attribution/license requirements, and
+  known limits.
+- Sentinel COG spike conclusion and what remains deferred to the imagery phase.
+- Map boundary, state ownership, provider configuration, and persistence changes.
+- Exact commands run with results and coverage summary.
+- Real local-fixture Chromium flows and real-provider manual smoke result.
+- Diagnostics schema/version and compatibility result.
+- Loading/error/accessibility behavior demonstrated.
+- Production bundle impact and any new dependency with rationale.
+- Known limitations, deviations from this plan, and deferred work.
+- Confirmation that no public deployment, provider secret, personal GPX data, or
+  unexpected public-network test dependency was added.
 
-Update README with:
+Remain on the feature branch after the handoff. Merge to `main` only after explicit user
+approval.
 
-- Prerequisites and exact setup commands.
-- How React components, hooks, use cases, services, Query, Zustand, and Dexie divide
-  responsibilities.
-- How to run each test layer.
-- How to activate developer mode and inspect a bundle.
-- How GitHub Pages base paths work.
-- The current feature branch and approval status only when appropriate; avoid stale
-  permanent branch text in product documentation.
+## 16. Definition of Phase 1 done
 
-Add a short architecture decision record only for a decision that is not already
-captured clearly in README, TOP_LVL_PLAN, PLAN, or AGENTS.
+Phase 1 is complete only when:
 
-## 8. Expected dependency boundaries
-
-The following imports are allowed:
-
-```text
-features/presentation -> application ports/use cases, shared UI, map adapter API
-application           -> domain, application ports
-domain                -> domain only
-infrastructure        -> domain/application ports plus external libraries
-bootstrap             -> every layer solely to construct the application
-diagnostics           -> its contracts and safe browser/runtime adapters
-tools                  -> Node-only schemas/utilities, never imported by browser
-```
-
-Disallowed examples:
-
-- Domain importing React, MUI, Dexie, `ky`, Zustand, TanStack Query, or MapLibre.
-- JSX directly calling `fetch`/`ky` or Dexie.
-- Zustand actions implementing distance/elevation/catalog business rules.
-- Infrastructure importing feature components.
-- Browser code importing Node-only tools.
-- Arbitrary global singletons imported from everywhere.
-
-## 9. Test and acceptance matrix
-
-| Capability            | Unit/component evidence                    | Browser/CI evidence                     |
-| --------------------- | ------------------------------------------ | --------------------------------------- |
-| Strict configuration  | Configuration/type fixtures fail correctly | CI typecheck required                   |
-| Architecture boundary | ESLint or boundary test                    | CI lint required                        |
-| Application shell     | RTL behavior and axe tests                 | Chromium shell/reload flow              |
-| Local map smoke       | Fake facade component states               | Real network-free MapLibre canvas       |
-| Composition root      | Fakes replace ports cleanly                | App boots from production bundle        |
-| Dexie                 | `fake-indexeddb` schema/migration tests    | Settings survive reload                 |
-| HTTP foundation       | MSW success/error/cancel tests             | No unexpected external requests         |
-| Diagnostics           | schema, redaction, bounds, error tests     | Record/export controlled failure        |
-| Diagnostics CLI       | valid/invalid/golden CLI tests             | Browser bundle accepted by CLI          |
-| GitHub Pages path     | Vite config tests where useful             | Build served and reloaded under subpath |
-| Accessibility         | RTL/axe targeted checks                    | Playwright axe plus keyboard smoke      |
-
-## 10. Coverage and quality gates
-
-Required before Phase 0 can be presented for approval:
-
-- Global statements/lines/functions at least 80%.
-- Global branches at least 75%.
-- Domain/application statements/lines at least 90%.
-- Domain/application branches at least 85%.
-- Zero TypeScript errors.
-- Zero ESLint errors.
-- Formatting check passes.
-- Unit, component, infrastructure, and Playwright suites pass.
-- Production build passes from a clean frozen-lockfile install.
-- No required test contacts a public map/data provider.
-- Dependency audit has no ignored unexplained critical finding.
-- Diagnostics redaction fixtures prove secrets and personal geometry are absent.
-
-If a check is temporarily blocked by an external tool defect, document the exact
-failure, evidence, containment, and follow-up. Do not silently remove the gate.
-
-## 11. Planned commit sequence
-
-Commits remain on the implementation feature branch. A reasonable sequence is:
-
-1. `chore: scaffold React TypeScript toolchain`
-2. `chore: configure lint formatting and test foundations`
-3. `feat: add application shell and composition root`
-4. `feat: add network-free MapLibre smoke canvas`
-5. `feat: add local persistence and state foundations`
-6. `feat: add structured diagnostics and bootstrap fallback`
-7. `test: add browser accessibility and diagnostics coverage`
-8. `ci: add required checks and guarded Pages workflow`
-9. `docs: document infrastructure and development workflow`
-
-Combine or split commits when it improves reviewability. Do not commit broken
-intermediate states merely to match this list. Every commit intended for review should
-compile or clearly state why it is an intentionally preparatory commit.
-
-## 12. Approval checklist
-
-Before asking for approval to integrate into `main`, report:
-
-- Active feature branch and commit list.
-- Files and architecture introduced.
-- Dependency summary and audit result.
-- Exact commands run and their results.
-- Coverage summary.
-- Playwright/axe result and any retained artifact.
-- Production bundle size summary.
-- Diagnostics export/inspection demonstration.
-- Known limitations, deferred work, and any deviation from this plan.
-- Confirmation that no public deployment, secret, or personal GPX data was added.
-
-Remain on the feature branch after presenting the result. Update `main` only after the
-user explicitly approves integration.
-
-## 13. Definition of Phase 0 done
-
-Phase 0 is done only when:
-
-1. The repository is reproducible from a clean checkout with the frozen lockfile.
-2. The documented command interface exists and required checks pass.
-3. The Material UI workbench shell and local MapLibre smoke canvas run in current
-   Chrome.
-4. Clean architecture boundaries and constructor-based service composition are
-   demonstrated by real code and tests.
-5. Persistence, HTTP, remote-query, and transient-state foundations exist without
-   absorbing business logic.
-6. Developer mode captures startup/component failures and exports a correctly redacted
-   bundle readable by the CLI.
-7. GitHub Actions defines protected automatic checks and the Pages workflow cannot
-   publish a feature branch.
-8. Documentation is sufficient for a backend developer to run, test, navigate, and
-   diagnose the frontend.
-9. The verified state is committed on a feature branch and presented for user approval.
-10. No commit or merge has been made to `main` without that approval.
+1. A validated, replaceable provider configuration renders the OSM hiking map with
+   correct attribution.
+2. The map supports smooth desktop pan, zoom, rotate, and pitch in current Chrome.
+3. The last valid settled camera restores after reload and corrupt persistence degrades
+   safely.
+4. 2D/3D terrain toggles on the same map instance, preserves camera intent, and falls
+   back to a usable 2D map on DEM failure.
+5. MapLibre lifecycle and native objects remain isolated behind a typed feature boundary
+   with deterministic cleanup.
+6. Loading, fatal, degraded, retry, offline, and WebGL-loss states are accessible and
+   covered automatically.
+7. Map/source/terrain/WebGL instrumentation is useful, bounded, sanitized, and visible
+   in developer mode and the exported diagnostics bundle.
+8. Diagnostics inspection remains compatible with supported Phase 0 bundles.
+9. Required tests run with local vector/DEM fixtures and no public-provider dependency;
+   a separately documented real-provider smoke check passes.
+10. The provider and Sentinel COG feasibility decisions, configuration, attribution, and
+    operating limits are documented for the maintainer.
+11. The verified implementation exists as multiple focused, testable commits on the
+    feature branch and is presented for approval without changing `main`.

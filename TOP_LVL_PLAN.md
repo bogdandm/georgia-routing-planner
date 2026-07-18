@@ -10,11 +10,18 @@ straight-line planning.
 The MVP is a static web application. It must remain useful without accounts, automatic
 routing, or a proprietary backend.
 
+Tracks have two explicit sources. A curated catalog is committed to the repository and
+served as versioned static assets by the same GitHub Pages deployment as the
+application. Separately, GPX files imported by a user remain private in that browser's
+IndexedDB unless the user explicitly exports them. There is no runtime catalog-editing
+or upload service and local imports are never uploaded automatically.
+
 ## 2. Product principles
 
 1. **The map is the workspace.** Controls should support the map rather than compete
    with it.
-2. **Local first.** User-imported GPX files and saved plans stay in the browser.
+2. **Local first.** User-imported GPX files, personal organization, saved markers, and
+   saved plans stay in the browser.
 3. **No hidden magic.** Straight segments are visibly straight, data dates and cloud
    cover are visible, and calculated elevation states its source.
 4. **Consistent statistics.** Catalog tracks and new plans use the same distance and
@@ -33,18 +40,26 @@ routing, or a proprietary backend.
 ### 3.1 Explore imagery
 
 1. Open the application at the last used view or a Georgia-wide default.
-2. Choose a Sentinel-2 acquisition date and maximum cloud cover.
-3. View the raster imagery with transparent hiking-relevant OSM layers above it.
-4. Toggle terrain and adjust pitch/bearing without losing selected layers.
+2. Search Sentinel-2 L1C/L2A acquisitions intersecting the current viewport or an area
+   around a saved marker.
+3. Use a calendar to choose an acquisition date and compare availability and cloud
+   cover.
+4. View true-color imagery and its footprint with transparent hiking-relevant OSM layers
+   above it.
+5. Toggle terrain and adjust pitch/bearing without losing selected layers.
 
 ### 3.2 Browse the track library
 
 1. Open the `Tracks` tab.
-2. Filter by visible map area, region, length, ascent, maximum elevation, route shape,
-   and curated tags.
-3. Hover or select a result to highlight its simplified preview.
-4. Open the full track, inspect statistics and elevation, and download the original GPX
-   if desired.
+2. Browse both the read-only curated GitHub Pages catalog and GPX tracks retained in the
+   browser.
+3. Browse curated categories or organize tracks into personal nested folders using
+   drag-and-drop and manual ordering.
+4. Filter and sort by visible map area, name, date added, recorded duration when
+   available, region, length, ascent, maximum elevation, route shape, and curated tags.
+5. Hover or select a result to highlight its simplified preview.
+6. Open the full track on the map, inspect statistics and elevation, and load or
+   download the original GPX only when requested.
 
 ### 3.3 Create a manual plan
 
@@ -54,16 +69,28 @@ routing, or a proprietary backend.
 3. Connect consecutive points with straight geodesic segments.
 4. Sample terrain along the segments and show distance, ascent/descent, and an elevation
    profile.
-5. Add names, notes, and marker types.
+5. Add waypoint names, notes, and display styles.
 6. Save locally or export to GPX.
 
 ### 3.4 Import a local GPX
 
 1. Select or drag a GPX file into the application.
 2. Validate and preview it before saving.
-3. Store it locally only when the user explicitly chooses to retain it.
+3. Extract its name, bounds, distance, optional timestamps/duration, elevation data, and
+   validation warnings using the same versioned calculation policies as the static
+   catalog.
+4. Store it in IndexedDB and include it in the combined track catalog only when the user
+   explicitly chooses to retain it.
 
-### 3.5 Diagnose a problem
+### 3.5 Save and revisit a marker
+
+1. Click the map and choose to create a saved marker.
+2. Set its name, icon, color, and preferred map scale; retain coordinates and optional
+   terrain-derived elevation.
+3. Reopen the marker later to restore its saved location and scale, or use it as a
+   Sentinel search target or a source for a new planning waypoint.
+
+### 3.6 Diagnose a problem
 
 1. Enable developer mode from Settings or a documented URL parameter.
 2. Reproduce the problem while a bounded diagnostic session records structured events.
@@ -161,6 +188,10 @@ Zustand, TanStack Query, or Dexie package.
 - `ElevationSample`
 - `ElevationProfile`
 - `TrackMetadata`
+- `TrackFolder`
+- `TrackPlacement`
+- `SavedMarker`
+- `MapLayerDefinition`
 - `SatelliteScene`
 - `AddWaypointToPlan`
 - `MoveWaypoint`
@@ -169,6 +200,7 @@ Zustand, TanStack Query, or Dexie package.
 - `ImportGpxTrack`
 - `ExportPlanAsGpx`
 - `SearchTrackCatalog`
+- `SearchSatelliteScenes`
 
 Use immutable value objects where they prevent invalid states. DTOs and persisted
 records remain plain readonly TypeScript data. Prefer composition and interfaces over
@@ -321,10 +353,13 @@ action.
 
 ## 6. Data plan
 
-### 6.1 GPX catalog source
+### 6.1 Static curated GPX catalog source
 
-Keep original files under a stable data directory outside normal application source
-modules. A Node-based catalog tool runs before production builds.
+The maintainer selects and categorizes the curated GPX collection, then commits it to
+the GitHub repository under a stable data directory outside normal application source
+modules. A Node-based catalog tool validates those inputs and generates the static
+assets included in the GitHub Pages build. This is build-time repository preparation,
+not a runtime publishing or upload service.
 
 Suggested source shape:
 
@@ -333,6 +368,7 @@ data/
   tracks/
     <stable-name>.gpx
   track-metadata.csv
+  catalog-folders.json
   catalog-overrides.json
 ```
 
@@ -340,46 +376,67 @@ Suggested generated shape:
 
 ```text
 public/catalog/
+  manifest.json
   tracks.json
+  folders.json
   track-previews.geojson
   validation-report.json
 public/tracks/
   <stable-id>.gpx
 ```
 
-### 6.2 Catalog pipeline
+The generated catalog is read-only in the deployed application. Full GPX assets are
+fetched only when the user selects, views, or downloads a track. File-system paths are
+not catalog identities; stable IDs and metadata define categorization.
+
+### 6.2 Static catalog build
 
 For every GPX file:
 
 1. Parse tracks, routes, waypoints, elevation, and optional timestamps.
 2. Reject invalid coordinates and report malformed segments.
 3. Normalize names and create a stable non-path-derived ID.
-4. Compute bounds, center, distance, loop-ness, and point counts.
-5. Resample elevation from the selected DEM for cross-file consistency.
-6. Smooth elevation according to one versioned calculation policy.
-7. Calculate ascent, descent, and minimum/maximum elevation.
-8. Generate simplified preview geometry at one or more tolerances.
-9. Detect exact and likely duplicates.
-10. Merge curated metadata and write deterministic sorted output.
+4. Read the catalog-added time from curated metadata and extract optional recorded
+   start/end time and elapsed duration when valid timestamps exist. Never derive the
+   catalog-added time from the nondeterministic build clock.
+5. Compute bounds, center, distance, loop-ness, and point counts.
+6. Resample elevation from the selected DEM for cross-file consistency.
+7. Smooth elevation according to one versioned calculation policy.
+8. Calculate ascent, descent, and minimum/maximum elevation.
+9. Generate simplified preview geometry at one or more tolerances.
+10. Detect exact and likely duplicates.
+11. Merge curated folder/category metadata and write deterministic sorted output.
 
 The tool must be repeatable: identical inputs produce byte-stable generated metadata
 where timestamps are not intentionally included.
 
-### 6.3 Privacy and publishing audit
+For the initial collection size, viewport search uses summary bounds and simplified
+preview geometry in memory. Add a generated spatial or tile index only after measurement
+shows that the simple search is insufficient.
+
+### 6.3 Curated-source safety review
 
 - Confirm redistribution rights for every source file.
-- Remove unwanted author, device, email, and timestamp metadata from published copies.
+- Remove unwanted author, device, email, and sensitive timestamp metadata from the
+  static copies served by GitHub Pages.
 - Review home/private start and finish locations.
 - Preserve provenance and attribution in catalog metadata where required.
-- Never expose unpublished source paths in generated URLs.
+- Never expose source repository paths in generated URLs.
+
+This review applies only to tracks deliberately selected for the public static catalog.
+It never scans, transforms, or uploads a user's browser-local tracks.
 
 ### 6.4 User-created data
 
 Dexie stores:
 
 - Saved route plans.
-- Locally imported tracks the user elects to retain.
-- UI preferences and last map view.
+- Locally imported track summaries and full GPX content that the user elects to retain.
+- Personal folders and drag-and-drop placement/order for curated or local tracks.
+- Saved markers with name, icon, color, coordinates, optional elevation, and preferred
+  map scale.
+- UI preferences, layer preferences, and the last settled map camera so the application
+  reopens at the previous position.
 - Cached catalog metadata with a schema/data version.
 - Developer-mode preferences and, if enabled, a strictly capped recent diagnostic
   buffer.
@@ -387,9 +444,23 @@ Dexie stores:
 Database migrations are explicit and tested. Destructive migrations require an
 export/backup path or a clear user confirmation.
 
+The permanent storage and entity contracts are defined in
+[`docs/data-model.md`](docs/data-model.md).
+
 ## 7. Map and imagery plan
 
-### 7.1 OSM
+### 7.1 Layer composition
+
+- Keep stable typed layer bands in this order: background, satellite imagery, OSM
+  reference overlays, track previews/selected tracks, plans, saved markers/waypoints,
+  and interaction highlights.
+- Keep sources, rendering adapters, layer visibility/opacity state, and attribution
+  separate so new imagery or overlay providers can be added without changing domain
+  entities.
+- Do not persist arbitrary MapLibre objects. Persist only validated serializable layer
+  preferences and reconstruct native sources/layers through the map facade.
+
+### 7.2 OSM
 
 - Use a MapLibre-compatible vector tile source.
 - Build a hiking-focused transparent overlay style rather than placing a complete opaque
@@ -398,16 +469,23 @@ export/backup path or a clear user confirmation.
 - Make tile/style endpoints configuration-driven so a provider can be changed without
   rewriting features.
 
-### 7.2 Sentinel-2
+### 7.3 Sentinel-2
 
 - Query an anonymous STAC service for the static MVP.
-- Filter by viewport, date range, collection, and cloud-cover metadata.
+- Restrict results to Sentinel-2 L1C and L2A collections.
+- Search by viewport or by a bounded area around a saved marker, plus date range and
+  cloud-cover metadata.
+- Group matching scenes by acquisition date for calendar availability and show cloud
+  cover in the calendar and scene list.
 - Initially render true-color imagery only.
-- Show acquisition date, product/scene identifier, and cloud-cover metadata.
+- Show acquisition date, product level, product/scene identifier, footprint/coverage,
+  and cloud-cover metadata.
+- Select a concrete scene explicitly in the MVP rather than silently mosaicking scenes;
+  uncovered portions of the viewport remain visible and understandable.
 - Keep imagery loading behind a `SatelliteCatalogGateway` and raster-source adapter so a
   future CDSE processing service can replace it.
 
-### 7.3 Terrain and elevation
+### 7.4 Terrain and elevation
 
 - Use one raster DEM source for visual terrain and route calculations where technically
   practical.
@@ -415,6 +493,8 @@ export/backup path or a clear user confirmation.
 - Apply a deterministic smoothing and positive-gain threshold policy.
 - Version the elevation algorithm so catalog data can be regenerated when it changes.
 - Label elevation as terrain-derived, not device/barometric elevation.
+- Retain MapLibre's existing terrain/pitch capability, but defer richer 3D overlays,
+  models, and 3D marker behavior beyond the MVP.
 
 ## 8. Automatic testing strategy
 
@@ -600,14 +680,14 @@ Acceptance:
 - Current Chrome can pan, zoom, rotate, pitch, and toggle terrain smoothly.
 - Map lifecycle code is isolated from the rest of the UI.
 
-### Phase 2: GPX catalog pipeline
+### Phase 2: static GPX catalog build
 
 Deliver:
 
 - GPX audit/index CLI.
 - Deterministic catalog and simplified preview output.
 - Validation and duplicate report.
-- Initial curated metadata schema.
+- Initial curated track, folder/category, time, and metrics schemas.
 - Catalog audit report accessible from developer mode.
 
 Acceptance:
@@ -621,12 +701,19 @@ Deliver:
 
 - Tracks drawer, filters, visible-map search, previews, selection, details, and original
   GPX download.
+- Local GPX parse/validate/preview/retain workflow with no network upload.
+- One combined view over read-only curated tracks and retained local tracks.
+- Curated categories plus personal nested folders, drag-and-drop placement, manual
+  ordering, sorting, and filtering.
 - Elevation summary/profile for selected tracks.
 
 Acceptance:
 
 - Filtering 1,200 entries feels immediate.
 - Selecting a track loads only the data needed for that track.
+- A retained local track survives reload and can be removed without affecting the
+  curated static catalog.
+- Personal organization survives reload without attempting to modify GitHub assets.
 
 ### Phase 4: manual planner
 
@@ -637,10 +724,15 @@ Deliver:
 - Distance and elevation sampling.
 - Elevation chart linked to the map.
 - Local save/load and GPX export.
+- Create/edit/delete saved markers with icons, colors, coordinates, terrain-derived
+  elevation, and preferred map scale.
+- Convert or copy a saved marker into a planning waypoint without coupling their
+  identities.
 
 Acceptance:
 
 - A plan survives a page reload.
+- A saved marker restores its location and preferred map scale after reload.
 - Exported GPX reimports without geometry loss.
 - Calculation services have deterministic unit tests.
 
@@ -648,15 +740,19 @@ Acceptance:
 
 Deliver:
 
-- STAC search by viewport/date/cloud cover.
+- STAC search limited to Sentinel-2 L1C/L2A by viewport or saved-marker area, date, and
+  cloud cover.
+- Acquisition calendar grouped by date with availability and cloud-cover summaries.
 - Scene selector and true-color raster display.
-- Imagery metadata and attribution.
+- Scene footprint/coverage, product level, imagery metadata, and attribution.
 - Cancellable loading and actionable errors.
 - Sanitized request tracing, provider timing, and quota/rate-limit diagnostics.
 
 Acceptance:
 
 - A user can select a different acquisition without resetting the map or plan.
+- The calendar and scene list make partial coverage and cloud cover visible rather than
+  implying that one scene covers the entire viewport.
 - Secrets are absent from source code and production assets.
 
 ### Phase 6: polish and release
@@ -688,7 +784,7 @@ For one developer using Codex assistance:
 | ----------------------------------------------- | ----------------------------------------: |
 | Scaffold, architecture, and GUI shell           |                                  3-5 days |
 | Map, OSM layers, and terrain                    |                                  4-7 days |
-| Catalog audit/index pipeline                    | 3-7 days, depending on source consistency |
+| Catalog audit/index build tooling               | 3-7 days, depending on source consistency |
 | Catalog UI and elevation profile                |                                  4-7 days |
 | Manual planner and persistence                  |                                  4-7 days |
 | Sentinel scene selection/rendering              |                                  4-8 days |
@@ -704,7 +800,7 @@ retire the largest uncertainties before detailed estimates are made.
 | Sentinel COG performance or CORS behavior     | Prove one real scene in Phase 1/technical spike; retain a replaceable raster adapter.                                                        |
 | Inconsistent elevation gain                   | Use one versioned DEM sampling/smoothing policy and regenerate the catalog.                                                                  |
 | MapLibre/React lifecycle complexity           | Keep a dedicated map facade and integration tests; do not let native map objects leak into domain code.                                      |
-| GPX source quality and duplicates             | Produce a non-destructive validation report before publishing or renaming files.                                                             |
+| GPX source quality and duplicates             | Produce a non-destructive validation report before serving static catalog assets or renaming files.                                          |
 | Excessive frontend state complexity           | Separate remote, local UI, persisted, and domain state; do not add Redux/NgRx-style machinery without demonstrated need.                     |
 | CSS/design time grows                         | Stay within Material UI and the shared theme; reject one-off custom widgets without a functional reason.                                     |
 | Static provider dependence                    | Put all endpoints behind configuration and ports; never hard-code provider behavior into use cases.                                          |

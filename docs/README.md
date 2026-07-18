@@ -1,15 +1,17 @@
 # Project documentation
 
-This directory explains the implemented system. It complements, rather than repeats, the
-product roadmap and implementation plan.
+This directory explains the implemented system and durable approved contracts. It
+complements, rather than repeats, the product roadmap and implementation plan; each
+document distinguishes current behavior from target contracts where necessary.
 
-| Document                                                                    | Purpose                                                                        | Update when                                             |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| [Project structure](./project-structure.md)                                 | Module boundaries, dependency direction, composition, and state ownership      | Files move, a layer is added, or ownership changes      |
-| [Features](./features.md)                                                   | Implemented behavior, failure handling, diagnostics, tests, and deferred scope | User-visible behavior or a failure mode changes         |
-| [Runtime flows](./runtime-flows.md)                                         | Startup, camera, terrain, provider errors, health checks, and export sequences | Cross-module control flow or lifecycle ordering changes |
-| [Map providers](./map-providers.md)                                         | Provider choice, schema, attribution, evidence, and operating limits           | An endpoint, policy, attribution, or provider changes   |
-| [Provider configuration example](./map-provider-configuration.example.json) | Valid public configuration accepted by the production Zod boundary             | The configuration schema or defaults change             |
+| Document                                                                    | Purpose                                                                        | Update when                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| [Project structure](./project-structure.md)                                 | Module boundaries, dependency direction, composition, and state ownership      | Files move, a layer is added, or ownership changes        |
+| [Data model](./data-model.md)                                               | MVP entities, attributes, storage authority, privacy, and consistency rules    | A persisted contract, source, cache, or ownership changes |
+| [Features](./features.md)                                                   | Implemented behavior, failure handling, diagnostics, tests, and deferred scope | User-visible behavior or a failure mode changes           |
+| [Runtime flows](./runtime-flows.md)                                         | Startup, camera, terrain, provider errors, health checks, and export sequences | Cross-module control flow or lifecycle ordering changes   |
+| [Map providers](./map-providers.md)                                         | Provider choice, schema, attribution, evidence, and operating limits           | An endpoint, policy, attribution, or provider changes     |
+| [Provider configuration example](./map-provider-configuration.example.json) | Valid public configuration accepted by the production Zod boundary             | The configuration schema or defaults change               |
 
 Repository-level references:
 

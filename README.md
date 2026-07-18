@@ -310,8 +310,9 @@ branch is considered releasable only when all required checks pass.
 
 ## GPX collection
 
-The approximately 1,200 GPX files (under 15 MB total) will be processed during the
-build. A catalog tool will generate:
+Tracks have two independent sources. The approximately 1,200 maintainer-selected GPX
+files (under 15 MB total) will be committed to GitHub and processed into a read-only
+static catalog served by the GitHub Pages deployment. A catalog tool will generate:
 
 - Search/filter metadata.
 - Bounds and map centers.
@@ -321,6 +322,11 @@ build. A catalog tool will generate:
 - Stable links to original GPX files that are loaded only when selected.
 
 The browser must not fetch and parse all original files at startup.
+
+Separately, a user may import GPX files into that browser. Retained imports, personal
+folders, saved markers, and plans live only in IndexedDB and are never added to GitHub
+or uploaded automatically. The UI combines curated and local tracks without erasing
+their different ownership. See [Data model and storage ownership](docs/data-model.md).
 
 ## Deployment model
 

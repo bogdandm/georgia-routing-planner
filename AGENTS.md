@@ -62,18 +62,45 @@ Rules:
 - End each implementation handoff by reporting the active branch, commit/check status,
   and whether the branch is awaiting approval.
 
-`PLAN.md` and `TOP_LVL_PLAN.md` are temporary planning artifacts. They may be
-regenerated for a workstream or deleted after it. They can guide current work, but
-neither file is a source of project truth and neither may be the sole record of product
-scope, architecture, behavior, decisions, operations, or maintenance knowledge. Before
-work closes, move every durable fact into `README.md`, `docs/`, code contracts, or
-tests.
+## Documentation ownership: system description vs planning
 
-Planning files are the only repository documents that may contain work-item sequencing,
-delivery timing, branch tracking, or implementation-status tracking. `README.md` and
-`docs/` describe the project overview, reviewed system concept, implemented behavior,
-current capability boundaries, architecture, and operations without referring to work
-splits or delivery timing.
+Keep stable system documentation independent from work breakdown and delivery progress:
+
+| Location          | Owns                                                                                                      | Must not contain                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `README.md`       | Stable project overview, current application capabilities, setup, commands, and complete concept summary  | Feature phases/stages, task IDs, estimates, branch/commit/PR status, merge status, or progress  |
+| `docs/`           | Stable feature concepts, implemented behavior, unavailable capability labels, architecture, and operation | Feature phases/stages, task ordering, estimates, branch/commit/PR status, or delivery progress  |
+| `TOP_LVL_PLAN.md` | TO-BE product roadmap, feature ordering, dependencies, broad acceptance, and high-level progress          | Detailed durable technical contracts that belong in `docs/`, code, or tests                     |
+| `PLAN.md`         | Active implementation tasks, work splits, commit sequence, verification plan, and detailed progress       | The only explanation of a feature's meaning, runtime contract, ownership, or operating behavior |
+
+Rules:
+
+- `README.md` and `docs/` may describe features that are not implemented when needed to
+  explain the complete reviewed system concept. Label current availability clearly, but
+  never say when, in which phase/stage, or through which task/branch the feature will be
+  implemented.
+- Only `PLAN.md` and `TOP_LVL_PLAN.md` may contain phases, stages, roadmap sequencing,
+  work-item breakdown, delivery estimates, branch tracking, approval progress, or
+  implementation-status history.
+- Planning files may link to stable documentation. Stable documentation must not depend
+  on a planning section, phase name, task number, or implementation split to explain a
+  feature or system contract.
+- Durable facts discovered during implementation must move into `README.md`, `docs/`,
+  code contracts, or tests in the same change. Planning files may retain task outcomes,
+  but must not remain the sole record of lasting behavior or architecture.
+- When reviewed Penpot UI/UX conflicts with repository prose, Penpot wins for layout,
+  feature placement, and interaction hierarchy. Update stable feature documentation and
+  the relevant planning files; do not reinterpret the design to preserve stale prose.
+- Before a documentation handoff, verify that this command returns no matches:
+
+  ```powershell
+  rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
+  ```
+
+  Also inspect `README.md` and `docs/` for estimates, task identifiers, branch names,
+  commit hashes, pull-request state, merge state, approval state, and other progress
+  reporting. Current capability statements such as “not currently available” are
+  allowed; delivery timing is not.
 
 ## Penpot design review workflow
 

@@ -5,6 +5,11 @@ import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
+import {
+  loadMapProviderConfiguration,
+  summarizeMapProviderConfiguration,
+  type MapProviderConfigurationResult,
+} from '@/bootstrap/configuration/MapProviderConfiguration';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
@@ -21,6 +26,7 @@ export interface RuntimeServices {
   readonly httpClient: KyInstance;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
+  readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly queryClient: QueryClient;
 }
 
@@ -37,6 +43,29 @@ export function createRuntimeServices(): RuntimeServices {
     buildInfo.mode !== 'production' || developerFlag === '1',
   );
   const database = new AppDatabase(logger);
+  const mapProviderConfiguration = loadMapProviderConfiguration(
+    import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
+    new URL(import.meta.env.BASE_URL, globalThis.location.origin).toString(),
+  );
+  if (mapProviderConfiguration.status === 'valid') {
+    const summary = summarizeMapProviderConfiguration(mapProviderConfiguration.value);
+    logger.log({
+      level: 'info',
+      name: 'map.configuration.validated',
+      data: {
+        vectorId: summary.vectorId,
+        vectorOrigin: summary.vectorOrigin,
+        terrainId: summary.terrainId,
+        terrainOrigin: summary.terrainOrigin,
+      },
+    });
+  } else {
+    logger.log({
+      level: 'error',
+      name: 'map.configuration.invalid',
+      message: mapProviderConfiguration.message,
+    });
+  }
   const healthChecks = new HealthCheckService(clock, database, logger);
   const diagnostics = new DiagnosticsService(buildInfo, logger, healthChecks);
   const queryClient = new QueryClient({
@@ -77,6 +106,7 @@ export function createRuntimeServices(): RuntimeServices {
     httpClient: createHttpClient(logger),
     idGenerator,
     logger,
+    mapProviderConfiguration,
     queryClient,
   };
 }

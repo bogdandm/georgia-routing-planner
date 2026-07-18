@@ -2,6 +2,10 @@ import { QueryClient } from '@tanstack/react-query';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import {
+  defaultMapProviderConfigurationInput,
+  parseMapProviderConfiguration,
+} from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
@@ -52,6 +56,13 @@ export function createTestServices(): RuntimeServices {
     httpClient: createHttpClient(logger),
     idGenerator,
     logger,
+    mapProviderConfiguration: {
+      status: 'valid',
+      value: parseMapProviderConfiguration(
+        defaultMapProviderConfigurationInput,
+        'https://example.test/georgia-routing-planner/',
+      ),
+    },
     queryClient: new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     }),

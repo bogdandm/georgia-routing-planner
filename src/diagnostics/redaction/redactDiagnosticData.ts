@@ -19,6 +19,8 @@ const exportableFieldNames = new Set([
   'ready',
   'reason',
   'schemaVersion',
+  'satelliteId',
+  'satelliteOrigin',
   'sourceId',
   'status',
   'usageBytes',

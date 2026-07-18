@@ -1,7 +1,10 @@
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import {
+  SatelliteCatalogError,
+  type SatelliteCatalogGateway,
+} from '@/application/ports/SatelliteCatalogGateway';
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { maximumSatelliteSearchResults } from '@/application/satellite/SearchSatelliteScenes';
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
@@ -184,10 +187,12 @@ export class LoadSatelliteAvailability {
       const safeError =
         error instanceof SatelliteSearchError
           ? error
-          : new SatelliteSearchError(
-              'provider-capability',
-              'The satellite catalog could not load acquisition dates.',
-            );
+          : error instanceof SatelliteCatalogError
+            ? new SatelliteSearchError(error.code, error.message)
+            : new SatelliteSearchError(
+                'provider-capability',
+                'The satellite catalog could not load acquisition dates.',
+              );
       this.logger.log({
         level: 'error',
         name: 'satellite.availability.failed',

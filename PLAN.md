@@ -9,9 +9,9 @@ This is the active implementation plan for the Satellite imagery workspace descr
 [`docs/map-providers.md`](./docs/map-providers.md). It replaces the completed map
 foundation plan that previously occupied this file.
 
-- Status: **implementation started; the live Sentinel diagnostics timeline foundation is
-  implemented, catalog feasibility is verified, and the provider-independent search core
-  is the active package while raster feasibility remains open**.
+- Status: **implementation started; the live Sentinel diagnostics timeline foundation,
+  validated Earth Search catalog path, and provider-independent search core are
+  implemented while raster feasibility remains open**.
 - Active branch: `feature/sentinel-imagery-plan`, created from `main` on 2026-07-19.
 - Approval boundary: all implementation remains on a feature branch and reaches `main`
   only after the reviewed branch state is explicitly approved.
@@ -37,7 +37,7 @@ merge into `main`.
 | S5.1    | Persistent drawer and live Sentinel timeline      | In progress |
 | S5.2    | Catalog and raster feasibility decision           | In progress |
 | S5.3    | Models, viewport geometry, and use cases          | Done        |
-| S5.4    | Validated STAC gateway and configuration          | Pending     |
+| S5.4    | Validated STAC gateway and configuration          | Done        |
 | S5.5    | Search sidebar and acquisition calendar           | Pending     |
 | S5.6    | MapLibre true-color imagery and footprint adapter | Pending     |
 | S5.7    | Results, metadata, and applied actions            | Pending     |
@@ -1231,6 +1231,26 @@ Tests in the same commit:
 - Cancellation, timeout, offline, 4xx, 429, 5xx, and partial validation.
 - Configuration validation, HTTPS/origin safety, and fake token/query/body redaction.
 - Fixture bytes are synthetic/minimal and no public provider is contacted.
+
+Current evidence:
+
+- Public configuration validates the Earth Search URL, distinct L1C/L2A collection IDs,
+  attribution, and a maximum of one to ten pages; bootstrap constructs the adapter
+  behind `SatelliteCatalogGateway` only after configuration succeeds.
+- The gateway sends allowlisted bbox/date/cloud/field criteria through the central
+  no-retry `ky` client, propagates `AbortSignal`, and follows only same-origin HTTPS
+  POST pagination tokens with no query or fragment.
+- Zod validates the complete response before any scene is returned. L2A must expose an
+  HTTPS true-color COG; known public L1C S3 keys map to HTTPS but remain explicitly
+  `unsupported-jp2`.
+- Timeout, rate-limit, HTTP, network, schema, pagination, result-limit, and cancellation
+  outcomes remain typed. Logs/timeline events retain safe codes and operation IDs but no
+  bodies, URLs, tokens, or exact geometry.
+- Explicit provider health checks include a fixed bounded Sentinel POST probe and remain
+  outside application startup.
+- `pnpm check` passes with 120 combined tests, 16 focused integration tests, 90.83%
+  statement coverage, 80.44% branch coverage, strict type checking, linting, formatting,
+  repository audit, and production build.
 
 Commit: `feat(satellite): add Earth Search gateway`
 

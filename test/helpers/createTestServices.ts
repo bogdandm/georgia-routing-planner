@@ -15,6 +15,7 @@ import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnost
 import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
+import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -52,6 +53,10 @@ export function createTestServices(): RuntimeServices {
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const httpClient = createHttpClient(logger);
+  const parsedMapProviderConfiguration = parseMapProviderConfiguration(
+    defaultMapProviderConfigurationInput,
+    'https://example.test/georgia-routing-planner/',
+  );
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -77,14 +82,19 @@ export function createTestServices(): RuntimeServices {
     mapDiagnostics,
     mapProviderConfiguration: {
       status: 'valid',
-      value: parseMapProviderConfiguration(
-        defaultMapProviderConfigurationInput,
-        'https://example.test/georgia-routing-planner/',
-      ),
+      value: parsedMapProviderConfiguration,
     },
     queryClient: new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     }),
+    satelliteCatalogGateway: new EarthSearchSatelliteCatalogGateway(
+      httpClient,
+      parsedMapProviderConfiguration.satellite,
+      parsedMapProviderConfiguration.policy.requestTimeoutMs,
+      sentinelQueryDiagnostics,
+      logger,
+      clock,
+    ),
     sentinelQueryDiagnostics,
   };
 }

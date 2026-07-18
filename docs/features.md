@@ -89,9 +89,10 @@ visibility actions.
 The current implementation shows live viewport coordinates and the compact selector. The
 internal application core now captures immutable viewport bounds, validates bounded
 inclusive UTC criteria, keeps L1C/L2A exclusive, and derives grouped scene coverage and
-edge evidence behind a catalog port. It is not yet connected to a STAC adapter or the
-Satellite controls, so marker targeting, date/product filters, user-triggered search,
-results, metadata, and imagery rendering remain unavailable.
+edge evidence behind a catalog port. The validated Earth Search adapter is configured
+and composed at bootstrap, but no user command invokes it yet. Marker targeting,
+date/product filters, user-triggered search, results, metadata, and imagery rendering
+therefore remain unavailable.
 
 ### Markers
 

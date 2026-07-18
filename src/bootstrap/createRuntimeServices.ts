@@ -5,6 +5,7 @@ import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
+import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
   loadMapProviderConfiguration,
@@ -21,6 +22,7 @@ import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
+import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -35,6 +37,7 @@ export interface RuntimeServices {
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly queryClient: QueryClient;
+  readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
 }
 
@@ -70,6 +73,8 @@ export function createRuntimeServices(): RuntimeServices {
         vectorOrigin: summary.vectorOrigin,
         terrainId: summary.terrainId,
         terrainOrigin: summary.terrainOrigin,
+        satelliteId: summary.satelliteId,
+        satelliteOrigin: summary.satelliteOrigin,
       },
     });
   } else {
@@ -82,6 +87,17 @@ export function createRuntimeServices(): RuntimeServices {
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const httpClient = createHttpClient(logger);
+  const satelliteCatalogGateway =
+    mapProviderConfiguration.status === 'valid'
+      ? new EarthSearchSatelliteCatalogGateway(
+          httpClient,
+          mapProviderConfiguration.value.satellite,
+          mapProviderConfiguration.value.policy.requestTimeoutMs,
+          sentinelQueryDiagnostics,
+          logger,
+          clock,
+        )
+      : null;
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -137,6 +153,7 @@ export function createRuntimeServices(): RuntimeServices {
     mapDiagnostics,
     mapProviderConfiguration,
     queryClient,
+    satelliteCatalogGateway,
     sentinelQueryDiagnostics,
   };
 }

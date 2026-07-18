@@ -23,12 +23,19 @@ describe('MapProviderConfiguration', () => {
       minZoom: 0,
       maxZoom: 15,
     });
+    expect(configuration.satellite).toMatchObject({
+      id: 'earth-search-v1',
+      collections: { L1C: 'sentinel-2-l1c', L2A: 'sentinel-2-l2a' },
+      maximumPages: 5,
+    });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
       schemaVersion: 1,
       vectorId: 'openfreemap-openmaptiles',
       vectorOrigin: 'https://tiles.openfreemap.org',
       terrainId: 'aws-mapzen-terrarium',
       terrainOrigin: 'https://s3.amazonaws.com',
+      satelliteId: 'earth-search-v1',
+      satelliteOrigin: 'https://earth-search.aws.element84.com',
     });
   });
 
@@ -39,10 +46,12 @@ describe('MapProviderConfiguration', () => {
         glyphsUrl: string;
       };
       terrain: { tileUrl: string };
+      satellite: { searchUrl: string };
     };
     input.vector.tileJsonUrl = './fixtures/vector/tiles.json';
     input.vector.glyphsUrl = './fixtures/fonts/{fontstack}/{range}.pbf';
     input.terrain.tileUrl = './fixtures/terrain/{z}/{x}/{y}.png';
+    input.satellite.searchUrl = './fixtures/stac/search';
 
     const configuration = parseMapProviderConfiguration(input, baseUrl);
 
@@ -51,6 +60,9 @@ describe('MapProviderConfiguration', () => {
     );
     expect(configuration.terrain.tileUrl).toBe(
       'https://example.test/georgia-routing-planner/fixtures/terrain/{z}/{x}/{y}.png',
+    );
+    expect(configuration.satellite.searchUrl).toBe(
+      'https://example.test/georgia-routing-planner/fixtures/stac/search',
     );
   });
 
@@ -86,10 +98,24 @@ describe('MapProviderConfiguration', () => {
       },
     },
     {
+      name: 'duplicate satellite collections',
+      mutate: (input: Record<string, unknown>) => {
+        const satellite = input.satellite as Record<string, unknown>;
+        satellite.collections = { L1C: 'sentinel', L2A: 'sentinel' };
+      },
+    },
+    {
       name: 'insecure endpoint',
       mutate: (input: Record<string, unknown>) => {
         const vector = input.vector as Record<string, unknown>;
         vector.tileJsonUrl = 'http://tiles.example.test/tiles.json';
+      },
+    },
+    {
+      name: 'insecure satellite endpoint',
+      mutate: (input: Record<string, unknown>) => {
+        const satellite = input.satellite as Record<string, unknown>;
+        satellite.searchUrl = 'http://earth-search.example.test/search';
       },
     },
   ])('rejects $name', ({ mutate }) => {

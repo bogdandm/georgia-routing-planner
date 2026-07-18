@@ -38,7 +38,7 @@ src/
   domain/satellite/        framework-free Sentinel values and geometry calculations
   application/satellite/   cancellable Sentinel search and availability orchestration
   application/ports/       framework-free catalog, viewport, diagnostics, and storage ports
-  infrastructure/          HTTP, IndexedDB, clock, and ID implementations
+  infrastructure/          HTTP, STAC, IndexedDB, clock, and ID implementations
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
@@ -57,6 +57,12 @@ values plus deterministic Turf-backed coverage/edge calculations. The satellite
 application layer validates submitted UTC criteria, enforces result bounds and product
 separation, deduplicates scenes, and publishes correlated diagnostics through ports. It
 does not import React, MapLibre, `ky`, or STAC JSON.
+
+`infrastructure/stac/` owns the configured Earth Search adapter and Zod schemas. It
+builds allowlisted STAC requests, validates all returned items before mapping them,
+follows only same-origin POST pagination tokens within the configured cap, and converts
+transport/schema failures to safe catalog errors. The composition root exposes the
+adapter through `SatelliteCatalogGateway`; React never receives its `ky` client.
 
 ## Composition root
 

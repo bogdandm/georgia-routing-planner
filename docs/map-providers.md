@@ -139,6 +139,15 @@ AWS Sentinel objects. Earth Search remains the selected replaceable catalog cand
 - Service policy: public best-effort access with no SLA. A private catalog or silent
   provider fallback is not assumed.
 
+The validated public configuration supplies the exact search URL, distinct collection
+IDs, plain-text attribution, and a one-to-ten page cap (default five). The production
+gateway sends a single collection, WGS84 bbox, inclusive UTC interval, scene-level cloud
+filter, descending acquisition sort, allowlisted fields, and at most 100 items. It
+follows only one unambiguous `POST` next link at a time when the link has the configured
+HTTPS origin/path, no query or fragment, and a bounded opaque `next` token. Invalid
+items, counts, assets, or pagination fail closed; raw bodies, links, tokens, and exact
+geometry are never logged.
+
 ### L2A true-color COG
 
 This was a non-product, time-boxed check. Earth Search v1 returned the item

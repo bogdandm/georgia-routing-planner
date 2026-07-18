@@ -128,8 +128,8 @@ diagnostic transitions are ignored and cannot change the primary operation outco
 
 ## Sentinel search core
 
-The provider-independent application flow is implemented even though no catalog adapter
-or search UI is composed yet:
+The provider-independent application flow and Earth Search adapter are implemented even
+though no search UI invokes them yet:
 
 ```mermaid
 sequenceDiagram
@@ -157,6 +157,19 @@ Availability uses the lowest scene-level cloud value as the per-day summary. A n
 operation replaces the visible timeline; late transitions from an older request are
 ignored by operation ID. Logs contain correlation IDs, counts, durations, and safe error
 codes, never exact viewport geometry.
+
+The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
+URL. It obtains the first page, follows at most the configured number of same-origin
+`POST` next tokens, validates every collected page with Zod, and then maps items to
+readonly scenes. A page containing any malformed item fails as a whole; the application
+does not present incomplete comparisons as trustworthy partial results. L1C `s3://`
+visual keys are converted only for the known public bucket and remain marked as
+unsupported JP2. L2A visual assets must be HTTPS true-color COGs.
+
+Timeout, rate-limit, unsuccessful HTTP, network, schema, pagination, result-limit, and
+cancellation outcomes remain distinct typed codes. Logs and the timeline contain the
+operation ID, safe code, count, and duration only. Explicit provider health checks add a
+fixed one-item Sentinel POST probe; startup never waits for it.
 
 ## Teardown ownership
 

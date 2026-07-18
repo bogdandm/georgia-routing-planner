@@ -1,10 +1,12 @@
+import type { SatelliteCatalogErrorCode } from '@/application/ports/SatelliteCatalogGateway';
+
 export type SatelliteSearchErrorCode =
+  | SatelliteCatalogErrorCode
   | 'invalid-viewport'
   | 'invalid-date'
   | 'date-range-reversed'
   | 'date-range-too-large'
   | 'invalid-cloud-cover'
-  | 'result-limit-exceeded'
   | 'invalid-scene-geometry'
   | 'provider-capability';
 

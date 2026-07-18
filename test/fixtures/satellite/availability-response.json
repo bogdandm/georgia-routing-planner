@@ -1,0 +1,68 @@
+{
+  "type": "FeatureCollection",
+  "context": { "limit": 100, "matched": 2, "returned": 2 },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "S2A_38TMN_20250717_0_L1C",
+      "collection": "sentinel-2-l1c",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [44, 42],
+            [45, 42],
+            [45, 43],
+            [44, 43],
+            [44, 42]
+          ]
+        ]
+      },
+      "properties": {
+        "datetime": "2025-07-17T08:01:12.000000Z",
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 4,
+        "proj:epsg": 32638,
+        "sat:relative_orbit": 135
+      },
+      "assets": {
+        "visual": {
+          "href": "s3://sentinel-s2-l1c/tiles/38/T/MN/2025/7/17/0/TCI.jp2",
+          "type": "image/jp2",
+          "roles": ["visual"]
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "S2B_38TMN_20250707_0_L1C",
+      "collection": "sentinel-2-l1c",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [44, 42],
+            [45, 42],
+            [45, 43],
+            [44, 43],
+            [44, 42]
+          ]
+        ]
+      },
+      "properties": {
+        "datetime": "2025-07-07T08:03:10.000000Z",
+        "platform": "sentinel-2b",
+        "eo:cloud_cover": 11,
+        "proj:epsg": 32638
+      },
+      "assets": {
+        "visual": {
+          "href": "s3://sentinel-s2-l1c/tiles/38/T/MN/2025/7/7/0/TCI.jp2",
+          "type": "image/jp2",
+          "roles": ["visual"]
+        }
+      }
+    }
+  ],
+  "links": []
+}

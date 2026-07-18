@@ -1,7 +1,10 @@
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import {
+  SatelliteCatalogError,
+  type SatelliteCatalogGateway,
+} from '@/application/ports/SatelliteCatalogGateway';
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
@@ -175,15 +178,17 @@ export class SearchSatelliteScenes {
       const safeError =
         error instanceof SatelliteSearchError
           ? error
-          : error instanceof SatelliteGeometryError
-            ? new SatelliteSearchError(
-                'invalid-scene-geometry',
-                'A returned scene has geometry that cannot be measured.',
-              )
-            : new SatelliteSearchError(
-                'provider-capability',
-                'The satellite catalog could not complete this search.',
-              );
+          : error instanceof SatelliteCatalogError
+            ? new SatelliteSearchError(error.code, error.message)
+            : error instanceof SatelliteGeometryError
+              ? new SatelliteSearchError(
+                  'invalid-scene-geometry',
+                  'A returned scene has geometry that cannot be measured.',
+                )
+              : new SatelliteSearchError(
+                  'provider-capability',
+                  'The satellite catalog could not complete this search.',
+                );
       this.logger.log({
         level: 'error',
         name: 'satellite.search.failed',

@@ -101,8 +101,9 @@ The replaceable map-provider defaults are:
 - OpenFreeMap's OpenMapTiles-compatible TileJSON and glyph endpoints for the vector
   basemap.
 - AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for optional 3D terrain.
+- Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
 
-Neither default uses a credential. Provider evidence, licensing, attribution, and
+None of these defaults uses a credential. Provider evidence, licensing, attribution, and
 replacement constraints are recorded in
 [docs/map-providers.md](./docs/map-providers.md). The application includes a complete
 validated override example in
@@ -116,8 +117,9 @@ pnpm dev
 
 The value is public build-time JSON. It must not contain secrets, authorization headers,
 private query tokens, or confidential account identifiers. HTTPS and relative
-application paths are accepted. An invalid override fails closed before MapLibre mounts
-and presents a safe configuration message without echoing the input or its URLs.
+application paths are accepted. The Sentinel configuration keeps the L1C/L2A collection
+IDs distinct and caps pagination. An invalid override fails closed before MapLibre
+mounts and presents a safe configuration message without echoing the input or its URLs.
 
 Provider attribution remains visible in MapLibre. The OpenFreeMap/OpenMapTiles/OSM
 credits are shown in 2D; Mapzen/AWS terrain attribution is added when the DEM source is

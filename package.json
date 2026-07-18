@@ -23,7 +23,7 @@
     "test:watch": "vitest",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
     "e2e": "tsx tools/e2e/runPlaywright.ts",
     "catalog:audit": "tsx tools/catalog/notImplemented.ts audit",
     "catalog:build": "tsx tools/catalog/notImplemented.ts build",

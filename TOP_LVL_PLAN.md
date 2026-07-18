@@ -29,9 +29,9 @@ or upload service and local imports are never uploaded automatically.
 5. **Static by default.** Do not introduce a backend until a required feature cannot be
    implemented safely as a static application.
 6. **Readable engineering.** Domain behavior is expressed in small TypeScript classes
-   and use cases, not embedded in JSX, hooks, or state stores.
-7. **Use an existing design system.** Material UI supplies the visual language; custom
-   CSS stays small.
+   and use cases, not embedded in framework event handlers or state stores.
+7. **Pragmatic presentation.** Use Material UI as the component foundation. Do not spend
+   MVP time on custom animation, ornamental transitions, or a bespoke component system.
 8. **Diagnosable by design.** A user must be able to export enough structured evidence
    to investigate failures without opening browser developer tools.
 
@@ -42,30 +42,28 @@ or upload service and local imports are never uploaded automatically.
 1. Open the application at the last used view or a Georgia-wide default.
 2. Search Sentinel-2 L1C/L2A acquisitions intersecting the current viewport or an area
    around a saved marker.
-3. Use a calendar to choose an acquisition date and compare availability and cloud
-   cover.
+3. Choose an acquisition date and compare availability and cloud cover.
 4. View true-color imagery and its footprint with transparent hiking-relevant OSM layers
    above it.
 5. Toggle terrain and adjust pitch/bearing without losing selected layers.
 
 ### 3.2 Browse the track library
 
-1. Open the `Tracks` tab.
+1. Open the track library.
 2. Browse both the read-only curated GitHub Pages catalog and GPX tracks retained in the
    browser.
-3. Browse curated categories or organize tracks into personal nested folders using
-   drag-and-drop and manual ordering.
+3. Browse curated categories or organize tracks into personal nested folders with
+   explicit manual ordering.
 4. Filter and sort by visible map area, name, date added, recorded duration when
    available, region, length, ascent, maximum elevation, route shape, and curated tags.
-5. Hover or select a result to highlight its simplified preview.
+5. Inspect a result's simplified preview before loading its full content.
 6. Open the full track on the map, inspect statistics and elevation, and load or
    download the original GPX only when requested.
 
 ### 3.3 Create a manual plan
 
-1. Open the `Plan` tab and start a new plan.
-2. Click the map to add waypoints; drag to move and use the keyboard or control buttons
-   to remove/reorder them.
+1. Start a new manual plan.
+2. Add, move, remove, and reorder waypoints.
 3. Connect consecutive points with straight geodesic segments.
 4. Sample terrain along the segments and show distance, ascent/descent, and an elevation
    profile.
@@ -94,69 +92,18 @@ or upload service and local imports are never uploaded automatically.
 
 1. Enable developer mode from Settings or a documented URL parameter.
 2. Reproduce the problem while a bounded diagnostic session records structured events.
-3. Inspect map, network, storage, data, performance, and error summaries in the
-   developer drawer.
+3. Inspect map, network, storage, data, performance, and error summaries.
 4. Export one sanitized diagnostics bundle and attach it to a bug report.
 5. Explicitly opt in if track geometry or other potentially personal data is needed; it
    is excluded by default.
 
-## 4. GUI plan
+## 4. Technical architecture
 
-### 4.1 Desktop layout
-
-```text
-+----------------------------------------------------------------------------------+
-| Georgia Routing Planner | Layers | 2D/3D | Import | Export | Settings             |
-+----------------------------+-----------------------------------------------------+
-| Tracks | Plan | Satellite  |                                                     |
-|----------------------------|                                                     |
-| Search / active controls   |                                                     |
-|                            |                     MAP                             |
-| Track or waypoint list     |                                                     |
-|                            |                                                     |
-| Context actions            |                                                     |
-+----------------------------+-----------------------------------------------------+
-| Distance | +Elevation | -Elevation | Min/Max        [collapsible elevation chart] |
-+----------------------------------------------------------------------------------+
-```
-
-### 4.2 Material UI components
-
-- `AppBar` and `Toolbar` for global actions.
-- Permanent/resizable `Drawer` on wide screens; temporary drawer as a fallback on narrow
-  screens.
-- `Tabs` for Tracks, Plan, and Satellite.
-- `List`, `ListItemButton`, `Chip`, and `Tooltip` for catalog results.
-- `Slider`, `Select`, `Autocomplete`, and `TextField` for filters.
-- `ToggleButtonGroup` for 2D/3D and layer mode.
-- `Dialog` for import validation, settings, and confirmations.
-- `Snackbar` and `Alert` for recoverable feedback.
-- `Skeleton` and progress indicators for remote imagery/catalog state.
-- MUI X line chart for elevation.
-- A right-side developer `Drawer` with virtualized structured logs, diagnostic tabs,
-  recording controls, copy-summary, export, and clear actions.
-
-### 4.3 Styling policy
-
-- Start from one Material UI theme with restrained earth/satellite colors.
-- Define all design tokens in `src/presentation/theme`.
-- Use an 8 px spacing rhythm and Material component sizes.
-- Use `sx` for small local adjustments; extract repeated patterns into themed components
-  or CSS modules.
-- Do not build custom buttons, fields, tabs, dialogs, tooltips, or menus when a Material
-  UI component exists.
-- Do not adopt Tailwind alongside Material UI; two styling systems would create
-  unnecessary cognitive overhead.
-- Bundle icons and required fonts or use system fonts; do not make the shell depend on
-  third-party font availability.
-
-## 5. Technical architecture
-
-### 5.1 Layers
+### 4.1 Layers
 
 ```text
 presentation
-  React components, feature hooks, MapLibre adapter, MUI theme
+  React composition, Material UI, feature integration, MapLibre adapter
 
 application
   use-case classes, commands/queries, orchestration, result types
@@ -176,10 +123,10 @@ diagnostics
   structured logger, sinks, redaction, snapshots, support-bundle exporter
 ```
 
-Dependencies point inward. Domain code imports no React, MapLibre, browser API, MUI,
-Zustand, TanStack Query, or Dexie package.
+Dependencies point inward. Domain code imports no React, Material UI, MapLibre, browser
+API, Zustand, TanStack Query, or Dexie package.
 
-### 5.2 Example domain/application types
+### 4.2 Example domain/application types
 
 - `RoutePlan`
 - `Waypoint`
@@ -206,20 +153,20 @@ Use immutable value objects where they prevent invalid states. DTOs and persiste
 records remain plain readonly TypeScript data. Prefer composition and interfaces over
 class inheritance.
 
-### 5.3 React integration
+### 4.3 React integration
 
 - React components are functional and declarative; class components are not used.
 - An application composition root constructs repositories and use cases with explicit
   constructor injection.
 - A typed React context exposes application services.
-- Feature hooks translate UI events into named use-case calls.
-- Zustand contains only transient UI/session state such as active tab, selected track
-  ID, open panels, and map interaction mode.
+- Feature hooks translate user commands into named use-case calls.
+- Zustand contains only transient session state such as selected track ID and map
+  interaction mode.
 - TanStack Query contains remote/static query state and cache; it does not contain
   domain rules.
 - MapLibre imperative operations are isolated behind a map adapter/facade.
 
-### 5.4 Async policy
+### 4.4 Async policy
 
 - Use `async`/`await` in application and infrastructure code.
 - Pass `AbortSignal` through remote operations.
@@ -228,20 +175,21 @@ class inheritance.
   request independently in both `ky` and TanStack Query.
 - Parse and validate every external response with Zod before it enters the application
   layer.
-- Do not nest promise chains or place multi-step async workflows in JSX handlers.
+- Do not nest promise chains or place multi-step async workflows in React event
+  handlers.
 
-### 5.5 Developer mode and diagnostics
+### 4.5 Developer mode and diagnostics
 
 Developer mode is a supported production feature, not a development-only console. It
 must be cheap when disabled, bounded when enabled, and safe to share by default.
 
 #### Activation
 
-- Settings toggle, persisted locally.
-- Documented URL flag for cases where the UI fails before settings can open.
+- Locally persisted activation preference.
+- Documented URL flag for cases where the primary application cannot initialize.
 - Optional `Start diagnostic recording` action that clears the ring buffer and marks a
   reproducible session boundary.
-- A visible indicator while recording is active.
+- Recording state must be exposed to the user while active.
 
 #### Structured logging
 
@@ -256,8 +204,8 @@ and `error` levels. Each event contains:
 - Normalized error type, message, code, and stack when available.
 
 Use a bounded in-memory ring buffer. Optionally retain a small capped recent-session
-buffer in IndexedDB so a crash/reload does not destroy the only evidence. Provide clear
-controls and an explicit maximum size/retention policy.
+buffer in IndexedDB so a crash/reload does not destroy the only evidence. Expose an
+explicit maximum size/retention policy.
 
 Do not scatter direct `console.log` calls throughout the application. In developer mode,
 a console sink may mirror structured events for convenience. The structured logger
@@ -290,31 +238,26 @@ remains the source of exported evidence.
 Do not log every animation frame, map render event, coordinate sample, or full GPX/STAC
 payload. Summarize and sample high-volume data.
 
-#### Developer drawer
+#### Diagnostic capabilities
 
-Provide these views:
+Provide access to:
 
-- **Overview:** app/build version, commit, build time, environment, current URL,
-  supported capabilities, configuration summary, and recent fatal error.
-- **Health:** one-click self-tests for WebGL/terrain capability, catalog integrity,
-  IndexedDB read/write, available storage, one elevation sample, and provider
-  reachability/CORS. Tests must be non-destructive and distinguish unavailable,
-  degraded, and failed states.
-- **Logs:** searchable/filterable structured events with copy details.
-- **Map:** camera, active style/layers/sources, terrain/WebGL state, tile/source errors,
-  and toggles for MapLibre tile boundaries/collision diagnostics where supported.
-- **Requests:** recent sanitized requests, timing, status, cancellation, and rate or
-  quota responses.
-- **Storage:** IndexedDB version/table counts, storage estimate, catalog/cache versions,
-  and safe clear/rebuild actions.
-- **Data:** selected track/plan summary, validation warnings, calculation versions, and
-  provider provenance without full private geometry.
-- **Performance:** startup milestones, slow operations, long tasks, and bounded timing
-  aggregates.
-- **Flags:** supported local diagnostic/experimental overrides with a reset action.
-
-React Query Devtools may be lazy-loaded only when developer mode is active. They are a
-convenience, not a replacement for the exportable application diagnostics.
+- App/build version, commit, build time, environment, current URL, supported
+  capabilities, configuration summary, and recent fatal error.
+- Non-destructive self-tests for WebGL/terrain capability, catalog integrity, IndexedDB
+  read/write, available storage, one elevation sample, and provider reachability/CORS.
+  Tests must be non-destructive and distinguish unavailable, degraded, and failed
+  states.
+- Searchable/filterable structured events with copyable details.
+- Camera, active style/layers/sources, terrain/WebGL state, tile/source errors, and
+  supported MapLibre boundary/collision diagnostics.
+- Recent sanitized requests, timing, status, cancellation, and rate or quota responses.
+- IndexedDB version/table counts, storage estimate, catalog/cache versions, and safe
+  clear/rebuild operations.
+- Selected track/plan summary, validation warnings, calculation versions, and provider
+  provenance without full private geometry.
+- Startup milestones, slow operations, long tasks, and bounded timing aggregates.
+- Supported local diagnostic/experimental overrides with a reset operation.
 
 #### Diagnostics bundle
 
@@ -333,8 +276,8 @@ bundle contains:
 
 Default redaction removes tokens, authorization headers, cookies, query secrets,
 file-system paths, raw response bodies, GPX XML, full route geometry, timestamps from
-personal tracks, and free-form imported metadata. The export UI shows what will be
-included. Adding current plan/track geometry requires a separate explicit checkbox and
+personal tracks, and free-form imported metadata. Before export, disclose what will be
+included. Adding current plan/track geometry requires a separate explicit opt-in and
 warning.
 
 No diagnostic data is uploaded automatically. The user owns and manually shares the
@@ -347,13 +290,13 @@ provider failures, storage state, map state, and likely next investigation steps
 must never execute content from a bundle or print fields that the exporter classifies as
 sensitive.
 
-If React cannot mount, the bootstrap fallback page should still show the build version,
+If React cannot mount, the bootstrap fallback must still expose the build version,
 normalized startup error, clear-local-state guidance, and a minimal diagnostics export
-action.
+capability.
 
-## 6. Data plan
+## 5. Data plan
 
-### 6.1 Static curated GPX catalog source
+### 5.1 Static curated GPX catalog source
 
 The maintainer selects and categorizes the curated GPX collection, then commits it to
 the GitHub repository under a stable data directory outside normal application source
@@ -389,7 +332,7 @@ The generated catalog is read-only in the deployed application. Full GPX assets 
 fetched only when the user selects, views, or downloads a track. File-system paths are
 not catalog identities; stable IDs and metadata define categorization.
 
-### 6.2 Static catalog build
+### 5.2 Static catalog build
 
 For every GPX file:
 
@@ -414,7 +357,7 @@ For the initial collection size, viewport search uses summary bounds and simplif
 preview geometry in memory. Add a generated spatial or tile index only after measurement
 shows that the simple search is insufficient.
 
-### 6.3 Curated-source safety review
+### 5.3 Curated-source safety review
 
 - Confirm redistribution rights for every source file.
 - Remove unwanted author, device, email, and sensitive timestamp metadata from the
@@ -426,17 +369,17 @@ shows that the simple search is insufficient.
 This review applies only to tracks deliberately selected for the public static catalog.
 It never scans, transforms, or uploads a user's browser-local tracks.
 
-### 6.4 User-created data
+### 5.4 User-created data
 
 Dexie stores:
 
 - Saved route plans.
 - Locally imported track summaries and full GPX content that the user elects to retain.
-- Personal folders and drag-and-drop placement/order for curated or local tracks.
+- Personal folders and explicit placement/order for curated or local tracks.
 - Saved markers with name, icon, color, coordinates, optional elevation, and preferred
   map scale.
-- UI preferences, layer preferences, and the last settled map camera so the application
-  reopens at the previous position.
+- Presentation preferences, layer preferences, and the last settled map camera so the
+  application reopens at the previous position.
 - Cached catalog metadata with a schema/data version.
 - Developer-mode preferences and, if enabled, a strictly capped recent diagnostic
   buffer.
@@ -447,9 +390,9 @@ export/backup path or a clear user confirmation.
 The permanent storage and entity contracts are defined in
 [`docs/data-model.md`](docs/data-model.md).
 
-## 7. Map and imagery plan
+## 6. Map and imagery plan
 
-### 7.1 Layer composition
+### 6.1 Layer composition
 
 - Keep stable typed layer bands in this order: background, satellite imagery, OSM
   reference overlays, track previews/selected tracks, plans, saved markers/waypoints,
@@ -460,7 +403,7 @@ The permanent storage and entity contracts are defined in
 - Do not persist arbitrary MapLibre objects. Persist only validated serializable layer
   preferences and reconstruct native sources/layers through the map facade.
 
-### 7.2 OSM
+### 6.2 OSM
 
 - Use a MapLibre-compatible vector tile source.
 - Build a hiking-focused transparent overlay style rather than placing a complete opaque
@@ -469,14 +412,14 @@ The permanent storage and entity contracts are defined in
 - Make tile/style endpoints configuration-driven so a provider can be changed without
   rewriting features.
 
-### 7.3 Sentinel-2
+### 6.3 Sentinel-2
 
 - Query an anonymous STAC service for the static MVP.
 - Restrict results to Sentinel-2 L1C and L2A collections.
 - Search by viewport or by a bounded area around a saved marker, plus date range and
   cloud-cover metadata.
-- Group matching scenes by acquisition date for calendar availability and show cloud
-  cover in the calendar and scene list.
+- Group matching scenes by acquisition date and retain availability and cloud-cover
+  summaries for comparison.
 - Initially render true-color imagery only.
 - Show acquisition date, product level, product/scene identifier, footprint/coverage,
   and cloud-cover metadata.
@@ -485,7 +428,7 @@ The permanent storage and entity contracts are defined in
 - Keep imagery loading behind a `SatelliteCatalogGateway` and raster-source adapter so a
   future CDSE processing service can replace it.
 
-### 7.4 Terrain and elevation
+### 6.4 Terrain and elevation
 
 - Use one raster DEM source for visual terrain and route calculations where technically
   practical.
@@ -496,13 +439,13 @@ The permanent storage and entity contracts are defined in
 - Retain MapLibre's existing terrain/pitch capability, but defer richer 3D overlays,
   models, and 3D marker behavior beyond the MVP.
 
-## 8. Automatic testing strategy
+## 7. Automatic testing strategy
 
 Testing is built into every phase. A feature is not complete when it merely works
-manually; its domain behavior, important UI states, failure modes, and critical browser
-workflow need an automated safety net.
+manually; its domain behavior, important user-visible states, failure modes, and
+critical browser workflow need an automated safety net.
 
-### 8.1 Test layers
+### 7.1 Test layers
 
 #### Domain and application unit tests
 
@@ -540,11 +483,11 @@ services at the composition boundary. Test what a user sees and does:
 
 - Loading, empty, ready, partial, disabled, and error states.
 - Track filters and selection.
-- Planner commands, validation, dialogs, and keyboard behavior.
+- Planner commands, validation, confirmation, and keyboard behavior.
 - Developer-mode activation, recording, health results, and export confirmation.
 - Accessible names, focus management, and important screen-reader announcements.
 
-Do not assert private hook state, MUI implementation details, or large snapshots.
+Do not assert private hook state, third-party component internals, or large snapshots.
 
 #### Map adapter tests
 
@@ -570,24 +513,24 @@ Chromium only. Network routes serve local fixtures. Critical tests cover:
 - Browse/filter/select a catalog track.
 - Import a GPX fixture and handle an invalid file.
 - Add, move, reorder, and remove planning waypoints.
-- Calculate metrics and interact with the elevation chart.
+- Calculate metrics and inspect the elevation profile.
 - Save, reload, export, and reimport a plan.
 - Change Sentinel scenes without losing the plan.
 - Toggle terrain without recreating application state.
 - Recover from provider, storage, and map failures.
 - Record/export diagnostics and prove secret/geometry redaction.
 
-### 8.2 Accessibility and visual checks
+### 7.2 Accessibility and visual checks
 
-- Run automated axe checks on the application shell and critical dialogs/workflows.
-- Test keyboard-only use of global actions, drawers, tabs, lists, dialogs, and planner
-  controls.
-- Keep a small set of stable Playwright screenshots for the shell and important non-map
-  states. Screenshot updates require deliberate review.
+- Run automated axe checks on application startup and critical workflows.
+- Test keyboard-only use of global and feature actions, selection, confirmation, and
+  planner workflows.
+- Keep a small set of stable Playwright screenshots for application startup and
+  important non-map states. Screenshot updates require deliberate review.
 - Do not treat automated accessibility checks as complete accessibility proof; manually
   verify the critical keyboard flows before releases.
 
-### 8.3 Coverage policy
+### 7.3 Coverage policy
 
 Start with enforceable thresholds rather than an aspirational 100%:
 
@@ -604,7 +547,7 @@ and parsers require direct behavioral tests regardless of coverage.
 Thresholds can increase once a stable baseline exists; lowering them requires a
 documented reason.
 
-### 8.4 Fixtures and determinism
+### 7.4 Fixtures and determinism
 
 - Check in small synthetic fixtures with no real personal GPX data.
 - Freeze clocks and ID generators through injected ports when output depends on time or
@@ -617,7 +560,7 @@ documented reason.
 - A flaky test is a defect. Fix or quarantine it with an issue and owner; do not
   normalize repeated blind reruns.
 
-### 8.5 Continuous integration
+### 7.5 Continuous integration
 
 GitHub Actions runs automatically on every pull request and push to the protected
 default branch:
@@ -636,21 +579,21 @@ Required checks block merging. Deployment runs only after the same commit passes
 required checks. A lightweight post-deployment smoke test verifies the Pages URL, asset
 base path, build version, and bootstrap without querying external data providers.
 
-## 9. Delivery phases
+## 8. Delivery phases
 
 ### Phase 0: repository and quality scaffold
 
 Deliver:
 
 - React + TypeScript + Vite project.
-- Material UI theme and map-workbench shell.
+- Application composition with Material UI and a persistent map entry point.
 - Strict TypeScript, ESLint, Prettier, Vitest, Playwright, and CI.
 - Mock Service Worker, fake IndexedDB, synthetic fixture foundations, coverage
   enforcement, and a GitHub Actions required-check workflow.
 - GitHub Pages base-path configuration.
 - Architecture folders and composition root.
 - Structured logger, global error capture, React error boundary, build metadata, and the
-  initial developer-mode drawer/URL activation path.
+  initial developer-mode activation path.
 - Minimal bootstrap-failure report/export and diagnostics-bundle inspection CLI.
 
 Acceptance:
@@ -658,7 +601,7 @@ Acceptance:
 - `pnpm check` and `pnpm build` pass from a clean checkout.
 - Coverage thresholds are enforced and a Playwright Chromium smoke test runs against the
   production build without public network access.
-- The empty shell deploys and reloads correctly under a GitHub Pages subpath.
+- The application deploys and reloads correctly under a GitHub Pages subpath.
 - An intentional startup/component error appears in developer mode and a sanitized
   diagnostics file can be exported.
 - `pnpm diagnostics:inspect -- <bundle.json>` validates that file and reports the
@@ -678,7 +621,7 @@ Deliver:
 Acceptance:
 
 - Current Chrome can pan, zoom, rotate, pitch, and toggle terrain smoothly.
-- Map lifecycle code is isolated from the rest of the UI.
+- Map lifecycle code is isolated from the rest of the application state.
 
 ### Phase 2: static GPX catalog build
 
@@ -695,16 +638,16 @@ Acceptance:
 - All source tracks are accounted for as valid, rejected, or warned.
 - The browser loads one index and does not fetch all original GPX files.
 
-### Phase 3: track catalog UI
+### Phase 3: track catalog
 
 Deliver:
 
-- Tracks drawer, filters, visible-map search, previews, selection, details, and original
-  GPX download.
+- Catalog loading, filters, visible-map search, previews, selection, details, and
+  original GPX download.
 - Local GPX parse/validate/preview/retain workflow with no network upload.
 - One combined view over read-only curated tracks and retained local tracks.
-- Curated categories plus personal nested folders, drag-and-drop placement, manual
-  ordering, sorting, and filtering.
+- Curated categories plus personal nested folders, explicit placement/order, sorting,
+  and filtering.
 - Elevation summary/profile for selected tracks.
 
 Acceptance:
@@ -722,7 +665,7 @@ Deliver:
 - Add/move/remove/reorder waypoint interaction.
 - Straight geodesic segments.
 - Distance and elevation sampling.
-- Elevation chart linked to the map.
+- Elevation profile linked to the map position.
 - Local save/load and GPX export.
 - Create/edit/delete saved markers with icons, colors, coordinates, terrain-derived
   elevation, and preferred map scale.
@@ -742,8 +685,8 @@ Deliver:
 
 - STAC search limited to Sentinel-2 L1C/L2A by viewport or saved-marker area, date, and
   cloud cover.
-- Acquisition calendar grouped by date with availability and cloud-cover summaries.
-- Scene selector and true-color raster display.
+- Date-grouped acquisition availability and cloud-cover summaries.
+- Explicit scene selection and true-color raster display.
 - Scene footprint/coverage, product level, imagery metadata, and attribution.
 - Cancellable loading and actionable errors.
 - Sanitized request tracing, provider timing, and quota/rate-limit diagnostics.
@@ -751,7 +694,7 @@ Deliver:
 Acceptance:
 
 - A user can select a different acquisition without resetting the map or plan.
-- The calendar and scene list make partial coverage and cloud cover visible rather than
+- Acquisition choices make partial coverage and cloud cover explicit rather than
   implying that one scene covers the entire viewport.
 - Secrets are absent from source code and production assets.
 
@@ -759,7 +702,7 @@ Acceptance:
 
 Deliver:
 
-- Keyboard accessibility and tooltips.
+- Keyboard and assistive-technology accessibility.
 - Loading/empty/error states.
 - Chrome performance profiling.
 - Data-source documentation, privacy statement, and attribution audit.
@@ -776,16 +719,16 @@ Acceptance:
   distinguish configuration, provider, parsing, storage, map, and calculation failures
   without exposing private track data.
 
-## 10. Estimated effort
+## 9. Estimated effort
 
 For one developer using Codex assistance:
 
 | Area                                            |                           Expected effort |
 | ----------------------------------------------- | ----------------------------------------: |
-| Scaffold, architecture, and GUI shell           |                                  3-5 days |
+| Scaffold, architecture, and application startup |                                  3-5 days |
 | Map, OSM layers, and terrain                    |                                  4-7 days |
 | Catalog audit/index build tooling               | 3-7 days, depending on source consistency |
-| Catalog UI and elevation profile                |                                  4-7 days |
+| Catalog interaction and elevation profile       |                                  4-7 days |
 | Manual planner and persistence                  |                                  4-7 days |
 | Sentinel scene selection/rendering              |                                  4-8 days |
 | Testing, accessibility, performance, deployment |                                 5-10 days |
@@ -793,7 +736,7 @@ For one developer using Codex assistance:
 These ranges are planning estimates, not commitments. The first technical spike should
 retire the largest uncertainties before detailed estimates are made.
 
-## 11. Main risks and mitigations
+## 10. Main risks and mitigations
 
 | Risk                                          | Mitigation                                                                                                                                   |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -801,17 +744,15 @@ retire the largest uncertainties before detailed estimates are made.
 | Inconsistent elevation gain                   | Use one versioned DEM sampling/smoothing policy and regenerate the catalog.                                                                  |
 | MapLibre/React lifecycle complexity           | Keep a dedicated map facade and integration tests; do not let native map objects leak into domain code.                                      |
 | GPX source quality and duplicates             | Produce a non-destructive validation report before serving static catalog assets or renaming files.                                          |
-| Excessive frontend state complexity           | Separate remote, local UI, persisted, and domain state; do not add Redux/NgRx-style machinery without demonstrated need.                     |
-| CSS/design time grows                         | Stay within Material UI and the shared theme; reject one-off custom widgets without a functional reason.                                     |
+| Excessive frontend state complexity           | Separate remote, transient presentation, persisted, and domain state; do not add Redux/NgRx-style machinery without demonstrated need.       |
 | Static provider dependence                    | Put all endpoints behind configuration and ports; never hard-code provider behavior into use cases.                                          |
 | Problems cannot be reproduced remotely        | Ship production developer mode, structured correlation IDs, health snapshots, and a one-file sanitized diagnostics export.                   |
 | Diagnostic logs leak personal data or secrets | Allowlist exported fields, centrally redact, exclude geometry/payloads by default, cap retention, and test redaction with secret fixtures.   |
 | Frontend regressions are found only manually  | Require layered automatic tests and protected CI checks; keep map/provider tests deterministic with local fixtures.                          |
 | Browser tests become slow or flaky            | Keep most rules below the browser layer, use Chromium only, intercept external requests, retain failure traces, and treat flakes as defects. |
 
-## 12. Deferred ideas
+## 11. Deferred ideas
 
-- Rich 3D marker models and animation.
 - Route comparison and overlap analysis.
 - Photos and route notes.
 - Offline regional packages.

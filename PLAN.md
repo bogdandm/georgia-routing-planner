@@ -135,7 +135,7 @@ At completion, a desktop Chrome user can:
   the explicit camera command.
 - `Hide imagery` stops raster display without deleting results or the selected scene's
   metadata. Final footprint visibility semantics await the review question in
-  section 13.
+  section 14.
 - Closing the results pane does not silently remove an applied scene.
 - `Other imagery` remains an honest unavailable boundary. Do not add a fake provider or
   generic source picker.
@@ -389,7 +389,624 @@ rather than weakening privacy/static-hosting constraints.
 - Preserve acquisition timestamps internally in UTC; group/display by UTC date.
 - Do not expose raw response bodies or provider error objects to React or diagnostics.
 
-## 9. Step-by-step work packages
+## 9. End-to-end Sentinel query chain and payloads
+
+This section fixes the intended top-level data flow and the external/internal payload
+boundaries. The coordinates, dates, item IDs, counts, and asset URLs are illustrative
+examples taken from a live Earth Search query on 2026-07-19 against July 2025 data. They
+are not application constants.
+
+### 9.1 Capture the submitted viewport
+
+When the user presses **Search Images**, the map capability reads the settled center and
+visible bounds from MapLibre and returns a serializable snapshot:
+
+```json
+{
+  "center": {
+    "latitude": 42.6584,
+    "longitude": 44.6439
+  },
+  "bbox": [44.55, 42.6, 44.75, 42.72]
+}
+```
+
+The bounding-box order is the STAC/GeoJSON order `[west, south, east, north]`. The
+search captures this snapshot once; later panning does not mutate an in-flight query or
+existing results.
+
+### 9.2 Build the typed search criteria
+
+The React form maps the viewport snapshot and filters into an application DTO:
+
+```json
+{
+  "area": {
+    "type": "viewport",
+    "bbox": [44.55, 42.6, 44.75, 42.72]
+  },
+  "startDate": "2025-07-02",
+  "endDate": "2025-07-17",
+  "productLevel": "L2A",
+  "maxCloudCover": 25
+}
+```
+
+The product choice maps to one and only one STAC collection:
+
+```text
+L1C -> sentinel-2-l1c
+L2A -> sentinel-2-l2a
+```
+
+Earth Search currently exposes both collections from its
+[STAC root](https://earth-search.aws.element84.com/v1/), with separate
+[L1C](https://earth-search.aws.element84.com/v1/collections/sentinel-2-l1c) and
+[L2A](https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a) collection
+contracts.
+
+### 9.3 Create TanStack Query keys
+
+The availability query covers the displayed calendar month:
+
+```json
+[
+  "satellite",
+  "availability",
+  "earth-search",
+  "L2A",
+  "2025-07",
+  25,
+  [44.55, 42.6, 44.75, 42.72]
+]
+```
+
+The submitted scene query includes the complete immutable criteria:
+
+```json
+[
+  "satellite",
+  "scenes",
+  "earth-search",
+  "L2A",
+  "2025-07-02",
+  "2025-07-17",
+  25,
+  [44.55, 42.6, 44.75, 42.72]
+]
+```
+
+Exact coordinates may exist in the in-memory key, but must not appear in default
+diagnostics exports. TanStack Query owns in-memory caching, stale-result protection,
+cancellation, and the single retry policy.
+
+### 9.4 Execute the availability query
+
+The query chain is:
+
+```text
+TanStack Query
+-> LoadSatelliteAvailability
+-> SatelliteCatalogGateway
+-> EarthSearchSatelliteCatalogGateway
+-> configured ky client
+-> POST https://earth-search.aws.element84.com/v1/search
+```
+
+Example request for the visible month:
+
+```json
+{
+  "collections": ["sentinel-2-l2a"],
+  "bbox": [44.55, 42.6, 44.75, 42.72],
+  "datetime": "2025-07-01T00:00:00Z/2025-07-31T23:59:59Z",
+  "query": {
+    "eo:cloud_cover": {
+      "lte": 25
+    }
+  },
+  "sortby": [
+    {
+      "field": "properties.datetime",
+      "direction": "desc"
+    }
+  ],
+  "fields": {
+    "include": [
+      "id",
+      "collection",
+      "properties.datetime",
+      "properties.platform",
+      "properties.eo:cloud_cover"
+    ]
+  },
+  "limit": 100
+}
+```
+
+The gateway validates the response, groups items by UTC acquisition date, and produces
+the calendar annotations:
+
+```json
+{
+  "month": "2025-07",
+  "dates": [
+    {
+      "date": "2025-07-17",
+      "sceneCount": 2,
+      "cloudSummaryPercent": 4
+    }
+  ]
+}
+```
+
+The meaning of `cloudSummaryPercent` remains governed by the prototype review question
+in section 14; the current recommendation is the lowest scene-level cloud value on that
+date.
+
+### 9.5 Execute the submitted scene search
+
+The application chain is:
+
+```text
+TanStack Query
+-> SearchSatelliteScenes
+-> SatelliteCatalogGateway
+-> EarthSearchSatelliteCatalogGateway
+-> configured ky client
+-> POST https://earth-search.aws.element84.com/v1/search
+```
+
+Example request:
+
+```json
+{
+  "collections": ["sentinel-2-l2a"],
+  "bbox": [44.55, 42.6, 44.75, 42.72],
+  "datetime": "2025-07-02T00:00:00Z/2025-07-17T23:59:59Z",
+  "query": {
+    "eo:cloud_cover": {
+      "lte": 25
+    }
+  },
+  "sortby": [
+    {
+      "field": "properties.datetime",
+      "direction": "desc"
+    }
+  ],
+  "fields": {
+    "include": [
+      "id",
+      "collection",
+      "bbox",
+      "geometry",
+      "properties.datetime",
+      "properties.platform",
+      "properties.eo:cloud_cover",
+      "properties.proj:epsg",
+      "properties.grid:code",
+      "properties.s2:tile_id",
+      "properties.s2:product_type",
+      "properties.s2:product_uri",
+      "assets.visual",
+      "assets.thumbnail",
+      "links"
+    ]
+  },
+  "limit": 100
+}
+```
+
+Earth Search advertises STAC 1.0 Item Search, query, fields, and sorting conformance
+from the linked STAC root. The client still validates actual response behavior and does
+not infer support only from conformance declarations.
+
+### 9.6 Receive a STAC FeatureCollection
+
+The response content type is GeoJSON/STAC JSON. A trimmed L2A response is:
+
+```json
+{
+  "type": "FeatureCollection",
+  "stac_version": "1.0.0",
+  "context": {
+    "limit": 100,
+    "matched": 10,
+    "returned": 10
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "S2A_38TMN_20250731_0_L2A",
+      "collection": "sentinel-2-l2a",
+      "bbox": [44.000177, 42.359721, 45.120421, 43.352783],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": ["validated scene footprint coordinates"]
+      },
+      "properties": {
+        "datetime": "2025-07-31T07:58:21.070000Z",
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 2.628153,
+        "proj:epsg": 32638,
+        "grid:code": "MGRS-38TMN",
+        "s2:tile_id": "S2A_OPER_MSI_L2A_TL_2APS_20250731T110117_A052785_T38TMN_N05.11",
+        "s2:product_type": "S2MSI2A",
+        "s2:product_uri": "S2A_MSIL2A_20250731T075021_N0511_R135_T38TMN_20250731T110117.SAFE"
+      },
+      "assets": {
+        "visual": {
+          "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/TCI.tif",
+          "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "roles": ["visual"],
+          "gsd": 10,
+          "proj:shape": [10980, 10980]
+        },
+        "thumbnail": {
+          "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/preview.jpg",
+          "type": "image/jpeg",
+          "roles": ["thumbnail"]
+        }
+      }
+    }
+  ],
+  "links": [
+    {
+      "rel": "next",
+      "method": "POST",
+      "href": "https://earth-search.aws.element84.com/v1/search",
+      "body": {
+        "next": "provider pagination token"
+      }
+    }
+  ]
+}
+```
+
+The full provider response contains more fields and assets. Zod schemas accept only the
+required allowlisted structure and ignore unrelated extensions after validating the
+envelope.
+
+### 9.7 Follow bounded pagination
+
+When a validated response contains a `links` entry with `rel: "next"`, the gateway:
+
+1. Verifies HTTPS, the configured Earth Search origin, POST method, and response type.
+2. Replays the validated provider-supplied body, including its opaque `next` token.
+3. Appends valid items, deduplicated by collection plus item ID.
+4. Stops at the configured page/result cap or when no next link exists.
+
+An observed next-page body has this shape:
+
+```json
+{
+  "datetime": "2025-07-01T00:00:00Z/2025-07-31T23:59:59Z",
+  "query": {
+    "eo:cloud_cover": {
+      "lte": 25
+    }
+  },
+  "sortby": [
+    {
+      "field": "properties.datetime",
+      "direction": "desc"
+    }
+  ],
+  "collections": ["sentinel-2-l2a"],
+  "bbox": [44.55, 42.6, 44.75, 42.72],
+  "limit": 100,
+  "next": "2025-07-29T07:58:25.174000Z"
+}
+```
+
+Do not concatenate or execute arbitrary pagination URLs and do not truncate silently.
+
+### 9.8 Validate and map the external JSON
+
+The boundary is:
+
+```text
+unknown JSON
+-> Zod STAC envelope/item/geometry/asset schemas
+-> validated external items
+-> readonly SatelliteScene[]
+```
+
+A mapped internal L2A scene is:
+
+```json
+{
+  "sceneId": "S2A_38TMN_20250731_0_L2A",
+  "level": "L2A",
+  "platform": "Sentinel-2A",
+  "acquiredAt": "2025-07-31T07:58:21.070Z",
+  "cloudCoverPercent": 2.628153,
+  "tileCode": "38TMN",
+  "orbit": "R135",
+  "productType": "S2MSI2A",
+  "productId": "S2A_MSIL2A_20250731T075021_N0511_R135_T38TMN_20250731T110117.SAFE",
+  "projectionEpsg": 32638,
+  "footprint": {
+    "type": "Polygon",
+    "coordinates": ["validated scene footprint coordinates"]
+  },
+  "visualAsset": {
+    "format": "cog",
+    "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/TCI.tif",
+    "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized"
+  },
+  "thumbnailUrl": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/preview.jpg"
+}
+```
+
+`tileCode` comes from a validated MGRS grid code. The observed item has no dedicated
+relative-orbit property, so `orbit` may be extracted only from a strictly validated
+Sentinel product URI; otherwise it remains `null`. Missing metadata is never invented.
+
+### 9.9 Calculate coverage, edge evidence, and acquisition groups
+
+For each validated scene:
+
+```text
+viewport coverage percent =
+geodesic area(intersection(submitted viewport polygon, scene footprint))
+/ geodesic area(submitted viewport polygon)
+* 100
+```
+
+The edge calculation is:
+
+```text
+submitted viewport center
+-> shortest geodesic distance to the scene polygon boundary
+-> inside/outside/near-edge classification
+-> distance and warning DTO
+```
+
+Focused Turf modules may provide intersection, area, and point-to-boundary distance
+after the S5.1 dependency/bundle review.
+
+The final result is grouped and sorted by UTC acquisition date:
+
+```json
+{
+  "sceneCount": 8,
+  "acquisitionDayCount": 4,
+  "groups": [
+    {
+      "date": "2025-07-17",
+      "scenes": [
+        {
+          "sceneId": "S2A_38TMN_20250717_0_L2A",
+          "cloudCoverPercent": 4,
+          "viewportCoveragePercent": 92,
+          "edgeDistanceKm": 14.6
+        }
+      ]
+    }
+  ]
+}
+```
+
+Counts are derived from validated data, not copied from prototype sample labels.
+
+### 9.10 Present results and select a scene
+
+The presentation chain is:
+
+```text
+SatelliteSearchResult
+-> SatelliteResultsPane
+-> UTC date groups
+-> SatelliteSceneCard
+-> selected SatelliteSceneDetails
+```
+
+The card may request `assets.thumbnail.href` as a lightweight JPEG preview when the
+asset exists. A thumbnail is never stretched over the map as the production raster.
+
+Selecting a scene does not immediately move the camera. It sends the mapped scene to the
+narrow imagery-map capability:
+
+```text
+user selects/applies scene
+-> SatelliteImageryMap.apply(scene, AbortSignal)
+-> MapLibreSatelliteImageryAdapter
+-> validated visual asset
+```
+
+### 9.11 L2A raster request and MapLibre chain
+
+The observed L2A visual asset is:
+
+```json
+{
+  "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/TCI.tif",
+  "format": "COG",
+  "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized",
+  "projection": "EPSG:32638",
+  "resolutionMeters": 10,
+  "shape": [10980, 10980]
+}
+```
+
+The required rendering chain is:
+
+```text
+MapLibre requests Web Mercator tile z/x/y
+-> raster adapter converts tile bounds to the scene projection
+-> HTTP Range requests read only required COG headers/blocks/overviews
+-> provider returns 206 Partial Content
+-> worker decodes the requested RGB window
+-> adapter reprojects/resamples EPSG:32638 pixels to EPSG:3857
+-> adapter returns one 256x256 RGBA/PNG tile
+-> MapLibre raster source renders the tile
+```
+
+Representative range request:
+
+```http
+GET /sentinel-s2-l2a-cogs/.../TCI.tif HTTP/1.1
+Host: sentinel-cogs.s3.us-west-2.amazonaws.com
+Range: bytes=0-16383
+```
+
+Representative response:
+
+```http
+HTTP/1.1 206 Partial Content
+Content-Type: image/tiff
+Content-Range: bytes 0-16383/<asset-size>
+Content-Length: 16384
+```
+
+MapLibre's
+[official COG example](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-cog-raster-source/)
+shows the custom-protocol shape:
+
+```ts
+maplibregl.addProtocol('cog', cogProtocol);
+
+map.addSource('sentinel-imagery', {
+  type: 'raster',
+  url: 'cog://<validated-visual-asset-url>',
+  tileSize: 256,
+});
+
+map.addLayer(
+  {
+    id: 'sentinel-imagery',
+    type: 'raster',
+    source: 'sentinel-imagery',
+  },
+  firstOsmReferenceLayerId,
+);
+```
+
+This code is the desired MapLibre boundary, not a selected dependency. The example
+adapter documents that its inputs must already use EPSG:3857 and that it does not
+reproject. The observed Georgia scene uses EPSG:32638, so S5.1 must prove or choose the
+reprojection-capable implementation before S5.5 adopts a production adapter.
+
+### 9.12 L1C raster branch
+
+The same live area/month query returned L1C metadata, but the visual asset differs:
+
+```json
+{
+  "sceneId": "S2A_38TMN_20250731_0_L1C",
+  "collection": "sentinel-2-l1c",
+  "productType": "S2MSI1C",
+  "projectionEpsg": 32638,
+  "visualAsset": {
+    "href": "s3://sentinel-s2-l1c/tiles/38/T/MN/2025/7/31/0/TCI.jp2",
+    "type": "image/jp2",
+    "roles": ["visual"],
+    "shape": [10980, 10980]
+  },
+  "thumbnail": null
+}
+```
+
+The browser cannot fetch the `s3://` URL through normal HTTP and does not provide a
+MapLibre-ready JPEG 2000 tile decoder. Therefore:
+
+```text
+L1C STAC search/metadata
+-> works through the same JSON query chain
+
+L1C map rendering
+-> requires an approved HTTPS asset/tile service
+   or a browser JP2 + reprojection adapter
+-> remains an S5.1 feasibility decision
+```
+
+Do not silently render the related L2A scene when the user selected L1C, and do not
+present metadata-only L1C results as successfully applicable imagery.
+
+### 9.13 Add the footprint and applied-state snapshot
+
+The validated STAC geometry becomes a GeoJSON source:
+
+```json
+{
+  "type": "Feature",
+  "properties": {
+    "sceneId": "S2A_38TMN_20250731_0_L2A"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": ["validated scene footprint coordinates"]
+  }
+}
+```
+
+The map adapter owns:
+
+```text
+satellite raster source/layer
+satellite footprint GeoJSON source/layers
+applied scene ID
+raster loading/ready/failed/hidden state
+attribution
+cleanup and cancellation
+```
+
+`Fit footprint` derives bounds from the validated geometry and calls the typed
+map-camera capability. `Hide imagery` changes raster visibility according to the
+reviewed footprint semantics without deleting search results.
+
+### 9.14 Cancellation and typed failure chain
+
+Cancellation travels through every boundary:
+
+```text
+TanStack Query AbortSignal
+-> LoadSatelliteAvailability/SearchSatelliteScenes
+-> SatelliteCatalogGateway
+-> ky/fetch
+-> pagination
+-> raster protocol/worker/range requests
+```
+
+Stale operation IDs prevent cancelled or superseded responses from replacing current
+state. Failures map into explicit categories:
+
+```json
+{
+  "kind": "rate-limit | timeout | offline | http | schema | pagination | unsupported-asset | decode | reprojection | map-source | cancelled",
+  "retryable": true,
+  "message": "Safe actionable user-facing message"
+}
+```
+
+Raw response bodies, headers, URLs with arbitrary queries, asset URLs, geometries, and
+provider error objects never reach React or default diagnostics.
+
+### 9.15 Complete query chain
+
+```text
+MapLibre settled viewport snapshot
+-> typed search criteria
+-> TanStack Query key and AbortSignal
+-> availability/search application use case
+-> SatelliteCatalogGateway
+-> POST Earth Search /v1/search
+-> STAC FeatureCollection JSON
+-> bounded pagination
+-> Zod envelope/item/geometry/asset validation
+-> readonly SatelliteScene[]
+-> coverage, edge distance, UTC grouping, and counts
+-> Satellite results UI
+-> selected visual asset
+-> raster adapter
+-> COG/JP2 range or approved tile requests
+-> decode and reprojection
+-> MapLibre raster layer plus GeoJSON footprint
+```
+
+## 10. Step-by-step work packages
 
 ### S5.0 Establish the reviewed plan and design governance
 
@@ -612,7 +1229,7 @@ Commit: `test(satellite): harden imagery workflows` followed by
 `docs: document Sentinel imagery operation` when the scopes are independently
 reviewable.
 
-## 10. Automatic test and acceptance matrix
+## 11. Automatic test and acceptance matrix
 
 | Boundary            | Required evidence                                                                                                                        |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -628,7 +1245,7 @@ reviewable.
 Required browser fixtures must be synthetic or redistribution-safe. No test copies a
 personal track or requires Earth Search/AWS availability.
 
-## 11. Performance, privacy, and reliability limits
+## 12. Performance, privacy, and reliability limits
 
 - The feasibility gate sets explicit search-result, pagination, date-span, worker,
   memory, request, transferred-byte, time-to-first-pixel, and cancellation budgets
@@ -651,7 +1268,7 @@ personal track or requires Earth Search/AWS availability.
 - Provider/search/render failure must never remove the OSM map, terrain control, or
   existing local workspace state.
 
-## 12. Quality gates and definition of done
+## 13. Quality gates and definition of done
 
 Run narrow tests with every work package. Before feature handoff, run:
 
@@ -689,7 +1306,7 @@ Also verify:
 11. The intended commits are pushed to a feature branch and available in a draft pull
     request targeting `main` before the feature is presented as finished.
 
-## 13. Prototype review questions and discrepancy log
+## 14. Prototype review questions and discrepancy log
 
 These are design/data-contract questions, not permission to reinterpret the prototype.
 Recommended defaults let implementation planning continue, but the accepted answers must

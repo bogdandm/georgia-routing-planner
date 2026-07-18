@@ -83,6 +83,10 @@ function recoverableMessage(category: MapFailureCategory): string {
   }
 }
 
+/**
+ * Owns the single native MapLibre instance, its listeners, terrain transitions, and
+ * bounded diagnostic snapshot. React interacts only through the `MapFacade` contract.
+ */
 export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   #map: MapLibreMap | null = null;
@@ -107,6 +111,7 @@ export class MapLibreFacade implements MapFacade {
     this.snapshotStore?.update(this.#snapshot);
   }
 
+  /** Attaches exactly one native map and transfers listener ownership from any prior map. */
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
       return;
@@ -153,6 +158,7 @@ export class MapLibreFacade implements MapFacade {
     this.logger.log({ level: 'info', name: 'map.recoverable.retry-requested' });
   }
 
+  /** Serializes terrain transitions so sources, listeners, and camera changes cannot race. */
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {
     const transition = this.#terrainTransition;
     if (transition !== null) {
@@ -506,6 +512,7 @@ export class MapLibreFacade implements MapFacade {
       previous === undefined || now - previous.lastLoggedAtMs >= windowMs;
 
     if (previous === undefined && this.#failureBuckets.size >= 8) {
+      // Bound cardinality as well as event count; arbitrary provider errors cannot grow memory.
       const oldestKey = this.#failureBuckets.keys().next().value;
       if (oldestKey !== undefined) this.#failureBuckets.delete(oldestKey);
     }

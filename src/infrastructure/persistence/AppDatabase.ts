@@ -28,6 +28,7 @@ export interface UiPreferences {
 
 const defaultUiPreferences: UiPreferences = { developerMode: false };
 
+/** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */
 export class AppDatabase extends Dexie {
   public readonly settings!: EntityTable<SettingRecord, 'key'>;
   public readonly diagnostics!: EntityTable<PersistedDiagnosticRecord, 'id'>;
@@ -69,6 +70,7 @@ export class AppDatabase extends Dexie {
     });
   }
 
+  /** Performs a temporary write/read/delete cycle without retaining health-check data. */
   public async probe(): Promise<void> {
     const key = '__healthcheck__';
     await this.settings.put({ key, value: true, updatedAt: new Date().toISOString() });

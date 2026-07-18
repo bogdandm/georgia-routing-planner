@@ -334,6 +334,10 @@ function createBasemapLayers(
   ];
 }
 
+/**
+ * Builds the complete deterministic hiking basemap style from validated provider
+ * mappings. Stable IDs and layer order are integration contracts for later overlays.
+ */
 export function createHikingMapStyle(
   configuration: MapProviderConfiguration,
 ): StyleSpecification {

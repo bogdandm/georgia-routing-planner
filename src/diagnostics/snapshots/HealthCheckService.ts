@@ -6,6 +6,7 @@ import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDia
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import type { KyInstance } from 'ky';
 
+/** Runs bounded, non-destructive browser, storage, map, and provider self-checks. */
 export class HealthCheckService {
   public constructor(
     private readonly clock: Clock,
@@ -38,6 +39,10 @@ export class HealthCheckService {
     return results;
   }
 
+  /**
+   * Probes configured providers only after an explicit user action. Cancellation is
+   * owned by the caller; application startup must never wait for this operation.
+   */
   public async runProviderReachability(
     configuration: MapProviderConfiguration,
     signal: AbortSignal,

@@ -14,6 +14,10 @@ function roundTo(value: number, decimalPlaces: number): number {
   return Math.round(value * scale) / scale;
 }
 
+/**
+ * Combines bounded events, health results, and a privacy-reduced map snapshot into the
+ * local support bundle. This service never uploads diagnostics.
+ */
 export class DiagnosticsService {
   #healthChecks: readonly HealthCheckResult[] = [];
 
@@ -77,6 +81,7 @@ export class DiagnosticsService {
       ...snapshot,
       camera: {
         ...snapshot.camera,
+        // Exact camera coordinates remain available locally in developer mode only.
         longitude: roundTo(snapshot.camera.longitude, 1),
         latitude: roundTo(snapshot.camera.latitude, 1),
         zoom: roundTo(snapshot.camera.zoom, 2),

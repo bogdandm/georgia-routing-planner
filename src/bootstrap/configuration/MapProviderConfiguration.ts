@@ -139,6 +139,7 @@ export interface MapProviderConfigurationSummary {
   readonly terrainOrigin: string;
 }
 
+/** Anonymous, credential-free provider defaults used when no public override is supplied. */
 export const defaultMapProviderConfigurationInput = {
   schemaVersion: 1,
   vector: {
@@ -188,6 +189,7 @@ function resolveEndpoint(value: string, baseUrl: string): string {
     .replaceAll('%7D', '}');
 }
 
+/** Validates provider input and resolves application-relative endpoints against `baseUrl`. */
 export function parseMapProviderConfiguration(
   input: unknown,
   baseUrl: string,
@@ -207,6 +209,10 @@ export function parseMapProviderConfiguration(
   };
 }
 
+/**
+ * Loads the optional serialized Vite override and fails closed with a payload-safe
+ * message. The returned error never echoes provider URLs or configuration contents.
+ */
 export function loadMapProviderConfiguration(
   serializedOverride: string | undefined,
   baseUrl: string,
@@ -226,6 +232,7 @@ export function loadMapProviderConfiguration(
   }
 }
 
+/** Reduces provider configuration to identifiers and origins safe for diagnostics. */
 export function summarizeMapProviderConfiguration(
   configuration: MapProviderConfiguration,
 ): MapProviderConfigurationSummary {

@@ -56,6 +56,10 @@ async function loadCameraWithDeadline(
   }
 }
 
+/**
+ * Coordinates React-visible map states while delegating all native MapLibre lifecycle
+ * work to `MapFacade`. The map mounts only after camera restoration settles or expires.
+ */
 export function MapWorkspace({
   facade: suppliedFacade,
   mapCanvas,
@@ -181,6 +185,7 @@ export function MapWorkspace({
 
   useEffect(() => {
     let active = true;
+    // Storage must not be allowed to keep the primary map behind a loader indefinitely.
     void loadCameraWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
       .then((camera) => {
         if (active) {

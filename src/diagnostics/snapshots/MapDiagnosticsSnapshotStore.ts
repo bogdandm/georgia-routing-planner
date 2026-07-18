@@ -1,5 +1,9 @@
 import type { MapDiagnosticsSnapshot } from '@/presentation/map/mapTypes';
 
+/**
+ * Shares a serializable copy of current map state with React, health checks, and bundle
+ * export without exposing MapLibre's mutable native object.
+ */
 export class MapDiagnosticsSnapshotStore {
   readonly #listeners = new Set<() => void>();
   #snapshot: MapDiagnosticsSnapshot | null = null;

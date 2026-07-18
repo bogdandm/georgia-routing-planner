@@ -7,6 +7,10 @@ import type {
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import { redactDiagnosticInput } from '@/diagnostics/redaction/redactDiagnosticData';
 
+/**
+ * Redacts events before retaining them in a fixed-capacity ring buffer. Logging is
+ * deliberately best-effort so diagnostics cannot turn a recoverable failure into one.
+ */
 export class BoundedDiagnosticLogger implements DiagnosticLogger {
   readonly #events: DiagnosticEvent[] = [];
 

@@ -21,6 +21,7 @@ import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapC
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 
+/** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
   readonly buildInfo: BuildInfo;
   readonly clock: Clock;
@@ -35,6 +36,10 @@ export interface RuntimeServices {
   readonly queryClient: QueryClient;
 }
 
+/**
+ * Constructs browser adapters, validates public configuration, and wires cross-cutting
+ * diagnostics. Feature modules consume this bundle but must not construct replacements.
+ */
 export function createRuntimeServices(): RuntimeServices {
   const clock = new BrowserClock();
   const idGenerator = new CryptoIdGenerator();

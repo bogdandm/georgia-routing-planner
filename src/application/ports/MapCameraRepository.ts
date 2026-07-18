@@ -6,6 +6,7 @@ export interface MapCamera {
   readonly pitch: number;
 }
 
+/** Persists the last settled map camera without exposing the storage technology. */
 export interface MapCameraRepository {
   load(): Promise<MapCamera | null>;
   save(camera: MapCamera): Promise<void>;
@@ -23,6 +24,10 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+/**
+ * Validates an untrusted camera record and clamps finite values to MapLibre's supported
+ * operating range. Returns `null` when the record cannot be repaired safely.
+ */
 export function normalizeMapCamera(value: unknown): MapCamera | null {
   if (typeof value !== 'object' || value === null) {
     return null;

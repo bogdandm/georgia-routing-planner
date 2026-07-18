@@ -27,6 +27,10 @@ function readPersistedCamera(value: unknown): MapCamera | null {
   return normalizeMapCamera(candidate.camera);
 }
 
+/**
+ * Stores the versioned camera record in the shared settings table and repairs invalid
+ * records by removing them before returning the defaultable `null` result.
+ */
 export class DexieMapCameraRepository implements MapCameraRepository {
   public constructor(
     private readonly database: AppDatabase,

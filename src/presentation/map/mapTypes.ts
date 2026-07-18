@@ -28,6 +28,7 @@ export interface MapWebGlCapabilities {
   readonly antialias: boolean | null;
 }
 
+/** Serializable map state shared with React and diagnostics; it contains no native objects. */
 export interface MapDiagnosticsSnapshot {
   readonly lifecycle: MapLifecycleState;
   readonly camera: MapCamera;
@@ -46,6 +47,7 @@ export type TerrainTransitionResult =
   | { readonly status: 'success'; readonly mode: TerrainMode }
   | { readonly status: 'failed'; readonly reason: string };
 
+/** Overview used when no valid persisted camera can be restored. */
 export const defaultGeorgiaCamera: MapCamera = {
   longitude: 43.4,
   latitude: 42.1,

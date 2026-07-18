@@ -18,9 +18,9 @@ durable settled-camera restoration, provider failure feedback, and bounded map/W
 diagnostics. Catalog, planning, and satellite product features remain assigned to later
 roadmap phases.
 
-See [TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md) for the product roadmap, [PLAN.md](./PLAN.md)
-for the detailed plan for the active implementation phase, and [AGENTS.md](./AGENTS.md)
-for the required engineering conventions.
+See [docs/README.md](./docs/README.md) for the permanent project handbook and
+[AGENTS.md](./AGENTS.md) for required engineering conventions. `PLAN.md` and
+`TOP_LVL_PLAN.md` are temporary planning artifacts, not sources of project truth.
 
 ## Getting started
 

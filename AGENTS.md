@@ -49,6 +49,14 @@ Rules:
 - The GitHub CLI (`gh`) is installed and available for this project. Use it for
   requested GitHub repository and remote workflows, and verify `gh auth status` before
   an operation that contacts GitHub.
+- In managed Codex runs, a sandboxed `gh auth status` or other `gh` command may falsely
+  report that the token is invalid because the sandbox cannot access the host keyring or
+  network. When a sandboxed `gh` command reports an authentication or likely
+  sandbox-related failure, immediately rerun the same command with
+  `sandbox_permissions: "require_escalated"` before concluding that authentication is
+  invalid, asking the maintainer to log in, or blocking publication. Treat the elevated
+  result as authoritative; never report an invalid token based only on a sandboxed
+  result.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
 - End each implementation handoff by reporting the active branch, commit/check status,

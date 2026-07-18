@@ -90,6 +90,34 @@ describe('MapWorkspace', () => {
     await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
   });
 
+  it('falls back to the Georgia overview when camera storage never settles', async () => {
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () => new Promise<never>(() => undefined),
+        save: () => Promise.resolve(),
+      },
+    };
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace
+          facade={new FakeMapFacade()}
+          mapCanvas={(initialCamera) => (
+            <div>Fallback zoom {String(initialCamera.zoom)}</div>
+          )}
+          cameraRestoreTimeoutMs={0}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.queryByText(/Fallback zoom/)).not.toBeInTheDocument();
+    await expect(screen.findByText('Fallback zoom 5.8')).resolves.toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The saved camera could not be restored',
+    );
+  });
+
   it('keeps 2D usable after terrain failure and retries explicitly', async () => {
     const user = userEvent.setup();
     const facade = new FakeMapFacade();

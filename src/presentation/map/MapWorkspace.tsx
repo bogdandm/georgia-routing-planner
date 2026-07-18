@@ -26,6 +26,7 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
   readonly mapCanvas?: ReactNode | ((initialCamera: MapCamera) => ReactNode);
+  readonly cameraRestoreTimeoutMs?: number;
 }
 
 const unavailableMapStyle: StyleSpecification = {
@@ -34,7 +35,32 @@ const unavailableMapStyle: StyleSpecification = {
   layers: [],
 };
 
-export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspaceProps) {
+const cameraRestoreTimeoutMs = 2_000;
+
+async function loadCameraWithDeadline(
+  load: () => Promise<MapCamera | null>,
+  timeoutMs: number,
+): Promise<MapCamera | null> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      load(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error('Map camera restoration timed out.'));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function MapWorkspace({
+  facade: suppliedFacade,
+  mapCanvas,
+  cameraRestoreTimeoutMs: restoreTimeoutMs = cameraRestoreTimeoutMs,
+}: MapWorkspaceProps) {
   const { logger, mapCameraRepository, mapDiagnostics, mapProviderConfiguration } =
     useRuntimeServices();
   const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
@@ -155,8 +181,7 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
 
   useEffect(() => {
     let active = true;
-    void mapCameraRepository
-      .load()
+    void loadCameraWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
       .then((camera) => {
         if (active) {
           setRestoredCamera(camera ?? defaultGeorgiaCamera);
@@ -175,7 +200,7 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
     return () => {
       active = false;
     };
-  }, [logger, mapCameraRepository]);
+  }, [logger, mapCameraRepository, restoreTimeoutMs]);
 
   useEffect(() => {
     return () => {

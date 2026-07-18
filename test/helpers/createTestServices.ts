@@ -48,8 +48,15 @@ export function createTestServices(): RuntimeServices {
     timestamp: '2026-07-18T00:00:00.000Z',
     mode: 'test',
   };
-  const healthChecks = new HealthCheckService(clock, database, logger);
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const httpClient = createHttpClient(logger);
+  const healthChecks = new HealthCheckService(
+    clock,
+    database,
+    logger,
+    mapDiagnostics,
+    httpClient,
+  );
 
   return {
     buildInfo,
@@ -61,7 +68,7 @@ export function createTestServices(): RuntimeServices {
       healthChecks,
       mapDiagnostics,
     ),
-    httpClient: createHttpClient(logger),
+    httpClient,
     idGenerator,
     logger,
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),

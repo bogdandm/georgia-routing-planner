@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
 
@@ -162,5 +163,34 @@ describe('MapWorkspace', () => {
       window.dispatchEvent(new Event('online'));
     });
     expect(screen.queryByText(/new map data is unavailable/)).not.toBeInTheDocument();
+  });
+
+  it('applies developer debug flags and resets them when developer mode ends', async () => {
+    const facade = new FakeMapFacade();
+    useUiStore.setState({
+      developerMode: true,
+      mapDebugOptions: {
+        showCollisionBoxes: true,
+        showTileBoundaries: true,
+      },
+    });
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Debug map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Debug map');
+    expect(facade.debugOptions).toEqual({
+      showCollisionBoxes: true,
+      showTileBoundaries: true,
+    });
+
+    act(() => {
+      useUiStore.setState({ developerMode: false });
+    });
+    expect(facade.debugOptions).toEqual({
+      showCollisionBoxes: false,
+      showTileBoundaries: false,
+    });
   });
 });

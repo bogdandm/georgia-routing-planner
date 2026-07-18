@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 import { installMapProviderFixtures } from './installMapProviderFixtures';
@@ -22,6 +23,26 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     }, 0);
   });
   await page.getByRole('button', { name: 'Developer diagnostics' }).click();
+  await page.getByRole('tab', { name: 'Map' }).click();
+  await expect(page.getByText('Exact current camera')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Ordered map sources' })).toContainText(
+    'basemap-vector',
+  );
+  await page.getByRole('switch', { name: 'Show tile boundaries' }).click();
+  const mapDrawerAccessibility = await new AxeBuilder({ page })
+    .include('.MuiDrawer-paper')
+    .analyze();
+  expect(
+    mapDrawerAccessibility.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Check configured providers' }).click();
+  await expect(page.getByText('Vector provider reachability')).toBeVisible();
+  await expect(page.getByText('Terrain provider reachability')).toBeVisible();
+
   await page.getByRole('tab', { name: /Logs/ }).click();
   await expect(page.getByText('runtime.promise.unhandled')).toBeVisible();
   await page.getByRole('tab', { name: 'Overview' }).click();

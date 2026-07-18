@@ -78,6 +78,8 @@ describe('DiagnosticsService', () => {
       services.clock,
       services.database,
       services.logger,
+      services.mapDiagnostics,
+      services.httpClient,
     );
     vi.spyOn(healthService, 'run').mockResolvedValue([
       {

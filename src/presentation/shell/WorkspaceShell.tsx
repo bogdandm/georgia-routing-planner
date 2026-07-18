@@ -75,6 +75,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   const setDeveloperDrawerOpen = useUiStore((state) => state.setDeveloperDrawerOpen);
   const setDeveloperMode = useUiStore((state) => state.setDeveloperMode);
   const setElevationExpanded = useUiStore((state) => state.setElevationExpanded);
+  const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
 
@@ -123,6 +124,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     setDeveloperMode(value);
     if (!value) {
       setDeveloperDrawerOpen(false);
+      setMapDebugOptions({
+        showCollisionBoxes: false,
+        showTileBoundaries: false,
+      });
     }
     void persistDeveloperMode(value);
   };

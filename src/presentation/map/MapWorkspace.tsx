@@ -21,6 +21,7 @@ import {
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
+import { useUiStore } from '@/presentation/shell/uiStore';
 
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
@@ -41,6 +42,8 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
   const [terrainState, setTerrainState] = useState<TerrainControlState>('flat');
   const [terrainMessage, setTerrainMessage] = useState<string | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
+  const developerMode = useUiStore((state) => state.developerMode);
+  const mapDebugOptions = useUiStore((state) => state.mapDebugOptions);
   const cameraPersistence = useMemo(
     () =>
       new SettledCameraPersistence(mapCameraRepository, logger, () => {
@@ -120,6 +123,20 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
     },
     [facade],
   );
+
+  useEffect(() => {
+    facade.setDebugOptions(
+      developerMode
+        ? mapDebugOptions
+        : { showCollisionBoxes: false, showTileBoundaries: false },
+    );
+    return () => {
+      facade.setDebugOptions({
+        showCollisionBoxes: false,
+        showTileBoundaries: false,
+      });
+    };
+  }, [developerMode, facade, mapDebugOptions]);
 
   useEffect(() => {
     const handleOnline = () => {

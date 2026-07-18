@@ -21,6 +21,7 @@ beforeEach(async () => {
     developerDrawerOpen: false,
     developerMode: false,
     elevationExpanded: true,
+    mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
     settingsOpen: false,
   });
 });

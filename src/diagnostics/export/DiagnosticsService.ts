@@ -1,5 +1,6 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { BuildInfo } from '@/bootstrap/buildInfo';
+import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
   DiagnosticBundle,
   HealthCheckResult,
@@ -24,7 +25,17 @@ export class DiagnosticsService {
   ) {}
 
   public async runHealthChecks(): Promise<readonly HealthCheckResult[]> {
-    this.#healthChecks = await this.healthCheckService.run();
+    this.#healthChecks = this.mergeHealthChecks(await this.healthCheckService.run());
+    return this.#healthChecks;
+  }
+
+  public async runProviderHealthChecks(
+    configuration: MapProviderConfiguration,
+    signal: AbortSignal,
+  ): Promise<readonly HealthCheckResult[]> {
+    this.#healthChecks = this.mergeHealthChecks(
+      await this.healthCheckService.runProviderReachability(configuration, signal),
+    );
     return this.#healthChecks;
   }
 
@@ -78,5 +89,13 @@ export class DiagnosticsService {
         ...failure,
       })),
     };
+  }
+
+  private mergeHealthChecks(
+    incoming: readonly HealthCheckResult[],
+  ): readonly HealthCheckResult[] {
+    const byName = new Map(this.#healthChecks.map((check) => [check.name, check]));
+    for (const check of incoming) byName.set(check.name, check);
+    return [...byName.values()];
   }
 }

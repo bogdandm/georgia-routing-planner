@@ -10,7 +10,7 @@ export class MapDiagnosticsSnapshotStore {
   }
 
   public getSnapshot(): MapDiagnosticsSnapshot | null {
-    return this.#snapshot === null ? null : structuredClone(this.#snapshot);
+    return this.#snapshot;
   }
 
   public subscribe(listener: () => void): () => void {

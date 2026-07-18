@@ -72,8 +72,15 @@ export function createRuntimeServices(): RuntimeServices {
       message: mapProviderConfiguration.message,
     });
   }
-  const healthChecks = new HealthCheckService(clock, database, logger);
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const httpClient = createHttpClient(logger);
+  const healthChecks = new HealthCheckService(
+    clock,
+    database,
+    logger,
+    mapDiagnostics,
+    httpClient,
+  );
   const diagnostics = new DiagnosticsService(
     buildInfo,
     logger,
@@ -115,7 +122,7 @@ export function createRuntimeServices(): RuntimeServices {
     clock,
     database,
     diagnostics,
-    httpClient: createHttpClient(logger),
+    httpClient,
     idGenerator,
     logger,
     mapCameraRepository,

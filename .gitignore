@@ -1,8 +1,10 @@
 node_modules/
+.pnpm-store/
 dist/
 coverage/
 .vite/
 .turbo/
+.eslintcache
 
 playwright-report/
 test-results/
@@ -14,6 +16,15 @@ blob-report/
 
 *.local
 *.log
+*.pid
+*.pid.lock
+*.dmp
+*.crash
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
 *.tsbuildinfo
 
 .idea/

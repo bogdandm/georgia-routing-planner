@@ -28,9 +28,10 @@
     "catalog:audit": "tsx tools/catalog/notImplemented.ts audit",
     "catalog:build": "tsx tools/catalog/notImplemented.ts build",
     "diagnostics:inspect": "tsx tools/diagnostics/inspectDiagnostics.ts",
+    "repo:audit": "tsx tools/repository/auditRepository.ts",
     "build:app": "vite build",
     "build": "pnpm typecheck && pnpm build:app",
-    "check": "pnpm format:check && pnpm lint && pnpm test:coverage && pnpm test:integration && pnpm build"
+    "check": "pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm test:integration && pnpm build"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

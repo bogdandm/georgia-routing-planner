@@ -23,5 +23,10 @@
     },
     "types": ["node", "vite/client", "vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "test", "tools/diagnostics/summarizeDiagnostics.ts"]
+  "include": [
+    "src",
+    "test",
+    "tools/diagnostics/summarizeDiagnostics.ts",
+    "tools/repository/artifactPolicy.ts"
+  ]
 }

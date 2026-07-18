@@ -1,18 +1,128 @@
-# Implemented features
+# Features and workspace UX
 
-This is the implemented Phase 1 inventory. Later roadmap features are listed only to
-make current boundaries explicit.
+This document describes the implemented application and the reviewed complete system
+concept. It distinguishes unavailable behavior so the mockups are not mistaken for
+working functionality.
+
+## Design authority and vocabulary
+
+The reviewed
+[Penpot workspace concepts](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334)
+are authoritative for layout, feature placement, control grouping, and interaction
+hierarchy. Repository documentation and code remain authoritative for data, privacy,
+architecture, and failure contracts. When those sources disagree about UI/UX, the
+reviewed design wins and this document must be corrected.
+
+- **Feature rail:** `Tracks`, `Satellite`, `Markers`, and `Layers` are the primary
+  top-level feature sections.
+- **Global rail actions:** `Diagnostics` is available when developer mode is enabled;
+  `Settings` is always a global action.
+- **Create GPX workflow:** manual waypoint planning begins from `Create GPX` in Tracks.
+  “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
+  item, or independent planning destination.
+- **Contextual sidebar:** the left panel changes with the active feature section.
+- **Detail pane:** selected track and imagery details may open adjacent to the
+  contextual sidebar without replacing or remounting the map.
+- **Persistent map:** the map remains the primary canvas across rail changes, detail
+  selection, dialogs, and developer tools.
 
 ## Desktop workspace
 
-The Material UI shell provides Tracks, Plan, and Satellite sections, a persistent map,
-an elevation panel placeholder, settings, and an opt-in developer drawer. The three
-product sections are deliberate empty states until their roadmap phases.
+The Material UI shell is a map-first desktop workbench. The compact rail and contextual
+sidebar occupy the left edge; the persistent map uses the remaining viewport. Native map
+navigation remains on the right, and the 2D/3D selector sits directly below it. The
+shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
+derived surface, border, status, and tag colors.
+
+The current shell implements all four rail destinations and honest empty or disabled
+states for unavailable feature behavior. It has no full-width app bar, empty global
+elevation placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
+- Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
 - Durable setting: developer-mode preference in Dexie.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
+
+## Feature surfaces
+
+### Tracks
+
+Tracks combines the read-only global catalog and browser-local GPX tracks in one
+library. The contextual sidebar contains `Create GPX`, Import GPX, search, filter, sort,
+curated categories, personal nested folders, and global/local track results. Personal
+folders store a user's organization without modifying global assets.
+
+Selecting a track draws its geometry on the map and opens an adjacent detail pane with
+source, tags, metrics, folder/download actions, calculation provenance, and a contextual
+elevation profile. The full original GPX is loaded only when requested. Import retention
+and privacy guidance appears at the relevant preview/confirmation step instead of as a
+permanent workspace banner.
+
+The current implementation shows the Tracks structure and disabled actions but does not
+load a catalog, import GPX, manage folders, or open track details.
+
+### Create GPX
+
+`Create GPX` starts the manual waypoint workflow from Tracks. Users add, move, remove,
+and reorder waypoints connected by visibly straight geodesic segments. The workflow owns
+waypoint names, notes, appearance, distance/elevation metrics, local draft saving, and
+GPX export. Its elevation chart uses the same calculation and provenance vocabulary as
+selected-track details.
+
+The current implementation exposes a disabled `Create GPX` action; waypoint editing,
+calculation, persistence, and export are unavailable.
+
+### Satellite
+
+Satellite uses a compact `Viewport | <coordinates>` search-area selector. Viewport is
+the default source; Marker becomes available when a saved marker can supply the search
+target. The sidebar also contains date range, cloud threshold, L1C/L2A choice, and the
+search action.
+
+Results compare acquisition date, platform, product level, cloud cover, coverage, and
+scene-edge warnings. Applying a concrete scene draws its true-color imagery and
+footprint without resetting other workspace state. The adjacent metadata pane exposes
+acquisition, tile/orbit/product identity, attribution, fit-footprint, and imagery
+visibility actions.
+
+The current implementation shows live viewport coordinates and the compact selector.
+Marker targeting, date/product filters, search, results, metadata, and imagery rendering
+are unavailable.
+
+### Markers
+
+Markers supports adding, searching, sorting, grouping, and filtering saved markers,
+including a current-view subset. Selected marker details edit name, icon, color,
+coordinates, terrain-derived elevation, and preferred map scale.
+
+A marker can become a Satellite search target or be copied into Create GPX. Copying
+transfers coordinates and supported appearance/provenance values; marker and waypoint
+identities remain separate, so subsequent marker edits do not mutate the waypoint.
+
+The current implementation provides the Markers rail destination and an empty state;
+marker creation, persistence, organization, editing, and cross-feature actions are
+unavailable.
+
+### Layers
+
+Layers controls supported visibility, opacity, and ordering within typed map-layer
+bands. Changes affect the persistent map while preserving attribution and the required
+relationship among satellite imagery, hiking references, tracks/Create GPX geometry,
+markers, and interaction highlights. It is not a generic unrestricted layer editor.
+
+The current implementation provides the Layers rail destination and an empty state;
+interactive layer management is unavailable.
+
+## Persistent map controls
+
+- Place-or-coordinate search is overlaid on the map. The current search field is
+  disabled.
+- Native zoom and compass/navigation controls remain on the right.
+- The 2D/3D selector is a separate control group immediately below the compass stack.
+- Attribution remains visible in every feature section and terrain mode.
+- Selection legends, elevation charts, and imagery footprints appear only when their
+  corresponding geometry exists.
 
 ## Hiking basemap
 
@@ -85,13 +195,9 @@ sizes, zoom ranges, policy limits, layer mappings, and attribution are validated
 errors report an issue count without echoing the payload. `VITE_*` configuration must
 never contain secrets.
 
-## Deferred features
+## Current capability boundary
 
-| Feature                                        | Planned phase/status                       |
-| ---------------------------------------------- | ------------------------------------------ |
-| Searchable GPX catalog and track display       | Later phase; current tab is an empty state |
-| Local GPX import                               | Later phase; control is disabled           |
-| Manual waypoint planning and GPX export        | Later phase; no routing engine exists      |
-| Elevation calculations and chart               | Later phase; panel is a placeholder        |
-| Sentinel-2 scene selection/rendering           | Later phase; COG feasibility only          |
-| Offline region downloads, accounts, cloud sync | Explicit MVP non-goals                     |
+The application does not currently provide GPX catalog loading, GPX import, Create GPX
+editing/export, track elevation charts, saved-marker management, interactive layer
+management, Sentinel-2 search/rendering, offline-region downloads, accounts, or cloud
+synchronization.

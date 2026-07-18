@@ -5,7 +5,8 @@
 This document defines the target MVP data contracts and their authoritative storage. It
 distinguishes the curated static GPX catalog from private browser-local data and from
 provider-owned online data. The current database contains only settings and bounded
-diagnostics; later phases add the planned tables through explicit Dexie migrations.
+diagnostics. Other records in this document describe the complete system concept and do
+not exist in IndexedDB until an executable schema and migration implement them.
 
 Mermaid is the declarative schema language used here because it renders with the other
 repository documentation. TypeScript types and Zod schemas become the executable
@@ -249,6 +250,10 @@ waypoints and are not independently persisted. A saved marker and a plan waypoin
 separate identities; copying a marker into a plan records optional provenance but does
 not create a live link.
 
+`RoutePlanRecord`, “route plan”, and “plan” are domain/storage terms. In the approved UI
+this aggregate is created and edited inside the Tracks-owned `Create GPX` workflow; it
+does not imply a Plan tab, rail item, or separate top-level feature.
+
 ```mermaid
 classDiagram
   class RoutePlanRecord {
@@ -333,8 +338,8 @@ flowchart TB
 ```
 
 The diagram is top-to-bottom visual priority. Terrain DEM is a capability/source used
-for elevation and MapLibre terrain, not an ordinary visual overlay. Basic pitch and
-terrain remain available; richer 3D entities are deferred.
+for elevation and MapLibre terrain, not an ordinary visual overlay. The application
+supports basic pitch and terrain but does not model richer 3D entities.
 
 ## Satellite, OSM, and elevation provider data
 
@@ -423,7 +428,7 @@ are excluded from default export. Geometry requires a separate explicit opt-in.
   another explicit destination. Child-folder handling requires confirmation.
 - Catalog-version replacement invalidates only derived/cache records, never user
   folders, placements, plans, markers, or local tracks.
-- If a curated track disappears in a later catalog, its personal placement becomes an
+- If a curated track disappears in a catalog update, its personal placement becomes an
   identifiable orphan that the UI can remove; it must not be rebound to another track by
   name.
 - Updating a calculation policy marks affected cached metrics stale and recalculates

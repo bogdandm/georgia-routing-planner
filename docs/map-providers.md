@@ -3,8 +3,8 @@
 ## Decision record
 
 - Evidence date: **2026-07-18**.
-- Scope: Phase 1 anonymous static browser client hosted on GitHub Pages and local
-  development origins.
+- Scope: anonymous static browser client hosted on GitHub Pages and local development
+  origins.
 - Decision: use the OpenFreeMap public OpenMapTiles vector source and the AWS Open Data
   Mapzen Terrain Tiles bucket as replaceable defaults.
 - Credentials: neither default requires an API key, cookie, account, signed request, or
@@ -27,10 +27,10 @@ template. The provider's Liberty style identified these optional support endpoin
 - Glyphs: `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf`.
 - Sprite metadata/image base: `https://tiles.openfreemap.org/sprites/ofm_f384/ofm`.
 
-Phase 1 uses glyphs for labels but intentionally avoids provider sprite coupling. Hiking
-points are rendered with simple circles and text. The source is the unmodified
-[OpenMapTiles schema](https://openmaptiles.org/schema/), which gives this configuration
-mapping:
+The application uses glyphs for labels but intentionally avoids provider sprite
+coupling. Hiking points are rendered with simple circles and text. The source is the
+unmodified [OpenMapTiles schema](https://openmaptiles.org/schema/), which gives this
+configuration mapping:
 
 | Application concept | Source layer          | Relevant fields/values                          |
 | ------------------- | --------------------- | ----------------------------------------------- |
@@ -48,8 +48,8 @@ mapping:
 
 The transportation schema explicitly includes `path`, `track`, `footway`, `steps`,
 `bridleway`, and `cycleway` classifications. OpenMapTiles does not expose hiking route
-relations as a dedicated source layer in this default schema, so Phase 1 styles physical
-ways rather than claiming to show official marked routes.
+relations as a dedicated source layer in this default schema, so the current style shows
+physical ways rather than claiming to show official marked routes.
 
 ### Attribution and licensing
 
@@ -110,15 +110,15 @@ European inputs make Copernicus/European Union and USGS/NOAA provenance especial
 relevant.
 
 The S3 endpoint has no CDN or SLA; upstream documentation says it is optimized for EC2
-networking. This is acceptable for an explicitly enabled, low-traffic MVP terrain mode,
-but it is the main production risk. A missing/no-data tile or network failure must
-return the application to flat 2D and never block the vector basemap. There is no silent
+networking. This is acceptable for an explicitly enabled, low-traffic terrain mode, but
+it is the main production risk. A missing/no-data tile or network failure must return
+the application to flat 2D and never block the vector basemap. There is no silent
 terrain provider failover because a replacement could have different licensing and
 elevation semantics.
 
 ## Rejected defaults
 
-- Public `tile.openstreetmap.org` raster tiles: rejected because the phase requires a
+- Public `tile.openstreetmap.org` raster tiles: rejected because the application uses a
   vector OSM foundation and the OSM Foundation raster service is not the application's
   production vector provider.
 - MapTiler Cloud: technically suitable but rejected as the anonymous default because its
@@ -146,23 +146,22 @@ No product render was added. MapLibre GL JS does not directly render a GeoTIFF/C
 raster source, and Chrome does not provide the geospatial windowing/reprojection needed
 by itself. The spike therefore has no meaningful full render-time number: it stopped
 after the successful 16 KiB range read rather than downloading or decoding the full
-asset. Phase 6 needs a replaceable imagery adapter, likely one of:
+asset. Rendering Sentinel imagery requires a replaceable imagery adapter, such as:
 
 1. Browser-side COG range reading, reprojection, and tile generation behind a worker.
 2. A standards-compatible dynamic tile service, if a provider policy is approved.
 
 The adapter must expose raster tiles/texture data to MapLibre without changing catalog
-search or scene-selection workflows. STAC search, scene choice, caching, imagery UI, and
-production COG decoding remain intentionally deferred.
+search or scene-selection workflows. The current application does not implement STAC
+search, scene choice, imagery caching/UI, or production COG decoding.
 
-## Phase 1 verification record
+## Verification record
 
-The required Chromium suite uses generated local vector, glyph, and DEM fixtures and
-passed on `feature/map-foundation` on 2026-07-18. It exercises the production style,
-camera reload, 2D/3D transitions, terrain retry, vector failure, WebGL context
-loss/restoration, diagnostics, attribution focus, accessibility, and rejection of every
-unexpected public request. Public-provider availability is deliberately outside that
-required gate.
+The required Chromium suite uses generated local vector, glyph, and DEM fixtures. The
+recorded 2026-07-18 run exercised the production style, camera reload, 2D/3D
+transitions, terrain retry, vector failure, WebGL context loss/restoration, diagnostics,
+attribution focus, accessibility, and rejection of every unexpected public request.
+Public-provider availability is deliberately outside that required gate.
 
 The live checks recorded above independently confirmed anonymous browser CORS for the
 OpenFreeMap TileJSON and AWS terrain range request. A combined local Vite smoke in the
@@ -172,9 +171,9 @@ read could indefinitely delay MapLibre mount. The implementation now bounds that
 and falls back to the Georgia overview with a storage warning, with component coverage.
 
 The in-app browser's local-navigation policy prevented a post-fix live-provider rerun.
-Therefore the checklist below remains a required normal-desktop-Chrome verification
-before merge or public release; do not treat the separate endpoint and deterministic
-fixture evidence as a completed real-provider application smoke.
+Use the checklist below for normal-desktop-Chrome verification before public release; do
+not treat the separate endpoint and deterministic fixture evidence as a completed
+real-provider application smoke.
 
 ## Manual revalidation checklist
 

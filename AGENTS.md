@@ -30,10 +30,10 @@ Rules:
   and obtain approval again.
 - Commits are allowed and encouraged on feature branches after relevant checks pass.
   Keep commits focused and use clear imperative or Conventional Commit-style messages.
-- Do not implement an entire phase as one mega-commit. When a temporary `PLAN.md`
-  exists, it must split phase work into smaller independently reviewable commits; each
+- Do not implement an entire workstream as one mega-commit. When a temporary `PLAN.md`
+  exists, it must split the work into smaller independently reviewable commits; each
   implementation commit must include its relevant automated tests and leave the
-  repository in a buildable, testable state. Do not defer most of a phase's tests to a
+  repository in a buildable, testable state. Do not defer most of the work's tests to a
   final test-only commit.
 - A feature is not handed off as finished until its relevant checks pass and its
   feature-branch state is available in a GitHub pull request targeting `main`. When you
@@ -49,16 +49,69 @@ Rules:
 - The GitHub CLI (`gh`) is installed and available for this project. Use it for
   requested GitHub repository and remote workflows, and verify `gh auth status` before
   an operation that contacts GitHub.
+- In managed Codex runs, a sandboxed `gh auth status` or other `gh` command may falsely
+  report that the token is invalid because the sandbox cannot access the host keyring or
+  network. When a sandboxed `gh` command reports an authentication or likely
+  sandbox-related failure, immediately rerun the same command with
+  `sandbox_permissions: "require_escalated"` before concluding that authentication is
+  invalid, asking the maintainer to log in, or blocking publication. Treat the elevated
+  result as authoritative; never report an invalid token based only on a sandboxed
+  result.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
 - End each implementation handoff by reporting the active branch, commit/check status,
   and whether the branch is awaiting approval.
 
-`PLAN.md` and `TOP_LVL_PLAN.md` are temporary planning artifacts. They may be
-regenerated for a phase or deleted after it. They can guide current work, but neither
-file is a source of project truth and neither may be the sole record of product scope,
-architecture, behavior, decisions, operations, or maintenance knowledge. Before a phase
-closes, move every durable fact into `README.md`, `docs/`, code contracts, or tests.
+## Documentation ownership: system description vs planning
+
+Keep stable system documentation independent from work breakdown and delivery progress:
+
+| Location          | Owns                                                                                                      | Must not contain                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `README.md`       | Stable project overview, current application capabilities, setup, commands, and complete concept summary  | Feature phases/stages, task IDs, estimates, branch/commit/PR status, merge status, or progress  |
+| `docs/`           | Stable feature concepts, implemented behavior, unavailable capability labels, architecture, and operation | Feature phases/stages, task ordering, estimates, branch/commit/PR status, or delivery progress  |
+| `TOP_LVL_PLAN.md` | TO-BE product roadmap, feature ordering, dependencies, broad acceptance, and high-level progress          | Detailed durable technical contracts that belong in `docs/`, code, or tests                     |
+| `PLAN.md`         | Active implementation tasks, work splits, commit sequence, verification plan, and detailed progress       | The only explanation of a feature's meaning, runtime contract, ownership, or operating behavior |
+
+Rules:
+
+- `README.md` and `docs/` may describe features that are not implemented when needed to
+  explain the complete reviewed system concept. Label current availability clearly, but
+  never say when, in which phase/stage, or through which task/branch the feature will be
+  implemented.
+- Only `PLAN.md` and `TOP_LVL_PLAN.md` may contain phases, stages, roadmap sequencing,
+  work-item breakdown, delivery estimates, branch tracking, approval progress, or
+  implementation-status history.
+- Planning files may link to stable documentation. Stable documentation must not depend
+  on a planning section, phase name, task number, or implementation split to explain a
+  feature or system contract.
+- Durable facts discovered during implementation must move into `README.md`, `docs/`,
+  code contracts, or tests in the same change. Planning files may retain task outcomes,
+  but must not remain the sole record of lasting behavior or architecture.
+- When reviewed Penpot UI/UX conflicts with repository prose, Penpot wins for layout,
+  feature placement, and interaction hierarchy. Update stable feature documentation and
+  the relevant planning files; do not reinterpret the design to preserve stale prose.
+- Before a documentation handoff, verify that this command returns no matches:
+
+  ```powershell
+  rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
+  ```
+
+  Also inspect `README.md` and `docs/` for estimates, task identifiers, branch names,
+  commit hashes, pull-request state, merge state, approval state, and other progress
+  reporting. Current capability statements such as “not currently available” are
+  allowed; delivery timing is not.
+
+## Penpot design review workflow
+
+When a task edits a Penpot file:
+
+- Inspect the current Penpot hierarchy before editing and preserve reviewer-made
+  changes.
+- Apply one requested review change per Penpot operation so the reviewer can observe
+  each change in real time.
+- Allow that change to reach the Penpot file before starting the next review change.
+- Do not batch multiple review changes into one Penpot MCP execution.
 
 ## Maintainer context
 
@@ -76,14 +129,14 @@ sections across files; link to the authoritative explanation.
 
 Update documentation in the same change as the behavior it describes:
 
-| Change                                                                                   | Required permanent documentation                                      |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Directory, layer, dependency direction, composition, or state owner                      | `docs/project-structure.md`                                           |
-| User-visible feature, limitation, error behavior, privacy behavior, or deferred boundary | `docs/features.md`                                                    |
-| Startup, async sequence, lifecycle, cleanup, persistence, or cross-module interaction    | `docs/runtime-flows.md`                                               |
-| Map endpoint, source schema, provider policy, attribution, CORS evidence, or replacement | `docs/map-providers.md` and the configuration example when applicable |
-| Setup, stable command, supported environment, or operator workflow                       | `README.md`                                                           |
-| Documentation file added, renamed, or removed                                            | `docs/README.md`                                                      |
+| Change                                                                                     | Required permanent documentation                                      |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Directory, layer, dependency direction, composition, or state owner                        | `docs/project-structure.md`                                           |
+| User-visible feature, limitation, error behavior, privacy behavior, or capability boundary | `docs/features.md`                                                    |
+| Startup, async sequence, lifecycle, cleanup, persistence, or cross-module interaction      | `docs/runtime-flows.md`                                               |
+| Map endpoint, source schema, provider policy, attribution, CORS evidence, or replacement   | `docs/map-providers.md` and the configuration example when applicable |
+| Setup, stable command, supported environment, or operator workflow                         | `README.md`                                                           |
+| Documentation file added, renamed, or removed                                              | `docs/README.md`                                                      |
 
 Rules:
 
@@ -106,7 +159,7 @@ cleanup, compatibility, security, performance, or workaround reasons.
 Do not comment every declaration or restate a line in English. Comments must explain why
 a constraint exists or what callers may rely on. Remove or update comments in the same
 commit as the behavior they describe; a stale comment is a defect. Avoid TODO comments
-without an issue, phase, or concrete completion condition.
+without an issue or concrete completion condition.
 
 ## Product constraints
 
@@ -117,8 +170,7 @@ without an issue, phase, or concrete completion condition.
 - The MVP is a static GitHub Pages application.
 - The MVP has no automatic routing, accounts, cloud sync, or OAuth integrations.
 - Planning uses user-created waypoints connected by straight geodesic segments.
-- User-imported data remains local unless a future requirement explicitly says
-  otherwise.
+- User-imported data remains local unless a new requirement explicitly says otherwise.
 - Production builds must include an explicitly activated, privacy-safe developer mode
   and diagnostics export. Do not rely on the user opening Chrome DevTools.
 
@@ -259,7 +311,9 @@ src/
     theme/              # MUI theme and design tokens
     routing/            # client-side page routing, if introduced
     map/
-    planner/
+    planner/            # Tracks-owned Create GPX workflow; never top-level navigation
+    markers/
+    layers/
     track-catalog/
     satellite-browser/
     elevation-profile/
@@ -476,8 +530,8 @@ Material UI is the default answer for application chrome and controls.
 ## Testing
 
 Automated tests are required by default. Add or update tests in the same change as
-production behavior. Do not defer the entire test suite to a later phase and do not rely
-on manual browser verification as the only evidence.
+production behavior. Do not postpone the entire test suite to a subsequent change and do
+not rely on manual browser verification as the only evidence.
 
 Use this test distribution:
 
@@ -537,10 +591,10 @@ Use Playwright's Chromium project for critical workflows:
 
 - Application opens on GitHub Pages-style base path.
 - Track search and selection.
-- Add/move/delete planning waypoints.
-- Save/reload/export a plan.
+- Add/move/delete waypoints through Create GPX in Tracks.
+- Save/reload/export a Create GPX draft.
 - Select imagery and recover from a failed request.
-- Toggle terrain without losing the plan.
+- Toggle terrain without losing an active Create GPX draft.
 - Activate developer mode through the URL, record a failure, export diagnostics, and
   verify secret/geometry redaction.
 
@@ -612,8 +666,8 @@ pnpm build          # typecheck plus production Vite build
 pnpm check          # all non-destructive CI checks
 ```
 
-If a command is not yet implemented, add it during the relevant scaffold phase rather
-than documenting a different ad-hoc command.
+If a command is not yet implemented, add it with the relevant implementation rather than
+documenting a different ad-hoc command.
 
 ## Verification and definition of done
 

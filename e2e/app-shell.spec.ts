@@ -27,9 +27,7 @@ test('loads the production map style and reloads under a repository subpath', as
 
   await page.goto('?developer=1');
 
-  await expect(
-    page.getByRole('heading', { name: 'Georgia Routing Planner' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
   await expect(page.getByTestId('map-workspace')).toBeVisible();
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -45,17 +43,16 @@ test('loads the production map style and reloads under a repository subpath', as
     'true',
   );
 
-  await page.getByRole('tab', { name: 'Plan' }).click();
-  await expect(page.getByRole('heading', { name: 'No active plan' })).toBeVisible();
-  await page.getByRole('button', { name: 'Collapse elevation profile' }).click();
+  await expect(page.getByRole('tab', { name: 'Plan' })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Markers' }).click();
+  await expect(page.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Layers' }).click();
   await expect(
-    page.getByRole('button', { name: 'Expand elevation profile' }),
+    page.getByRole('heading', { name: 'Layer controls are not available yet' }),
   ).toBeVisible();
 
   await page.reload();
-  await expect(
-    page.getByRole('heading', { name: 'Georgia Routing Planner' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
   expect(externalRequests).toEqual([]);
 });
 
@@ -63,9 +60,7 @@ test('has no serious accessibility violations in the shell and settings', async 
   page,
 }) => {
   await page.goto('?developer=1');
-  await expect(
-    page.getByRole('heading', { name: 'Georgia Routing Planner' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
 
   const shellResults = await new AxeBuilder({ page }).analyze();
   expect(

@@ -11,18 +11,22 @@ terrain control, and privacy-safe map diagnostics.
 Phase 1 establishes the map as a stable platform for catalog previews, manual planning,
 and Sentinel-2 imagery. It does not implement those later product features.
 
+This file is a historical phase plan, not the current UI/UX specification. The approved
+workspace hierarchy is defined in [`docs/features.md`](./docs/features.md) from the
+reviewed Penpot concepts. In particular, later manual planning is the Tracks-owned
+`Create GPX` workflow and must never be inferred from this plan as a top-level Plan tab
+or rail item.
+
 ## 2. Phase status and Git boundary
 
-- Status: **implemented and automatically verified on `feature/map-foundation`; awaiting
-  maintainer approval and the normal-Chrome real-provider revalidation documented
-  below**.
-- Phase 0 is merged into `main` at the start of this plan.
-- Planning branch: `docs/phase-1-map-foundation-plan`.
-- Implementation must occur on a feature branch, normally `feature/map-foundation`.
-- `main` must remain unchanged until the user explicitly approves a verified
-  feature-branch state.
-- No remote push, pull request, deployment, or branch-protection change is included
-  unless separately requested.
+- Status: **implemented, automatically verified, approved, and merged into `main`
+  through pull request #1**. The normal-Chrome real-provider revalidation documented
+  below remains a release check.
+- Phase 0 was already merged into `main` when this plan began.
+- Historical planning branch: `docs/phase-1-map-foundation-plan`.
+- Historical implementation branch: `feature/map-foundation`.
+- Current branch, pull-request, and approval rules are defined by `AGENTS.md`; the old
+  phase branches in this file are not instructions for new work.
 
 Phase 1 must be delivered as a sequence of small, reviewable commits. It must not be
 collapsed into one phase-sized implementation commit. Every implementation commit must
@@ -30,8 +34,8 @@ include its relevant tests and leave the repository in a buildable, testable sta
 
 ### Implementation outcome (2026-07-18)
 
-- Work packages P1.1 through P1.12 are implemented as focused commits on
-  `feature/map-foundation`; `main` remains unchanged.
+- Work packages P1.1 through P1.12 were implemented as focused commits on
+  `feature/map-foundation` and merged into `main` through pull request #1.
 - The production defaults are OpenFreeMap/OpenMapTiles vectors plus AWS Open Data Mapzen
   Terrarium DEM, behind a versioned Zod configuration boundary with a tracked valid
   example.
@@ -47,8 +51,8 @@ include its relevant tests and leave the repository in a buildable, testable sta
   because the available in-app Chrome disabled IndexedDB and then blocked local
   renavigation; [docs/map-providers.md](./docs/map-providers.md) records the observation
   and normal-Chrome checklist.
-- No push, pull request, deployment, merge, provider secret, or personal GPX data is
-  part of this implementation.
+- No deployment, provider secret, or personal GPX data was part of the Phase 1
+  implementation.
 
 ### Automated acceptance evidence (2026-07-18)
 
@@ -108,8 +112,8 @@ The following decisions come from the top-level plan and Phase 0 architecture:
   engine or React map wrapper.
 - Keep React components functional and declarative. MapLibre imperative behavior belongs
   in a typed map adapter/facade.
-- Use one map instance for the lifetime of the workspace. Tab, drawer, diagnostics, and
-  terrain-state changes must not remount it.
+- Use one map instance for the lifetime of the workspace. Rail-section, detail-pane,
+  dialog, diagnostics, and terrain-state changes must not remount it.
 - Use a MapLibre-compatible vector source for OSM data. Do not make the production
   basemap depend on the public `tile.openstreetmap.org` raster service.
 - Build a restrained hiking-focused style with centrally defined source and layer IDs.
@@ -265,7 +269,8 @@ order from bottom to top is:
 6. Hiking paths/tracks/steps.
 7. Hiking points such as shelters, peaks, and passes.
 8. Place and feature labels.
-9. Reserved future catalog tracks, plans, and waypoints above the basemap.
+9. Reserved future catalog tracks, Create GPX geometry, and saved markers/waypoints
+   above the basemap.
 
 Layer definitions must be deterministic and testable without constructing a WebGL
 context. Provider source-layer names are mapped once in the style factory.
@@ -488,7 +493,7 @@ Test:
 
 Implement a pure style factory using stable source/layer IDs and the parsed provider
 mapping. Use restrained theme-compatible colors and retain room for future imagery,
-tracks, plans, and waypoints.
+tracks, Create GPX geometry, and saved markers/waypoints.
 
 Cover land/background, water, boundaries, roads, hiking paths, useful hiking POIs, and
 labels only where supported by the selected source. Unsupported optional source layers
@@ -669,11 +674,11 @@ The final state must also satisfy:
 - No secret, personal GPX data, exact default-export camera, or unbounded map event data
   appears in logs, fixtures, build output, or diagnostics.
 
-## 14. Planned commit sequence
+## 14. Historical commit sequence
 
-Implementation occurs on `feature/map-foundation`. The sequence below is intentionally
-smaller than the phase. Each commit includes the listed tests and must pass at least
-`pnpm typecheck`, `pnpm lint`, and the relevant Vitest suite before the next commit.
+Implementation occurred on `feature/map-foundation`. The sequence below records why the
+phase was split into independently testable changes; it is not a branch instruction for
+current work.
 
 | Commit                                                      | Scope                                                                                                                          | Commit-level verification                                 |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
@@ -706,9 +711,9 @@ requires them, but the following rules are not optional:
 - Documentation-only feasibility evidence may stand alone, but code commits remain
   independently executable and reviewable.
 
-## 15. Approval checklist
+## 15. Historical approval checklist
 
-Before asking to integrate Phase 1 into `main`, report:
+The Phase 1 handoff reported:
 
 - Active branch and the ordered commit list.
 - Repository audit result, `.gitignore` changes, any paths removed from the index, and
@@ -728,12 +733,12 @@ Before asking to integrate Phase 1 into `main`, report:
 - Confirmation that no public deployment, provider secret, personal GPX data, or
   unexpected public-network test dependency was added.
 
-Remain on the feature branch after the handoff. Merge to `main` only after explicit user
-approval.
+Phase 1 remained on its feature branch until explicit approval and was then merged
+through pull request #1.
 
-## 16. Definition of Phase 1 done
+## 16. Definition of Phase 1 done (met)
 
-Phase 1 is complete only when:
+Phase 1 was accepted after satisfying the following conditions:
 
 1. A repeatable repository audit proves dependencies, build/test output, caches, logs,
    secrets, exports, and temporary artifacts are ignored and not tracked.
@@ -758,5 +763,5 @@ Phase 1 is complete only when:
     a separately documented real-provider smoke check passes.
 12. The provider and Sentinel COG feasibility decisions, configuration, attribution, and
     operating limits are documented for the maintainer.
-13. The verified implementation exists as multiple focused, testable commits on the
-    feature branch and is presented for approval without changing `main`.
+13. The verified implementation existed as multiple focused, testable commits on the
+    feature branch and was presented for approval before `main` changed.

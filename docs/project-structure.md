@@ -24,7 +24,8 @@ flowchart LR
 
 Dependencies point toward contracts: presentation and infrastructure may depend on
 application ports; application code must not depend on React, MapLibre, Dexie, or MUI.
-The future domain layer will remain independent of all browser frameworks.
+Any domain layer added to the repository must remain independent of all browser
+frameworks.
 
 ## Repository layout
 
@@ -36,10 +37,10 @@ src/
   infrastructure/          HTTP, IndexedDB, clock, and ID implementations
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
-    shell/                 desktop workbench and settings
+    shell/                 feature rail, contextual sidebars, settings, and shell state
     map/                   map UI, pure style, facade, terrain, and camera coordination
     developer-tools/       local support and diagnostic UI
-    theme/                 Material UI theme
+    theme/                 shared color tokens and Material UI theme
     styles/                application-level CSS
 e2e/                       built-app Chromium workflows and provider fixtures
 test/                      shared fixtures, fakes, setup, and repository-policy tests
@@ -47,8 +48,9 @@ tools/                     Node-only audit, diagnostics, and E2E runners
 docs/                      maintainer-facing system documentation
 ```
 
-`domain/` and most application use-case folders are intentionally absent until later
-product phases add tracks, planning, elevation, and imagery behavior.
+`domain/` and feature use-case folders are not present. The current application layer
+contains capability ports used by the implemented map, diagnostics, and persistence
+boundaries.
 
 ## Composition root
 
@@ -65,17 +67,22 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 
 | State                                                     | Owner                               | Reason                                             |
 | --------------------------------------------------------- | ----------------------------------- | -------------------------------------------------- |
-| Dialogs, selected workspace tab, developer flags          | Zustand `uiStore`                   | Cross-component, transient, serializable UI state  |
+| Dialogs, active rail section, developer flags             | Zustand `uiStore`                   | Cross-component, transient, serializable UI state  |
 | Component transitions and messages                        | React component state               | Local rendering concern                            |
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
-| Future remote/static data                                 | TanStack Query                      | Request and cache lifecycle                        |
-| Future business invariants                                | Domain/application classes          | Framework-independent behavior                     |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
 the native map instance to be recreated.
+
+`WorkspaceShell` only composes the persistent regions. `WorkspaceRail` owns the Tracks,
+Satellite, Markers, and Layers destinations plus global Diagnostics and Settings
+actions. `WorkspaceSidebar` owns each section's implemented, disabled, or empty
+presentation. Create GPX is currently a disabled Tracks action and is never a rail
+section. Shared palette values live in `appColors.ts` so the MUI theme and pure MapLibre
+style use the same visual vocabulary without introducing a second styling system.
 
 ## Map boundary
 
@@ -83,5 +90,5 @@ the native map instance to be recreated.
 and user commands. [`MapLibreFacade.ts`](../src/presentation/map/MapLibreFacade.ts) owns
 the native object, event listeners, terrain source, error aggregation, WebGL state, and
 cleanup. [`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and
-uses stable IDs from `mapIds.ts` so future imagery, tracks, plans, and waypoints can be
-inserted without accidental layer reordering.
+uses stable IDs from `mapIds.ts`. Any added feature layer must extend that typed
+ordering instead of scattering MapLibre identifiers through presentation components.

@@ -20,7 +20,6 @@ beforeEach(async () => {
     activeTab: 'tracks',
     developerDrawerOpen: false,
     developerMode: false,
-    elevationExpanded: true,
     mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
     settingsOpen: false,
   });
@@ -43,26 +42,43 @@ function renderWorkspaceShell() {
 }
 
 describe('WorkspaceShell', () => {
-  it('navigates intentional empty states and toggles the elevation panel', async () => {
+  it('navigates the contextual feature panels without covering the map', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    expect(
-      screen.getByRole('heading', { name: 'Georgia Routing Planner' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'No tracks loaded' })).toBeVisible();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
-    await user.click(screen.getByRole('tab', { name: 'Plan' }));
-    expect(screen.getByRole('heading', { name: 'No active plan' })).toBeVisible();
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
-    expect(screen.getByRole('heading', { name: 'No satellite layer' })).toBeVisible();
-
-    const collapse = screen.getByRole('button', { name: 'Collapse elevation profile' });
-    await user.click(collapse);
+    expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Markers' }));
+    expect(screen.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(
-      screen.getByRole('button', { name: 'Expand elevation profile' }),
+      screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
     ).toBeVisible();
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Imagery search is not available yet' }),
+    ).toBeVisible();
+    const searchAreaSource = screen.getByRole('combobox', {
+      name: 'Search area source',
+    });
+    expect(searchAreaSource).toHaveTextContent('Viewport');
+    expect(searchAreaSource).toHaveTextContent('42.1000, 43.4000');
+    await user.click(searchAreaSource);
+    expect(screen.getByRole('option', { name: 'Viewport' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.queryByTestId('elevation-panel')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Imported tracks will stay in this browser/u),
+    ).not.toBeInTheDocument();
   });
 
   it('persists developer mode and opens the diagnostics drawer', async () => {

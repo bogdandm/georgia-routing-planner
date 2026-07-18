@@ -1,17 +1,42 @@
 import { createTheme } from '@mui/material/styles';
 
+import { appColors } from '@/presentation/theme/appColors';
+
 export function createAppTheme() {
   return createTheme({
     palette: {
       mode: 'light',
-      primary: { main: '#1f5b45', dark: '#143d2e', light: '#4c806b' },
-      secondary: { main: '#b66a2c' },
-      background: { default: '#eef1eb', paper: '#fbfcf8' },
+      primary: {
+        main: appColors.brand.deepSpace,
+        dark: '#011F2E',
+        light: appColors.brand.blueGreen,
+        contrastText: appColors.text.inverse,
+      },
+      secondary: {
+        main: appColors.brand.tigerOrange,
+        dark: appColors.status.warning,
+        light: appColors.brand.amber,
+      },
+      info: { main: appColors.brand.blueGreen },
+      warning: { main: appColors.brand.amber, dark: appColors.status.warning },
+      error: { main: appColors.status.error },
+      success: { main: appColors.status.success },
+      background: {
+        default: appColors.surface.canvas,
+        paper: appColors.surface.panel,
+      },
+      text: {
+        primary: appColors.text.primary,
+        secondary: appColors.text.secondary,
+      },
+      divider: appColors.border.default,
+      action: { selected: appColors.surface.selected },
     },
     typography: {
       fontFamily:
         'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      h6: { fontWeight: 700, letterSpacing: '0.01em' },
+      h6: { fontWeight: 750, letterSpacing: '-0.01em' },
+      subtitle2: { fontWeight: 700 },
       button: { fontWeight: 650, textTransform: 'none' },
     },
     shape: { borderRadius: 10 },
@@ -22,7 +47,7 @@ export function createAppTheme() {
         styleOverrides: {
           root: {
             '&:focus-visible': {
-              outline: '3px solid #d58442',
+              outline: `3px solid ${appColors.brand.tigerOrange}`,
               outlineOffset: 2,
             },
           },
@@ -30,6 +55,44 @@ export function createAppTheme() {
       },
       MuiAppBar: {
         styleOverrides: { root: { backgroundImage: 'none' } },
+      },
+      MuiButton: {
+        styleOverrides: {
+          root: { borderRadius: 8, minHeight: 36 },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: { borderRadius: 8 },
+        },
+      },
+      MuiTab: {
+        styleOverrides: {
+          root: {
+            minWidth: 52,
+            minHeight: 58,
+            marginInline: 6,
+            marginBottom: 4,
+            padding: '6px 4px',
+            borderRadius: 10,
+            color: 'rgba(255,255,255,0.72)',
+            fontSize: '0.625rem',
+            lineHeight: 1.1,
+            textTransform: 'none',
+            '&.Mui-selected': {
+              color: appColors.text.inverse,
+              backgroundColor: 'rgba(33,158,188,0.34)',
+            },
+            '& .MuiTab-iconWrapper': {
+              marginBottom: '2px !important',
+            },
+          },
+        },
+      },
+      MuiPaper: {
+        styleOverrides: {
+          root: { backgroundImage: 'none' },
+        },
       },
     },
   });

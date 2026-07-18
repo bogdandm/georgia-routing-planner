@@ -1,5 +1,3 @@
-import TerrainOutlinedIcon from '@mui/icons-material/TerrainOutlined';
-import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
 import {
   CircularProgress,
   Paper,
@@ -30,23 +28,28 @@ export function TerrainModeControl({ state, onModeChange }: TerrainModeControlPr
   };
 
   return (
-    <Paper elevation={2} sx={{ position: 'absolute', top: 12, left: 12, zIndex: 1 }}>
+    <Paper elevation={2} sx={{ position: 'absolute', top: 112, right: 10, zIndex: 1 }}>
       <ToggleButtonGroup
         exclusive
+        orientation="vertical"
         size="small"
         aria-label="Map dimension"
         value={selectedMode}
         onChange={handleChange}
       >
-        <ToggleButton value="flat" aria-label="Show flat 2D map" disabled={pending}>
+        <ToggleButton
+          value="flat"
+          aria-label="Show flat 2D map"
+          disabled={pending}
+          sx={{ width: 40, height: 36, p: 0 }}
+        >
           <Tooltip title="Flat map">
             <span>
               {state === 'disabling' ? (
                 <CircularProgress size={18} aria-hidden />
               ) : (
-                <MapOutlinedIcon fontSize="small" />
+                '2D'
               )}
-              <span style={{ marginLeft: 6 }}>2D</span>
             </span>
           </Tooltip>
         </ToggleButton>
@@ -54,15 +57,11 @@ export function TerrainModeControl({ state, onModeChange }: TerrainModeControlPr
           value="terrain"
           aria-label="Show 3D terrain map"
           disabled={pending}
+          sx={{ width: 40, height: 36, p: 0 }}
         >
           <Tooltip title="3D terrain">
             <span>
-              {state === 'enabling' ? (
-                <CircularProgress size={18} aria-hidden />
-              ) : (
-                <TerrainOutlinedIcon fontSize="small" />
-              )}
-              <span style={{ marginLeft: 6 }}>3D</span>
+              {state === 'enabling' ? <CircularProgress size={18} aria-hidden /> : '3D'}
             </span>
           </Tooltip>
         </ToggleButton>

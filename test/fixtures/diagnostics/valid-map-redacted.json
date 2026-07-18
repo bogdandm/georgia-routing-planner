@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "exportedAt": "2026-07-18T00:00:00.000Z",
+  "build": {
+    "appVersion": "0.0.0",
+    "commit": "abc123",
+    "timestamp": "2026-07-18T00:00:00.000Z",
+    "mode": "production"
+  },
+  "runtime": {
+    "userAgent": "Synthetic Chrome",
+    "language": "en",
+    "online": true
+  },
+  "reproductionNotes": "A synthetic map tile failed.",
+  "healthChecks": [],
+  "events": [
+    {
+      "id": "event-map-1",
+      "timestamp": "2026-07-18T00:00:01.000Z",
+      "level": "warn",
+      "name": "map.source.failed",
+      "data": {
+        "category": "base-vector",
+        "sourceId": "basemap-vector",
+        "count": 2
+      }
+    }
+  ],
+  "map": {
+    "lifecycle": "degraded",
+    "camera": {
+      "longitude": 44.8,
+      "latitude": 41.7,
+      "zoom": 8.25,
+      "bearing": 0,
+      "pitch": 0
+    },
+    "terrainMode": "flat",
+    "styleId": "Georgia hiking basemap v1",
+    "sourceIds": ["basemap-vector"],
+    "layerIds": ["background", "water"],
+    "lastIdleAt": "2026-07-18T00:00:02.000Z",
+    "webGlContext": "available",
+    "webGlCapabilities": {
+      "contextType": "webgl2",
+      "version": "WebGL 2.0",
+      "maxTextureSize": 16384,
+      "antialias": true
+    },
+    "recoverableFailures": [
+      {
+        "category": "base-vector",
+        "sourceId": "basemap-vector",
+        "count": 2,
+        "lastOccurredAt": "2026-07-18T00:00:01.000Z"
+      }
+    ],
+    "message": "Some basemap tiles could not load."
+  }
+}

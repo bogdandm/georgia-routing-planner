@@ -25,6 +25,12 @@ export class FakeMapFacade implements MapFacade {
     layerIds: ['background'],
     lastIdleAt: null,
     webGlContext: 'unknown',
+    webGlCapabilities: {
+      contextType: 'unknown',
+      version: null,
+      maxTextureSize: null,
+      antialias: null,
+    },
     recoverableFailures: [],
     message: null,
   };

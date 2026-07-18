@@ -21,6 +21,13 @@ export interface MapSourceFailure {
   readonly lastOccurredAt: string;
 }
 
+export interface MapWebGlCapabilities {
+  readonly contextType: 'webgl2' | 'webgl' | 'unavailable' | 'unknown';
+  readonly version: string | null;
+  readonly maxTextureSize: number | null;
+  readonly antialias: boolean | null;
+}
+
 export interface MapDiagnosticsSnapshot {
   readonly lifecycle: MapLifecycleState;
   readonly camera: MapCamera;
@@ -30,6 +37,7 @@ export interface MapDiagnosticsSnapshot {
   readonly layerIds: readonly string[];
   readonly lastIdleAt: string | null;
   readonly webGlContext: 'available' | 'lost' | 'restored' | 'unknown';
+  readonly webGlCapabilities: MapWebGlCapabilities;
   readonly recoverableFailures: readonly MapSourceFailure[];
   readonly message: string | null;
 }

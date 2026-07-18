@@ -1,55 +1,33 @@
 import { z } from 'zod';
 
-const fieldValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+import {
+  diagnosticBundleSchema,
+  diagnosticBundleV1Schema,
+  type DiagnosticBundle,
+} from '../../src/diagnostics/export/diagnosticBundleSchema';
 
-export const cliDiagnosticBundleSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    exportedAt: z.iso.datetime(),
-    build: z
-      .object({
-        appVersion: z.string(),
-        commit: z.string(),
-        timestamp: z.string(),
-        mode: z.string(),
-      })
-      .strict(),
-    runtime: z
-      .object({
-        userAgent: z.string(),
-        language: z.string(),
-        online: z.boolean(),
-      })
-      .strict(),
-    reproductionNotes: z.string(),
-    healthChecks: z.array(
-      z
-        .object({
-          name: z.string(),
-          status: z.enum(['pass', 'warn', 'fail']),
-          durationMs: z.number().nonnegative(),
-          summary: z.string(),
-          remediation: z.string().optional(),
-        })
-        .strict(),
-    ),
-    events: z.array(
-      z
-        .object({
-          id: z.string(),
-          timestamp: z.iso.datetime(),
-          level: z.enum(['debug', 'info', 'warn', 'error']),
-          name: z.string(),
-          message: z.string().optional(),
-          data: z.record(z.string(), fieldValueSchema).optional(),
-        })
-        .strict(),
-    ),
-  })
-  .strict();
+export const cliDiagnosticBundleSchema = z.discriminatedUnion('schemaVersion', [
+  diagnosticBundleV1Schema,
+  diagnosticBundleSchema,
+]);
+
+export function migrateDiagnosticsBundle(input: unknown): {
+  readonly bundle: DiagnosticBundle;
+  readonly sourceVersion: 1 | 2;
+} {
+  const parsed = cliDiagnosticBundleSchema.parse(input);
+  if (parsed.schemaVersion === 2) {
+    return { bundle: parsed, sourceVersion: 2 };
+  }
+
+  return {
+    sourceVersion: 1,
+    bundle: { ...parsed, schemaVersion: 2, map: null },
+  };
+}
 
 export function summarizeDiagnostics(input: unknown): string {
-  const bundle = cliDiagnosticBundleSchema.parse(input);
+  const { bundle, sourceVersion } = migrateDiagnosticsBundle(input);
   const failedChecks = bundle.healthChecks.filter((check) => check.status !== 'pass');
   const recentErrors = bundle.events
     .filter((event) => event.level === 'error')
@@ -59,7 +37,7 @@ export function summarizeDiagnostics(input: unknown): string {
     return typeof duration === 'number' && duration >= 1_000;
   });
   const lines = [
-    'Georgia Routing Planner diagnostics v1',
+    `Georgia Routing Planner diagnostics v2${sourceVersion === 1 ? ' (migrated from v1)' : ''}`,
     `Build: ${bundle.build.appVersion} (${bundle.build.commit}, ${bundle.build.mode})`,
     `Browser: ${bundle.runtime.userAgent}`,
     `Exported: ${bundle.exportedAt}`,
@@ -68,6 +46,17 @@ export function summarizeDiagnostics(input: unknown): string {
 
   for (const check of failedChecks) {
     lines.push(`- ${check.status.toUpperCase()} ${check.name}: ${check.summary}`);
+  }
+
+  if (bundle.map === null) {
+    lines.push('Map: not captured in this bundle.');
+  } else {
+    lines.push(
+      `Map: ${bundle.map.lifecycle}, ${bundle.map.terrainMode}, ${String(bundle.map.recoverableFailures.length)} recoverable failure category(s)`,
+    );
+    lines.push(
+      `Map style: ${bundle.map.styleId}; ${String(bundle.map.sourceIds.length)} source(s), ${String(bundle.map.layerIds.length)} layer(s)`,
+    );
   }
 
   lines.push(`Recent errors: ${String(recentErrors.length)}`);
@@ -79,7 +68,7 @@ export function summarizeDiagnostics(input: unknown): string {
   lines.push(
     failedChecks.length > 0 || recentErrors.length > 0
       ? 'Next: investigate failed health checks and the newest error events.'
-      : 'Next: no immediate Phase 0 infrastructure failure is visible.',
+      : 'Next: no immediate map-foundation failure is visible.',
   );
 
   return `${lines.join('\n')}\n`;

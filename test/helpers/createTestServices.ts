@@ -11,6 +11,7 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
+import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 
@@ -48,16 +49,23 @@ export function createTestServices(): RuntimeServices {
     mode: 'test',
   };
   const healthChecks = new HealthCheckService(clock, database, logger);
+  const mapDiagnostics = new MapDiagnosticsSnapshotStore();
 
   return {
     buildInfo,
     clock,
     database,
-    diagnostics: new DiagnosticsService(buildInfo, logger, healthChecks),
+    diagnostics: new DiagnosticsService(
+      buildInfo,
+      logger,
+      healthChecks,
+      mapDiagnostics,
+    ),
     httpClient: createHttpClient(logger),
     idGenerator,
     logger,
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
+    mapDiagnostics,
     mapProviderConfiguration: {
       status: 'valid',
       value: parseMapProviderConfiguration(

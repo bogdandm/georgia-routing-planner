@@ -6,6 +6,12 @@ import type {
 } from '@/diagnostics/export/diagnosticBundleSchema';
 import { sanitizeDiagnosticText } from '@/diagnostics/redaction/redactDiagnosticData';
 import type { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
+import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
+
+function roundTo(value: number, decimalPlaces: number): number {
+  const scale = 10 ** decimalPlaces;
+  return Math.round(value * scale) / scale;
+}
 
 export class DiagnosticsService {
   #healthChecks: readonly HealthCheckResult[] = [];
@@ -14,6 +20,7 @@ export class DiagnosticsService {
     private readonly build: BuildInfo,
     private readonly logger: DiagnosticLogger,
     private readonly healthCheckService: HealthCheckService,
+    private readonly mapSnapshots: MapDiagnosticsSnapshotStore,
   ) {}
 
   public async runHealthChecks(): Promise<readonly HealthCheckResult[]> {
@@ -23,7 +30,7 @@ export class DiagnosticsService {
 
   public createBundle(reproductionNotes = ''): DiagnosticBundle {
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       build: this.build,
       runtime: {
@@ -34,6 +41,7 @@ export class DiagnosticsService {
       reproductionNotes: sanitizeDiagnosticText(reproductionNotes),
       healthChecks: [...this.#healthChecks],
       events: [...this.logger.getEvents()],
+      map: this.createMapExport(),
     };
   }
 
@@ -48,5 +56,27 @@ export class DiagnosticsService {
     anchor.download = `diagnostics-${bundle.exportedAt.replaceAll(':', '-')}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  private createMapExport(): DiagnosticBundle['map'] {
+    const snapshot = this.mapSnapshots.getSnapshot();
+    if (snapshot === null) return null;
+
+    return {
+      ...snapshot,
+      camera: {
+        ...snapshot.camera,
+        longitude: roundTo(snapshot.camera.longitude, 1),
+        latitude: roundTo(snapshot.camera.latitude, 1),
+        zoom: roundTo(snapshot.camera.zoom, 2),
+        bearing: roundTo(snapshot.camera.bearing, 1),
+        pitch: roundTo(snapshot.camera.pitch, 1),
+      },
+      sourceIds: [...snapshot.sourceIds],
+      layerIds: [...snapshot.layerIds],
+      recoverableFailures: snapshot.recoverableFailures.map((failure) => ({
+        ...failure,
+      })),
+    };
   }
 }

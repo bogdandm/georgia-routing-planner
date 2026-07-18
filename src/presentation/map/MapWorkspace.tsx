@@ -34,7 +34,7 @@ const unavailableMapStyle: StyleSpecification = {
 };
 
 export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspaceProps) {
-  const { logger, mapCameraRepository, mapProviderConfiguration } =
+  const { logger, mapCameraRepository, mapDiagnostics, mapProviderConfiguration } =
     useRuntimeServices();
   const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
@@ -66,8 +66,15 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
                 mapProviderConfiguration.value.policy.equivalentErrorWindowMs,
             }
           : undefined,
+        mapDiagnostics,
       ),
-    [cameraPersistence, logger, mapProviderConfiguration, suppliedFacade],
+    [
+      cameraPersistence,
+      logger,
+      mapDiagnostics,
+      mapProviderConfiguration,
+      suppliedFacade,
+    ],
   );
   const subscribe = useCallback(
     (listener: () => void) => facade.subscribe(listener),

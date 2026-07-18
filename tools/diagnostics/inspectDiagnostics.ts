@@ -22,7 +22,7 @@ try {
 } catch (error) {
   const message =
     error instanceof ZodError
-      ? 'Unsupported or invalid diagnostics bundle. Expected schema version 1.'
+      ? 'Unsupported or invalid diagnostics bundle. Expected schema version 1 or 2.'
       : error instanceof Error
         ? error.message
         : 'Unknown diagnostics inspection failure.';

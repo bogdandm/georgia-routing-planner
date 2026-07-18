@@ -39,15 +39,27 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   const bundle = JSON.parse(await readFile(downloadPath, 'utf8')) as {
     schemaVersion: number;
     events: { name: string }[];
+    map: {
+      styleId: string;
+      sourceIds: string[];
+      layerIds: string[];
+      webGlCapabilities: { contextType: string };
+    } | null;
   };
   const serialized = JSON.stringify(bundle);
 
-  expect(bundle.schemaVersion).toBe(1);
+  expect(bundle.schemaVersion).toBe(2);
   expect(bundle.events.map((event) => event.name)).toContain(
     'react.error-boundary.caught',
   );
   expect(bundle.events.map((event) => event.name)).toContain(
     'runtime.promise.unhandled',
   );
+  expect(bundle.map).toMatchObject({
+    styleId: 'Georgia hiking basemap v1',
+    sourceIds: ['basemap-vector'],
+    webGlCapabilities: { contextType: 'webgl2' },
+  });
+  expect(bundle.map?.layerIds.length).toBeGreaterThan(10);
   expect(serialized).not.toContain('token=private');
 });

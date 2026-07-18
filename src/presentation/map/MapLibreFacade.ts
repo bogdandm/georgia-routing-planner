@@ -6,6 +6,7 @@ import type {
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
+import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import {
@@ -15,6 +16,7 @@ import {
   type MapDiagnosticsSnapshot,
   type MapFailureCategory,
   type MapSourceFailure,
+  type MapWebGlCapabilities,
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
@@ -28,6 +30,12 @@ const initialSnapshot: MapDiagnosticsSnapshot = {
   layerIds: ['background'],
   lastIdleAt: null,
   webGlContext: 'unknown',
+  webGlCapabilities: {
+    contextType: 'unknown',
+    version: null,
+    maxTextureSize: null,
+    antialias: null,
+  },
   recoverableFailures: [],
   message: null,
 };
@@ -87,12 +95,17 @@ export class MapLibreFacade implements MapFacade {
   } | null = null;
   #cancelTerrainWait: (() => void) | null = null;
   readonly #failureBuckets = new Map<string, FailureBucket>();
+  #mountedAt = 0;
+  #lastCameraDiagnosticAt = 0;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
     private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
-  ) {}
+    private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
+  ) {
+    this.snapshotStore?.update(this.#snapshot);
+  }
 
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
@@ -108,6 +121,7 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .addEventListener('webglcontextrestored', this.handleContextRestored);
+    this.#mountedAt = performance.now();
     this.logger.log({ level: 'info', name: 'map.lifecycle.mounted' });
 
     if (map.loaded()) {
@@ -194,16 +208,34 @@ export class MapLibreFacade implements MapFacade {
       sourceIds: Object.keys(style.sources),
       layerIds: style.layers.map((layer) => layer.id),
       webGlContext: 'available',
+      webGlCapabilities: this.readWebGlCapabilities(map),
       message: this.#snapshot.message,
     });
-    this.logger.log({ level: 'info', name: 'map.lifecycle.loaded' });
+    const durationMs = Math.max(0, performance.now() - this.#mountedAt);
+    this.logger.log({
+      level: 'info',
+      name: 'map.lifecycle.loaded',
+      data: { durationMs },
+    });
+    this.logger.log({
+      level: 'info',
+      name: 'map.style.ready',
+      data: {
+        count: style.layers.length,
+        status: style.name ?? initialSnapshot.styleId,
+      },
+    });
   };
 
   private readonly handleIdle = (): void => {
     this.updateSnapshot({ lastIdleAt: new Date().toISOString() });
     if (!this.#firstIdleRecorded) {
       this.#firstIdleRecorded = true;
-      this.logger.log({ level: 'info', name: 'map.lifecycle.first-idle' });
+      this.logger.log({
+        level: 'info',
+        name: 'map.lifecycle.first-idle',
+        data: { durationMs: Math.max(0, performance.now() - this.#mountedAt) },
+      });
     }
   };
 
@@ -212,6 +244,15 @@ export class MapLibreFacade implements MapFacade {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
       this.onCameraSettled(camera);
+      const now = Date.now();
+      if (now - this.#lastCameraDiagnosticAt >= 5_000) {
+        this.#lastCameraDiagnosticAt = now;
+        this.logger.log({
+          level: 'debug',
+          name: 'map.camera.settled',
+          data: { cameraZoom: Math.round(camera.zoom * 10) / 10 },
+        });
+      }
     }
   };
 
@@ -251,6 +292,9 @@ export class MapLibreFacade implements MapFacade {
     this.updateSnapshot({
       lifecycle: 'ready',
       webGlContext: 'restored',
+      ...(this.#map === null
+        ? {}
+        : { webGlCapabilities: this.readWebGlCapabilities(this.#map) }),
       message: null,
     });
     this.logger.log({ level: 'info', name: 'map.webgl.context-restored' });
@@ -265,6 +309,46 @@ export class MapLibreFacade implements MapFacade {
       bearing: map.getBearing(),
       pitch: map.getPitch(),
     };
+  }
+
+  private readWebGlCapabilities(map: MapLibreMap): MapWebGlCapabilities {
+    if (typeof WebGLRenderingContext === 'undefined') {
+      return {
+        contextType: 'unknown',
+        version: null,
+        maxTextureSize: null,
+        antialias: null,
+      };
+    }
+
+    try {
+      const canvas = map.getCanvas();
+      const webGl2 = canvas.getContext('webgl2');
+      const context = webGl2 ?? canvas.getContext('webgl');
+      if (context === null) {
+        return {
+          contextType: 'unavailable',
+          version: null,
+          maxTextureSize: null,
+          antialias: null,
+        };
+      }
+      const version = context.getParameter(context.VERSION) as unknown;
+      const maxTextureSize = context.getParameter(context.MAX_TEXTURE_SIZE) as unknown;
+      return {
+        contextType: webGl2 === null ? 'webgl' : 'webgl2',
+        version: typeof version === 'string' ? version : null,
+        maxTextureSize: typeof maxTextureSize === 'number' ? maxTextureSize : null,
+        antialias: context.getContextAttributes()?.antialias ?? null,
+      };
+    } catch {
+      return {
+        contextType: 'unknown',
+        version: null,
+        maxTextureSize: null,
+        antialias: null,
+      };
+    }
   }
 
   private async transitionTerrain(mode: TerrainMode): Promise<TerrainTransitionResult> {
@@ -448,6 +532,7 @@ export class MapLibreFacade implements MapFacade {
 
   private updateSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.#snapshot = { ...this.#snapshot, ...changed };
+    this.snapshotStore?.update(this.#snapshot);
     for (const listener of this.#listeners) {
       listener();
     }

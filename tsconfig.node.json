@@ -28,6 +28,7 @@
     "vitest.integration.config.ts",
     "playwright.config.ts",
     "tools/**/*.ts",
+    "src/diagnostics/export/diagnosticBundleSchema.ts",
     "e2e/**/*.ts"
   ]
 }

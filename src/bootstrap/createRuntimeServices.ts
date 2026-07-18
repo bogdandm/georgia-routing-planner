@@ -14,6 +14,7 @@ import {
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
+import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
@@ -30,6 +31,7 @@ export interface RuntimeServices {
   readonly logger: DiagnosticLogger;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
+  readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly queryClient: QueryClient;
 }
 
@@ -71,7 +73,13 @@ export function createRuntimeServices(): RuntimeServices {
     });
   }
   const healthChecks = new HealthCheckService(clock, database, logger);
-  const diagnostics = new DiagnosticsService(buildInfo, logger, healthChecks);
+  const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const diagnostics = new DiagnosticsService(
+    buildInfo,
+    logger,
+    healthChecks,
+    mapDiagnostics,
+  );
   const queryClient = new QueryClient({
     queryCache: new QueryCache({
       onError: (error) => {
@@ -111,6 +119,7 @@ export function createRuntimeServices(): RuntimeServices {
     idGenerator,
     logger,
     mapCameraRepository,
+    mapDiagnostics,
     mapProviderConfiguration,
     queryClient,
   };

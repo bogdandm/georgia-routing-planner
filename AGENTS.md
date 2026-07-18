@@ -68,6 +68,17 @@ file is a source of project truth and neither may be the sole record of product 
 architecture, behavior, decisions, operations, or maintenance knowledge. Before a phase
 closes, move every durable fact into `README.md`, `docs/`, code contracts, or tests.
 
+## Penpot design review workflow
+
+When a task edits a Penpot file:
+
+- Inspect the current Penpot hierarchy before editing and preserve reviewer-made
+  changes.
+- Apply one requested review change per Penpot operation so the reviewer can observe
+  progress in real time.
+- Allow that change to reach the Penpot file before starting the next review change.
+- Do not batch multiple review changes into one Penpot MCP execution.
+
 ## Maintainer context
 
 The maintainer is a backend developer and technical lead. Optimize the codebase for

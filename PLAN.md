@@ -30,6 +30,11 @@ include its relevant tests and leave the repository in a buildable, testable sta
 
 At completion, the application must:
 
+- Contain no tracked dependency directories, generated build/test output, local logs,
+  diagnostics exports, secrets, editor state, or temporary files, with a repeatable
+  repository audit included in normal checks.
+- Use unambiguous top-level source names: `bootstrap` for runtime construction,
+  `presentation` for React/UI code, and `application` only for use cases and ports.
 - Render one long-lived MapLibre map centered on Georgia with an OSM-derived vector
   basemap and hiking-relevant overlay layers.
 - Keep required OSM, vector-provider, and terrain attribution visible.
@@ -76,6 +81,12 @@ The following decisions come from the top-level plan and Phase 0 architecture:
   interception. Public-provider availability is never a required test dependency.
 - Add no runtime dependency unless the implementation demonstrates a concrete gap in
   MapLibre, React, Zod, Dexie, MUI, and the browser APIs already installed.
+- Reserve `application` for the clean-architecture application layer. Remove the vague
+  `src/app` name by moving composition to `src/bootstrap` and React/UI code to
+  `src/presentation` before adding Phase 1 map files.
+- Keep generated dependencies and local outputs out of Git. The lockfile, source
+  fixtures, and intentional configuration examples remain tracked; installed packages,
+  build output, reports, caches, logs, secrets, and personal exports do not.
 
 ## 5. Provider feasibility and configuration gate
 
@@ -127,7 +138,27 @@ satellite UI in this phase.
 
 ## 7. Ownership and architecture
 
-### 7.1 State ownership
+### 7.1 Source terminology
+
+The current names `src/app` and `src/application` represent different architectural
+concepts, but the distinction is too subtle. Phase 1 uses these explicit terms:
+
+- `src/bootstrap`: the composition root, runtime-service construction, providers, build
+  metadata, startup error capture, and the browser entry wiring.
+- `src/presentation`: React components, the workspace shell, theme, feature UI, UI
+  stores, and MapLibre presentation adapters.
+- `src/application`: framework-independent use cases and capability ports. It must not
+  contain React, MUI, MapLibre, Dexie, or browser API code.
+- `src/infrastructure`: implementations of application ports using browser storage,
+  HTTP, files, or other external mechanisms.
+
+As part of the rename, replace the overly broad `ApplicationServices` composition bundle
+names with `RuntimeServices` (or an equally explicit approved name), including the
+factory, context, provider, and hook. Rename `App`/`AppErrorBoundary` to workspace-
+shell names. Update import aliases, architecture lint rules, tests, and documentation in
+the same behavior-preserving commit.
+
+### 7.2 State ownership
 
 | State or behavior                                           | Owner                                  | Persistence         |
 | ----------------------------------------------------------- | -------------------------------------- | ------------------- |
@@ -141,9 +172,9 @@ satellite UI in this phase.
 | Provider configuration                                      | Validated application configuration    | Build/runtime asset |
 
 Do not put a native map object, class instance, mutable source, or per-frame camera
-value in Zustand, TanStack Query, Dexie, or the general application-services context.
+value in Zustand, TanStack Query, Dexie, or the runtime-services context.
 
-### 7.2 Map boundary
+### 7.3 Map boundary
 
 The presentation feature may expose small typed capabilities such as:
 
@@ -161,7 +192,7 @@ It must not expose `Map`, `MapRef`, arbitrary `getMap()`, or generic command str
 React receives serializable snapshots and typed outcomes. Event handlers translate
 MapLibre events at this boundary and remove every listener on teardown.
 
-### 7.3 Provider configuration boundary
+### 7.4 Provider configuration boundary
 
 Define and validate a readonly configuration model before constructing a style. It must
 represent at least:
@@ -177,7 +208,7 @@ Use Zod at the external boundary and map parsed data into an internal readonly t
 Configuration errors are typed and safe to show. Never log full tile templates, query
 strings, tokens, headers, or raw configuration objects.
 
-### 7.4 Stable source and layer contract
+### 7.5 Stable source and layer contract
 
 Centralize stable application IDs instead of scattering string literals. The initial
 order from bottom to top is:
@@ -207,21 +238,21 @@ georgia-routing-planner/
   e2e/
     map-foundation.spec.ts
   src/
-    app/
-      bootstrap/
-        createApplicationServices.ts
+    bootstrap/
+      createRuntimeServices.ts
+      RuntimeServicesContext.ts
+      RuntimeServicesProvider.tsx
+      useRuntimeServices.ts
       configuration/
         MapProviderConfiguration.ts
-    application/
-      ports/
-        MapCameraRepository.ts
-    diagnostics/
-      export/
-        diagnosticBundleSchema.ts
-      snapshots/
-        MapDiagnosticsSnapshotStore.ts
-        HealthCheckService.ts
-    features/
+    presentation/
+      shell/
+        WorkspaceShell.tsx
+        WorkspaceErrorBoundary.tsx
+      theme/
+        createAppTheme.ts
+      developer-tools/
+        DeveloperDrawer.tsx
       map/
         MapWorkspace.tsx
         MapFacade.ts
@@ -231,6 +262,15 @@ georgia-routing-planner/
         mapIds.ts
         mapStyleFactory.ts
         mapTypes.ts
+    application/
+      ports/
+        MapCameraRepository.ts
+    diagnostics/
+      export/
+        diagnosticBundleSchema.ts
+      snapshots/
+        MapDiagnosticsSnapshotStore.ts
+        HealthCheckService.ts
     infrastructure/
       persistence/
         AppDatabase.ts
@@ -242,6 +282,9 @@ georgia-routing-planner/
         style-metadata.json
         vector-tile.pbf
         terrain-dem.png
+  tools/
+    repository/
+      auditRepository.ts
 ```
 
 The fixture names are illustrative. Keep fixture data synthetic, minimal, licensed for
@@ -312,7 +355,57 @@ map remains the same instance in both modes.
 
 ## 10. Work packages
 
-### P1.1 Retire the smoke-component boundary
+### P1.1 Audit repository hygiene and ignored artifacts
+
+This is the first implementation task and first Phase 1 commit. Start with a read-only
+inventory using `git ls-files`, `git status --short --ignored`, `git check-ignore`, and
+a filesystem review before changing ignore rules or removing anything from the index.
+
+The planning-branch baseline already confirms that `node_modules/`, `dist/`,
+`coverage/`, `playwright-report/`, `test-results/`, and `debug.log` are ignored and not
+tracked. They remain visible in a normal file explorer because `.gitignore` affects Git,
+not the local filesystem. Re-run the audit from the implementation branch and cover at
+least:
+
+- Installed packages and local package stores, including `node_modules/` and a
+  repository-local `.pnpm-store/`.
+- Vite/TypeScript/ESLint/tool caches and build output.
+- Coverage, Playwright blob/HTML reports, screenshots, videos, traces, and test results.
+- Logs, PID files, crash dumps, temporary/editor backup files, and OS metadata.
+- `.env` variants and credentials, while retaining intentional `.env.example` files.
+- Exported diagnostics, catalog build/audit output, and other user-local data.
+- IDE state, except explicitly shared minimal recommendations such as
+  `.vscode/extensions.json`.
+
+Do not ignore source-like directories or broad file extensions merely to make the audit
+pass. `pnpm-lock.yaml`, checked-in synthetic test fixtures, source maps intentionally
+used as fixtures, and reviewed configuration examples are repository inputs and remain
+tracked.
+
+Add a dependency-free `pnpm repo:audit` command that fails when `git ls-files` contains
+a forbidden artifact/secret path. Put the path-classification rules in a small testable
+module, cover allowed exceptions, and run the command from `pnpm check` and CI. If an
+artifact is already tracked, remove it from the Git index without deleting the user's
+local copy unless deletion is separately requested. Report every such path explicitly.
+
+### P1.2 Clarify bootstrap, presentation, and application names
+
+Perform one behavior-preserving source move before new map work:
+
+- Move `src/app/bootstrap` to `src/bootstrap`.
+- Move the React shell/error boundary, theme, global presentation styles, and existing
+  `src/features` code under explicit `src/presentation` subdirectories.
+- Keep `src/application` for framework-independent ports and future use cases.
+- Rename `ApplicationServices` symbols to `RuntimeServices`, and rename the generic
+  `App`/`AppErrorBoundary` components to `WorkspaceShell`/`WorkspaceErrorBoundary`.
+- Update imports, aliases, ESLint architecture boundaries, tests, README, `AGENTS.md`,
+  and diagrams so no current instruction recreates `src/app`.
+
+Do not mix map behavior into this commit. All existing unit, integration, accessibility,
+diagnostics, and Chromium shell tests must pass after the moves, proving the change is
+terminology and ownership only.
+
+### P1.3 Retire the smoke-component boundary
 
 Replace `MapSmokeCanvas` with a production-named `MapWorkspace` while initially keeping
 the network-free Phase 0 style. Introduce the smallest typed facade/controller boundary
@@ -325,7 +418,7 @@ Deliverables:
 - A fake facade/controller for component tests.
 - Existing shell, diagnostics, accessibility, and no-network tests remain green.
 
-### P1.2 Validate provider feasibility
+### P1.4 Validate provider feasibility
 
 Complete the vector, DEM, and time-boxed Sentinel COG checks described in Section 5.
 Document exact evidence dates because provider behavior is time-sensitive. Record the
@@ -334,7 +427,7 @@ chosen default and a rejected alternative where useful.
 This package changes no product scope. It prevents the implementation from baking in an
 unusable provider or a credential that cannot be kept secret.
 
-### P1.3 Add validated map provider configuration
+### P1.5 Add validated map provider configuration
 
 Add a Zod boundary and internal readonly configuration. Construct it in the composition
 root or a dedicated configuration factory, then inject only the parsed form.
@@ -347,7 +440,7 @@ Test:
 - Relative GitHub Pages base-path handling where local assets are used.
 - Error messages and diagnostics contain no query secrets or full provider payload.
 
-### P1.4 Build the OSM hiking style
+### P1.6 Build the OSM hiking style
 
 Implement a pure style factory using stable source/layer IDs and the parsed provider
 mapping. Use restrained theme-compatible colors and retain room for future imagery,
@@ -360,7 +453,7 @@ must be documented; do not invent data that the provider does not expose.
 Test the produced style shape, source mapping, layer order, visibility defaults,
 attribution, and absence of secrets. Keep production provider I/O outside unit tests.
 
-### P1.5 Persist and restore the camera
+### P1.7 Persist and restore the camera
 
 Add a small `MapCameraRepository` port and a Dexie-backed adapter using the existing
 settings table unless an index/schema change genuinely requires a database migration. Do
@@ -371,7 +464,7 @@ Load the camera before map mount, persist settled moves, repair corrupt records,
 cover read/write failures. Add fake-indexeddb tests, component behavior tests, and a
 Chromium reload flow.
 
-### P1.6 Implement terrain mode
+### P1.8 Implement terrain mode
 
 Add the DEM source and 2D/3D control without replacing the base style or map instance.
 Model transition states explicitly: `flat`, `enabling`, `terrain`, `disabling`, and
@@ -380,7 +473,7 @@ Model transition states explicitly: `flat`, `enabling`, `terrain`, `disabling`, 
 Test successful toggles, repeated clicks, unavailable DEM, source error, retry, camera
 preservation, source/listener deduplication, and teardown during a pending transition.
 
-### P1.7 Add loading and recoverable error feedback
+### P1.9 Add loading and recoverable error feedback
 
 Translate MapLibre errors into typed, user-actionable categories. Distinguish WebGL,
 style/configuration, base-vector, glyph/sprite, and DEM failures as far as the available
@@ -392,7 +485,7 @@ event evidence permits.
 - Retry actions are explicit and must not create duplicate map instances or listeners.
 - Offline state is described accurately; do not promise offline map availability.
 
-### P1.8 Extend map and WebGL diagnostics
+### P1.10 Extend map and WebGL diagnostics
 
 Capture stable, bounded events for:
 
@@ -415,7 +508,7 @@ The local developer UI may display the exact current camera for immediate inspec
 but default exported diagnostics must round longitude/latitude to a documented coarse
 precision or omit them. Full route/track geometry remains excluded.
 
-### P1.9 Add developer map inspection and health
+### P1.11 Add developer map inspection and health
 
 Add a `Map` view to the developer drawer, or an equivalently clear map section, showing
 serializable snapshots rather than the native map object. Include:
@@ -430,7 +523,7 @@ Extend health checks with a non-destructive map readiness check and a terrain/pr
 reachability check that runs only on explicit user request. Normal application startup
 must not wait for optional provider health checks.
 
-### P1.10 Harden deterministic browser coverage and documentation
+### P1.12 Harden deterministic browser coverage and documentation
 
 Create synthetic vector and DEM fixtures sufficient to run the production style and
 terrain paths in real Chromium. Intercept every configured provider request and fail the
@@ -445,6 +538,8 @@ phase-boundary change.
 
 | Concern             | Unit/component/integration evidence                    | Chromium evidence                               |
 | ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| Repository hygiene  | Artifact classifier and allowed-exception tests        | `pnpm repo:audit` sees no tracked output        |
+| Source terminology  | Architecture lint/import and existing behavior tests   | Renamed workspace shell behaves unchanged       |
 | Facade boundary     | Fake facade drives loading/ready/error and cleanup     | Native map initializes once                     |
 | Provider config     | Zod valid/invalid/secret fixtures                      | Local deterministic config loads                |
 | OSM style           | Pure style/source/layer-order assertions               | Synthetic vector feature renders                |
@@ -501,6 +596,7 @@ Every implementation commit runs the narrow tests for its behavior. Before prese
 Phase 1 for approval, run:
 
 ```text
+pnpm repo:audit
 pnpm format:check
 pnpm lint
 pnpm typecheck
@@ -514,6 +610,10 @@ pnpm check
 
 The final state must also satisfy:
 
+- `pnpm repo:audit` reports no tracked dependency, generated, secret, local-only, or
+  temporary artifact and is part of `pnpm check`/CI.
+- No ambiguous `src/app` directory or `ApplicationServices` composition-bundle name
+  remains; architecture lint rules enforce the documented source boundaries.
 - Existing global and domain/application coverage thresholds remain enforced.
 - No required test contacts a public vector, terrain, OSM, or imagery endpoint.
 - Current stable desktop Chrome passes the real-provider manual smoke check documented
@@ -531,17 +631,21 @@ Implementation occurs on `feature/map-foundation`. The sequence below is intenti
 smaller than the phase. Each commit includes the listed tests and must pass at least
 `pnpm typecheck`, `pnpm lint`, and the relevant Vitest suite before the next commit.
 
-| Commit                                                      | Scope                                                                                                                      | Commit-level verification                                 |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `refactor(map): isolate the MapLibre lifecycle`             | Rename the smoke surface, introduce the typed facade boundary, lifecycle cleanup, and fake while retaining the local style | Existing shell/E2E plus facade/component tests            |
-| `feat(config): validate map provider configuration`         | Add Zod configuration, safe errors, composition, and fixture config                                                        | Config unit tests, secret-redaction tests, build          |
-| `feat(map): render the OSM hiking basemap`                  | Add pure style factory, stable IDs/layer order, attribution, loading/degraded states                                       | Style tests, component tests, local-vector Chromium smoke |
-| `feat(map): persist settled camera state`                   | Add camera value/schema, repository port/adapter, restore/debounce/repair behavior                                         | Unit, fake-indexeddb, component, reload E2E               |
-| `feat(map): add resilient 2D and 3D terrain modes`          | Add DEM source, MUI toggle, transitions, fallback, retry, and camera preservation                                          | Transition/component tests and local-DEM E2E              |
-| `feat(diagnostics): capture bounded map and WebGL evidence` | Add aggregation, snapshot state, health hooks, bundle schema/version migration, and redaction                              | Diagnostics/schema/CLI compatibility/integration tests    |
-| `feat(developer-tools): expose map diagnostics`             | Add developer map view, safe debug flags, health states, accessible feedback                                               | RTL/axe and developer-mode E2E                            |
-| `test(map): harden MapLibre provider failure workflows`     | Add remaining real-map error, context-loss, network-isolation, and lifecycle regression cases                              | Full `pnpm e2e` and coverage gates                        |
-| `docs: document Phase 1 providers and map operation`        | Record provider/COG evidence, configuration, attribution, manual checks, README status, and plan outcome                   | Formatting/link review and full `pnpm check`              |
+| Commit                                                      | Scope                                                                                                                          | Commit-level verification                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `chore: audit repository hygiene and ignored artifacts`     | Complete the tracked/ignored inventory, tighten `.gitignore`, add `repo:audit`, its classifier tests, and CI/check integration | Audit tests, `pnpm repo:audit`, existing checks           |
+| `refactor: clarify source architecture names`               | Move to `bootstrap`/`presentation`, retain `application` for use cases/ports, and rename runtime/shell symbols                 | Architecture lint, typecheck, all existing tests and E2E  |
+| `refactor(map): isolate the MapLibre lifecycle`             | Rename the smoke surface, introduce the typed facade boundary, lifecycle cleanup, and fake while retaining the local style     | Existing shell/E2E plus facade/component tests            |
+| `docs: record Phase 1 provider feasibility`                 | Select vector/DEM defaults and record policy/CORS/schema evidence plus the bounded Sentinel COG spike                          | Formatting/link review; no production provider calls      |
+| `feat(config): validate map provider configuration`         | Add Zod configuration, safe errors, composition, and fixture config                                                            | Config unit tests, secret-redaction tests, build          |
+| `feat(map): render the OSM hiking basemap`                  | Add pure style factory, stable IDs/layer order, attribution, and loading states                                                | Style tests, component tests, local-vector Chromium smoke |
+| `feat(map): persist settled camera state`                   | Add camera value/schema, repository port/adapter, restore/debounce/repair behavior                                             | Unit, fake-indexeddb, component, reload E2E               |
+| `feat(map): add resilient 2D and 3D terrain modes`          | Add DEM source, MUI toggle, transitions, fallback, retry, and camera preservation                                              | Transition/component tests and local-DEM E2E              |
+| `feat(map): add recoverable provider failure feedback`      | Add typed fatal/degraded states, aggregation, retry, and accessible alerts                                                     | Component tests and intercepted-failure E2E               |
+| `feat(diagnostics): capture bounded map and WebGL evidence` | Add aggregation, snapshot state, health hooks, bundle schema/version migration, and redaction                                  | Diagnostics/schema/CLI compatibility/integration tests    |
+| `feat(developer-tools): expose map diagnostics`             | Add developer map view, safe debug flags, health states, accessible feedback                                                   | RTL/axe and developer-mode E2E                            |
+| `test(map): harden MapLibre provider failure workflows`     | Add remaining real-map context-loss, network-isolation, and lifecycle regression cases                                         | Full `pnpm e2e` and coverage gates                        |
+| `docs: document Phase 1 map operation`                      | Record configuration, attribution, manual checks, README status, and plan outcome                                              | Formatting/link review and full `pnpm check`              |
 
 Small adjustments to this sequence are allowed when a reviewable dependency boundary
 requires them, but the following rules are not optional:
@@ -561,6 +665,10 @@ requires them, but the following rules are not optional:
 Before asking to integrate Phase 1 into `main`, report:
 
 - Active branch and the ordered commit list.
+- Repository audit result, `.gitignore` changes, any paths removed from the index, and
+  confirmation that local user files were not deleted.
+- Final `bootstrap`/`presentation`/`application` ownership and the old-to-new path and
+  symbol mapping.
 - Chosen vector/terrain providers, evidence date, attribution/license requirements, and
   known limits.
 - Sentinel COG spike conclusion and what remains deferred to the imagery phase.
@@ -581,23 +689,28 @@ approval.
 
 Phase 1 is complete only when:
 
-1. A validated, replaceable provider configuration renders the OSM hiking map with
+1. A repeatable repository audit proves dependencies, build/test output, caches, logs,
+   secrets, exports, and temporary artifacts are ignored and not tracked.
+2. `src/app` and the generic application-service composition names are gone;
+   `bootstrap`, `presentation`, `application`, and `infrastructure` have distinct,
+   enforced responsibilities.
+3. A validated, replaceable provider configuration renders the OSM hiking map with
    correct attribution.
-2. The map supports smooth desktop pan, zoom, rotate, and pitch in current Chrome.
-3. The last valid settled camera restores after reload and corrupt persistence degrades
+4. The map supports smooth desktop pan, zoom, rotate, and pitch in current Chrome.
+5. The last valid settled camera restores after reload and corrupt persistence degrades
    safely.
-4. 2D/3D terrain toggles on the same map instance, preserves camera intent, and falls
+6. 2D/3D terrain toggles on the same map instance, preserves camera intent, and falls
    back to a usable 2D map on DEM failure.
-5. MapLibre lifecycle and native objects remain isolated behind a typed feature boundary
+7. MapLibre lifecycle and native objects remain isolated behind a typed feature boundary
    with deterministic cleanup.
-6. Loading, fatal, degraded, retry, offline, and WebGL-loss states are accessible and
+8. Loading, fatal, degraded, retry, offline, and WebGL-loss states are accessible and
    covered automatically.
-7. Map/source/terrain/WebGL instrumentation is useful, bounded, sanitized, and visible
+9. Map/source/terrain/WebGL instrumentation is useful, bounded, sanitized, and visible
    in developer mode and the exported diagnostics bundle.
-8. Diagnostics inspection remains compatible with supported Phase 0 bundles.
-9. Required tests run with local vector/DEM fixtures and no public-provider dependency;
-   a separately documented real-provider smoke check passes.
-10. The provider and Sentinel COG feasibility decisions, configuration, attribution, and
+10. Diagnostics inspection remains compatible with supported Phase 0 bundles.
+11. Required tests run with local vector/DEM fixtures and no public-provider dependency;
+    a separately documented real-provider smoke check passes.
+12. The provider and Sentinel COG feasibility decisions, configuration, attribution, and
     operating limits are documented for the maintainer.
-11. The verified implementation exists as multiple focused, testable commits on the
+13. The verified implementation exists as multiple focused, testable commits on the
     feature branch and is presented for approval without changing `main`.

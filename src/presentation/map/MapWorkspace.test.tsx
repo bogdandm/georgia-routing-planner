@@ -121,4 +121,46 @@ describe('MapWorkspace', () => {
     ).not.toBeInTheDocument();
     expect(facade.terrainModeRequests).toEqual(['terrain', 'terrain']);
   });
+
+  it('shows recoverable basemap feedback, retries in place, and describes offline limits', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Available map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Available map');
+
+    act(() => {
+      facade.setSnapshot({
+        lifecycle: 'degraded',
+        message: 'Some basemap tiles could not load.',
+        recoverableFailures: [
+          {
+            category: 'base-vector',
+            sourceId: 'basemap-vector',
+            count: 4,
+            lastOccurredAt: '2026-07-18T00:00:00.000Z',
+          },
+        ],
+      });
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Some basemap tiles could not load.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Retry map data' }));
+    expect(facade.retryRequests).toBe(1);
+
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'new map data is unavailable until the connection returns',
+    );
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    expect(screen.queryByText(/new map data is unavailable/)).not.toBeInTheDocument();
+  });
 });

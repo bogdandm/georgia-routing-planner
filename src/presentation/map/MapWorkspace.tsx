@@ -40,6 +40,7 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainState, setTerrainState] = useState<TerrainControlState>('flat');
   const [terrainMessage, setTerrainMessage] = useState<string | null>(null);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const cameraPersistence = useMemo(
     () =>
       new SettledCameraPersistence(mapCameraRepository, logger, () => {
@@ -61,6 +62,8 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
           ? {
               terrain: mapProviderConfiguration.value.terrain,
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
+              equivalentErrorWindowMs:
+                mapProviderConfiguration.value.policy.equivalentErrorWindowMs,
             }
           : undefined,
       ),
@@ -110,6 +113,21 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
     },
     [facade],
   );
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true);
+    };
+    const handleOffline = () => {
+      setOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -220,8 +238,22 @@ export function MapWorkspace({ facade: suppliedFacade, mapCanvas }: MapWorkspace
           {terrainMessage} The 2D basemap is still available.
         </Alert>
       ) : null}
+      {!online && mapProviderConfiguration.status === 'valid' ? (
+        <Alert
+          severity="info"
+          sx={{ position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 1 }}
+        >
+          You are offline. Areas already rendered may remain visible, but new map data
+          is unavailable until the connection returns.
+        </Alert>
+      ) : null}
       {mapProviderConfiguration.status === 'valid' ? (
-        <MapStatusOverlay snapshot={snapshot} />
+        <MapStatusOverlay
+          snapshot={snapshot}
+          onRetry={() => {
+            facade.retryRecoverableFailures();
+          }}
+        />
       ) : null}
     </Box>
   );

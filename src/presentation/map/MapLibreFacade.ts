@@ -13,6 +13,8 @@ import {
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
+  type MapFailureCategory,
+  type MapSourceFailure,
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
@@ -26,17 +28,51 @@ const initialSnapshot: MapDiagnosticsSnapshot = {
   layerIds: ['background'],
   lastIdleAt: null,
   webGlContext: 'unknown',
+  recoverableFailures: [],
   message: null,
 };
 
-interface TerrainProviderOptions {
+interface MapProviderOptions {
   readonly terrain: MapProviderConfiguration['terrain'];
   readonly requestTimeoutMs: number;
+  readonly equivalentErrorWindowMs: number;
+}
+
+interface FailureBucket {
+  readonly failure: MapSourceFailure;
+  readonly lastLoggedAtMs: number;
 }
 
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   const sourceId = (event as unknown as { readonly sourceId?: unknown }).sourceId;
   return typeof sourceId === 'string' ? sourceId : null;
+}
+
+function categorizeMapError(
+  event: MapLibreErrorEvent,
+  lifecycle: MapDiagnosticsSnapshot['lifecycle'],
+): MapFailureCategory {
+  const sourceId = getErrorSourceId(event);
+  if (sourceId === mapSourceIds.terrainDem) return 'terrain';
+  if (sourceId === mapSourceIds.basemapVector) return 'base-vector';
+
+  const message = event.error.message.toLowerCase();
+  if (message.includes('glyph') || message.includes('sprite')) return 'glyph-sprite';
+  if (message.includes('style') || lifecycle === 'loading') return 'style';
+  return 'unknown';
+}
+
+function recoverableMessage(category: MapFailureCategory): string {
+  switch (category) {
+    case 'base-vector':
+      return 'Some basemap tiles could not load. You can keep using areas that are already visible.';
+    case 'glyph-sprite':
+      return 'Some map labels or icons could not load. Roads and terrain remain available.';
+    case 'terrain':
+      return '3D terrain is unavailable. The 2D basemap remains usable.';
+    default:
+      return 'Part of the map could not load. The available basemap remains usable.';
+  }
 }
 
 export class MapLibreFacade implements MapFacade {
@@ -50,11 +86,12 @@ export class MapLibreFacade implements MapFacade {
     readonly promise: Promise<TerrainTransitionResult>;
   } | null = null;
   #cancelTerrainWait: (() => void) | null = null;
+  readonly #failureBuckets = new Map<string, FailureBucket>();
 
   public constructor(
     private readonly logger: DiagnosticLogger,
     private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
-    private readonly terrainProvider?: TerrainProviderOptions,
+    private readonly provider?: MapProviderOptions,
   ) {}
 
   public attach(map: MapLibreMap): void {
@@ -91,6 +128,15 @@ export class MapLibreFacade implements MapFacade {
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {
     return this.#snapshot;
+  }
+
+  public retryRecoverableFailures(): void {
+    if (this.#map === null) {
+      return;
+    }
+    this.#map.triggerRepaint();
+    this.updateSnapshot({ lifecycle: 'ready', message: null });
+    this.logger.log({ level: 'info', name: 'map.recoverable.retry-requested' });
   }
 
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {
@@ -138,13 +184,17 @@ export class MapLibreFacade implements MapFacade {
     }
     const style = map.getStyle();
     this.updateSnapshot({
-      lifecycle: 'ready',
+      lifecycle:
+        this.#snapshot.message === null ||
+        this.#snapshot.recoverableFailures.length === 0
+          ? 'ready'
+          : 'degraded',
       camera: this.readCamera(map),
       styleId: style.name ?? initialSnapshot.styleId,
       sourceIds: Object.keys(style.sources),
       layerIds: style.layers.map((layer) => layer.id),
       webGlContext: 'available',
-      message: null,
+      message: this.#snapshot.message,
     });
     this.logger.log({ level: 'info', name: 'map.lifecycle.loaded' });
   };
@@ -166,27 +216,24 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleError = (event: MapLibreErrorEvent): void => {
+    const category = categorizeMapError(event, this.#snapshot.lifecycle);
     const sourceId = getErrorSourceId(event);
-    if (sourceId === mapSourceIds.terrainDem) {
+    if (category !== 'style') {
+      this.recordRecoverableFailure(category, sourceId);
       this.updateSnapshot({
         lifecycle: 'degraded',
-        terrainMode: 'flat',
-        message: '3D terrain is unavailable. The 2D basemap remains usable.',
-      });
-      this.logger.log({
-        level: 'warn',
-        name: 'map.source.failed',
-        data: { category: 'terrain', sourceId },
+        ...(category === 'terrain' ? { terrainMode: 'flat' as const } : {}),
+        message: recoverableMessage(category),
       });
       return;
     }
 
-    const message = 'MapLibre could not initialize the map workspace.';
+    const message =
+      'The map style could not be loaded. Check the provider configuration or open developer diagnostics.';
     this.updateSnapshot({ lifecycle: 'fatal', message });
     this.logger.log({
       level: 'error',
-      name: 'map.lifecycle.failed',
-      message: event.error.message,
+      name: 'map.style.failed',
     });
   };
 
@@ -249,7 +296,7 @@ export class MapLibreFacade implements MapFacade {
       return { status: 'success', mode };
     }
 
-    const provider = this.terrainProvider;
+    const provider = this.provider;
     if (provider === undefined) {
       return { status: 'failed', reason: 'Terrain configuration is unavailable.' };
     }
@@ -352,6 +399,51 @@ export class MapLibreFacade implements MapFacade {
       map.on('sourcedata', handleSourceData);
       map.on('error', handleSourceError);
     });
+  }
+
+  private recordRecoverableFailure(
+    category: MapFailureCategory,
+    sourceId: string | null,
+  ): void {
+    const now = Date.now();
+    const key = `${category}:${sourceId ?? 'none'}`;
+    const previous = this.#failureBuckets.get(key);
+    const failure: MapSourceFailure = {
+      category,
+      sourceId,
+      count: Math.min(9_999, (previous?.failure.count ?? 0) + 1),
+      lastOccurredAt: new Date(now).toISOString(),
+    };
+    const windowMs = this.provider?.equivalentErrorWindowMs ?? 10_000;
+    const shouldLog =
+      previous === undefined || now - previous.lastLoggedAtMs >= windowMs;
+
+    if (previous === undefined && this.#failureBuckets.size >= 8) {
+      const oldestKey = this.#failureBuckets.keys().next().value;
+      if (oldestKey !== undefined) this.#failureBuckets.delete(oldestKey);
+    }
+    this.#failureBuckets.set(key, {
+      failure,
+      lastLoggedAtMs:
+        previous === undefined || shouldLog ? now : previous.lastLoggedAtMs,
+    });
+    this.updateSnapshot({
+      recoverableFailures: [...this.#failureBuckets.values()].map(
+        (bucket) => bucket.failure,
+      ),
+    });
+
+    if (shouldLog) {
+      this.logger.log({
+        level: 'warn',
+        name: 'map.source.failed',
+        data: {
+          category,
+          count: failure.count,
+          ...(sourceId === null ? {} : { sourceId }),
+        },
+      });
+    }
   }
 
   private updateSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {

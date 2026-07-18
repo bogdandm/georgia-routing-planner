@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 import { installMapProviderFixtures } from './installMapProviderFixtures';
@@ -102,4 +103,31 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
     'data-map-state',
     'ready',
   );
+});
+
+test('keeps the map usable and offers retry after intercepted vector failures', async ({
+  page,
+}) => {
+  await page.route(/https:\/\/tiles\.openfreemap\.org\/fixtures\/.*\.pbf/u, (route) =>
+    route.abort('failed'),
+  );
+  await page.goto('?developer=1');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'degraded');
+  await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText(
+    'Some basemap tiles could not load',
+  );
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[data-testid="map-workspace"]')
+    .analyze();
+  expect(
+    accessibility.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+
+  await page.getByRole('button', { name: 'Retry map data' }).click();
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
 });

@@ -15,6 +15,7 @@ class FakeNativeMap {
   public addSourceCalls = 0;
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
+  public repaintCalls = 0;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -96,6 +97,10 @@ class FakeNativeMap {
     if (typeof options.pitch === 'number') this.#pitch = options.pitch;
   }
 
+  public triggerRepaint(): void {
+    this.repaintCalls += 1;
+  }
+
   public fire(type: string, event?: unknown): void {
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
@@ -172,6 +177,7 @@ describe('MapLibreFacade', () => {
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
       requestTimeoutMs: 100,
+      equivalentErrorWindowMs: 10_000,
     });
     facade.attach(nativeMap as unknown as MapLibreMap);
     nativeMap.fire('load');
@@ -216,6 +222,7 @@ describe('MapLibreFacade', () => {
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
       requestTimeoutMs: 1_000,
+      equivalentErrorWindowMs: 10_000,
     });
     facade.attach(nativeMap as unknown as MapLibreMap);
     nativeMap.fire('load');
@@ -237,5 +244,56 @@ describe('MapLibreFacade', () => {
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);
+  });
+
+  it('categorizes and aggregates recoverable source failures without retaining raw errors', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_721_260_800_000);
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    for (let occurrence = 0; occurrence < 3; occurrence += 1) {
+      nativeMap.fire('error', {
+        error: {
+          message: 'Tile failed https://provider.invalid/5/18/11.pbf?token=private',
+        },
+        sourceId: 'basemap-vector',
+      });
+    }
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'degraded',
+      recoverableFailures: [
+        { category: 'base-vector', sourceId: 'basemap-vector', count: 3 },
+      ],
+    });
+    expect(
+      services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
+    ).toHaveLength(1);
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain('private');
+
+    facade.retryRecoverableFailures();
+    expect(nativeMap.repaintCalls).toBe(1);
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      message: null,
+    });
+  });
+
+  it('treats an unrecoverable pre-load style error as fatal', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    nativeMap.fire('error', { error: { message: 'Style document is invalid' } });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'fatal',
+      recoverableFailures: [],
+    });
+    expect(services.logger.getEvents().at(-1)?.name).toBe('map.style.failed');
   });
 });

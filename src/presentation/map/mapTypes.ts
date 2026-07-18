@@ -11,6 +11,16 @@ export interface MapDebugOptions {
 
 export type MapLifecycleState = 'loading' | 'ready' | 'degraded' | 'fatal';
 
+export type MapFailureCategory =
+  'base-vector' | 'glyph-sprite' | 'terrain' | 'style' | 'webgl' | 'unknown';
+
+export interface MapSourceFailure {
+  readonly category: MapFailureCategory;
+  readonly sourceId: string | null;
+  readonly count: number;
+  readonly lastOccurredAt: string;
+}
+
 export interface MapDiagnosticsSnapshot {
   readonly lifecycle: MapLifecycleState;
   readonly camera: MapCamera;
@@ -20,6 +30,7 @@ export interface MapDiagnosticsSnapshot {
   readonly layerIds: readonly string[];
   readonly lastIdleAt: string | null;
   readonly webGlContext: 'available' | 'lost' | 'restored' | 'unknown';
+  readonly recoverableFailures: readonly MapSourceFailure[];
   readonly message: string | null;
 }
 

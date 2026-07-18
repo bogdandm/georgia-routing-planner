@@ -8,6 +8,7 @@ const exportableFieldNames = new Set([
   'buildMode',
   'cameraZoom',
   'capability',
+  'category',
   'code',
   'commit',
   'component',
@@ -18,6 +19,7 @@ const exportableFieldNames = new Set([
   'ready',
   'reason',
   'schemaVersion',
+  'sourceId',
   'status',
   'usageBytes',
 ]);

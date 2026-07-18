@@ -13,6 +13,7 @@ export class FakeMapFacade implements MapFacade {
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
+  public retryRequests = 0;
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
   public snapshot: MapDiagnosticsSnapshot = {
@@ -24,6 +25,7 @@ export class FakeMapFacade implements MapFacade {
     layerIds: ['background'],
     lastIdleAt: null,
     webGlContext: 'unknown',
+    recoverableFailures: [],
     message: null,
   };
 
@@ -40,6 +42,11 @@ export class FakeMapFacade implements MapFacade {
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {
     return this.snapshot;
+  }
+
+  public retryRecoverableFailures(): void {
+    this.retryRequests += 1;
+    this.setSnapshot({ lifecycle: 'ready', message: null });
   }
 
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {

@@ -16,6 +16,31 @@ beforeEach(() => {
 });
 
 describe('DeveloperDrawer', () => {
+  it('stays non-modal and closes only from its explicit control', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const services = createTestServices();
+    render(
+      <RuntimeServicesProvider services={services}>
+        <DeveloperDrawer open onClose={onClose} onTriggerFailure={vi.fn()} />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(
+      screen.getByRole('complementary', { name: 'Developer diagnostics' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Close developer diagnostics' }),
+    );
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it('shows the exact live map snapshot and controls safe MapLibre debug flags', async () => {
     const user = userEvent.setup();
     const services = createTestServices();

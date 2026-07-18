@@ -91,10 +91,11 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     >
       <WorkspaceRail
         activeTab={activeTab}
+        developerToolsOpen={developerDrawerOpen}
         developerMode={developerMode}
         onSectionChange={setActiveTab}
-        onOpenDeveloperTools={() => {
-          setDeveloperDrawerOpen(true);
+        onToggleDeveloperTools={() => {
+          setDeveloperDrawerOpen(!developerDrawerOpen);
         }}
         onOpenSettings={() => {
           setSettingsOpen(true);

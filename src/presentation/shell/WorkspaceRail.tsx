@@ -12,16 +12,18 @@ import { appColors } from '@/presentation/theme/appColors';
 
 interface WorkspaceRailProps {
   readonly activeTab: WorkspaceTab;
+  readonly developerToolsOpen: boolean;
   readonly developerMode: boolean;
-  readonly onOpenDeveloperTools: () => void;
+  readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
 }
 
 export function WorkspaceRail({
   activeTab,
+  developerToolsOpen,
   developerMode,
-  onOpenDeveloperTools,
+  onToggleDeveloperTools,
   onOpenSettings,
   onSectionChange,
 }: WorkspaceRailProps) {
@@ -94,8 +96,12 @@ export function WorkspaceRail({
           <Tooltip title="Developer diagnostics" placement="right">
             <IconButton
               aria-label="Developer diagnostics"
-              onClick={onOpenDeveloperTools}
-              sx={{ color: 'rgba(255,255,255,0.84)' }}
+              aria-pressed={developerToolsOpen}
+              onClick={onToggleDeveloperTools}
+              sx={{
+                color: 'rgba(255,255,255,0.84)',
+                bgcolor: developerToolsOpen ? 'rgba(33,158,188,0.34)' : 'transparent',
+              }}
             >
               <BugReportOutlinedIcon />
             </IconButton>

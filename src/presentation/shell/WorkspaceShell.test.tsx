@@ -98,6 +98,11 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Developer diagnostics' }),
     ).toBeVisible();
+    expect(developerButton).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(developerButton);
+    expect(useUiStore.getState().developerDrawerOpen).toBe(false);
+    expect(developerButton).toHaveAttribute('aria-pressed', 'false');
 
     await waitFor(async () => {
       await expect(services.database.loadUiPreferences()).resolves.toEqual({

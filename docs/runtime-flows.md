@@ -39,6 +39,11 @@ Changing among Tracks, Satellite, Markers, and Layers changes contextual React c
 not the map owner. Opening Settings or Diagnostics follows the same invariant: the
 existing `MapWorkspace` and native MapLibre instance stay mounted.
 
+Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
+captures interaction from the workspace, and it remains open until the user activates
+its header close control, toggles the Diagnostics rail action, or disables developer
+mode.
+
 ## Settled camera write
 
 1. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch.

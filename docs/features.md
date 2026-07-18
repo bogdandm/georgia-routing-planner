@@ -178,6 +178,13 @@ The developer Map view shows exact local camera state, ordered source/layer IDs,
 terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Debug flags
 reset when developer mode ends.
 
+The diagnostics drawer is a persistent, non-modal workspace surface: it has no backdrop
+or elevation shadow and does not close on Escape, backdrop interaction, or section
+changes. The header close control and the active Diagnostics rail button are the only
+normal close actions, so the map and feature controls remain usable while diagnostics
+are observed. Drawer tabs use their own compact light-surface treatment rather than the
+dark navigation-rail tab styling.
+
 Schema-version 2 exports include build/runtime data, bounded events, health results,
 notes, and a serializable map snapshot. Exported longitude/latitude are rounded to 0.1
 degree; route geometry, raw provider URLs, tokens, headers, paths, and filenames are

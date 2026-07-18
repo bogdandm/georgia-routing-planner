@@ -2,6 +2,7 @@ export const appColors = {
   brand: {
     sky: '#8ECAE6',
     blueGreen: '#219EBC',
+    blueGreenDark: '#0A6D82',
     deepSpace: '#023047',
     amber: '#FFB703',
     tigerOrange: '#FB8500',

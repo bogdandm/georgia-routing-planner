@@ -55,8 +55,8 @@ export function WorkspaceRail({
             display: 'grid',
             placeItems: 'center',
             borderRadius: 1.25,
-            bgcolor: appColors.brand.blueGreen,
-            color: '#011f2e',
+            bgcolor: appColors.brand.blueGreenDark,
+            color: appColors.text.inverse,
             boxShadow: '0 6px 18px rgba(0, 0, 0, 0.18)',
           }}
         >

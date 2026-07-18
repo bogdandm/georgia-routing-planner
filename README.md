@@ -71,9 +71,9 @@ pnpm e2e
 
 ## Phase 0 application structure
 
-The composition root in `src/app/bootstrap/createApplicationServices.ts` is the only
-place that constructs browser adapters and connects them to application-facing ports.
-Features receive the typed `ApplicationServices` bundle through a React context. Tests
+The composition root in `src/bootstrap/createRuntimeServices.ts` is the only place that
+constructs browser adapters and connects them to application-facing ports. Presentation
+features receive the typed `RuntimeServices` bundle through a React context. Tests
 replace that entire bundle at the provider boundary.
 
 State ownership is deliberate:

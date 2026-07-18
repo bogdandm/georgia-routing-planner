@@ -69,8 +69,8 @@ export default tseslint.config(
           patterns: [
             {
               group: [
-                '@/app/**',
-                '@/features/**',
+                '@/bootstrap/**',
+                '@/presentation/**',
                 '@/infrastructure/**',
                 '@mui/**',
                 'dexie',

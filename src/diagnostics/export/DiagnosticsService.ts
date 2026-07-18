@@ -1,5 +1,5 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type { BuildInfo } from '@/app/bootstrap/buildInfo';
+import type { BuildInfo } from '@/bootstrap/buildInfo';
 import type {
   DiagnosticBundle,
   HealthCheckResult,

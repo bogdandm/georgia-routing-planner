@@ -180,10 +180,7 @@ Keep feature ownership visible while preserving layer boundaries:
 
 ```text
 src/
-  app/
-    bootstrap/          # composition root and providers
-    theme/              # MUI theme and design tokens
-    routing/            # client-side page routing, if introduced
+  bootstrap/            # composition root, runtime services, and providers
   domain/
     planning/
     tracks/
@@ -208,7 +205,10 @@ src/
     snapshots/
     export/
     redaction/
-  features/
+  presentation/
+    shell/
+    theme/              # MUI theme and design tokens
+    routing/            # client-side page routing, if introduced
     map/
     planner/
     track-catalog/

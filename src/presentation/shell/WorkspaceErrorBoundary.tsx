@@ -5,23 +5,23 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 
-interface AppErrorBoundaryProps {
+interface WorkspaceErrorBoundaryProps {
   readonly children: ReactNode;
   readonly diagnostics: DiagnosticsService;
   readonly logger: DiagnosticLogger;
 }
 
-interface AppErrorBoundaryState {
+interface WorkspaceErrorBoundaryState {
   readonly failed: boolean;
 }
 
-export class AppErrorBoundary extends Component<
-  AppErrorBoundaryProps,
-  AppErrorBoundaryState
+export class WorkspaceErrorBoundary extends Component<
+  WorkspaceErrorBoundaryProps,
+  WorkspaceErrorBoundaryState
 > {
-  public override state: AppErrorBoundaryState = { failed: false };
+  public override state: WorkspaceErrorBoundaryState = { failed: false };
 
-  public static getDerivedStateFromError(): AppErrorBoundaryState {
+  public static getDerivedStateFromError(): WorkspaceErrorBoundaryState {
     return { failed: true };
   }
 

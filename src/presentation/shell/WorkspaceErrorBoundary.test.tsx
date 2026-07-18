@@ -2,9 +2,9 @@ import { ThemeProvider } from '@mui/material';
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AppErrorBoundary } from '@/app/AppErrorBoundary';
-import { createAppTheme } from '@/app/theme/createAppTheme';
-import { createTestServices } from '../../test/helpers/createTestServices';
+import { WorkspaceErrorBoundary } from '@/presentation/shell/WorkspaceErrorBoundary';
+import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { createTestServices } from '../../../test/helpers/createTestServices';
 
 function FailingComponent(): never {
   throw new Error('Synthetic component failure');
@@ -16,13 +16,16 @@ afterEach(async () => {
   await services.database.delete();
 });
 
-describe('AppErrorBoundary', () => {
+describe('WorkspaceErrorBoundary', () => {
   it('renders children when no error occurs', () => {
     const services = createTestServices();
     render(
-      <AppErrorBoundary diagnostics={services.diagnostics} logger={services.logger}>
+      <WorkspaceErrorBoundary
+        diagnostics={services.diagnostics}
+        logger={services.logger}
+      >
         <div>Healthy child</div>
-      </AppErrorBoundary>,
+      </WorkspaceErrorBoundary>,
     );
 
     expect(screen.getByText('Healthy child')).toBeVisible();
@@ -33,9 +36,12 @@ describe('AppErrorBoundary', () => {
     const services = createTestServices();
     render(
       <ThemeProvider theme={createAppTheme()}>
-        <AppErrorBoundary diagnostics={services.diagnostics} logger={services.logger}>
+        <WorkspaceErrorBoundary
+          diagnostics={services.diagnostics}
+          logger={services.logger}
+        >
           <FailingComponent />
-        </AppErrorBoundary>
+        </WorkspaceErrorBoundary>
       </ThemeProvider>,
     );
 

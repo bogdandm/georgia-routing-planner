@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { useState, type SyntheticEvent } from 'react';
 
-import { useApplicationServices } from '@/app/bootstrap/useApplicationServices';
+import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
 
 interface DeveloperDrawerProps {
@@ -35,7 +35,7 @@ export function DeveloperDrawer({
   onTriggerFailure,
   open,
 }: DeveloperDrawerProps) {
-  const { buildInfo, diagnostics, logger } = useApplicationServices();
+  const { buildInfo, diagnostics, logger } = useRuntimeServices();
   const [activeTab, setActiveTab] = useState<DeveloperTab>('overview');
   const [healthChecks, setHealthChecks] = useState<readonly HealthCheckResult[]>([]);
   const [notes, setNotes] = useState('');

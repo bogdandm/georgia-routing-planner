@@ -4,7 +4,7 @@ import type { KyInstance } from 'ky';
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import { buildInfo, type BuildInfo } from '@/app/bootstrap/buildInfo';
+import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
@@ -13,7 +13,7 @@ import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 
-export interface ApplicationServices {
+export interface RuntimeServices {
   readonly buildInfo: BuildInfo;
   readonly clock: Clock;
   readonly database: AppDatabase;
@@ -24,7 +24,7 @@ export interface ApplicationServices {
   readonly queryClient: QueryClient;
 }
 
-export function createApplicationServices(): ApplicationServices {
+export function createRuntimeServices(): RuntimeServices {
   const clock = new BrowserClock();
   const idGenerator = new CryptoIdGenerator();
   const developerFlag = new URLSearchParams(globalThis.location.search).get(

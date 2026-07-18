@@ -112,7 +112,7 @@ routing, or a proprietary backend.
 ### 4.3 Styling policy
 
 - Start from one Material UI theme with restrained earth/satellite colors.
-- Define all design tokens in `src/app/theme`.
+- Define all design tokens in `src/presentation/theme`.
 - Use an 8 px spacing rhythm and Material component sizes.
 - Use `sx` for small local adjustments; extract repeated patterns into themed components
   or CSS modules.

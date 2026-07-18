@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Map, { type ErrorEvent, type MapRef } from 'react-map-gl/maplibre';
 import type { StyleSpecification } from 'maplibre-gl';
 
-import { useApplicationServices } from '@/app/bootstrap/useApplicationServices';
+import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 
 const networkFreeStyle: StyleSpecification = {
   version: 8,
@@ -19,7 +19,7 @@ const networkFreeStyle: StyleSpecification = {
 };
 
 export function MapSmokeCanvas() {
-  const { logger } = useApplicationServices();
+  const { logger } = useRuntimeServices();
   const mapRef = useRef<MapRef>(null);
   const cleanupContextListener = useRef<() => void>(() => undefined);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');

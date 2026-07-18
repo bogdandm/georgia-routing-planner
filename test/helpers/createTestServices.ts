@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import type { ApplicationServices } from '@/app/bootstrap/createApplicationServices';
+import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
@@ -31,7 +31,7 @@ class TestIdGenerator implements IdGenerator {
   }
 }
 
-export function createTestServices(): ApplicationServices {
+export function createTestServices(): RuntimeServices {
   const clock = new TestClock();
   const idGenerator = new TestIdGenerator();
   const logger = new BoundedDiagnosticLogger(clock, idGenerator);

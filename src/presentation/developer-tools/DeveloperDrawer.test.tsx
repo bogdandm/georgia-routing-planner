@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,6 +79,35 @@ describe('DeveloperDrawer', () => {
 
     await user.click(screen.getByRole('switch', { name: 'Show tile boundaries' }));
     expect(useUiStore.getState().mapDebugOptions.showTileBoundaries).toBe(true);
+  });
+
+  it('shows each Sentinel step with its current status and duration', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    services.sentinelQueryDiagnostics.beginOperation('sentinel-test');
+    services.sentinelQueryDiagnostics.beginStep('query-stac-catalog');
+    services.sentinelQueryDiagnostics.completeStep('query-stac-catalog');
+    services.sentinelQueryDiagnostics.beginStep('fetch-result-pages');
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <DeveloperDrawer open onClose={vi.fn()} onTriggerFailure={vi.fn()} />
+      </RuntimeServicesProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Sentinel query' }));
+
+    const catalogStep = screen.getByTestId('sentinel-query-step-query-stac-catalog');
+    expect(within(catalogStep).getByText('Completed')).toBeVisible();
+    expect(within(catalogStep).getByText(/\d+ ms/u)).toBeVisible();
+
+    const paginationStep = screen.getByTestId('sentinel-query-step-fetch-result-pages');
+    expect(within(paginationStep).getByText('Running')).toBeVisible();
+    expect(
+      within(paginationStep).getByText(
+        'Follow provider next links within the pagination limit.',
+      ),
+    ).toBeVisible();
   });
 
   it('runs configured provider probes only after the explicit action', async () => {

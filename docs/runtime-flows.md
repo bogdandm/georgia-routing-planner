@@ -104,6 +104,8 @@ flowchart LR
   Browser["Global/error boundary"] --> Logger["Bounded redacting logger"]
   HTTP["HTTP hooks"] --> Logger
   Storage["Persistence"] --> Logger
+  Sentinel["Sentinel use cases and raster adapter"] --> SentinelSnapshot["Sentinel query timeline store"]
+  SentinelSnapshot --> Drawer
   Snapshot --> Drawer["Developer drawer"]
   Logger --> Drawer
   Health["Local and explicit provider checks"] --> Diagnostics["Diagnostics service"]
@@ -116,6 +118,13 @@ Logging is best-effort and must never fail the primary operation. Redaction happ
 before an event enters the bounded buffer. Bundle creation copies serializable state,
 coarsens camera location, and creates a local object URL that is revoked immediately
 after download. Nothing is uploaded.
+
+Sentinel commands will open one timeline operation ID and publish a fixed sequence of
+best-effort step transitions through the `SentinelQueryDiagnostics` application port.
+The local store keeps only the current or most recent operation. While the persistent
+drawer is open and the operation is running, its UI requests a monotonic-duration
+refresh every 250 milliseconds; this performs no provider polling. Invalid or late
+diagnostic transitions are ignored and cannot change the primary operation outcome.
 
 ## Teardown ownership
 

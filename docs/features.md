@@ -185,6 +185,16 @@ normal close actions, so the map and feature controls remain usable while diagno
 are observed. Drawer tabs use their own compact light-surface treatment rather than the
 dark navigation-rail tab styling.
 
+The `Sentinel query` tab exposes one local current-or-last-operation timeline. It always
+lists viewport capture, criteria construction, STAC request, pagination, validation,
+scene mapping, coverage/grouping, visual-asset selection, decode/reprojection, and map
+application. Each row shows an explicit waiting, running, completed, failed, cancelled,
+or skipped state and a monotonic duration that refreshes while work is active. The
+timeline foundation is implemented even though Sentinel search and rendering are not
+currently available; those operations must publish their transitions as they are added.
+The timeline is memory-only and does not expose raw payloads, exact geometry, provider
+URLs, headers, tokens, or raw failures.
+
 Schema-version 2 exports include build/runtime data, bounded events, health results,
 notes, and a serializable map snapshot. Exported longitude/latitude are rounded to 0.1
 degree; route geometry, raw provider URLs, tokens, headers, paths, and filenames are

@@ -9,13 +9,15 @@ This is the active implementation plan for the Satellite imagery workspace descr
 [`docs/map-providers.md`](./docs/map-providers.md). It replaces the completed map
 foundation plan that previously occupied this file.
 
-- Status: **planning; no Sentinel search or rendering behavior is implemented yet**.
+- Status: **planning; the live Sentinel diagnostics timeline foundation is implemented,
+  while search and rendering behavior remain unavailable**.
 - Active branch: `feature/sentinel-imagery-plan`, created from `main` on 2026-07-19.
 - Approval boundary: all implementation remains on a feature branch and reaches `main`
   only after the reviewed branch state is explicitly approved.
 - Current application boundary: the Satellite rail destination and live viewport-center
   selector exist, while date/product filters, search, results, scene metadata, and
-  imagery rendering remain unavailable.
+  imagery rendering remain unavailable. Developer diagnostics now has the persistent
+  `Sentinel query` timeline that those operations will update.
 
 The implementation must be delivered as focused, independently testable commits. Each
 behavior commit includes its tests and leaves the repository buildable. This plan stays
@@ -28,17 +30,18 @@ Update this table in the same commit that materially changes a package's state. 
 means its acceptance evidence exists on the feature branch; it does not mean approval to
 merge into `main`.
 
-| Package | Outcome                                           | Status  |
-| ------- | ------------------------------------------------- | ------- |
-| S5.0    | Plan, branch, prototype ledger, governance        | Done    |
-| S5.1    | Catalog and raster feasibility decision           | Pending |
-| S5.2    | Models, viewport geometry, and use cases          | Pending |
-| S5.3    | Validated STAC gateway and configuration          | Pending |
-| S5.4    | Search sidebar and acquisition calendar           | Pending |
-| S5.5    | MapLibre true-color imagery and footprint adapter | Pending |
-| S5.6    | Results, metadata, and applied actions            | Pending |
-| S5.7    | Diagnostics and failure evidence                  | Pending |
-| S5.8    | E2E, accessibility, docs, and design sync         | Pending |
+| Package | Outcome                                           | Status      |
+| ------- | ------------------------------------------------- | ----------- |
+| S5.0    | Plan, branch, prototype ledger, governance        | Done        |
+| S5.1    | Persistent drawer and live Sentinel timeline      | In progress |
+| S5.2    | Catalog and raster feasibility decision           | Pending     |
+| S5.3    | Models, viewport geometry, and use cases          | Pending     |
+| S5.4    | Validated STAC gateway and configuration          | Pending     |
+| S5.5    | Search sidebar and acquisition calendar           | Pending     |
+| S5.6    | MapLibre true-color imagery and footprint adapter | Pending     |
+| S5.7    | Results, metadata, and applied actions            | Pending     |
+| S5.8    | Exported diagnostics and failure evidence         | Pending     |
+| S5.9    | E2E, accessibility, docs, and design sync         | Pending     |
 
 ## 2. Design authority and synchronization
 
@@ -71,19 +74,20 @@ Synchronization rules for this workstream:
 
 ### 2.1 Prototype-to-delivery ledger
 
-| Prototype surface          | Reviewed contract                                                                    | Current application                                       | Planned work                                                      | State                                                     |
-| -------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| Satellite rail destination | Opens contextual Satellite tools without remounting the map                          | Implemented                                               | Regression coverage in S5.8                                       | Existing                                                  |
-| Search-area selector       | Compact `Viewport                                                                    | <latitude, longitude>` selector; Marker is a later source | Viewport center implemented; Marker disabled                      | Actual viewport bounds in S5.2; preserve Marker for later | Partial |
-| Date calendar              | Range selection plus acquisition/cloud hints below available days                    | Placeholder card only                                     | Availability query and accessible calendar in S5.4                | Planned                                                   |
-| Sentinel options           | Exclusive L1C/L2A choice and cloud threshold                                         | Disabled controls                                         | Typed criteria and active controls in S5.4                        | Planned                                                   |
-| Other imagery              | Visible boundary that no other source is available in this prototype                 | Not represented exactly                                   | Honest unavailable row in S5.4; no invented provider              | Planned                                                   |
-| Search summary/action      | Concise criteria summary and `Search Images` action                                  | Disabled action                                           | Submitted criteria, loading, cancellation, and validation in S5.4 | Planned                                                   |
-| Adjacent results pane      | Overlay/adjacent pane titled for the search point, with scene and acquisition counts | Unavailable                                               | Shell-owned pane in S5.6                                          | Planned                                                   |
-| Date-grouped scene cards   | Platform, product level, cloud, coverage, warning, thumbnail, expand action          | Unavailable                                               | Result grouping and cards in S5.6                                 | Planned                                                   |
-| Expanded scene metadata    | Acquisition time, tile, orbit, product, edge distance, attribution                   | Unavailable                                               | Validated metadata details in S5.6                                | Planned                                                   |
-| Applied scene actions      | Applied status, fit footprint, and hide imagery                                      | Unavailable                                               | Map adapter and commands in S5.5/S5.6                             | Planned                                                   |
-| Persistent map composition | True-color scene beneath hiking references, with footprint and other state preserved | Reserved satellite layer band only                        | Rendering and layer-order work in S5.5                            | Planned                                                   |
+| Prototype surface          | Reviewed contract                                                                    | Current application                                             | Planned work                                                          | State    |
+| -------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------- | -------- |
+| Satellite rail destination | Opens contextual Satellite tools without remounting the map                          | Implemented                                                     | Regression coverage in S5.9                                           | Existing |
+| Search-area selector       | Compact `Viewport` / `<latitude, longitude>` selector; Marker is a later source      | Viewport center implemented; Marker disabled                    | Actual viewport bounds in S5.3; preserve Marker for later             | Partial  |
+| Date calendar              | Range selection plus acquisition/cloud hints below available days                    | Placeholder card only                                           | Availability query and accessible calendar in S5.5                    | Planned  |
+| Sentinel options           | Exclusive L1C/L2A choice and cloud threshold                                         | Disabled controls                                               | Typed criteria and active controls in S5.5                            | Planned  |
+| Other imagery              | Visible boundary that no other source is available in this prototype                 | Not represented exactly                                         | Honest unavailable row in S5.5; no invented provider                  | Planned  |
+| Search summary/action      | Concise criteria summary and `Search Images` action                                  | Disabled action                                                 | Submitted criteria, loading, cancellation, and validation in S5.5     | Planned  |
+| Adjacent results pane      | Overlay/adjacent pane titled for the search point, with scene and acquisition counts | Unavailable                                                     | Shell-owned pane in S5.7                                              | Planned  |
+| Date-grouped scene cards   | Platform, product level, cloud, coverage, warning, thumbnail, expand action          | Unavailable                                                     | Result grouping and cards in S5.7                                     | Planned  |
+| Expanded scene metadata    | Acquisition time, tile, orbit, product, edge distance, attribution                   | Unavailable                                                     | Validated metadata details in S5.7                                    | Planned  |
+| Applied scene actions      | Applied status, fit footprint, and hide imagery                                      | Unavailable                                                     | Map adapter and commands in S5.6/S5.7                                 | Planned  |
+| Persistent map composition | True-color scene beneath hiking references, with footprint and other state preserved | Reserved satellite layer band only                              | Rendering and layer-order work in S5.6                                | Planned  |
+| Sentinel query diagnostics | Persistent non-modal drawer with every query/render step, status, and live duration  | Drawer and typed timeline implemented; operations not yet wired | Instrument each boundary in S5.3-S5.8 and mirror the widget in Penpot | Partial  |
 
 ## 3. Required user outcome
 
@@ -108,6 +112,8 @@ At completion, a desktop Chrome user can:
 9. Export diagnostics that distinguish catalog, validation, render, and provider
    failures without exporting exact search geometry, asset URLs, request bodies, or
    other sensitive data.
+10. Keep the persistent diagnostics drawer open while using the workspace and inspect
+    every Sentinel chain step with its current status and live/finished duration.
 
 ## 4. Fixed product and UX decisions
 
@@ -139,6 +145,18 @@ At completion, a desktop Chrome user can:
 - Closing the results pane does not silently remove an applied scene.
 - `Other imagery` remains an honest unavailable boundary. Do not add a fake provider or
   generic source picker.
+- Developer diagnostics is a persistent, non-modal, shadow-free drawer. It closes only
+  from its header control, its active rail toggle, or disabling developer mode; Escape,
+  workspace clicks, and tab changes do not close it.
+- `Sentinel query` is a dedicated diagnostics tab. It always lists the reviewed chain
+  from viewport capture through raster/footprint application, showing `Waiting`,
+  `Running`, `Completed`, `Failed`, `Cancelled`, or `Skipped` plus a monotonic duration.
+- The timeline holds only the current or most recent operation in memory. A new
+  operation replaces the prior snapshot, and the widget never exposes raw
+  request/response bodies, exact geometry, arbitrary URLs, headers, tokens, or provider
+  errors.
+- Each work package must wire its own steps into the timeline in the same commit as the
+  behavior. Core observability is not deferred to the final diagnostics hardening work.
 - Detailed Layers UI is not invented without a reviewed Layers prototype. This work
   exposes typed imagery visibility/opacity capabilities so a later reviewed Layers
   surface can use them.
@@ -155,6 +173,8 @@ At completion, a desktop Chrome user can:
 - Scene footprint, coverage, edge distance, fit, hide, and applied-state handling.
 - TanStack Query lifecycle, AbortSignal propagation, typed errors, diagnostics, tests,
   stable documentation, and Penpot synchronization.
+- Persistent live developer visualization of the full Sentinel query/render chain,
+  including per-step state and monotonic elapsed time.
 
 ### 5.2 Excluded
 
@@ -189,12 +209,22 @@ Satellite React commands -> narrow imagery-map capability -> MapLibre adapter
                                                         |
                                                         v
                                       raster source/layer + footprint source/layer
+
+application use cases + raster adapter -> SentinelQueryDiagnostics port
+                                                   |
+                                                   v
+                                  local timeline snapshot store -> developer drawer
 ```
 
 The catalog path follows normal clean-architecture dependency injection. The imperative
 MapLibre path remains a presentation adapter because it controls a UI rendering engine.
 React receives only serializable scene/render snapshots and narrow commands; neither
 application use cases nor Zustand receive the native map.
+
+Sentinel orchestration depends only on the small `SentinelQueryDiagnostics` application
+port. Its diagnostics implementation stores one serializable current/last-operation
+snapshot and publishes it through `useSyncExternalStore`; application code does not
+depend on React or the concrete developer drawer.
 
 ### 6.2 Proposed contracts
 
@@ -216,6 +246,10 @@ Names may be refined during implementation, but responsibilities remain separate
   deduplicates/paginates, calculates derived display data, and returns date-grouped
   scenes.
 - `SatelliteCatalogGateway`: small cancellable STAC search capability.
+- `SentinelQueryDiagnostics`: best-effort lifecycle sink for the fixed Sentinel chain;
+  invalid instrumentation transitions are ignored and can never fail the operation.
+- `SentinelQueryDiagnosticsStore`: local current/last-operation snapshot, subscriber
+  boundary, and live monotonic-duration refresh used by the diagnostics drawer.
 - `SatelliteImageryMap`: narrow presentation capability for apply, hide, fit footprint,
   subscribe, and get a serializable render snapshot.
 - `MapLibreSatelliteImageryAdapter`: owns protocol registration, raster/footprint
@@ -236,6 +270,7 @@ MapLibre getter.
 | Native raster/GeoJSON sources, layers, protocols, listeners           | MapLibre imagery adapter                  | Never                |
 | Settled camera and existing terrain state                             | Existing map owner/repository             | Existing policy      |
 | Provider/catalog configuration                                        | Validated runtime configuration           | Build/runtime asset  |
+| Current/last Sentinel step statuses and durations                     | Sentinel diagnostics snapshot store       | Memory only          |
 
 No raw STAC response, COG bytes, native map instance, class instance, or full geometry
 is stored in Zustand, TanStack Query persistence, or Dexie.
@@ -254,6 +289,9 @@ src/
     SearchSatelliteScenes.ts
   application/ports/
     SatelliteCatalogGateway.ts
+    SentinelQueryDiagnostics.ts
+  diagnostics/snapshots/
+    SentinelQueryDiagnosticsStore.ts
   infrastructure/stac/
     EarthSearchSatelliteCatalogGateway.ts
     earthSearchSchemas.ts
@@ -264,6 +302,8 @@ src/
     SatelliteResultsPane.tsx
     SatelliteSceneCard.tsx
     SatelliteSceneDetails.tsx
+  presentation/developer-tools/
+    SentinelQueryTimeline.tsx
   presentation/map/
     SatelliteImageryMap.ts
     MapLibreSatelliteImageryAdapter.ts
@@ -288,7 +328,7 @@ complete until both reviewed L1C and L2A flows have an honest rendering outcome.
 
 Earth Search v1 is the initial candidate because it offers a public STAC search API and
 the repository already recorded successful anonymous access to a Sentinel true-color
-COG. It is best-effort and has no SLA. Before product code depends on it, S5.1 must
+COG. It is best-effort and has no SLA. Before product code depends on it, S5.2 must
 revalidate:
 
 - Current collection IDs and the L1C/L2A asset sets.
@@ -311,7 +351,7 @@ MapLibre COG example uses `@geomatico/maplibre-cog-protocol`, but that adapter d
 that its input must already be EPSG:3857 and it does not reproject. Sentinel scene
 assets commonly use UTM grids, so package adoption is not assumed.
 
-S5.1 must compare at least these paths against one representative Georgia L1C scene and
+S5.2 must compare at least these paths against one representative Georgia L1C scene and
 one L2A scene:
 
 1. A browser-side COG/JP2 windowing, reprojection, and tile adapter with work isolated
@@ -356,7 +396,7 @@ rather than weakening privacy/static-hosting constraints.
   cloud threshold. It returns per-date scene count and a reviewed cloud summary.
 - The explicit search uses the selected inclusive range and the same product/cloud
   criteria.
-- Limit the supported date span and result count based on S5.1 provider measurements;
+- Limit the supported date span and result count based on S5.2 provider measurements;
   show an actionable refinement message rather than truncating silently.
 - Follow provider pagination through validated HTTPS links only, cap pages/results, and
   deduplicate by collection plus stable item ID.
@@ -765,7 +805,7 @@ submitted viewport center
 ```
 
 Focused Turf modules may provide intersection, area, and point-to-boundary distance
-after the S5.1 dependency/bundle review.
+after the S5.2 dependency/bundle review.
 
 The final result is grouped and sorted by UTC acquisition date:
 
@@ -886,8 +926,8 @@ map.addLayer(
 
 This code is the desired MapLibre boundary, not a selected dependency. The example
 adapter documents that its inputs must already use EPSG:3857 and that it does not
-reproject. The observed Georgia scene uses EPSG:32638, so S5.1 must prove or choose the
-reprojection-capable implementation before S5.5 adopts a production adapter.
+reproject. The observed Georgia scene uses EPSG:32638, so S5.2 must prove or choose the
+reprojection-capable implementation before S5.6 adopts a production adapter.
 
 ### 9.12 L1C raster branch
 
@@ -919,7 +959,7 @@ L1C STAC search/metadata
 L1C map rendering
 -> requires an approved HTTPS asset/tile service
    or a browser JP2 + reprojection adapter
--> remains an S5.1 feasibility decision
+-> remains an S5.2 feasibility decision
 ```
 
 Do not silently render the related L2A scene when the user selected L1C, and do not
@@ -1026,7 +1066,47 @@ Verification:
 
 Commit: `docs: plan Sentinel imagery implementation`
 
-### S5.1 Choose and document the catalog/rendering path
+### S5.1 Make diagnostics persistent and establish the live Sentinel timeline
+
+Scope:
+
+- Convert the existing developer drawer from a temporary modal to a persistent,
+  non-modal surface with no backdrop or elevation shadow.
+- Add an always-visible header close control and make the Diagnostics rail action toggle
+  the drawer without allowing Escape, workspace interaction, or section changes to close
+  it.
+- Isolate the drawer's compact light-surface tabs from the dark navigation-rail `MuiTab`
+  styling.
+- Define the `SentinelQueryDiagnostics` application port and a best-effort local
+  snapshot store for the current or most recent operation.
+- Add the `Sentinel query` diagnostics tab with all ten query/render steps, explicit
+  statuses, static technical boundary descriptions, and live monotonic durations.
+- Update stable diagnostics ownership/behavior documentation and mirror the accepted
+  drawer/timeline design in Penpot without replacing future Satellite features.
+
+Tests in the same commits:
+
+- Drawer has no dialog/backdrop behavior, ignores Escape, and closes from both explicit
+  controls.
+- Drawer tabs use the local compact treatment and remain keyboard accessible.
+- Timeline transition, subscription, elapsed-time, completion, failure, cancellation,
+  skipped-step, and invalid-transition behavior.
+- Timeline UI renders every step with its current status and duration.
+
+Commits: `fix(diagnostics): keep developer drawer persistent` followed by
+`feat(diagnostics): add live Sentinel query timeline`
+
+Current evidence:
+
+- Drawer behavior, styling, timeline store/UI, tests, stable documentation, and current
+  Chrome visual verification are complete on the feature branch.
+- Penpot synchronization remains pending because the connected design tool timed out
+  before returning even the root hierarchy on 2026-07-19. The visible prototype was
+  inspected read-only; no blind coordinate edit was attempted and S5.1 remains in
+  progress until the hierarchy can be read and the changes mirrored one operation at a
+  time.
+
+### S5.2 Choose and document the catalog/rendering path
 
 Scope:
 
@@ -1050,7 +1130,7 @@ Acceptance:
 
 Commit: `docs(satellite): choose catalog and raster path`
 
-### S5.2 Add satellite models, viewport search geometry, and use cases
+### S5.3 Add satellite models, viewport search geometry, and use cases
 
 Scope:
 
@@ -1061,6 +1141,9 @@ Scope:
   edge calculations.
 - Define typed application errors for invalid criteria, result limit, geometry, and
   provider capability failures.
+- Begin one timeline operation per explicit availability/search command and publish the
+  viewport-capture, criteria-building, coverage/grouping, completion, failure, and
+  cancellation transitions through `SentinelQueryDiagnostics`.
 
 Tests in the same commit:
 
@@ -1073,7 +1156,7 @@ Tests in the same commit:
 
 Commit: `feat(satellite): model viewport scene search`
 
-### S5.3 Implement the validated STAC gateway and configuration
+### S5.4 Implement the validated STAC gateway and configuration
 
 Scope:
 
@@ -1085,6 +1168,8 @@ Scope:
 - Map HTTP/timeout/offline/rate-limit/schema/cancellation errors into typed outcomes.
 - Construct the gateway and use cases in `createRuntimeServices` with explicit types.
 - Add bounded feature diagnostics and safe provider health evidence.
+- Publish catalog request, pagination, schema validation, and scene-mapping step
+  transitions without leaking raw provider payloads into the timeline.
 
 Tests in the same commit:
 
@@ -1096,7 +1181,7 @@ Tests in the same commit:
 
 Commit: `feat(satellite): add Earth Search gateway`
 
-### S5.4 Build the prototype-aligned search sidebar and calendar
+### S5.5 Build the prototype-aligned search sidebar and calendar
 
 Scope:
 
@@ -1122,7 +1207,7 @@ Tests in the same commit:
 
 Commit: `feat(satellite): build imagery search controls`
 
-### S5.5 Integrate true-color imagery and footprint with MapLibre
+### S5.6 Integrate true-color imagery and footprint with MapLibre
 
 Scope:
 
@@ -1135,6 +1220,8 @@ Scope:
 - Retain OSM attribution and add Sentinel/Copernicus/provider attribution while imagery
   is applied.
 - Aggregate tile/decode/source errors and keep a usable base map on failure.
+- Publish asset selection, decode/reprojection, and map-apply step transitions with the
+  same operation ID used by the submitted scene workflow.
 
 Tests in the same commit:
 
@@ -1146,7 +1233,7 @@ Tests in the same commit:
 
 Commit: `feat(map): render selected Sentinel imagery`
 
-### S5.6 Add results, metadata, selection, and applied actions
+### S5.7 Add results, metadata, selection, and applied actions
 
 Scope:
 
@@ -1172,12 +1259,15 @@ Tests in the same commit:
 
 Commit: `feat(satellite): add scene results and metadata`
 
-### S5.7 Complete diagnostics, failure behavior, and developer evidence
+### S5.8 Harden exported diagnostics, failure behavior, and developer evidence
 
 Scope:
 
 - Add stable events for availability, search, validation, apply, render, switch, hide,
   cancel, and failure outcomes with operation IDs and monotonic durations.
+- Verify that every implemented boundary updates the already-shipped live timeline; this
+  package may refine evidence but must not introduce core step visibility for the first
+  time.
 - Add a sanitized satellite snapshot to developer mode/support bundles when it
   materially improves diagnosis; version schemas and CLI compatibility if the bundle
   changes.
@@ -1202,7 +1292,7 @@ Tests in the same commit:
 
 Commit: `feat(diagnostics): capture satellite imagery evidence`
 
-### S5.8 Harden end-to-end behavior, accessibility, documentation, and design sync
+### S5.9 Harden end-to-end behavior, accessibility, documentation, and design sync
 
 Scope:
 

@@ -32,6 +32,7 @@ import {
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
+import { SentinelQueryTimeline } from '@/presentation/developer-tools/SentinelQueryTimeline';
 import { useUiStore } from '@/presentation/shell/uiStore';
 
 interface DeveloperDrawerProps {
@@ -40,15 +41,21 @@ interface DeveloperDrawerProps {
   readonly onTriggerFailure: () => void;
 }
 
-type DeveloperTab = 'overview' | 'map' | 'logs' | 'health';
+type DeveloperTab = 'overview' | 'sentinel-query' | 'map' | 'logs' | 'health';
 
 export function DeveloperDrawer({
   onClose,
   onTriggerFailure,
   open,
 }: DeveloperDrawerProps) {
-  const { buildInfo, diagnostics, logger, mapDiagnostics, mapProviderConfiguration } =
-    useRuntimeServices();
+  const {
+    buildInfo,
+    diagnostics,
+    logger,
+    mapDiagnostics,
+    mapProviderConfiguration,
+    sentinelQueryDiagnostics,
+  } = useRuntimeServices();
   const [activeTab, setActiveTab] = useState<DeveloperTab>('overview');
   const [healthChecks, setHealthChecks] = useState<readonly HealthCheckResult[]>([]);
   const [notes, setNotes] = useState('');
@@ -70,6 +77,19 @@ export function DeveloperDrawer({
     readMapSnapshot,
     readMapSnapshot,
   );
+  const subscribeToSentinelQuery = useCallback(
+    (listener: () => void) => sentinelQueryDiagnostics.subscribe(listener),
+    [sentinelQueryDiagnostics],
+  );
+  const readSentinelQuerySnapshot = useCallback(
+    () => sentinelQueryDiagnostics.getSnapshot(),
+    [sentinelQueryDiagnostics],
+  );
+  const sentinelQuerySnapshot = useSyncExternalStore(
+    subscribeToSentinelQuery,
+    readSentinelQuerySnapshot,
+    readSentinelQuerySnapshot,
+  );
   const events = logger.getEvents().slice(-50).reverse();
 
   useEffect(
@@ -78,6 +98,18 @@ export function DeveloperDrawer({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!open || sentinelQuerySnapshot.status !== 'running') return;
+
+    sentinelQueryDiagnostics.refreshRunningDurations();
+    const intervalId = window.setInterval(() => {
+      sentinelQueryDiagnostics.refreshRunningDurations();
+    }, 250);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [open, sentinelQueryDiagnostics, sentinelQuerySnapshot.status]);
 
   const handleTabChange = (_event: SyntheticEvent, value: DeveloperTab) => {
     setActiveTab(value);
@@ -171,7 +203,6 @@ export function DeveloperDrawer({
         value={activeTab}
         onChange={handleTabChange}
         variant="scrollable"
-        scrollButtons="auto"
         aria-label="Developer diagnostics sections"
         sx={{
           minHeight: 44,
@@ -197,10 +228,11 @@ export function DeveloperDrawer({
           },
         }}
       >
-        <Tab value="overview" label="Overview" />
-        <Tab value="map" label="Map" />
-        <Tab value="logs" label={`Logs (${String(events.length)})`} />
-        <Tab value="health" label="Health" />
+        <Tab disableRipple value="overview" label="Overview" />
+        <Tab disableRipple value="sentinel-query" label="Sentinel query" />
+        <Tab disableRipple value="map" label="Map" />
+        <Tab disableRipple value="logs" label={`Logs (${String(events.length)})`} />
+        <Tab disableRipple value="health" label="Health" />
       </Tabs>
       <Divider />
 
@@ -238,6 +270,10 @@ export function DeveloperDrawer({
               Trigger controlled component failure
             </Button>
           </Stack>
+        ) : null}
+
+        {activeTab === 'sentinel-query' ? (
+          <SentinelQueryTimeline snapshot={sentinelQuerySnapshot} />
         ) : null}
 
         {activeTab === 'map' ? (

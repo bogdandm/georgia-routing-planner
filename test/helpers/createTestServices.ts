@@ -12,6 +12,7 @@ import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
+import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 
@@ -49,6 +50,7 @@ export function createTestServices(): RuntimeServices {
     mode: 'test',
   };
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const httpClient = createHttpClient(logger);
   const healthChecks = new HealthCheckService(
     clock,
@@ -83,5 +85,6 @@ export function createTestServices(): RuntimeServices {
     queryClient: new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     }),
+    sentinelQueryDiagnostics,
   };
 }

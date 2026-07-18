@@ -15,6 +15,7 @@ import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
+import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
@@ -34,6 +35,7 @@ export interface RuntimeServices {
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly queryClient: QueryClient;
+  readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
 }
 
 /**
@@ -78,6 +80,7 @@ export function createRuntimeServices(): RuntimeServices {
     });
   }
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const httpClient = createHttpClient(logger);
   const healthChecks = new HealthCheckService(
     clock,
@@ -134,5 +137,6 @@ export function createRuntimeServices(): RuntimeServices {
     mapDiagnostics,
     mapProviderConfiguration,
     queryClient,
+    sentinelQueryDiagnostics,
   };
 }

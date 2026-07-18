@@ -57,7 +57,8 @@ boundaries.
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It creates the clock, ID generator, bounded
 logger, Dexie database, camera repository, validated provider configuration, map
-snapshot store, HTTP client, health/diagnostics services, and TanStack Query client.
+snapshot store, Sentinel query timeline store, HTTP client, health/diagnostics services,
+and TanStack Query client.
 
 [`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
 this order: runtime services, TanStack Query, MUI theme, error boundary, workspace
@@ -72,6 +73,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
+| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause

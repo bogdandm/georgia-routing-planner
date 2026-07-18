@@ -2,7 +2,9 @@ import AddIcon from '@mui/icons-material/Add';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -190,13 +192,25 @@ function SatelliteContent({ coordinates }: SatelliteContentProps) {
   );
 }
 
-function PlanContent() {
+function MarkersContent() {
   return (
     <Box sx={{ p: 2 }}>
       <EmptyState
-        icon={<RouteOutlinedIcon fontSize="large" />}
-        title="No active plan"
-        description="Manual waypoint planning arrives in a later phase."
+        icon={<PlaceOutlinedIcon fontSize="large" />}
+        title="No saved markers"
+        description="Saved map markers arrive in a later phase."
+      />
+    </Box>
+  );
+}
+
+function LayersContent() {
+  return (
+    <Box sx={{ p: 2 }}>
+      <EmptyState
+        icon={<LayersOutlinedIcon fontSize="large" />}
+        title="Layer controls are not available yet"
+        description="Map layer visibility and ordering arrive in a later phase."
       />
     </Box>
   );
@@ -222,7 +236,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
           </IconButton>,
         )}
         {disabledAction(
-          'Route creation arrives in a later phase',
+          'Manual planning starts here in a later phase',
           <Button disabled size="small" variant="contained" startIcon={<AddIcon />}>
             Create GPX
           </Button>,
@@ -239,14 +253,18 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
       </IconButton>,
     ),
   },
-  plan: {
-    title: 'Route plan',
+  markers: {
+    title: 'Markers',
     actions: disabledAction(
-      'Route creation arrives in a later phase',
+      'Marker creation arrives in a later phase',
       <Button disabled size="small" variant="contained" startIcon={<AddIcon />}>
-        New plan
+        New marker
       </Button>,
     ),
+  },
+  layers: {
+    title: 'Layers',
+    actions: null,
   },
 };
 
@@ -310,7 +328,8 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         {activeTab === 'satellite' ? (
           <SatelliteContent coordinates={searchAreaCoordinates} />
         ) : null}
-        {activeTab === 'plan' ? <PlanContent /> : null}
+        {activeTab === 'markers' ? <MarkersContent /> : null}
+        {activeTab === 'layers' ? <LayersContent /> : null}
       </Box>
     </Box>
   );

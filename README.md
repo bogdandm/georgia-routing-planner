@@ -256,11 +256,14 @@ and explicitly denies MSW's optional script.
 
 The interface will use a desktop map-workbench layout:
 
-- A compact top application bar for project name, base-layer choice, 2D/3D toggle,
-  import, export, and settings.
-- A persistent left Material UI drawer with `Tracks`, `Plan`, and `Satellite` tabs.
-- The map as the primary canvas.
-- A collapsible elevation panel across the bottom.
+- A compact left quick-access rail with `Tracks`, `Satellite`, `Markers`, and `Layers`
+  sections plus global settings and opt-in developer diagnostics.
+- A contextual sidebar for the active rail section, with optional adjacent detail panes
+  when a future workflow needs them.
+- Manual planning launched by `Create GPX` from Tracks. Planning is a workflow, not a
+  top-level rail section.
+- The persistent map as the primary canvas, with place search and 2D/3D controls layered
+  over the map.
 - Contextual dialogs for metadata, destructive confirmation, and application settings.
 - A developer drawer, hidden by default, for logs, map/source state, requests, storage
   health, feature flags, and performance information.

@@ -50,8 +50,13 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('heading', { name: 'No tracks loaded' })).toBeVisible();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
-    await user.click(screen.getByRole('tab', { name: 'Plan' }));
-    expect(screen.getByRole('heading', { name: 'No active plan' })).toBeVisible();
+    expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Markers' }));
+    expect(screen.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    expect(
+      screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
+    ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),

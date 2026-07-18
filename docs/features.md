@@ -7,10 +7,12 @@ make current boundaries explicit.
 
 The Material UI shell follows a map-first desktop workbench: a compact quick-access rail
 owns section navigation and settings, a contextual panel owns the active Tracks,
-Satellite, or Plan controls, and the persistent map uses the remaining viewport. The
-shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette, with
-derived surface, border, status, and tag colors. Native map navigation remains on the
-right; the 2D/3D terrain control is directly below it.
+Satellite, Markers, or Layers controls, and the persistent map uses the remaining
+viewport. Manual planning is a workflow launched from `Create GPX` in Tracks; it is not
+a top-level navigation section. The shell uses the shared sky-blue, blue-green,
+deep-space, amber, and orange palette, with derived surface, border, status, and tag
+colors. Native map navigation remains on the right; the 2D/3D terrain control is
+directly below it.
 
 The contextual controls are intentionally disabled where their roadmap feature is not
 implemented. They communicate the future layout without presenting synthetic catalog,
@@ -96,11 +98,11 @@ never contain secrets.
 
 ## Deferred features
 
-| Feature                                        | Planned phase/status                       |
-| ---------------------------------------------- | ------------------------------------------ |
-| Searchable GPX catalog and track display       | Later phase; current tab is an empty state |
-| Local GPX import                               | Later phase; control is disabled           |
-| Manual waypoint planning and GPX export        | Later phase; no routing engine exists      |
-| Elevation calculations and chart               | Later phase; panel is a placeholder        |
-| Sentinel-2 scene selection/rendering           | Later phase; COG feasibility only          |
-| Offline region downloads, accounts, cloud sync | Explicit MVP non-goals                     |
+| Feature                                        | Planned phase/status                         |
+| ---------------------------------------------- | -------------------------------------------- |
+| Searchable GPX catalog and track display       | Later phase; current tab is an empty state   |
+| Local GPX import                               | Later phase; control is disabled             |
+| Manual waypoint planning and GPX export        | Later phase; no routing engine exists        |
+| Elevation calculations and chart               | Later phase; no elevation surface is mounted |
+| Sentinel-2 scene selection/rendering           | Later phase; COG feasibility only            |
+| Offline region downloads, accounts, cloud sync | Explicit MVP non-goals                       |

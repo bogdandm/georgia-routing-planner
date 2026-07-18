@@ -1,5 +1,6 @@
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
@@ -82,9 +83,10 @@ export function WorkspaceRail({
           },
         }}
       >
-        <Tab icon={<LayersOutlinedIcon />} label="Tracks" value="tracks" />
+        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
-        <Tab icon={<RouteOutlinedIcon />} label="Plan" value="plan" />
+        <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
+        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
       </Tabs>
 
       <Stack spacing={0.5} sx={{ mt: 'auto', px: 0.75, pb: 1 }}>

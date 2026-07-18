@@ -43,8 +43,13 @@ test('loads the production map style and reloads under a repository subpath', as
     'true',
   );
 
-  await page.getByRole('tab', { name: 'Plan' }).click();
-  await expect(page.getByRole('heading', { name: 'No active plan' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Plan' })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Markers' }).click();
+  await expect(page.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Layer controls are not available yet' }),
+  ).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();

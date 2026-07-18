@@ -5,12 +5,13 @@ import type {
   TerrainMode,
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
+import type { MapViewportProvider } from '@/application/ports/MapViewportProvider';
 
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
  * object. Consumers observe serializable snapshots and never receive the native map.
  */
-export interface MapFacade {
+export interface MapFacade extends MapViewportProvider {
   subscribe(listener: () => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;

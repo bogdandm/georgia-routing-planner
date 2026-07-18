@@ -126,6 +126,38 @@ drawer is open and the operation is running, its UI requests a monotonic-duratio
 refresh every 250 milliseconds; this performs no provider polling. Invalid or late
 diagnostic transitions are ignored and cannot change the primary operation outcome.
 
+## Sentinel search core
+
+The provider-independent application flow is implemented even though no catalog adapter
+or search UI is composed yet:
+
+```mermaid
+sequenceDiagram
+  participant Command as Satellite command
+  participant UseCase as Search/availability use case
+  participant Gateway as SatelliteCatalogGateway
+  participant Geometry as Satellite coverage
+  participant Timeline as Sentinel diagnostics
+
+  Command->>UseCase: viewport snapshot + UTC criteria + AbortSignal
+  UseCase->>Timeline: begin correlated operation
+  UseCase->>UseCase: validate bounds, dates, level, cloud limit
+  UseCase->>Gateway: bounded criteria, item cap, operation ID, signal
+  Gateway-->>UseCase: readonly scenes + total matched
+  UseCase->>UseCase: enforce level/cap and deduplicate IDs
+  UseCase->>Geometry: coverage and center-to-edge evidence
+  Geometry-->>UseCase: percent, relation, distance, warning
+  UseCase->>Timeline: complete, fail, or cancel matching operation
+  UseCase-->>Command: stable UTC date groups or typed error
+```
+
+Date endpoints are inclusive and searches are limited to 62 days and 100 matched items.
+The use cases reject a mixed L1C/L2A response instead of substituting product levels.
+Availability uses the lowest scene-level cloud value as the per-day summary. A newer
+operation replaces the visible timeline; late transitions from an older request are
+ignored by operation ID. Logs contain correlation IDs, counts, durations, and safe error
+codes, never exact viewport geometry.
+
 ## Teardown ownership
 
 `MapWorkspace` destroys the facade and flushes camera persistence. The facade cancels a

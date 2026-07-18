@@ -86,9 +86,12 @@ footprint without resetting other workspace state. The adjacent metadata pane ex
 acquisition, tile/orbit/product identity, attribution, fit-footprint, and imagery
 visibility actions.
 
-The current implementation shows live viewport coordinates and the compact selector.
-Marker targeting, date/product filters, search, results, metadata, and imagery rendering
-are unavailable.
+The current implementation shows live viewport coordinates and the compact selector. The
+internal application core now captures immutable viewport bounds, validates bounded
+inclusive UTC criteria, keeps L1C/L2A exclusive, and derives grouped scene coverage and
+edge evidence behind a catalog port. It is not yet connected to a STAC adapter or the
+Satellite controls, so marker targeting, date/product filters, user-triggered search,
+results, metadata, and imagery rendering remain unavailable.
 
 ### Markers
 

@@ -350,7 +350,7 @@ classDiagram
     +LocalDate startDate
     +LocalDate endDate
     +percent maximumCloudCover
-    +ProductLevel[] levels
+    +ProductLevel productLevel
   }
   class ViewportTarget {
     +GeoBounds bounds
@@ -374,6 +374,12 @@ classDiagram
     +SceneAsset[] assets
     +string attributionKey
   }
+  class SatelliteSceneCoverage {
+    +percent viewportCoverage
+    +InterestPointRelation relation
+    +kilometers distanceToSceneEdge
+    +boolean edgeWarning
+  }
   class SceneDaySummary {
     +LocalDate date
     +number sceneCount
@@ -385,13 +391,23 @@ classDiagram
   SatelliteSearchQuery *-- ViewportTarget
   SatelliteSearchQuery *-- MarkerAreaTarget
   SatelliteSearchQuery "1" --> "many" SatelliteScene
+  SatelliteScene "1" --> "1" SatelliteSceneCoverage
   SatelliteScene "many" --> "one" SceneDaySummary
 ```
 
-`SearchTarget` is exactly one viewport or marker-area variant. Product levels are
-restricted to `L1C` and `L2A`. A marker search uses an explicit radius; a point alone
-has no meaningful intersection area. Calendar summaries are derived from returned scenes
-using a declared display timezone and are not persisted as authoritative data.
+`SearchTarget` is exactly one viewport or marker-area variant. The implemented viewport
+snapshot contains immutable WGS84 bounds and center. Product level is one exclusive
+`L1C` or `L2A` value; a response containing the other level is rejected. Date endpoints
+are inclusive UTC dates. A marker search uses an explicit radius; a point alone has no
+meaningful intersection area. Calendar summaries and viewport coverage are derived from
+returned scenes and are not persisted as authoritative data.
+
+Scene identity is collection plus item ID. Search results are deduplicated on that key,
+ordered by acquisition instant then item ID, and grouped by UTC date. Coverage is the
+geodesic area intersection divided by submitted viewport area. The interest point is
+classified as inside, boundary, or outside and carries its geodesic distance to the
+nearest footprint ring. A visual asset is explicitly a renderable COG, unsupported JP2,
+or unavailable; unsupported L1C imagery is never replaced with an L2A scene.
 
 | Provider data             | Validated application attributes                                                                                                                       | Persistence                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |

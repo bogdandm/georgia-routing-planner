@@ -35,7 +35,7 @@ describe('SentinelQueryDiagnosticsStore', () => {
     store.subscribe(listener);
 
     store.beginOperation('operation-1');
-    store.beginStep('capture-viewport');
+    store.beginStep('operation-1', 'capture-viewport');
     clock.monotonic = 125;
     store.refreshRunningDurations();
 
@@ -51,8 +51,8 @@ describe('SentinelQueryDiagnosticsStore', () => {
     });
 
     clock.monotonic = 180;
-    store.completeStep('capture-viewport');
-    store.completeOperation();
+    store.completeStep('operation-1', 'capture-viewport');
+    store.completeOperation('operation-1');
 
     expect(store.getSnapshot()).toMatchObject({
       status: 'success',
@@ -77,19 +77,19 @@ describe('SentinelQueryDiagnosticsStore', () => {
     const store = new SentinelQueryDiagnosticsStore(clock);
 
     expect(() => {
-      store.completeStep('query-stac-catalog');
+      store.completeStep('missing-operation', 'query-stac-catalog');
     }).not.toThrow();
     store.beginOperation('failed-operation');
-    store.beginStep('query-stac-catalog');
-    store.beginStep('fetch-result-pages');
-    store.completeOperation();
+    store.beginStep('failed-operation', 'query-stac-catalog');
+    store.beginStep('failed-operation', 'fetch-result-pages');
+    store.completeOperation('failed-operation');
     expect(store.getSnapshot().status).toBe('running');
     expect(
       store.getSnapshot().steps.find((step) => step.id === 'fetch-result-pages')
         ?.status,
     ).toBe('waiting');
     clock.monotonic = 75;
-    store.failStep('query-stac-catalog');
+    store.failStep('failed-operation', 'query-stac-catalog');
 
     expect(store.getSnapshot()).toMatchObject({
       status: 'error',
@@ -101,9 +101,9 @@ describe('SentinelQueryDiagnosticsStore', () => {
 
     clock.monotonic = 100;
     store.beginOperation('cancelled-operation');
-    store.beginStep('fetch-result-pages');
+    store.beginStep('cancelled-operation', 'fetch-result-pages');
     clock.monotonic = 140;
-    store.cancelOperation();
+    store.cancelOperation('cancelled-operation');
 
     expect(store.getSnapshot()).toMatchObject({
       status: 'cancelled',
@@ -112,5 +112,25 @@ describe('SentinelQueryDiagnosticsStore', () => {
     expect(
       store.getSnapshot().steps.find((step) => step.id === 'fetch-result-pages'),
     ).toMatchObject({ status: 'cancelled', durationMs: 40 });
+  });
+
+  it('ignores late transitions from an operation replaced by a newer request', () => {
+    const store = new SentinelQueryDiagnosticsStore(new ControllableClock());
+
+    store.beginOperation('older');
+    store.beginStep('older', 'query-stac-catalog');
+    store.beginOperation('newer');
+    store.beginStep('newer', 'capture-viewport');
+    store.failOperation('older');
+    store.completeStep('older', 'query-stac-catalog');
+
+    expect(store.getSnapshot()).toMatchObject({
+      operationId: 'newer',
+      status: 'running',
+    });
+    expect(store.getSnapshot().steps[0]).toMatchObject({
+      id: 'capture-viewport',
+      status: 'running',
+    });
   });
 });

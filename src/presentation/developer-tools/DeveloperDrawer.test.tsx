@@ -85,9 +85,12 @@ describe('DeveloperDrawer', () => {
     const user = userEvent.setup();
     const services = createTestServices();
     services.sentinelQueryDiagnostics.beginOperation('sentinel-test');
-    services.sentinelQueryDiagnostics.beginStep('query-stac-catalog');
-    services.sentinelQueryDiagnostics.completeStep('query-stac-catalog');
-    services.sentinelQueryDiagnostics.beginStep('fetch-result-pages');
+    services.sentinelQueryDiagnostics.beginStep('sentinel-test', 'query-stac-catalog');
+    services.sentinelQueryDiagnostics.completeStep(
+      'sentinel-test',
+      'query-stac-catalog',
+    );
+    services.sentinelQueryDiagnostics.beginStep('sentinel-test', 'fetch-result-pages');
 
     render(
       <RuntimeServicesProvider services={services}>

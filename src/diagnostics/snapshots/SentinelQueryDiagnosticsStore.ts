@@ -124,8 +124,8 @@ export class SentinelQueryDiagnosticsStore implements SentinelQueryDiagnostics {
     this.notify();
   }
 
-  public beginStep(stepId: SentinelQueryStepId): void {
-    if (this.#snapshot.status !== 'running') return;
+  public beginStep(operationId: string, stepId: SentinelQueryStepId): void {
+    if (!this.isCurrentRunningOperation(operationId)) return;
     if (this.#snapshot.steps.some((step) => step.status === 'running')) return;
 
     const step = this.#snapshot.steps.find((candidate) => candidate.id === stepId);
@@ -135,11 +135,13 @@ export class SentinelQueryDiagnosticsStore implements SentinelQueryDiagnostics {
     this.updateStep(stepId, 'running', 0);
   }
 
-  public completeStep(stepId: SentinelQueryStepId): void {
+  public completeStep(operationId: string, stepId: SentinelQueryStepId): void {
+    if (!this.isCurrentRunningOperation(operationId)) return;
     this.finishStep(stepId, 'success');
   }
 
-  public failStep(stepId: SentinelQueryStepId): void {
+  public failStep(operationId: string, stepId: SentinelQueryStepId): void {
+    if (!this.isCurrentRunningOperation(operationId)) return;
     if (!this.finishStep(stepId, 'error')) return;
 
     this.#snapshot = {
@@ -150,8 +152,8 @@ export class SentinelQueryDiagnosticsStore implements SentinelQueryDiagnostics {
     this.notify();
   }
 
-  public completeOperation(): void {
-    if (this.#snapshot.status !== 'running') return;
+  public completeOperation(operationId: string): void {
+    if (!this.isCurrentRunningOperation(operationId)) return;
     if (this.#snapshot.steps.some((step) => step.status === 'running')) return;
 
     this.#snapshot = {
@@ -166,8 +168,26 @@ export class SentinelQueryDiagnosticsStore implements SentinelQueryDiagnostics {
     this.notify();
   }
 
-  public cancelOperation(): void {
-    if (this.#snapshot.status !== 'running') return;
+  public failOperation(operationId: string): void {
+    if (!this.isCurrentRunningOperation(operationId)) return;
+
+    const runningStep = this.#snapshot.steps.find((step) => step.status === 'running');
+    if (runningStep !== undefined) {
+      this.failStep(operationId, runningStep.id);
+      return;
+    }
+
+    this.#snapshot = {
+      ...this.#snapshot,
+      status: 'error',
+      durationMs: this.readOperationDuration(),
+    };
+    this.#stepStartedAt.clear();
+    this.notify();
+  }
+
+  public cancelOperation(operationId: string): void {
+    if (!this.isCurrentRunningOperation(operationId)) return;
 
     const now = this.clock.monotonicNow();
     const durationMs = this.durationSince(this.#operationStartedAt, now);
@@ -252,6 +272,12 @@ export class SentinelQueryDiagnosticsStore implements SentinelQueryDiagnostics {
 
   private readOperationDuration(): number {
     return this.durationSince(this.#operationStartedAt, this.clock.monotonicNow());
+  }
+
+  private isCurrentRunningOperation(operationId: string): boolean {
+    return (
+      this.#snapshot.operationId === operationId && this.#snapshot.status === 'running'
+    );
   }
 
   private durationSince(startedAt: number | null, now: number): number {

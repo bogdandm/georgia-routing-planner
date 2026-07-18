@@ -9,8 +9,9 @@ This is the active implementation plan for the Satellite imagery workspace descr
 [`docs/map-providers.md`](./docs/map-providers.md). It replaces the completed map
 foundation plan that previously occupied this file.
 
-- Status: **planning; the live Sentinel diagnostics timeline foundation is implemented,
-  while search and rendering behavior remain unavailable**.
+- Status: **implementation started; the live Sentinel diagnostics timeline foundation is
+  implemented, catalog feasibility is verified, and the provider-independent search core
+  is the active package while raster feasibility remains open**.
 - Active branch: `feature/sentinel-imagery-plan`, created from `main` on 2026-07-19.
 - Approval boundary: all implementation remains on a feature branch and reaches `main`
   only after the reviewed branch state is explicitly approved.
@@ -34,8 +35,8 @@ merge into `main`.
 | ------- | ------------------------------------------------- | ----------- |
 | S5.0    | Plan, branch, prototype ledger, governance        | Done        |
 | S5.1    | Persistent drawer and live Sentinel timeline      | In progress |
-| S5.2    | Catalog and raster feasibility decision           | Pending     |
-| S5.3    | Models, viewport geometry, and use cases          | Pending     |
+| S5.2    | Catalog and raster feasibility decision           | In progress |
+| S5.3    | Models, viewport geometry, and use cases          | Done        |
 | S5.4    | Validated STAC gateway and configuration          | Pending     |
 | S5.5    | Search sidebar and acquisition calendar           | Pending     |
 | S5.6    | MapLibre true-color imagery and footprint adapter | Pending     |
@@ -378,6 +379,30 @@ The chosen path and rejected alternatives become durable evidence in
 `docs/map-providers.md` before later work packages add product behavior. If no
 acceptable path exists, stop after the gate and request a product or deployment decision
 rather than weakening privacy/static-hosting constraints.
+
+### 7.3 Current gate evidence (2026-07-19)
+
+- Earth Search v1 still exposes `sentinel-2-l1c` and `sentinel-2-l2a`, and a bounded
+  Georgia query returned concrete items from both collections.
+- The representative L2A item exposes a 220,705,355-byte EPSG:32638 true-color COG.
+  Anonymous HTTPS range requests returned `206 Partial Content` with permissive CORS.
+- The representative L1C item exposes a 104,134,127-byte EPSG:32638 true-color JP2 as
+  `s3://.../TCI.jp2`; the item contains no thumbnail even though the collection-level
+  template advertises one. Translating the known public bucket/key to HTTPS permits
+  anonymous CORS range requests, so transport is feasible.
+- The remaining L1C blocker is bounded browser decoding and reprojection. Available
+  generic OpenJPEG/WASM decoders do not establish a maintained MapLibre adapter that
+  reads only the visible JP2 region; downloading and decoding the whole 104 MB scene is
+  outside the memory, cancellation, and interaction constraints.
+- `geotiff.js` supports remote COG windows, overviews, workers, and cancellation for
+  L2A, but it is a raster reader rather than a reprojection/rendering adapter. The known
+  MapLibre COG protocol still requires EPSG:3857 while the sample is UTM EPSG:32638.
+
+The catalog decision is therefore usable for provider-independent search work. S5.3 may
+proceed without embedding a raster assumption, but S5.6 cannot claim L1C apply support
+until the gate either proves a bounded JP2 path or receives an explicit product or
+deployment decision. L1C must remain a distinct, honestly unsupported render asset; it
+must never be substituted with the related L2A scene.
 
 ## 8. Search and derived-data contracts
 
@@ -949,16 +974,19 @@ The same live area/month query returned L1C metadata, but the visual asset diffe
 }
 ```
 
-The browser cannot fetch the `s3://` URL through normal HTTP and does not provide a
-MapLibre-ready JPEG 2000 tile decoder. Therefore:
+The browser cannot fetch the literal `s3://` URL through normal HTTP. For this known
+public AWS dataset, the bucket/key can be mapped to
+`https://sentinel-s2-l1c.s3.amazonaws.com/.../TCI.jp2`; the representative object
+supports anonymous CORS range requests. The provider item itself still has no thumbnail,
+and Chrome does not provide a MapLibre-ready JPEG 2000 region decoder. Therefore:
 
 ```text
 L1C STAC search/metadata
 -> works through the same JSON query chain
 
 L1C map rendering
--> requires an approved HTTPS asset/tile service
-   or a browser JP2 + reprojection adapter
+-> requires an approved tile service
+   or a bounded browser JP2 + reprojection adapter
 -> remains an S5.2 feasibility decision
 ```
 
@@ -1128,6 +1156,14 @@ Acceptance:
   added.
 - The spike is not left wired into production UI.
 
+Current evidence:
+
+- Earth Search catalog/CORS and concrete Georgia L1C/L2A item contracts are revalidated.
+- L2A COG and L1C JP2 bounded range requests are proven; neither asset was downloaded in
+  full.
+- L1C bounded decode/reprojection remains unresolved, so this package stays in progress
+  and no production raster dependency is selected yet.
+
 Commit: `docs(satellite): choose catalog and raster path`
 
 ### S5.3 Add satellite models, viewport search geometry, and use cases
@@ -1153,6 +1189,23 @@ Tests in the same commit:
 - Point inside/outside/near-edge distance semantics.
 - Viewport bounds capture, antimeridian rejection/handling, and no exact geometry in
   diagnostics.
+
+Current evidence:
+
+- `SatelliteScene`, criteria, coverage, acquisition, availability, and result DTOs are
+  implemented without React, MapLibre, STAC, or transport dependencies.
+- `SearchSatelliteScenes` and `LoadSatelliteAvailability` enforce inclusive UTC dates, a
+  62-day range, a 100-item cap, exclusive product levels, stable deduplication, and
+  cancellation through the catalog port.
+- Focused Turf 7.3.5 modules provide polygon intersection/area and geodesic edge
+  distance; each selected package is MIT-licensed and the full Turf bundle is not used.
+- MapLibre exposes a copied WGS84 viewport through `MapViewportProvider`; invalid and
+  antimeridian-crossing bounds are rejected before catalog access.
+- Timeline transitions now carry operation IDs, so a superseded request cannot mutate
+  the newer request's live status. Tests verify exact viewport values do not enter logs.
+- `pnpm check` passes with 102 tests, 91.16% statement coverage, 83.48% branch coverage,
+  integration tests, strict type checking, linting, formatting, repository audit, and a
+  production build.
 
 Commit: `feat(satellite): model viewport scene search`
 

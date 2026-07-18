@@ -56,6 +56,15 @@ class FakeNativeMap {
     return { lng: this.#longitude, lat: this.#latitude };
   }
 
+  public getBounds() {
+    return {
+      getWest: () => 44.2,
+      getSouth: () => 41.4,
+      getEast: () => 45.4,
+      getNorth: () => 42.2,
+    };
+  }
+
   public getZoom(): number {
     return this.#zoom;
   }
@@ -162,8 +171,13 @@ describe('MapLibreFacade', () => {
       bearing: 12,
       pitch: 35,
     });
+    expect(facade.getViewportSnapshot()).toEqual({
+      bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
+      center: { longitude: 44.8, latitude: 41.7 },
+    });
 
     facade.destroy();
+    expect(facade.getViewportSnapshot()).toBeNull();
     expect(nativeMap.listenerCount()).toBe(0);
     expect(
       services.logger

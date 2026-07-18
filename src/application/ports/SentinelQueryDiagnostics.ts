@@ -19,9 +19,10 @@ export type SentinelQueryStepId = (typeof sentinelQueryStepIds)[number];
  */
 export interface SentinelQueryDiagnostics {
   beginOperation(operationId: string): void;
-  beginStep(stepId: SentinelQueryStepId): void;
-  completeStep(stepId: SentinelQueryStepId): void;
-  failStep(stepId: SentinelQueryStepId): void;
-  completeOperation(): void;
-  cancelOperation(): void;
+  beginStep(operationId: string, stepId: SentinelQueryStepId): void;
+  completeStep(operationId: string, stepId: SentinelQueryStepId): void;
+  failStep(operationId: string, stepId: SentinelQueryStepId): void;
+  completeOperation(operationId: string): void;
+  failOperation(operationId: string): void;
+  cancelOperation(operationId: string): void;
 }

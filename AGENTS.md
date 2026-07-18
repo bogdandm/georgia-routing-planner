@@ -30,6 +30,10 @@ Rules:
   and obtain approval again.
 - Commits are allowed and encouraged on feature branches after relevant checks pass.
   Keep commits focused and use clear imperative or Conventional Commit-style messages.
+- Do not implement an entire phase as one mega-commit. `PLAN.md` must split phase work
+  into smaller independently reviewable commits; each implementation commit must include
+  its relevant automated tests and leave the repository in a buildable, testable state.
+  Do not defer most of a phase's tests to a final test-only commit.
 - Do not create a remote, push, open a pull request, change branch protection, or
   publish/deploy unless the user requests that external action.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to

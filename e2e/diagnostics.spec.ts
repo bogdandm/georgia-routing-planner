@@ -1,6 +1,13 @@
 import { readFile } from 'node:fs/promises';
 
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+
+import { installMapProviderFixtures } from './installMapProviderFixtures';
+
+test.beforeEach(async ({ page }) => {
+  await installMapProviderFixtures(page);
+});
 
 test('captures failures and exports an inspectable redacted bundle', async ({
   page,
@@ -16,6 +23,26 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     }, 0);
   });
   await page.getByRole('button', { name: 'Developer diagnostics' }).click();
+  await page.getByRole('tab', { name: 'Map' }).click();
+  await expect(page.getByText('Exact current camera')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Ordered map sources' })).toContainText(
+    'basemap-vector',
+  );
+  await page.getByRole('switch', { name: 'Show tile boundaries' }).click();
+  const mapDrawerAccessibility = await new AxeBuilder({ page })
+    .include('.MuiDrawer-paper')
+    .analyze();
+  expect(
+    mapDrawerAccessibility.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Check configured providers' }).click();
+  await expect(page.getByText('Vector provider reachability')).toBeVisible();
+  await expect(page.getByText('Terrain provider reachability')).toBeVisible();
+
   await page.getByRole('tab', { name: /Logs/ }).click();
   await expect(page.getByText('runtime.promise.unhandled')).toBeVisible();
   await page.getByRole('tab', { name: 'Overview' }).click();
@@ -33,15 +60,27 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   const bundle = JSON.parse(await readFile(downloadPath, 'utf8')) as {
     schemaVersion: number;
     events: { name: string }[];
+    map: {
+      styleId: string;
+      sourceIds: string[];
+      layerIds: string[];
+      webGlCapabilities: { contextType: string };
+    } | null;
   };
   const serialized = JSON.stringify(bundle);
 
-  expect(bundle.schemaVersion).toBe(1);
+  expect(bundle.schemaVersion).toBe(2);
   expect(bundle.events.map((event) => event.name)).toContain(
     'react.error-boundary.caught',
   );
   expect(bundle.events.map((event) => event.name)).toContain(
     'runtime.promise.unhandled',
   );
+  expect(bundle.map).toMatchObject({
+    styleId: 'Georgia hiking basemap v1',
+    sourceIds: ['basemap-vector'],
+    webGlCapabilities: { contextType: 'webgl2' },
+  });
+  expect(bundle.map?.layerIds.length).toBeGreaterThan(10);
   expect(serialized).not.toContain('token=private');
 });

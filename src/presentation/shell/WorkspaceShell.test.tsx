@@ -3,14 +3,14 @@ import { userEvent } from '@testing-library/user-event';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { App } from '@/app/App';
-import { ApplicationServicesProvider } from '@/app/bootstrap/ApplicationServicesProvider';
-import type { ApplicationServices } from '@/app/bootstrap/createApplicationServices';
-import { createAppTheme } from '@/app/theme/createAppTheme';
-import { useUiStore } from '@/features/app-shell/uiStore';
-import { createTestServices } from '../../test/helpers/createTestServices';
+import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
+import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { createTestServices } from '../../../test/helpers/createTestServices';
 
-let services: ApplicationServices;
+let services: RuntimeServices;
 
 beforeEach(async () => {
   services = createTestServices();
@@ -21,6 +21,7 @@ beforeEach(async () => {
     developerDrawerOpen: false,
     developerMode: false,
     elevationExpanded: true,
+    mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
     settingsOpen: false,
   });
 });
@@ -31,20 +32,20 @@ afterEach(async () => {
   services.queryClient.clear();
 });
 
-function renderApp() {
+function renderWorkspaceShell() {
   return render(
-    <ApplicationServicesProvider services={services}>
+    <RuntimeServicesProvider services={services}>
       <ThemeProvider theme={createAppTheme()}>
-        <App mapSurface={<div aria-label="Fake map">Local map ready</div>} />
+        <WorkspaceShell mapSurface={<div aria-label="Fake map">Local map ready</div>} />
       </ThemeProvider>
-    </ApplicationServicesProvider>,
+    </RuntimeServicesProvider>,
   );
 }
 
-describe('App', () => {
+describe('WorkspaceShell', () => {
   it('navigates intentional empty states and toggles the elevation panel', async () => {
     const user = userEvent.setup();
-    renderApp();
+    renderWorkspaceShell();
 
     expect(
       screen.getByRole('heading', { name: 'Georgia Routing Planner' }),
@@ -66,7 +67,7 @@ describe('App', () => {
 
   it('persists developer mode and opens the diagnostics drawer', async () => {
     const user = userEvent.setup();
-    renderApp();
+    renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Open settings' }));
     await user.click(

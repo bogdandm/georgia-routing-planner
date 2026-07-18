@@ -28,30 +28,91 @@ export const healthCheckSchema = z
   })
   .strict();
 
-export const diagnosticBundleSchema = z
+const buildSchema = z
   .object({
-    schemaVersion: z.literal(1),
-    exportedAt: z.iso.datetime(),
-    build: z
-      .object({
-        appVersion: z.string(),
-        commit: z.string(),
-        timestamp: z.string(),
-        mode: z.string(),
-      })
-      .strict(),
-    runtime: z
-      .object({
-        userAgent: z.string(),
-        language: z.string(),
-        online: z.boolean(),
-      })
-      .strict(),
-    reproductionNotes: z.string(),
-    healthChecks: z.array(healthCheckSchema),
-    events: z.array(diagnosticEventSchema),
+    appVersion: z.string(),
+    commit: z.string(),
+    timestamp: z.string(),
+    mode: z.string(),
   })
   .strict();
 
+const runtimeSchema = z
+  .object({
+    userAgent: z.string(),
+    language: z.string(),
+    online: z.boolean(),
+  })
+  .strict();
+
+const commonBundleShape = {
+  exportedAt: z.iso.datetime(),
+  build: buildSchema,
+  runtime: runtimeSchema,
+  reproductionNotes: z.string(),
+  healthChecks: z.array(healthCheckSchema),
+  events: z.array(diagnosticEventSchema),
+};
+
+export const diagnosticBundleV1Schema = z
+  .object({ schemaVersion: z.literal(1), ...commonBundleShape })
+  .strict();
+
+export const mapDiagnosticSnapshotSchema = z
+  .object({
+    lifecycle: z.enum(['loading', 'ready', 'degraded', 'fatal']),
+    camera: z
+      .object({
+        longitude: z.number().min(-180).max(180),
+        latitude: z.number().min(-85).max(85),
+        zoom: z.number(),
+        bearing: z.number(),
+        pitch: z.number(),
+      })
+      .strict(),
+    terrainMode: z.enum(['flat', 'terrain']),
+    styleId: z.string(),
+    sourceIds: z.array(z.string()),
+    layerIds: z.array(z.string()),
+    lastIdleAt: z.iso.datetime().nullable(),
+    webGlContext: z.enum(['available', 'lost', 'restored', 'unknown']),
+    webGlCapabilities: z
+      .object({
+        contextType: z.enum(['webgl2', 'webgl', 'unavailable', 'unknown']),
+        version: z.string().nullable(),
+        maxTextureSize: z.number().nullable(),
+        antialias: z.boolean().nullable(),
+      })
+      .strict(),
+    recoverableFailures: z.array(
+      z
+        .object({
+          category: z.enum([
+            'base-vector',
+            'glyph-sprite',
+            'terrain',
+            'style',
+            'webgl',
+            'unknown',
+          ]),
+          sourceId: z.string().nullable(),
+          count: z.number().int().nonnegative(),
+          lastOccurredAt: z.iso.datetime(),
+        })
+        .strict(),
+    ),
+    message: z.string().nullable(),
+  })
+  .strict();
+
+export const diagnosticBundleSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    ...commonBundleShape,
+    map: mapDiagnosticSnapshotSchema.nullable(),
+  })
+  .strict();
+
+export type DiagnosticBundleV1 = z.infer<typeof diagnosticBundleV1Schema>;
 export type DiagnosticBundle = z.infer<typeof diagnosticBundleSchema>;
 export type HealthCheckResult = z.infer<typeof healthCheckSchema>;

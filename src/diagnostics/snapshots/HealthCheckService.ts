@@ -1,13 +1,19 @@
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
+import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
+import type { KyInstance } from 'ky';
 
+/** Runs bounded, non-destructive browser, storage, map, and provider self-checks. */
 export class HealthCheckService {
   public constructor(
     private readonly clock: Clock,
     private readonly database: AppDatabase,
     private readonly logger: DiagnosticLogger,
+    private readonly mapSnapshots: MapDiagnosticsSnapshotStore,
+    private readonly httpClient: KyInstance,
   ) {}
 
   public async run(): Promise<readonly HealthCheckResult[]> {
@@ -18,12 +24,51 @@ export class HealthCheckService {
     const results = [
       this.checkBrowserCapabilities(),
       this.checkWebGl(),
+      this.checkMapReadiness(),
       indexedDb,
       storageEstimate,
     ];
     this.logger.log({
       level: results.some((result) => result.status === 'fail') ? 'warn' : 'info',
       name: 'health.run.completed',
+      data: {
+        count: results.length,
+        status: results.some((result) => result.status === 'fail') ? 'fail' : 'pass',
+      },
+    });
+    return results;
+  }
+
+  /**
+   * Probes configured providers only after an explicit user action. Cancellation is
+   * owned by the caller; application startup must never wait for this operation.
+   */
+  public async runProviderReachability(
+    configuration: MapProviderConfiguration,
+    signal: AbortSignal,
+  ): Promise<readonly HealthCheckResult[]> {
+    const terrainProbeUrl = configuration.terrain.tileUrl
+      .replace('{z}', '0')
+      .replace('{x}', '0')
+      .replace('{y}', '0');
+    const results = await Promise.all([
+      this.checkProvider(
+        'Vector provider reachability',
+        configuration.vector.tileJsonUrl,
+        configuration.policy.requestTimeoutMs,
+        signal,
+      ),
+      this.checkProvider(
+        'Terrain provider reachability',
+        terrainProbeUrl,
+        configuration.policy.requestTimeoutMs,
+        signal,
+        { Range: 'bytes=0-1023' },
+      ),
+    ]);
+    this.logger.log({
+      level: results.some((result) => result.status === 'fail') ? 'warn' : 'info',
+      name: 'health.providers.completed',
       data: {
         count: results.length,
         status: results.some((result) => result.status === 'fail') ? 'fail' : 'pass',
@@ -58,6 +103,15 @@ export class HealthCheckService {
 
   private checkWebGl(): HealthCheckResult {
     const startedAt = this.clock.monotonicNow();
+    if (typeof WebGLRenderingContext === 'undefined') {
+      return {
+        name: 'WebGL',
+        status: 'fail',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'WebGL is unavailable.',
+        remediation: 'Enable hardware acceleration and restart Chrome.',
+      };
+    }
     const canvas = document.createElement('canvas');
     const available =
       canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }) !== null ||
@@ -72,6 +126,70 @@ export class HealthCheckService {
         ? {}
         : { remediation: 'Enable hardware acceleration and restart Chrome.' }),
     };
+  }
+
+  private checkMapReadiness(): HealthCheckResult {
+    const startedAt = this.clock.monotonicNow();
+    const snapshot = this.mapSnapshots.getSnapshot();
+    if (snapshot === null) {
+      return {
+        name: 'Map readiness',
+        status: 'warn',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'The map has not published a diagnostics snapshot yet.',
+        remediation: 'Open the map workspace and run the checks again.',
+      };
+    }
+
+    return {
+      name: 'Map readiness',
+      status:
+        snapshot.lifecycle === 'fatal'
+          ? 'fail'
+          : snapshot.lifecycle === 'degraded'
+            ? 'warn'
+            : 'pass',
+      durationMs: this.clock.monotonicNow() - startedAt,
+      summary: `Map lifecycle is ${snapshot.lifecycle}; WebGL context is ${snapshot.webGlContext}.`,
+      ...(snapshot.lifecycle === 'fatal'
+        ? {
+            remediation:
+              'Check hardware acceleration and provider configuration, then reload.',
+          }
+        : {}),
+    };
+  }
+
+  private async checkProvider(
+    name: string,
+    url: string,
+    timeoutMs: number,
+    signal: AbortSignal,
+    headers?: Readonly<Record<string, string>>,
+  ): Promise<HealthCheckResult> {
+    const startedAt = this.clock.monotonicNow();
+    try {
+      await this.httpClient.get(url, {
+        signal,
+        timeout: timeoutMs,
+        ...(headers === undefined ? {} : { headers }),
+      });
+      return {
+        name,
+        status: 'pass',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'The configured provider responded successfully.',
+      };
+    } catch {
+      return {
+        name,
+        status: 'fail',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'The configured provider did not respond successfully.',
+        remediation:
+          'Check connectivity and provider status. No automatic provider switch was attempted.',
+      };
+    }
   }
 
   private async checkIndexedDb(): Promise<HealthCheckResult> {
@@ -97,12 +215,21 @@ export class HealthCheckService {
 
   private async checkStorageEstimate(): Promise<HealthCheckResult> {
     const startedAt = this.clock.monotonicNow();
-    const estimate = await navigator.storage.estimate();
-    return {
-      name: 'Storage estimate',
-      status: 'pass',
-      durationMs: this.clock.monotonicNow() - startedAt,
-      summary: `Using ${String(estimate.usage ?? 0)} of ${String(estimate.quota ?? 0)} bytes.`,
-    };
+    try {
+      const estimate = await navigator.storage.estimate();
+      return {
+        name: 'Storage estimate',
+        status: 'pass',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: `Using ${String(estimate.usage ?? 0)} of ${String(estimate.quota ?? 0)} bytes.`,
+      };
+    } catch {
+      return {
+        name: 'Storage estimate',
+        status: 'warn',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'The browser did not provide a storage quota estimate.',
+      };
+    }
   }
 }

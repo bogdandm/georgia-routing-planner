@@ -2,10 +2,16 @@ import { QueryClient } from '@tanstack/react-query';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import type { ApplicationServices } from '@/app/bootstrap/createApplicationServices';
+import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
+import {
+  defaultMapProviderConfigurationInput,
+  parseMapProviderConfiguration,
+} from '@/bootstrap/configuration/MapProviderConfiguration';
+import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
+import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 
@@ -31,7 +37,7 @@ class TestIdGenerator implements IdGenerator {
   }
 }
 
-export function createTestServices(): ApplicationServices {
+export function createTestServices(): RuntimeServices {
   const clock = new TestClock();
   const idGenerator = new TestIdGenerator();
   const logger = new BoundedDiagnosticLogger(clock, idGenerator);
@@ -42,16 +48,38 @@ export function createTestServices(): ApplicationServices {
     timestamp: '2026-07-18T00:00:00.000Z',
     mode: 'test',
   };
-  const healthChecks = new HealthCheckService(clock, database, logger);
+  const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const httpClient = createHttpClient(logger);
+  const healthChecks = new HealthCheckService(
+    clock,
+    database,
+    logger,
+    mapDiagnostics,
+    httpClient,
+  );
 
   return {
     buildInfo,
     clock,
     database,
-    diagnostics: new DiagnosticsService(buildInfo, logger, healthChecks),
-    httpClient: createHttpClient(logger),
+    diagnostics: new DiagnosticsService(
+      buildInfo,
+      logger,
+      healthChecks,
+      mapDiagnostics,
+    ),
+    httpClient,
     idGenerator,
     logger,
+    mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
+    mapDiagnostics,
+    mapProviderConfiguration: {
+      status: 'valid',
+      value: parseMapProviderConfiguration(
+        defaultMapProviderConfigurationInput,
+        'https://example.test/georgia-routing-planner/',
+      ),
+    },
     queryClient: new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     }),

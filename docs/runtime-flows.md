@@ -1,0 +1,111 @@
+# Runtime flows
+
+## Startup and map readiness
+
+```mermaid
+sequenceDiagram
+  participant Entry as main.tsx
+  participant Root as createRuntimeServices
+  participant UI as WorkspaceShell
+  participant Workspace as MapWorkspace
+  participant Storage as MapCameraRepository
+  participant Facade as MapLibreFacade
+  participant Map as MapLibre
+
+  Entry->>Root: construct adapters and validate configuration
+  Root-->>Entry: RuntimeServices
+  Entry->>UI: render providers and error boundary
+  UI->>Workspace: mount persistent map area
+  Workspace->>Storage: load saved camera with deadline
+  Storage-->>Workspace: valid camera, null, or failure
+  Workspace->>Map: mount once with initial camera and pure style
+  Workspace->>Facade: attach native map
+  Map-->>Facade: load and idle events
+  Facade-->>Workspace: serializable ready snapshot
+```
+
+Configuration validation occurs before MapLibre mounts. A configuration failure renders
+a fatal alert without contacting the provider. Camera failure is recoverable: the map
+uses `defaultGeorgiaCamera`. The facade registers native listeners exactly once and
+removes them during teardown.
+
+## Settled camera write
+
+1. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch.
+2. The facade updates its snapshot, notifies React, and calls the camera-settled port.
+3. `SettledCameraPersistence` keeps only the newest camera during its debounce window.
+4. Writes are chained so IndexedDB saves cannot overtake one another.
+5. Save failure is logged and shown as a non-blocking warning; map interaction
+   continues.
+
+This flow intentionally excludes continuous `move`/render events from React, IndexedDB,
+and diagnostics.
+
+## Terrain transition
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant UI as TerrainModeControl
+  participant Facade as MapLibreFacade
+  participant Map as MapLibre
+  participant DEM as Terrain provider
+
+  User->>UI: select 3D
+  UI->>Facade: setTerrainMode(terrain)
+  Facade->>Map: add raster-dem source once
+  Facade->>Map: set terrain and preserve camera intent
+  Map->>DEM: request configured DEM tiles
+  alt source becomes ready
+    Map-->>Facade: sourcedata loaded
+    Facade-->>UI: success / terrain
+  else error, timeout, or cancellation
+    Facade->>Map: clear terrain and remove failed source
+    Facade-->>UI: failed / usable flat map
+  end
+```
+
+Only one terrain transition may run at a time. Repeated requests for the same target
+share its promise; an opposite request receives an explicit failure. This prevents
+duplicate sources, listeners, and out-of-order camera changes.
+
+## Provider and WebGL failures
+
+- `error` events are classified from safe source IDs and normalized messages.
+- Style errors during startup become fatal because no usable basemap exists.
+- Vector, glyph, and terrain errors update capped failure buckets and a degraded
+  snapshot; repeated equivalent events do not create alert or log storms.
+- Retry triggers a repaint and clears the current warning without constructing a new
+  map.
+- `webglcontextlost` is prevented from default disposal, recorded as fatal, and exposed
+  to the user. A restoration event refreshes capabilities and returns the snapshot to
+  ready.
+
+## Diagnostics and health
+
+```mermaid
+flowchart LR
+  Map["MapLibreFacade"] --> Snapshot["Map snapshot store"]
+  Browser["Global/error boundary"] --> Logger["Bounded redacting logger"]
+  HTTP["HTTP hooks"] --> Logger
+  Storage["Persistence"] --> Logger
+  Snapshot --> Drawer["Developer drawer"]
+  Logger --> Drawer
+  Health["Local and explicit provider checks"] --> Diagnostics["Diagnostics service"]
+  Snapshot --> Diagnostics
+  Logger --> Diagnostics
+  Diagnostics --> Bundle["Local schema-v2 JSON download"]
+```
+
+Logging is best-effort and must never fail the primary operation. Redaction happens
+before an event enters the bounded buffer. Bundle creation copies serializable state,
+coarsens camera location, and creates a local object URL that is revoked immediately
+after download. Nothing is uploaded.
+
+## Teardown ownership
+
+`MapWorkspace` destroys the facade and flushes camera persistence. The facade cancels a
+pending terrain wait, removes MapLibre and WebGL listeners, clears subscribers, and
+releases the native map reference. React effects also remove online/offline listeners
+and reset developer-only debug flags. New integrations must preserve this single-owner
+cleanup model.

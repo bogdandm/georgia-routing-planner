@@ -1,13 +1,26 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-test('loads and reloads the network-free shell under a repository subpath', async ({
+import {
+  installMapProviderFixtures,
+  isConfiguredProviderRequest,
+} from './installMapProviderFixtures';
+
+test.beforeEach(async ({ page }) => {
+  await installMapProviderFixtures(page);
+});
+
+test('loads the production map style and reloads under a repository subpath', async ({
   page,
 }) => {
   const externalRequests: string[] = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.protocol.startsWith('http') && url.hostname !== '127.0.0.1') {
+    if (
+      url.protocol.startsWith('http') &&
+      url.hostname !== '127.0.0.1' &&
+      !isConfiguredProviderRequest(url)
+    ) {
       externalRequests.push(request.url());
     }
   });
@@ -17,7 +30,16 @@ test('loads and reloads the network-free shell under a repository subpath', asyn
   await expect(
     page.getByRole('heading', { name: 'Georgia Routing Planner' }),
   ).toBeVisible();
-  await expect(page.getByTestId('map-smoke-canvas')).toBeVisible();
+  await expect(page.getByTestId('map-workspace')).toBeVisible();
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+  );
+  await expect(page.getByText('OpenFreeMap')).toBeVisible();
+  const attributionLink = page.getByRole('link', { name: 'OpenFreeMap' });
+  await attributionLink.focus();
+  await expect(attributionLink).toBeFocused();
+  await expect(attributionLink).toHaveAttribute('href', 'https://openfreemap.org');
   await expect(page.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
     'aria-selected',
     'true',

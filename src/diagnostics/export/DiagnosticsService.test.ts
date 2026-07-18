@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
+import { diagnosticBundleSchema } from '@/diagnostics/export/diagnosticBundleSchema';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
@@ -22,11 +23,53 @@ describe('DiagnosticsService', () => {
     const bundle = services.diagnostics.createBundle('Bearer private-token');
     const serialized = JSON.stringify(bundle);
 
-    expect(bundle.schemaVersion).toBe(1);
+    expect(bundle.schemaVersion).toBe(2);
     expect(bundle.build.commit).toBe('test-commit');
     expect(serialized).not.toContain('private-token');
     expect(serialized).not.toContain('41.7151');
     expect(serialized).not.toContain('secret.gpx');
+  });
+
+  it('exports a coarse camera and serializable map evidence without exact location data', () => {
+    const services = createTestServices();
+    services.mapDiagnostics.update({
+      lifecycle: 'ready',
+      camera: {
+        longitude: 44.8271,
+        latitude: 41.7151,
+        zoom: 9.876,
+        bearing: 12.34,
+        pitch: 35.67,
+      },
+      terrainMode: 'terrain',
+      styleId: 'fixture-style',
+      sourceIds: ['basemap-vector', 'terrain-dem'],
+      layerIds: ['background'],
+      lastIdleAt: '2026-07-18T00:00:00.000Z',
+      webGlContext: 'available',
+      webGlCapabilities: {
+        contextType: 'webgl2',
+        version: 'WebGL 2.0',
+        maxTextureSize: 16_384,
+        antialias: true,
+      },
+      recoverableFailures: [],
+      message: null,
+    });
+
+    const bundle = services.diagnostics.createBundle();
+    expect(diagnosticBundleSchema.parse(bundle).map).toMatchObject({
+      camera: {
+        longitude: 44.8,
+        latitude: 41.7,
+        zoom: 9.88,
+        bearing: 12.3,
+        pitch: 35.7,
+      },
+      terrainMode: 'terrain',
+    });
+    expect(JSON.stringify(bundle)).not.toContain('44.8271');
+    expect(JSON.stringify(bundle)).not.toContain('41.7151');
   });
 
   it('records health results and downloads the current JSON bundle', async () => {
@@ -35,6 +78,8 @@ describe('DiagnosticsService', () => {
       services.clock,
       services.database,
       services.logger,
+      services.mapDiagnostics,
+      services.httpClient,
     );
     vi.spyOn(healthService, 'run').mockResolvedValue([
       {
@@ -48,6 +93,7 @@ describe('DiagnosticsService', () => {
       services.buildInfo,
       services.logger,
       healthService,
+      services.mapDiagnostics,
     );
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')

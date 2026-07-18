@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "vector": {
+    "id": "openfreemap-openmaptiles",
+    "label": "OpenFreeMap",
+    "tileJsonUrl": "https://tiles.openfreemap.org/planet",
+    "glyphsUrl": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+    "attribution": "<a href=\"https://openfreemap.org\" target=\"_blank\">OpenFreeMap</a> · <a href=\"https://www.openmaptiles.org/\" target=\"_blank\">© OpenMapTiles</a> · Data from <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\">OpenStreetMap</a>",
+    "sourceLayers": {
+      "landcover": "landcover",
+      "landuse": "landuse",
+      "parks": "park",
+      "water": "water",
+      "waterways": "waterway",
+      "boundaries": "boundary",
+      "transportation": "transportation",
+      "transportationNames": "transportation_name",
+      "peaks": "mountain_peak",
+      "pois": "poi",
+      "places": "place",
+      "waterNames": "water_name"
+    }
+  },
+  "terrain": {
+    "id": "aws-mapzen-terrarium",
+    "label": "AWS Open Data Terrain Tiles",
+    "tileUrl": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    "encoding": "terrarium",
+    "tileSize": 256,
+    "minZoom": 0,
+    "maxZoom": 15,
+    "attribution": "Terrain data: <a href=\"https://github.com/tilezen/joerd/blob/master/docs/attribution.md\" target=\"_blank\">Mapzen/AWS Open Data providers</a>",
+    "exaggeration": 1.15
+  },
+  "policy": {
+    "requestTimeoutMs": 15000,
+    "equivalentErrorWindowMs": 10000
+  }
+}

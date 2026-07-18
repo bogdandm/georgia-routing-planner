@@ -24,9 +24,7 @@ export default defineConfig({
         'src/application/**/*.ts',
         'src/diagnostics/**/*.ts',
         'src/infrastructure/**/*.ts',
-        'src/features/app-shell/**/*.{ts,tsx}',
-        'src/app/App.tsx',
-        'src/app/AppErrorBoundary.tsx',
+        'src/presentation/shell/**/*.{ts,tsx}',
       ],
       exclude: [
         '**/*.test.{ts,tsx}',

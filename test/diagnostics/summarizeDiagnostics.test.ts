@@ -38,12 +38,13 @@ describe('summarizeDiagnostics', () => {
   it('prints a deterministic safe troubleshooting summary', () => {
     expect(summarizeDiagnostics(validBundle)).toBe(
       [
-        'Georgia Routing Planner diagnostics v1',
+        'Georgia Routing Planner diagnostics v2 (migrated from v1)',
         'Build: 0.0.0 (abc123, production)',
         'Browser: Synthetic Chrome',
         'Exported: 2026-07-18T00:00:00.000Z',
         'Health: 1 warning/failure(s) of 1',
         '- FAIL IndexedDB: Probe failed.',
+        'Map: not captured in this bundle.',
         'Recent errors: 1',
         '- storage.failed: Storage unavailable.',
         'Slow operations: 1',
@@ -55,7 +56,52 @@ describe('summarizeDiagnostics', () => {
 
   it('rejects unsupported schema versions', () => {
     expect(() => {
-      summarizeDiagnostics({ ...validBundle, schemaVersion: 2 });
+      summarizeDiagnostics({ ...validBundle, schemaVersion: 3 });
     }).toThrow();
+  });
+
+  it('summarizes the current v2 map snapshot', () => {
+    const v2Bundle = {
+      ...validBundle,
+      schemaVersion: 2,
+      map: {
+        lifecycle: 'degraded',
+        camera: {
+          longitude: 44.8,
+          latitude: 41.7,
+          zoom: 8,
+          bearing: 0,
+          pitch: 0,
+        },
+        terrainMode: 'flat',
+        styleId: 'Georgia hiking basemap v1',
+        sourceIds: ['basemap-vector'],
+        layerIds: ['background', 'water'],
+        lastIdleAt: '2026-07-18T00:00:02.000Z',
+        webGlContext: 'available',
+        webGlCapabilities: {
+          contextType: 'webgl2',
+          version: 'WebGL 2.0',
+          maxTextureSize: 16_384,
+          antialias: true,
+        },
+        recoverableFailures: [
+          {
+            category: 'base-vector',
+            sourceId: 'basemap-vector',
+            count: 3,
+            lastOccurredAt: '2026-07-18T00:00:03.000Z',
+          },
+        ],
+        message: 'Some basemap tiles could not load.',
+      },
+    } as const;
+
+    const summary = summarizeDiagnostics(v2Bundle);
+    expect(summary).toContain('Georgia Routing Planner diagnostics v2\n');
+    expect(summary).toContain('Map: degraded, flat, 1 recoverable failure category(s)');
+    expect(summary).toContain(
+      'Map style: Georgia hiking basemap v1; 1 source(s), 2 layer(s)',
+    );
   });
 });

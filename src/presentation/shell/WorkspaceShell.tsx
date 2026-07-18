@@ -25,14 +25,14 @@ import {
 } from '@mui/material';
 import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
 
-import { useApplicationServices } from '@/app/bootstrap/useApplicationServices';
-import { EmptyState } from '@/features/app-shell/EmptyState';
-import { SettingsDialog } from '@/features/app-shell/SettingsDialog';
-import { useUiStore, type WorkspaceTab } from '@/features/app-shell/uiStore';
-import { DeveloperDrawer } from '@/features/developer-tools/DeveloperDrawer';
-import { MapSmokeCanvas } from '@/features/map/MapSmokeCanvas';
+import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
+import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import { EmptyState } from '@/presentation/shell/EmptyState';
+import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
+import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 
-interface AppProps {
+interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
 }
 
@@ -64,8 +64,8 @@ const emptyStates: Record<WorkspaceTab, ReactNode> = {
   ),
 };
 
-export function App({ mapSurface = <MapSmokeCanvas /> }: AppProps) {
-  const { database, logger } = useApplicationServices();
+export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
+  const { database, logger } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
   const developerMode = useUiStore((state) => state.developerMode);
@@ -75,6 +75,7 @@ export function App({ mapSurface = <MapSmokeCanvas /> }: AppProps) {
   const setDeveloperDrawerOpen = useUiStore((state) => state.setDeveloperDrawerOpen);
   const setDeveloperMode = useUiStore((state) => state.setDeveloperMode);
   const setElevationExpanded = useUiStore((state) => state.setElevationExpanded);
+  const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
 
@@ -123,6 +124,10 @@ export function App({ mapSurface = <MapSmokeCanvas /> }: AppProps) {
     setDeveloperMode(value);
     if (!value) {
       setDeveloperDrawerOpen(false);
+      setMapDebugOptions({
+        showCollisionBoxes: false,
+        showTileBoundaries: false,
+      });
     }
     void persistDeveloperMode(value);
   };

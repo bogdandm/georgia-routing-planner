@@ -4,16 +4,16 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { App } from '@/app/App';
-import { AppErrorBoundary } from '@/app/AppErrorBoundary';
-import { ApplicationServicesProvider } from '@/app/bootstrap/ApplicationServicesProvider';
-import { createApplicationServices } from '@/app/bootstrap/createApplicationServices';
-import { installGlobalErrorCapture } from '@/app/bootstrap/installGlobalErrorCapture';
-import { mountBootstrapFallback } from '@/app/bootstrap/mountBootstrapFallback';
-import { createAppTheme } from '@/app/theme/createAppTheme';
-import '@/styles/global.css';
+import { createRuntimeServices } from '@/bootstrap/createRuntimeServices';
+import { installGlobalErrorCapture } from '@/bootstrap/installGlobalErrorCapture';
+import { mountBootstrapFallback } from '@/bootstrap/mountBootstrapFallback';
+import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { WorkspaceErrorBoundary } from '@/presentation/shell/WorkspaceErrorBoundary';
+import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import '@/presentation/styles/global.css';
+import { createAppTheme } from '@/presentation/theme/createAppTheme';
 
-const services = createApplicationServices();
+const services = createRuntimeServices();
 installGlobalErrorCapture(services.logger);
 
 const rootElement = document.querySelector<HTMLElement>('#root');
@@ -25,19 +25,19 @@ if (rootElement === null) {
 try {
   createRoot(rootElement).render(
     <StrictMode>
-      <ApplicationServicesProvider services={services}>
+      <RuntimeServicesProvider services={services}>
         <QueryClientProvider client={services.queryClient}>
           <ThemeProvider theme={createAppTheme()}>
             <CssBaseline />
-            <AppErrorBoundary
+            <WorkspaceErrorBoundary
               diagnostics={services.diagnostics}
               logger={services.logger}
             >
-              <App />
-            </AppErrorBoundary>
+              <WorkspaceShell />
+            </WorkspaceErrorBoundary>
           </ThemeProvider>
         </QueryClientProvider>
-      </ApplicationServicesProvider>
+      </RuntimeServicesProvider>
     </StrictMode>,
   );
   services.logger.log({ level: 'info', name: 'app.bootstrap.render-requested' });

@@ -30,8 +30,20 @@ Rules:
   and obtain approval again.
 - Commits are allowed and encouraged on feature branches after relevant checks pass.
   Keep commits focused and use clear imperative or Conventional Commit-style messages.
-- Do not create a remote, push, open a pull request, change branch protection, or
-  publish/deploy unless the user requests that external action.
+- Do not implement an entire phase as one mega-commit. When a temporary `PLAN.md`
+  exists, it must split phase work into smaller independently reviewable commits; each
+  implementation commit must include its relevant automated tests and leave the
+  repository in a buildable, testable state. Do not defer most of a phase's tests to a
+  final test-only commit.
+- A feature is not handed off as finished until its relevant checks pass and its
+  feature-branch state is available in a GitHub pull request targeting `main`. When you
+  believe the feature is finished, commit the intended changes, push the feature branch,
+  open a draft pull request, and give the user its review link. This standing
+  instruction authorizes that feature-completion push and pull-request creation without
+  a separate prompt. If a pull request already exists for the branch, update it and
+  return the existing link instead of creating a duplicate.
+- Do not create a new remote, change branch protection, publish/deploy, or perform other
+  external actions unless the user requests them.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to
   remove user work.
 - The GitHub CLI (`gh`) is installed and available for this project. Use it for
@@ -42,10 +54,11 @@ Rules:
 - End each implementation handoff by reporting the active branch, commit/check status,
   and whether the branch is awaiting approval.
 
-The current active implementation plan belongs in `PLAN.md`. `TOP_LVL_PLAN.md` contains
-the cross-phase product roadmap. Update the detailed plan as work progresses; update the
-top-level plan only when scope, architecture, phase boundaries, or product direction
-changes materially.
+`PLAN.md` and `TOP_LVL_PLAN.md` are temporary planning artifacts. They may be
+regenerated for a phase or deleted after it. They can guide current work, but neither
+file is a source of project truth and neither may be the sole record of product scope,
+architecture, behavior, decisions, operations, or maintenance knowledge. Before a phase
+closes, move every durable fact into `README.md`, `docs/`, code contracts, or tests.
 
 ## Maintainer context
 
@@ -54,6 +67,46 @@ explicit control flow, discoverable architecture, strong types, and readable
 object-oriented domain/application code. Do not assume deep familiarity with modern
 frontend conventions; document non-obvious React behavior and explain frontend-specific
 tradeoffs in pull requests and handoffs.
+
+## Documentation and code comments
+
+Permanent project documentation lives under `docs/` and is indexed by `docs/README.md`.
+Keep that index accurate and use repository-relative links. Do not duplicate large
+sections across files; link to the authoritative explanation.
+
+Update documentation in the same change as the behavior it describes:
+
+| Change                                                                                   | Required permanent documentation                                      |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Directory, layer, dependency direction, composition, or state owner                      | `docs/project-structure.md`                                           |
+| User-visible feature, limitation, error behavior, privacy behavior, or deferred boundary | `docs/features.md`                                                    |
+| Startup, async sequence, lifecycle, cleanup, persistence, or cross-module interaction    | `docs/runtime-flows.md`                                               |
+| Map endpoint, source schema, provider policy, attribution, CORS evidence, or replacement | `docs/map-providers.md` and the configuration example when applicable |
+| Setup, stable command, supported environment, or operator workflow                       | `README.md`                                                           |
+| Documentation file added, renamed, or removed                                            | `docs/README.md`                                                      |
+
+Rules:
+
+- A feature is incomplete when its permanent documentation describes old ownership,
+  behavior, failure handling, or limits.
+- Planning files may link to permanent documentation, but permanent documentation must
+  not depend on a planning file for context.
+- Keep documentation compact: describe contracts, ownership, invariants, rationale,
+  failure behavior, and connections. Do not narrate obvious code or add filler.
+- Include small diagrams or tables only when they clarify relationships or sequences
+  better than concise prose. Update them when the represented flow changes.
+- Tests are executable behavioral evidence, not a replacement for an architecture or
+  operating explanation.
+
+Use TSDoc/JSDoc comments on exported contracts and important implementation classes when
+their lifecycle, invariants, failure semantics, privacy boundary, units, or ownership
+are not obvious from the signature. Use inline comments for non-obvious ordering,
+cleanup, compatibility, security, performance, or workaround reasons.
+
+Do not comment every declaration or restate a line in English. Comments must explain why
+a constraint exists or what callers may rely on. Remove or update comments in the same
+commit as the behavior they describe; a stale comment is a defect. Avoid TODO comments
+without an issue, phase, or concrete completion condition.
 
 ## Product constraints
 
@@ -176,10 +229,7 @@ Keep feature ownership visible while preserving layer boundaries:
 
 ```text
 src/
-  app/
-    bootstrap/          # composition root and providers
-    theme/              # MUI theme and design tokens
-    routing/            # client-side page routing, if introduced
+  bootstrap/            # composition root, runtime services, and providers
   domain/
     planning/
     tracks/
@@ -204,7 +254,10 @@ src/
     snapshots/
     export/
     redaction/
-  features/
+  presentation/
+    shell/
+    theme/              # MUI theme and design tokens
+    routing/            # client-side page routing, if introduced
     map/
     planner/
     track-catalog/
@@ -574,10 +627,12 @@ Before declaring a change complete:
 6. Verify new loading/error/empty states visually in current Chrome.
 7. Verify new failure paths emit useful bounded diagnostic events with no secret or
    personal payload.
-8. Update PLAN.md, TOP_LVL_PLAN.md, or an architecture decision at the appropriate level
-   when behavior or architecture changes materially.
+8. Update the permanent document selected by the documentation matrix whenever behavior,
+   architecture, provider policy, operating steps, or ownership changes.
 9. Confirm no secret, personal GPX metadata, generated debug file, or unrelated
    workspace artifact is included.
+10. Confirm exported contracts and non-obvious invariants have accurate, compact code
+    comments and that no comment contradicts current behavior.
 
 Do not mark work complete when required checks fail. Report an external or pre-existing
 failure precisely and keep unrelated user changes intact.

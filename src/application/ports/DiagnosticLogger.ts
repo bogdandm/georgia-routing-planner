@@ -14,6 +14,10 @@ export interface DiagnosticEvent extends DiagnosticInput {
   readonly timestamp: string;
 }
 
+/**
+ * Accepts structured diagnostic events and exposes a bounded, already-redacted snapshot.
+ * Implementations must not allow logging failures to break the primary operation.
+ */
 export interface DiagnosticLogger {
   log(input: DiagnosticInput): void;
   getEvents(): readonly DiagnosticEvent[];

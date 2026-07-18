@@ -27,7 +27,7 @@ import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react'
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
-import { MapSmokeCanvas } from '@/presentation/map/MapSmokeCanvas';
+import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { EmptyState } from '@/presentation/shell/EmptyState';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
@@ -64,9 +64,7 @@ const emptyStates: Record<WorkspaceTab, ReactNode> = {
   ),
 };
 
-export function WorkspaceShell({
-  mapSurface = <MapSmokeCanvas />,
-}: WorkspaceShellProps) {
+export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
   const { database, logger } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);

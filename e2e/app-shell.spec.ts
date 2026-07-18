@@ -17,7 +17,7 @@ test('loads and reloads the network-free shell under a repository subpath', asyn
   await expect(
     page.getByRole('heading', { name: 'Georgia Routing Planner' }),
   ).toBeVisible();
-  await expect(page.getByTestId('map-smoke-canvas')).toBeVisible();
+  await expect(page.getByTestId('map-workspace')).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
     'aria-selected',
     'true',

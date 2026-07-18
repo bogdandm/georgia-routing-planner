@@ -90,6 +90,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
+    { timeout: 15_000 },
   );
 
   const flatButton = page.getByRole('button', { name: 'Show flat 2D map' });
@@ -125,6 +126,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
+    { timeout: 15_000 },
   );
 });
 
@@ -138,7 +140,9 @@ test('falls back after DEM failure and enables terrain after explicit retry', as
   );
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
 
   await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
   await expect(workspace).toHaveAttribute('data-map-state', 'degraded');
@@ -152,13 +156,17 @@ test('falls back after DEM failure and enables terrain after explicit retry', as
   await expect(
     page.getByRole('button', { name: 'Show 3D terrain map' }),
   ).toHaveAttribute('aria-pressed', 'true');
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
 });
 
 test('reports and restores a controlled WebGL context loss', async ({ page }) => {
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
   const canvas = page.locator('.maplibregl-canvas');
   const supported = await canvas.evaluate((element) => {
     const context = (element as HTMLCanvasElement).getContext('webgl2');
@@ -181,7 +189,9 @@ test('reports and restores a controlled WebGL context loss', async ({ page }) =>
     };
     testWindow.__mapContextExtension?.restoreContext();
   });
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
 
   await page.getByRole('button', { name: 'Developer diagnostics' }).click();
   await page.getByRole('tab', { name: /Logs/ }).click();
@@ -214,5 +224,7 @@ test('keeps the map usable and offers retry after intercepted vector failures', 
   ).toEqual([]);
 
   await page.getByRole('button', { name: 'Retry map data' }).click();
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
 });

@@ -48,6 +48,17 @@ describe('createHikingMapStyle', () => {
     expect(serialized).not.toContain('token=');
   });
 
+  it('uses the shared application palette for the dominant basemap accents', () => {
+    const style = createHikingMapStyle(configuration);
+    const serialized = JSON.stringify(style);
+
+    expect(serialized).toContain('#8ECAE6');
+    expect(serialized).toContain('#219EBC');
+    expect(serialized).toContain('#023047');
+    expect(serialized).toContain('#FFB703');
+    expect(serialized).toContain('#FB8500');
+  });
+
   it('uses the configured source-layer mapping exactly once at the style boundary', () => {
     const customConfiguration = {
       ...configuration,

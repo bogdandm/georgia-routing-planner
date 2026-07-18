@@ -35,8 +35,15 @@ Rules:
   implementation commit must include its relevant automated tests and leave the
   repository in a buildable, testable state. Do not defer most of a phase's tests to a
   final test-only commit.
-- Do not create a remote, push, open a pull request, change branch protection, or
-  publish/deploy unless the user requests that external action.
+- A feature is not handed off as finished until its relevant checks pass and its
+  feature-branch state is available in a GitHub pull request targeting `main`. When you
+  believe the feature is finished, commit the intended changes, push the feature branch,
+  open a draft pull request, and give the user its review link. This standing
+  instruction authorizes that feature-completion push and pull-request creation without
+  a separate prompt. If a pull request already exists for the branch, update it and
+  return the existing link instead of creating a duplicate.
+- Do not create a new remote, change branch protection, publish/deploy, or perform other
+  external actions unless the user requests them.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to
   remove user work.
 - The GitHub CLI (`gh`) is installed and available for this project. Use it for

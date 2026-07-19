@@ -57,6 +57,22 @@ describe('diagnostic redaction', () => {
     });
   });
 
+  it('retains exact HTTP origins but redacts origin-shaped values with paths', () => {
+    const result = redactDiagnosticInput({
+      level: 'info',
+      name: 'http.request.started',
+      data: {
+        origin: 'https://catalog.test',
+        satelliteOrigin: 'https://catalog.test/private?token=secret',
+      },
+    });
+
+    expect(result.data).toEqual({
+      origin: 'https://catalog.test',
+      satelliteOrigin: '[remote-url]',
+    });
+  });
+
   it('omits empty optional data and preserves safe scalar values', () => {
     expect(
       redactDiagnosticInput({ level: 'info', name: 'empty', data: { unknown: true } }),

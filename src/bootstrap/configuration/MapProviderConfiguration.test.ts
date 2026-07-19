@@ -113,6 +113,24 @@ describe('MapProviderConfiguration', () => {
         vector.tileJsonUrl = 'http://tiles.example.test/tiles.json';
       },
     },
+    ...[
+      'javascript:alert(1)',
+      'data:text/plain,private',
+      'mailto:user@example.com',
+    ].map((endpoint) => ({
+      name: `unsafe ${endpoint.split(':')[0] ?? 'unknown'} URI`,
+      mutate: (input: Record<string, unknown>) => {
+        const vector = input.vector as Record<string, unknown>;
+        vector.tileJsonUrl = endpoint;
+      },
+    })),
+    {
+      name: 'protocol-relative endpoint',
+      mutate: (input: Record<string, unknown>) => {
+        const vector = input.vector as Record<string, unknown>;
+        vector.tileJsonUrl = '//tiles.example.test/tiles.json';
+      },
+    },
     {
       name: 'insecure satellite endpoint',
       mutate: (input: Record<string, unknown>) => {

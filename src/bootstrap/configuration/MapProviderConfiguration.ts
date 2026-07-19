@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
+function isApplicationRelativeEndpoint(value: string): boolean {
+  if (value.startsWith('//') || value.includes('\\')) return false;
+  if (/^[a-z][a-z0-9+.-]*:/iu.test(value)) return false;
+  return /^(?:\/|\.\.?\/|[a-z0-9_{])/iu.test(value);
+}
+
 const endpointSchema = z
   .string()
   .trim()
   .min(1)
   .refine(
-    (value) =>
-      value.startsWith('https://') ||
-      value.startsWith('/') ||
-      value.startsWith('./') ||
-      !value.includes('://'),
+    (value) => value.startsWith('https://') || isApplicationRelativeEndpoint(value),
     'Endpoints must use HTTPS or a relative application path.',
   );
 

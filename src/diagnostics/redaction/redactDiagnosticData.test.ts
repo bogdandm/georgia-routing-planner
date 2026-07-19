@@ -19,6 +19,23 @@ describe('diagnostic redaction', () => {
     expect(value).toContain('[redacted]');
   });
 
+  it('removes URL query data, fragments, protocol-relative URLs, and POSIX paths', () => {
+    const value = sanitizeDiagnosticText(
+      'GET https://host.test/items/42?email=user@example.com&trip=private#token ' +
+        '//tiles.test/private?key=value /home/alice/private/track.geojson ' +
+        'file:///Users/alice/secret.txt mailto:alice@example.com',
+    );
+
+    expect(value).not.toContain('host.test');
+    expect(value).not.toContain('tiles.test');
+    expect(value).not.toContain('user@example.com');
+    expect(value).not.toContain('trip=private');
+    expect(value).not.toContain('/home/alice');
+    expect(value).not.toContain('/Users/alice');
+    expect(value).toContain('[remote-url]');
+    expect(value).toContain('[local-path]');
+  });
+
   it('exports only fields on the central allowlist', () => {
     const result = redactDiagnosticInput({
       level: 'warn',

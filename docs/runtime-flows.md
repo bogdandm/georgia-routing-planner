@@ -192,9 +192,10 @@ Users do not enter date endpoints.
 
 Each successful month is recorded as complete for the submitted viewport and product,
 including a successful empty result. Provider requests use the complete 0–100% cloud
-range. The slider is applied only to the loaded calendar summaries, so changing it
-updates orange highlights immediately without hiding dates, removing scene cards, or
-invalidating loaded months. Calendar navigation checks the session cache before
+range. The slider filters loaded scene cards client-side and updates the calendar's
+orange highlights immediately. Acquisition dates above the threshold remain visible
+without an outline, and changing the slider neither invalidates loaded months nor
+performs another provider request. Calendar navigation checks the session cache before
 requesting the displayed month. A missing month runs the same cancellable search use
 case and appends its groups to the existing results. Revisiting a complete month
 performs no provider request. Changing submitted provider criteria starts a new session

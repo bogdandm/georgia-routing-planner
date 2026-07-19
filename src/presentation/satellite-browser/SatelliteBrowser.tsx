@@ -218,6 +218,26 @@ function flattenMatches(result: SatelliteSearchResult): readonly SatelliteSceneM
   return result.groups.flatMap((group) => group.scenes);
 }
 
+function filterResultByCloudCover(
+  result: SatelliteSearchResult,
+  maxCloudCoverPercent: number,
+): SatelliteSearchResult {
+  const groups = result.groups
+    .map((group) => ({
+      ...group,
+      scenes: group.scenes.filter(
+        (match) => match.scene.cloudCoverPercent <= maxCloudCoverPercent,
+      ),
+    }))
+    .filter((group) => group.scenes.length > 0);
+  return {
+    groups,
+    sceneCount: groups.reduce((count, group) => count + group.scenes.length, 0),
+    acquisitionDateCount: groups.length,
+    totalMatched: result.totalMatched,
+  };
+}
+
 function visibleGroups(
   result: SatelliteSearchResult,
   visibleCount: number,
@@ -877,9 +897,18 @@ export function SatelliteBrowser({
     searchState.status === 'idle' && restoredScene !== null && restoredResult !== null;
   const restoredSceneKey =
     restoredScene === null ? null : satelliteSceneKey(restoredScene);
+  const cloudFilteredResult = useMemo(
+    () =>
+      searchState.status === 'success'
+        ? filterResultByCloudCover(searchState.result, maxCloudCoverPercent)
+        : null,
+    [maxCloudCoverPercent, searchState],
+  );
   const paneSearchState: SearchState = showingRestoredScene
     ? { status: 'success', result: restoredResult }
-    : searchState;
+    : searchState.status === 'success' && cloudFilteredResult !== null
+      ? { status: 'success', result: cloudFilteredResult }
+      : searchState;
   const paneSelectedSceneId = showingRestoredScene ? restoredScene.id : selectedSceneId;
   const paneOpen =
     resultsOpen ||
@@ -914,7 +943,11 @@ export function SatelliteBrowser({
   ) => {
     if (searchSatelliteScenes === null || searchState.status !== 'success') return;
     if (loadedMonthsRef.current.has(range.month)) {
-      if (revealLoadedMonth) setVisibleCount(searchState.result.sceneCount);
+      if (revealLoadedMonth) {
+        setVisibleCount(
+          filterResultByCloudCover(searchState.result, maxCloudCoverPercent).sceneCount,
+        );
+      }
       return;
     }
     if (loadingMonthsRef.current.has(range.month)) return;
@@ -943,12 +976,20 @@ export function SatelliteBrowser({
       );
       if (controller.signal.aborted) return;
       const mergedResult = mergeSearchResults(baseResult, monthResult);
+      const matchingMergedCount = filterResultByCloudCover(
+        mergedResult,
+        maxCloudCoverPercent,
+      ).sceneCount;
+      const matchingBaseCount = filterResultByCloudCover(
+        baseResult,
+        maxCloudCoverPercent,
+      ).sceneCount;
       markMonthLoaded(range.month);
       setSearchState({ status: 'success', result: mergedResult });
       setVisibleCount(
         revealLoadedMonth
-          ? mergedResult.sceneCount
-          : Math.min(mergedResult.sceneCount, baseResult.sceneCount + resultPageSize),
+          ? matchingMergedCount
+          : Math.min(matchingMergedCount, matchingBaseCount + resultPageSize),
       );
       completeSatelliteRequest(
         `${String(mergedResult.sceneCount)} Sentinel image${mergedResult.sceneCount === 1 ? '' : 's'} available`,
@@ -983,7 +1024,7 @@ export function SatelliteBrowser({
       setResultsOpen(true);
       setLoadMoreError(null);
       if (loadedMonthsRef.current.has(range.month)) {
-        setVisibleCount(searchState.result.sceneCount);
+        setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
         return;
       }
       await loadMonthIntoResults(range, existingSearch, true);
@@ -1053,7 +1094,7 @@ export function SatelliteBrowser({
 
   const loadMoreImages = async () => {
     if (searchState.status !== 'success') return;
-    if (visibleCount < searchState.result.sceneCount) {
+    if (visibleCount < (cloudFilteredResult?.sceneCount ?? 0)) {
       setVisibleCount((count) => count + resultPageSize);
       return;
     }
@@ -1067,7 +1108,7 @@ export function SatelliteBrowser({
     setLoadMoreError(null);
     if (searchState.status !== 'success' || submittedSearch === null) return;
     if (loadedMonthsRef.current.has(month)) {
-      setVisibleCount(searchState.result.sceneCount);
+      setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
       return;
     }
     void loadMonthIntoResults(

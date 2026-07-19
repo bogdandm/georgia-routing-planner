@@ -438,17 +438,21 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('loads all cloud values and changes only the client-side calendar highlight', async () => {
-    const scene = syntheticSatelliteScene(
+  it('keeps all dates but filters scene cards by cloud cover client-side', async () => {
+    const highCloudScene = syntheticSatelliteScene(
       'threshold-scene',
       '2026-07-12T10:12:00.000Z',
     );
+    const lowCloudScene = syntheticSatelliteScene(
+      'matching-scene',
+      '2026-07-09T10:12:00.000Z',
+    );
     const search = vi.fn<SatelliteCatalogGateway['search']>(() =>
       Promise.resolve({
-        totalMatched: 1,
+        totalMatched: 2,
         scenes: [
           {
-            ...scene,
+            ...highCloudScene,
             cloudCoverPercent: 70,
             footprint: {
               type: 'Polygon',
@@ -463,6 +467,7 @@ describe('WorkspaceShell', () => {
               ],
             },
           },
+          { ...lowCloudScene, cloudCoverPercent: 10 },
         ],
       }),
     );
@@ -480,16 +485,30 @@ describe('WorkspaceShell', () => {
 
     expect(search).toHaveBeenCalledOnce();
     expect(search.mock.calls[0]?.[0].criteria.maxCloudCoverPercent).toBe(100);
-    expect(await screen.findByLabelText('High cloud cover: 70%')).toBeVisible();
-    expect(screen.getByLabelText(/Low viewport coverage: 40%/u)).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Apply 9 Jul 2026 imagery' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('gridcell', {
         name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
       }),
     ).toBeVisible();
+    expect(
+      screen.getByRole('gridcell', {
+        name: /9 Jul 2026, imagery available, 10 percent weighted cloud, matches/u,
+      }),
+    ).toBeVisible();
     fireEvent.change(screen.getByRole('slider', { name: 'Maximum cloud' }), {
       target: { value: '100' },
     });
+    expect(
+      screen.getByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('High cloud cover: 70%')).toBeVisible();
+    expect(screen.getByLabelText(/Low viewport coverage: 40%/u)).toBeVisible();
     expect(
       screen.getByRole('gridcell', {
         name: /12 Jul 2026, imagery available, 70 percent weighted cloud, matches/u,

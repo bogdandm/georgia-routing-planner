@@ -40,6 +40,12 @@ or its dimensions. Collapsing navigation keeps only the GR control above the map
 Opening Settings or Diagnostics follows the same invariant: the existing `MapWorkspace`
 and native MapLibre instance stay mounted.
 
+Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
+stretch slider validates and stores the new numeric values, prepares a replacement
+raster for the current scene, and swaps only after MapLibre reports it ready. A failed
+tuning attempt rolls back the controller values and keeps the prior raster visible. At
+startup, validated stretch preferences load before a saved Sentinel scene is restored.
+
 Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
 captures interaction from the workspace, and it remains open until the user activates
 its header close control, toggles the Diagnostics rail action, or disables developer
@@ -91,8 +97,8 @@ duplicate sources, listeners, and out-of-order camera changes.
 - Style errors during startup become fatal because no usable basemap exists.
 - Vector, glyph, and terrain errors update capped failure buckets and a degraded
   snapshot; repeated equivalent events do not create alert or log storms.
-- Retry triggers a repaint and clears the current warning without constructing a new
-  map.
+- The shell projects the latest degraded snapshot into the shared status below search;
+  no separate recoverable map banner is mounted.
 - `webglcontextlost` is prevented from default disposal, recorded as fatal, and exposed
   to the user. A restoration event refreshes capabilities and returns the snapshot to
   ready.
@@ -235,15 +241,17 @@ derives bounds from the validated polygon while preserving current pitch and bea
 Layers commands use logical IDs. Hiking, road, and place commands expand to fixed native
 style groups; satellite and footprint commands target only controller-owned layers.
 Visibility is applied idempotently and projected into a serializable live store. Dexie
-persists visibility and the last successful scene for startup restoration. Satellite
-search/results state remains mounted while another rail section is visible, and
-returning to Satellite reattaches the existing adjacent pane without a new provider
-request.
+persists visibility, imagery stretch, and the last successful scene for startup
+restoration. Satellite search/results state remains mounted while another rail section
+is visible, and returning to Satellite reattaches the existing adjacent pane without a
+new provider request.
 
 ## Teardown ownership
 
-`MapWorkspace` destroys the facade and flushes camera persistence. The facade detaches
-the shared layer controller, cancels a pending terrain wait, removes MapLibre and WebGL
-listeners, clears subscribers, and releases the native map reference. React effects also
-remove online/offline listeners and reset developer-only debug flags. New integrations
-must preserve this single-owner cleanup model.
+`MapWorkspace` flushes camera persistence and releases the native map through its ref
+callback. The facade detaches the shared layer controller, cancels a pending terrain
+wait, removes MapLibre and WebGL listeners, and releases the native map reference. Ref
+cleanup preserves facade subscribers so React Strict Mode can immediately reattach the
+retained facade without leaving map readiness or the Satellite controller stale. React
+effects also remove online/offline listeners and reset developer-only debug flags. New
+integrations must preserve this single-owner cleanup model.

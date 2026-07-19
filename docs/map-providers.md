@@ -179,9 +179,11 @@ The default template calls Development Seed's public
 [TiTiler demo](https://developmentseed.org/titiler/examples/notebooks/Working_with_STAC_simple/)
 [`/stac/tiles` endpoint](https://developmentseed.org/titiler/endpoints/stac/) with
 `WebMercatorQuad`, the MapLibre tile coordinates, the validated STAC item, and ordered
-red/green/blue assets. Each channel uses the full 0–10,000 reflectance range before
-display gamma. TiTiler performs bounded COG reads, RGB composition, reprojection, and
-web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles.
+red/green/blue assets. The default maps each channel over 0–10,000 reflectance before
+display gamma. Users can persistently tune the upper reflectance bound, gamma, and up to
+five times normal saturation in Settings; a lower bound brightens midtones but can clip
+the brightest snow. TiTiler performs bounded COG reads, RGB composition, reprojection,
+and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles.
 
 The default is anonymous and requires no browser secret, but it is a best-effort demo
 service with no project SLA. It is acceptable for the current low-traffic static MVP and
@@ -189,6 +191,11 @@ manual review, not sustained production traffic. The renderer ID, HTTPS template
 size, zoom bounds, and attribution are validated public configuration so a managed
 TiTiler-compatible deployment can replace it without changing catalog, UI, or map
 commands. There is no silent renderer fallback.
+
+The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
+`{saturation}` tokens. The controller substitutes only bounded numeric preferences and
+never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
+failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
 
 The map adapter prepares a replacement raster under a second stable source/layer slot
 and reveals it only after MapLibre reports the source loaded. Failure, timeout,

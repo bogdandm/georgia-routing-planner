@@ -51,33 +51,34 @@ export function WorkspaceRail({
       sx={{
         position: 'relative',
         zIndex: 4,
-        width: 64,
+        width: collapsed ? 44 : 64,
+        height: '100%',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'stretch',
-        bgcolor: appColors.brand.deepSpace,
+        bgcolor: collapsed ? 'transparent' : appColors.brand.deepSpace,
         color: appColors.text.inverse,
-        borderRadius: collapsed ? 2 : '8px 0 0 8px',
-        overflow: 'hidden',
-        boxShadow: collapsed ? '0 8px 28px rgba(2, 48, 71, 0.24)' : 'none',
+        borderRadius: collapsed ? 1.25 : '8px 0 0 8px',
+        overflow: collapsed ? 'visible' : 'hidden',
+        boxShadow: 'none',
         transition: (theme) =>
-          theme.transitions.create('height', {
+          theme.transitions.create(['width', 'background-color'], {
             duration: theme.transitions.duration.shorter,
           }),
       }}
     >
       <Tooltip
-        title={collapsed ? 'Show navigation' : 'Georgia Routing Planner'}
+        title={collapsed ? 'Show navigation' : 'Hide navigation'}
         placement="right"
       >
         <ButtonBase
-          aria-label={collapsed ? 'Show navigation' : 'Georgia Routing Planner'}
+          aria-label={collapsed ? 'Show navigation' : 'Hide navigation from GR'}
           onClick={onLogoClick}
           sx={{
             width: 44,
             height: 36,
-            mt: 1.5,
+            mt: collapsed ? 0 : 1.5,
             mx: 'auto',
             display: 'grid',
             placeItems: 'center',
@@ -85,7 +86,7 @@ export function WorkspaceRail({
             bgcolor: appColors.brand.blueGreenDark,
             color: appColors.text.inverse,
             boxShadow: '0 6px 18px rgba(0, 0, 0, 0.18)',
-            cursor: collapsed ? 'pointer' : 'default',
+            cursor: 'pointer',
           }}
         >
           <Typography variant="subtitle2" color="inherit" sx={{ fontWeight: 800 }}>

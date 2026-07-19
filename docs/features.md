@@ -41,7 +41,8 @@ elevation placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable settings: developer-mode and collapsed-navigation preferences in Dexie.
+- Durable settings: developer mode, collapsed navigation, and Sentinel imagery stretch
+  preferences in Dexie.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
 
@@ -114,12 +115,14 @@ preceding month and appends it, continuing back through the Sentinel-2 archive.
 Whole-card click selects, expands metadata, and applies that concrete scene through the
 shared map adapter. A validated L2A item is rendered from its separate red, green, and
 blue reflectance COGs as correctly georeferenced Web Mercator tiles below hiking
-references. The full reflectance range is mapped before display gamma so snow detail is
-not lost through the already stretched 8-bit TCI asset. The real polygon or multipolygon
-footprint is a separate orange outline above hiking geometry and below labels. While a
-replacement is loading the prior usable image remains present; a failed replacement
-reports a safe error and leaves that prior image available. Marker targeting remains
-unavailable.
+references. Settings exposes a persistent reflectance ceiling, gamma, and saturation
+control up to five times normal so users can tune the raw-band display without relying
+on the already stretched 8-bit TCI asset. The real polygon or multipolygon footprint is
+a separate orange outline above hiking geometry and below labels. While a replacement is
+loading the prior usable image remains present; a failed replacement reports a safe,
+clickable error and leaves that prior image available. The error detail distinguishes
+rejected values, rate limiting, renderer availability, timeout, and an unclassified
+unusable tile without exposing provider URLs. Marker targeting remains unavailable.
 
 Clicking a loaded calendar date selects the scene with the highest viewport coverage for
 that date, reveals its batch if needed, expands its card, and scrolls it into view.
@@ -167,14 +170,18 @@ remain disabled until a scene is applied. Hiding imagery retains the applied sce
 does not remove its footprint, search results, or attribution contract. Base land and
 water remain visible and cannot be disabled. Opacity, drag ordering, custom layers are
 unavailable. Checkbox state and the last successfully applied scene are stored locally
-and restored after refresh.
+and restored after refresh. The last successful imagery stretch is stored with those
+preferences and applied before a saved scene is restored.
 
 ## Persistent map controls
 
 - Place-or-coordinate search is overlaid on the map. The current search field is
   disabled.
-- A lightweight line below search reports readiness, pending work, or safe failures.
+- A lightweight line below search reports readiness, pending work, or safe failures;
+  selecting an error opens its complete safe detail.
 - Navigation collapses with a short transition to only the clickable GR mark.
+- Settings is non-modal and does not dim or block the map, allowing imagery stretch to
+  be judged while a slider is adjusted.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Attribution remains visible in every feature section and terrain mode.
@@ -189,8 +196,8 @@ ordering are stable contracts. Unsupported hiking route relations are not invent
 
 - Default vector source: OpenFreeMap TileJSON; attribution stays visible.
 - Invalid configuration: MapLibre does not mount; a safe fatal message is shown.
-- Vector/glyph failures: the existing canvas remains usable and an aggregated warning
-  offers an explicit retry.
+- Vector/glyph failures: the existing canvas remains usable and the aggregated safe
+  failure appears only in the shared status below search.
 - Tests: pure style assertions plus synthetic MVT/glyph Chromium coverage.
 
 ## Camera persistence
@@ -226,7 +233,15 @@ Map errors are classified as vector, glyph/sprite, terrain, style, WebGL, or unk
 Equivalent recoverable errors are counted in capped buckets and logged at a bounded
 interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
 degraded states. Offline messaging promises only that already rendered areas may remain
-visible, not full offline map support.
+visible, not full offline map support. Map lifecycle and imagery errors do not create a
+wide map banner: the shared line below search is their single UI surface. Ready remains
+background-free; pending and error states use a lightly translucent surface for map
+contrast, and selecting an error reveals its complete safe detail. Hovering any
+truncated status message reveals the full text in a multiline tooltip. The non-ready
+surface transitions quickly and remains translucent enough to preserve map context.
+Pending text uses the dark primary color and a medium weight rather than the muted Ready
+treatment, preserving legibility over imagery. Status padding is invariant so state
+changes never shift the icon or text.
 
 ## Diagnostics and developer mode
 

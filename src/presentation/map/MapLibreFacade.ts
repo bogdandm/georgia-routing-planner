@@ -170,15 +170,6 @@ export class MapLibreFacade implements MapFacade {
     return this.#snapshot;
   }
 
-  public retryRecoverableFailures(): void {
-    if (this.#map === null) {
-      return;
-    }
-    this.#map.triggerRepaint();
-    this.updateSnapshot({ lifecycle: 'ready', message: null });
-    this.logger.log({ level: 'info', name: 'map.recoverable.retry-requested' });
-  }
-
   /** Serializes terrain transitions so sources, listeners, and camera changes cannot race. */
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {
     const transition = this.#terrainTransition;
@@ -212,9 +203,17 @@ export class MapLibreFacade implements MapFacade {
     map.showCollisionBoxes = options.showCollisionBoxes;
   }
 
-  public destroy(): void {
+  /**
+   * Releases only the current native map attachment. Subscribers remain registered so
+   * React Strict Mode can replay the ref lifecycle and attach the same facade again.
+   */
+  public detachMap(): void {
     this.#cancelTerrainWait?.();
     this.detach();
+  }
+
+  public destroy(): void {
+    this.detachMap();
     this.#listeners.clear();
   }
 

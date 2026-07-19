@@ -11,8 +11,9 @@ import {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
-import { resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
+import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -510,23 +511,82 @@ describe('WorkspaceShell', () => {
     });
   });
 
-  it('collapses and restores the complete left navigation from settings', async () => {
+  it('collapses from the GR logo and restores from the remaining logo', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Open settings' }));
-    await user.click(screen.getByRole('switch', { name: 'Collapse left navigation' }));
-    await user.click(screen.getByRole('button', { name: 'Done' }));
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('dialog', { name: 'Settings' }),
-      ).not.toBeInTheDocument();
-    });
+    await user.click(screen.getByRole('button', { name: 'Hide navigation from GR' }));
 
     expect(screen.getByRole('navigation')).toBeVisible();
     expect(screen.getByRole('complementary', { hidden: true })).not.toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Show navigation' }));
     expect(screen.getByRole('navigation')).toBeVisible();
     expect(screen.getByRole('complementary')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    expect(
+      screen.queryByRole('switch', { name: 'Collapse left navigation' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
+    ).toBeVisible();
+    expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    const ceiling = screen.getByRole('slider', {
+      name: 'Sentinel reflectance ceiling',
+    });
+    fireEvent.keyDown(ceiling, { key: 'Home' });
+    fireEvent.keyUp(ceiling, { key: 'Home' });
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingTuning().reflectanceMax).toBe(3_000);
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        renderingTuning: { reflectanceMax: 3_000 },
+      });
+    });
+    const saturation = screen.getByRole('slider', { name: 'Sentinel saturation' });
+    fireEvent.keyDown(saturation, { key: 'End' });
+    fireEvent.keyUp(saturation, { key: 'End' });
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingTuning().saturation).toBe(5);
+    });
+  });
+
+  it('opens the complete current map error from the lightweight status line', async () => {
+    const user = userEvent.setup();
+    mapLayerStore.setState({
+      errorMessage:
+        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    const statusButton = await screen.findByRole('button', {
+      name: 'Show current error details',
+    });
+    await user.hover(
+      screen.getByLabelText(
+        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+      ),
+    );
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+    );
+    expect(screen.getByRole('status')).toHaveStyle({
+      backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    });
+    await user.click(statusButton);
+
+    expect(screen.getByText('Current map error')).toBeVisible();
+    expect(
+      screen.getAllByText(/renderer rejected these stretch values/i).at(-1),
+    ).toBeVisible();
   });
 });

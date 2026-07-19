@@ -68,7 +68,7 @@ test('keeps the full-screen map fixed while navigation changes and collapses', a
 
   await page.getByRole('tab', { name: 'Satellite' }).click();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
-  await page.getByRole('button', { name: 'Hide navigation' }).click();
+  await page.getByRole('button', { name: 'Hide navigation from GR' }).click();
   await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
 
@@ -77,6 +77,8 @@ test('keeps the full-screen map fixed while navigation changes and collapses', a
   await page.getByRole('button', { name: 'Show navigation' }).click();
   await expect(page.getByRole('tab', { name: 'Satellite' })).toBeVisible();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
+  await page.getByRole('button', { name: 'Hide navigation', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
 });
 
 test('has no serious accessibility violations in the shell and settings', async ({

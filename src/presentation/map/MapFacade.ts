@@ -15,7 +15,6 @@ export interface MapFacade extends MapViewportProvider {
   subscribe(listener: () => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
-  retryRecoverableFailures(): void;
 
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;

@@ -1,7 +1,21 @@
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
-import { Box, CircularProgress, LinearProgress, Typography } from '@mui/material';
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  Box,
+  ButtonBase,
+  CircularProgress,
+  LinearProgress,
+  Popover,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type MouseEvent,
+} from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
@@ -34,6 +48,7 @@ export function OperationalStatus() {
     getMapSnapshot,
   );
   const [now, setNow] = useState(0);
+  const [errorAnchor, setErrorAnchor] = useState<HTMLElement | null>(null);
 
   let display: DisplayStatus;
   if (mapProviderConfiguration.status === 'invalid') {
@@ -92,23 +107,58 @@ export function OperationalStatus() {
       ? null
       : Math.max(0, Math.floor((now - display.startedAt) / 1_000));
 
+  const handleErrorDetailsOpen = (event: MouseEvent<HTMLElement>) => {
+    setErrorAnchor(event.currentTarget);
+  };
+
   return (
     <Box
       role="status"
       aria-live="polite"
       sx={{
         position: 'absolute',
-        top: 62,
-        right: 64,
+        top: 56,
+        right: 47,
         zIndex: 2,
         width: 330,
         maxWidth: 'calc(100% - 144px)',
         px: 1.75,
-        color: display.kind === 'error' ? 'error.dark' : 'text.secondary',
-        textShadow: '0 1px 2px rgba(255,255,255,0.9)',
+        py: 0.375,
+        bgcolor: display.kind === 'ready' ? 'transparent' : 'rgba(255, 255, 255, 0.42)',
+        backdropFilter: display.kind === 'ready' ? 'none' : 'blur(3px)',
+        borderRadius: 1,
+        boxShadow:
+          display.kind === 'ready' ? 'none' : '0 1px 4px rgba(2, 48, 71, 0.08)',
+        transition: (theme) =>
+          theme.transitions.create(
+            ['background-color', 'backdrop-filter', 'box-shadow'],
+            { duration: 120 },
+          ),
+        color:
+          display.kind === 'error'
+            ? 'error.dark'
+            : display.kind === 'pending'
+              ? 'primary.dark'
+              : 'text.secondary',
+        textShadow:
+          display.kind === 'ready' ? '0 1px 2px rgba(255,255,255,0.9)' : 'none',
       }}
     >
-      <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center', minHeight: 20 }}>
+      <Box
+        component={display.kind === 'error' ? ButtonBase : 'div'}
+        aria-label={display.kind === 'error' ? 'Show current error details' : undefined}
+        onClick={display.kind === 'error' ? handleErrorDetailsOpen : undefined}
+        sx={{
+          display: 'flex',
+          width: '100%',
+          gap: 0.75,
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          minHeight: 20,
+          borderRadius: 0.5,
+          cursor: display.kind === 'error' ? 'pointer' : 'default',
+        }}
+      >
         {display.kind === 'pending' ? (
           <CircularProgress size={14} thickness={5} aria-hidden />
         ) : display.kind === 'error' ? (
@@ -116,16 +166,49 @@ export function OperationalStatus() {
         ) : (
           <CheckCircleOutlineIcon color="success" sx={{ fontSize: 17 }} aria-hidden />
         )}
-        <Typography variant="caption" noWrap sx={{ minWidth: 0, flex: 1 }}>
-          {display.message}
-          {display.kind === 'pending' && elapsedSeconds !== null
-            ? ` · ${String(elapsedSeconds)}s`
-            : ''}
-        </Typography>
+        <Tooltip
+          title={display.message}
+          placement="bottom-start"
+          slotProps={{
+            tooltip: {
+              sx: { maxWidth: 360, whiteSpace: 'normal', overflowWrap: 'anywhere' },
+            },
+          }}
+        >
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              minWidth: 0,
+              flex: 1,
+              fontWeight: display.kind === 'ready' ? 400 : 500,
+            }}
+          >
+            {display.message}
+            {display.kind === 'pending' && elapsedSeconds !== null
+              ? ` · ${String(elapsedSeconds)}s`
+              : ''}
+          </Typography>
+        </Tooltip>
       </Box>
       {display.kind === 'pending' ? (
         <LinearProgress aria-hidden sx={{ mt: 0.25, height: 2, borderRadius: 1 }} />
       ) : null}
+      <Popover
+        open={errorAnchor !== null && display.kind === 'error'}
+        anchorEl={errorAnchor}
+        onClose={() => {
+          setErrorAnchor(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        slotProps={{ paper: { sx: { mt: 0.5, p: 1.5, maxWidth: 360 } } }}
+      >
+        <Typography variant="subtitle2">Current map error</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {display.message}
+        </Typography>
+      </Popover>
     </Box>
   );
 }

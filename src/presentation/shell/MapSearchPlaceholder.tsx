@@ -8,8 +8,8 @@ export function MapSearchPlaceholder() {
         elevation={4}
         sx={{
           position: 'absolute',
-          top: 12,
-          right: 64,
+          top: 6,
+          right: 47,
           zIndex: 2,
           width: 330,
           maxWidth: 'calc(100% - 144px)',

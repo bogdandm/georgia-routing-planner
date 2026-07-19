@@ -6,6 +6,7 @@ import type {
   MapLayerPreferencesRepository,
   PersistedMapLayerPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
+import { defaultSatelliteRenderingTuning } from '@/application/ports/MapLayerPreferencesRepository';
 
 interface SettingRecord {
   readonly key: string;
@@ -99,6 +100,13 @@ const mapLayerPreferencesSchema = z
       })
       .strict(),
     appliedScene: satelliteSceneSchema.nullable(),
+    renderingTuning: z
+      .object({
+        reflectanceMax: z.number().min(2_000).max(15_000),
+        gamma: z.number().min(0.3).max(4),
+        saturation: z.number().min(0).max(5),
+      })
+      .default(defaultSatelliteRenderingTuning),
   })
   .strict();
 
@@ -111,6 +119,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'places-and-pois': true,
   },
   appliedScene: null,
+  renderingTuning: defaultSatelliteRenderingTuning,
 };
 
 /** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */

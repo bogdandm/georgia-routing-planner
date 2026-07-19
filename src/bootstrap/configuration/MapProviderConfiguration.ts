@@ -100,8 +100,11 @@ const mapProviderConfigurationInputSchema = z
                 value.includes('{z}') &&
                 value.includes('{x}') &&
                 value.includes('{y}') &&
-                value.includes('{itemUrl}'),
-              'Satellite renderer endpoint must contain {z}, {x}, {y}, and {itemUrl}.',
+                value.includes('{itemUrl}') &&
+                value.includes('{reflectanceMax}') &&
+                value.includes('{gamma}') &&
+                value.includes('{saturation}'),
+              'Satellite renderer endpoint must contain map, item, and rendering-tuning tokens.',
             ),
             tileSize: z.union([z.literal(256), z.literal(512)]),
             minZoom: z.number().int().min(0).max(22),
@@ -251,7 +254,7 @@ export const defaultMapProviderConfigurationInput = {
     renderer: {
       id: 'titiler-demo-stac-rgb',
       tileUrlTemplate:
-        'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C10000&rescale=0%2C10000&rescale=0%2C10000&color_formula=Gamma%20RGB%201.8%2C%20Saturation%201.05&resampling=bilinear&reproject=bilinear',
+        'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear',
       tileSize: 256,
       minZoom: 5,
       maxZoom: 16,

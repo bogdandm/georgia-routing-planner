@@ -33,7 +33,9 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type {
   SatelliteImageryCommandResult,
   SatelliteImageryMap,
+  SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
+import { defaultSatelliteRenderingTuning } from '@/presentation/map/SatelliteImageryMap';
 
 const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
@@ -93,6 +95,46 @@ function sourceIdFromError(event: MapLibreErrorEvent): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+class SentinelRasterLoadError extends Error {
+  public constructor(public readonly userMessage: string) {
+    super(userMessage);
+    this.name = 'SentinelRasterLoadError';
+  }
+}
+
+function safeRasterFailureMessage(message: string): string {
+  const normalized = message.toLowerCase();
+  const hasStatus = (status: number, reason: RegExp): boolean =>
+    new RegExp(
+      `(?:ajaxerror|http|status|response)[^\\d]{0,16}${String(status)}\\b`,
+    ).test(normalized) ||
+    new RegExp(`\\(${String(status)}\\b`).test(normalized) ||
+    (new RegExp(`\\b${String(status)}\\s+`).test(normalized) &&
+      reason.test(normalized));
+
+  if (
+    hasStatus(400, /bad request/) ||
+    hasStatus(422, /unprocessable|invalid request/)
+  ) {
+    return 'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.';
+  }
+  if (hasStatus(429, /too many requests|rate limit/)) {
+    return 'The imagery renderer is rate-limiting requests. Wait briefly, then try again.';
+  }
+  if (
+    hasStatus(500, /internal server/) ||
+    hasStatus(502, /bad gateway/) ||
+    hasStatus(503, /service unavailable/) ||
+    hasStatus(504, /gateway timeout/)
+  ) {
+    return 'The imagery renderer is temporarily unavailable. The previous image remains visible; try again shortly.';
+  }
+  if (normalized.includes('timeout') || normalized.includes('timed out')) {
+    return 'The imagery renderer did not finish in time. The previous image remains visible; try again.';
+  }
+  return 'The imagery renderer did not return a usable tile. The previous image remains visible; retry or reset the imagery stretch.';
+}
+
 /**
  * Owns logical visibility plus the replaceable Sentinel raster/footprint sources on the
  * long-lived native map. Provider URLs stay inside this adapter and never enter state.
@@ -107,6 +149,7 @@ export class MapLibreLayerController
   #pendingRestore: PersistedMapLayerPreferences | null = null;
   #restoreController: AbortController | null = null;
   #restoreInProgress = false;
+  #renderingTuning: SatelliteRenderingTuning = defaultSatelliteRenderingTuning;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -183,6 +226,7 @@ export class MapLibreLayerController
   public async restorePersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
+      this.#renderingTuning = { ...persisted.renderingTuning };
       this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
       mapLayerStore.setState({
         visibility: persisted.visibility,
@@ -196,6 +240,39 @@ export class MapLibreLayerController
         name: 'storage.map-layers.load-failed',
       });
     }
+  }
+
+  public getRenderingTuning(): SatelliteRenderingTuning {
+    return { ...this.#renderingTuning };
+  }
+
+  public async setRenderingTuning(
+    tuning: SatelliteRenderingTuning,
+    signal: AbortSignal,
+  ): Promise<SatelliteImageryCommandResult> {
+    if (
+      !Number.isFinite(tuning.reflectanceMax) ||
+      tuning.reflectanceMax < 2_000 ||
+      tuning.reflectanceMax > 15_000 ||
+      !Number.isFinite(tuning.gamma) ||
+      tuning.gamma < 0.3 ||
+      tuning.gamma > 4 ||
+      !Number.isFinite(tuning.saturation) ||
+      tuning.saturation < 0 ||
+      tuning.saturation > 5
+    ) {
+      return { status: 'failed', message: 'Imagery tuning values are out of range.' };
+    }
+    const previousTuning = this.#renderingTuning;
+    this.#renderingTuning = { ...tuning };
+    if (this.#appliedScene === null) {
+      this.persistStableState();
+      return { status: 'success' };
+    }
+    const result = await this.applySceneInternal(this.#appliedScene, signal, false);
+    if (result.status === 'failed') this.#renderingTuning = previousTuning;
+    if (result.status === 'success') this.persistStableState();
+    return result;
   }
 
   private async applySceneInternal(
@@ -316,11 +393,11 @@ export class MapLibreLayerController
         return { status: 'cancelled' };
       }
       operation.fail();
-      return this.applyFailure(
-        sceneKey,
-        'The true-color image could not be rendered. The previous map remains available.',
-        previousSceneKey,
-      );
+      const message =
+        error instanceof SentinelRasterLoadError
+          ? error.userMessage
+          : 'The true-color image could not be rendered. The previous map remains available.';
+      return this.applyFailure(sceneKey, message, previousSceneKey);
     }
   }
 
@@ -348,10 +425,14 @@ export class MapLibreLayerController
   }
 
   private createTileUrl(itemUrl: string): string {
-    return this.renderer.tileUrlTemplate.replace(
-      '{itemUrl}',
-      encodeURIComponent(itemUrl),
-    );
+    return this.renderer.tileUrlTemplate
+      .replace('{itemUrl}', encodeURIComponent(itemUrl))
+      .replaceAll(
+        '{reflectanceMax}',
+        String(Math.round(this.#renderingTuning.reflectanceMax)),
+      )
+      .replace('{gamma}', this.#renderingTuning.gamma.toFixed(2))
+      .replace('{saturation}', this.#renderingTuning.saturation.toFixed(2));
   }
 
   private updateLoadingProgress(
@@ -433,8 +514,9 @@ export class MapLibreLayerController
   private persistStableState(): void {
     const appliedScene = this.#appliedScene;
     const { visibility } = mapLayerStore.getState();
+    const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
-      .saveMapLayerPreferences({ visibility, appliedScene })
+      .saveMapLayerPreferences({ visibility, appliedScene, renderingTuning })
       .catch(() => {
         this.logger.log({
           level: 'warn',
@@ -532,11 +614,17 @@ export class MapLibreLayerController
       };
       const handleError = (event: MapLibreErrorEvent) => {
         if (sourceIdFromError(event) === sourceId) {
-          fail(new Error('Sentinel raster source failed.'));
+          fail(
+            new SentinelRasterLoadError(safeRasterFailureMessage(event.error.message)),
+          );
         }
       };
       const timeout = setTimeout(() => {
-        fail(new Error('Sentinel raster source timed out.'));
+        fail(
+          new SentinelRasterLoadError(
+            'The imagery renderer did not finish in time. The previous image remains visible; try again.',
+          ),
+        );
       }, this.requestTimeoutMs);
       signal.addEventListener('abort', handleAbort, { once: true });
       map.on('sourcedata', handleSourceData);
@@ -590,7 +678,11 @@ export class MapLibreLayerController
       appliedImagery: { status: 'failed', sceneKey, previousSceneKey, message },
       errorMessage: message,
     });
-    this.logger.log({ level: 'warn', name: 'satellite.imagery.apply-failed' });
+    this.logger.log({
+      level: 'warn',
+      name: 'satellite.imagery.apply-failed',
+      message,
+    });
     return { status: 'failed', message };
   }
 }

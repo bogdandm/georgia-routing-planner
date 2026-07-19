@@ -328,6 +328,27 @@ Tests cover storage repair and round trips, restored scene application, fixed ma
 dimensions, navigation reload persistence, raw-band renderer requests, and status/error
 states.
 
+### I8. Persistent renderer tuning and workspace polish — In progress
+
+Scope:
+
+- Keep imagery stretch controls in Settings, persist their values, allow saturation up
+  to five times normal, and reapply the active scene atomically.
+- Keep Settings visually and interactively non-modal so the map remains available while
+  tuning.
+- Make safe raster-renderer failures selectable from the shared status line and classify
+  common rejection, throttling, availability, and timeout cases.
+- Remove the duplicate recoverable map banner and give non-ready status a translucent
+  map-readable surface.
+- Preserve readiness subscribers across Strict Mode ref cleanup so Satellite cannot be
+  left with a detached map controller until refresh.
+- Finish GR-only collapse geometry, close animation, pane rounding, and consistent map
+  control spacing.
+
+Tests cover tuning bounds and persistence, renderer URL substitution, safe error
+classification and disclosure, the non-dimming Settings surface, and both GR collapse
+directions.
+
 ## 7. Review checkpoints
 
 ### Checkpoint A: Layers interaction

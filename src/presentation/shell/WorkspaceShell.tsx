@@ -5,6 +5,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import {
+  defaultSatelliteRenderingTuning,
+  type SatelliteRenderingTuning,
+} from '@/presentation/map/SatelliteImageryMap';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
@@ -38,6 +42,12 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
+  const [renderingTuning, setRenderingTuning] = useState<SatelliteRenderingTuning>(
+    () => mapLayers?.getRenderingTuning() ?? defaultSatelliteRenderingTuning,
+  );
+  const [renderingTuningPending, setRenderingTuningPending] = useState(false);
+  const [renderingTuningError, setRenderingTuningError] = useState<string | null>(null);
+  const renderingTuningAbort = useRef<AbortController | null>(null);
   const developerModeChangedByUser = useRef(false);
   const navigationChangedByUser = useRef(false);
 
@@ -70,7 +80,18 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   }, [database, logger, setDeveloperMode, setNavigationCollapsed]);
 
   useEffect(() => {
-    void mapLayers?.restorePersistedState();
+    let cancelled = false;
+    const restoreMapPreferences = async () => {
+      await mapLayers?.restorePersistedState();
+      if (!cancelled && mapLayers !== null) {
+        setRenderingTuning(mapLayers.getRenderingTuning());
+      }
+    };
+    void restoreMapPreferences();
+    return () => {
+      cancelled = true;
+      renderingTuningAbort.current?.abort();
+    };
   }, [mapLayers]);
 
   useEffect(() => {
@@ -131,6 +152,25 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
+  const handleRenderingTuningChange = async (value: SatelliteRenderingTuning) => {
+    setRenderingTuning(value);
+    if (mapLayers === null) return;
+    renderingTuningAbort.current?.abort();
+    const controller = new AbortController();
+    renderingTuningAbort.current = controller;
+    setRenderingTuningPending(true);
+    setRenderingTuningError(null);
+    try {
+      const result = await mapLayers.setRenderingTuning(value, controller.signal);
+      if (result.status === 'failed') setRenderingTuningError(result.message);
+    } finally {
+      if (renderingTuningAbort.current === controller) {
+        renderingTuningAbort.current = null;
+        setRenderingTuningPending(false);
+      }
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -153,8 +193,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           position: 'absolute',
           top: 6,
           left: 6,
-          bottom: navigationCollapsed ? 'auto' : 6,
-          height: navigationCollapsed ? 60 : 'auto',
+          height: navigationCollapsed ? 36 : 'calc(100dvh - 12px)',
           zIndex: 4,
           display: 'flex',
           gap: 0,
@@ -162,8 +201,8 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             ? 'none'
             : 'drop-shadow(0 8px 14px rgba(2, 48, 71, 0.2))',
           transition: (theme) =>
-            theme.transitions.create(['height', 'bottom'], {
-              duration: theme.transitions.duration.shorter,
+            theme.transitions.create('height', {
+              duration: theme.transitions.duration.short,
             }),
         }}
       >
@@ -180,12 +219,14 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             setSettingsOpen(true);
           }}
           onLogoClick={() => {
-            if (navigationCollapsed) handleNavigationCollapsedChange(false);
+            handleNavigationCollapsedChange(!navigationCollapsed);
           }}
         />
         <Box
           sx={{
             minWidth: 0,
+            width: 'max-content',
+            maxWidth: navigationCollapsed ? 0 : 920,
             height: '100%',
             display: 'flex',
             gap: 0,
@@ -193,7 +234,12 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             transform: navigationCollapsed ? 'translateX(-16px)' : 'translateX(0)',
             pointerEvents: navigationCollapsed ? 'none' : 'auto',
             visibility: navigationCollapsed ? 'hidden' : 'visible',
-            transition: (theme) => theme.transitions.create(['opacity', 'transform']),
+            overflow: 'hidden',
+            borderRadius: '0 8px 8px 0',
+            transition: (theme) =>
+              `${theme.transitions.create(['opacity', 'transform', 'max-width'], {
+                duration: theme.transitions.duration.short,
+              })}, visibility 0s linear ${navigationCollapsed ? '250ms' : '0ms'}`,
           }}
         >
           <WorkspaceSidebar activeTab={activeTab} />
@@ -205,7 +251,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
               display: activeTab === 'satellite' ? 'flex' : 'none',
               flexShrink: 0,
               overflow: 'hidden',
-              borderRadius: '0 8px 8px 0',
             }}
           />
         </Box>
@@ -220,7 +265,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
               sx={{
                 position: 'absolute',
                 top: 12,
-                right: -18,
+                right: -28,
                 bgcolor: 'background.paper',
                 border: 1,
                 borderColor: 'divider',
@@ -235,14 +280,19 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
       </Box>
 
       <SettingsDialog
+        key={`${String(renderingTuning.reflectanceMax)}:${renderingTuning.gamma.toFixed(2)}:${renderingTuning.saturation.toFixed(2)}`}
         developerMode={developerMode}
-        navigationCollapsed={navigationCollapsed}
         open={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
         }}
         onDeveloperModeChange={handleDeveloperModeChange}
-        onNavigationCollapsedChange={handleNavigationCollapsedChange}
+        renderingTuning={renderingTuning}
+        renderingTuningPending={renderingTuningPending}
+        renderingTuningError={renderingTuningError}
+        onRenderingTuningChange={(value) => {
+          void handleRenderingTuningChange(value);
+        }}
       />
       {developerMode ? (
         <DeveloperDrawer

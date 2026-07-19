@@ -1,4 +1,5 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import { waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -221,7 +222,11 @@ describe('MapLibreLayerController', () => {
       error: { message: 'private provider detail' },
     });
 
-    await expect(replacement).resolves.toMatchObject({ status: 'failed' });
+    await expect(replacement).resolves.toEqual({
+      status: 'failed',
+      message:
+        'The imagery renderer did not return a usable tile. The previous image remains visible; retry or reset the imagery stretch.',
+    });
     expect(map.layers.has(sentinelMapLayerIds.rasterA)).toBe(true);
     expect(map.layers.has(sentinelMapLayerIds.rasterB)).toBe(false);
     expect(mapLayerStore.getState().appliedImagery).toMatchObject({
@@ -231,6 +236,37 @@ describe('MapLibreLayerController', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain(
       'private provider detail',
     );
+  });
+
+  it('reports a safe actionable reason when the renderer rejects a tile request', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('scene-a'), new AbortController().signal);
+    map.sourceLoaded = false;
+
+    const replacement = controller.applyScene(
+      scene('scene-b'),
+      new AbortController().signal,
+    );
+    map.fire('error', {
+      sourceId: 'sentinel-raster-b',
+      error: {
+        message:
+          'AJAXError: 400 Bad Request: https://renderer.example/private-item-and-token',
+      },
+    });
+
+    await expect(replacement).resolves.toEqual({
+      status: 'failed',
+      message:
+        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+    });
+    const diagnosticText = JSON.stringify(services.logger.getEvents());
+    expect(diagnosticText).toContain('rejected these stretch values');
+    expect(diagnosticText).not.toContain('private-item-and-token');
   });
 
   it('restores the saved scene and visibility after a page refresh', async () => {
@@ -246,6 +282,7 @@ describe('MapLibreLayerController', () => {
         'places-and-pois': true,
       },
       appliedScene: scene('saved-scene'),
+      renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -258,6 +295,39 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: { 'satellite-imagery': false, roads: false },
       appliedImagery: { status: 'hidden', sceneId: 'saved-scene' },
+    });
+    expect(controller.getRenderingTuning()).toEqual({
+      reflectanceMax: 6_500,
+      gamma: 1.6,
+      saturation: 1.2,
+    });
+  });
+
+  it('atomically reapplies and persists user imagery stretch values', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('tuned-scene'), new AbortController().signal);
+
+    await expect(
+      controller.setRenderingTuning(
+        { reflectanceMax: 6_250, gamma: 1.55, saturation: 1.25 },
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ status: 'success' });
+
+    const raster = map.sources.get('sentinel-raster-b') as {
+      readonly tiles: readonly string[];
+    };
+    expect(raster.tiles[0]).toContain('rescale=0%2C6250');
+    expect(raster.tiles[0]).toContain('Gamma%20RGB%201.55');
+    expect(raster.tiles[0]).toContain('Saturation%201.25');
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        renderingTuning: { reflectanceMax: 6_250, gamma: 1.55, saturation: 1.25 },
+      });
     });
   });
 });

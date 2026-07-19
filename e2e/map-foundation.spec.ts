@@ -200,7 +200,7 @@ test('reports and restores a controlled WebGL context loss', async ({ page }) =>
   await expect(page.getByText('map.lifecycle.mounted')).toHaveCount(1);
 });
 
-test('keeps the map usable and offers retry after intercepted vector failures', async ({
+test('keeps the map usable and centralizes intercepted vector failures', async ({
   page,
 }) => {
   await page.route(/https:\/\/tiles\.openfreemap\.org\/fixtures\/.*\.pbf/u, (route) =>
@@ -210,9 +210,10 @@ test('keeps the map usable and offers retry after intercepted vector failures', 
   const workspace = page.getByTestId('map-workspace');
   await expect(workspace).toHaveAttribute('data-map-state', 'degraded');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
-  await expect(page.getByRole('alert')).toContainText(
-    'Some basemap tiles could not load',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Show current error details' }),
+  ).toContainText('Some basemap tiles could not load');
+  await expect(page.getByRole('button', { name: 'Retry map data' })).toHaveCount(0);
 
   const accessibility = await new AxeBuilder({ page })
     .include('[data-testid="map-workspace"]')
@@ -222,9 +223,4 @@ test('keeps the map usable and offers retry after intercepted vector failures', 
       ['serious', 'critical'].includes(violation.impact ?? ''),
     ),
   ).toEqual([]);
-
-  await page.getByRole('button', { name: 'Retry map data' }).click();
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
-    timeout: 15_000,
-  });
 });

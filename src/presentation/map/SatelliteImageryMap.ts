@@ -1,4 +1,10 @@
+import type { SatelliteRenderingTuning } from '@/application/ports/MapLayerPreferencesRepository';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+
+export {
+  defaultSatelliteRenderingTuning,
+  type SatelliteRenderingTuning,
+} from '@/application/ports/MapLayerPreferencesRepository';
 
 export type AppliedSatelliteImagerySnapshot =
   | { readonly status: 'empty' }
@@ -41,5 +47,10 @@ export interface SatelliteImageryMap {
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult>;
   fitFootprint(): SatelliteImageryCommandResult;
+  getRenderingTuning(): SatelliteRenderingTuning;
   restorePersistedState(): Promise<void>;
+  setRenderingTuning(
+    tuning: SatelliteRenderingTuning,
+    signal: AbortSignal,
+  ): Promise<SatelliteImageryCommandResult>;
 }

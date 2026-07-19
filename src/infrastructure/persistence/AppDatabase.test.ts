@@ -50,7 +50,7 @@ describe('AppDatabase', () => {
     await expect(database.settings.get('ui.preferences')).resolves.toBeUndefined();
   });
 
-  it('persists validated layer visibility and the currently applied scene', async () => {
+  it('persists layer visibility, imagery stretch, and the applied scene', async () => {
     const appliedScene: SatelliteScene = {
       id: 'saved-scene',
       collection: 'sentinel-2-l2a',
@@ -92,11 +92,33 @@ describe('AppDatabase', () => {
         'places-and-pois': true,
       },
       appliedScene,
+      renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
     } as const;
 
     await database.saveMapLayerPreferences(preferences);
 
     await expect(database.loadMapLayerPreferences()).resolves.toEqual(preferences);
+  });
+
+  it('adds safe imagery stretch defaults to older layer preference records', async () => {
+    await database.settings.put({
+      key: 'map.layers',
+      value: {
+        visibility: {
+          'satellite-imagery': true,
+          'scene-footprint': true,
+          'hiking-paths': true,
+          roads: true,
+          'places-and-pois': true,
+        },
+        appliedScene: null,
+      },
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      renderingTuning: { reflectanceMax: 10_000, gamma: 1.8, saturation: 1.05 },
+    });
   });
 
   it('runs a non-destructive storage probe', async () => {

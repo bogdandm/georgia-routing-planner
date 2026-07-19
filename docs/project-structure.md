@@ -92,7 +92,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Component transitions and messages                        | React component state               | Local rendering concern                            |
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
 | Sentinel sources, footprint, and layer commands           | `MapLibreLayerController`           | Provider URLs and native resources stay imperative |
-| Applied imagery and logical visibility                    | Dexie plus Zustand `mapLayerStore`  | Durable choices with a serializable live view      |
+| Applied imagery, logical visibility, and raster stretch   | Dexie plus map layer controller     | Durable choices with a serializable live view      |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
@@ -121,10 +121,11 @@ ordering instead of scattering MapLibre identifiers through presentation compone
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
 only Sentinel raster slots, the footprint source/layer, and allowlisted logical
-visibility commands. Satellite and Layers UI share its serializable Zustand snapshot;
-they never receive the native map or provider asset URL. Search results remain local
-React state in a mounted-but-hidden Satellite browser so rail navigation does not reset
-the session.
+visibility commands. It also validates persistent reflectance, gamma, and saturation
+values and atomically reapplies the current raster. Satellite and Layers UI share its
+serializable Zustand snapshot; they never receive the native map or provider asset URL.
+Search results remain local React state in a mounted-but-hidden Satellite browser so
+rail navigation does not reset the session.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

@@ -13,7 +13,6 @@ import Map, { NavigationControl, type MapRef } from 'react-map-gl/maplibre';
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
-import { MapStatusOverlay } from '@/presentation/map/MapStatusOverlay';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
   TerrainModeControl,
@@ -145,9 +144,12 @@ export function MapWorkspace({
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
-      if (facade instanceof MapLibreFacade && mapRef !== null) {
-        facade.attach(mapRef.getMap());
+      if (!(facade instanceof MapLibreFacade)) return;
+      if (mapRef === null) {
+        facade.detachMap();
+        return;
       }
+      facade.attach(mapRef.getMap());
     },
     [facade],
   );
@@ -229,8 +231,10 @@ export function MapWorkspace({
 
   useEffect(() => {
     return () => {
-      facade.destroy();
       cameraPersistence.destroy();
+      // The native MapLibre ref owns real-facade detach/reattach. Destroying it here
+      // breaks React Strict Mode's development cleanup replay by clearing subscribers.
+      if (!(facade instanceof MapLibreFacade)) facade.destroy();
     };
   }, [cameraPersistence, facade]);
 
@@ -320,14 +324,6 @@ export function MapWorkspace({
           You are offline. Areas already rendered may remain visible, but new map data
           is unavailable until the connection returns.
         </Alert>
-      ) : null}
-      {mapProviderConfiguration.status === 'valid' ? (
-        <MapStatusOverlay
-          snapshot={snapshot}
-          onRetry={() => {
-            facade.retryRecoverableFailures();
-          }}
-        />
       ) : null}
     </Box>
   );

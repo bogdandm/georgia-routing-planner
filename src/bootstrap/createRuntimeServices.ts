@@ -105,6 +105,7 @@ export function createRuntimeServices(): RuntimeServices {
     mapProviderConfiguration.status === 'valid'
       ? new MapLibreLayerController(
           mapProviderConfiguration.value.satellite.renderer,
+          mapProviderConfiguration.value.terrain,
           logger,
           idGenerator,
           sentinelQueryDiagnostics,

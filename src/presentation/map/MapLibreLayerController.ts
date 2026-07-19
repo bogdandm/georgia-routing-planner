@@ -13,6 +13,7 @@ import type {
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
+import { supportedContourIntervals } from '@/application/ports/MapLayerPreferencesRepository';
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
@@ -30,6 +31,7 @@ import {
   mapLayerIds,
   mapSourceIds,
   sentinelMapLayerIds,
+  terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type {
@@ -38,6 +40,11 @@ import type {
   SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
 import { defaultSatelliteRenderingTuning } from '@/presentation/map/SatelliteImageryMap';
+import type {
+  TerrainOverlayCommandResult,
+  TerrainOverlayMap,
+} from '@/presentation/map/TerrainOverlayMap';
+import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 
 const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
@@ -142,7 +149,7 @@ function safeRasterFailureMessage(message: string): string {
  * long-lived native map. Provider URLs stay inside this adapter and never enter state.
  */
 export class MapLibreLayerController
-  implements MapLayerVisibility, SatelliteImageryMap
+  implements MapLayerVisibility, SatelliteImageryMap, TerrainOverlayMap
 {
   #map: MapLibreMap | null = null;
   #activeSlot: RasterSlot | null = null;
@@ -157,6 +164,7 @@ export class MapLibreLayerController
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
+    private readonly terrain: MapProviderConfiguration['terrain'],
     private readonly logger: DiagnosticLogger,
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
@@ -165,13 +173,23 @@ export class MapLibreLayerController
   ) {}
 
   public attach(map: MapLibreMap): void {
+    if (this.#map === map) {
+      this.reconcileTerrainOverlays();
+      this.applyBaseLayerVisibility();
+      void this.restorePendingScene();
+      return;
+    }
+    this.#map?.off('styledata', this.handleStyleData);
     this.#map = map;
+    map.on('styledata', this.handleStyleData);
+    this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     void this.restorePendingScene();
   }
 
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
+    map.off('styledata', this.handleStyleData);
     this.#map = null;
     this.#applySequence += 1;
     this.#restoreController?.abort();
@@ -236,6 +254,7 @@ export class MapLibreLayerController
     if (map !== null) {
       for (const slot of rasterSlots) this.removeSlot(map, slot);
       this.removeFootprint(map);
+      this.reconcileTerrainOverlays();
     }
     this.#activeSlot = null;
     this.#appliedScene = null;
@@ -264,6 +283,7 @@ export class MapLibreLayerController
         errorMessage: null,
       });
       this.applyBaseLayerVisibility();
+      this.reconcileTerrainOverlays();
       await this.restorePendingScene();
     } catch {
       this.logger.log({
@@ -279,6 +299,20 @@ export class MapLibreLayerController
 
   public getTerrainOverlayPreferences(): TerrainOverlayPreferences {
     return { ...this.#terrainOverlayPreferences };
+  }
+
+  public setTerrainOverlayPreferences(
+    value: TerrainOverlayPreferences,
+  ): TerrainOverlayCommandResult {
+    if (!supportedContourIntervals.includes(value.contourIntervalMeters)) {
+      return this.terrainOverlayFailure(
+        'Choose a supported contour distance that divides the 200 m index interval.',
+      );
+    }
+    this.#terrainOverlayPreferences = { ...value };
+    const result = this.reconcileTerrainOverlays();
+    if (result.status === 'success') this.persistStableState();
+    return result;
   }
 
   public async setRenderingTuning(
@@ -408,6 +442,7 @@ export class MapLibreLayerController
       if (this.#activeSlot !== null) this.removeSlot(map, this.#activeSlot);
       this.#activeSlot = slot;
       this.#appliedScene = scene;
+      this.reconcileTerrainOverlays();
       mapLayerStore.setState({
         appliedImagery: { status: 'ready', sceneKey, sceneId: scene.id, visible: true },
         visibility: { ...state.visibility, 'satellite-imagery': true },
@@ -565,6 +600,99 @@ export class MapLibreLayerController
           name: 'storage.map-layers.save-failed',
         });
       });
+  }
+
+  private readonly handleStyleData = (): void => {
+    this.reconcileTerrainOverlays();
+    this.applyBaseLayerVisibility();
+  };
+
+  private reconcileTerrainOverlays(): TerrainOverlayCommandResult {
+    const map = this.#map;
+    if (map === null) {
+      return this.terrainOverlayFailure('The map is not ready yet.');
+    }
+    if (map.getLayer(mapLayerIds.background) === undefined) {
+      return { status: 'success' };
+    }
+    try {
+      if (map.getSource(mapSourceIds.terrainDem) === undefined) {
+        map.addSource(mapSourceIds.terrainDem, createTerrainDemSource(this.terrain));
+      }
+      if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
+        map.addLayer(
+          {
+            id: terrainOverlayLayerIds.reliefShade,
+            type: 'hillshade',
+            source: mapSourceIds.terrainDem,
+            paint: {
+              'hillshade-exaggeration': 0.22,
+              'hillshade-shadow-color': '#4f4438',
+              'hillshade-highlight-color': '#f3ead8',
+              'hillshade-accent-color': '#7d6a55',
+              'hillshade-illumination-anchor': 'map',
+            },
+          },
+          mapInsertionPoints.terrainOverlaysBeforeLayerId,
+        );
+        this.logger.log({ level: 'info', name: 'map.relief.initialized' });
+      }
+      const beforeId =
+        !this.#terrainOverlayPreferences.shadeAboveSatellite &&
+        this.#activeSlot !== null &&
+        map.getLayer(this.#activeSlot.layerId) !== undefined
+          ? this.#activeSlot.layerId
+          : mapInsertionPoints.terrainOverlaysBeforeLayerId;
+      const layerIds = map.getStyle().layers.map((layer) => layer.id);
+      const reliefIndex = layerIds.indexOf(terrainOverlayLayerIds.reliefShade);
+      const beforeIndex = layerIds.indexOf(beforeId);
+      const activeRasterIndex =
+        this.#activeSlot === null ? -1 : layerIds.indexOf(this.#activeSlot.layerId);
+      const orderIsCorrect = this.#terrainOverlayPreferences.shadeAboveSatellite
+        ? activeRasterIndex < 0 ||
+          (reliefIndex > activeRasterIndex && reliefIndex < beforeIndex)
+        : reliefIndex >= 0 && reliefIndex < beforeIndex;
+      if (!orderIsCorrect) map.moveLayer(terrainOverlayLayerIds.reliefShade, beforeId);
+      mapLayerStore.setState({
+        terrainOverlays: {
+          initialized: true,
+          preferences: { ...this.#terrainOverlayPreferences },
+          message: null,
+        },
+      });
+      if (!orderIsCorrect) {
+        this.logger.log({
+          level: 'info',
+          name: 'map.relief.order-reconciled',
+          data: {
+            position: this.#terrainOverlayPreferences.shadeAboveSatellite
+              ? 'above-satellite'
+              : 'below-satellite',
+          },
+        });
+      }
+      return { status: 'success' };
+    } catch {
+      return this.terrainOverlayFailure(
+        'Terrain relief could not be rendered. The base map remains available.',
+      );
+    }
+  }
+
+  private terrainOverlayFailure(message: string): TerrainOverlayCommandResult {
+    mapLayerStore.setState({
+      terrainOverlays: {
+        initialized: false,
+        preferences: { ...this.#terrainOverlayPreferences },
+        message,
+      },
+    });
+    this.logger.log({
+      level: 'warn',
+      name: 'map.terrain-overlays.failed',
+      message,
+    });
+    return { status: 'failed', message };
   }
 
   private nativeLayerIds(layerId: LogicalMapLayerId): readonly string[] {

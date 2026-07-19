@@ -89,6 +89,7 @@ export function createTestServices(
     );
   const mapLayers = new MapLibreLayerController(
     parsedMapProviderConfiguration.satellite.renderer,
+    parsedMapProviderConfiguration.terrain,
     logger,
     idGenerator,
     sentinelQueryDiagnostics,

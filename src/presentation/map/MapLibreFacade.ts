@@ -10,6 +10,7 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { mapSourceIds } from '@/presentation/map/mapIds';
+import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   defaultGeorgiaCamera,
@@ -416,15 +417,10 @@ export class MapLibreFacade implements MapFacade {
     const pitch = camera.pitch > 0 ? camera.pitch : this.#lastTerrainPitch;
     try {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
-        map.addSource(mapSourceIds.terrainDem, {
-          type: 'raster-dem',
-          tiles: [provider.terrain.tileUrl],
-          encoding: provider.terrain.encoding,
-          tileSize: provider.terrain.tileSize,
-          minzoom: provider.terrain.minZoom,
-          maxzoom: provider.terrain.maxZoom,
-          attribution: provider.terrain.attribution,
-        });
+        map.addSource(
+          mapSourceIds.terrainDem,
+          createTerrainDemSource(provider.terrain),
+        );
       }
       map.setTerrain({
         source: mapSourceIds.terrainDem,
@@ -449,9 +445,6 @@ export class MapLibreFacade implements MapFacade {
       return { status: 'success', mode };
     } catch {
       map.setTerrain(null);
-      if (map.getSource(mapSourceIds.terrainDem) !== undefined) {
-        map.removeSource(mapSourceIds.terrainDem);
-      }
       map.easeTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,

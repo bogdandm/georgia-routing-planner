@@ -16,6 +16,7 @@ class FakeLayerMap {
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
+  readonly moves: Array<{ readonly id: string; readonly beforeId?: string }> = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
 
@@ -43,8 +44,39 @@ class FakeLayerMap {
     return this.layers.get(id);
   }
 
-  public addLayer(layer: Record<string, unknown>): void {
-    this.layers.set(String(layer.id), layer);
+  public addLayer(layer: Record<string, unknown>, beforeId?: string): void {
+    const id = String(layer.id);
+    if (beforeId === undefined || !this.layers.has(beforeId)) {
+      this.layers.set(id, layer);
+      return;
+    }
+    const reordered = [...this.layers.entries()];
+    const beforeIndex = reordered.findIndex(([layerId]) => layerId === beforeId);
+    reordered.splice(beforeIndex, 0, [id, layer]);
+    this.layers.clear();
+    for (const [layerId, value] of reordered) this.layers.set(layerId, value);
+  }
+
+  public moveLayer(id: string, beforeId?: string): void {
+    if (!this.layers.has(id)) throw new Error(`Layer ${id} is unavailable.`);
+    this.moves.push(beforeId === undefined ? { id } : { id, beforeId });
+    const layer = this.layers.get(id);
+    if (layer === undefined) return;
+    const reordered = [...this.layers.entries()].filter(([layerId]) => layerId !== id);
+    const beforeIndex = reordered.findIndex(([layerId]) => layerId === beforeId);
+    reordered.splice(beforeIndex < 0 ? reordered.length : beforeIndex, 0, [id, layer]);
+    this.layers.clear();
+    for (const [layerId, value] of reordered) this.layers.set(layerId, value);
+  }
+
+  public getStyle(): {
+    readonly sources: Record<string, unknown>;
+    readonly layers: Array<{ readonly id: string }>;
+  } {
+    return {
+      sources: Object.fromEntries(this.sources),
+      layers: [...this.layers.keys()].map((id) => ({ id })),
+    };
   }
 
   public removeLayer(id: string): void {
@@ -140,6 +172,7 @@ describe('MapLibreLayerController', () => {
     const map = new FakeLayerMap();
     const controller = new MapLibreLayerController(
       configuration.value.satellite.renderer,
+      configuration.value.terrain,
       services.logger,
       services.idGenerator,
       services.sentinelQueryDiagnostics,
@@ -156,6 +189,46 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.roadLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingPaths)).toBe('visible');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
+  });
+
+  it('creates one relief layer and deterministically orders it around satellite imagery', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+
+    controller.attach(map as unknown as MapLibreMap);
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(map.sources.has('terrain-dem')).toBe(true);
+    expect(map.layers.has('terrain-relief-shade')).toBe(true);
+    expect(
+      [...map.layers.keys()].filter((id) => id === 'terrain-relief-shade'),
+    ).toHaveLength(1);
+
+    await controller.applyScene(scene('scene-relief'), new AbortController().signal);
+    const belowOrder = [...map.layers.keys()];
+    expect(belowOrder.indexOf('terrain-relief-shade')).toBeLessThan(
+      belowOrder.indexOf('sentinel-raster-a'),
+    );
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 50,
+        shadeAboveSatellite: true,
+      }),
+    ).toEqual({ status: 'success' });
+    const aboveOrder = [...map.layers.keys()];
+    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeGreaterThan(
+      aboveOrder.indexOf('sentinel-raster-a'),
+    );
+    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeLessThan(
+      aboveOrder.indexOf(mapLayerIds.water),
+    );
+    expect(mapLayerStore.getState().terrainOverlays).toMatchObject({
+      initialized: true,
+      preferences: { shadeAboveSatellite: true },
+    });
   });
 
   it('applies a georeferenced tile source, footprint, visibility, and fit command', async () => {

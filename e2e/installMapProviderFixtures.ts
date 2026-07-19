@@ -1,8 +1,11 @@
 import type { Page } from '@playwright/test';
+import searchResponse from '../test/fixtures/satellite/search-response.json' with { type: 'json' };
 
 const openFreeMapOrigin = 'https://tiles.openfreemap.org';
 const terrainOrigin = 'https://s3.amazonaws.com';
 const earthSearchOrigin = 'https://earth-search.aws.element84.com';
+const satelliteRendererOrigin = 'https://titiler.xyz';
+const sentinelCogFixtureOrigin = 'https://sentinel-cogs.example.test';
 const terrainDemFixture = Buffer.from(
   [
     'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAADGklEQVR4nO3OQQ0AMBAEoZVe6ZUxjyNBAHsbnNUPINQPINQPINQP',
@@ -115,6 +118,14 @@ function createVectorTileFixture(): Buffer {
 }
 
 const vectorTileFixture = createVectorTileFixture();
+const satelliteSearchFixture = structuredClone(searchResponse);
+const satelliteFeature = satelliteSearchFixture.features[0];
+if (satelliteFeature !== undefined) {
+  satelliteFeature.id = 'S2A_38TMN_20260709_0_L2A';
+  satelliteFeature.properties.datetime = '2026-07-09T08:08:21.070000Z';
+  satelliteFeature.properties['s2:product_uri'] =
+    'S2A_MSIL2A_20260709T080821_N0512_R135_T38TMN_SYNTHETIC.SAFE';
+}
 
 const tileJsonFixture = {
   tilejson: '3.0.0',
@@ -166,9 +177,41 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
   );
   await page.route(
     new RegExp(`^${earthSearchOrigin.replaceAll('.', '\\.')}`),
+    (route) => {
+      const requestBody = route.request().postDataJSON() as {
+        readonly datetime?: unknown;
+      };
+      const isCurrentMonth =
+        typeof requestBody.datetime === 'string' &&
+        requestBody.datetime.startsWith('2026-07-01');
+      return route.fulfill({
+        json: isCurrentMonth
+          ? satelliteSearchFixture
+          : {
+              type: 'FeatureCollection',
+              context: { matched: 0, returned: 0, limit: 100 },
+              features: [],
+              links: [],
+            },
+      });
+    },
+  );
+  await page.route(
+    new RegExp(`^${satelliteRendererOrigin.replaceAll('.', '\\.')}`),
     (route) =>
       route.fulfill({
-        json: { type: 'FeatureCollection', features: [], links: [] },
+        status: 200,
+        contentType: 'image/png',
+        body: terrainDemFixture,
+      }),
+  );
+  await page.route(
+    new RegExp(`^${sentinelCogFixtureOrigin.replaceAll('.', '\\.')}`),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/png',
+        body: terrainDemFixture,
       }),
   );
   await page.route(
@@ -196,6 +239,8 @@ export function isConfiguredProviderRequest(url: URL): boolean {
   return (
     url.origin === openFreeMapOrigin ||
     url.origin === terrainOrigin ||
-    url.origin === earthSearchOrigin
+    url.origin === earthSearchOrigin ||
+    url.origin === satelliteRendererOrigin ||
+    url.origin === sentinelCogFixtureOrigin
   );
 }

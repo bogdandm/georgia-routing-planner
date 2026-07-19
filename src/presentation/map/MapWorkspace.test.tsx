@@ -10,7 +10,7 @@ import { createTestServices } from '../../../test/helpers/createTestServices';
 import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
 
 describe('MapWorkspace', () => {
-  it('renders lifecycle feedback from a serializable facade snapshot', () => {
+  it('publishes lifecycle state without mounting a duplicate local banner', () => {
     const facade = new FakeMapFacade();
     const services = createTestServices();
     const { unmount } = render(
@@ -19,7 +19,10 @@ describe('MapWorkspace', () => {
       </RuntimeServicesProvider>,
     );
 
-    expect(screen.getByRole('status', { name: 'Loading map workspace' })).toBeVisible();
+    expect(screen.getByTestId('map-workspace')).toHaveAttribute(
+      'data-map-state',
+      'loading',
+    );
 
     act(() => {
       facade.setSnapshot({
@@ -27,9 +30,11 @@ describe('MapWorkspace', () => {
         message: 'WebGL is unavailable for this browser.',
       });
     });
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'WebGL is unavailable for this browser.',
+    expect(screen.getByTestId('map-workspace')).toHaveAttribute(
+      'data-map-state',
+      'fatal',
     );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     unmount();
     expect(facade.destroyed).toBe(true);
@@ -124,6 +129,7 @@ describe('MapWorkspace', () => {
     let attempts = 0;
     facade.terrainTransition = (mode) => {
       attempts += 1;
+      if (attempts > 1) facade.setSnapshot({ terrainMode: mode });
       return Promise.resolve(
         attempts === 1
           ? { status: 'failed', reason: 'Fixture terrain is unavailable.' }
@@ -151,8 +157,42 @@ describe('MapWorkspace', () => {
     expect(facade.terrainModeRequests).toEqual(['terrain', 'terrain']);
   });
 
-  it('shows recoverable basemap feedback, retries in place, and describes offline limits', async () => {
-    const user = userEvent.setup();
+  it('returns the control to 2D after a late terrain source failure', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Terrain map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Terrain map');
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'terrain' });
+    });
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    act(() => {
+      facade.setSnapshot({
+        lifecycle: 'degraded',
+        terrainMode: 'flat',
+        message: '3D terrain is unavailable. The 2D basemap remains usable.',
+      });
+    });
+
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('leaves recoverable map feedback to the shared status and describes offline limits', async () => {
     const facade = new FakeMapFacade();
     render(
       <RuntimeServicesProvider services={createTestServices()}>
@@ -175,11 +215,12 @@ describe('MapWorkspace', () => {
         ],
       });
     });
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Some basemap tiles could not load.',
-    );
-    await user.click(screen.getByRole('button', { name: 'Retry map data' }));
-    expect(facade.retryRequests).toBe(1);
+    expect(
+      screen.queryByText('Some basemap tiles could not load.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Retry map data' }),
+    ).not.toBeInTheDocument();
 
     act(() => {
       window.dispatchEvent(new Event('offline'));

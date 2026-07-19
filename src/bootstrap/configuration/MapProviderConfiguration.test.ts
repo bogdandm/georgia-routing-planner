@@ -36,6 +36,8 @@ describe('MapProviderConfiguration', () => {
       terrainOrigin: 'https://s3.amazonaws.com',
       satelliteId: 'earth-search-v1',
       satelliteOrigin: 'https://earth-search.aws.element84.com',
+      satelliteRendererId: 'titiler-demo-stac-rgb',
+      satelliteRendererOrigin: 'https://titiler.xyz',
     });
   });
 
@@ -109,6 +111,24 @@ describe('MapProviderConfiguration', () => {
       mutate: (input: Record<string, unknown>) => {
         const vector = input.vector as Record<string, unknown>;
         vector.tileJsonUrl = 'http://tiles.example.test/tiles.json';
+      },
+    },
+    ...[
+      'javascript:alert(1)',
+      'data:text/plain,private',
+      'mailto:user@example.com',
+    ].map((endpoint) => ({
+      name: `unsafe ${endpoint.split(':')[0] ?? 'unknown'} URI`,
+      mutate: (input: Record<string, unknown>) => {
+        const vector = input.vector as Record<string, unknown>;
+        vector.tileJsonUrl = endpoint;
+      },
+    })),
+    {
+      name: 'protocol-relative endpoint',
+      mutate: (input: Record<string, unknown>) => {
+        const vector = input.vector as Record<string, unknown>;
+        vector.tileJsonUrl = '//tiles.example.test/tiles.json';
       },
     },
     {

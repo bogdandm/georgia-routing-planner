@@ -19,7 +19,9 @@ import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQ
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
+import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
+import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -63,7 +65,7 @@ export function createTestServices(
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const mapViewport = new MapViewportSnapshotStore();
-  const httpClient = createHttpClient(logger);
+  const httpClient = createHttpClient(logger, clock, idGenerator);
   const parsedMapProviderConfiguration = parseMapProviderConfiguration(
     defaultMapProviderConfigurationInput,
     'https://example.test/georgia-routing-planner/',
@@ -85,6 +87,14 @@ export function createTestServices(
       logger,
       clock,
     );
+  const mapLayers = new MapLibreLayerController(
+    parsedMapProviderConfiguration.satellite.renderer,
+    logger,
+    idGenerator,
+    sentinelQueryDiagnostics,
+    parsedMapProviderConfiguration.policy.requestTimeoutMs,
+    database,
+  );
 
   return {
     buildInfo,
@@ -102,6 +112,7 @@ export function createTestServices(
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
     mapDiagnostics,
     mapViewport,
+    mapLayers,
     mapProviderConfiguration: {
       status: 'valid',
       value: parsedMapProviderConfiguration,
@@ -125,5 +136,23 @@ export function createTestServices(
       clock,
     ),
     sentinelQueryDiagnostics,
+    storageUsage: new BrowserStorageUsageReader({
+      estimate: () =>
+        Promise.resolve({
+          usage: 8 * 1_048_576,
+          quota: 512 * 1_048_576,
+          usageDetails: {
+            indexedDB: 3 * 1_048_576,
+            caches: 4 * 1_048_576,
+          },
+        }),
+      heapMemory: () => ({
+        usedJSHeapSize: 48 * 1_048_576,
+        totalJSHeapSize: 64 * 1_048_576,
+        jsHeapSizeLimit: 2_048 * 1_048_576,
+      }),
+      localStorageEntries: () => [['test', 'value']],
+      now: () => new Date('2026-07-19T12:00:00.000Z'),
+    }),
   };
 }

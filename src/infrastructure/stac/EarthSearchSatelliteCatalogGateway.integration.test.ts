@@ -63,7 +63,7 @@ function beginOperation(services: ReturnType<typeof createTestServices>, id: str
 }
 
 describe('EarthSearchSatelliteCatalogGateway', () => {
-  it('posts bounded L2A criteria and maps the validated COG scene', async () => {
+  it('posts bounded L2A criteria and maps validated raw RGB COG bands', async () => {
     const requestBodies: unknown[] = [];
     mswServer.use(
       http.post(searchUrl, async ({ request }) => {
@@ -94,7 +94,9 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
       tileId: '38TMN',
       orbit: 'R135',
       visualAsset: {
-        kind: 'cog',
+        kind: 'sentinel-rgb-cogs',
+        itemHref:
+          'https://earth-search.example.test/v1/collections/sentinel-2-l2a/items/S2A_38TMN_20250731_0_L2A',
         projectionEpsg: 32638,
       },
     });
@@ -290,7 +292,7 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
     if (insecureFeature === undefined) {
       throw new Error('Expected a synthetic insecure-asset feature.');
     }
-    insecureFeature.assets.visual.href =
+    insecureFeature.assets.red.href =
       'http://sentinel-cogs.example.test/private.tif?token=fake-secret';
     mswServer.use(http.post(searchUrl, () => HttpResponse.json(insecureAsset)));
     services.sentinelQueryDiagnostics.beginOperation('insecure-asset');

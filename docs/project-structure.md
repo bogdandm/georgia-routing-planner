@@ -43,6 +43,7 @@ src/
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
     map/                   map UI, pure style, facade, terrain, and camera coordination
+    layers/                logical visibility checkbox presentation
     satellite-browser/     live search controls and date-grouped scene presentation
     developer-tools/       local support and diagnostic UI
     theme/                 shared color tokens and Material UI theme
@@ -90,6 +91,9 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Dialogs, active rail section, developer flags             | Zustand `uiStore`                   | Cross-component, transient, serializable UI state  |
 | Component transitions and messages                        | React component state               | Local rendering concern                            |
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
+| Sentinel sources, footprint, and layer commands           | `MapLibreLayerController`           | Provider URLs and native resources stay imperative |
+| Applied imagery, logical visibility, and raster stretch   | Dexie plus map layer controller     | Durable choices with a serializable live view      |
+| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`         | Read-only platform metrics behind an app port      |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
@@ -99,12 +103,19 @@ Do not mirror authoritative map or durable data into Zustand. React consumes the
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
 the native map instance to be recreated.
 
-`WorkspaceShell` only composes the persistent regions. `WorkspaceRail` owns the Tracks,
-Satellite, Markers, and Layers destinations plus global Diagnostics and Settings
-actions. `WorkspaceSidebar` owns each section's implemented, disabled, or empty
-presentation. Create GPX is currently a disabled Tracks action and is never a rail
-section. Shared palette values live in `appColors.ts` so the MUI theme and pure MapLibre
-style use the same visual vocabulary without introducing a second styling system.
+`WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
+`WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global
+Diagnostics and Settings actions. `WorkspaceSidebar` owns each section's implemented,
+disabled, or empty presentation. Create GPX is currently a disabled Tracks action and is
+never a rail section. Shared palette values live in `appColors.ts` so the MUI theme and
+pure MapLibre style use the same visual vocabulary without introducing a second styling
+system.
+
+`BrowserStorageUsageReader` implements the small `StorageUsageReader` application port.
+It combines the origin storage estimate, Chromium's optional per-category details,
+localStorage byte estimation, and optional JavaScript heap counters without exposing
+browser globals to the Settings UI. Missing browser capabilities produce unavailable
+metric values rather than failing the dialog.
 
 ## Map boundary
 
@@ -114,6 +125,14 @@ the native object, event listeners, terrain source, error aggregation, WebGL sta
 cleanup. [`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and
 uses stable IDs from `mapIds.ts`. Any added feature layer must extend that typed
 ordering instead of scattering MapLibre identifiers through presentation components.
+
+`MapLibreLayerController` attaches to the same native map through the facade and owns
+only Sentinel raster slots, the footprint source/layer, and allowlisted logical
+visibility commands. It also validates persistent reflectance, gamma, and saturation
+values and atomically reapplies the current raster. Satellite and Layers UI share its
+serializable Zustand snapshot; they never receive the native map or provider asset URL.
+Search results remain local React state in a mounted-but-hidden Satellite browser so
+rail navigation does not reset the session.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

@@ -28,7 +28,7 @@ export function TerrainModeControl({ state, onModeChange }: TerrainModeControlPr
   };
 
   return (
-    <Paper elevation={2} sx={{ position: 'absolute', top: 112, right: 10, zIndex: 1 }}>
+    <Paper elevation={2} sx={{ position: 'absolute', top: 99, right: 6, zIndex: 1 }}>
       <ToggleButtonGroup
         exclusive
         orientation="vertical"

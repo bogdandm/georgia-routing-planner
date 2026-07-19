@@ -19,6 +19,23 @@ describe('diagnostic redaction', () => {
     expect(value).toContain('[redacted]');
   });
 
+  it('removes URL query data, fragments, protocol-relative URLs, and POSIX paths', () => {
+    const value = sanitizeDiagnosticText(
+      'GET https://host.test/items/42?email=user@example.com&trip=private#token ' +
+        '//tiles.test/private?key=value /home/alice/private/track.geojson ' +
+        'file:///Users/alice/secret.txt mailto:alice@example.com',
+    );
+
+    expect(value).not.toContain('host.test');
+    expect(value).not.toContain('tiles.test');
+    expect(value).not.toContain('user@example.com');
+    expect(value).not.toContain('trip=private');
+    expect(value).not.toContain('/home/alice');
+    expect(value).not.toContain('/Users/alice');
+    expect(value).toContain('[remote-url]');
+    expect(value).toContain('[local-path]');
+  });
+
   it('exports only fields on the central allowlist', () => {
     const result = redactDiagnosticInput({
       level: 'warn',
@@ -37,6 +54,22 @@ describe('diagnostic redaction', () => {
       name: 'test.event',
       message: 'authorization=[redacted]',
       data: { status: 'failed', durationMs: 25 },
+    });
+  });
+
+  it('retains exact HTTP origins but redacts origin-shaped values with paths', () => {
+    const result = redactDiagnosticInput({
+      level: 'info',
+      name: 'http.request.started',
+      data: {
+        origin: 'https://catalog.test',
+        satelliteOrigin: 'https://catalog.test/private?token=secret',
+      },
+    });
+
+    expect(result.data).toEqual({
+      origin: 'https://catalog.test',
+      satelliteOrigin: '[remote-url]',
     });
   });
 

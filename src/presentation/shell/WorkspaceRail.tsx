@@ -4,28 +4,41 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
-import { Box, IconButton, Stack, Tab, Tabs, Tooltip, Typography } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  IconButton,
+  Stack,
+  Tab,
+  Tabs,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import type { SyntheticEvent } from 'react';
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 
 interface WorkspaceRailProps {
+  readonly collapsed: boolean;
   readonly activeTab: WorkspaceTab;
   readonly developerToolsOpen: boolean;
   readonly developerMode: boolean;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
+  readonly onLogoClick: () => void;
 }
 
 export function WorkspaceRail({
+  collapsed,
   activeTab,
   developerToolsOpen,
   developerMode,
   onToggleDeveloperTools,
   onOpenSettings,
   onSectionChange,
+  onLogoClick,
 }: WorkspaceRailProps) {
   const handleSectionChange = (_event: SyntheticEvent, value: WorkspaceTab) => {
     onSectionChange(value);
@@ -39,20 +52,33 @@ export function WorkspaceRail({
         position: 'relative',
         zIndex: 4,
         width: 64,
+        height: '100%',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'stretch',
-        bgcolor: appColors.brand.deepSpace,
+        bgcolor: collapsed ? 'transparent' : appColors.brand.deepSpace,
         color: appColors.text.inverse,
+        borderRadius: collapsed ? 0 : '8px 0 0 8px',
+        overflow: collapsed ? 'visible' : 'hidden',
+        boxShadow: 'none',
+        transition: (theme) =>
+          theme.transitions.create('background-color', {
+            duration: theme.transitions.duration.shorter,
+          }),
       }}
     >
-      <Tooltip title="Georgia Routing Planner" placement="right">
-        <Box
-          aria-label="Georgia Routing Planner"
+      <Tooltip
+        title={collapsed ? 'Show navigation' : 'Hide navigation'}
+        placement="right"
+      >
+        <ButtonBase
+          aria-label={collapsed ? 'Show navigation' : 'Hide navigation from GR'}
+          onClick={onLogoClick}
           sx={{
             width: 44,
             height: 36,
+            flexShrink: 0,
             mt: 1.5,
             mx: 'auto',
             display: 'grid',
@@ -61,12 +87,13 @@ export function WorkspaceRail({
             bgcolor: appColors.brand.blueGreenDark,
             color: appColors.text.inverse,
             boxShadow: '0 6px 18px rgba(0, 0, 0, 0.18)',
+            cursor: 'pointer',
           }}
         >
           <Typography variant="subtitle2" color="inherit" sx={{ fontWeight: 800 }}>
             GR
           </Typography>
-        </Box>
+        </ButtonBase>
       </Tooltip>
 
       <Tabs
@@ -75,6 +102,9 @@ export function WorkspaceRail({
         value={activeTab}
         onChange={handleSectionChange}
         sx={{
+          visibility: collapsed ? 'hidden' : 'visible',
+          opacity: collapsed ? 0 : 1,
+          transition: (theme) => theme.transitions.create('opacity'),
           mt: 1.5,
           '& .MuiTabs-indicator': {
             left: 0,
@@ -91,7 +121,17 @@ export function WorkspaceRail({
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
       </Tabs>
 
-      <Stack spacing={0.5} sx={{ mt: 'auto', px: 0.75, pb: 1 }}>
+      <Stack
+        spacing={0.5}
+        sx={{
+          mt: 'auto',
+          px: 0.75,
+          pb: 1,
+          visibility: collapsed ? 'hidden' : 'visible',
+          opacity: collapsed ? 0 : 1,
+          transition: (theme) => theme.transitions.create('opacity'),
+        }}
+      >
         {developerMode ? (
           <Tooltip title="Developer diagnostics" placement="right">
             <IconButton

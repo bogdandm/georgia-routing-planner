@@ -63,6 +63,9 @@ const includedFields = [
   'properties.s2:product_uri',
   'properties.sat:relative_orbit',
   'assets.visual',
+  'assets.red',
+  'assets.green',
+  'assets.blue',
   'assets.thumbnail',
   'links',
 ] as const;
@@ -174,12 +177,12 @@ function mapVisualAsset(
   item: EarthSearchItem,
   productLevel: SatelliteProductLevel,
 ): SatelliteVisualAsset {
-  const visual = item.assets.visual;
-  if (visual === undefined) return { kind: 'unavailable' };
-  const mediaType = visual.type ?? '';
   const projectionEpsg = item.properties['proj:epsg'];
 
   if (productLevel === 'L1C') {
+    const visual = item.assets.visual;
+    if (visual === undefined) return { kind: 'unavailable' };
+    const mediaType = visual.type ?? '';
     if (!mediaType.toLowerCase().includes('image/jp2')) {
       throw new SatelliteCatalogError(
         'provider-invalid-response',
@@ -194,20 +197,26 @@ function mapVisualAsset(
     };
   }
 
-  const normalizedMediaType = mediaType.toLowerCase();
-  if (
-    !normalizedMediaType.includes('image/tiff') ||
-    !normalizedMediaType.includes('cloud-optimized')
-  ) {
-    throw new SatelliteCatalogError(
-      'provider-invalid-response',
-      'Earth Search returned an unexpected L2A visual asset format.',
-    );
+  const bands = ['red', 'green', 'blue'] as const;
+  const bandAssets = bands.map((band) => item.assets[band]);
+  if (bandAssets.some((asset) => asset === undefined)) return { kind: 'unavailable' };
+  for (const asset of bandAssets) {
+    const mediaType = asset?.type?.toLowerCase() ?? '';
+    if (!mediaType.includes('image/tiff') || !mediaType.includes('cloud-optimized')) {
+      throw new SatelliteCatalogError(
+        'provider-invalid-response',
+        'Earth Search returned an unexpected L2A reflectance-band format.',
+      );
+    }
   }
+  const itemHref = item.links.find((link) => link.rel === 'self')?.href;
+  if (itemHref === undefined) return { kind: 'unavailable' };
   return {
-    kind: 'cog',
-    href: httpsUrl(visual.href, 'L2A visual asset'),
-    mediaType,
+    kind: 'sentinel-rgb-cogs',
+    itemHref: httpsUrl(itemHref, 'L2A STAC item'),
+    redHref: httpsUrl(bandAssets[0]?.href ?? '', 'L2A red band'),
+    greenHref: httpsUrl(bandAssets[1]?.href ?? '', 'L2A green band'),
+    blueHref: httpsUrl(bandAssets[2]?.href ?? '', 'L2A blue band'),
     projectionEpsg,
   };
 }
@@ -298,7 +307,9 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
       const initialBody = createRequestBody(query, expectedCollection);
 
       beginStep('query-stac-catalog');
-      const rawPages: unknown[] = [await this.fetchPage(initialBody, context.signal)];
+      const rawPages: unknown[] = [
+        await this.fetchPage(initialBody, context.operationId, context.signal),
+      ];
       completeStep();
 
       beginStep('fetch-result-pages');
@@ -332,7 +343,11 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
           );
         }
         rawPages.push(
-          await this.fetchPage({ ...initialBody, next: next.token }, context.signal),
+          await this.fetchPage(
+            { ...initialBody, next: next.token },
+            context.operationId,
+            context.signal,
+          ),
         );
         envelope = earthSearchPaginationEnvelopeSchema.parse(rawPages.at(-1));
         const fetchedItemCount = rawPages.reduce<number>((count, page) => {
@@ -404,9 +419,14 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
     }
   }
 
-  private fetchPage(body: unknown, signal: AbortSignal): Promise<unknown> {
+  private fetchPage(
+    body: unknown,
+    operationId: string,
+    signal: AbortSignal,
+  ): Promise<unknown> {
     return this.httpClient
       .post(this.configuration.searchUrl, {
+        context: { operationId },
         json: body,
         signal,
         timeout: this.requestTimeoutMs,

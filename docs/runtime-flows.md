@@ -35,9 +35,28 @@ selector. Viewport is the current source; Marker is visible but disabled until
 saved-marker behavior exists. The sidebar never receives the native MapLibre object and
 falls back to `defaultGeorgiaCamera` before the first snapshot is available.
 
-Changing among Tracks, Satellite, Markers, and Layers changes contextual React content,
-not the map owner. Opening Settings or Diagnostics follows the same invariant: the
+Changing sections changes floating contextual content, not the full-viewport map owner
+or its dimensions. Collapsing navigation keeps only the GR control above the map; that
+control retains its expanded-state size and coordinates while the surrounding rail and
+panes animate out. Opening Settings or Diagnostics follows the same invariant: the
 existing `MapWorkspace` and native MapLibre instance stay mounted.
+
+Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
+stretch slider validates and stores the new numeric values, prepares a replacement
+raster for the current scene, and swaps only after MapLibre reports it ready. A failed
+tuning attempt rolls back the controller values and keeps the prior raster visible. At
+startup, validated stretch preferences load before a saved Sentinel scene is restored.
+When restoration reaches a ready or hidden state, Satellite projects the controller's
+saved scene into a one-entry Images pane using the current viewport for coverage
+evidence. Clicking that active entry aborts any pending application, removes both raster
+slots and the footprint, clears the applied-scene preference, and returns map layer
+state to empty.
+
+Settings presents three exclusive tabs and mounts only the selected tab's content. The
+Storage tab performs a fresh, read-only measurement when opened and on explicit refresh.
+It combines `navigator.storage.estimate()`, optional Chromium usage details, a bounded
+localStorage byte calculation, and optional `performance.memory` values. Unsupported or
+failed measurements are omitted and do not block the rest of Settings.
 
 Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
 captures interaction from the workspace, and it remains open until the user activates
@@ -90,8 +109,8 @@ duplicate sources, listeners, and out-of-order camera changes.
 - Style errors during startup become fatal because no usable basemap exists.
 - Vector, glyph, and terrain errors update capped failure buckets and a degraded
   snapshot; repeated equivalent events do not create alert or log storms.
-- Retry triggers a repaint and clears the current warning without constructing a new
-  map.
+- The shell projects the latest degraded snapshot into the shared status below search;
+  no separate recoverable map banner is mounted.
 - `webglcontextlost` is prevented from default disposal, recorded as fatal, and exposed
   to the user. A restoration event refreshes capabilities and returns the snapshot to
   ready.
@@ -105,6 +124,8 @@ flowchart LR
   HTTP["HTTP hooks"] --> Logger
   Storage["Persistence"] --> Logger
   Sentinel["Sentinel use cases and raster adapter"] --> SentinelSnapshot["Sentinel query timeline store"]
+  Sentinel --> LayerState["Applied imagery and logical visibility state"]
+  LayerState --> Map
   SentinelSnapshot --> Drawer
   Snapshot --> Drawer["Developer drawer"]
   Logger --> Drawer
@@ -118,6 +139,18 @@ Logging is best-effort and must never fail the primary operation. Redaction happ
 before an event enters the bounded buffer. Bundle creation copies serializable state,
 coarsens camera location, and creates a local object URL that is revoked immediately
 after download. Nothing is uploaded.
+
+The shared `ky` client records start, completion, cancellation, timeout, HTTP-status,
+and network-failure events. It exports only the remote origin, status, duration, and an
+allowlisted operation ID; request paths, queries, headers, and bodies never enter the
+diagnostic event. Satellite use cases pass their operation ID through the HTTP context
+so application and transport events can be correlated without adding a public header.
+
+Application startup is enclosed by a pre-React failure boundary. When normal runtime
+services exist, the fallback can export the standard bundle. If service construction or
+root discovery fails, it mounts against the available document body and produces a
+minimal schema-versioned bootstrap bundle using the standalone redactor, without
+depending on React, IndexedDB, health checks, or the normal diagnostics service.
 
 Sentinel commands will open one timeline operation ID and publish a fixed sequence of
 best-effort step transitions through the `SentinelQueryDiagnostics` application port.
@@ -194,13 +227,55 @@ fixed one-item Sentinel POST probe; startup never waits for it.
 The sidebar captures one immutable viewport snapshot at submission, aborts a replaced
 request, and keeps provider data local to the current browser session. Successful
 results are grouped by UTC acquisition date. Catalog, pagination, validation, mapping,
-and coverage steps complete in the live timeline; visual selection and map rendering
-steps are marked skipped until the user can apply a scene.
+and coverage steps complete in the live timeline. Applying a result starts a new
+correlated operation for visual selection, provider reprojection, and MapLibre source
+application.
+
+## Sentinel imagery application and logical layers
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Browser as SatelliteBrowser
+  participant Controller as MapLibreLayerController
+  participant Renderer as Configured COG renderer
+  participant Map as MapLibre
+  participant State as Map layer store
+
+  User->>Browser: click scene card or loaded calendar day
+  Browser->>Controller: applyScene(scene, AbortSignal)
+  Controller->>State: loading with safe scene key
+  Controller->>Map: add hidden staging raster source/layer
+    Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
+  alt staging source becomes ready
+    Controller->>Map: reveal staging raster and update footprint GeoJSON
+    Controller->>Map: remove prior raster source/layer
+    Controller->>State: ready or hidden snapshot
+  else source error, timeout, cancellation, or stale command
+    Controller->>Map: remove staging resources only
+    Controller->>State: failed/cancelled; prior raster remains usable
+  end
+```
+
+Two internal raster slots make replacement atomic from the user's perspective. Provider
+URLs remain inside the controller and never enter Zustand or exported diagnostics. The
+footprint is updated only after the replacement raster is usable. `Fit footprint`
+derives bounds from the validated polygon while preserving current pitch and bearing.
+
+Layers commands use logical IDs. Hiking, road, and place commands expand to fixed native
+style groups; satellite and footprint commands target only controller-owned layers.
+Visibility is applied idempotently and projected into a serializable live store. Dexie
+persists visibility, imagery stretch, and the last successful scene for startup
+restoration. Satellite search/results state remains mounted while another rail section
+is visible, and returning to Satellite reattaches the existing adjacent pane without a
+new provider request.
 
 ## Teardown ownership
 
-`MapWorkspace` destroys the facade and flushes camera persistence. The facade cancels a
-pending terrain wait, removes MapLibre and WebGL listeners, clears subscribers, and
-releases the native map reference. React effects also remove online/offline listeners
-and reset developer-only debug flags. New integrations must preserve this single-owner
-cleanup model.
+`MapWorkspace` flushes camera persistence and releases the native map through its ref
+callback. The facade detaches the shared layer controller, cancels a pending terrain
+wait, removes MapLibre and WebGL listeners, and releases the native map reference. Ref
+cleanup preserves facade subscribers so React Strict Mode can immediately reattach the
+retained facade without leaving map readiness or the Satellite controller stale. React
+effects also remove online/offline listeners and reset developer-only debug flags. New
+integrations must preserve this single-owner cleanup model.

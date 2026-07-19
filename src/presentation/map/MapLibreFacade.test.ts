@@ -186,6 +186,28 @@ describe('MapLibreFacade', () => {
     ).toHaveLength(1);
   });
 
+  it('preserves subscribers while the native ref detaches and reattaches', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    const subscriber = vi.fn();
+    const unsubscribe = facade.subscribe(subscriber);
+
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const notificationsBeforeDetach = subscriber.mock.calls.length;
+
+    facade.detachMap();
+    expect(nativeMap.listenerCount()).toBe(0);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    expect(subscriber.mock.calls.length).toBeGreaterThan(notificationsBeforeDetach);
+    expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
+    unsubscribe();
+    facade.destroy();
+  });
+
   it('toggles terrain on one map while preserving camera intent and deduplicating the source', async () => {
     const services = createTestServices();
     const provider = services.mapProviderConfiguration;
@@ -291,13 +313,6 @@ describe('MapLibreFacade', () => {
       services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
     ).toHaveLength(1);
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('private');
-
-    facade.retryRecoverableFailures();
-    expect(nativeMap.repaintCalls).toBe(1);
-    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
-      lifecycle: 'ready',
-      message: null,
-    });
   });
 
   it('treats an unrecoverable pre-load style error as fatal', () => {

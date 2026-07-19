@@ -6,6 +6,7 @@ import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
@@ -23,9 +24,11 @@ import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
+import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
+import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -40,11 +43,13 @@ export interface RuntimeServices {
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly mapViewport: MapViewportSnapshotStore;
+  readonly mapLayers: MapLibreLayerController | null;
   readonly queryClient: QueryClient;
   readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
+  readonly storageUsage: StorageUsageReader;
 }
 
 /**
@@ -64,6 +69,7 @@ export function createRuntimeServices(): RuntimeServices {
     buildInfo.mode !== 'production' || developerFlag === '1',
   );
   const database = new AppDatabase(logger);
+  const storageUsage = new BrowserStorageUsageReader();
   const mapCameraRepository = new DexieMapCameraRepository(database, clock, logger);
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
@@ -81,6 +87,8 @@ export function createRuntimeServices(): RuntimeServices {
         terrainOrigin: summary.terrainOrigin,
         satelliteId: summary.satelliteId,
         satelliteOrigin: summary.satelliteOrigin,
+        satelliteRendererId: summary.satelliteRendererId,
+        satelliteRendererOrigin: summary.satelliteRendererOrigin,
       },
     });
   } else {
@@ -93,7 +101,18 @@ export function createRuntimeServices(): RuntimeServices {
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const mapViewport = new MapViewportSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
-  const httpClient = createHttpClient(logger);
+  const mapLayers =
+    mapProviderConfiguration.status === 'valid'
+      ? new MapLibreLayerController(
+          mapProviderConfiguration.value.satellite.renderer,
+          logger,
+          idGenerator,
+          sentinelQueryDiagnostics,
+          mapProviderConfiguration.value.policy.requestTimeoutMs,
+          database,
+        )
+      : null;
+  const httpClient = createHttpClient(logger, clock, idGenerator);
   const satelliteCatalogGateway =
     mapProviderConfiguration.status === 'valid'
       ? new EarthSearchSatelliteCatalogGateway(
@@ -179,11 +198,13 @@ export function createRuntimeServices(): RuntimeServices {
     mapCameraRepository,
     mapDiagnostics,
     mapViewport,
+    mapLayers,
     mapProviderConfiguration,
     queryClient,
     loadSatelliteAvailability,
     satelliteCatalogGateway,
     searchSatelliteScenes,
     sentinelQueryDiagnostics,
+    storageUsage,
   };
 }

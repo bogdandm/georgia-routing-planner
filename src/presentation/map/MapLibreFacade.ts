@@ -10,6 +10,7 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { mapSourceIds } from '@/presentation/map/mapIds';
+import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
@@ -108,6 +109,7 @@ export class MapLibreFacade implements MapFacade {
     private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
+    private readonly layerController?: MapLibreLayerController,
   ) {
     this.snapshotStore?.update(this.#snapshot);
   }
@@ -119,6 +121,7 @@ export class MapLibreFacade implements MapFacade {
     }
     this.detach();
     this.#map = map;
+    this.layerController?.attach(map);
     map.on('load', this.handleLoad);
     map.on('idle', this.handleIdle);
     map.on('moveend', this.handleMoveEnd);
@@ -167,15 +170,6 @@ export class MapLibreFacade implements MapFacade {
     return this.#snapshot;
   }
 
-  public retryRecoverableFailures(): void {
-    if (this.#map === null) {
-      return;
-    }
-    this.#map.triggerRepaint();
-    this.updateSnapshot({ lifecycle: 'ready', message: null });
-    this.logger.log({ level: 'info', name: 'map.recoverable.retry-requested' });
-  }
-
   /** Serializes terrain transitions so sources, listeners, and camera changes cannot race. */
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {
     const transition = this.#terrainTransition;
@@ -209,9 +203,17 @@ export class MapLibreFacade implements MapFacade {
     map.showCollisionBoxes = options.showCollisionBoxes;
   }
 
-  public destroy(): void {
+  /**
+   * Releases only the current native map attachment. Subscribers remain registered so
+   * React Strict Mode can replay the ref lifecycle and attach the same facade again.
+   */
+  public detachMap(): void {
     this.#cancelTerrainWait?.();
     this.detach();
+  }
+
+  public destroy(): void {
+    this.detachMap();
     this.#listeners.clear();
   }
 
@@ -220,6 +222,7 @@ export class MapLibreFacade implements MapFacade {
     if (map === null) {
       return;
     }
+    this.layerController?.attach(map);
     const style = map.getStyle();
     this.updateSnapshot({
       lifecycle:
@@ -579,6 +582,7 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
+    this.layerController?.detach(map);
     this.#map = null;
     this.logger.log({ level: 'debug', name: 'map.lifecycle.unmounted' });
   }

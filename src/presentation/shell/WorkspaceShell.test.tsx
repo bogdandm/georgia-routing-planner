@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@mui/material';
 import { userEvent } from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   SatelliteCatalogError,
@@ -11,15 +11,21 @@ import {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
+import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
 let services: RuntimeServices;
 
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
+  resetMapLayerStore();
+  resetSatelliteRequestStatus();
   services = createTestServices();
   await services.database.delete();
   services = createTestServices();
@@ -28,6 +34,7 @@ beforeEach(async () => {
     developerDrawerOpen: false,
     developerMode: false,
     mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+    navigationCollapsed: false,
     settingsOpen: false,
   });
 });
@@ -110,9 +117,16 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Markers' }));
     expect(screen.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
+      screen.getByRole('heading', {
+        name: 'Copernicus Sentinel-2 via Earth Search',
+      }),
     ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
+    ).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');
     expect(
@@ -149,9 +163,7 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
-    expect(
-      screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {
@@ -217,8 +229,14 @@ describe('WorkspaceShell', () => {
         name: /12 Jul 2026, imagery available/u,
       }),
     );
-    expect(screen.getByText('Selected for imagery')).toBeVisible();
+    expect(screen.getByText('Image failed to apply')).toBeVisible();
     expect(services.sentinelQueryDiagnostics.getSnapshot().status).toBe('success');
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(
+      screen.getByRole('heading', { name: 'Images near 42.5000, 44.5000' }),
+    ).toBeVisible();
+    expect(screen.getByText('Image failed to apply')).toBeVisible();
   });
 
   it('loads preceding months through the same persistent load-more action', async () => {
@@ -256,6 +274,46 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText(/18 Jun 2026 · 14:12 GMT\+4/u)).toBeVisible();
     expect(requestedStarts).toEqual(['2026-07-01', '2026-06-01']);
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
+  });
+
+  it('shows the restored applied scene as one removable image after refresh', async () => {
+    const restoredScene = syntheticSatelliteScene(
+      'restored-scene',
+      '2026-06-18T10:12:00.000Z',
+    );
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    services.mapViewport.update(testViewport);
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(restoredScene);
+    const clearScene = vi.spyOn(mapLayers, 'clearScene').mockImplementation(() => {
+      mapLayerStore.setState({ appliedImagery: { status: 'empty' } });
+      return { status: 'success' };
+    });
+    mapLayerStore.setState({
+      appliedImagery: {
+        status: 'ready',
+        sceneKey: 'sentinel-2-l2a:restored-scene',
+        sceneId: 'restored-scene',
+        visible: true,
+      },
+    });
+    window.history.replaceState(null, '', '/#satellite');
+    const user = userEvent.setup();
+
+    renderWorkspaceShell();
+
+    expect(await screen.findByText('1 image · 1 acquisition day')).toBeVisible();
+    const restoredCard = screen.getByRole('button', {
+      name: 'Remove 18 Jun 2026 imagery from map',
+    });
+    expect(restoredCard).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(restoredCard);
+
+    expect(clearScene).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole('button', { name: 'Apply 18 Jun 2026 imagery' }),
+    ).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('searches May, loads June and July on navigation, and reuses complete months', async () => {
@@ -456,10 +514,10 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
-      await screen.findByText(
+      await screen.findAllByText(
         'Earth Search is rate limiting requests. Wait and try again.',
       ),
-    ).toBeVisible();
+    ).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
   });
 
@@ -489,7 +547,149 @@ describe('WorkspaceShell', () => {
     await waitFor(async () => {
       await expect(services.database.loadUiPreferences()).resolves.toEqual({
         developerMode: true,
+        navigationCollapsed: false,
       });
     });
+  });
+
+  it('collapses from the GR logo and restores from the remaining logo', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const navigation = screen.getByRole('navigation');
+    const expandedLogo = screen.getByRole('button', {
+      name: 'Hide navigation from GR',
+    });
+    expect(navigation).toHaveStyle({ width: '64px' });
+    expect(expandedLogo).toHaveStyle({
+      width: '44px',
+      height: '36px',
+      flexShrink: '0',
+      marginTop: '12px',
+    });
+
+    await user.click(expandedLogo);
+
+    const collapsedLogo = screen.getByRole('button', { name: 'Show navigation' });
+    expect(navigation).toBeVisible();
+    expect(navigation).toHaveStyle({ width: '64px' });
+    expect(collapsedLogo).toHaveStyle({
+      width: '44px',
+      height: '36px',
+      flexShrink: '0',
+      marginTop: '12px',
+    });
+    expect(screen.getByRole('complementary', { hidden: true })).not.toBeVisible();
+    await user.click(collapsedLogo);
+    expect(screen.getByRole('navigation')).toBeVisible();
+    expect(screen.getByRole('complementary')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    expect(
+      screen.queryByRole('switch', { name: 'Collapse left navigation' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Rendering' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Storage' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Sentinel imagery stretch' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+    expect(
+      screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
+    ).toBeVisible();
+    expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    const ceiling = screen.getByRole('slider', {
+      name: 'Sentinel reflectance ceiling',
+    });
+    fireEvent.keyDown(ceiling, { key: 'Home' });
+    fireEvent.keyUp(ceiling, { key: 'Home' });
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingTuning().reflectanceMax).toBe(3_000);
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        renderingTuning: { reflectanceMax: 3_000 },
+      });
+    });
+    const saturation = screen.getByRole('slider', { name: 'Sentinel saturation' });
+    fireEvent.keyDown(saturation, { key: 'End' });
+    fireEvent.keyUp(saturation, { key: 'End' });
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingTuning().saturation).toBe(5);
+    });
+    expect(screen.getByRole('tab', { name: 'Rendering' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Storage' }));
+    expect(await screen.findByText('Local database (IndexedDB)')).toBeVisible();
+    expect(screen.getByText('Cache Storage')).toBeVisible();
+    expect(screen.getByText('3.00 MB')).toBeVisible();
+    expect(screen.getByText('4.00 MB')).toBeVisible();
+    expect(screen.getByText('48.00 MB')).toBeVisible();
+    expect(screen.getByText(/HTTP and MapLibre tile caches/i)).toBeVisible();
+  });
+
+  it('opens the complete current map error from the lightweight status line', async () => {
+    const user = userEvent.setup();
+    mapLayerStore.setState({
+      errorMessage:
+        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    const statusButton = await screen.findByRole('button', {
+      name: 'Show current error details',
+    });
+    await user.hover(
+      screen.getByLabelText(
+        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+      ),
+    );
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+    );
+    expect(screen.getByRole('status')).toHaveStyle({
+      backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    });
+    await user.click(statusButton);
+
+    expect(screen.getByText('Current map error')).toBeVisible();
+    expect(
+      screen.getAllByText(/renderer rejected these stretch values/i).at(-1),
+    ).toBeVisible();
+  });
+
+  it('announces fatal map failures assertively', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'fatal',
+      message: 'The browser lost the WebGL context.',
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The browser lost the WebGL context.',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

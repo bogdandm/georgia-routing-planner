@@ -167,23 +167,48 @@ The 2026-07-19 Georgia sample `S2A_38TMN_20250731_0_L2A` reported EPSG:32638 and
 220,705,355-byte true-color COG. A bounded request for its first 65,536 bytes again
 returned `206 Partial Content`, `Accept-Ranges: bytes`, and browser-permissive CORS.
 
-No product render was added. MapLibre GL JS does not directly render a GeoTIFF/COG as a
-raster source, and Chrome does not provide the geospatial windowing/reprojection needed
-by itself. [geotiff.js](https://github.com/geotiffjs/geotiff.js) can read remote COG
-windows and overviews, use workers, and accept cancellation, but it deliberately does
-not provide a high-level reprojection or MapLibre tiling API. The inspected
-[MapLibre COG protocol](https://github.com/geomatico/maplibre-cog-protocol) requires
-EPSG:3857 input and does not reproject the UTM sample. The spike therefore has no
-meaningful full render-time number: it stopped after bounded range reads rather than
-downloading or decoding the full asset. Rendering Sentinel imagery requires a
-replaceable imagery adapter, such as:
+The `visual` TCI COG is an 8-bit display product whose prior stretch may clip bright
+snow to white. A later transform cannot reconstruct lost channel detail, so the
+application instead renders Earth Search's separate `red`, `green`, and `blue` L2A
+reflectance COGs.
 
-1. Browser-side COG range reading, reprojection, and tile generation behind a worker.
-2. A standards-compatible dynamic tile service, if a provider policy is approved.
+MapLibre GL JS does not directly render a GeoTIFF/COG as a raster source, and the
+inspected direct COG protocol accepts EPSG:3857 input but does not reproject the UTM
+Sentinel sample. The application therefore uses a configured dynamic COG tile adapter.
+The default template calls Development Seed's public
+[TiTiler demo](https://developmentseed.org/titiler/examples/notebooks/Working_with_STAC_simple/)
+[`/stac/tiles` endpoint](https://developmentseed.org/titiler/endpoints/stac/) with
+`WebMercatorQuad`, the MapLibre tile coordinates, the validated STAC item, and ordered
+red/green/blue assets. The default maps each channel over 0–10,000 reflectance before
+display gamma. Users can persistently tune the upper reflectance bound, gamma, and up to
+five times normal saturation in Settings; a lower bound brightens midtones but can clip
+the brightest snow. TiTiler performs bounded COG reads, RGB composition, reprojection,
+and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles.
 
-The adapter must expose raster tiles/texture data to MapLibre without changing catalog
-search or scene-selection workflows. The current application does not implement STAC
-search, scene choice, imagery caching/UI, or production COG decoding.
+The default is anonymous and requires no browser secret, but it is a best-effort demo
+service with no project SLA. It is acceptable for the current low-traffic static MVP and
+manual review, not sustained production traffic. The renderer ID, HTTPS template, tile
+size, zoom bounds, and attribution are validated public configuration so a managed
+TiTiler-compatible deployment can replace it without changing catalog, UI, or map
+commands. There is no silent renderer fallback.
+
+The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
+`{saturation}` tokens. The controller substitutes only bounded numeric preferences and
+never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
+failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
+
+The map adapter prepares a replacement raster under a second stable source/layer slot
+and reveals it only after MapLibre reports the source loaded. Failure, timeout,
+cancellation, or supersession removes only staging resources and leaves the prior scene
+and basemap usable. The validated WGS84 footprint renders independently as GeoJSON,
+making partial coverage explicit. The application never logs or stores the COG or tile
+URL in shared state or support bundles.
+
+A 2026-07-19 current-Chrome smoke searched the live Georgia viewport, applied
+`S2A_38TLM_20260709_0_L2A`, and displayed the georeferenced true-color tiles plus the
+independent footprint and combined provider attribution. Hiding/restoring the raster
+through Layers left the footprint and basemap in place; the same applied source remained
+usable after enabling 3D terrain and changing rail destinations.
 
 ### L1C true-color JP2
 

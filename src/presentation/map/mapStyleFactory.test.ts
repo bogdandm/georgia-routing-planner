@@ -55,8 +55,15 @@ describe('createHikingMapStyle', () => {
     expect(serialized).toContain('#8ECAE6');
     expect(serialized).toContain('#219EBC');
     expect(serialized).toContain('#023047');
-    expect(serialized).toContain('#FFB703');
-    expect(serialized).toContain('#FB8500');
+    expect(serialized).toContain('#2F6FD6');
+    expect(serialized).toContain('#B7C0B8');
+    const roads = style.layers.find((layer) => layer.id === mapLayerIds.roads);
+    const hikingPaths = style.layers.find(
+      (layer) => layer.id === mapLayerIds.hikingPaths,
+    );
+    expect(roads).toHaveProperty('paint.line-opacity', 0.62);
+    expect(hikingPaths).toHaveProperty('paint.line-color', '#2F6FD6');
+    expect(hikingPaths).toHaveProperty('paint.line-opacity', 0.88);
   });
 
   it('uses the configured source-layer mapping exactly once at the style boundary', () => {

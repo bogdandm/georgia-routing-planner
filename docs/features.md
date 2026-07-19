@@ -28,9 +28,10 @@ reviewed design wins and this document must be corrected.
 
 ## Desktop workspace
 
-The Material UI shell is a map-first desktop workbench. The compact rail and contextual
-sidebar occupy the left edge; the persistent map uses the remaining viewport. Native map
-navigation remains on the right, and the 2D/3D selector sits directly below it. The
+The Material UI shell is a map-first desktop workbench. The map always fills the
+viewport; the rail, contextual sidebar, and detail pane form one floating surface above
+it. Changing sections or opening a pane therefore never changes the map viewport. Native
+map navigation remains on the right, and the 2D/3D selector sits directly below it. The
 shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
 derived surface, border, status, and tag colors.
 
@@ -40,7 +41,12 @@ elevation placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable setting: developer-mode preference in Dexie.
+- Durable settings: developer mode, collapsed navigation, and Sentinel imagery stretch
+  preferences in Dexie.
+- Settings uses compact `General`, `Rendering`, and `Storage` tabs. Storage shows only
+  the measurements the browser supplies: origin usage and quota, IndexedDB, Cache
+  Storage, localStorage, residual origin data, and Chromium's optional JavaScript heap
+  estimate in megabytes.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
 
@@ -110,14 +116,39 @@ coverage. Days at or below the current cloud slider receive a subtle orange high
 non-matching days retain only their cloud percentage without a tile outline. After
 locally loaded cards are revealed, the same load-more action fetches the next missing
 preceding month and appends it, continuing back through the Sentinel-2 archive.
-Whole-card click selects and expands metadata. Marker targeting and imagery rendering
-remain unavailable.
+Whole-card click selects, expands metadata, and applies that concrete scene through the
+shared map adapter. A validated L2A item is rendered from its separate red, green, and
+blue reflectance COGs as correctly georeferenced Web Mercator tiles below hiking
+references. Settings exposes a persistent reflectance ceiling, gamma, and saturation
+control up to five times normal so users can tune the raw-band display without relying
+on the already stretched 8-bit TCI asset. Fresh storage and the reset action use a
+reflectance ceiling of 11000, gamma 2.25, and saturation 2.50; saved user tuning
+continues to take precedence. The real polygon or multipolygon footprint is a separate
+orange outline above hiking geometry and below labels. While a replacement is loading
+the prior usable image remains present; a failed replacement reports a safe, clickable
+error and leaves that prior image available. The error detail distinguishes rejected
+values, rate limiting, renderer availability, timeout, and an unclassified unusable tile
+without exposing provider URLs. Marker targeting remains unavailable.
+
+Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
+exposed through the web storage APIs, so the application neither claims their size nor
+offers a misleading clear action. Replaced Sentinel raster sources are removed from the
+live MapLibre map after a successful swap, and failed staging sources are discarded.
 
 Clicking a loaded calendar date selects the scene with the highest viewport coverage for
 that date, reveals its batch if needed, expands its card, and scrolls it into view.
 Coverage ties retain the existing acquisition-time order. The shortcut never reopens a
-results pane that the user closed. The later imagery-apply command will attach to this
-same selection path.
+results pane that the user closed. The same shortcut applies the selected scene through
+the card command path.
+
+The expanded applied card shows validated acquisition, tile, orbit, product,
+edge-distance, and attribution evidence. `Fit footprint` preserves pitch and bearing;
+`Hide imagery` stops the raster without discarding results, selection, or the footprint.
+Clicking the already applied scene card de-applies it, removes its raster and footprint,
+and clears the saved applied scene. After refresh, a restored scene opens the Images
+pane as one selected entry so it can be de-applied without repeating a catalog search.
+The Satellite sidebar and results stay mounted but hidden across rail changes, so a user
+can inspect Layers and return without losing the search session.
 
 If the initial cards do not occupy most of the adjacent pane, the UI automatically
 reveals another local set or fetches preceding months, with a small bounded number of
@@ -144,18 +175,29 @@ unavailable.
 
 ### Layers
 
-Layers controls supported visibility, opacity, and ordering within typed map-layer
-bands. Changes affect the persistent map while preserving attribution and the required
-relationship among satellite imagery, hiking references, tracks/Create GPX geometry,
-markers, and interaction highlights. It is not a generic unrestricted layer editor.
-
-The current implementation provides the Layers rail destination and an empty state;
-interactive layer management is unavailable.
+Layers groups durable controls under explicit source headings: Copernicus Sentinel-2
+through the configured satellite catalog, and OpenStreetMap through the configured
+vector provider. The checkboxes cover Satellite imagery, Scene footprint, Hiking paths,
+Roads, and Places and POIs. Each logical ID maps to an allowlisted set of stable
+MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
+remain disabled until a scene is applied. Hiding imagery retains the applied scene and
+does not remove its footprint, search results, or attribution contract. Base land and
+water remain visible and cannot be disabled. Opacity, drag ordering, custom layers are
+unavailable. Checkbox state and the last successfully applied scene are stored locally
+and restored after refresh. The last successful imagery stretch is stored with those
+preferences and applied before a saved scene is restored.
 
 ## Persistent map controls
 
 - Place-or-coordinate search is overlaid on the map. The current search field is
   disabled.
+- A lightweight line below search reports readiness, pending work, or safe failures;
+  selecting an error opens its complete safe detail.
+- Navigation collapses with a short transition to only the clickable GR mark. The GR
+  square keeps the exact same size and viewport position in both states so the remaining
+  navigation appears to retract into that fixed anchor.
+- Settings is non-modal and does not dim or block the map, allowing imagery stretch to
+  be judged while a slider is adjusted.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Attribution remains visible in every feature section and terrain mode.
@@ -170,8 +212,8 @@ ordering are stable contracts. Unsupported hiking route relations are not invent
 
 - Default vector source: OpenFreeMap TileJSON; attribution stays visible.
 - Invalid configuration: MapLibre does not mount; a safe fatal message is shown.
-- Vector/glyph failures: the existing canvas remains usable and an aggregated warning
-  offers an explicit retry.
+- Vector/glyph failures: the existing canvas remains usable and the aggregated safe
+  failure appears only in the shared status below search.
 - Tests: pure style assertions plus synthetic MVT/glyph Chromium coverage.
 
 ## Camera persistence
@@ -207,7 +249,15 @@ Map errors are classified as vector, glyph/sprite, terrain, style, WebGL, or unk
 Equivalent recoverable errors are counted in capped buckets and logged at a bounded
 interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
 degraded states. Offline messaging promises only that already rendered areas may remain
-visible, not full offline map support.
+visible, not full offline map support. Map lifecycle and imagery errors do not create a
+wide map banner: the shared line below search is their single UI surface. Ready remains
+background-free; pending and error states use a lightly translucent surface for map
+contrast, and selecting an error reveals its complete safe detail. Hovering any
+truncated status message reveals the full text in a multiline tooltip. The non-ready
+surface transitions quickly and remains translucent enough to preserve map context.
+Pending text uses the dark primary color and a medium weight rather than the muted Ready
+treatment, preserving legibility over imagery. Status padding is invariant so state
+changes never shift the icon or text.
 
 ## Diagnostics and developer mode
 
@@ -227,11 +277,12 @@ The `Sentinel query` tab exposes one local current-or-last-operation timeline. I
 lists viewport capture, criteria construction, STAC request, pagination, validation,
 scene mapping, coverage/grouping, visual-asset selection, decode/reprojection, and map
 application. Each row shows an explicit waiting, running, completed, failed, cancelled,
-or skipped state and a monotonic duration that refreshes while work is active.
-Implemented search operations publish their transitions in real time. Rendering-only
-steps remain visible and are marked skipped until a scene can be applied to the map. The
-timeline is memory-only and does not expose raw payloads, exact geometry, provider URLs,
-headers, tokens, or raw failures.
+or skipped state and a monotonic duration that refreshes while work is active. Search
+and imagery-application operations publish their transitions in real time. The render
+operation records visual-asset selection, provider reprojection, and MapLibre
+application without exporting the COG or tile URL. The timeline is memory-only and does
+not expose raw payloads, exact geometry, provider URLs, headers, tokens, or raw
+failures.
 
 Schema-version 2 exports include build/runtime data, bounded events, health results,
 notes, and a serializable map snapshot. Exported longitude/latitude are rounded to 0.1
@@ -245,18 +296,19 @@ startup never waits for them.
 ## Configuration and security
 
 `VITE_MAP_PROVIDER_CONFIGURATION` is optional public JSON validated by Zod. Endpoints
-must be HTTPS or application-relative; terrain template tokens, supported encoding, tile
-sizes, zoom ranges, policy limits, layer mappings, and attribution are validated. Safe
-errors report an issue count without echoing the payload. `VITE_*` configuration must
-never contain secrets.
+must be HTTPS or application-relative; terrain and satellite renderer template tokens,
+supported tile sizes, zoom ranges, policy limits, layer mappings, and attribution are
+validated. The Sentinel renderer template accepts `{z}`, `{x}`, `{y}`, and an encoded
+`{itemUrl}`. Safe errors report an issue count without echoing the payload. `VITE_*`
+configuration must never contain secrets.
 
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, GPX import, Create GPX
 editing/export, track elevation charts, saved-marker management, interactive layer
-management, Sentinel-2 imagery rendering, offline-region downloads, accounts, or cloud
-synchronization. Satellite provides live viewport search for L2A scenes with a
-scene-cloud control. Successful results are grouped by UTC acquisition day and show a
-thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
-sub-5-km edge warning. Selecting a card does not render imagery until the raster adapter
-exists.
+management, offline-region downloads, accounts, or cloud synchronization. Satellite
+provides live viewport search for L2A scenes with a scene-cloud control. Successful
+results are grouped by UTC acquisition day and show a thumbnail, local acquisition time,
+processing level, cloud, viewport coverage, and sub-5-km edge warning. Selecting a card
+renders one georeferenced true-color scene and its footprint; Layers can hide or restore
+the raster and related logical map groups.

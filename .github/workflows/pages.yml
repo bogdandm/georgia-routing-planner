@@ -1,11 +1,13 @@
 name: Pages
 
 on:
-  workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [Checks]
+    types: [completed]
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -15,35 +17,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    if: github.ref == 'refs/heads/main'
+  prepare:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Download artifact produced by Checks
+        uses: actions/download-artifact@v4
         with:
-          version: 11.9.0
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check
-        env:
-          BASE_PATH: /georgia-routing-planner/
-      - run: pnpm build:app
-        env:
-          BASE_PATH: /georgia-routing-planner/
+          name: pages-dist-${{ github.event.workflow_run.head_sha }}
+          path: dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
+    needs: prepare
     runs-on: ubuntu-latest
     environment:
       name: github-pages

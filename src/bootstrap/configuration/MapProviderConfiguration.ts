@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
+function isApplicationRelativeEndpoint(value: string): boolean {
+  if (value.startsWith('//') || value.includes('\\')) return false;
+  if (/^[a-z][a-z0-9+.-]*:/iu.test(value)) return false;
+  return /^(?:\/|\.\.?\/|[a-z0-9_{])/iu.test(value);
+}
+
 const endpointSchema = z
   .string()
   .trim()
   .min(1)
   .refine(
-    (value) =>
-      value.startsWith('https://') ||
-      value.startsWith('/') ||
-      value.startsWith('./') ||
-      !value.includes('://'),
+    (value) => value.startsWith('https://') || isApplicationRelativeEndpoint(value),
     'Endpoints must use HTTPS or a relative application path.',
   );
 
@@ -92,6 +94,30 @@ const mapProviderConfigurationInputSchema = z
           }),
         attribution: z.string().trim().min(1).max(200),
         maximumPages: z.number().int().min(1).max(10),
+        renderer: z
+          .object({
+            id: z.string().regex(/^[a-z0-9-]+$/u),
+            tileUrlTemplate: endpointSchema.refine(
+              (value) =>
+                value.includes('{z}') &&
+                value.includes('{x}') &&
+                value.includes('{y}') &&
+                value.includes('{itemUrl}') &&
+                value.includes('{reflectanceMax}') &&
+                value.includes('{gamma}') &&
+                value.includes('{saturation}'),
+              'Satellite renderer endpoint must contain map, item, and rendering-tuning tokens.',
+            ),
+            tileSize: z.union([z.literal(256), z.literal(512)]),
+            minZoom: z.number().int().min(0).max(22),
+            maxZoom: z.number().int().min(0).max(22),
+            attribution: safeAttributionSchema,
+          })
+          .strict()
+          .refine((renderer) => renderer.maxZoom > renderer.minZoom, {
+            message: 'Satellite renderer maxZoom must be greater than minZoom.',
+            path: ['maxZoom'],
+          }),
       })
       .strict(),
     policy: z
@@ -147,6 +173,14 @@ interface MapProviderConfigurationInput {
     };
     readonly attribution: string;
     readonly maximumPages: number;
+    readonly renderer: {
+      readonly id: string;
+      readonly tileUrlTemplate: string;
+      readonly tileSize: 256 | 512;
+      readonly minZoom: number;
+      readonly maxZoom: number;
+      readonly attribution: string;
+    };
   };
   readonly policy: {
     readonly requestTimeoutMs: number;
@@ -168,6 +202,8 @@ export interface MapProviderConfigurationSummary {
   readonly terrainOrigin: string;
   readonly satelliteId: string;
   readonly satelliteOrigin: string;
+  readonly satelliteRendererId: string;
+  readonly satelliteRendererOrigin: string;
 }
 
 /** Anonymous, credential-free provider defaults used when no public override is supplied. */
@@ -217,6 +253,16 @@ export const defaultMapProviderConfigurationInput = {
     },
     attribution: 'Copernicus Sentinel data · Earth Search / Element 84',
     maximumPages: 10,
+    renderer: {
+      id: 'titiler-demo-stac-rgb',
+      tileUrlTemplate:
+        'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear',
+      tileSize: 256,
+      minZoom: 5,
+      maxZoom: 16,
+      attribution:
+        'Copernicus Sentinel data · COG tiles rendered by TiTiler / Development Seed',
+    },
   },
   policy: {
     requestTimeoutMs: 15_000,
@@ -251,6 +297,13 @@ export function parseMapProviderConfiguration(
     satellite: {
       ...parsed.satellite,
       searchUrl: resolveEndpoint(parsed.satellite.searchUrl, baseUrl),
+      renderer: {
+        ...parsed.satellite.renderer,
+        tileUrlTemplate: resolveEndpoint(
+          parsed.satellite.renderer.tileUrlTemplate,
+          baseUrl,
+        ),
+      },
     },
   };
 }
@@ -290,5 +343,8 @@ export function summarizeMapProviderConfiguration(
     terrainOrigin: new URL(configuration.terrain.tileUrl).origin,
     satelliteId: configuration.satellite.id,
     satelliteOrigin: new URL(configuration.satellite.searchUrl).origin,
+    satelliteRendererId: configuration.satellite.renderer.id,
+    satelliteRendererOrigin: new URL(configuration.satellite.renderer.tileUrlTemplate)
+      .origin,
   };
 }

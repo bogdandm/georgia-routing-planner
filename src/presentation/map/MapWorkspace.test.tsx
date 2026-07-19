@@ -129,6 +129,7 @@ describe('MapWorkspace', () => {
     let attempts = 0;
     facade.terrainTransition = (mode) => {
       attempts += 1;
+      if (attempts > 1) facade.setSnapshot({ terrainMode: mode });
       return Promise.resolve(
         attempts === 1
           ? { status: 'failed', reason: 'Fixture terrain is unavailable.' }
@@ -154,6 +155,41 @@ describe('MapWorkspace', () => {
       screen.queryByText('Fixture terrain is unavailable.'),
     ).not.toBeInTheDocument();
     expect(facade.terrainModeRequests).toEqual(['terrain', 'terrain']);
+  });
+
+  it('returns the control to 2D after a late terrain source failure', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Terrain map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Terrain map');
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'terrain' });
+    });
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    act(() => {
+      facade.setSnapshot({
+        lifecycle: 'degraded',
+        terrainMode: 'flat',
+        message: '3D terrain is unavailable. The 2D basemap remains usable.',
+      });
+    });
+
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('leaves recoverable map feedback to the shared status and describes offline limits', async () => {

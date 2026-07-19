@@ -74,7 +74,10 @@ export function MapWorkspace({
   } = useRuntimeServices();
   const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
-  const [terrainState, setTerrainState] = useState<TerrainControlState>('flat');
+  const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
+    TerrainControlState,
+    'flat' | 'terrain'
+  > | null>(null);
   const [terrainMessage, setTerrainMessage] = useState<string | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const developerMode = useUiStore((state) => state.developerMode);
@@ -122,6 +125,7 @@ export function MapWorkspace({
   );
   const getSnapshot = useCallback(() => facade.getDiagnosticsSnapshot(), [facade]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const terrainState: TerrainControlState = terrainCommandState ?? snapshot.terrainMode;
 
   useEffect(() => {
     const publishViewport = () => {
@@ -156,18 +160,18 @@ export function MapWorkspace({
 
   const handleTerrainModeChange = useCallback(
     async (mode: 'flat' | 'terrain') => {
-      setTerrainState(mode === 'terrain' ? 'enabling' : 'disabling');
+      setTerrainCommandState(mode === 'terrain' ? 'enabling' : 'disabling');
       setTerrainMessage(null);
       try {
         const result = await facade.setTerrainMode(mode);
         if (result.status === 'success') {
-          setTerrainState(result.mode);
+          setTerrainCommandState(null);
           return;
         }
-        setTerrainState('failed');
+        setTerrainCommandState('failed');
         setTerrainMessage(result.reason);
       } catch {
-        setTerrainState('failed');
+        setTerrainCommandState('failed');
         setTerrainMessage(
           'Terrain could not be enabled. The flat map remains available.',
         );

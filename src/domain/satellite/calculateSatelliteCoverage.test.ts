@@ -52,6 +52,15 @@ describe('calculateSatelliteCoverage', () => {
 
     expect(result.viewportCoveragePercent).toBe(0);
     expect(result.interestPointRelation).toBe('outside');
+    expect(result.distanceToSceneEdgeKm).toBeGreaterThan(80);
+    expect(result.hasEdgeWarning).toBe(false);
+  });
+
+  it('warns when an outside search anchor is less than five kilometres from the border', () => {
+    const result = calculateSatelliteCoverage(viewport, rectangle(1.02, 0, 3, 2));
+
+    expect(result.interestPointRelation).toBe('outside');
+    expect(result.distanceToSceneEdgeKm).toBeLessThan(satelliteEdgeWarningDistanceKm);
     expect(result.hasEdgeWarning).toBe(true);
   });
 

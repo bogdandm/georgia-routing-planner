@@ -81,6 +81,7 @@ describe('HealthCheckService', () => {
           });
           expect(await request.json()).toMatchObject({
             collections: ['sentinel-2-l2a'],
+            intersects: { type: 'Point', coordinates: [44.005, 42.005] },
             limit: 1,
           });
           return HttpResponse.json({ type: 'FeatureCollection', features: [] });

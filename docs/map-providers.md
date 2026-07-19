@@ -141,12 +141,12 @@ AWS Sentinel objects. Earth Search remains the selected replaceable catalog cand
 
 The validated public configuration supplies the exact search URL, distinct collection
 IDs, plain-text attribution, and a one-to-ten page cap (default five). The production
-gateway sends a single collection, WGS84 bbox, inclusive UTC interval, scene-level cloud
-filter, descending acquisition sort, allowlisted fields, and at most 100 items. It
-follows only one unambiguous `POST` next link at a time when the link has the configured
-HTTPS origin/path, no query or fragment, and a bounded opaque `next` token. Invalid
-items, counts, assets, or pagination fail closed; raw bodies, links, tokens, and exact
-geometry are never logged.
+gateway sends a single collection, WGS84 point intersection, inclusive UTC interval,
+scene-level cloud filter, descending acquisition sort, allowlisted fields, and at most
+100 items. It follows only one unambiguous `POST` next link at a time when the link has
+the configured HTTPS origin/path, no query or fragment, and a bounded opaque `next`
+token. Invalid items, counts, assets, or pagination fail closed; raw bodies, links,
+tokens, and exact geometry are never logged.
 
 ### L2A true-color COG
 

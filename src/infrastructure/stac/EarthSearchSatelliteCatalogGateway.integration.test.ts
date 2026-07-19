@@ -12,7 +12,10 @@ import { mswServer } from '../../../test/setup/mswServer';
 
 const searchUrl = 'https://earth-search.example.test/v1/search';
 
-function createQuery(productLevel: 'L1C' | 'L2A' = 'L2A'): SatelliteCatalogQuery {
+function createQuery(
+  productLevel: 'L1C' | 'L2A' = 'L2A',
+  maximumItems = 100,
+): SatelliteCatalogQuery {
   return {
     criteria: {
       viewport: {
@@ -25,7 +28,7 @@ function createQuery(productLevel: 'L1C' | 'L2A' = 'L2A'): SatelliteCatalogQuery
       maxCloudCoverPercent: 25,
       inclusiveDayCount: 16,
     },
-    maximumItems: 100,
+    maximumItems,
   };
 }
 
@@ -78,7 +81,7 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
     expect(requestBodies).toEqual([
       expect.objectContaining({
         collections: ['sentinel-2-l2a'],
-        bbox: [44.1, 42.1, 44.9, 42.9],
+        intersects: { type: 'Point', coordinates: [44.5, 42.5] },
         datetime: '2025-07-02T00:00:00.000Z/2025-07-17T23:59:59.999Z',
         query: { 'eo:cloud_cover': { lte: 25 } },
         limit: 100,
@@ -163,6 +166,7 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
         requestCount += 1;
         const body = (await request.json()) as Record<string, unknown>;
         if (requestCount === 1) {
+          expect(body).toMatchObject({ limit: 100 });
           return HttpResponse.json({
             ...searchResponse,
             context: { limit: 100, matched: 2, returned: 1 },
@@ -186,7 +190,7 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
     const { services, gateway } = createGateway();
 
     const result = await gateway.search(
-      createQuery(),
+      createQuery('L2A', 1_000),
       beginOperation(services, 'paged-search'),
     );
 
@@ -196,6 +200,37 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
       'S2A_38TMN_20250731_0_L2A',
       'S2B_38TMN_20250716_0_L2A',
     ]);
+  });
+
+  it('does not follow Earth Search next metadata after every matched item was returned', async () => {
+    let requestCount = 0;
+    mswServer.use(
+      http.post(searchUrl, async ({ request }) => {
+        requestCount += 1;
+        const originalBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          ...searchResponse,
+          context: { limit: 100, matched: 1, returned: 1 },
+          links: [
+            {
+              rel: 'next',
+              href: searchUrl,
+              method: 'POST',
+              body: { ...originalBody, next: 'provider-cursor' },
+            },
+          ],
+        });
+      }),
+    );
+    const { services, gateway } = createGateway();
+
+    const result = await gateway.search(
+      createQuery(),
+      beginOperation(services, 'complete-first-page'),
+    );
+
+    expect(requestCount).toBe(1);
+    expect(result).toMatchObject({ totalMatched: 1 });
   });
 
   it.each([
@@ -273,6 +308,7 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
       http.post(searchUrl, () =>
         HttpResponse.json({
           ...searchResponse,
+          context: { limit: 100, matched: 2, returned: 1 },
           links: [
             {
               rel: 'next',

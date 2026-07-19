@@ -204,7 +204,7 @@ export class HealthCheckService {
         timeout: configuration.policy.requestTimeoutMs,
         json: {
           collections: [configuration.satellite.collections.L2A],
-          bbox: [44, 42, 44.01, 42.01],
+          intersects: { type: 'Point', coordinates: [44.005, 42.005] },
           datetime: '2025-01-01T00:00:00.000Z/2025-01-01T23:59:59.999Z',
           fields: { include: ['id'] },
           limit: 1,

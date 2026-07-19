@@ -46,6 +46,7 @@ function scene(
   id: string,
   acquiredAt: string,
   productLevel: 'L1C' | 'L2A' = 'L2A',
+  sceneFootprint: Polygon = footprint(),
 ): SatelliteScene {
   return {
     id,
@@ -54,7 +55,7 @@ function scene(
     productLevel,
     acquiredAt,
     cloudCoverPercent: 12,
-    footprint: footprint(),
+    footprint: sceneFootprint,
     tileId: '38TMN',
     orbit: 'R135',
     productId: `${id}.SAFE`,
@@ -144,10 +145,10 @@ describe('validateSatelliteSearchCriteria', () => {
 });
 
 describe('SearchSatelliteScenes', () => {
-  it('deduplicates and groups scenes in stable newest-first order', async () => {
+  it('groups newest days first and sorts each day by acquisition time', async () => {
     const older = scene('scene-b', '2025-07-16T09:00:00.000Z');
     const firstNewer = scene('scene-a', '2025-07-17T08:00:00.000Z');
-    const secondNewer = scene('scene-c', '2025-07-17T08:00:00.000Z');
+    const secondNewer = scene('scene-c', '2025-07-17T09:00:00.000Z');
     const { services, useCase } = createUseCase({
       scenes: [older, secondNewer, firstNewer, firstNewer],
       totalMatched: 4,
@@ -165,8 +166,8 @@ describe('SearchSatelliteScenes', () => {
       '2025-07-16',
     ]);
     expect(result.groups[0]?.scenes.map((match) => match.scene.id)).toEqual([
-      'scene-a',
       'scene-c',
+      'scene-a',
     ]);
     expect(services.sentinelQueryDiagnostics.getSnapshot().status).toBe('success');
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('44.1');
@@ -200,8 +201,8 @@ describe('SearchSatelliteScenes', () => {
     });
   });
 
-  it('requires refinement instead of silently truncating excessive matches', async () => {
-    const { useCase } = createUseCase({ scenes: [], totalMatched: 101 });
+  it('keeps an internal safety boundary above a normal paginated month', async () => {
+    const { useCase } = createUseCase({ scenes: [], totalMatched: 1_001 });
 
     await expect(
       useCase.execute(criteria, new AbortController().signal),

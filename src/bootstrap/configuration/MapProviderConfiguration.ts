@@ -216,7 +216,7 @@ export const defaultMapProviderConfigurationInput = {
       L2A: 'sentinel-2-l2a',
     },
     attribution: 'Copernicus Sentinel data · Earth Search / Element 84',
-    maximumPages: 5,
+    maximumPages: 10,
   },
   policy: {
     requestTimeoutMs: 15_000,

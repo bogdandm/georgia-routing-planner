@@ -6,6 +6,8 @@ import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
+import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
   loadMapProviderConfiguration,
@@ -23,6 +25,7 @@ import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapC
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
+import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -36,8 +39,11 @@ export interface RuntimeServices {
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
+  readonly mapViewport: MapViewportSnapshotStore;
   readonly queryClient: QueryClient;
+  readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
+  readonly searchSatelliteScenes: SearchSatelliteScenes | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
 }
 
@@ -85,6 +91,7 @@ export function createRuntimeServices(): RuntimeServices {
     });
   }
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const mapViewport = new MapViewportSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const httpClient = createHttpClient(logger);
   const satelliteCatalogGateway =
@@ -98,6 +105,26 @@ export function createRuntimeServices(): RuntimeServices {
           clock,
         )
       : null;
+  const searchSatelliteScenes =
+    satelliteCatalogGateway === null
+      ? null
+      : new SearchSatelliteScenes(
+          satelliteCatalogGateway,
+          sentinelQueryDiagnostics,
+          logger,
+          idGenerator,
+          clock,
+        );
+  const loadSatelliteAvailability =
+    satelliteCatalogGateway === null
+      ? null
+      : new LoadSatelliteAvailability(
+          satelliteCatalogGateway,
+          sentinelQueryDiagnostics,
+          logger,
+          idGenerator,
+          clock,
+        );
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -151,9 +178,12 @@ export function createRuntimeServices(): RuntimeServices {
     logger,
     mapCameraRepository,
     mapDiagnostics,
+    mapViewport,
     mapProviderConfiguration,
     queryClient,
+    loadSatelliteAvailability,
     satelliteCatalogGateway,
+    searchSatelliteScenes,
     sentinelQueryDiagnostics,
   };
 }

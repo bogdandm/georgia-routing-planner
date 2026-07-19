@@ -96,12 +96,15 @@ export const earthSearchPaginationEnvelopeSchema = z
     links: z.array(linkSchema).default([]),
     context: contextSchema.optional(),
     numberMatched: z.number().int().nonnegative().optional(),
+    numberReturned: z.number().int().nonnegative().optional(),
   })
   .loose();
 
 export const earthSearchNextBodySchema = z
   .object({ next: z.string().trim().min(1).max(2_000) })
-  .strict();
+  // Earth Search repeats the original search fields beside the opaque token.
+  // Only `next` is consumed; the gateway rebuilds every subsequent request.
+  .loose();
 
 export type EarthSearchFeatureCollection = z.infer<
   typeof earthSearchFeatureCollectionSchema

@@ -82,6 +82,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   await page.getByRole('button', { name: 'Check configured providers' }).click();
   await expect(page.getByText('Vector provider reachability')).toBeVisible();
   await expect(page.getByText('Terrain provider reachability')).toBeVisible();
+  await expect(page.getByText('Satellite catalog reachability')).toBeVisible();
 
   await page.getByRole('tab', { name: /Logs/ }).click();
   await expect(page.getByText('runtime.promise.unhandled')).toBeVisible();

@@ -29,7 +29,10 @@ import {
 
 interface EarthSearchRequestBody {
   readonly collections: readonly string[];
-  readonly bbox: readonly [number, number, number, number];
+  readonly intersects: {
+    readonly type: 'Point';
+    readonly coordinates: readonly [number, number];
+  };
   readonly datetime: string;
   readonly query: Readonly<Record<'eo:cloud_cover', { readonly lte: number }>>;
   readonly sortby: readonly [{ readonly field: string; readonly direction: 'desc' }];
@@ -71,17 +74,21 @@ function createRequestBody(
   const { criteria } = query;
   return {
     collections: [collection],
-    bbox: [
-      criteria.viewport.bounds.west,
-      criteria.viewport.bounds.south,
-      criteria.viewport.bounds.east,
-      criteria.viewport.bounds.north,
-    ],
+    // Search only for scenes containing the immutable anchor. The full submitted
+    // viewport is intentionally retained for client-side coverage calculations.
+    intersects: {
+      type: 'Point',
+      coordinates: [
+        criteria.viewport.center.longitude,
+        criteria.viewport.center.latitude,
+      ],
+    },
     datetime: `${criteria.startDate}T00:00:00.000Z/${criteria.endDate}T23:59:59.999Z`,
     query: { 'eo:cloud_cover': { lte: criteria.maxCloudCoverPercent } },
     sortby: [{ field: 'properties.datetime', direction: 'desc' }],
     fields: { include: includedFields },
-    limit: query.maximumItems,
+    // Keep provider pages small and follow validated next links under the hood.
+    limit: Math.min(query.maximumItems, 100),
   };
 }
 
@@ -296,7 +303,15 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
 
       beginStep('fetch-result-pages');
       let envelope = earthSearchPaginationEnvelopeSchema.parse(rawPages[0]);
-      let next = this.readNext(envelope.links);
+      const initialMatched = this.readMatched(rawPages[0]);
+      const initialReturned = this.readReturned(rawPages[0]);
+      const initialNext = this.readNext(envelope.links);
+      let next =
+        initialMatched !== null &&
+        initialReturned !== null &&
+        initialReturned >= initialMatched
+          ? null
+          : initialNext;
       while (next !== null) {
         if (rawPages.length >= this.configuration.maximumPages) {
           throw new SatelliteCatalogError(
@@ -320,7 +335,14 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
           await this.fetchPage({ ...initialBody, next: next.token }, context.signal),
         );
         envelope = earthSearchPaginationEnvelopeSchema.parse(rawPages.at(-1));
-        next = this.readNext(envelope.links);
+        const fetchedItemCount = rawPages.reduce<number>((count, page) => {
+          const parsed = earthSearchPaginationEnvelopeSchema.parse(page);
+          return count + parsed.features.length;
+        }, 0);
+        next =
+          knownMatched !== null && fetchedItemCount >= knownMatched
+            ? null
+            : this.readNext(envelope.links);
       }
       completeStep();
 
@@ -440,5 +462,11 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
     const parsed = earthSearchPaginationEnvelopeSchema.safeParse(page);
     if (!parsed.success) return null;
     return parsed.data.context?.matched ?? parsed.data.numberMatched ?? null;
+  }
+
+  private readReturned(page: unknown): number | null {
+    const parsed = earthSearchPaginationEnvelopeSchema.safeParse(page);
+    if (!parsed.success) return null;
+    return parsed.data.context?.returned ?? parsed.data.numberReturned ?? null;
   }
 }

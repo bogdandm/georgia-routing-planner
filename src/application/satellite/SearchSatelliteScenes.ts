@@ -25,7 +25,7 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 
-export const maximumSatelliteSearchResults = 100;
+export const maximumSatelliteSearchResults = 1_000;
 
 function sceneTimestamp(scene: SatelliteScene): number {
   const timestamp = Date.parse(scene.acquiredAt);
@@ -69,7 +69,12 @@ function groupMatches(
 
   return [...byDate.entries()]
     .sort(([left], [right]) => right.localeCompare(left))
-    .map(([date, scenes]) => ({ date, scenes }));
+    .map(([date, scenes]) => ({
+      date,
+      scenes: scenes.toSorted((left, right) =>
+        stableSceneOrder(left.scene, right.scene),
+      ),
+    }));
 }
 
 function isCancellation(error: unknown, signal: AbortSignal): boolean {
@@ -128,7 +133,7 @@ export class SearchSatelliteScenes {
       ) {
         throw new SatelliteSearchError(
           'result-limit-exceeded',
-          'Too many scenes matched. Narrow the date range, viewport, or cloud limit.',
+          'This point matches more imagery than can be loaded safely.',
         );
       }
 

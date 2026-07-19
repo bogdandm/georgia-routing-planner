@@ -26,7 +26,7 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.satellite).toMatchObject({
       id: 'earth-search-v1',
       collections: { L1C: 'sentinel-2-l1c', L2A: 'sentinel-2-l2a' },
-      maximumPages: 5,
+      maximumPages: 10,
     });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
       schemaVersion: 1,

@@ -9,7 +9,7 @@ import { SatelliteGeometryError } from '@/domain/satellite/SatelliteGeometryErro
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import type { SatelliteSceneCoverage } from '@/domain/satellite/SatelliteSearchResult';
 
-export const satelliteEdgeWarningDistanceKm = 2;
+export const satelliteEdgeWarningDistanceKm = 5;
 
 function assertFiniteGeometry(geometry: Polygon | MultiPolygon): void {
   const visitRing = (ring: Position[]) => {
@@ -108,9 +108,7 @@ export function calculateSatelliteCoverage(
       viewportCoveragePercent,
       interestPointRelation,
       distanceToSceneEdgeKm,
-      hasEdgeWarning:
-        interestPointRelation !== 'inside' ||
-        distanceToSceneEdgeKm <= satelliteEdgeWarningDistanceKm,
+      hasEdgeWarning: distanceToSceneEdgeKm < satelliteEdgeWarningDistanceKm,
     };
   } catch (error) {
     if (error instanceof SatelliteGeometryError) throw error;

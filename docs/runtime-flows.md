@@ -190,26 +190,33 @@ coverage calculation and edge evidence. The displayed UTC calendar month supplie
 date range; the current month ends at today and past months end on their final day.
 Users do not enter date endpoints.
 
-Each successful month is recorded as complete for the submitted viewport, product, and
-cloud criteria, including a successful empty result. Calendar navigation checks that
-session cache before requesting the displayed month. A missing month runs the same
-cancellable search use case and appends its groups to the existing results. Revisiting a
-complete month performs no provider request. Changing submitted criteria starts a new
-session and clears the completed-month set.
+Each successful month is recorded as complete for the submitted viewport and product,
+including a successful empty result. Provider requests use the complete 0–100% cloud
+range. The slider filters loaded scene cards client-side and updates the calendar's
+orange highlights immediately. Acquisition dates above the threshold remain visible
+without an outline, and changing the slider neither invalidates loaded months nor
+performs another provider request. A calendar selection above the threshold remains in
+the results projection while it is selected, so the active card can be inspected and
+de-applied. Clearing that selection or selecting a different scene reapplies the cloud
+filter. Calendar navigation checks the session cache before requesting the displayed
+month. A missing month runs the same cancellable search use case and appends its groups
+to the existing results. Revisiting a complete month performs no provider request.
+Changing submitted provider criteria starts a new session and clears the completed-month
+set.
 
 The UI reveals locally loaded scenes in eight-card sets. When that result is exhausted,
 the same load-more command finds the next missing month before the initially submitted
-month, uses the immutable original viewport, product level, and cloud threshold, and
-appends the returned groups. This continues back to the first Sentinel-2 archive month
-without skipping a gap created by direct calendar navigation. Earth Search pages are
-capped at 100 items and followed internally up to the configured ten-page safety
-boundary, so a normal month is not truncated or turned into a user refinement task. The
-use cases reject a mixed L1C/L2A response instead of substituting product levels. The
-calendar's per-day cloud summary is a weighted average using each scene's submitted
-viewport coverage as its weight, with a simple average fallback when every coverage is
-zero. A newer operation replaces the visible timeline; late transitions from an older
-request are ignored by operation ID. Logs contain correlation IDs, counts, durations,
-and safe error codes, never exact viewport geometry.
+month, uses the immutable original viewport and product level with the complete cloud
+range, and appends the returned groups. This continues back to the first Sentinel-2
+archive month without skipping a gap created by direct calendar navigation. Earth Search
+pages are capped at 100 items and followed internally up to the configured ten-page
+safety boundary, so a normal month is not truncated or turned into a user refinement
+task. The use cases reject a mixed L1C/L2A response instead of substituting product
+levels. The calendar's per-day cloud summary is a weighted average using each scene's
+submitted viewport coverage as its weight, with a simple average fallback when every
+coverage is zero. A newer operation replaces the visible timeline; late transitions from
+an older request are ignored by operation ID. Logs contain correlation IDs, counts,
+durations, and safe error codes, never exact viewport geometry.
 
 The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
 URL. It obtains the first page, follows at most the configured number of same-origin

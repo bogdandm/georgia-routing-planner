@@ -43,6 +43,10 @@ elevation placeholder, or generic always-visible privacy notice.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
 - Durable settings: developer mode, collapsed navigation, and Sentinel imagery stretch
   preferences in Dexie.
+- Settings uses compact `General`, `Rendering`, and `Storage` tabs. Storage shows only
+  the measurements the browser supplies: origin usage and quota, IndexedDB, Cache
+  Storage, localStorage, residual origin data, and Chromium's optional JavaScript heap
+  estimate in megabytes.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
 
@@ -123,6 +127,11 @@ loading the prior usable image remains present; a failed replacement reports a s
 clickable error and leaves that prior image available. The error detail distinguishes
 rejected values, rate limiting, renderer availability, timeout, and an unclassified
 unusable tile without exposing provider URLs. Marker targeting remains unavailable.
+
+Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
+exposed through the web storage APIs, so the application neither claims their size nor
+offers a misleading clear action. Replaced Sentinel raster sources are removed from the
+live MapLibre map after a successful swap, and failed staging sources are discarded.
 
 Clicking a loaded calendar date selects the scene with the highest viewport coverage for
 that date, reveals its batch if needed, expands its card, and scrolls it into view.

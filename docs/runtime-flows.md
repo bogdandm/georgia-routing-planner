@@ -46,6 +46,12 @@ raster for the current scene, and swaps only after MapLibre reports it ready. A 
 tuning attempt rolls back the controller values and keeps the prior raster visible. At
 startup, validated stretch preferences load before a saved Sentinel scene is restored.
 
+Settings presents three exclusive tabs and mounts only the selected tab's content. The
+Storage tab performs a fresh, read-only measurement when opened and on explicit refresh.
+It combines `navigator.storage.estimate()`, optional Chromium usage details, a bounded
+localStorage byte calculation, and optional `performance.memory` values. Unsupported or
+failed measurements are omitted and do not block the rest of Settings.
+
 Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
 captures interaction from the workspace, and it remains open until the user activates
 its header close control, toggles the Diagnostics rail action, or disables developer

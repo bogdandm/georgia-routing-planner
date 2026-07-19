@@ -527,6 +527,16 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByRole('switch', { name: 'Collapse left navigation' }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Rendering' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Storage' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Sentinel imagery stretch' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
     expect(
       screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
     ).toBeVisible();
@@ -552,6 +562,18 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(services.mapLayers?.getRenderingTuning().saturation).toBe(5);
     });
+    expect(screen.getByRole('tab', { name: 'Rendering' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Storage' }));
+    expect(await screen.findByText('Local database (IndexedDB)')).toBeVisible();
+    expect(screen.getByText('Cache Storage')).toBeVisible();
+    expect(screen.getByText('3.00 MB')).toBeVisible();
+    expect(screen.getByText('4.00 MB')).toBeVisible();
+    expect(screen.getByText('48.00 MB')).toBeVisible();
+    expect(screen.getByText(/HTTP and MapLibre tile caches/i)).toBeVisible();
   });
 
   it('opens the complete current map error from the lightweight status line', async () => {

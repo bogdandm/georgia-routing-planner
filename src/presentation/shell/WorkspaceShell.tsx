@@ -29,7 +29,7 @@ function ControlledFailure(): never {
 }
 
 export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
-  const { database, logger, mapLayers } = useRuntimeServices();
+  const { database, logger, mapLayers, storageUsage } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
   const developerMode = useUiStore((state) => state.developerMode);
@@ -162,7 +162,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     setRenderingTuningError(null);
     try {
       const result = await mapLayers.setRenderingTuning(value, controller.signal);
-      if (result.status === 'failed') setRenderingTuningError(result.message);
+      if (result.status === 'failed') {
+        setRenderingTuning(mapLayers.getRenderingTuning());
+        setRenderingTuningError(result.message);
+      }
     } finally {
       if (renderingTuningAbort.current === controller) {
         renderingTuningAbort.current = null;
@@ -280,7 +283,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
       </Box>
 
       <SettingsDialog
-        key={`${String(renderingTuning.reflectanceMax)}:${renderingTuning.gamma.toFixed(2)}:${renderingTuning.saturation.toFixed(2)}`}
         developerMode={developerMode}
         open={settingsOpen}
         onClose={() => {
@@ -290,6 +292,8 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         renderingTuning={renderingTuning}
         renderingTuningPending={renderingTuningPending}
         renderingTuningError={renderingTuningError}
+        storageUsage={storageUsage}
+        onRenderingTuningDraftChange={setRenderingTuning}
         onRenderingTuningChange={(value) => {
           void handleRenderingTuningChange(value);
         }}

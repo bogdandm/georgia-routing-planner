@@ -1,34 +1,61 @@
 import {
   Alert,
+  Box,
   Button,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   FormControlLabel,
-  FormGroup,
   Paper,
   Slider,
   Stack,
   Switch,
+  Tab,
+  Tabs,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
 
+import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import {
   defaultSatelliteRenderingTuning,
   type SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
+import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
+
+type SettingsTab = 'general' | 'rendering' | 'storage';
 
 interface SettingsDialogProps {
   readonly developerMode: boolean;
   readonly onClose: () => void;
   readonly onDeveloperModeChange: (value: boolean) => void;
   readonly onRenderingTuningChange: (value: SatelliteRenderingTuning) => void;
+  readonly onRenderingTuningDraftChange: (value: SatelliteRenderingTuning) => void;
   readonly open: boolean;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly renderingTuningError: string | null;
   readonly renderingTuningPending: boolean;
+  readonly storageUsage: StorageUsageReader;
+}
+
+function SliderLabel({
+  label,
+  value,
+}: {
+  readonly label: string;
+  readonly value: string;
+}) {
+  return (
+    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+      <Typography variant="body2">{label}</Typography>
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </Typography>
+    </Stack>
+  );
 }
 
 export function SettingsDialog({
@@ -36,12 +63,14 @@ export function SettingsDialog({
   onClose,
   onDeveloperModeChange,
   onRenderingTuningChange,
+  onRenderingTuningDraftChange,
   open,
   renderingTuning,
   renderingTuningError,
   renderingTuningPending,
+  storageUsage,
 }: SettingsDialogProps) {
-  const [draft, setDraft] = useState(renderingTuning);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   if (!open) return null;
 
@@ -59,125 +88,215 @@ export function SettingsDialog({
         zIndex: (theme) => theme.zIndex.modal,
         top: '50%',
         left: '50%',
-        width: 'min(600px, calc(100vw - 32px))',
-        maxHeight: 'calc(100dvh - 32px)',
+        width: 'min(560px, calc(100vw - 24px))',
+        maxHeight: 'calc(100dvh - 24px)',
         display: 'flex',
         flexDirection: 'column',
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <DialogTitle id="settings-panel-title">Settings</DialogTitle>
-      <DialogContent dividers>
-        <FormGroup>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={developerMode}
-                onChange={(event) => {
-                  onDeveloperModeChange(event.target.checked);
+      <DialogTitle id="settings-panel-title" sx={{ px: 2, py: 1.25 }}>
+        Settings
+      </DialogTitle>
+      <Tabs
+        value={activeTab}
+        onChange={(_event, value: SettingsTab) => {
+          setActiveTab(value);
+        }}
+        aria-label="Settings tabs"
+        sx={{
+          minHeight: 42,
+          px: 1,
+          borderTop: 1,
+          borderBottom: 1,
+          borderColor: 'divider',
+          '& .MuiTabs-flexContainer': { gap: 0.25 },
+          '& .MuiTab-root': {
+            flex: '0 0 auto',
+            minWidth: 0,
+            minHeight: 42,
+            mx: 0,
+            mb: 0,
+            px: 1.25,
+            py: 1,
+            borderRadius: 0,
+            bgcolor: 'transparent',
+            color: 'text.primary',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            textTransform: 'none',
+          },
+          '& .MuiTab-root.Mui-selected': {
+            bgcolor: 'transparent',
+            color: 'info.main',
+          },
+          '& .MuiTab-root.Mui-focusVisible': {
+            outline: 'none',
+            boxShadow: 'inset 0 -4px 0 rgba(33, 158, 188, 0.3)',
+          },
+          '& .MuiTabs-indicator': {
+            height: 2,
+            borderRadius: 0,
+            bgcolor: 'info.main',
+          },
+        }}
+      >
+        <Tab disableRipple value="general" label="General" />
+        <Tab disableRipple value="rendering" label="Rendering" />
+        <Tab disableRipple value="storage" label="Storage" />
+      </Tabs>
+
+      <DialogContent sx={{ minHeight: 240, px: 2, py: 1.5 }}>
+        {activeTab === 'general' ? (
+          <Stack spacing={0.75} role="tabpanel" aria-label="General settings">
+            <FormControlLabel
+              sx={{ m: 0 }}
+              control={
+                <Switch
+                  checked={developerMode}
+                  onChange={(event) => {
+                    onDeveloperModeChange(event.target.checked);
+                  }}
+                />
+              }
+              label="Enable developer diagnostics"
+            />
+            <Typography variant="body2" color="text.secondary">
+              Exposes local logs, health checks, and diagnostics export. Nothing is
+              uploaded automatically.
+            </Typography>
+          </Stack>
+        ) : null}
+
+        {activeTab === 'rendering' ? (
+          <Stack spacing={1} role="tabpanel" aria-label="Rendering settings">
+            <Box>
+              <Typography component="h3" variant="subtitle2">
+                Sentinel imagery stretch
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Stored locally. Release a slider to replace the active raster; lower
+                ceilings brighten terrain but can clip bright snow.
+              </Typography>
+            </Box>
+
+            <Box>
+              <SliderLabel
+                label="Reflectance ceiling"
+                value={String(renderingTuning.reflectanceMax)}
+              />
+              <Slider
+                aria-label="Sentinel reflectance ceiling"
+                min={3_000}
+                max={12_000}
+                step={250}
+                value={renderingTuning.reflectanceMax}
+                valueLabelDisplay="auto"
+                disabled={renderingTuningPending}
+                onChange={(_event, value) => {
+                  if (typeof value === 'number') {
+                    onRenderingTuningDraftChange({
+                      ...renderingTuning,
+                      reflectanceMax: value,
+                    });
+                  }
+                }}
+                onChangeCommitted={(_event, value) => {
+                  if (typeof value === 'number') {
+                    onRenderingTuningChange({
+                      ...renderingTuning,
+                      reflectanceMax: value,
+                    });
+                  }
                 }}
               />
-            }
-            label="Enable developer diagnostics"
-          />
-        </FormGroup>
-        <Typography variant="body2" color="text.secondary">
-          Developer mode exposes local logs, health checks, and diagnostics export. It
-          never uploads data automatically.
-        </Typography>
+            </Box>
 
-        <Divider sx={{ my: 2 }} />
-        <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 700 }}>
-          Sentinel imagery stretch
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          These values are stored locally and applied to the current and future Sentinel
-          scenes. Release a slider to re-render; lower ceilings make terrain brighter
-          but may clip the brightest snow.
-        </Typography>
-        <Stack spacing={1} sx={{ mt: 2 }}>
-          <Typography variant="body2">
-            Reflectance ceiling: {String(draft.reflectanceMax)}
-          </Typography>
-          <Slider
-            aria-label="Sentinel reflectance ceiling"
-            min={3_000}
-            max={12_000}
-            step={250}
-            value={draft.reflectanceMax}
-            valueLabelDisplay="auto"
-            disabled={renderingTuningPending}
-            onChange={(_event, value) => {
-              if (typeof value === 'number')
-                setDraft({ ...draft, reflectanceMax: value });
-            }}
-            onChangeCommitted={(_event, value) => {
-              if (typeof value === 'number') {
-                onRenderingTuningChange({ ...draft, reflectanceMax: value });
-              }
-            }}
-          />
-          <Typography variant="body2">Gamma: {draft.gamma.toFixed(2)}</Typography>
-          <Slider
-            aria-label="Sentinel gamma"
-            min={0.5}
-            max={3}
-            step={0.05}
-            value={draft.gamma}
-            valueLabelDisplay="auto"
-            disabled={renderingTuningPending}
-            onChange={(_event, value) => {
-              if (typeof value === 'number') setDraft({ ...draft, gamma: value });
-            }}
-            onChangeCommitted={(_event, value) => {
-              if (typeof value === 'number') {
-                onRenderingTuningChange({ ...draft, gamma: value });
-              }
-            }}
-          />
-          <Typography variant="body2">
-            Saturation: {draft.saturation.toFixed(2)}
-          </Typography>
-          <Slider
-            aria-label="Sentinel saturation"
-            min={0}
-            max={5}
-            step={0.05}
-            value={draft.saturation}
-            valueLabelDisplay="auto"
-            disabled={renderingTuningPending}
-            onChange={(_event, value) => {
-              if (typeof value === 'number') setDraft({ ...draft, saturation: value });
-            }}
-            onChangeCommitted={(_event, value) => {
-              if (typeof value === 'number') {
-                onRenderingTuningChange({ ...draft, saturation: value });
-              }
-            }}
-          />
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={renderingTuningPending}
-              onClick={() => {
-                setDraft(defaultSatelliteRenderingTuning);
-                onRenderingTuningChange(defaultSatelliteRenderingTuning);
-              }}
-            >
-              Reset imagery stretch
-            </Button>
-            {renderingTuningPending ? (
-              <Typography variant="caption">Applying…</Typography>
-            ) : null}
+            <Box>
+              <SliderLabel label="Gamma" value={renderingTuning.gamma.toFixed(2)} />
+              <Slider
+                aria-label="Sentinel gamma"
+                min={0.5}
+                max={3}
+                step={0.05}
+                value={renderingTuning.gamma}
+                valueLabelDisplay="auto"
+                disabled={renderingTuningPending}
+                onChange={(_event, value) => {
+                  if (typeof value === 'number') {
+                    onRenderingTuningDraftChange({ ...renderingTuning, gamma: value });
+                  }
+                }}
+                onChangeCommitted={(_event, value) => {
+                  if (typeof value === 'number') {
+                    onRenderingTuningChange({ ...renderingTuning, gamma: value });
+                  }
+                }}
+              />
+            </Box>
+
+            <Box>
+              <SliderLabel
+                label="Saturation"
+                value={renderingTuning.saturation.toFixed(2)}
+              />
+              <Slider
+                aria-label="Sentinel saturation"
+                min={0}
+                max={5}
+                step={0.05}
+                value={renderingTuning.saturation}
+                valueLabelDisplay="auto"
+                disabled={renderingTuningPending}
+                onChange={(_event, value) => {
+                  if (typeof value === 'number') {
+                    onRenderingTuningDraftChange({
+                      ...renderingTuning,
+                      saturation: value,
+                    });
+                  }
+                }}
+                onChangeCommitted={(_event, value) => {
+                  if (typeof value === 'number') {
+                    onRenderingTuningChange({ ...renderingTuning, saturation: value });
+                  }
+                }}
+              />
+            </Box>
+
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={renderingTuningPending}
+                onClick={() => {
+                  onRenderingTuningDraftChange(defaultSatelliteRenderingTuning);
+                  onRenderingTuningChange(defaultSatelliteRenderingTuning);
+                }}
+              >
+                Reset stretch
+              </Button>
+              {renderingTuningPending ? (
+                <Typography variant="caption">Applying…</Typography>
+              ) : null}
+            </Stack>
+            {renderingTuningError === null ? null : (
+              <Alert severity="error">{renderingTuningError}</Alert>
+            )}
           </Stack>
-          {renderingTuningError === null ? null : (
-            <Alert severity="error">{renderingTuningError}</Alert>
-          )}
-        </Stack>
+        ) : null}
+
+        {activeTab === 'storage' ? (
+          <Box role="tabpanel" aria-label="Storage usage settings">
+            <StorageUsagePanel reader={storageUsage} />
+          </Box>
+        ) : null}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Done</Button>
+
+      <DialogActions sx={{ px: 1.5, py: 0.75 }}>
+        <Button size="small" onClick={onClose}>
+          Done
+        </Button>
       </DialogActions>
     </Paper>
   );

@@ -336,6 +336,9 @@ Scope:
   to five times normal, and reapply the active scene atomically.
 - Keep Settings visually and interactively non-modal so the map remains available while
   tuning.
+- Present Settings as three compact tabs: General, Rendering, and Storage. Report
+  available origin-storage categories, quota, and optional JavaScript heap metrics in
+  megabytes, while stating the browser-managed tile-cache limitation.
 - Make safe raster-renderer failures selectable from the shared status line and classify
   common rejection, throttling, availability, and timeout cases.
 - Remove the duplicate recoverable map banner and give non-ready status a translucent

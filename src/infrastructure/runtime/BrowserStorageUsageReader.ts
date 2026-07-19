@@ -56,10 +56,7 @@ function readHeapMemory(): HeapMemoryInfo | null {
 
 function defaultEnvironment(): BrowserStorageUsageEnvironment {
   return {
-    estimate:
-      navigator.storage?.estimate === undefined
-        ? null
-        : () => navigator.storage.estimate() as Promise<ExtendedStorageEstimate>,
+    estimate: () => navigator.storage.estimate(),
     heapMemory: readHeapMemory,
     localStorageEntries: readLocalStorageEntries,
     now: () => new Date(),

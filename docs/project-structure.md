@@ -93,6 +93,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
 | Sentinel sources, footprint, and layer commands           | `MapLibreLayerController`           | Provider URLs and native resources stay imperative |
 | Applied imagery, logical visibility, and raster stretch   | Dexie plus map layer controller     | Durable choices with a serializable live view      |
+| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`         | Read-only platform metrics behind an app port      |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
@@ -109,6 +110,12 @@ disabled, or empty presentation. Create GPX is currently a disabled Tracks actio
 never a rail section. Shared palette values live in `appColors.ts` so the MUI theme and
 pure MapLibre style use the same visual vocabulary without introducing a second styling
 system.
+
+`BrowserStorageUsageReader` implements the small `StorageUsageReader` application port.
+It combines the origin storage estimate, Chromium's optional per-category details,
+localStorage byte estimation, and optional JavaScript heap counters without exposing
+browser globals to the Settings UI. Missing browser capabilities produce unavailable
+metric values rather than failing the dialog.
 
 ## Map boundary
 

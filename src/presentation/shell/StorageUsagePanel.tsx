@@ -24,11 +24,17 @@ type StorageUsageState =
   | { readonly status: 'ready'; readonly snapshot: StorageUsageSnapshot }
   | { readonly status: 'error' };
 
-function formatMegabytes(bytes: number | null): string {
-  return bytes === null ? 'Not reported' : `${(bytes / 1_048_576).toFixed(2)} MB`;
+function formatMegabytes(bytes: number): string {
+  return `${(bytes / 1_048_576).toFixed(2)} MB`;
 }
 
-function MetricRow({ label, value }: { readonly label: string; readonly value: string }) {
+function MetricRow({
+  label,
+  value,
+}: {
+  readonly label: string;
+  readonly value: string;
+}) {
   return (
     <Stack
       direction="row"
@@ -38,10 +44,25 @@ function MetricRow({ label, value }: { readonly label: string; readonly value: s
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
+      >
         {value}
       </Typography>
     </Stack>
+  );
+}
+
+function OptionalMetricRow({
+  label,
+  bytes,
+}: {
+  readonly label: string;
+  readonly bytes: number | null;
+}) {
+  return bytes === null ? null : (
+    <MetricRow label={label} value={formatMegabytes(bytes)} />
   );
 }
 
@@ -98,45 +119,48 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
   }
 
   const snapshot = state.snapshot;
+  const hasHeapMetrics =
+    snapshot.heapUsedBytes !== null ||
+    snapshot.heapAllocatedBytes !== null ||
+    snapshot.heapLimitBytes !== null;
   return (
     <Stack spacing={1.25}>
       <Box>
-        <MetricRow
+        <OptionalMetricRow
           label="Total app storage"
-          value={formatMegabytes(snapshot.totalStoredBytes)}
+          bytes={snapshot.totalStoredBytes}
         />
-        <MetricRow
+        <OptionalMetricRow
           label="Local database (IndexedDB)"
-          value={formatMegabytes(snapshot.indexedDbBytes)}
+          bytes={snapshot.indexedDbBytes}
         />
-        <MetricRow
-          label="Cache Storage"
-          value={formatMegabytes(snapshot.cacheStorageBytes)}
-        />
+        <OptionalMetricRow label="Cache Storage" bytes={snapshot.cacheStorageBytes} />
         <MetricRow
           label="localStorage"
           value={formatMegabytes(snapshot.localStorageBytes)}
         />
-        <MetricRow
+        <OptionalMetricRow
           label="Other origin storage"
-          value={formatMegabytes(snapshot.otherOriginStorageBytes)}
+          bytes={snapshot.otherOriginStorageBytes}
         />
-        <MetricRow label="Origin quota" value={formatMegabytes(snapshot.quotaBytes)} />
+        <OptionalMetricRow label="Origin quota" bytes={snapshot.quotaBytes} />
       </Box>
 
-      <Divider />
+      {hasHeapMetrics ? <Divider /> : null}
 
-      <Box>
-        <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
-          Approximate JavaScript memory
-        </Typography>
-        <MetricRow label="Used heap" value={formatMegabytes(snapshot.heapUsedBytes)} />
-        <MetricRow
-          label="Allocated heap"
-          value={formatMegabytes(snapshot.heapAllocatedBytes)}
-        />
-        <MetricRow label="Heap limit" value={formatMegabytes(snapshot.heapLimitBytes)} />
-      </Box>
+      {hasHeapMetrics ? (
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
+            Approximate JavaScript memory
+          </Typography>
+          <OptionalMetricRow label="Used heap" bytes={snapshot.heapUsedBytes} />
+          <OptionalMetricRow
+            label="Allocated heap"
+            bytes={snapshot.heapAllocatedBytes}
+          />
+          <OptionalMetricRow label="Heap limit" bytes={snapshot.heapLimitBytes} />
+        </Box>
+      ) : null}
 
       <Alert severity="info" icon={false} sx={{ py: 0.25 }}>
         Chrome manages HTTP and MapLibre tile caches internally. Web apps cannot measure
@@ -144,7 +168,10 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
         when they are replaced.
       </Alert>
 
-      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+      >
         <Typography variant="caption" color="text.secondary">
           Measured {new Date(snapshot.measuredAt).toLocaleTimeString()}
         </Typography>

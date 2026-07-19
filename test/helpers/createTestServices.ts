@@ -115,6 +115,9 @@ export function createTestServices(
     httpClient,
     idGenerator,
     logger,
+    elevationProvider: {
+      sample: () => Promise.resolve({ status: 'available' as const, meters: 1_234 }),
+    },
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
     mapDiagnostics,
     mapViewport,

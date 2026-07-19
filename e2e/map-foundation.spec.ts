@@ -154,6 +154,143 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   );
 });
 
+test('uses conventional native camera gestures and resets them with the compass', async ({
+  page,
+}) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  const initialCamera = await readStoredCamera(page);
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down();
+  await page.mouse.move(centerX + 90, centerY + 30, { steps: 4 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.longitude)
+    .not.toBe(initialCamera?.longitude);
+
+  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Show 3D terrain map' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  const cameraBeforeOrbit = await readStoredCamera(page);
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
+  await page.mouse.up({ button: 'middle' });
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.bearing)
+    .not.toBe(cameraBeforeOrbit?.bearing);
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.pitch ?? 0)
+    .toBeGreaterThan(0);
+
+  await canvas.focus();
+  const cameraBeforeKeyboard = await readStoredCamera(page);
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.bearing)
+    .not.toBe(cameraBeforeKeyboard?.bearing);
+  await page.keyboard.press('Equal');
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.zoom)
+    .toBeGreaterThan(cameraBeforeKeyboard?.zoom ?? 0);
+
+  await page.locator('.maplibregl-ctrl-compass').click();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.bearing ?? null)
+    .toBe(0);
+  await expect.poll(async () => (await readStoredCamera(page))?.pitch ?? null).toBe(0);
+});
+
+test('keeps one terrain-anchored point inspector tracking native camera movement', async ({
+  page,
+}) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+
+  await canvas.click({
+    position: { x: bounds.width / 2, y: bounds.height / 2 },
+  });
+  const popup = page.locator('.map-point-inspector');
+  const anchor = page.locator('.map-point-inspector__anchor');
+  await expect(popup).toHaveCount(1);
+  await expect(page.getByRole('dialog', { name: 'Map point' })).toContainText(
+    'Terrain elevation',
+  );
+  await expect(page.getByText(/m$/).first()).toBeVisible({ timeout: 15_000 });
+  const initialTransform = await anchor.evaluate((element) => element.style.transform);
+
+  await canvas.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('+');
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Shift+ArrowUp');
+  await expect
+    .poll(async () => anchor.evaluate((element) => element.style.transform))
+    .not.toBe(initialTransform);
+  await expect(popup).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Show 3D terrain map' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(popup).toHaveCount(1);
+  const anchorBeforeOrbit = await anchor.boundingBox();
+  expect(anchorBeforeOrbit).not.toBeNull();
+  if (anchorBeforeOrbit !== null) {
+    const orbitX = anchorBeforeOrbit.x + anchorBeforeOrbit.width / 2;
+    const orbitY = anchorBeforeOrbit.y + anchorBeforeOrbit.height / 2;
+    await page.mouse.move(orbitX, orbitY);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(orbitX + 80, orbitY - 60, { steps: 4 });
+    await page.mouse.up({ button: 'middle' });
+    await expect
+      .poll(async () => {
+        const current = await anchor.boundingBox();
+        return current === null
+          ? Number.POSITIVE_INFINITY
+          : Math.hypot(
+              current.x + current.width / 2 - orbitX,
+              current.y + current.height / 2 - orbitY,
+            );
+      })
+      .toBeLessThan(4);
+  }
+  await page.getByRole('button', { name: 'Show flat 2D map' }).click();
+  await expect(popup).toHaveCount(1);
+  await page.getByRole('button', { name: 'Close map point details' }).click();
+  await expect(popup).toHaveCount(0);
+  await expect(anchor).toHaveCount(0);
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('[data-testid="map-workspace"]')
+    .analyze();
+  expect(
+    accessibility.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+});
+
 test('falls back after DEM failure and enables terrain after explicit retry', async ({
   page,
 }) => {

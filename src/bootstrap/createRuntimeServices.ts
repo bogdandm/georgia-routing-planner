@@ -3,6 +3,7 @@ import type { KyInstance } from 'ky';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
@@ -21,6 +22,7 @@ import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
+import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
@@ -40,6 +42,7 @@ export interface RuntimeServices {
   readonly httpClient: KyInstance;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
+  readonly elevationProvider: ElevationProvider | null;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
@@ -120,6 +123,14 @@ export function createRuntimeServices(): RuntimeServices {
         )
       : null;
   const httpClient = createHttpClient(logger, clock, idGenerator);
+  const elevationProvider =
+    mapProviderConfiguration.status === 'valid'
+      ? new RasterDemElevationProvider(
+          httpClient,
+          mapProviderConfiguration.value.terrain,
+          idGenerator,
+        )
+      : null;
   const satelliteCatalogGateway =
     mapProviderConfiguration.status === 'valid'
       ? new EarthSearchSatelliteCatalogGateway(
@@ -202,6 +213,7 @@ export function createRuntimeServices(): RuntimeServices {
     httpClient,
     idGenerator,
     logger,
+    elevationProvider,
     mapCameraRepository,
     mapDiagnostics,
     mapViewport,

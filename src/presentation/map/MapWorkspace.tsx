@@ -68,6 +68,7 @@ export function MapWorkspace({
     logger,
     mapCameraRepository,
     mapDiagnostics,
+    elevationProvider,
     mapLayers,
     mapProviderConfiguration,
     mapViewport,
@@ -102,6 +103,10 @@ export function MapWorkspace({
         mapProviderConfiguration.status === 'valid'
           ? {
               terrain: mapProviderConfiguration.value.terrain,
+              sourceLayers: {
+                peaks: mapProviderConfiguration.value.vector.sourceLayers.peaks,
+                pois: mapProviderConfiguration.value.vector.sourceLayers.pois,
+              },
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
               equivalentErrorWindowMs:
                 mapProviderConfiguration.value.policy.equivalentErrorWindowMs,
@@ -109,12 +114,14 @@ export function MapWorkspace({
           : undefined,
         mapDiagnostics,
         mapLayers ?? undefined,
+        elevationProvider ?? undefined,
       ),
     [
       cameraPersistence,
       logger,
       mapDiagnostics,
       mapLayers,
+      elevationProvider,
       mapProviderConfiguration,
       suppliedFacade,
     ],
@@ -270,8 +277,16 @@ export function MapWorkspace({
             attributionControl={{ compact: false }}
             initialViewState={restoredCamera}
             mapStyle={mapStyle}
+            boxZoom
+            doubleClickZoom
+            dragPan
+            dragRotate
+            keyboard
             reuseMaps={false}
+            scrollZoom
             style={{ width: '100%', height: '100%' }}
+            touchPitch
+            touchZoomRotate
           >
             <NavigationControl
               position="top-right"

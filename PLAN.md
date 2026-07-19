@@ -320,7 +320,8 @@ Scope:
   collapse state in validated Dexie records.
 - Keep the map fixed to the full viewport while rail, sidebar, and results float above
   it as one continuous surface.
-- Collapse with a short transition to the clickable GR mark.
+- Collapse with a short transition into the fixed clickable GR mark without moving or
+  resizing that anchor.
 - Add the shared one-line operational status below map search.
 - Replace clipped TCI rendering with full-range raw RGB reflectance-band composition.
 

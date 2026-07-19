@@ -196,7 +196,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           position: 'absolute',
           top: 6,
           left: 6,
-          height: navigationCollapsed ? 36 : 'calc(100dvh - 12px)',
+          height: navigationCollapsed ? 48 : 'calc(100dvh - 12px)',
           zIndex: 4,
           display: 'flex',
           gap: 0,

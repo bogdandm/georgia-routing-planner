@@ -51,7 +51,7 @@ export function WorkspaceRail({
       sx={{
         position: 'relative',
         zIndex: 4,
-        width: collapsed ? 44 : 64,
+        width: 64,
         height: '100%',
         flexShrink: 0,
         display: 'flex',
@@ -59,11 +59,11 @@ export function WorkspaceRail({
         alignItems: 'stretch',
         bgcolor: collapsed ? 'transparent' : appColors.brand.deepSpace,
         color: appColors.text.inverse,
-        borderRadius: collapsed ? 1.25 : '8px 0 0 8px',
+        borderRadius: collapsed ? 0 : '8px 0 0 8px',
         overflow: collapsed ? 'visible' : 'hidden',
         boxShadow: 'none',
         transition: (theme) =>
-          theme.transitions.create(['width', 'background-color'], {
+          theme.transitions.create('background-color', {
             duration: theme.transitions.duration.shorter,
           }),
       }}
@@ -78,7 +78,8 @@ export function WorkspaceRail({
           sx={{
             width: 44,
             height: 36,
-            mt: collapsed ? 0 : 1.5,
+            flexShrink: 0,
+            mt: 1.5,
             mx: 'auto',
             display: 'grid',
             placeItems: 'center',

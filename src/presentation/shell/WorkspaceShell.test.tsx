@@ -515,11 +515,31 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Hide navigation from GR' }));
+    const navigation = screen.getByRole('navigation');
+    const expandedLogo = screen.getByRole('button', {
+      name: 'Hide navigation from GR',
+    });
+    expect(navigation).toHaveStyle({ width: '64px' });
+    expect(expandedLogo).toHaveStyle({
+      width: '44px',
+      height: '36px',
+      flexShrink: '0',
+      marginTop: '12px',
+    });
 
-    expect(screen.getByRole('navigation')).toBeVisible();
+    await user.click(expandedLogo);
+
+    const collapsedLogo = screen.getByRole('button', { name: 'Show navigation' });
+    expect(navigation).toBeVisible();
+    expect(navigation).toHaveStyle({ width: '64px' });
+    expect(collapsedLogo).toHaveStyle({
+      width: '44px',
+      height: '36px',
+      flexShrink: '0',
+      marginTop: '12px',
+    });
     expect(screen.getByRole('complementary', { hidden: true })).not.toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Show navigation' }));
+    await user.click(collapsedLogo);
     expect(screen.getByRole('navigation')).toBeVisible();
     expect(screen.getByRole('complementary')).toBeVisible();
 

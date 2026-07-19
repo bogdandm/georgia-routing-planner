@@ -188,7 +188,9 @@ preferences and applied before a saved scene is restored.
   disabled.
 - A lightweight line below search reports readiness, pending work, or safe failures;
   selecting an error opens its complete safe detail.
-- Navigation collapses with a short transition to only the clickable GR mark.
+- Navigation collapses with a short transition to only the clickable GR mark. The GR
+  square keeps the exact same size and viewport position in both states so the remaining
+  navigation appears to retract into that fixed anchor.
 - Settings is non-modal and does not dim or block the map, allowing imagery stretch to
   be judged while a slider is adjusted.
 - Native zoom and compass/navigation controls remain on the right.

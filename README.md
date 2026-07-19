@@ -193,10 +193,12 @@ $env:BASE_PATH='/georgia-routing-planner/'
 pnpm build
 ```
 
-The Pages workflow is guarded to `refs/heads/main`; it cannot deploy a feature branch.
 The checks workflow runs the frozen install, non-browser checks, production build,
-Chromium smoke flows, and axe checks. No deployment is part of feature-branch
-verification.
+Chromium smoke flows, and axe checks. For a successful `main` run, it also uploads the
+exact `dist` artifact built from that commit. The Pages workflow starts only from that
+successful Checks run and deploys its immutable artifact, so it cannot publish a feature
+branch or independently rebuild unverified source. No deployment is part of
+feature-branch verification.
 
 ## Complete system concept
 

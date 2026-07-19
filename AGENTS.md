@@ -537,6 +537,24 @@ Automated tests are required by default. Add or update tests in the same change 
 production behavior. Do not postpone the entire test suite to a subsequent change and do
 not rely on manual browser verification as the only evidence.
 
+### Managed Windows coverage timing
+
+On the managed Windows workspace, parallel V8 coverage can make otherwise passing
+`WorkspaceShell` interaction tests exceed Vitest's five-second per-test default because
+several JSDOM workers compete for CPU. Always try the canonical `pnpm test:coverage`
+command first. If the only failures are timeouts and the named tests pass when focused,
+rerun the complete coverage suite with bounded concurrency and a ten-second ceiling:
+
+```powershell
+.\node_modules\.bin\vitest.cmd run --config vitest.coverage.config.ts --coverage --maxWorkers=2 --testTimeout=10000
+```
+
+If two workers still show contention, retry with `--maxWorkers=1`. Do not skip tests,
+remove assertions, add sleeps, or increase application polling delays to make the run
+green. Report both the canonical timeout and the successful bounded-concurrency result
+in the handoff so other agents can distinguish infrastructure timing from a behavioral
+failure.
+
 Use the smallest automated-test tier that proves the changed behavior. Isolated UI
 copy/style changes, local component-state fixes, and small interaction changes should
 use focused unit or React component tests plus a brief manual browser check when visual

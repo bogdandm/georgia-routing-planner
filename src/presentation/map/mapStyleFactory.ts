@@ -134,16 +134,6 @@ function createBasemapLayers(
       },
     },
     {
-      id: mapLayerIds.water,
-      type: 'fill',
-      source,
-      'source-layer': sourceLayers.water,
-      paint: {
-        'fill-color': mapVisualPalette.water.fill,
-        ...mapVisualModePaint.vector[mapLayerIds.water],
-      },
-    },
-    {
       id: mapLayerIds.waterways,
       type: 'line',
       source,
@@ -151,6 +141,16 @@ function createBasemapLayers(
       paint: {
         'line-color': mapVisualPalette.water.line,
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 14, 2],
+      },
+    },
+    {
+      id: mapLayerIds.water,
+      type: 'fill',
+      source,
+      'source-layer': sourceLayers.water,
+      paint: {
+        'fill-color': mapVisualPalette.water.fill,
+        ...mapVisualModePaint.vector[mapLayerIds.water],
       },
     },
     {

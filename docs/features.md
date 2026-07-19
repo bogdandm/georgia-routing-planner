@@ -231,6 +231,9 @@ from tiled surface polygons; the intentional red military perimeter is the only
 restricted-area outline. Imported and user-created GPX tracks reserve a brighter blue
 than the contour family so route geometry remains distinguishable.
 
+Waterway lines and water-body polygons use the same blue. Waterways render first, so
+lake and reservoir polygons cover river centerlines where the geometries overlap.
+
 Labels prefer `name:en`, then the provider's `name:latin` transliteration, before legacy
 English and native-name fallbacks. A native Georgian label can therefore remain when the
 source supplies neither an English name nor a Latin transliteration; the client does not

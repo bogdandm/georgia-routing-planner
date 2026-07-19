@@ -66,6 +66,9 @@ areas (`landuse` military), Hiking paths, Roads, and Places and POIs. New source
 families must be added to the corresponding Layers control in the same change as their
 style.
 
+Waterways and water bodies share one blue. The `waterway` layer is ordered below the
+`water` fill so lake and reservoir polygons mask overlapping river centerlines.
+
 ### Attribution and licensing
 
 Attribution remains visible in MapLibre's attribution control:

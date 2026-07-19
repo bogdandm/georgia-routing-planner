@@ -129,6 +129,40 @@ describe('AppDatabase', () => {
     });
   });
 
+  it('repairs unsupported persisted terrain overlay values to safe defaults', async () => {
+    await database.settings.put({
+      key: 'map.layers',
+      value: {
+        visibility: {
+          'satellite-imagery': true,
+          'scene-footprint': true,
+          'hiking-paths': true,
+          roads: true,
+          'places-and-pois': true,
+        },
+        appliedScene: null,
+        renderingTuning: {
+          reflectanceMax: 11_000,
+          gamma: 2.25,
+          saturation: 2.5,
+        },
+        terrainOverlays: {
+          contourIntervalMeters: 30,
+          shadeAboveSatellite: 'yes',
+        },
+      },
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      terrainOverlays: {
+        contourIntervalMeters: 50,
+        shadeAboveSatellite: false,
+      },
+    });
+    await expect(database.settings.get('map.layers')).resolves.toBeUndefined();
+  });
+
   it('runs a non-destructive storage probe', async () => {
     await database.probe();
 

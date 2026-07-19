@@ -6,7 +6,12 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  FormControl,
+  FormHelperText,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Slider,
   Stack,
   Switch,
@@ -22,6 +27,10 @@ import {
   type SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
 import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
+import {
+  supportedContourIntervals,
+  type TerrainOverlayPreferences,
+} from '@/application/ports/MapLayerPreferencesRepository';
 
 type SettingsTab = 'general' | 'rendering' | 'storage';
 
@@ -36,6 +45,11 @@ interface SettingsDialogProps {
   readonly renderingTuningError: string | null;
   readonly renderingTuningPending: boolean;
   readonly storageUsage: StorageUsageReader;
+  readonly terrainOverlayError: string | null;
+  readonly terrainOverlayPreferences: TerrainOverlayPreferences;
+  readonly onTerrainOverlayPreferencesChange: (
+    value: TerrainOverlayPreferences,
+  ) => void;
 }
 
 function SliderLabel({
@@ -69,6 +83,9 @@ export function SettingsDialog({
   renderingTuningError,
   renderingTuningPending,
   storageUsage,
+  terrainOverlayError,
+  terrainOverlayPreferences,
+  onTerrainOverlayPreferencesChange,
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
@@ -282,6 +299,71 @@ export function SettingsDialog({
             </Stack>
             {renderingTuningError === null ? null : (
               <Alert severity="error">{renderingTuningError}</Alert>
+            )}
+
+            <Box sx={{ pt: 0.5 }}>
+              <Typography component="h3" variant="subtitle2">
+                Terrain overlays
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Minor contours use the selected spacing. Emphasized, labeled index
+                contours remain every 200 m and appear from zoom 11.
+              </Typography>
+            </Box>
+
+            <FormControl size="small" fullWidth>
+              <InputLabel id="contour-distance-label">Contour distance</InputLabel>
+              <Select
+                labelId="contour-distance-label"
+                label="Contour distance"
+                value={terrainOverlayPreferences.contourIntervalMeters}
+                onChange={(event) => {
+                  onTerrainOverlayPreferencesChange({
+                    ...terrainOverlayPreferences,
+                    contourIntervalMeters: event.target.value,
+                  });
+                }}
+              >
+                {supportedContourIntervals.map((interval) => (
+                  <MenuItem key={interval} value={interval}>
+                    {interval} m
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Smaller distances show more minor lines while keeping 200 m labels.
+              </FormHelperText>
+            </FormControl>
+
+            <Box>
+              <FormControlLabel
+                sx={{ m: 0 }}
+                control={
+                  <Switch
+                    checked={terrainOverlayPreferences.shadeAboveSatellite}
+                    onChange={(event) => {
+                      onTerrainOverlayPreferencesChange({
+                        ...terrainOverlayPreferences,
+                        shadeAboveSatellite: event.target.checked,
+                      });
+                    }}
+                  />
+                }
+                label="Show relief shading above satellite imagery"
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block' }}
+              >
+                When enabled, low-contrast terrain shadows remain visible over the
+                selected satellite scene. Contours always stay above both.
+              </Typography>
+            </Box>
+            {terrainOverlayError === null ? null : (
+              <Alert severity="warning" role="status">
+                {terrainOverlayError}
+              </Alert>
             )}
           </Stack>
         ) : null}

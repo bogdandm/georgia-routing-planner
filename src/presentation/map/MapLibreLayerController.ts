@@ -319,6 +319,17 @@ export class MapLibreLayerController
     const previous = this.#terrainOverlayPreferences;
     this.#terrainOverlayPreferences = { ...value };
     this.#contourFailureReported = false;
+    if (this.#map === null) {
+      mapLayerStore.setState({
+        terrainOverlays: {
+          initialized: false,
+          preferences: { ...value },
+          message: null,
+        },
+      });
+      this.persistStableState();
+      return { status: 'success' };
+    }
     const result = this.reconcileTerrainOverlays();
     if (result.status === 'success') {
       this.persistStableState();

@@ -673,6 +673,44 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
+  it('UI-wires accessible terrain overlay settings and persists both choices', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+
+    expect(screen.getByRole('heading', { name: 'Terrain overlays' })).toBeVisible();
+    const contourDistance = screen.getByRole('combobox', {
+      name: 'Contour distance',
+    });
+    expect(contourDistance).toHaveTextContent('50 m');
+    expect(
+      screen.getByText(/Emphasized, labeled index contours remain every 200 m/u),
+    ).toBeVisible();
+
+    await user.click(contourDistance);
+    await user.click(screen.getByRole('option', { name: '25 m' }));
+    await user.click(
+      screen.getByRole('switch', {
+        name: 'Show relief shading above satellite imagery',
+      }),
+    );
+
+    expect(services.mapLayers?.getTerrainOverlayPreferences()).toEqual({
+      contourIntervalMeters: 25,
+      shadeAboveSatellite: true,
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        terrainOverlays: {
+          contourIntervalMeters: 25,
+          shadeAboveSatellite: true,
+        },
+      });
+    });
+  });
+
   it('announces fatal map failures assertively', () => {
     services.mapDiagnostics.update({
       ...new FakeMapFacade().snapshot,

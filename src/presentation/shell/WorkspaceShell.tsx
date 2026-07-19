@@ -1,6 +1,7 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
@@ -12,6 +13,7 @@ import {
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
 import { WorkspaceSidebar } from '@/presentation/shell/WorkspaceSidebar';
@@ -47,6 +49,13 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   );
   const [renderingTuningPending, setRenderingTuningPending] = useState(false);
   const [renderingTuningError, setRenderingTuningError] = useState<string | null>(null);
+  const [terrainOverlayCommandError, setTerrainOverlayCommandError] = useState<
+    string | null
+  >(null);
+  const terrainOverlaySnapshot = useStore(
+    mapLayerStore,
+    (state) => state.terrainOverlays,
+  );
   const renderingTuningAbort = useRef<AbortController | null>(null);
   const developerModeChangedByUser = useRef(false);
   const navigationChangedByUser = useRef(false);
@@ -174,6 +183,14 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     }
   };
 
+  const handleTerrainOverlayPreferencesChange = (
+    value: typeof terrainOverlaySnapshot.preferences,
+  ) => {
+    if (mapLayers === null) return;
+    const result = mapLayers.setTerrainOverlayPreferences(value);
+    setTerrainOverlayCommandError(result.status === 'failed' ? result.message : null);
+  };
+
   return (
     <Box
       sx={{
@@ -297,6 +314,11 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         onRenderingTuningChange={(value) => {
           void handleRenderingTuningChange(value);
         }}
+        terrainOverlayPreferences={terrainOverlaySnapshot.preferences}
+        terrainOverlayError={
+          terrainOverlayCommandError ?? terrainOverlaySnapshot.message
+        }
+        onTerrainOverlayPreferencesChange={handleTerrainOverlayPreferencesChange}
       />
       {developerMode ? (
         <DeveloperDrawer

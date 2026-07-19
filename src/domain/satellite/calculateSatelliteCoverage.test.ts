@@ -1,4 +1,4 @@
-import type { Polygon } from 'geojson';
+import type { MultiPolygon, Polygon } from 'geojson';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -86,6 +86,52 @@ describe('calculateSatelliteCoverage', () => {
 
     expect(() => calculateSatelliteCoverage(viewport, invalid)).toThrow(
       SatelliteGeometryError,
+    );
+  });
+
+  it('measures every polygon in a multi-polygon footprint', () => {
+    const footprint: MultiPolygon = {
+      type: 'MultiPolygon',
+      coordinates: [
+        rectangle(-1, -1, 0.5, 3).coordinates,
+        rectangle(1.5, -1, 3, 3).coordinates,
+      ],
+    };
+
+    const result = calculateSatelliteCoverage(viewport, footprint);
+
+    expect(result.viewportCoveragePercent).toBeCloseTo(50, 1);
+    expect(result.interestPointRelation).toBe('outside');
+  });
+
+  it('rejects non-finite coordinates before invoking geometry libraries', () => {
+    const invalid = rectangle(0, 0, 2, 2);
+    const outerRing = invalid.coordinates[0];
+    if (outerRing === undefined)
+      throw new Error('Rectangle fixture has no outer ring.');
+    outerRing[1] = [Number.NaN, 0];
+
+    expect(() => calculateSatelliteCoverage(viewport, invalid)).toThrow(
+      'Scene footprint contains a non-finite coordinate.',
+    );
+  });
+
+  it('rejects a viewport with no measurable area', () => {
+    const zeroAreaViewport: SatelliteSearchViewport = {
+      ...viewport,
+      bounds: { west: 1, south: 0, east: 1, north: 2 },
+    };
+
+    expect(() =>
+      calculateSatelliteCoverage(zeroAreaViewport, rectangle(-1, -1, 3, 3)),
+    ).toThrow('Submitted viewport has no measurable area.');
+  });
+
+  it('rejects footprints without a measurable boundary', () => {
+    const invalid: Polygon = { type: 'Polygon', coordinates: [] };
+
+    expect(() => calculateSatelliteCoverage(viewport, invalid)).toThrow(
+      'Scene footprint boundary distance is not finite.',
     );
   });
 });

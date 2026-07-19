@@ -2,7 +2,7 @@ import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 
 const hashByTab: Readonly<Record<WorkspaceTab, string>> = {
   tracks: '#tracks',
-  satellite: '#satelite',
+  satellite: '#satellite',
   markers: '#markers',
   layers: '#layers',
 };
@@ -13,7 +13,7 @@ export function workspaceTabFromHash(hash: string): WorkspaceTab | null {
   for (const [tab, tabHash] of Object.entries(hashByTab)) {
     if (normalized === tabHash) return tab as WorkspaceTab;
   }
-  return normalized === '#satellite' ? 'satellite' : null;
+  return normalized === '#satelite' ? 'satellite' : null;
 }
 
 /** Returns the stable shareable URL hash for a workspace destination. */

@@ -116,7 +116,7 @@ reveals another local set or fetches preceding months, with a small bounded numb
 automatic month requests. The same load-more button remains available for further manual
 archive traversal.
 
-Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satelite`,
+Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
 `#markers`, or `#layers`. Loading an anchored URL restores that tab, and changing tabs
 updates the anchor.
 

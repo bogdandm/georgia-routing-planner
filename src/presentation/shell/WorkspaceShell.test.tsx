@@ -114,7 +114,7 @@ describe('WorkspaceShell', () => {
       screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
-    expect(window.location.hash).toBe('#satelite');
+    expect(window.location.hash).toBe('#satellite');
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
     ).toBeVisible();

@@ -28,7 +28,8 @@ Before modifying files:
 Rules:
 
 - Never commit directly to `main`.
-- When asked for code review directly by user - do not run tests, e2e tests or other pnpm commands to run automatic checks. Your job is to review code only.
+- When asked for code review directly by user - do not run tests, e2e tests or other
+  pnpm commands to run automatic checks. Your job is to review code only.
 - Never merge, fast-forward, rebase, or cherry-pick work into `main` until the user
   explicitly approves the current feature-branch state for integration.
 - Do not interpret silence, a request for more work, or approval of an individual design

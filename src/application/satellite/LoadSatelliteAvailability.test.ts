@@ -123,4 +123,25 @@ describe('LoadSatelliteAvailability', () => {
       ),
     ).rejects.toMatchObject({ code: 'invalid-date' });
   });
+
+  it('classifies cancellation separately from provider failures', async () => {
+    const useCase = createUseCase({ scenes: [], totalMatched: 0 });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      useCase.execute(
+        {
+          viewport: {
+            bounds: { west: 44, south: 42, east: 45, north: 43 },
+            center: { longitude: 44.5, latitude: 42.5 },
+          },
+          month: '2025-07',
+          productLevel: 'L2A',
+          maxCloudCoverPercent: 25,
+        },
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
 });

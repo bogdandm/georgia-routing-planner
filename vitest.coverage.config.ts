@@ -23,7 +23,9 @@ export default defineConfig({
       include: [
         'src/application/**/*.ts',
         'src/diagnostics/**/*.ts',
+        'src/domain/**/*.ts',
         'src/infrastructure/**/*.ts',
+        'src/presentation/satellite-browser/**/*.{ts,tsx}',
         'src/presentation/shell/**/*.{ts,tsx}',
       ],
       exclude: [
@@ -35,6 +37,16 @@ export default defineConfig({
         lines: 80,
         functions: 80,
         branches: 75,
+        'src/application/**/*.ts': {
+          statements: 90,
+          lines: 90,
+          branches: 85,
+        },
+        'src/domain/**/*.ts': {
+          statements: 90,
+          lines: 90,
+          branches: 85,
+        },
       },
     },
   },

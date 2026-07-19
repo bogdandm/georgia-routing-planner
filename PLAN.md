@@ -18,9 +18,10 @@ Add two independently controllable terrain overlays to the long-lived MapLibre m
 
 Default contour spacing is 50 m for minor lines and 200 m for emphasized, labeled index
 lines. Contours appear only at a zoom level where that density remains readable and
-useful. Styling follows the supplied reference: low-contrast relief, fine subdued tan
-minor contours, and stronger index contours that do not overpower satellite imagery or
-OSM context.
+useful. Styling follows the supplied references and reviewed palette: low-contrast
+neutral relief, blue minor/index contours, orange roads and paths, green vegetation,
+pale-blue glaciers, red restricted areas, and a neutral-grey vector base. Satellite mode
+retains those meanings with stronger line contrast and lighter polygon coverage.
 
 The normal native layer order is:
 
@@ -134,6 +135,39 @@ Commit: `feat(settings): configure terrain overlays`
   automated tests.
 
 Commit: `docs(map): describe terrain overlay behavior`
+
+### T6. Unified map palette and feature context — Done
+
+- Centralize semantic map colors and vector/satellite contrast paints.
+- Replace brown contours with the UI primary-blue family and use secondary-orange shades
+  for roads, tracks, footways, and steps.
+- Add explicit vegetation, glacier, and provider-supported restricted-area rendering.
+- Prefer English labels, then provider transliteration, before native-name fallback.
+- Preserve imagery detail by removing land-cover fills in satellite mode and retaining
+  high-contrast true line features and label halos.
+- Do not outline tiled polygon sources; their clipped tile fragments create false seams.
+- Document the private-access data limitation and reserve bright blue for future GPX.
+
+Commit: `feat(map): unify overlay palette and labels`
+
+### T7. Native camera interaction and point inspection — Done
+
+- Keep MapLibre's desktop pan, wheel/double-click zoom, keyboard, touch, compass, and
+  pitch semantics, with a focused 3D-only middle-drag orbit around the pressed terrain
+  point at restrained sensitivity; leave right drag to the browser.
+- Reuse one facade-owned native marker/popup so MapLibre tracks the selected terrain
+  point during every camera render and dismisses fully terrain-occluded anchors.
+- Show five-decimal coordinates, configured DEM elevation, and the deterministic nearest
+  loaded OSM POI within a 100 m geodesic radius.
+- Abort superseded elevation samples, retain explicit loading/unavailable/error states,
+  and exclude coordinates plus raw POI metadata from diagnostics.
+- Cover selection, DEM math, cancellation, native ownership, accessibility, camera
+  gestures, popup tracking, and 2D/3D transitions with focused and Chromium tests.
+
+Commits:
+
+1. `feat(map): add terrain-anchored point inspection`
+2. `docs(map): describe camera and point inspection`
 
 ## 5. Verification
 

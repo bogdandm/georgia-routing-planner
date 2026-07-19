@@ -16,10 +16,11 @@ turn-by-turn routing.
 The application provides a compact map workspace with Tracks, Satellite, Markers, and
 Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain; live
 Sentinel-2 L2A search and georeferenced true-color scene rendering; logical map layer
-visibility; configurable relief shading and elevation isolines; durable settled-camera
-restoration; provider failure feedback; settings; and bounded map/WebGL diagnostics.
-Unavailable feature actions are shown as disabled controls or explicit empty states
-instead of synthetic data.
+visibility; configurable relief shading and elevation isolines; native desktop camera
+gestures; terrain-anchored point inspection with DEM elevation and nearby OSM context;
+durable settled-camera restoration; provider failure feedback; settings; and bounded
+map/WebGL diagnostics. Unavailable feature actions are shown as disabled controls or
+explicit empty states instead of synthetic data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
 [AGENTS.md](./AGENTS.md) for required engineering conventions.
@@ -101,7 +102,10 @@ protected from UI, storage, HTTP, and map imports by ESLint restrictions.
 The replaceable map-provider defaults are:
 
 - OpenFreeMap's OpenMapTiles-compatible TileJSON and glyph endpoints for the vector
-  basemap.
+  basemap. Its shared map palette uses a neutral-grey ground, green vegetation,
+  pale-blue glaciers, orange roads and paths, blue contours, and red restricted-area
+  perimeters; satellite mode retains those meanings with imagery-safe opacity and
+  contrast.
 - AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for relief shading,
   client-generated contours, and optional 3D terrain.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
@@ -162,13 +166,17 @@ After `pnpm dev`, use current stable desktop Chrome to:
 
 1. Confirm the map reaches ready state and OpenFreeMap/OpenMapTiles/OSM attribution is
    visible and keyboard reachable.
-2. Pan, zoom, rotate, and pitch, wait for movement to settle, reload, and confirm the
+2. Pan, wheel/double-click zoom, use restrained middle-drag orbit in 3D, and use the
+   native keyboard commands; reset with the compass, reload, and confirm the settled
    camera restores.
 3. Toggle 3D on and off, confirming the map is not replaced, the camera intent is
    preserved, and terrain attribution is visible while 3D is active.
-4. Enable developer mode, inspect the Map tab, run the explicit provider checks, and
+4. Click a map point, rapidly pan/zoom/rotate/pitch, and toggle 2D/3D; confirm the
+   native popup remains attached to its terrain point and reports elevation plus nearby
+   OSM context when available.
+5. Enable developer mode, inspect the Map tab, run the explicit provider checks, and
    validate an exported bundle with `pnpm diagnostics:inspect -- <bundle.json>`.
-5. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
+6. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
    context, accessibility, and public-network isolation behavior.
 
 Known operating limits:

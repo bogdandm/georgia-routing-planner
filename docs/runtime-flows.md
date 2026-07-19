@@ -111,6 +111,38 @@ Only one terrain transition may run at a time. Repeated requests for the same ta
 share its promise; an opposite request receives an explicit failure. This prevents
 duplicate sources, listeners, and out-of-order camera changes.
 
+## Point inspection
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Facade as MapLibreFacade
+  participant Popup as Native marker/popup
+  participant Vector as Loaded OSM vectors
+  participant DEM as ElevationProvider
+
+  User->>Facade: native map click
+  Facade->>Popup: reuse anchor; show loading content
+  Facade->>Vector: query loaded POI and peak source features
+  Facade->>Facade: geodesic filter and deterministic nearest selection
+  Facade->>DEM: sample configured raster-dem with AbortSignal
+  alt current request completes
+    DEM-->>Facade: elevation, unavailable, or safe failure
+    Facade->>Popup: update content at the same LngLat
+  else new click, close, or teardown
+    Facade->>DEM: abort superseded request
+  end
+  Popup->>Popup: MapLibre reprojects for camera and terrain changes
+```
+
+The facade owns one marker/popup pair and releases it with its map listeners. Native
+source querying and screen placement do not cross the facade. The DEM adapter derives a
+maximum-zoom slippy tile and pixel from the selected coordinate, uses the centralized
+HTTP client, decodes the configured Terrarium or Mapbox formula, and never persists the
+sample. Inspection diagnostics contain duration and result categories only; exact
+coordinates and raw POI properties are excluded. MapLibre's terrain depth handling
+removes a popup whose anchor becomes fully covered by terrain.
+
 ## Terrain overlay reconciliation
 
 On style readiness, style data changes, satellite swaps, preference changes, and 3D
@@ -121,6 +153,14 @@ Updating the contour interval calls the existing vector source's tile update, so
 camera and unrelated native resources remain untouched. MapLibre abort signals flow
 through the contour protocol to bounded DEM requests; source failures update the overlay
 snapshot without removing the basemap.
+
+Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
+shared visual mode on the existing native layers. Semantic colors remain stable, while
+opaque vector-base land-cover fills switch off for satellite context, while true line
+features, hillshade strength, and label halos update atomically; the map instance,
+camera, sources, and user visibility choices are preserved. Surface polygons are not
+restyled as decorative line layers; the restricted-area layer is an intentional red
+perimeter derived from provider-tagged military geometry.
 
 ## Provider and WebGL failures
 
@@ -281,13 +321,16 @@ URLs remain inside the controller and never enter Zustand or exported diagnostic
 footprint is updated only after the replacement raster is usable. `Fit footprint`
 derives bounds from the validated polygon while preserving current pitch and bearing.
 
-Layers commands use logical IDs. Hiking, road, and place commands expand to fixed native
-style groups; satellite and footprint commands target only controller-owned layers.
-Visibility is applied idempotently and projected into a serializable live store. Dexie
-persists visibility, imagery stretch, and the last successful scene for startup
-restoration. Satellite search/results state remains mounted while another rail section
-is visible, and returning to Satellite reattaches the existing adjacent pane without a
-new provider request.
+Layers commands use logical IDs. The Natural features command expands to land-cover,
+glacier, and water-polygon layers; restricted-area, hiking, road, and place commands
+expand to their fixed native style groups. Satellite and footprint commands target only
+controller-owned layers. Adding a map data source includes adding its provider group and
+relevant logical visibility controls to Layers in the same change. Visibility is applied
+idempotently and projected into a serializable live store. Dexie persists visibility,
+imagery stretch, and the last successful scene for startup restoration. Satellite
+search/results state remains mounted while another rail section is visible, and
+returning to Satellite reattaches the existing adjacent pane without a new provider
+request.
 
 ## Teardown ownership
 

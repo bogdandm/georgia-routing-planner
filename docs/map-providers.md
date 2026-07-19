@@ -32,24 +32,39 @@ coupling. Hiking points are rendered with simple circles and text. The source is
 unmodified [OpenMapTiles schema](https://openmaptiles.org/schema/), which gives this
 configuration mapping:
 
-| Application concept | Source layer          | Relevant fields/values                          |
-| ------------------- | --------------------- | ----------------------------------------------- |
-| Land cover          | `landcover`           | `class`, `subclass`                             |
-| Human land use      | `landuse`             | `class`                                         |
-| Protected land      | `park`                | `class`, `name`                                 |
-| Water               | `water`, `waterway`   | geometry and `class`                            |
-| Boundaries          | `boundary`            | `admin_level`, `disputed`, `maritime`           |
-| Roads and paths     | `transportation`      | `class`, `subclass`, `brunnel`                  |
-| Road/path labels    | `transportation_name` | `name`, `class`, `subclass`                     |
-| Peaks and passes    | `mountain_peak`       | `class` (`peak`, `saddle`, etc.), `name`, `ele` |
-| Hiking POIs         | `poi`                 | `class`, `subclass`, `name`, `rank`             |
-| Settlements         | `place`               | `class`, `name`, `rank`, `capital`              |
-| Water labels        | `water_name`          | `name`, geometry-specific fields                |
+| Application concept | Source layer          | Relevant fields/values                                                       |
+| ------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| Land cover          | `landcover`           | `class` (`wood`, `grass`, `farmland`, `wetland`, `ice`, etc.) and `subclass` |
+| Human land use      | `landuse`             | `class` (`military`, residential, and other uses)                            |
+| Protected land      | `park`                | `class`, names                                                               |
+| Water               | `water`, `waterway`   | geometry and `class`                                                         |
+| Boundaries          | `boundary`            | `admin_level`, `disputed`, `maritime`                                        |
+| Roads and paths     | `transportation`      | `class`, `subclass`, `brunnel`                                               |
+| Road/path labels    | `transportation_name` | names, `class`, `subclass`                                                   |
+| Peaks and passes    | `mountain_peak`       | `class` (`peak`, `saddle`, etc.), names, `ele`                               |
+| Hiking POIs         | `poi`                 | `class`, `subclass`, names, `rank`                                           |
+| Settlements         | `place`               | `class`, names, `rank`, `capital`                                            |
+| Water labels        | `water_name`          | names and geometry-specific fields                                           |
 
 The transportation schema explicitly includes `path`, `track`, `footway`, `steps`,
 `bridleway`, and `cycleway` classifications. OpenMapTiles does not expose hiking route
 relations as a dedicated source layer in this default schema, so the current style shows
 physical ways rather than claiming to show official marked routes.
+
+English-first labels use `name:en`, then the provider-generated `name:latin` field for
+transliteration, and finally legacy English/native fallbacks. Land-cover `ice` supplies
+the available glacier geometry. Land-use `military` supplies restricted-area geometry,
+but the schema has no dependable general access/ownership field; private-property and
+other closure coverage is therefore unavailable rather than inferred from unrelated
+land-use classes.
+
+The Layers panel represents this source under its provider heading. One **Natural
+features** checkbox owns the polygon layers for vegetation (`landcover` excluding ice),
+glaciers (`landcover` ice), and water bodies (`water`). Waterway lines and water labels
+remain visible as navigation context. The remaining source controls cover Restricted
+areas (`landuse` military), Hiking paths, Roads, and Places and POIs. New source-layer
+families must be added to the corresponding Layers control in the same change as their
+style.
 
 ### Attribution and licensing
 
@@ -132,6 +147,13 @@ or hosted processing service is introduced.
 MapLibre transfers protocol responses to a worker. The adapter therefore gives each
 delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
 or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
+
+Point inspection samples the same configured DEM endpoint without adding a provider. The
+adapter requests the maximum configured zoom tile containing the selected point, decodes
+one pixel with the declared Terrarium or Mapbox formula, and carries an `AbortSignal` so
+a newer click or close action cancels stale work. Loaded native terrain elevation is
+preferred when available. Diagnostics retain only safe request origin and outcome
+fields; clicked coordinates are never logged.
 
 The terrain configuration validates contour minimum/maximum zoom and cache size. The
 contour maximum cannot exceed the DEM provider maximum. Replacing the provider requires

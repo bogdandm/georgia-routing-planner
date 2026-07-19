@@ -73,6 +73,34 @@ describe('diagnostic redaction', () => {
     });
   });
 
+  it('retains only aggregate DEM repair evidence', () => {
+    const result = redactDiagnosticInput({
+      level: 'debug',
+      name: 'map.dem.tile-filtered',
+      data: {
+        durationMs: 82,
+        noDataCount: 1,
+        sentinelCount: 2,
+        impossibleCount: 256,
+        spikeCount: 3,
+        repairedCount: 262,
+        unrepairedCount: 0,
+        tileUrl: 'https://tiles.example/15/20448/12164.png',
+        coordinates: '42.0003, 44.6486',
+      },
+    });
+
+    expect(result.data).toEqual({
+      durationMs: 82,
+      noDataCount: 1,
+      sentinelCount: 2,
+      impossibleCount: 256,
+      spikeCount: 3,
+      repairedCount: 262,
+      unrepairedCount: 0,
+    });
+  });
+
   it('omits empty optional data and preserves safe scalar values', () => {
     expect(
       redactDiagnosticInput({ level: 'info', name: 'empty', data: { unknown: true } }),

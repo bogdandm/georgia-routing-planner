@@ -14,10 +14,11 @@ turn-by-turn routing.
 ## Current application
 
 The application provides a compact map workspace with Tracks, Satellite, Markers, and
-Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain;
-durable settled-camera restoration; provider failure feedback; settings; and bounded
-map/WebGL diagnostics. Unavailable feature actions are shown as disabled controls or
-explicit empty states instead of synthetic data.
+Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain; live
+Sentinel-2 L2A search and georeferenced true-color scene rendering; logical map layer
+visibility; durable settled-camera restoration; provider failure feedback; settings; and
+bounded map/WebGL diagnostics. Unavailable feature actions are shown as disabled
+controls or explicit empty states instead of synthetic data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
 [AGENTS.md](./AGENTS.md) for required engineering conventions.
@@ -174,9 +175,12 @@ Known operating limits:
 - The AWS S3 terrain endpoint has no SLA; native DEM coverage stops at zoom 15 and
   higher map zooms overzoom that data.
 - There is no silent provider failover, offline-region download, or tile pre-cache.
+- The default TiTiler renderer is a public best-effort demo service with no SLA. Replace
+  its validated template before sustained public traffic.
 - A storage outage falls back to the Georgia overview after a bounded wait; the current
   camera may not persist until storage recovers.
-- The application does not currently select or render Sentinel-2 imagery.
+- Sentinel imagery is one scene at a time; mosaics, cloud masking, false color, and
+  offline imagery are unavailable.
 
 ## GitHub Pages base paths
 

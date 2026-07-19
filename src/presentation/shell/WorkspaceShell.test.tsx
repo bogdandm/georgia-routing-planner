@@ -11,6 +11,7 @@ import {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -20,6 +21,7 @@ let services: RuntimeServices;
 
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
+  resetMapLayerStore();
   services = createTestServices();
   await services.database.delete();
   services = createTestServices();
@@ -110,9 +112,8 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Markers' }));
     expect(screen.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
-    expect(
-      screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');
     expect(
@@ -149,9 +150,7 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
-    expect(
-      screen.getByRole('heading', { name: 'Layer controls are not available yet' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {
@@ -217,8 +216,14 @@ describe('WorkspaceShell', () => {
         name: /12 Jul 2026, imagery available/u,
       }),
     );
-    expect(screen.getByText('Selected for imagery')).toBeVisible();
+    expect(screen.getByText('Image failed to apply')).toBeVisible();
     expect(services.sentinelQueryDiagnostics.getSnapshot().status).toBe('success');
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(
+      screen.getByRole('heading', { name: 'Images near 42.5000, 44.5000' }),
+    ).toBeVisible();
+    expect(screen.getByText('Image failed to apply')).toBeVisible();
   });
 
   it('loads preceding months through the same persistent load-more action', async () => {

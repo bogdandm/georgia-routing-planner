@@ -1,7 +1,10 @@
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import CloseIcon from '@mui/icons-material/Close';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import SearchIcon from '@mui/icons-material/Search';
 import lookupTimeZone from '@photostructure/tz-lookup';
 import {
@@ -29,6 +32,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useStore } from 'zustand';
 
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
@@ -42,10 +46,14 @@ import type {
   SatelliteSearchResult,
 } from '@/domain/satellite/SatelliteSearchResult';
 import { calculateWeightedCloudCover } from '@/domain/satellite/calculateWeightedCloudCover';
+import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import { appColors } from '@/presentation/theme/appColors';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
 
 interface SatelliteBrowserProps {
+  readonly active?: boolean;
   readonly fallbackCoordinates: string;
 }
 
@@ -362,17 +370,34 @@ function AcquisitionCalendar({
 }
 
 function SceneCard({
+  appliedImagery,
   match,
   selected,
   timeZone,
+  onFitFootprint,
   onSelect,
+  onToggleImagery,
 }: {
+  readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly match: SatelliteSceneMatch;
   readonly selected: boolean;
   readonly timeZone: string;
+  readonly onFitFootprint: () => void;
   readonly onSelect: () => void;
+  readonly onToggleImagery: (visible: boolean) => void;
 }) {
   const { scene, coverage } = match;
+  const sceneKey = satelliteSceneKey(scene);
+  const applying =
+    appliedImagery.status === 'loading' && appliedImagery.sceneKey === sceneKey;
+  const failed =
+    appliedImagery.status === 'failed' && appliedImagery.sceneKey === sceneKey;
+  const applied =
+    (appliedImagery.status === 'ready' ||
+      appliedImagery.status === 'preview' ||
+      appliedImagery.status === 'hidden') &&
+    appliedImagery.sceneKey === sceneKey;
+  const hidden = appliedImagery.status === 'hidden' && applied;
   const acquiredAt = new Date(scene.acquiredAt);
   const title = dayFormatter.format(acquiredAt);
   return (
@@ -387,7 +412,7 @@ function SceneCard({
       }}
     >
       <ButtonBase
-        aria-label={`Select ${title} imagery`}
+        aria-label={`Apply ${title} imagery`}
         aria-pressed={selected}
         onClick={onSelect}
         sx={{ display: 'block', width: '100%', textAlign: 'left' }}
@@ -478,7 +503,15 @@ function SceneCard({
         {selected ? (
           <Box sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider' }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
-              Selected for imagery
+              {applying
+                ? 'Applying true-color imagery…'
+                : failed
+                  ? 'Image failed to apply'
+                  : hidden
+                    ? 'Applied imagery is hidden'
+                    : applied
+                      ? 'True-color imagery applied'
+                      : 'Selected for imagery'}
             </Typography>
             <Typography
               variant="caption"
@@ -497,33 +530,80 @@ function SceneCard({
           </Box>
         ) : null}
       </ButtonBase>
+      {selected ? (
+        <Stack
+          spacing={0.75}
+          sx={{ px: 1.5, py: 1.25, borderTop: 1, borderColor: 'divider' }}
+        >
+          {failed ? <Alert severity="error">{appliedImagery.message}</Alert> : null}
+          <Typography variant="caption" color="text.secondary">
+            Tile {scene.tileId ?? 'Unavailable'} · Orbit {scene.orbit ?? 'Unavailable'}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ overflowWrap: 'anywhere' }}
+          >
+            Product {scene.productId ?? 'Unavailable'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Scene edge {coverage.distanceToSceneEdgeKm.toFixed(1)} km from search point
+          </Typography>
+          {applied ? (
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                startIcon={<CenterFocusStrongIcon />}
+                onClick={onFitFootprint}
+              >
+                Fit footprint
+              </Button>
+              <Button
+                size="small"
+                startIcon={hidden ? <VisibilityIcon /> : <VisibilityOffIcon />}
+                onClick={() => {
+                  onToggleImagery(hidden);
+                }}
+              >
+                {hidden ? 'Show imagery' : 'Hide imagery'}
+              </Button>
+            </Stack>
+          ) : null}
+        </Stack>
+      ) : null}
     </Paper>
   );
 }
 
 function SatelliteResultsPane({
+  appliedImagery,
   coordinates,
   canLoadOlder,
   loadMoreError,
   loadingMore,
   onAutoLoadMore,
   onClose,
+  onFitFootprint,
   onLoadMore,
   onSelect,
+  onToggleImagery,
   searchState,
   scrollRequestId,
   selectedSceneId,
   timeZone,
   visibleCount,
 }: {
+  readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly coordinates: string;
   readonly canLoadOlder: boolean;
   readonly loadMoreError: string | null;
   readonly loadingMore: boolean;
   readonly onAutoLoadMore: () => void;
   readonly onClose: () => void;
+  readonly onFitFootprint: () => void;
   readonly onLoadMore: () => void;
-  readonly onSelect: (sceneId: string) => void;
+  readonly onSelect: (match: SatelliteSceneMatch) => void;
+  readonly onToggleImagery: (visible: boolean) => void;
   readonly searchState: SearchState;
   readonly scrollRequestId: number;
   readonly selectedSceneId: string | null;
@@ -651,13 +731,16 @@ function SatelliteResultsPane({
               ) : null}
               {group.scenes.map((match) => (
                 <SceneCard
+                  appliedImagery={appliedImagery}
                   key={`${match.scene.collection}:${match.scene.id}`}
                   match={match}
                   selected={match.scene.id === selectedSceneId}
                   timeZone={timeZone}
                   onSelect={() => {
-                    onSelect(match.scene.id);
+                    onSelect(match);
                   }}
+                  onFitFootprint={onFitFootprint}
+                  onToggleImagery={onToggleImagery}
                 />
               ))}
             </Stack>
@@ -684,8 +767,12 @@ function SatelliteResultsPane({
   );
 }
 
-export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps) {
-  const { clock, mapViewport, searchSatelliteScenes } = useRuntimeServices();
+export function SatelliteBrowser({
+  active = true,
+  fallbackCoordinates,
+}: SatelliteBrowserProps) {
+  const { clock, mapLayers, mapViewport, searchSatelliteScenes } = useRuntimeServices();
+  const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const [today] = useState(() => clock.now());
   const latestMonth = currentSearchMonth(today).month;
   const [calendarMonth, setCalendarMonth] = useState(latestMonth);
@@ -704,6 +791,7 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
   const [autoLoadAttempts, setAutoLoadAttempts] = useState(0);
   const [scrollRequestId, setScrollRequestId] = useState(0);
   const request = useRef<AbortController | null>(null);
+  const applyRequest = useRef<AbortController | null>(null);
   const loadedMonthsRef = useRef(new Set<string>());
   const loadingMonthsRef = useRef(new Set<string>());
   const subscribeToViewport = useCallback(
@@ -724,6 +812,7 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
   useEffect(() => {
     return () => {
       request.current?.abort();
+      applyRequest.current?.abort();
     };
   }, []);
 
@@ -916,6 +1005,17 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
     setResultsOpen(false);
   };
 
+  const applyMatch = (match: SatelliteSceneMatch) => {
+    setSelectedSceneId(match.scene.id);
+    if (mapLayers === null) return;
+    applyRequest.current?.abort();
+    const controller = new AbortController();
+    applyRequest.current = controller;
+    void mapLayers.applyScene(match.scene, controller.signal).finally(() => {
+      if (applyRequest.current === controller) applyRequest.current = null;
+    });
+  };
+
   const selectCalendarDate = (date: string) => {
     if (searchState.status !== 'success') return;
     const group = searchState.result.groups.find(
@@ -938,6 +1038,7 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
     );
     setVisibleCount((count) => Math.max(count, matchIndex + 1));
     setSelectedSceneId(bestCoverageMatch.scene.id);
+    applyMatch(bestCoverageMatch);
     if (resultsOpen) setScrollRequestId((requestId) => requestId + 1);
   };
 
@@ -1054,9 +1155,10 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
           ) : null}
         </Box>
       </Stack>
-      {portalTarget !== null && resultsOpen
+      {active && portalTarget !== null && resultsOpen
         ? createPortal(
             <SatelliteResultsPane
+              appliedImagery={appliedImagery}
               coordinates={submittedCoordinates}
               canLoadOlder={nextArchiveMonth !== null}
               loadingMore={loadingMore}
@@ -1075,8 +1177,12 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
                 setResultsOpen(false);
               }}
               onLoadMore={() => void loadMoreImages()}
-              onSelect={(sceneId) => {
-                setSelectedSceneId((current) => (current === sceneId ? null : sceneId));
+              onSelect={applyMatch}
+              onFitFootprint={() => {
+                mapLayers?.fitFootprint();
+              }}
+              onToggleImagery={(visible) => {
+                mapLayers?.setLayerVisibility('satellite-imagery', visible);
               }}
             />,
             portalTarget,

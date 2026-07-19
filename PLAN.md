@@ -7,7 +7,7 @@ discovery browser into map imagery that can be applied, hidden, switched, and di
 It also introduces the first real Layers workspace at the same time so imagery is not
 wired through a Satellite-only visibility mechanism.
 
-- Status: **planned; implementation has not started on this branch**.
+- Status: **implemented and verified on the feature branch; awaiting UI/UX approval**.
 - Active branch: `feature/sentinel-map-layers`.
 - Branch base: the current `feature/sentinel-imagery-plan` state at commit `3d2b4d2`.
 - Approval boundary: all work remains on this feature branch until the combined imagery
@@ -161,7 +161,7 @@ in the same behavior commit.
 
 ## 6. Work packages and commit sequence
 
-### I1. Establish logical layer controls
+### I1. Establish logical layer controls — Done
 
 Scope:
 
@@ -183,7 +183,11 @@ Tests:
 
 Commit: `feat(layers): add logical map visibility controls`
 
-### I2. Add the preview imagery and footprint adapter
+### I2. Add the preview imagery and footprint adapter — Superseded
+
+The production tile adapter proved reviewable immediately, so no stretched preview path
+was shipped. The same card/calendar, footprint, fit, visibility, switching, and failure
+interactions use correctly georeferenced tiles.
 
 Scope:
 
@@ -207,7 +211,7 @@ Tests:
 
 Commit: `feat(map): preview selected Sentinel imagery`
 
-### I3. Wire cards, calendar, and Layers to applied state
+### I3. Wire cards, calendar, and Layers to applied state — Done
 
 Scope:
 
@@ -231,7 +235,7 @@ Tests:
 
 Commit: `feat(satellite): apply scenes through shared layer state`
 
-### I4. Select and implement the production L2A renderer
+### I4. Select and implement the production L2A renderer — Done
 
 Scope:
 
@@ -255,7 +259,7 @@ Tests:
 
 Commit: `feat(map): render georeferenced Sentinel L2A imagery`
 
-### I5. Complete diagnostics and support-bundle evidence
+### I5. Complete diagnostics and support-bundle evidence — Done
 
 Scope:
 
@@ -276,7 +280,7 @@ Tests:
 
 Commit: `feat(diagnostics): trace Sentinel rendering and layers`
 
-### I6. Harden the complete browser workflow and documentation
+### I6. Harden the complete browser workflow and documentation — Done
 
 Scope:
 
@@ -350,3 +354,15 @@ This work is complete only when:
   pass.
 - The branch is committed, pushed, and available in a draft pull request targeting
   `main` for explicit UI/UX approval.
+
+Verification evidence on 2026-07-19:
+
+- Strict type checking, formatting, lint, repository audit, unit/component tests,
+  integration tests, production build, and controlled Chromium/axe tests pass.
+- Coverage passes with 144 tests, 89.9% statements, 78.74% branches, 92.66% functions,
+  and 92.48% lines.
+- The built-app Chromium suite passes all 10 workflows, including synthetic Sentinel
+  apply, hide, restore, terrain, rail persistence, and public-network isolation.
+- A live current-Chrome smoke applied `S2A_38TLM_20260709_0_L2A` through Earth Search
+  and TiTiler, displayed its georeferenced raster and independent footprint, preserved
+  attribution, and verified Layers hide/restore behavior.

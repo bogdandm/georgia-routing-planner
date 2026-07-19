@@ -1,7 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
-import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
@@ -26,6 +25,7 @@ import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import { EmptyState } from '@/presentation/shell/EmptyState';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
+import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 
@@ -104,11 +104,12 @@ function TracksContent() {
 }
 
 interface SatelliteContentProps {
+  readonly active: boolean;
   readonly coordinates: string;
 }
 
-function SatelliteContent({ coordinates }: SatelliteContentProps) {
-  return <SatelliteBrowser fallbackCoordinates={coordinates} />;
+function SatelliteContent({ active, coordinates }: SatelliteContentProps) {
+  return <SatelliteBrowser active={active} fallbackCoordinates={coordinates} />;
 }
 
 function MarkersContent() {
@@ -124,15 +125,7 @@ function MarkersContent() {
 }
 
 function LayersContent() {
-  return (
-    <Box sx={{ p: 2 }}>
-      <EmptyState
-        icon={<LayersOutlinedIcon fontSize="large" />}
-        title="Layer controls are not available yet"
-        description="Map layer visibility and ordering arrive in a later phase."
-      />
-    </Box>
-  );
+  return <LayersPanel />;
 }
 
 function disabledAction(title: string, child: ReactNode) {
@@ -243,12 +236,21 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         {definition.actions}
       </Stack>
       <Box sx={{ minHeight: 0, flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
-        {activeTab === 'tracks' ? <TracksContent /> : null}
-        {activeTab === 'satellite' ? (
-          <SatelliteContent coordinates={searchAreaCoordinates} />
-        ) : null}
-        {activeTab === 'markers' ? <MarkersContent /> : null}
-        {activeTab === 'layers' ? <LayersContent /> : null}
+        <Box sx={{ display: activeTab === 'tracks' ? 'block' : 'none' }}>
+          <TracksContent />
+        </Box>
+        <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
+          <SatelliteContent
+            active={activeTab === 'satellite'}
+            coordinates={searchAreaCoordinates}
+          />
+        </Box>
+        <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
+          <MarkersContent />
+        </Box>
+        <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
+          <LayersContent />
+        </Box>
       </Box>
     </Box>
   );

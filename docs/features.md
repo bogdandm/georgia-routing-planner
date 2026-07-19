@@ -110,14 +110,24 @@ coverage. Days at or below the current cloud slider receive a subtle orange high
 non-matching days retain only their cloud percentage without a tile outline. After
 locally loaded cards are revealed, the same load-more action fetches the next missing
 preceding month and appends it, continuing back through the Sentinel-2 archive.
-Whole-card click selects and expands metadata. Marker targeting and imagery rendering
-remain unavailable.
+Whole-card click selects, expands metadata, and applies that concrete scene through the
+shared map adapter. A validated L2A COG is rendered as correctly georeferenced Web
+Mercator tiles below hiking references. The real polygon or multipolygon footprint is a
+separate orange outline above hiking geometry and below labels. While a replacement is
+loading the prior usable image remains present; a failed replacement reports a safe
+error and leaves that prior image available. Marker targeting remains unavailable.
 
 Clicking a loaded calendar date selects the scene with the highest viewport coverage for
 that date, reveals its batch if needed, expands its card, and scrolls it into view.
 Coverage ties retain the existing acquisition-time order. The shortcut never reopens a
-results pane that the user closed. The later imagery-apply command will attach to this
-same selection path.
+results pane that the user closed. The same shortcut applies the selected scene through
+the card command path.
+
+The expanded applied card shows validated acquisition, tile, orbit, product,
+edge-distance, and attribution evidence. `Fit footprint` preserves pitch and bearing;
+`Hide imagery` stops the raster without discarding results, selection, or the footprint.
+The Satellite sidebar and results stay mounted but hidden across rail changes, so a user
+can inspect Layers and return without losing the search session.
 
 If the initial cards do not occupy most of the adjacent pane, the UI automatically
 reveals another local set or fetches preceding months, with a small bounded number of
@@ -144,13 +154,13 @@ unavailable.
 
 ### Layers
 
-Layers controls supported visibility, opacity, and ordering within typed map-layer
-bands. Changes affect the persistent map while preserving attribution and the required
-relationship among satellite imagery, hiking references, tracks/Create GPX geometry,
-markers, and interaction highlights. It is not a generic unrestricted layer editor.
-
-The current implementation provides the Layers rail destination and an empty state;
-interactive layer management is unavailable.
+Layers exposes session-only checkboxes for Satellite imagery, Scene footprint, Hiking
+paths, Roads, and Places and POIs. Each logical ID maps to an allowlisted set of stable
+MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
+remain disabled until a scene is applied. Hiding imagery retains the applied scene and
+does not remove its footprint, search results, or attribution contract. Base land and
+water remain visible and cannot be disabled. Opacity, drag ordering, persistence, and
+custom layers are unavailable.
 
 ## Persistent map controls
 
@@ -227,11 +237,12 @@ The `Sentinel query` tab exposes one local current-or-last-operation timeline. I
 lists viewport capture, criteria construction, STAC request, pagination, validation,
 scene mapping, coverage/grouping, visual-asset selection, decode/reprojection, and map
 application. Each row shows an explicit waiting, running, completed, failed, cancelled,
-or skipped state and a monotonic duration that refreshes while work is active.
-Implemented search operations publish their transitions in real time. Rendering-only
-steps remain visible and are marked skipped until a scene can be applied to the map. The
-timeline is memory-only and does not expose raw payloads, exact geometry, provider URLs,
-headers, tokens, or raw failures.
+or skipped state and a monotonic duration that refreshes while work is active. Search
+and imagery-application operations publish their transitions in real time. The render
+operation records visual-asset selection, provider reprojection, and MapLibre
+application without exporting the COG or tile URL. The timeline is memory-only and does
+not expose raw payloads, exact geometry, provider URLs, headers, tokens, or raw
+failures.
 
 Schema-version 2 exports include build/runtime data, bounded events, health results,
 notes, and a serializable map snapshot. Exported longitude/latitude are rounded to 0.1
@@ -245,18 +256,19 @@ startup never waits for them.
 ## Configuration and security
 
 `VITE_MAP_PROVIDER_CONFIGURATION` is optional public JSON validated by Zod. Endpoints
-must be HTTPS or application-relative; terrain template tokens, supported encoding, tile
-sizes, zoom ranges, policy limits, layer mappings, and attribution are validated. Safe
-errors report an issue count without echoing the payload. `VITE_*` configuration must
-never contain secrets.
+must be HTTPS or application-relative; terrain and satellite renderer template tokens,
+supported tile sizes, zoom ranges, policy limits, layer mappings, and attribution are
+validated. The Sentinel renderer template accepts `{z}`, `{x}`, `{y}`, and an encoded
+`{assetUrl}`. Safe errors report an issue count without echoing the payload. `VITE_*`
+configuration must never contain secrets.
 
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, GPX import, Create GPX
 editing/export, track elevation charts, saved-marker management, interactive layer
-management, Sentinel-2 imagery rendering, offline-region downloads, accounts, or cloud
-synchronization. Satellite provides live viewport search for L2A scenes with a
-scene-cloud control. Successful results are grouped by UTC acquisition day and show a
-thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
-sub-5-km edge warning. Selecting a card does not render imagery until the raster adapter
-exists.
+management, offline-region downloads, accounts, or cloud synchronization. Satellite
+provides live viewport search for L2A scenes with a scene-cloud control. Successful
+results are grouped by UTC acquisition day and show a thumbnail, local acquisition time,
+processing level, cloud, viewport coverage, and sub-5-km edge warning. Selecting a card
+renders one georeferenced true-color scene and its footprint; Layers can hide or restore
+the raster and related logical map groups.

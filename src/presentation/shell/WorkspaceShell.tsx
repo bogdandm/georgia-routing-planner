@@ -129,12 +129,14 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         }}
       />
       <WorkspaceSidebar activeTab={activeTab} />
-      {activeTab === 'satellite' ? (
-        <Box
-          id="satellite-results-pane"
-          sx={{ minHeight: 0, display: 'flex', flexShrink: 0 }}
-        />
-      ) : null}
+      <Box
+        id="satellite-results-pane"
+        sx={{
+          minHeight: 0,
+          display: activeTab === 'satellite' ? 'flex' : 'none',
+          flexShrink: 0,
+        }}
+      />
 
       <Box component="main" sx={{ minWidth: 0, minHeight: 0, flex: 1 }}>
         <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>

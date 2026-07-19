@@ -313,7 +313,7 @@ describe('WorkspaceShell', () => {
     });
     expect(restoredCard).toHaveAttribute('aria-pressed', 'true');
 
-    await user.click(restoredCard);
+    await user.click(screen.getByText('Product S2A_restored-scene'));
 
     expect(clearScene).toHaveBeenCalledOnce();
     expect(

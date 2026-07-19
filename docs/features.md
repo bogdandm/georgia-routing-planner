@@ -103,12 +103,13 @@ lower cloud values are plain text. Every card remains an individual scene; mosai
 not currently composed.
 
 The displayed calendar month is the search month. The current month ends at today;
-earlier months cover their complete UTC month. After the first search, calendar arrows
-load a displayed month only when that month has not completed successfully for the
-submitted point, viewport, product, and cloud criteria. Successful months, including
-empty ones, are reused when navigating back. Newly loaded scene groups are appended to
-the right results pane without replacing other months or resetting the displayed
-calendar month.
+earlier months cover their complete UTC month. The provider search loads the complete
+0–100% scene-cloud range; the cloud slider is a client-side calendar highlight and never
+hides dates or scene cards. After the first search, calendar arrows load a displayed
+month only when that month has not completed successfully for the submitted point,
+viewport, and product. Successful months, including empty ones, are reused when
+navigating back. Newly loaded scene groups are appended to the right results pane
+without replacing other months or resetting the displayed calendar month.
 
 Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport

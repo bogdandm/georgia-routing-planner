@@ -74,6 +74,7 @@ type SearchState =
 
 const firstResultCount = 8;
 const resultPageSize = 8;
+const catalogCloudCoverCeilingPercent = 100;
 const sentinelArchiveFirstMonth = '2015-06';
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
 const monthFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -110,7 +111,6 @@ interface SearchMonthRange {
 interface SubmittedSearch {
   readonly viewport: SatelliteSearchViewport;
   readonly productLevel: SatelliteProductLevel;
-  readonly maxCloudCoverPercent: number;
   readonly initialMonth: string;
 }
 
@@ -164,11 +164,9 @@ function nextUnloadedSearchMonth(
 function hasSameSubmittedCriteria(
   submitted: SubmittedSearch,
   viewport: SatelliteSearchViewport,
-  maxCloudCoverPercent: number,
 ): boolean {
   return (
     submitted.productLevel === 'L2A' &&
-    submitted.maxCloudCoverPercent === maxCloudCoverPercent &&
     submitted.viewport.center.longitude === viewport.center.longitude &&
     submitted.viewport.center.latitude === viewport.center.latitude &&
     submitted.viewport.bounds.west === viewport.bounds.west &&
@@ -939,7 +937,7 @@ export function SatelliteBrowser({
           startDate: range.startDate,
           endDate: range.endDate,
           productLevel: criteria.productLevel,
-          maxCloudCoverPercent: criteria.maxCloudCoverPercent,
+          maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
         },
         controller.signal,
       );
@@ -980,7 +978,7 @@ export function SatelliteBrowser({
     if (
       existingSearch !== null &&
       searchState.status === 'success' &&
-      hasSameSubmittedCriteria(existingSearch, viewport, maxCloudCoverPercent)
+      hasSameSubmittedCriteria(existingSearch, viewport)
     ) {
       setResultsOpen(true);
       setLoadMoreError(null);
@@ -998,7 +996,6 @@ export function SatelliteBrowser({
     setSubmittedSearch({
       viewport,
       productLevel: 'L2A',
-      maxCloudCoverPercent,
       initialMonth: range.month,
     });
     loadedMonthsRef.current = new Set<string>();
@@ -1023,7 +1020,7 @@ export function SatelliteBrowser({
           startDate: range.startDate,
           endDate: range.endDate,
           productLevel: 'L2A',
-          maxCloudCoverPercent,
+          maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
         },
         controller.signal,
       );
@@ -1273,7 +1270,7 @@ export function SatelliteBrowser({
             <Typography variant="caption" color="text.secondary">
               Point {coordinates} ·{' '}
               {monthFormatter.format(new Date(`${calendarMonth}-01T00:00:00.000Z`))} →
-              older · cloud ≤ {maxCloudCoverPercent}%
+              older · highlight cloud ≤ {maxCloudCoverPercent}%
             </Typography>
           ) : null}
         </Box>

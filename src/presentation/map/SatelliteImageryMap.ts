@@ -46,7 +46,9 @@ export interface SatelliteImageryMap {
     scene: SatelliteScene,
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult>;
+  clearScene(): SatelliteImageryCommandResult;
   fitFootprint(): SatelliteImageryCommandResult;
+  getAppliedScene(): SatelliteScene | null;
   getRenderingTuning(): SatelliteRenderingTuning;
   restorePersistedState(): Promise<void>;
   setRenderingTuning(

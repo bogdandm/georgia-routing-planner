@@ -46,7 +46,11 @@ import type {
   SatelliteSearchResult,
 } from '@/domain/satellite/SatelliteSearchResult';
 import { calculateWeightedCloudCover } from '@/domain/satellite/calculateWeightedCloudCover';
-import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
+import { calculateSatelliteCoverage } from '@/domain/satellite/calculateSatelliteCoverage';
+import {
+  satelliteSceneKey,
+  type SatelliteScene,
+} from '@/domain/satellite/SatelliteScene';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import { appColors } from '@/presentation/theme/appColors';
@@ -186,6 +190,29 @@ function mergeSearchResults(
     sceneCount: groups.reduce((count, group) => count + group.scenes.length, 0),
     acquisitionDateCount: groups.length,
     totalMatched: newer.totalMatched + older.totalMatched,
+  };
+}
+
+function singleSceneResult(
+  scene: SatelliteScene,
+  viewport: SatelliteSearchViewport,
+): SatelliteSearchResult {
+  // Persisted scenes do not retain search evidence, so recompute it for the live viewport.
+  return {
+    groups: [
+      {
+        date: scene.acquiredAt.slice(0, 10),
+        scenes: [
+          {
+            scene,
+            coverage: calculateSatelliteCoverage(viewport, scene.footprint),
+          },
+        ],
+      },
+    ],
+    sceneCount: 1,
+    acquisitionDateCount: 1,
+    totalMatched: 1,
   };
 }
 
@@ -417,7 +444,9 @@ function SceneCard({
       }}
     >
       <ButtonBase
-        aria-label={`Apply ${title} imagery`}
+        aria-label={
+          applied ? `Remove ${title} imagery from map` : `Apply ${title} imagery`
+        }
         aria-pressed={selected}
         onClick={onSelect}
         sx={{ display: 'block', width: '100%', textAlign: 'left' }}
@@ -700,7 +729,7 @@ function SatelliteResultsPane({
           <Typography variant="caption" color="text.secondary">
             {result === null
               ? 'Latest Sentinel scenes'
-              : `${String(result.sceneCount)} images · ${String(result.acquisitionDateCount)} acquisition days`}
+              : `${String(result.sceneCount)} image${result.sceneCount === 1 ? '' : 's'} · ${String(result.acquisitionDateCount)} acquisition day${result.acquisitionDateCount === 1 ? '' : 's'}`}
           </Typography>
         </Box>
         <IconButton size="small" aria-label="Close imagery results" onClick={onClose}>
@@ -786,6 +815,9 @@ export function SatelliteBrowser({
   const [visibleCount, setVisibleCount] = useState(firstResultCount);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
+  const [dismissedRestoredSceneKey, setDismissedRestoredSceneKey] = useState<
+    string | null
+  >(null);
   const [submittedCoordinates, setSubmittedCoordinates] = useState(fallbackCoordinates);
   const [submittedTimeZone, setSubmittedTimeZone] = useState('Asia/Tbilisi');
   const [submittedSearch, setSubmittedSearch] = useState<SubmittedSearch | null>(null);
@@ -825,6 +857,41 @@ export function SatelliteBrowser({
     viewport === null
       ? fallbackCoordinates
       : `${viewport.center.latitude.toFixed(4)}, ${viewport.center.longitude.toFixed(4)}`;
+  const restoredScene = useMemo(() => {
+    if (
+      mapLayers === null ||
+      (appliedImagery.status !== 'ready' &&
+        appliedImagery.status !== 'preview' &&
+        appliedImagery.status !== 'hidden')
+    ) {
+      return null;
+    }
+    return mapLayers.getAppliedScene();
+  }, [appliedImagery, mapLayers]);
+  const restoredResult = useMemo(
+    () =>
+      restoredScene === null || viewport === null
+        ? null
+        : singleSceneResult(restoredScene, viewport),
+    [restoredScene, viewport],
+  );
+  const showingRestoredScene =
+    searchState.status === 'idle' && restoredScene !== null && restoredResult !== null;
+  const restoredSceneKey =
+    restoredScene === null ? null : satelliteSceneKey(restoredScene);
+  const paneSearchState: SearchState = showingRestoredScene
+    ? { status: 'success', result: restoredResult }
+    : searchState;
+  const paneSelectedSceneId = showingRestoredScene ? restoredScene.id : selectedSceneId;
+  const paneOpen =
+    resultsOpen ||
+    (showingRestoredScene && dismissedRestoredSceneKey !== restoredSceneKey);
+  const paneCoordinates = showingRestoredScene ? coordinates : submittedCoordinates;
+  const paneTimeZone =
+    showingRestoredScene && viewport !== null
+      ? lookupTimeZone(viewport.center.latitude, viewport.center.longitude)
+      : submittedTimeZone;
+
   const searchUnavailable = searchSatelliteScenes === null;
   const canSearch =
     viewport !== null &&
@@ -1025,8 +1092,45 @@ export function SatelliteBrowser({
   };
 
   const applyMatch = (match: SatelliteSceneMatch) => {
-    setSelectedSceneId(match.scene.id);
     if (mapLayers === null) return;
+    const sceneKey = satelliteSceneKey(match.scene);
+    const alreadyApplied =
+      (appliedImagery.status === 'ready' ||
+        appliedImagery.status === 'preview' ||
+        appliedImagery.status === 'hidden') &&
+      appliedImagery.sceneKey === sceneKey;
+    if (alreadyApplied) {
+      applyRequest.current?.abort();
+      applyRequest.current = null;
+      if (searchState.status === 'idle') {
+        setSearchState({
+          status: 'success',
+          result: {
+            groups: [
+              {
+                date: match.scene.acquiredAt.slice(0, 10),
+                scenes: [match],
+              },
+            ],
+            sceneCount: 1,
+            acquisitionDateCount: 1,
+            totalMatched: 1,
+          },
+        });
+        setVisibleCount(1);
+        setSubmittedCoordinates(coordinates);
+        if (viewport !== null) {
+          setSubmittedTimeZone(
+            lookupTimeZone(viewport.center.latitude, viewport.center.longitude),
+          );
+        }
+        setResultsOpen(true);
+      }
+      mapLayers.clearScene();
+      setSelectedSceneId(null);
+      return;
+    }
+    setSelectedSceneId(match.scene.id);
     applyRequest.current?.abort();
     const controller = new AbortController();
     applyRequest.current = controller;
@@ -1174,11 +1278,11 @@ export function SatelliteBrowser({
           ) : null}
         </Box>
       </Stack>
-      {active && portalTarget !== null && resultsOpen
+      {active && portalTarget !== null && paneOpen
         ? createPortal(
             <SatelliteResultsPane
               appliedImagery={appliedImagery}
-              coordinates={submittedCoordinates}
+              coordinates={paneCoordinates}
               canLoadOlder={nextArchiveMonth !== null}
               loadingMore={loadingMore}
               loadMoreError={loadMoreError}
@@ -1187,12 +1291,15 @@ export function SatelliteBrowser({
                 setAutoLoadAttempts((attempts) => attempts + 1);
                 void loadMoreImages();
               }}
-              searchState={searchState}
+              searchState={paneSearchState}
               scrollRequestId={scrollRequestId}
               visibleCount={visibleCount}
-              selectedSceneId={selectedSceneId}
-              timeZone={submittedTimeZone}
+              selectedSceneId={paneSelectedSceneId}
+              timeZone={paneTimeZone}
               onClose={() => {
+                if (showingRestoredScene) {
+                  setDismissedRestoredSceneKey(restoredSceneKey);
+                }
                 setResultsOpen(false);
               }}
               onLoadMore={() => void loadMoreImages()}

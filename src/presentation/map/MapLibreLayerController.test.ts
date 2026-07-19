@@ -238,6 +238,28 @@ describe('MapLibreLayerController', () => {
     );
   });
 
+  it('de-applies the current scene and clears its persisted map resources', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('scene-to-clear'), new AbortController().signal);
+
+    expect(controller.clearScene()).toEqual({ status: 'success' });
+
+    expect(controller.getAppliedScene()).toBeNull();
+    expect(map.layers.has(sentinelMapLayerIds.rasterA)).toBe(false);
+    expect(map.sources.has('sentinel-raster-a')).toBe(false);
+    expect(map.layers.has(sentinelMapLayerIds.footprint)).toBe(false);
+    expect(mapLayerStore.getState().appliedImagery).toEqual({ status: 'empty' });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        appliedScene: null,
+      });
+    });
+  });
+
   it('reports a safe actionable reason when the renderer rejects a tile request', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;

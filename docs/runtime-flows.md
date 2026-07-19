@@ -46,6 +46,11 @@ stretch slider validates and stores the new numeric values, prepares a replaceme
 raster for the current scene, and swaps only after MapLibre reports it ready. A failed
 tuning attempt rolls back the controller values and keeps the prior raster visible. At
 startup, validated stretch preferences load before a saved Sentinel scene is restored.
+When restoration reaches a ready or hidden state, Satellite projects the controller's
+saved scene into a one-entry Images pane using the current viewport for coverage
+evidence. Clicking that active entry aborts any pending application, removes both raster
+slots and the footprint, clears the applied-scene preference, and returns map layer
+state to empty.
 
 Settings presents three exclusive tabs and mounts only the selected tab's content. The
 Storage tab performs a fresh, read-only measurement when opened and on explicit refresh.

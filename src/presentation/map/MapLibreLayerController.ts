@@ -223,6 +223,32 @@ export class MapLibreLayerController
     return this.applySceneInternal(scene, signal, true);
   }
 
+  public clearScene(): SatelliteImageryCommandResult {
+    this.#applySequence += 1;
+    this.#restoreController?.abort();
+    this.#restoreController = null;
+    this.#pendingRestore = null;
+    const map = this.#map;
+    if (map !== null) {
+      for (const slot of rasterSlots) this.removeSlot(map, slot);
+      this.removeFootprint(map);
+    }
+    this.#activeSlot = null;
+    this.#appliedScene = null;
+    mapLayerStore.setState({ appliedImagery: { status: 'empty' }, errorMessage: null });
+    this.persistStableState();
+    this.logger.log({
+      level: 'info',
+      name: 'satellite.imagery.cleared',
+      data: { status: 'empty' },
+    });
+    return { status: 'success' };
+  }
+
+  public getAppliedScene(): SatelliteScene | null {
+    return this.#appliedScene;
+  }
+
   public async restorePersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
@@ -576,6 +602,15 @@ export class MapLibreLayerController
       },
       mapInsertionPoints.satelliteFootprintBeforeLayerId,
     );
+  }
+
+  private removeFootprint(map: MapLibreMap): void {
+    if (map.getLayer(sentinelMapLayerIds.footprint) !== undefined) {
+      map.removeLayer(sentinelMapLayerIds.footprint);
+    }
+    if (map.getSource(mapSourceIds.sentinelFootprint) !== undefined) {
+      map.removeSource(mapSourceIds.sentinelFootprint);
+    }
   }
 
   private waitForSource(

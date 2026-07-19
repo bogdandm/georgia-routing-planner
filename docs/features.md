@@ -142,6 +142,9 @@ the card command path.
 The expanded applied card shows validated acquisition, tile, orbit, product,
 edge-distance, and attribution evidence. `Fit footprint` preserves pitch and bearing;
 `Hide imagery` stops the raster without discarding results, selection, or the footprint.
+Clicking the already applied scene card de-applies it, removes its raster and footprint,
+and clears the saved applied scene. After refresh, a restored scene opens the Images
+pane as one selected entry so it can be de-applied without repeating a catalog search.
 The Satellite sidebar and results stay mounted but hidden across rail changes, so a user
 can inspect Layers and return without losing the search session.
 

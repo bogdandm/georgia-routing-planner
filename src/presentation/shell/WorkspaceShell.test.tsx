@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@mui/material';
 import { userEvent } from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   SatelliteCatalogError,
@@ -273,6 +273,46 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText(/18 Jun 2026 · 14:12 GMT\+4/u)).toBeVisible();
     expect(requestedStarts).toEqual(['2026-07-01', '2026-06-01']);
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
+  });
+
+  it('shows the restored applied scene as one removable image after refresh', async () => {
+    const restoredScene = syntheticSatelliteScene(
+      'restored-scene',
+      '2026-06-18T10:12:00.000Z',
+    );
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    services.mapViewport.update(testViewport);
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(restoredScene);
+    const clearScene = vi.spyOn(mapLayers, 'clearScene').mockImplementation(() => {
+      mapLayerStore.setState({ appliedImagery: { status: 'empty' } });
+      return { status: 'success' };
+    });
+    mapLayerStore.setState({
+      appliedImagery: {
+        status: 'ready',
+        sceneKey: 'sentinel-2-l2a:restored-scene',
+        sceneId: 'restored-scene',
+        visible: true,
+      },
+    });
+    window.history.replaceState(null, '', '/#satellite');
+    const user = userEvent.setup();
+
+    renderWorkspaceShell();
+
+    expect(await screen.findByText('1 image · 1 acquisition day')).toBeVisible();
+    const restoredCard = screen.getByRole('button', {
+      name: 'Remove 18 Jun 2026 imagery from map',
+    });
+    expect(restoredCard).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(restoredCard);
+
+    expect(clearScene).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole('button', { name: 'Apply 18 Jun 2026 imagery' }),
+    ).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('searches May, loads June and July on navigation, and reuses complete months', async () => {

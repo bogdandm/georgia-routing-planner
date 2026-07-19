@@ -340,6 +340,8 @@ Scope:
 - Present Settings as three compact tabs: General, Rendering, and Storage. Report
   available origin-storage categories, quota, and optional JavaScript heap metrics in
   megabytes, while stating the browser-managed tile-cache limitation.
+- Toggle the active imagery card off on a second click and hydrate a restored scene as a
+  single selected Images-pane entry after refresh.
 - Make safe raster-renderer failures selectable from the shared status line and classify
   common rejection, throttling, availability, and timeout cases.
 - Remove the duplicate recoverable map banner and give non-ready status a translucent

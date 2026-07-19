@@ -154,13 +154,15 @@ unavailable.
 
 ### Layers
 
-Layers exposes session-only checkboxes for Satellite imagery, Scene footprint, Hiking
-paths, Roads, and Places and POIs. Each logical ID maps to an allowlisted set of stable
-MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
-remain disabled until a scene is applied. Hiding imagery retains the applied scene and
-does not remove its footprint, search results, or attribution contract. Base land and
-water remain visible and cannot be disabled. Opacity, drag ordering, persistence, and
-custom layers are unavailable.
+Layers groups session-only controls under explicit source headings: Copernicus
+Sentinel-2 through the configured satellite catalog, and OpenStreetMap through the
+configured vector provider. The checkboxes cover Satellite imagery, Scene footprint,
+Hiking paths, Roads, and Places and POIs. Each logical ID maps to an allowlisted set of
+stable MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite
+controls remain disabled until a scene is applied. Hiding imagery retains the applied
+scene and does not remove its footprint, search results, or attribution contract. Base
+land and water remain visible and cannot be disabled. Opacity, drag ordering,
+persistence, and custom layers are unavailable.
 
 ## Persistent map controls
 

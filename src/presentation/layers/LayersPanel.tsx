@@ -13,7 +13,14 @@ import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 
-const controls = [
+interface LayerControl {
+  readonly id: LogicalMapLayerId;
+  readonly label: string;
+  readonly description: string;
+  readonly requiresScene: boolean;
+}
+
+const sentinelControls = [
   {
     id: 'satellite-imagery',
     label: 'Satellite imagery',
@@ -26,6 +33,9 @@ const controls = [
     description: 'The actual boundary of the applied scene.',
     requiresScene: true,
   },
+] as const satisfies readonly LayerControl[];
+
+const openStreetMapControls = [
   {
     id: 'hiking-paths',
     label: 'Hiking paths',
@@ -44,16 +54,27 @@ const controls = [
     description: 'Settlements, peaks, water labels, and hiking places.',
     requiresScene: false,
   },
-] as const satisfies readonly {
-  readonly id: LogicalMapLayerId;
-  readonly label: string;
-  readonly description: string;
-  readonly requiresScene: boolean;
-}[];
+] as const satisfies readonly LayerControl[];
 
 export function LayersPanel() {
-  const { mapLayers } = useRuntimeServices();
+  const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
   const state = useStore(mapLayerStore);
+  const provider =
+    mapProviderConfiguration.status === 'valid' ? mapProviderConfiguration.value : null;
+  const groups = [
+    {
+      id: 'sentinel',
+      title: `Copernicus Sentinel-2 via ${provider?.satellite.label ?? 'satellite catalog'}`,
+      description: `Raster rendering by ${provider?.satellite.renderer.id ?? 'configured renderer'}.`,
+      controls: sentinelControls,
+    },
+    {
+      id: 'openstreetmap',
+      title: `OpenStreetMap via ${provider?.vector.label ?? 'vector tile provider'}`,
+      description: 'Vector basemap data styled for hiking and navigation.',
+      controls: openStreetMapControls,
+    },
+  ] as const;
   const sceneAvailable =
     state.appliedImagery.status === 'ready' ||
     state.appliedImagery.status === 'preview' ||
@@ -78,40 +99,58 @@ export function LayersPanel() {
       {mapLayers === null ? (
         <Alert severity="error">Map layer controls are unavailable.</Alert>
       ) : null}
-      <FormGroup aria-label="Map layers">
-        {controls.map((control) => {
-          const disabled =
-            mapLayers === null || (control.requiresScene && !sceneAvailable);
-          return (
-            <Box
-              key={control.id}
-              sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}
-            >
-              <FormControlLabel
-                disabled={disabled}
-                control={
-                  <Checkbox
-                    checked={state.visibility[control.id]}
-                    onChange={(event) => {
-                      changeVisibility(control.id, event.target.checked);
-                    }}
+      {groups.map((group) => (
+        <Box
+          component="section"
+          key={group.id}
+          aria-labelledby={`${group.id}-layer-source`}
+        >
+          <Typography
+            id={`${group.id}-layer-source`}
+            component="h3"
+            variant="subtitle2"
+          >
+            {group.title}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {group.description}
+          </Typography>
+          <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
+            {group.controls.map((control) => {
+              const disabled =
+                mapLayers === null || (control.requiresScene && !sceneAvailable);
+              return (
+                <Box
+                  key={control.id}
+                  sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <FormControlLabel
+                    disabled={disabled}
+                    control={
+                      <Checkbox
+                        checked={state.visibility[control.id]}
+                        onChange={(event) => {
+                          changeVisibility(control.id, event.target.checked);
+                        }}
+                      />
+                    }
+                    label={control.label}
                   />
-                }
-                label={control.label}
-              />
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', pl: 4.75, mt: -0.75 }}
-              >
-                {control.requiresScene && !sceneAvailable
-                  ? 'Apply a Sentinel scene to enable this layer.'
-                  : control.description}
-              </Typography>
-            </Box>
-          );
-        })}
-      </FormGroup>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', pl: 4.75, mt: -0.75 }}
+                  >
+                    {control.requiresScene && !sceneAvailable
+                      ? 'Apply a Sentinel scene to enable this layer.'
+                      : control.description}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </FormGroup>
+        </Box>
+      ))}
       <Box aria-live="polite">
         {state.errorMessage === null ? null : (
           <Alert severity="warning">{state.errorMessage}</Alert>

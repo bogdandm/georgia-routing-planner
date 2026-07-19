@@ -113,6 +113,14 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', {
+        name: 'Copernicus Sentinel-2 via Earth Search',
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
+    ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');

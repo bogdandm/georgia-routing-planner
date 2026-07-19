@@ -7,7 +7,7 @@ discovery browser into map imagery that can be applied, hidden, switched, and di
 It also introduces the first real Layers workspace at the same time so imagery is not
 wired through a Satellite-only visibility mechanism.
 
-- Status: **implemented and verified on the feature branch; awaiting UI/UX approval**.
+- Status: **working UI and full check gate verified; draft PR update in progress**.
 - Active branch: `feature/sentinel-map-layers`.
 - Branch base: the current `feature/sentinel-imagery-plan` state at commit `3d2b4d2`.
 - Approval boundary: all work remains on this feature branch until the combined imagery
@@ -36,6 +36,9 @@ At completion, a desktop Chrome user can:
    among workspace tabs or changing terrain mode.
 7. Understand preview/render failures from the persistent Sentinel timeline and an
    exported privacy-safe diagnostics bundle.
+8. Refresh without losing logical layer visibility, the applied Sentinel scene, or the
+   collapsed-navigation preference.
+9. See one lightweight operational line below map search for pending or failed work.
 
 ## 3. Fixed UX decisions
 
@@ -71,8 +74,8 @@ The Satellite imagery and Scene footprint checkboxes are disabled with concise s
 text until a scene has been applied. Controls affect the long-lived native map
 immediately and never remount it.
 
-Visibility is session state. Persisting layer preferences across browser restarts,
-opacity control, and user-defined ordering are separate enhancements.
+Visibility and the last successful applied scene are durable local preferences. Opacity
+control and user-defined ordering remain separate enhancements.
 
 ## 4. Rendering checkpoints
 
@@ -97,13 +100,13 @@ order, scene switching, footprint display, fit behavior, loading, and failure re
 The preview implementation must remain behind the same narrow imagery-map capability as
 the final renderer so it can be deleted without rewriting Satellite or Layers UI state.
 
-### 4.2 Production checkpoint: georeferenced L2A visual asset
+### 4.2 Production checkpoint: georeferenced L2A reflectance bands
 
 Replace the preview adapter with a bounded, correctly georeferenced renderer for the
-existing validated `assets.visual` COG:
+validated `assets.red`, `assets.green`, and `assets.blue` COGs:
 
 ```text
-SatelliteVisualAsset(kind = cog)
+SatelliteVisualAsset(kind = sentinel-rgb-cogs)
 -> bounded range/tile requests
 -> decode and CRS-aware placement
 -> MapLibre raster source/layer
@@ -136,8 +139,9 @@ Required contracts:
 - `AppliedSatelliteImagerySnapshot` is a discriminated union for `empty`, `loading`,
   `preview`, `ready`, `hidden`, and `failed` states. It records only safe serializable
   identifiers and status evidence.
-- A small Zustand store owns cross-tab transient visibility and applied-scene snapshots.
-  It stores no MapLibre instance, adapter class, worker, image bytes, or request object.
+- Dexie owns durable visibility and applied-scene preferences. A small Zustand store
+  projects their live serializable UI state; neither stores a MapLibre instance, adapter
+  class, worker, image bytes, or request object.
 - The MapLibre adapter owns sources, layers, native listeners, cancellation, and
   cleanup.
 - Satellite search results remain owned by the Satellite browser. Applying maps one
@@ -308,6 +312,22 @@ Tests and checks:
 Commit: `test(satellite): harden imagery layer workflows`, with documentation committed
 separately when it is independently reviewable.
 
+### I7. Persist state and float the complete navigation — Done
+
+Scope:
+
+- Persist logical layer visibility, the last successfully applied scene, and navigation
+  collapse state in validated Dexie records.
+- Keep the map fixed to the full viewport while rail, sidebar, and results float above
+  it as one continuous surface.
+- Collapse with a short transition to the clickable GR mark.
+- Add the shared one-line operational status below map search.
+- Replace clipped TCI rendering with full-range raw RGB reflectance-band composition.
+
+Tests cover storage repair and round trips, restored scene application, fixed map
+dimensions, navigation reload persistence, raw-band renderer requests, and status/error
+states.
+
 ## 7. Review checkpoints
 
 ### Checkpoint A: Layers interaction
@@ -334,7 +354,7 @@ separately when it is independently reviewable.
 - Sentinel-2 L1C JP2 rendering.
 - Mosaics or multiple simultaneously active scenes.
 - Cloud masking, band math, false-color composites, or image processing controls.
-- Layer drag ordering, opacity sliders, custom layers, or persisted layer preferences.
+- Layer drag ordering, opacity sliders, or custom layers.
 - Accounts, server-side proxying, secret provider keys, or hosted telemetry.
 - Applying imagery from an unloaded calendar date without first retrieving its scene
   metadata.
@@ -359,10 +379,11 @@ Verification evidence on 2026-07-19:
 
 - Strict type checking, formatting, lint, repository audit, unit/component tests,
   integration tests, production build, and controlled Chromium/axe tests pass.
-- Coverage passes with 144 tests, 89.9% statements, 78.74% branches, 92.66% functions,
-  and 92.48% lines.
-- The built-app Chromium suite passes all 10 workflows, including synthetic Sentinel
-  apply, hide, restore, terrain, rail persistence, and public-network isolation.
-- A live current-Chrome smoke applied `S2A_38TLM_20260709_0_L2A` through Earth Search
-  and TiTiler, displayed its georeferenced raster and independent footprint, preserved
-  attribution, and verified Layers hide/restore behavior.
+- Coverage passes with 147 tests, 89.48% statements, 78.99% branches, 92.56% functions,
+  and 91.85% lines.
+- The built-app Chromium suite passes all 11 workflows, including raw RGB Sentinel
+  application and reload restoration, fixed map bounds, navigation collapse persistence,
+  terrain, diagnostics, axe, and public-network isolation.
+- A live current-Chrome smoke applied `S2A_38TMN_20260702_0_L2A` through Earth Search
+  and TiTiler's STAC RGB renderer, showed the lightweight pending status, and completed
+  with the floating three-pane navigation and full-screen map intact.

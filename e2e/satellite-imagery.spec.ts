@@ -12,7 +12,7 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
 }) => {
   const rendererRequests: string[] = [];
   page.on('request', (request) => {
-    if (request.url().startsWith('https://titiler.xyz/cog/tiles/')) {
+    if (request.url().startsWith('https://titiler.xyz/stac/tiles/')) {
       rendererRequests.push(request.url());
     }
   });
@@ -31,7 +31,12 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
     timeout: 15_000,
   });
   await expect.poll(() => rendererRequests.length).toBeGreaterThan(0);
-  expect(rendererRequests[0]).toContain('url=https%3A%2F%2Fsentinel-cogs.example.test');
+  expect(rendererRequests[0]).toContain(
+    'url=https%3A%2F%2Fearth-search.example.test%2Fv1%2Fcollections%2Fsentinel-2-l2a%2Fitems',
+  );
+  expect(rendererRequests[0]).toContain(
+    'assets=red&assets=green&assets=blue&asset_as_band=true',
+  );
   await expect(page.getByText(/COG tiles rendered by TiTiler/u)).toBeVisible();
 
   await page.getByRole('tab', { name: 'Layers' }).click();
@@ -44,6 +49,8 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
   await expect(footprint).toBeChecked();
   await imagery.check();
   await expect(imagery).toBeChecked();
+  const roads = page.getByRole('checkbox', { name: 'Roads' });
+  await roads.uncheck();
 
   await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
   await expect(
@@ -63,4 +70,13 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
       ['serious', 'critical'].includes(violation.impact ?? ''),
     ),
   ).toEqual([]);
+
+  const requestsBeforeReload = rendererRequests.length;
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Roads' })).not.toBeChecked();
+  await expect
+    .poll(() => rendererRequests.length)
+    .toBeGreaterThan(requestsBeforeReload);
 });

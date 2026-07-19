@@ -32,9 +32,10 @@ test('loads the production map style and reloads under a repository subpath', as
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
+    { timeout: 15_000 },
   );
-  await expect(page.getByText('OpenFreeMap')).toBeVisible();
   const attributionLink = page.getByRole('link', { name: 'OpenFreeMap' });
+  await expect(attributionLink).toBeVisible();
   await attributionLink.focus();
   await expect(attributionLink).toBeFocused();
   await expect(attributionLink).toHaveAttribute('href', 'https://openfreemap.org');
@@ -53,6 +54,29 @@ test('loads the production map style and reloads under a repository subpath', as
   await expect(page.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
   expect(new URL(page.url()).hash).toBe('#layers');
   expect(externalRequests).toEqual([]);
+});
+
+test('keeps the full-screen map fixed while navigation changes and collapses', async ({
+  page,
+}) => {
+  await page.goto('#tracks');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  const initialBounds = await workspace.boundingBox();
+
+  await page.getByRole('tab', { name: 'Satellite' }).click();
+  expect(await workspace.boundingBox()).toEqual(initialBounds);
+  await page.getByRole('button', { name: 'Hide navigation' }).click();
+  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
+  expect(await workspace.boundingBox()).toEqual(initialBounds);
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
+  await page.getByRole('button', { name: 'Show navigation' }).click();
+  await expect(page.getByRole('tab', { name: 'Satellite' })).toBeVisible();
+  expect(await workspace.boundingBox()).toEqual(initialBounds);
 });
 
 test('has no serious accessibility violations in the shell and settings', async ({

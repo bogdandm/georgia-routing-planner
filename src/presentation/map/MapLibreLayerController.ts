@@ -34,6 +34,12 @@ import {
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapVisualModePaint,
+  mapVisualPalette,
+  type MapVisualMode,
+  type MapVisualModePaint,
+} from '@/presentation/map/mapVisualPalette';
 import type {
   SatelliteImageryCommandResult,
   SatelliteImageryMap,
@@ -64,6 +70,12 @@ export const logicalNativeLayerGroups: Readonly<
     terrainOverlayLayerIds.contourIndex,
     terrainOverlayLayerIds.contourLabels,
   ],
+  'natural-features': [
+    mapLayerIds.landcover,
+    mapLayerIds.glacierAreas,
+    mapLayerIds.water,
+  ],
+  'restricted-areas': [mapLayerIds.restrictedAreas],
   'hiking-paths': [mapLayerIds.hikingPaths, mapLayerIds.hikingSteps],
   roads: [mapLayerIds.roadCasings, mapLayerIds.roads, mapLayerIds.roadLabels],
   'places-and-pois': [
@@ -71,7 +83,6 @@ export const logicalNativeLayerGroups: Readonly<
     mapLayerIds.hikingPoiLabels,
     mapLayerIds.peaks,
     mapLayerIds.peakLabels,
-    mapLayerIds.waterLabels,
     mapLayerIds.placeLabels,
   ],
 };
@@ -171,6 +182,8 @@ export class MapLibreLayerController
   #contourFailureReported = false;
   #appliedContourInterval: TerrainOverlayPreferences['contourIntervalMeters'] | null =
     null;
+  #appliedVisualMode: MapVisualMode | null = null;
+  readonly #visualModeLayerAnchors = new Map<string, unknown>();
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -187,6 +200,7 @@ export class MapLibreLayerController
     if (this.#map === map) {
       this.reconcileTerrainOverlays();
       this.applyBaseLayerVisibility();
+      this.applyMapVisualMode();
       void this.restorePendingScene();
       return;
     }
@@ -196,6 +210,7 @@ export class MapLibreLayerController
     map.on('error', this.handleTerrainOverlayError);
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
+    this.applyMapVisualMode();
     void this.restorePendingScene();
   }
 
@@ -204,6 +219,8 @@ export class MapLibreLayerController
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
     this.#map = null;
+    this.#appliedVisualMode = null;
+    this.#visualModeLayerAnchors.clear();
     this.#applySequence += 1;
     this.#restoreController?.abort();
   }
@@ -242,6 +259,7 @@ export class MapLibreLayerController
         ? state.appliedImagery
         : this.withRasterVisibility(state.appliedImagery, visible);
     mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
+    if (layerId === 'satellite-imagery') this.applyMapVisualMode();
     this.persistStableState();
     this.logger.log({
       level: 'info',
@@ -272,6 +290,7 @@ export class MapLibreLayerController
     this.#activeSlot = null;
     this.#appliedScene = null;
     mapLayerStore.setState({ appliedImagery: { status: 'empty' }, errorMessage: null });
+    this.applyMapVisualMode();
     this.persistStableState();
     this.logger.log({
       level: 'info',
@@ -479,6 +498,7 @@ export class MapLibreLayerController
         visibility: { ...state.visibility, 'satellite-imagery': true },
         errorMessage: null,
       });
+      this.applyMapVisualMode();
       operation.complete();
       if (persist) this.persistStableState();
       this.logger.log({
@@ -595,6 +615,8 @@ export class MapLibreLayerController
       'scene-footprint',
       'terrain-relief',
       'elevation-isolines',
+      'natural-features',
+      'restricted-areas',
       'hiking-paths',
       'roads',
       'places-and-pois',
@@ -614,6 +636,7 @@ export class MapLibreLayerController
       visibility['satellite-imagery'],
     );
     mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
+    this.applyMapVisualMode();
   }
 
   private persistStableState(): void {
@@ -638,6 +661,7 @@ export class MapLibreLayerController
   private readonly handleStyleData = (): void => {
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
+    this.applyMapVisualMode();
   };
 
   private readonly handleTerrainOverlayError = (event: MapLibreErrorEvent): void => {
@@ -677,10 +701,10 @@ export class MapLibreLayerController
                 : 'none',
             },
             paint: {
-              'hillshade-exaggeration': 0.22,
-              'hillshade-shadow-color': '#4f4438',
-              'hillshade-highlight-color': '#f3ead8',
-              'hillshade-accent-color': '#7d6a55',
+              ...mapVisualModePaint.vector[terrainOverlayLayerIds.reliefShade],
+              'hillshade-shadow-color': mapVisualPalette.terrain.shadow,
+              'hillshade-highlight-color': mapVisualPalette.terrain.highlight,
+              'hillshade-accent-color': mapVisualPalette.terrain.accent,
               'hillshade-illumination-anchor': 'map',
             },
           },
@@ -779,9 +803,17 @@ export class MapLibreLayerController
               : 'none',
           },
           paint: {
-            'line-color': '#8b7358',
-            'line-opacity': 0.48,
-            'line-width': 0.65,
+            'line-color': mapVisualPalette.terrain.contourMinor,
+            ...mapVisualModePaint.vector[terrainOverlayLayerIds.contourMinor],
+            'line-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              minzoom,
+              0.42,
+              this.terrain.overlays.contourMaxZoom,
+              0.72,
+            ],
           },
         },
         mapInsertionPoints.terrainOverlaysBeforeLayerId,
@@ -802,9 +834,17 @@ export class MapLibreLayerController
               : 'none',
           },
           paint: {
-            'line-color': '#6f5941',
-            'line-opacity': 0.72,
-            'line-width': 1.15,
+            'line-color': mapVisualPalette.terrain.contourIndex,
+            ...mapVisualModePaint.vector[terrainOverlayLayerIds.contourIndex],
+            'line-width': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              minzoom,
+              0.72,
+              this.terrain.overlays.contourMaxZoom,
+              1.15,
+            ],
           },
         },
         mapInsertionPoints.terrainOverlaysBeforeLayerId,
@@ -834,8 +874,8 @@ export class MapLibreLayerController
             'text-size': 10,
           },
           paint: {
-            'text-color': '#5c4936',
-            'text-halo-color': 'rgba(244, 239, 226, 0.88)',
+            'text-color': mapVisualPalette.terrain.contourLabel,
+            ...mapVisualModePaint.vector[terrainOverlayLayerIds.contourLabels],
             'text-halo-width': 1.2,
           },
         },
@@ -904,6 +944,8 @@ export class MapLibreLayerController
     for (const layerId of [
       'terrain-relief',
       'elevation-isolines',
+      'natural-features',
+      'restricted-areas',
       'hiking-paths',
       'roads',
       'places-and-pois',
@@ -916,6 +958,32 @@ export class MapLibreLayerController
             visibility[layerId] ? 'visible' : 'none',
           );
         }
+      }
+    }
+  }
+
+  private applyMapVisualMode(): void {
+    const map = this.#map;
+    if (map === null) return;
+    const imagery = mapLayerStore.getState().appliedImagery;
+    const mode: MapVisualMode =
+      this.#activeSlot !== null && imagery.status !== 'hidden' ? 'satellite' : 'vector';
+    const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
+    const layers = Object.entries(modePaint);
+    const modeChanged = this.#appliedVisualMode !== mode;
+    const layerChanged = layers.some(
+      ([layerId]) =>
+        map.getLayer(layerId) !== this.#visualModeLayerAnchors.get(layerId),
+    );
+    if (!modeChanged && !layerChanged) return;
+    this.#appliedVisualMode = mode;
+    this.#visualModeLayerAnchors.clear();
+    for (const [layerId, properties] of layers) {
+      const layer = map.getLayer(layerId);
+      if (layer === undefined) continue;
+      this.#visualModeLayerAnchors.set(layerId, layer);
+      for (const [property, value] of Object.entries(properties)) {
+        map.setPaintProperty(layerId, property, value);
       }
     }
   }
@@ -939,7 +1007,7 @@ export class MapLibreLayerController
         type: 'line',
         source: mapSourceIds.sentinelFootprint,
         paint: {
-          'line-color': '#ff8c1a',
+          'line-color': mapVisualPalette.userGeometry.satelliteFootprint,
           'line-width': 2.5,
           'line-opacity': 0.95,
         },

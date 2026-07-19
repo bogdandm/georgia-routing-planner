@@ -35,7 +35,22 @@ const sentinelControls = [
   },
 ] as const satisfies readonly LayerControl[];
 
-const openStreetMapControls = [
+const naturalFeatureControls = [
+  {
+    id: 'natural-features',
+    label: 'Natural features',
+    description: 'Vegetation, glaciers, wetlands, and water-body polygons.',
+    requiresScene: false,
+  },
+] as const satisfies readonly LayerControl[];
+
+const navigationAndAccessControls = [
+  {
+    id: 'restricted-areas',
+    label: 'Restricted areas',
+    description: 'Red perimeters for provider-identified military land.',
+    requiresScene: false,
+  },
   {
     id: 'hiking-paths',
     label: 'Hiking paths',
@@ -51,9 +66,14 @@ const openStreetMapControls = [
   {
     id: 'places-and-pois',
     label: 'Places and POIs',
-    description: 'Settlements, peaks, water labels, and hiking places.',
+    description: 'Settlements, peaks, and hiking places.',
     requiresScene: false,
   },
+] as const satisfies readonly LayerControl[];
+
+const openStreetMapControls = [
+  ...naturalFeatureControls,
+  ...navigationAndAccessControls,
 ] as const satisfies readonly LayerControl[];
 
 const terrainControls = [

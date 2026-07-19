@@ -10,6 +10,7 @@ import {
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import { mapVisualModePaint } from '@/presentation/map/mapVisualPalette';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
 type Listener = (event: never) => void;
@@ -20,6 +21,8 @@ class FakeLayerMap {
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
+  readonly paintProperties = new Map<string, unknown>();
+  paintUpdateCount = 0;
   readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
@@ -91,9 +94,11 @@ class FakeLayerMap {
     this.visibility.set(id, String(value));
   }
 
-  public setPaintProperty(id: string, _name: string, value: unknown): void {
+  public setPaintProperty(id: string, name: string, value: unknown): void {
     if (!this.layers.has(id)) throw new Error(`Layer ${id} is unavailable.`);
     this.paint.set(id, value);
+    this.paintProperties.set(`${id}.${name}`, value);
+    this.paintUpdateCount += 1;
   }
 
   public getSource(id: string): unknown {
@@ -221,6 +226,19 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourIndex)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourLabels)).toBe('none');
+
+    expect(controller.setLayerVisibility('natural-features', false)).toEqual({
+      status: 'success',
+    });
+    expect(controller.setLayerVisibility('restricted-areas', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(mapLayerIds.landcover)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.glacierAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.water)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.waterways)).not.toBe('none');
+    expect(map.visibility.get(mapLayerIds.waterLabels)).not.toBe('none');
+    expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
   });
 
   it('creates one relief layer and deterministically orders it around satellite imagery', async () => {
@@ -280,9 +298,15 @@ describe('MapLibreLayerController', () => {
     expect(map.layers.get('terrain-contour-minor')).toMatchObject({
       minzoom: 11,
       filter: ['==', ['get', 'level'], 0],
+      paint: {
+        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.42, 15, 0.72],
+      },
     });
     expect(map.layers.get('terrain-contour-index')).toMatchObject({
       filter: ['>', ['get', 'level'], 0],
+      paint: {
+        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 0.72, 15, 1.15],
+      },
     });
     expect(map.layers.get('terrain-contour-labels')).toMatchObject({
       filter: ['>', ['get', 'level'], 0],
@@ -327,12 +351,26 @@ describe('MapLibreLayerController', () => {
       status: 'ready',
       sceneId: 'scene-a',
     });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+    expect(
+      map.paintProperties.get(`${terrainOverlayLayerIds.contourIndex}.line-opacity`),
+    ).toBe(
+      mapVisualModePaint.satellite[terrainOverlayLayerIds.contourIndex]['line-opacity'],
+    );
+    const paintUpdates = map.paintUpdateCount;
+    map.fire('styledata', {});
+    expect(map.paintUpdateCount).toBe(paintUpdates);
 
     expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
       status: 'success',
     });
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
     expect(mapLayerStore.getState().appliedImagery.status).toBe('hidden');
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
 
     await expect(
       controller.applyScene(scene('scene-b'), new AbortController().signal),
@@ -480,6 +518,8 @@ describe('MapLibreLayerController', () => {
         'scene-footprint': true,
         'terrain-relief': false,
         'elevation-isolines': false,
+        'natural-features': true,
+        'restricted-areas': false,
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,
@@ -499,6 +539,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has('sentinel-raster-a')).toBe(true);
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({

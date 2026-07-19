@@ -196,6 +196,7 @@ describe('MapLibreLayerController', () => {
       configuration.value.satellite.renderer,
       configuration.value.terrain,
       {
+        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
         createTileUrl: (intervalMeters) =>
           `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
       },

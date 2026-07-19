@@ -214,6 +214,10 @@ export class MapLibreLayerController
     void this.restorePendingScene();
   }
 
+  public createDemTileUrl(): string {
+    return this.contourTiles.createDemTileUrl();
+  }
+
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
     map.off('styledata', this.handleStyleData);
@@ -687,7 +691,10 @@ export class MapLibreLayerController
     }
     try {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
-        map.addSource(mapSourceIds.terrainDem, createTerrainDemSource(this.terrain));
+        map.addSource(
+          mapSourceIds.terrainDem,
+          createTerrainDemSource(this.terrain, this.contourTiles.createDemTileUrl()),
+        );
       }
       if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
         map.addLayer(

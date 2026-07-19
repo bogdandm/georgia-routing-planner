@@ -220,6 +220,7 @@ describe('MapLibreFacade', () => {
     const nativeMap = new FakeNativeMap();
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
+      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
       requestTimeoutMs: 100,
       equivalentErrorWindowMs: 10_000,
     });
@@ -265,6 +266,7 @@ describe('MapLibreFacade', () => {
     nativeMap.sourceLoaded = false;
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
+      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
       requestTimeoutMs: 1_000,
       equivalentErrorWindowMs: 10_000,
     });

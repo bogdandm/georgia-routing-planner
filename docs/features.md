@@ -289,6 +289,11 @@ Disabling terrain returns pitch to zero while retaining center, zoom, and bearin
   controller keeps ownership of the shared source so relief can recover on later tiles.
 - Retry reuses the same facade and map rather than remounting either.
 
+Before the shared DEM source is decoded by MapLibre, the client repairs only transparent
+or configured-invalid values and isolated extreme local outliers. Decisions at tile
+borders use neighboring source pixels. Valid terrain is not smoothed, and the same
+corrected PNG cache supplies relief, 3D, and elevation isolines.
+
 ## Failure and offline feedback
 
 Map errors are classified as vector, glyph/sprite, terrain, style, WebGL, or unknown.

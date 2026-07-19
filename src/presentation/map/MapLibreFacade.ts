@@ -45,6 +45,7 @@ const initialSnapshot: MapDiagnosticsSnapshot = {
 
 interface MapProviderOptions {
   readonly terrain: MapProviderConfiguration['terrain'];
+  readonly demTileUrl: string;
   readonly requestTimeoutMs: number;
   readonly equivalentErrorWindowMs: number;
 }
@@ -436,7 +437,7 @@ export class MapLibreFacade implements MapFacade {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(provider.terrain),
+          createTerrainDemSource(provider.terrain, provider.demTileUrl),
         );
       }
       map.setTerrain({

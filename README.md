@@ -106,7 +106,9 @@ The replaceable map-provider defaults are:
   perimeters; satellite mode retains those meanings with imagery-safe opacity and
   contrast.
 - AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for relief shading,
-  client-generated contours, and optional 3D terrain.
+  client-generated contours, and optional 3D terrain. A bounded client-side filter
+  repairs only configured invalid values and isolated extreme pixels before all three
+  consumers see the tile.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and

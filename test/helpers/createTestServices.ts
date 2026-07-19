@@ -92,6 +92,7 @@ export function createTestServices(
     parsedMapProviderConfiguration.satellite.renderer,
     parsedMapProviderConfiguration.terrain,
     {
+      createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
       createTileUrl: (intervalMeters) =>
         `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
     } satisfies ContourTileGenerator,

@@ -7,6 +7,10 @@ import {
 } from '@/presentation/map/ContourTileGenerator';
 
 class FakeContourTileGenerator implements ContourTileGenerator {
+  public createDemTileUrl(): string {
+    return 'filtered-dem://tiles/{z}/{x}/{y}';
+  }
+
   public createTileUrl(intervalMeters: 20 | 25 | 40 | 50 | 100): string {
     return `contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`;
   }
@@ -18,6 +22,12 @@ describe('ContourTileGenerator contract', () => {
 
     expect(generator.createTileUrl(50)).toBe(
       'contour://tiles/{z}/{x}/{y}?minor=50&major=200',
+    );
+  });
+
+  it('exposes the shared filtered DEM URL used by MapLibre and contours', () => {
+    expect(new FakeContourTileGenerator().createDemTileUrl()).toBe(
+      'filtered-dem://tiles/{z}/{x}/{y}',
     );
   });
 

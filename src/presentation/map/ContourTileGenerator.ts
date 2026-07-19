@@ -5,8 +5,10 @@ import maplibreContour from 'maplibre-contour';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ContourIntervalMeters } from '@/application/ports/MapLayerPreferencesRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
+import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
 
 export interface ContourTileGenerator {
+  createDemTileUrl(): string;
   createTileUrl(intervalMeters: ContourIntervalMeters): string;
 }
 
@@ -56,6 +58,15 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       // additional worker survives after the application runtime is released.
       worker: false,
     });
+    if (terrain.encoding === 'terrarium') {
+      const filteredTiles = new FilteredTerrariumTileProvider(
+        terrain,
+        requestTimeoutMs,
+        logger,
+      );
+      this.#source.manager.fetchTile = (zoom, x, y, abortController) =>
+        filteredTiles.getTile(zoom, x, y, abortController);
+    }
     this.#source.setupMaplibre({ addProtocol: registerProtocolWithOwnedBuffers });
     this.#source.onTiming((timing) => {
       logger.log({
@@ -71,6 +82,10 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
         },
       });
     });
+  }
+
+  public createDemTileUrl(): string {
+    return this.#source.sharedDemProtocolUrl;
   }
 
   public createTileUrl(intervalMeters: ContourIntervalMeters): string {

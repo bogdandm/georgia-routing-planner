@@ -91,13 +91,17 @@ sequenceDiagram
   participant UI as TerrainModeControl
   participant Facade as MapLibreFacade
   participant Map as MapLibre
+  participant Filter as Filtered Terrarium protocol
   participant DEM as Terrain provider
 
   User->>UI: select 3D
   UI->>Facade: setTerrainMode(terrain)
   Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: set terrain and preserve camera intent
-  Map->>DEM: request configured DEM tiles
+  Map->>Filter: request shared raster-dem tile
+  Filter->>DEM: fetch center and neighboring tile context
+  Filter->>Filter: decode, reject, repair, re-encode, cache
+  Filter-->>Map: corrected Terrarium PNG
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
     Facade-->>UI: success / terrain
@@ -119,8 +123,12 @@ generated contour source, minor/index lines, and index labels. The invariant is 
 surface, relief/satellite in the selected order, contours, then OSM data layers.
 Updating the contour interval calls the existing vector source's tile update, so the map
 camera and unrelated native resources remain untouched. MapLibre abort signals flow
-through the contour protocol to bounded DEM requests; source failures update the overlay
-snapshot without removing the basemap.
+through both the shared DEM and contour protocols to the same filtered provider. The
+provider fetches the center and eight neighbors concurrently under one timeout, applies
+the configured pure repair policy, and retains completed PNGs and decoded neighbor
+context in bounded LRUs. Relief, 3D terrain, and generated isolines therefore cannot
+observe different elevation bytes. Source failures update the overlay snapshot without
+removing the basemap.
 
 Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
 shared visual mode on the existing native layers. Semantic colors remain stable, while

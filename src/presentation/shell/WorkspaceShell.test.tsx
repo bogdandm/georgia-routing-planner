@@ -501,6 +501,18 @@ describe('WorkspaceShell', () => {
         name: /9 Jul 2026, imagery available, 10 percent weighted cloud, matches/u,
       }),
     ).toBeVisible();
+    await user.click(
+      screen.getByRole('gridcell', {
+        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
+      }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }));
+    expect(
+      screen.queryByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('slider', { name: 'Maximum cloud' }), {
       target: { value: '100' },
     });

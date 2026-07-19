@@ -106,11 +106,13 @@ The displayed calendar month is the search month. The current month ends at toda
 earlier months cover their complete UTC month. The provider search loads the complete
 0–100% scene-cloud range. The cloud slider filters scene cards client-side while every
 loaded acquisition date remains visible in the calendar; dates at or below the threshold
-receive the orange highlight. After the first search, calendar arrows load a displayed
-month only when that month has not completed successfully for the submitted point,
-viewport, and product. Successful months, including empty ones, are reused when
-navigating back. Newly loaded scene groups are appended to the right results pane
-without replacing other months or resetting the displayed calendar month.
+receive the orange highlight. Selecting a date above the threshold temporarily reveals
+its selected scene card; de-applying it or selecting another scene restores the filter.
+After the first search, calendar arrows load a displayed month only when that month has
+not completed successfully for the submitted point, viewport, and product. Successful
+months, including empty ones, are reused when navigating back. Newly loaded scene groups
+are appended to the right results pane without replacing other months or resetting the
+displayed calendar month.
 
 Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport

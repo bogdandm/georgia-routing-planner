@@ -195,11 +195,14 @@ including a successful empty result. Provider requests use the complete 0–100%
 range. The slider filters loaded scene cards client-side and updates the calendar's
 orange highlights immediately. Acquisition dates above the threshold remain visible
 without an outline, and changing the slider neither invalidates loaded months nor
-performs another provider request. Calendar navigation checks the session cache before
-requesting the displayed month. A missing month runs the same cancellable search use
-case and appends its groups to the existing results. Revisiting a complete month
-performs no provider request. Changing submitted provider criteria starts a new session
-and clears the completed-month set.
+performs another provider request. A calendar selection above the threshold remains in
+the results projection while it is selected, so the active card can be inspected and
+de-applied. Clearing that selection or selecting a different scene reapplies the cloud
+filter. Calendar navigation checks the session cache before requesting the displayed
+month. A missing month runs the same cancellable search use case and appends its groups
+to the existing results. Revisiting a complete month performs no provider request.
+Changing submitted provider criteria starts a new session and clears the completed-month
+set.
 
 The UI reveals locally loaded scenes in eight-card sets. When that result is exhausted,
 the same load-more command finds the next missing month before the initially submitted

@@ -221,12 +221,15 @@ function flattenMatches(result: SatelliteSearchResult): readonly SatelliteSceneM
 function filterResultByCloudCover(
   result: SatelliteSearchResult,
   maxCloudCoverPercent: number,
+  selectedSceneId: string | null,
 ): SatelliteSearchResult {
   const groups = result.groups
     .map((group) => ({
       ...group,
       scenes: group.scenes.filter(
-        (match) => match.scene.cloudCoverPercent <= maxCloudCoverPercent,
+        (match) =>
+          match.scene.cloudCoverPercent <= maxCloudCoverPercent ||
+          match.scene.id === selectedSceneId,
       ),
     }))
     .filter((group) => group.scenes.length > 0);
@@ -900,9 +903,13 @@ export function SatelliteBrowser({
   const cloudFilteredResult = useMemo(
     () =>
       searchState.status === 'success'
-        ? filterResultByCloudCover(searchState.result, maxCloudCoverPercent)
+        ? filterResultByCloudCover(
+            searchState.result,
+            maxCloudCoverPercent,
+            selectedSceneId,
+          )
         : null,
-    [maxCloudCoverPercent, searchState],
+    [maxCloudCoverPercent, searchState, selectedSceneId],
   );
   const paneSearchState: SearchState = showingRestoredScene
     ? { status: 'success', result: restoredResult }
@@ -945,7 +952,11 @@ export function SatelliteBrowser({
     if (loadedMonthsRef.current.has(range.month)) {
       if (revealLoadedMonth) {
         setVisibleCount(
-          filterResultByCloudCover(searchState.result, maxCloudCoverPercent).sceneCount,
+          filterResultByCloudCover(
+            searchState.result,
+            maxCloudCoverPercent,
+            selectedSceneId,
+          ).sceneCount,
         );
       }
       return;
@@ -979,10 +990,12 @@ export function SatelliteBrowser({
       const matchingMergedCount = filterResultByCloudCover(
         mergedResult,
         maxCloudCoverPercent,
+        selectedSceneId,
       ).sceneCount;
       const matchingBaseCount = filterResultByCloudCover(
         baseResult,
         maxCloudCoverPercent,
+        selectedSceneId,
       ).sceneCount;
       markMonthLoaded(range.month);
       setSearchState({ status: 'success', result: mergedResult });

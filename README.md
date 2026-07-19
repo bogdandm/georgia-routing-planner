@@ -3,9 +3,9 @@
 [Open Georgia Routing Planner](https://bogdandm.github.io/georgia-routing-planner/)
 
 Georgia Routing Planner is a local-first web application for exploring Georgia. The
-complete system concept combines OpenStreetMap data, Sentinel-2 imagery, 3D terrain, a
-curated GPX track library, saved markers, layer controls, and straight-line GPX
-creation.
+complete system concept combines OpenStreetMap data, Sentinel-2 imagery, terrain relief
+and contours, 3D terrain, a curated GPX track library, saved markers, layer controls,
+and straight-line GPX creation.
 
 The project name is provisional. In the MVP, "routing" means placing waypoints and
 connecting them with straight segments. It does not mean automatic trail-following or
@@ -16,9 +16,10 @@ turn-by-turn routing.
 The application provides a compact map workspace with Tracks, Satellite, Markers, and
 Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain; live
 Sentinel-2 L2A search and georeferenced true-color scene rendering; logical map layer
-visibility; durable settled-camera restoration; provider failure feedback; settings; and
-bounded map/WebGL diagnostics. Unavailable feature actions are shown as disabled
-controls or explicit empty states instead of synthetic data.
+visibility; configurable relief shading and elevation isolines; durable settled-camera
+restoration; provider failure feedback; settings; and bounded map/WebGL diagnostics.
+Unavailable feature actions are shown as disabled controls or explicit empty states
+instead of synthetic data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
 [AGENTS.md](./AGENTS.md) for required engineering conventions.
@@ -101,7 +102,8 @@ The replaceable map-provider defaults are:
 
 - OpenFreeMap's OpenMapTiles-compatible TileJSON and glyph endpoints for the vector
   basemap.
-- AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for optional 3D terrain.
+- AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for relief shading,
+  client-generated contours, and optional 3D terrain.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and
@@ -123,8 +125,8 @@ IDs distinct and caps pagination. An invalid override fails closed before MapLib
 mounts and presents a safe configuration message without echoing the input or its URLs.
 
 Provider attribution remains visible in MapLibre. The OpenFreeMap/OpenMapTiles/OSM
-credits are shown in 2D; Mapzen/AWS terrain attribution is added when the DEM source is
-used.
+credits are shown in 2D; Mapzen/AWS terrain attribution is added whenever relief,
+contours, or 3D terrain use the DEM source.
 
 ## Developer mode and diagnostics
 

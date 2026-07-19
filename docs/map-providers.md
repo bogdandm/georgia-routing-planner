@@ -85,6 +85,9 @@ The terrain default is
 - Zoom range: 0 through 15; higher map zooms overzoom the last DEM level.
 - HTTPS and anonymous access.
 - Exaggeration: 1.15, deliberately conservative for route-planning context.
+- Relief: low-contrast hillshade from the same source in both flat and 3D modes.
+- Contours: browser-generated vector tiles from zoom 11 through 15, with a 32-tile
+  least-recently-used DEM cache.
 
 The [AWS Open Data entry](https://registry.opendata.aws/terrain-tiles/) describes global
 bare-earth elevation and anonymous bucket access. The upstream
@@ -110,11 +113,30 @@ European inputs make Copernicus/European Union and USGS/NOAA provenance especial
 relevant.
 
 The S3 endpoint has no CDN or SLA; upstream documentation says it is optimized for EC2
-networking. This is acceptable for an explicitly enabled, low-traffic terrain mode, but
-it is the main production risk. A missing/no-data tile or network failure must return
-the application to flat 2D and never block the vector basemap. There is no silent
-terrain provider failover because a replacement could have different licensing and
-elevation semantics.
+networking. This is acceptable for interactive relief, contours, and explicitly enabled
+3D, but it is the main production risk. A missing/no-data tile or network failure may
+omit an overlay or return 3D to flat mode, but it never blocks the vector basemap. There
+is no silent terrain provider failover because a replacement could have different
+licensing and elevation semantics.
+
+### Client-side contour generation
+
+The application pins `maplibre-contour` 0.0.5 (BSD-3-Clause), the implementation used by
+the MapLibre contour example. Its registered protocol requests only visible DEM tiles,
+honors MapLibre cancellation, decodes Terrarium elevation in the browser, and returns
+vector tiles containing `ele` and minor/index `level` properties. The application uses
+50 m minor and 200 m index thresholds by default, labels index lines only, and replaces
+the source tile template atomically when spacing changes. No geometry, token, backend,
+or hosted processing service is introduced.
+
+MapLibre transfers protocol responses to a worker. The adapter therefore gives each
+delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
+or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
+
+The terrain configuration validates contour minimum/maximum zoom and cache size. The
+contour maximum cannot exceed the DEM provider maximum. Replacing the provider requires
+compatible HTTPS/CORS image tiles, correct Terrarium or Mapbox encoding, updated
+attribution, and a review of contour density and cache bounds.
 
 ## Rejected defaults
 

@@ -4,6 +4,13 @@
 
 These instructions apply to the entire Georgia Routing Planner repository.
 
+## Canonical UI prototype
+
+The canonical Penpot workspace is
+[Georgia Routing Planner prototype](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334).
+Use it as the standing visual and interaction reference without asking the maintainer to
+provide the link again.
+
 ## Git workflow and approval gate
 
 `main` is the protected approval branch. All implementation, documentation,
@@ -101,17 +108,6 @@ Rules:
   commit hashes, pull-request state, merge state, approval state, and other progress
   reporting. Current capability statements such as “not currently available” are
   allowed; delivery timing is not.
-
-## Penpot design review workflow
-
-When a task edits a Penpot file:
-
-- Inspect the current Penpot hierarchy before editing and preserve reviewer-made
-  changes.
-- Apply one requested review change per Penpot operation so the reviewer can observe
-  each change in real time.
-- Allow that change to reach the Penpot file before starting the next review change.
-- Do not batch multiple review changes into one Penpot MCP execution.
 
 ## Maintainer context
 

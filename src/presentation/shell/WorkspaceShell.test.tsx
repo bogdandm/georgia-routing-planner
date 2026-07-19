@@ -128,9 +128,8 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
-    expect(
-      screen.getByRole('checkbox', { name: 'Elevation isolines' }),
-    ).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
+    expect(screen.queryByText(/<a href=/u)).not.toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');
     expect(

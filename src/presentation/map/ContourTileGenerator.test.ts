@@ -29,14 +29,8 @@ describe('ContourTileGenerator contract', () => {
     const registeredProtocol = withOwnedProtocolBuffers(underlyingProtocol);
 
     const request = { url: 'contour://fixture/11/1/1' };
-    const first = await registeredProtocol(
-      request,
-      new AbortController(),
-    );
-    const second = await registeredProtocol(
-      request,
-      new AbortController(),
-    );
+    const first = await registeredProtocol(request, new AbortController());
+    const second = await registeredProtocol(request, new AbortController());
 
     expect(first.data).not.toBe(second.data);
     expect(first.data).toBeInstanceOf(ArrayBuffer);

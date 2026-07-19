@@ -214,9 +214,9 @@ describe('MapLibreLayerController', () => {
     expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
       status: 'success',
     });
-    expect(
-      controller.setLayerVisibility('elevation-isolines', false),
-    ).toEqual({ status: 'success' });
+    expect(controller.setLayerVisibility('elevation-isolines', false)).toEqual({
+      status: 'success',
+    });
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourIndex)).toBe('none');

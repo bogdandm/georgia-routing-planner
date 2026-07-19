@@ -104,6 +104,7 @@ export class MapLibreFacade implements MapFacade {
   readonly #failureBuckets = new Map<string, FailureBucket>();
   #mountedAt = 0;
   #lastCameraDiagnosticAt = 0;
+  #styleSnapshotQueued = false;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -124,6 +125,7 @@ export class MapLibreFacade implements MapFacade {
     this.#map = map;
     this.layerController?.attach(map);
     map.on('load', this.handleLoad);
+    map.on('styledata', this.handleStyleData);
     map.on('idle', this.handleIdle);
     map.on('moveend', this.handleMoveEnd);
     map.on('error', this.handleError);
@@ -252,6 +254,21 @@ export class MapLibreFacade implements MapFacade {
         count: style.layers.length,
         status: style.name ?? initialSnapshot.styleId,
       },
+    });
+  };
+
+  private readonly handleStyleData = (): void => {
+    const map = this.#map;
+    if (map === null || this.#styleSnapshotQueued) return;
+    this.#styleSnapshotQueued = true;
+    queueMicrotask(() => {
+      this.#styleSnapshotQueued = false;
+      if (this.#map !== map) return;
+      const style = map.getStyle();
+      this.updateSnapshot({
+        sourceIds: Object.keys(style.sources),
+        layerIds: style.layers.map((layer) => layer.id),
+      });
     });
   };
 
@@ -568,6 +585,7 @@ export class MapLibreFacade implements MapFacade {
       return;
     }
     map.off('load', this.handleLoad);
+    map.off('styledata', this.handleStyleData);
     map.off('idle', this.handleIdle);
     map.off('moveend', this.handleMoveEnd);
     map.off('error', this.handleError);

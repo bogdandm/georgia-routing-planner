@@ -77,6 +77,28 @@ test('persists a settled camera and restores it before interaction after reload'
   expect(cameraAfterReload?.pitch).toBeCloseTo(cameraBeforeReload?.pitch ?? 0, 4);
 });
 
+test('persists terrain overlay visibility from the Layers tab', async ({ page }) => {
+  await page.goto('#layers');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+
+  const relief = page.getByRole('checkbox', { name: 'Relief shading' });
+  const isolines = page.getByRole('checkbox', { name: 'Elevation isolines' });
+  await expect(relief).toBeChecked();
+  await expect(isolines).toBeChecked();
+  await relief.uncheck();
+  await isolines.uncheck();
+
+  await page.reload();
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await expect(relief).not.toBeChecked();
+  await expect(isolines).not.toBeChecked();
+});
+
 test('switches between 2D and synthetic 3D terrain on the same map', async ({
   page,
 }) => {
@@ -107,7 +129,9 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await terrainButton.click();
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
-  await expect(page.getByText(/Terrain data:/)).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Mapzen/AWS Open Data providers' }).first(),
+  ).toBeVisible();
 
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
@@ -140,22 +164,21 @@ test('falls back after DEM failure and enables terrain after explicit retry', as
   );
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+  await expect(workspace).toHaveAttribute('data-map-state', 'degraded', {
     timeout: 15_000,
   });
 
   await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
   await expect(workspace).toHaveAttribute('data-map-state', 'degraded');
-  await expect(page.getByRole('alert')).toContainText(
-    'Terrain data could not be loaded',
-  );
+  await expect(
+    page.getByRole('button', { name: 'Show current error details' }),
+  ).toContainText('3D terrain is unavailable');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
 
   terrainUnavailable = false;
-  await page.getByRole('button', { name: 'Retry 3D' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Show 3D terrain map' }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 15_000,
   });

@@ -86,7 +86,7 @@ export function LayersPanel() {
     {
       id: 'terrain',
       title: provider?.terrain.label ?? 'Terrain elevation',
-      description: provider?.terrain.attribution ?? 'Configured elevation source.',
+      description: 'Elevation tiles for relief, contours, and 3D terrain.',
       controls: terrainControls,
     },
     {

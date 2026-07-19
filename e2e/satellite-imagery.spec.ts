@@ -45,10 +45,42 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
     name: 'Sentinel reflectance ceiling',
   });
   await reflectanceCeiling.fill('6250');
+  await page.getByRole('combobox', { name: 'Contour distance' }).click();
+  await page.getByRole('option', { name: '25 m' }).click();
+  await page
+    .getByRole('switch', {
+      name: 'Show relief shading above satellite imagery',
+    })
+    .check();
   await page.getByRole('button', { name: 'Done' }).click();
   await expect
     .poll(() => rendererRequests.some((url) => url.includes('rescale=0%2C6250')))
     .toBe(true);
+
+  await page
+    .getByRole('button', { name: 'Developer diagnostics', exact: true })
+    .click();
+  await page.getByRole('tab', { name: 'Map' }).click();
+  const sources = await page
+    .getByRole('list', { name: 'Ordered map sources' })
+    .getByRole('listitem')
+    .allTextContents();
+  expect(sources).toEqual(expect.arrayContaining(['terrain-dem', 'terrain-contours']));
+  const layers = await page
+    .getByRole('list', { name: 'Ordered map layers' })
+    .getByRole('listitem')
+    .allTextContents();
+  const satelliteIndex = layers.findIndex((id) => id.startsWith('sentinel-raster-'));
+  const reliefIndex = layers.indexOf('terrain-relief-shade');
+  const contourIndex = layers.indexOf('terrain-contour-minor');
+  const osmIndex = layers.indexOf('basemap-water');
+  expect(satelliteIndex).toBeGreaterThanOrEqual(0);
+  expect(reliefIndex).toBeGreaterThan(satelliteIndex);
+  expect(contourIndex).toBeGreaterThan(reliefIndex);
+  expect(osmIndex).toBeGreaterThan(contourIndex);
+  await page
+    .getByRole('button', { name: 'Close developer diagnostics', exact: true })
+    .click();
 
   await page.getByRole('tab', { name: 'Layers' }).click();
   const imagery = page.getByRole('checkbox', { name: 'Satellite imagery' });
@@ -95,4 +127,12 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
   await expect(
     page.getByRole('slider', { name: 'Sentinel reflectance ceiling' }),
   ).toHaveValue('6250');
+  await expect(page.getByRole('combobox', { name: 'Contour distance' })).toContainText(
+    '25 m',
+  );
+  await expect(
+    page.getByRole('switch', {
+      name: 'Show relief shading above satellite imagery',
+    }),
+  ).toBeChecked();
 });

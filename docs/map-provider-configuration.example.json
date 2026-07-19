@@ -30,7 +30,12 @@
     "minZoom": 0,
     "maxZoom": 15,
     "attribution": "Terrain data: <a href=\"https://github.com/tilezen/joerd/blob/master/docs/attribution.md\" target=\"_blank\">Mapzen/AWS Open Data providers</a>",
-    "exaggeration": 1.15
+    "exaggeration": 1.15,
+    "overlays": {
+      "contourMinZoom": 11,
+      "contourMaxZoom": 15,
+      "contourCacheSize": 32
+    }
   },
   "satellite": {
     "id": "earth-search-v1",

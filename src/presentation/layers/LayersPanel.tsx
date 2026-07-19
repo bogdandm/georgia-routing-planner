@@ -56,6 +56,21 @@ const openStreetMapControls = [
   },
 ] as const satisfies readonly LayerControl[];
 
+const terrainControls = [
+  {
+    id: 'terrain-relief',
+    label: 'Relief shading',
+    description: 'Hillshade derived from the configured elevation tiles.',
+    requiresScene: false,
+  },
+  {
+    id: 'elevation-isolines',
+    label: 'Elevation isolines',
+    description: 'Generated contour lines and labeled index elevations.',
+    requiresScene: false,
+  },
+] as const satisfies readonly LayerControl[];
+
 export function LayersPanel() {
   const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
   const state = useStore(mapLayerStore);
@@ -67,6 +82,12 @@ export function LayersPanel() {
       title: `Copernicus Sentinel-2 via ${provider?.satellite.label ?? 'satellite catalog'}`,
       description: `Raster rendering by ${provider?.satellite.renderer.id ?? 'configured renderer'}.`,
       controls: sentinelControls,
+    },
+    {
+      id: 'terrain',
+      title: provider?.terrain.label ?? 'Terrain elevation',
+      description: 'Elevation tiles for relief, contours, and 3D terrain.',
+      controls: terrainControls,
     },
     {
       id: 'openstreetmap',
@@ -93,7 +114,7 @@ export function LayersPanel() {
           Map visibility
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Changes apply immediately and remain for this session.
+          Changes apply immediately and are saved locally.
         </Typography>
       </Box>
       {mapLayers === null ? (

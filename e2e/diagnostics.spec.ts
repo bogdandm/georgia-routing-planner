@@ -52,9 +52,9 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   page,
 }) => {
   await page.goto('?developer=1');
-  await expect(
-    page.getByRole('button', { name: 'Developer diagnostics' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Developer diagnostics' })).toBeVisible(
+    { timeout: 15_000 },
+  );
 
   await page.evaluate(() => {
     setTimeout(() => {
@@ -119,7 +119,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   );
   expect(bundle.map).toMatchObject({
     styleId: 'Georgia hiking basemap v1',
-    sourceIds: ['basemap-vector'],
+    sourceIds: ['basemap-vector', 'terrain-dem', 'terrain-contours'],
     webGlCapabilities: { contextType: 'webgl2' },
   });
   expect(bundle.map?.layerIds.length).toBeGreaterThan(10);

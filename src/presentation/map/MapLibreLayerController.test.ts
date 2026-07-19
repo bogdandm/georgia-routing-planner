@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
-import { mapLayerIds, sentinelMapLayerIds } from '@/presentation/map/mapIds';
+import {
+  mapLayerIds,
+  sentinelMapLayerIds,
+  terrainOverlayLayerIds,
+} from '@/presentation/map/mapIds';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
@@ -16,6 +20,7 @@ class FakeLayerMap {
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
+  readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
 
@@ -43,8 +48,39 @@ class FakeLayerMap {
     return this.layers.get(id);
   }
 
-  public addLayer(layer: Record<string, unknown>): void {
-    this.layers.set(String(layer.id), layer);
+  public addLayer(layer: Record<string, unknown>, beforeId?: string): void {
+    const id = String(layer.id);
+    if (beforeId === undefined || !this.layers.has(beforeId)) {
+      this.layers.set(id, layer);
+      return;
+    }
+    const reordered = [...this.layers.entries()];
+    const beforeIndex = reordered.findIndex(([layerId]) => layerId === beforeId);
+    reordered.splice(beforeIndex, 0, [id, layer]);
+    this.layers.clear();
+    for (const [layerId, value] of reordered) this.layers.set(layerId, value);
+  }
+
+  public moveLayer(id: string, beforeId?: string): void {
+    if (!this.layers.has(id)) throw new Error(`Layer ${id} is unavailable.`);
+    this.moves.push(beforeId === undefined ? { id } : { id, beforeId });
+    const layer = this.layers.get(id);
+    if (layer === undefined) return;
+    const reordered = [...this.layers.entries()].filter(([layerId]) => layerId !== id);
+    const beforeIndex = reordered.findIndex(([layerId]) => layerId === beforeId);
+    reordered.splice(beforeIndex < 0 ? reordered.length : beforeIndex, 0, [id, layer]);
+    this.layers.clear();
+    for (const [layerId, value] of reordered) this.layers.set(layerId, value);
+  }
+
+  public getStyle(): {
+    readonly sources: Record<string, unknown>;
+    readonly layers: { readonly id: string }[];
+  } {
+    return {
+      sources: Object.fromEntries(this.sources),
+      layers: [...this.layers.keys()].map((id) => ({ id })),
+    };
   }
 
   public removeLayer(id: string): void {
@@ -65,7 +101,20 @@ class FakeLayerMap {
   }
 
   public addSource(id: string, source: unknown): void {
-    this.sources.set(id, source);
+    this.sources.set(
+      id,
+      typeof source === 'object' && source !== null && 'tiles' in source
+        ? {
+            ...source,
+            setTiles: (tiles: string[]) => {
+              const current = this.sources.get(id);
+              if (typeof current === 'object' && current !== null) {
+                this.sources.set(id, { ...current, tiles });
+              }
+            },
+          }
+        : source,
+    );
   }
 
   public removeSource(id: string): void {
@@ -140,6 +189,11 @@ describe('MapLibreLayerController', () => {
     const map = new FakeLayerMap();
     const controller = new MapLibreLayerController(
       configuration.value.satellite.renderer,
+      configuration.value.terrain,
+      {
+        createTileUrl: (intervalMeters) =>
+          `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
+      },
       services.logger,
       services.idGenerator,
       services.sentinelQueryDiagnostics,
@@ -156,6 +210,95 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.roadLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingPaths)).toBe('visible');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
+
+    expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
+      status: 'success',
+    });
+    expect(controller.setLayerVisibility('elevation-isolines', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourIndex)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourLabels)).toBe('none');
+  });
+
+  it('creates one relief layer and deterministically orders it around satellite imagery', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+
+    controller.attach(map as unknown as MapLibreMap);
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(map.sources.has('terrain-dem')).toBe(true);
+    expect(map.layers.has('terrain-relief-shade')).toBe(true);
+    expect(
+      [...map.layers.keys()].filter((id) => id === 'terrain-relief-shade'),
+    ).toHaveLength(1);
+
+    await controller.applyScene(scene('scene-relief'), new AbortController().signal);
+    const belowOrder = [...map.layers.keys()];
+    expect(belowOrder.indexOf('terrain-relief-shade')).toBeLessThan(
+      belowOrder.indexOf('sentinel-raster-a'),
+    );
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 50,
+        shadeAboveSatellite: true,
+      }),
+    ).toEqual({ status: 'success' });
+    const aboveOrder = [...map.layers.keys()];
+    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeGreaterThan(
+      aboveOrder.indexOf('sentinel-raster-a'),
+    );
+    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeLessThan(
+      aboveOrder.indexOf(mapLayerIds.water),
+    );
+    expect(mapLayerStore.getState().terrainOverlays).toMatchObject({
+      initialized: true,
+      preferences: { shadeAboveSatellite: true },
+    });
+  });
+
+  it('renders bounded minor, index, and labeled contours and updates their interval atomically', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    const contourSource = map.sources.get('terrain-contours') as {
+      readonly tiles: readonly string[];
+      readonly minzoom: number;
+      readonly maxzoom: number;
+    };
+    expect(contourSource).toMatchObject({ minzoom: 11, maxzoom: 15 });
+    expect(contourSource.tiles[0]).toContain('minor=50&major=200');
+    expect(map.layers.get('terrain-contour-minor')).toMatchObject({
+      minzoom: 11,
+      filter: ['==', ['get', 'level'], 0],
+    });
+    expect(map.layers.get('terrain-contour-index')).toMatchObject({
+      filter: ['>', ['get', 'level'], 0],
+    });
+    expect(map.layers.get('terrain-contour-labels')).toMatchObject({
+      filter: ['>', ['get', 'level'], 0],
+    });
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: false,
+      }),
+    ).toEqual({ status: 'success' });
+    const updatedSource = map.sources.get('terrain-contours') as {
+      readonly tiles: readonly string[];
+    };
+    expect(updatedSource.tiles[0]).toContain('minor=25&major=200');
+    expect(map.layers.has('terrain-contour-minor')).toBe(true);
   });
 
   it('applies a georeferenced tile source, footprint, visibility, and fit command', async () => {
@@ -335,12 +478,18 @@ describe('MapLibreLayerController', () => {
       visibility: {
         'satellite-imagery': false,
         'scene-footprint': true,
+        'terrain-relief': false,
+        'elevation-isolines': false,
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,
       },
       appliedScene: scene('saved-scene'),
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
+      terrainOverlays: {
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: true,
+      },
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -350,6 +499,8 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has('sentinel-raster-a')).toBe(true);
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: { 'satellite-imagery': false, roads: false },
       appliedImagery: { status: 'hidden', sceneId: 'saved-scene' },
@@ -358,6 +509,10 @@ describe('MapLibreLayerController', () => {
       reflectanceMax: 6_500,
       gamma: 1.6,
       saturation: 1.2,
+    });
+    expect(controller.getTerrainOverlayPreferences()).toEqual({
+      contourIntervalMeters: 25,
+      shadeAboveSatellite: true,
     });
   });
 

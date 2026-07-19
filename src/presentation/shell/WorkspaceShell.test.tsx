@@ -127,6 +127,9 @@ describe('WorkspaceShell', () => {
       screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
     ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
+    expect(screen.queryByText(/<a href=/u)).not.toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');
     expect(
@@ -137,6 +140,11 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByRole('button', { name: 'L2A' })).not.toBeInTheDocument();
     expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('25');
     expect(screen.getByLabelText('Sentinel acquisition calendar')).toBeVisible();
+    const acquisitionCalendar = screen.getByRole('grid', { name: 'July 2026' });
+    expect(acquisitionCalendar.children).toHaveLength(42);
+    expect(
+      screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
+    ).toHaveStyle({ height: '34px' });
     const searchAreaSource = screen.getByRole('combobox', {
       name: 'Search area source',
     });
@@ -706,6 +714,44 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getAllByText(/renderer rejected these stretch values/i).at(-1),
     ).toBeVisible();
+  });
+
+  it('UI-wires accessible terrain overlay settings and persists both choices', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+
+    expect(screen.getByRole('heading', { name: 'Terrain overlays' })).toBeVisible();
+    const contourDistance = screen.getByRole('combobox', {
+      name: 'Contour distance',
+    });
+    expect(contourDistance).toHaveTextContent('50 m');
+    expect(
+      screen.getByText(/Emphasized, labeled index contours remain every 200 m/u),
+    ).toBeVisible();
+
+    await user.click(contourDistance);
+    await user.click(screen.getByRole('option', { name: '25 m' }));
+    await user.click(
+      screen.getByRole('switch', {
+        name: 'Show relief shading above satellite imagery',
+      }),
+    );
+
+    expect(services.mapLayers?.getTerrainOverlayPreferences()).toEqual({
+      contourIntervalMeters: 25,
+      shadeAboveSatellite: true,
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        terrainOverlays: {
+          contourIntervalMeters: 25,
+          shadeAboveSatellite: true,
+        },
+      });
+    });
   });
 
   it('announces fatal map failures assertively', () => {

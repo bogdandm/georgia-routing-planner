@@ -10,7 +10,10 @@ import type {
   MapLayerPreferencesRepository,
   MapLayerVisibilityPreferences,
   PersistedMapLayerPreferences,
+  TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
+import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
+import { supportedContourIntervals } from '@/application/ports/MapLayerPreferencesRepository';
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
@@ -28,6 +31,7 @@ import {
   mapLayerIds,
   mapSourceIds,
   sentinelMapLayerIds,
+  terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type {
@@ -36,6 +40,12 @@ import type {
   SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
 import { defaultSatelliteRenderingTuning } from '@/presentation/map/SatelliteImageryMap';
+import type {
+  TerrainOverlayCommandResult,
+  TerrainOverlayMap,
+} from '@/presentation/map/TerrainOverlayMap';
+import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 
 const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
@@ -48,6 +58,12 @@ export const logicalNativeLayerGroups: Readonly<
     readonly string[]
   >
 > = {
+  'terrain-relief': [terrainOverlayLayerIds.reliefShade],
+  'elevation-isolines': [
+    terrainOverlayLayerIds.contourMinor,
+    terrainOverlayLayerIds.contourIndex,
+    terrainOverlayLayerIds.contourLabels,
+  ],
   'hiking-paths': [mapLayerIds.hikingPaths, mapLayerIds.hikingSteps],
   roads: [mapLayerIds.roadCasings, mapLayerIds.roads, mapLayerIds.roadLabels],
   'places-and-pois': [
@@ -140,7 +156,7 @@ function safeRasterFailureMessage(message: string): string {
  * long-lived native map. Provider URLs stay inside this adapter and never enter state.
  */
 export class MapLibreLayerController
-  implements MapLayerVisibility, SatelliteImageryMap
+  implements MapLayerVisibility, SatelliteImageryMap, TerrainOverlayMap
 {
   #map: MapLibreMap | null = null;
   #activeSlot: RasterSlot | null = null;
@@ -150,9 +166,16 @@ export class MapLibreLayerController
   #restoreController: AbortController | null = null;
   #restoreInProgress = false;
   #renderingTuning: SatelliteRenderingTuning = defaultSatelliteRenderingTuning;
+  #terrainOverlayPreferences: TerrainOverlayPreferences =
+    defaultTerrainOverlayPreferences;
+  #contourFailureReported = false;
+  #appliedContourInterval: TerrainOverlayPreferences['contourIntervalMeters'] | null =
+    null;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
+    private readonly terrain: MapProviderConfiguration['terrain'],
+    private readonly contourTiles: ContourTileGenerator,
     private readonly logger: DiagnosticLogger,
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
@@ -161,13 +184,25 @@ export class MapLibreLayerController
   ) {}
 
   public attach(map: MapLibreMap): void {
+    if (this.#map === map) {
+      this.reconcileTerrainOverlays();
+      this.applyBaseLayerVisibility();
+      void this.restorePendingScene();
+      return;
+    }
+    this.#map?.off('styledata', this.handleStyleData);
     this.#map = map;
+    map.on('styledata', this.handleStyleData);
+    map.on('error', this.handleTerrainOverlayError);
+    this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     void this.restorePendingScene();
   }
 
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
+    map.off('styledata', this.handleStyleData);
+    map.off('error', this.handleTerrainOverlayError);
     this.#map = null;
     this.#applySequence += 1;
     this.#restoreController?.abort();
@@ -232,6 +267,7 @@ export class MapLibreLayerController
     if (map !== null) {
       for (const slot of rasterSlots) this.removeSlot(map, slot);
       this.removeFootprint(map);
+      this.reconcileTerrainOverlays();
     }
     this.#activeSlot = null;
     this.#appliedScene = null;
@@ -253,12 +289,14 @@ export class MapLibreLayerController
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
       this.#renderingTuning = { ...persisted.renderingTuning };
+      this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
       this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
       mapLayerStore.setState({
         visibility: persisted.visibility,
         errorMessage: null,
       });
       this.applyBaseLayerVisibility();
+      this.reconcileTerrainOverlays();
       await this.restorePendingScene();
     } catch {
       this.logger.log({
@@ -270,6 +308,42 @@ export class MapLibreLayerController
 
   public getRenderingTuning(): SatelliteRenderingTuning {
     return { ...this.#renderingTuning };
+  }
+
+  public getTerrainOverlayPreferences(): TerrainOverlayPreferences {
+    return { ...this.#terrainOverlayPreferences };
+  }
+
+  public setTerrainOverlayPreferences(
+    value: TerrainOverlayPreferences,
+  ): TerrainOverlayCommandResult {
+    if (!supportedContourIntervals.includes(value.contourIntervalMeters)) {
+      return this.terrainOverlayFailure(
+        'Choose a supported contour distance that divides the 200 m index interval.',
+      );
+    }
+    const previous = this.#terrainOverlayPreferences;
+    this.#terrainOverlayPreferences = { ...value };
+    this.#contourFailureReported = false;
+    if (this.#map === null) {
+      mapLayerStore.setState({
+        terrainOverlays: {
+          initialized: false,
+          preferences: { ...value },
+          message: null,
+        },
+      });
+      this.persistStableState();
+      return { status: 'success' };
+    }
+    const result = this.reconcileTerrainOverlays();
+    if (result.status === 'success') {
+      this.persistStableState();
+    } else {
+      this.#terrainOverlayPreferences = previous;
+      this.reconcileTerrainOverlays();
+    }
+    return result;
   }
 
   public async setRenderingTuning(
@@ -399,6 +473,7 @@ export class MapLibreLayerController
       if (this.#activeSlot !== null) this.removeSlot(map, this.#activeSlot);
       this.#activeSlot = slot;
       this.#appliedScene = scene;
+      this.reconcileTerrainOverlays();
       mapLayerStore.setState({
         appliedImagery: { status: 'ready', sceneKey, sceneId: scene.id, visible: true },
         visibility: { ...state.visibility, 'satellite-imagery': true },
@@ -518,6 +593,8 @@ export class MapLibreLayerController
     for (const layerId of [
       'satellite-imagery',
       'scene-footprint',
+      'terrain-relief',
+      'elevation-isolines',
       'hiking-paths',
       'roads',
       'places-and-pois',
@@ -544,13 +621,272 @@ export class MapLibreLayerController
     const { visibility } = mapLayerStore.getState();
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
-      .saveMapLayerPreferences({ visibility, appliedScene, renderingTuning })
+      .saveMapLayerPreferences({
+        visibility,
+        appliedScene,
+        renderingTuning,
+        terrainOverlays: { ...this.#terrainOverlayPreferences },
+      })
       .catch(() => {
         this.logger.log({
           level: 'warn',
           name: 'storage.map-layers.save-failed',
         });
       });
+  }
+
+  private readonly handleStyleData = (): void => {
+    this.reconcileTerrainOverlays();
+    this.applyBaseLayerVisibility();
+  };
+
+  private readonly handleTerrainOverlayError = (event: MapLibreErrorEvent): void => {
+    if (
+      sourceIdFromError(event) !== mapSourceIds.terrainContours ||
+      this.#contourFailureReported
+    ) {
+      return;
+    }
+    this.#contourFailureReported = true;
+    this.terrainOverlayFailure(
+      'Elevation isolines could not be generated. Relief and the base map remain available.',
+    );
+  };
+
+  private reconcileTerrainOverlays(): TerrainOverlayCommandResult {
+    const map = this.#map;
+    if (map === null) {
+      return this.terrainOverlayFailure('The map is not ready yet.');
+    }
+    if (map.getLayer(mapLayerIds.background) === undefined) {
+      return { status: 'success' };
+    }
+    try {
+      if (map.getSource(mapSourceIds.terrainDem) === undefined) {
+        map.addSource(mapSourceIds.terrainDem, createTerrainDemSource(this.terrain));
+      }
+      if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
+        map.addLayer(
+          {
+            id: terrainOverlayLayerIds.reliefShade,
+            type: 'hillshade',
+            source: mapSourceIds.terrainDem,
+            layout: {
+              visibility: mapLayerStore.getState().visibility['terrain-relief']
+                ? 'visible'
+                : 'none',
+            },
+            paint: {
+              'hillshade-exaggeration': 0.22,
+              'hillshade-shadow-color': '#4f4438',
+              'hillshade-highlight-color': '#f3ead8',
+              'hillshade-accent-color': '#7d6a55',
+              'hillshade-illumination-anchor': 'map',
+            },
+          },
+          mapInsertionPoints.terrainOverlaysBeforeLayerId,
+        );
+        this.logger.log({ level: 'info', name: 'map.relief.initialized' });
+      }
+      const contourTileUrl = this.contourTiles.createTileUrl(
+        this.#terrainOverlayPreferences.contourIntervalMeters,
+      );
+      const existingContourSource = map.getSource(mapSourceIds.terrainContours);
+      if (existingContourSource === undefined) {
+        map.addSource(mapSourceIds.terrainContours, {
+          type: 'vector',
+          tiles: [contourTileUrl],
+          minzoom: this.terrain.overlays.contourMinZoom,
+          maxzoom: this.terrain.overlays.contourMaxZoom,
+          attribution: this.terrain.attribution,
+        });
+        this.#appliedContourInterval =
+          this.#terrainOverlayPreferences.contourIntervalMeters;
+      } else if (
+        this.#appliedContourInterval !==
+        this.#terrainOverlayPreferences.contourIntervalMeters
+      ) {
+        const source = existingContourSource as {
+          setTiles?: (tiles: string[]) => void;
+        };
+        if (source.setTiles === undefined) {
+          throw new Error('The contour source cannot update its tiles.');
+        }
+        source.setTiles([contourTileUrl]);
+        this.#appliedContourInterval =
+          this.#terrainOverlayPreferences.contourIntervalMeters;
+      }
+      this.ensureContourLayers(map);
+      this.ensureContourOrder(map);
+      const beforeId =
+        !this.#terrainOverlayPreferences.shadeAboveSatellite &&
+        this.#activeSlot !== null &&
+        map.getLayer(this.#activeSlot.layerId) !== undefined
+          ? this.#activeSlot.layerId
+          : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
+            ? mapInsertionPoints.terrainOverlaysBeforeLayerId
+            : terrainOverlayLayerIds.contourMinor;
+      const layerIds = map.getStyle().layers.map((layer) => layer.id);
+      const reliefIndex = layerIds.indexOf(terrainOverlayLayerIds.reliefShade);
+      const beforeIndex = layerIds.indexOf(beforeId);
+      const activeRasterIndex =
+        this.#activeSlot === null ? -1 : layerIds.indexOf(this.#activeSlot.layerId);
+      const orderIsCorrect = this.#terrainOverlayPreferences.shadeAboveSatellite
+        ? activeRasterIndex < 0 ||
+          (reliefIndex > activeRasterIndex && reliefIndex < beforeIndex)
+        : reliefIndex >= 0 && reliefIndex < beforeIndex;
+      if (!orderIsCorrect) map.moveLayer(terrainOverlayLayerIds.reliefShade, beforeId);
+      mapLayerStore.setState({
+        terrainOverlays: {
+          initialized: true,
+          preferences: { ...this.#terrainOverlayPreferences },
+          message: null,
+        },
+      });
+      if (!orderIsCorrect) {
+        this.logger.log({
+          level: 'info',
+          name: 'map.relief.order-reconciled',
+          data: {
+            position: this.#terrainOverlayPreferences.shadeAboveSatellite
+              ? 'above-satellite'
+              : 'below-satellite',
+          },
+        });
+      }
+      return { status: 'success' };
+    } catch {
+      return this.terrainOverlayFailure(
+        'Terrain relief could not be rendered. The base map remains available.',
+      );
+    }
+  }
+
+  private ensureContourLayers(map: MapLibreMap): void {
+    const minzoom = this.terrain.overlays.contourMinZoom;
+    if (map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined) {
+      map.addLayer(
+        {
+          id: terrainOverlayLayerIds.contourMinor,
+          type: 'line',
+          source: mapSourceIds.terrainContours,
+          'source-layer': 'contours',
+          minzoom,
+          filter: ['==', ['get', 'level'], 0],
+          layout: {
+            visibility: mapLayerStore.getState().visibility['elevation-isolines']
+              ? 'visible'
+              : 'none',
+          },
+          paint: {
+            'line-color': '#8b7358',
+            'line-opacity': 0.48,
+            'line-width': 0.65,
+          },
+        },
+        mapInsertionPoints.terrainOverlaysBeforeLayerId,
+      );
+    }
+    if (map.getLayer(terrainOverlayLayerIds.contourIndex) === undefined) {
+      map.addLayer(
+        {
+          id: terrainOverlayLayerIds.contourIndex,
+          type: 'line',
+          source: mapSourceIds.terrainContours,
+          'source-layer': 'contours',
+          minzoom,
+          filter: ['>', ['get', 'level'], 0],
+          layout: {
+            visibility: mapLayerStore.getState().visibility['elevation-isolines']
+              ? 'visible'
+              : 'none',
+          },
+          paint: {
+            'line-color': '#6f5941',
+            'line-opacity': 0.72,
+            'line-width': 1.15,
+          },
+        },
+        mapInsertionPoints.terrainOverlaysBeforeLayerId,
+      );
+    }
+    if (map.getLayer(terrainOverlayLayerIds.contourLabels) === undefined) {
+      map.addLayer(
+        {
+          id: terrainOverlayLayerIds.contourLabels,
+          type: 'symbol',
+          source: mapSourceIds.terrainContours,
+          'source-layer': 'contours',
+          minzoom,
+          filter: ['>', ['get', 'level'], 0],
+          layout: {
+            visibility: mapLayerStore.getState().visibility['elevation-isolines']
+              ? 'visible'
+              : 'none',
+            'symbol-placement': 'line',
+            'symbol-spacing': 360,
+            'text-field': [
+              'concat',
+              ['number-format', ['get', 'ele'], { 'max-fraction-digits': 0 }],
+              ' m',
+            ],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': 10,
+          },
+          paint: {
+            'text-color': '#5c4936',
+            'text-halo-color': 'rgba(244, 239, 226, 0.88)',
+            'text-halo-width': 1.2,
+          },
+        },
+        mapInsertionPoints.terrainOverlaysBeforeLayerId,
+      );
+    }
+  }
+
+  private ensureContourOrder(map: MapLibreMap): void {
+    if (this.#activeSlot === null) return;
+    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const rasterIndex = layerIds.indexOf(this.#activeSlot.layerId);
+    const minorIndex = layerIds.indexOf(terrainOverlayLayerIds.contourMinor);
+    const indexIndex = layerIds.indexOf(terrainOverlayLayerIds.contourIndex);
+    const labelIndex = layerIds.indexOf(terrainOverlayLayerIds.contourLabels);
+    const osmIndex = layerIds.indexOf(mapInsertionPoints.terrainOverlaysBeforeLayerId);
+    const orderIsCorrect =
+      rasterIndex >= 0 &&
+      minorIndex > rasterIndex &&
+      indexIndex > minorIndex &&
+      labelIndex > indexIndex &&
+      labelIndex < osmIndex;
+    if (orderIsCorrect) return;
+    map.moveLayer(
+      terrainOverlayLayerIds.contourMinor,
+      mapInsertionPoints.terrainOverlaysBeforeLayerId,
+    );
+    map.moveLayer(
+      terrainOverlayLayerIds.contourIndex,
+      mapInsertionPoints.terrainOverlaysBeforeLayerId,
+    );
+    map.moveLayer(
+      terrainOverlayLayerIds.contourLabels,
+      mapInsertionPoints.terrainOverlaysBeforeLayerId,
+    );
+  }
+
+  private terrainOverlayFailure(message: string): TerrainOverlayCommandResult {
+    mapLayerStore.setState({
+      terrainOverlays: {
+        initialized: false,
+        preferences: { ...this.#terrainOverlayPreferences },
+        message,
+      },
+    });
+    this.logger.log({
+      level: 'warn',
+      name: 'map.terrain-overlays.failed',
+      message,
+    });
+    return { status: 'failed', message };
   }
 
   private nativeLayerIds(layerId: LogicalMapLayerId): readonly string[] {
@@ -565,7 +901,13 @@ export class MapLibreLayerController
     const map = this.#map;
     if (map === null) return;
     const { visibility } = mapLayerStore.getState();
-    for (const layerId of ['hiking-paths', 'roads', 'places-and-pois'] as const) {
+    for (const layerId of [
+      'terrain-relief',
+      'elevation-isolines',
+      'hiking-paths',
+      'roads',
+      'places-and-pois',
+    ] as const) {
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(

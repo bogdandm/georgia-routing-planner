@@ -22,6 +22,11 @@ describe('MapProviderConfiguration', () => {
       tileSize: 256,
       minZoom: 0,
       maxZoom: 15,
+      overlays: {
+        contourMinZoom: 11,
+        contourMaxZoom: 15,
+        contourCacheSize: 32,
+      },
     });
     expect(configuration.satellite).toMatchObject({
       id: 'earth-search-v1',
@@ -97,6 +102,17 @@ describe('MapProviderConfiguration', () => {
         const terrain = input.terrain as Record<string, unknown>;
         terrain.minZoom = 15;
         terrain.maxZoom = 3;
+      },
+    },
+    {
+      name: 'contours beyond the terrain zoom range',
+      mutate: (input: Record<string, unknown>) => {
+        const terrain = input.terrain as Record<string, unknown>;
+        terrain.overlays = {
+          contourMinZoom: 11,
+          contourMaxZoom: 16,
+          contourCacheSize: 32,
+        };
       },
     },
     {

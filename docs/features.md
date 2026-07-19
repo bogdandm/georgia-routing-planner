@@ -179,17 +179,18 @@ unavailable.
 
 ### Layers
 
-Layers groups durable controls under explicit source headings: Copernicus Sentinel-2
-through the configured satellite catalog, and OpenStreetMap through the configured
-vector provider. The checkboxes cover Satellite imagery, Scene footprint, Hiking paths,
-Roads, and Places and POIs. Each logical ID maps to an allowlisted set of stable
-MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
-remain disabled until a scene is applied. Hiding imagery retains the applied scene and
-does not remove its footprint, search results, or attribution contract. Base land and
-water remain visible and cannot be disabled. Opacity, drag ordering, custom layers are
-unavailable. Checkbox state and the last successfully applied scene are stored locally
-and restored after refresh. The last successful imagery stretch is stored with those
-preferences and applied before a saved scene is restored.
+Layers groups durable controls under explicit source headings: Copernicus Sentinel-2,
+the configured terrain provider, and OpenStreetMap. The checkboxes cover Satellite
+imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and
+Places and POIs. Each logical ID maps to an allowlisted set of stable MapLibre layer
+IDs; arbitrary native IDs never cross the UI boundary. Satellite controls remain
+disabled until a scene is applied. Hiding imagery retains the applied scene and does not
+remove its footprint, search results, or attribution contract. Relief and isoline
+visibility are independent of 3D terrain mode and satellite availability. Base land and
+water remain visible and cannot be disabled. Opacity, drag ordering, and custom layers
+are unavailable. Checkbox state and the last successfully applied scene are stored
+locally and restored after refresh. The last successful imagery stretch is stored with
+those preferences and applied before a saved scene is restored.
 
 ## Persistent map controls
 
@@ -202,6 +203,8 @@ preferences and applied before a saved scene is restored.
   navigation appears to retract into that fixed anchor.
 - Settings is non-modal and does not dim or block the map, allowing imagery stretch to
   be judged while a slider is adjusted.
+- Settings > Rendering controls minor contour spacing and whether relief shading sits
+  above satellite imagery. Index contours remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Attribution remains visible in every feature section and terrain mode.
@@ -236,15 +239,24 @@ debounced persistence queue; animation-frame events are never persisted.
 
 ## 2D and 3D terrain
 
-The 2D/3D control operates on the same MapLibre instance and style. Enabling 3D adds one
-configured `raster-dem` source, applies terrain, restores a useful pitch, and waits for
-the source to become usable. Disabling terrain returns pitch to zero while retaining
-center, zoom, and bearing.
+The configured `raster-dem` source is always available to low-contrast relief shading.
+Client-side contour generation reads bounded DEM tiles and renders subdued minor lines
+plus emphasized, labeled 200 m index lines from zoom 11. Minor spacing defaults to 50 m
+and supports 20, 25, 40, 50, or 100 m so every choice divides the index cadence.
+
+Relief normally sits below satellite imagery; the Rendering setting moves it above the
+active raster without remounting MapLibre. Contours remain above both and below OSM
+roads, paths, labels, and POIs. Preferences are validated and stored locally with the
+existing map-layer record. Provider failure leaves unrelated layers and controls usable.
+
+The 2D/3D control operates on the same MapLibre instance and shared DEM source. Enabling
+3D applies terrain, restores a useful pitch, and waits for the source to become usable.
+Disabling terrain returns pitch to zero while retaining center, zoom, and bearing.
 
 - Duplicate clicks share one in-flight transition.
 - Conflicting transitions fail explicitly instead of racing.
-- DEM error, cancellation, or timeout removes the failed source, returns to 2D, and
-  preserves camera intent.
+- DEM error, cancellation, or timeout returns to 2D and preserves camera intent; the
+  controller keeps ownership of the shared source so relief can recover on later tiles.
 - Retry reuses the same facade and map rather than remounting either.
 
 ## Failure and offline feedback

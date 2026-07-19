@@ -52,6 +52,14 @@ evidence. Clicking that active entry aborts any pending application, removes bot
 slots and the footprint, clears the applied-scene preference, and returns map layer
 state to empty.
 
+Changing a terrain-overlay setting follows the same controller boundary. The controller
+validates the supported contour interval, updates the generated vector-tile URL on the
+existing source, reconciles relief/satellite/contour/OSM order, publishes a serializable
+snapshot, and then persists the combined map-layer record. When no map is attached, it
+persists the choice and applies it on the next style-ready attach. A failed native
+update restores the previous preference and emits only a safe, bounded diagnostic
+message.
+
 Settings presents three exclusive tabs and mounts only the selected tab's content. The
 Storage tab performs a fresh, read-only measurement when opened and on explicit refresh.
 It combines `navigator.storage.estimate()`, optional Chromium usage details, a bounded
@@ -87,14 +95,14 @@ sequenceDiagram
 
   User->>UI: select 3D
   UI->>Facade: setTerrainMode(terrain)
-  Facade->>Map: add raster-dem source once
+  Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: set terrain and preserve camera intent
   Map->>DEM: request configured DEM tiles
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
     Facade-->>UI: success / terrain
   else error, timeout, or cancellation
-    Facade->>Map: clear terrain and remove failed source
+    Facade->>Map: clear 3D terrain; retain shared overlay source
     Facade-->>UI: failed / usable flat map
   end
 ```
@@ -102,6 +110,17 @@ sequenceDiagram
 Only one terrain transition may run at a time. Repeated requests for the same target
 share its promise; an opposite request receives an explicit failure. This prevents
 duplicate sources, listeners, and out-of-order camera changes.
+
+## Terrain overlay reconciliation
+
+On style readiness, style data changes, satellite swaps, preference changes, and 3D
+transitions, the layer controller idempotently restores the DEM source, relief shade,
+generated contour source, minor/index lines, and index labels. The invariant is base
+surface, relief/satellite in the selected order, contours, then OSM data layers.
+Updating the contour interval calls the existing vector source's tile update, so the map
+camera and unrelated native resources remain untouched. MapLibre abort signals flow
+through the contour protocol to bounded DEM requests; source failures update the overlay
+snapshot without removing the basemap.
 
 ## Provider and WebGL failures
 

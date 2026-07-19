@@ -7,6 +7,7 @@ import type {
   PersistedMapLayerPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultSatelliteRenderingTuning } from '@/application/ports/MapLayerPreferencesRepository';
+import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 
 interface SettingRecord {
   readonly key: string;
@@ -94,6 +95,8 @@ const mapLayerPreferencesSchema = z
       .object({
         'satellite-imagery': z.boolean(),
         'scene-footprint': z.boolean(),
+        'terrain-relief': z.boolean().default(true),
+        'elevation-isolines': z.boolean().default(true),
         'hiking-paths': z.boolean(),
         roads: z.boolean(),
         'places-and-pois': z.boolean(),
@@ -107,6 +110,18 @@ const mapLayerPreferencesSchema = z
         saturation: z.number().min(0).max(5),
       })
       .default(defaultSatelliteRenderingTuning),
+    terrainOverlays: z
+      .object({
+        contourIntervalMeters: z.union([
+          z.literal(20),
+          z.literal(25),
+          z.literal(40),
+          z.literal(50),
+          z.literal(100),
+        ]),
+        shadeAboveSatellite: z.boolean(),
+      })
+      .default(defaultTerrainOverlayPreferences),
   })
   .strict();
 
@@ -114,12 +129,15 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   visibility: {
     'satellite-imagery': true,
     'scene-footprint': true,
+    'terrain-relief': true,
+    'elevation-isolines': true,
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,
   },
   appliedScene: null,
   renderingTuning: defaultSatelliteRenderingTuning,
+  terrainOverlays: defaultTerrainOverlayPreferences,
 };
 
 /** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */

@@ -72,11 +72,37 @@ const mapProviderConfigurationInputSchema = z
         maxZoom: z.number().int().min(0).max(22),
         attribution: safeAttributionSchema,
         exaggeration: z.number().min(1).max(2),
+        overlays: z
+          .object({
+            contourMinZoom: z.number().int().min(0).max(22),
+            contourMaxZoom: z.number().int().min(0).max(22),
+            contourCacheSize: z.number().int().min(8).max(128),
+          })
+          .strict(),
       })
       .strict()
-      .refine((terrain) => terrain.maxZoom > terrain.minZoom, {
-        message: 'Terrain maxZoom must be greater than minZoom.',
-        path: ['maxZoom'],
+      .superRefine((terrain, context) => {
+        if (terrain.maxZoom <= terrain.minZoom) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Terrain maxZoom must be greater than minZoom.',
+            path: ['maxZoom'],
+          });
+        }
+        if (terrain.overlays.contourMaxZoom < terrain.overlays.contourMinZoom) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Contour maxZoom must not be less than contourMinZoom.',
+            path: ['overlays', 'contourMaxZoom'],
+          });
+        }
+        if (terrain.overlays.contourMaxZoom > terrain.maxZoom) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Contour maxZoom must not exceed the terrain provider maxZoom.',
+            path: ['overlays', 'contourMaxZoom'],
+          });
+        }
       }),
     satellite: z
       .object({
@@ -162,6 +188,11 @@ interface MapProviderConfigurationInput {
     readonly maxZoom: number;
     readonly attribution: string;
     readonly exaggeration: number;
+    readonly overlays: {
+      readonly contourMinZoom: number;
+      readonly contourMaxZoom: number;
+      readonly contourCacheSize: number;
+    };
   };
   readonly satellite: {
     readonly id: string;
@@ -242,6 +273,11 @@ export const defaultMapProviderConfigurationInput = {
     attribution:
       'Terrain data: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank">Mapzen/AWS Open Data providers</a>',
     exaggeration: 1.15,
+    overlays: {
+      contourMinZoom: 11,
+      contourMaxZoom: 15,
+      contourCacheSize: 32,
+    },
   },
   satellite: {
     id: 'earth-search-v1',

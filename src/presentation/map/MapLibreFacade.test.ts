@@ -129,7 +129,7 @@ class FakeNativeMap {
 }
 
 describe('MapLibreFacade', () => {
-  it('owns lifecycle listeners, updates snapshots, and cleans up deterministically', () => {
+  it('owns lifecycle listeners, updates snapshots, and cleans up deterministically', async () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const onCameraSettled = vi.fn();
@@ -137,15 +137,19 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(4);
+    expect(nativeMap.listenerCount()).toBe(5);
 
     nativeMap.fire('load');
+    nativeMap.addSource('late-style-source', { type: 'geojson' });
+    nativeMap.fire('styledata');
+    await Promise.resolve();
     nativeMap.fire('idle');
     nativeMap.fire('moveend');
 
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'ready',
       styleId: 'fixture-style',
+      sourceIds: ['late-style-source'],
       layerIds: ['background'],
       webGlContext: 'available',
       camera: {
@@ -268,7 +272,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(6);
+    expect(nativeMap.listenerCount()).toBe(7);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -280,7 +284,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(6);
+    expect(nativeMap.listenerCount()).toBe(7);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);

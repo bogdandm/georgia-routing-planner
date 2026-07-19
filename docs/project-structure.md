@@ -91,8 +91,8 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Dialogs, active rail section, developer flags             | Zustand `uiStore`                   | Cross-component, transient, serializable UI state  |
 | Component transitions and messages                        | React component state               | Local rendering concern                            |
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
-| Sentinel sources, footprint, and layer commands           | `MapLibreLayerController`           | Provider URLs and native resources stay imperative |
-| Applied imagery, logical visibility, and raster stretch   | Dexie plus map layer controller     | Durable choices with a serializable live view      |
+| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`           | Provider URLs and native resources stay imperative |
+| Imagery, visibility, stretch, and overlay preferences     | Dexie plus map layer controller     | Durable choices with a serializable live view      |
 | Browser storage and optional heap measurements            | `BrowserStorageUsageReader`         | Read-only platform metrics behind an app port      |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
@@ -127,12 +127,15 @@ uses stable IDs from `mapIds.ts`. Any added feature layer must extend that typed
 ordering instead of scattering MapLibre identifiers through presentation components.
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
-only Sentinel raster slots, the footprint source/layer, and allowlisted logical
-visibility commands. It also validates persistent reflectance, gamma, and saturation
-values and atomically reapplies the current raster. Satellite and Layers UI share its
-serializable Zustand snapshot; they never receive the native map or provider asset URL.
-Search results remain local React state in a mounted-but-hidden Satellite browser so
-rail navigation does not reset the session.
+Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and
+layers, and allowlisted logical visibility commands. `ContourTileGenerator` wraps the
+MapLibre protocol that turns bounded DEM tile requests into vector contours; it does not
+expose caches, URLs, or the native map to React. The controller validates persistent
+imagery tuning and terrain-overlay preferences, atomically updates source tiles, and
+reconciles native order after style or satellite changes. Satellite, Layers, and
+Settings consume its serializable Zustand snapshot. Search results remain local React
+state in a mounted-but-hidden Satellite browser so rail navigation does not reset the
+session.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

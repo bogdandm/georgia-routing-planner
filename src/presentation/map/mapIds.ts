@@ -1,9 +1,17 @@
 export const mapSourceIds = {
   basemapVector: 'basemap-vector',
   terrainDem: 'terrain-dem',
+  terrainContours: 'terrain-contours',
   sentinelRasterA: 'sentinel-raster-a',
   sentinelRasterB: 'sentinel-raster-b',
   sentinelFootprint: 'sentinel-footprint',
+} as const;
+
+export const terrainOverlayLayerIds = {
+  reliefShade: 'terrain-relief-shade',
+  contourMinor: 'terrain-contour-minor',
+  contourIndex: 'terrain-contour-index',
+  contourLabels: 'terrain-contour-labels',
 } as const;
 
 export const sentinelMapLayerIds = {
@@ -35,6 +43,7 @@ export const mapLayerIds = {
 
 export const mapInsertionPoints = {
   satelliteBeforeLayerId: mapLayerIds.water,
+  terrainOverlaysBeforeLayerId: mapLayerIds.water,
   satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
   terrainShadingBeforeLayerId: mapLayerIds.boundaries,
   userOverlaysAfterLayerId: mapLayerIds.placeLabels,

@@ -22,6 +22,7 @@ import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthS
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -89,6 +90,11 @@ export function createTestServices(
     );
   const mapLayers = new MapLibreLayerController(
     parsedMapProviderConfiguration.satellite.renderer,
+    parsedMapProviderConfiguration.terrain,
+    {
+      createTileUrl: (intervalMeters) =>
+        `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
+    } satisfies ContourTileGenerator,
     logger,
     idGenerator,
     sentinelQueryDiagnostics,

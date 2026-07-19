@@ -1,9 +1,10 @@
-# Terrain Overlays Implementation Plan
+# Filtered Terrarium DEM Implementation Plan
 
 ## 1. Branch and approval boundary
 
-- Active branch: `feature/terrain-overlays`.
-- Branch base: `main` as checked out on 2026-07-19.
+- Active worktree: `.codex-worktrees/filtered-dem`.
+- Active branch: `feature/filtered-terrarium-dem`.
+- Branch base: merged terrain-overlay state on `main` at `90f801d`.
 - Approval boundary: all implementation remains on this feature branch until the
   reviewed pull-request state is explicitly approved for integration into `main`.
 - The unrelated `fix/client-side-cloud-highlighting` working tree was preserved in the
@@ -153,6 +154,26 @@ Commit: `docs(map): describe terrain overlay behavior`
 
 Commit: `feat(map): unify overlay palette and labels`
 
+### T7. Filtered Terrarium source — Done
+
+- Confirm the reported native tile and eight neighbors numerically before selecting
+  thresholds. Tile `15/20448/12164` contains one full −710 m scanline at local row 5;
+  the eastern neighbor continues it while other adjacent tiles are clean.
+- Add validated physical bounds, sentinel values, robust median/MAD thresholds, and a
+  bounded processed-PNG cache.
+- Decode and re-encode with browser APIs, honor abort and timeout, use neighboring-tile
+  context, and supply one filtered source to relief, 3D terrain, and contours.
+- Add deterministic synthetic tests for unchanged terrain, no-data, positive/negative
+  spikes, coherent ridges, tile edges, the observed scanline, cancellation, and bounds.
+- Update permanent provider, runtime, feature, structure, and setup documentation.
+- Verify the repaired 3D terrain and isolines around the affected lake in the opened
+  local browser, then commit in reviewable units and open a draft pull request.
+
+Planned commits:
+
+1. `fix(map): filter corrupt Terrarium elevation pixels`
+2. `docs(map): describe filtered Terrarium processing`
+
 ## 5. Verification
 
 Run the smallest relevant checks after each work package, followed by the complete gate:
@@ -209,3 +230,21 @@ Verified on 2026-07-19:
 - The supplied diagnostics bundle was traced to a cached contour `ArrayBuffer` being
   transferred more than once. The protocol adapter now clones each delivery while
   preserving the cache-owned buffer, with a regression test for repeated cache hits.
+
+Verified on 2026-07-20 for the filtered Terrarium source:
+
+- The failing 3x3 native-tile neighborhood was decoded numerically. Tiles
+  `15/20448/12164` and `15/20449/12164` each contain exactly 256 impossible negative
+  values in local row 5, with minima of -710.68 m and -701.53 m. The scanline crosses
+  their shared tile boundary; adjacent rows and the other seven tiles remain plausible.
+- Formatting, lint, strict type checking, documentation-boundary grep, diff validation,
+  175 unit/component tests, 18 integration tests, and the production build pass.
+- Bounded-concurrency coverage passes across 193 tests with 88% statements, 79.6%
+  branches, 90.38% functions, and 90.08% lines. The canonical run exposed the documented
+  managed-workspace five-second `WorkspaceShell` timeout only.
+- Ten of twelve controlled Chromium workflows pass, including every DEM and terrain
+  scenario. Two unrelated diagnostics timeline assertions remain reproducibly failing
+  because their older event rows are not visible; neither touches terrain processing.
+- The opened current-Chrome build was verified in 3D around `42.0768, 44.5653`. The lake
+  and its isolines render coherently with no rectangular trench or contour collapse, and
+  diagnostics report the map ready with the shared terrain, relief, and contour sources.

@@ -121,12 +121,14 @@ shared map adapter. A validated L2A item is rendered from its separate red, gree
 blue reflectance COGs as correctly georeferenced Web Mercator tiles below hiking
 references. Settings exposes a persistent reflectance ceiling, gamma, and saturation
 control up to five times normal so users can tune the raw-band display without relying
-on the already stretched 8-bit TCI asset. The real polygon or multipolygon footprint is
-a separate orange outline above hiking geometry and below labels. While a replacement is
-loading the prior usable image remains present; a failed replacement reports a safe,
-clickable error and leaves that prior image available. The error detail distinguishes
-rejected values, rate limiting, renderer availability, timeout, and an unclassified
-unusable tile without exposing provider URLs. Marker targeting remains unavailable.
+on the already stretched 8-bit TCI asset. Fresh storage and the reset action use a
+reflectance ceiling of 11000, gamma 2.25, and saturation 2.50; saved user tuning
+continues to take precedence. The real polygon or multipolygon footprint is a separate
+orange outline above hiking geometry and below labels. While a replacement is loading
+the prior usable image remains present; a failed replacement reports a safe, clickable
+error and leaves that prior image available. The error detail distinguishes rejected
+values, rate limiting, renderer availability, timeout, and an unclassified unusable tile
+without exposing provider URLs. Marker targeting remains unavailable.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
 exposed through the web storage APIs, so the application neither claims their size nor

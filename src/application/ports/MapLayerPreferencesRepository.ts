@@ -21,9 +21,9 @@ export interface SatelliteRenderingTuning {
 }
 
 export const defaultSatelliteRenderingTuning: SatelliteRenderingTuning = {
-  reflectanceMax: 10_000,
-  gamma: 1.8,
-  saturation: 1.05,
+  reflectanceMax: 11_000,
+  gamma: 2.25,
+  saturation: 2.5,
 };
 
 export interface PersistedMapLayerPreferences {

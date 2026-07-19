@@ -335,6 +335,8 @@ Scope:
 
 - Keep imagery stretch controls in Settings, persist their values, allow saturation up
   to five times normal, and reapply the active scene atomically.
+- Use the reviewed 11000 reflectance ceiling, 2.25 gamma, and 2.50 saturation as fresh
+  and reset defaults without overwriting persisted user tuning.
 - Keep Settings visually and interactively non-modal so the map remains available while
   tuning.
 - Present Settings as three compact tabs: General, Rendering, and Storage. Report

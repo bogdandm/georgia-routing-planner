@@ -117,7 +117,7 @@ describe('AppDatabase', () => {
     });
 
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
-      renderingTuning: { reflectanceMax: 10_000, gamma: 1.8, saturation: 1.05 },
+      renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
     });
   });
 

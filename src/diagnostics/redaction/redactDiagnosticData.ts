@@ -15,6 +15,7 @@ const exportableFieldNames = new Set([
   'count',
   'durationMs',
   'operationId',
+  'origin',
   'quotaBytes',
   'ready',
   'reason',

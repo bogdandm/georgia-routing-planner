@@ -307,7 +307,9 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
       const initialBody = createRequestBody(query, expectedCollection);
 
       beginStep('query-stac-catalog');
-      const rawPages: unknown[] = [await this.fetchPage(initialBody, context.signal)];
+      const rawPages: unknown[] = [
+        await this.fetchPage(initialBody, context.operationId, context.signal),
+      ];
       completeStep();
 
       beginStep('fetch-result-pages');
@@ -341,7 +343,11 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
           );
         }
         rawPages.push(
-          await this.fetchPage({ ...initialBody, next: next.token }, context.signal),
+          await this.fetchPage(
+            { ...initialBody, next: next.token },
+            context.operationId,
+            context.signal,
+          ),
         );
         envelope = earthSearchPaginationEnvelopeSchema.parse(rawPages.at(-1));
         const fetchedItemCount = rawPages.reduce<number>((count, page) => {
@@ -413,9 +419,14 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
     }
   }
 
-  private fetchPage(body: unknown, signal: AbortSignal): Promise<unknown> {
+  private fetchPage(
+    body: unknown,
+    operationId: string,
+    signal: AbortSignal,
+  ): Promise<unknown> {
     return this.httpClient
       .post(this.configuration.searchUrl, {
+        context: { operationId },
         json: body,
         signal,
         timeout: this.requestTimeoutMs,

@@ -140,6 +140,18 @@ before an event enters the bounded buffer. Bundle creation copies serializable s
 coarsens camera location, and creates a local object URL that is revoked immediately
 after download. Nothing is uploaded.
 
+The shared `ky` client records start, completion, cancellation, timeout, HTTP-status,
+and network-failure events. It exports only the remote origin, status, duration, and an
+allowlisted operation ID; request paths, queries, headers, and bodies never enter the
+diagnostic event. Satellite use cases pass their operation ID through the HTTP context
+so application and transport events can be correlated without adding a public header.
+
+Application startup is enclosed by a pre-React failure boundary. When normal runtime
+services exist, the fallback can export the standard bundle. If service construction or
+root discovery fails, it mounts against the available document body and produces a
+minimal schema-versioned bootstrap bundle using the standalone redactor, without
+depending on React, IndexedDB, health checks, or the normal diagnostics service.
+
 Sentinel commands will open one timeline operation ID and publish a fixed sequence of
 best-effort step transitions through the `SentinelQueryDiagnostics` application port.
 The local store keeps only the current or most recent operation. While the persistent

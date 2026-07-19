@@ -65,7 +65,7 @@ export function createTestServices(
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const mapViewport = new MapViewportSnapshotStore();
-  const httpClient = createHttpClient(logger);
+  const httpClient = createHttpClient(logger, clock, idGenerator);
   const parsedMapProviderConfiguration = parseMapProviderConfiguration(
     defaultMapProviderConfigurationInput,
     'https://example.test/georgia-routing-planner/',

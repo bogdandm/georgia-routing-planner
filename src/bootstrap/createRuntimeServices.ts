@@ -112,7 +112,7 @@ export function createRuntimeServices(): RuntimeServices {
           database,
         )
       : null;
-  const httpClient = createHttpClient(logger);
+  const httpClient = createHttpClient(logger, clock, idGenerator);
   const satelliteCatalogGateway =
     mapProviderConfiguration.status === 'valid'
       ? new EarthSearchSatelliteCatalogGateway(

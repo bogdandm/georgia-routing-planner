@@ -128,7 +128,7 @@ export function SettingsDialog({
           },
           '& .MuiTab-root.Mui-selected': {
             bgcolor: 'transparent',
-            color: 'info.main',
+            color: 'primary.main',
           },
           '& .MuiTab-root.Mui-focusVisible': {
             outline: 'none',

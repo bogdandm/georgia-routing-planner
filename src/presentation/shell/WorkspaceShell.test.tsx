@@ -17,6 +17,7 @@ import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
 let services: RuntimeServices;
@@ -670,5 +671,25 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getAllByText(/renderer rejected these stretch values/i).at(-1),
     ).toBeVisible();
+  });
+
+  it('announces fatal map failures assertively', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'fatal',
+      message: 'The browser lost the WebGL context.',
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The browser lost the WebGL context.',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

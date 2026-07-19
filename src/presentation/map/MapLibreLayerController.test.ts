@@ -56,6 +56,7 @@ class FakeLayerMap {
   }
 
   public setPaintProperty(id: string, _name: string, value: unknown): void {
+    if (!this.layers.has(id)) throw new Error(`Layer ${id} is unavailable.`);
     this.paint.set(id, value);
   }
 
@@ -71,8 +72,8 @@ class FakeLayerMap {
     this.sources.delete(id);
   }
 
-  public isSourceLoaded(): boolean {
-    return this.sourceLoaded;
+  public isSourceLoaded(id: string): boolean {
+    return this.sourceLoaded && this.sources.has(id);
   }
 
   public fitBounds(_bounds: unknown, options: Record<string, unknown>): void {
@@ -236,6 +237,41 @@ describe('MapLibreLayerController', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain(
       'private provider detail',
     );
+  });
+
+  it('does not let an aborted request remove the replacement that superseded it', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('scene-a'), new AbortController().signal);
+    map.sourceLoaded = false;
+
+    const staleController = new AbortController();
+    const staleRequest = controller.applyScene(
+      scene('scene-b'),
+      staleController.signal,
+    );
+    staleController.abort();
+    const currentRequest = controller.applyScene(
+      scene('scene-c'),
+      new AbortController().signal,
+    );
+
+    await expect(staleRequest).resolves.toEqual({ status: 'cancelled' });
+    expect(map.layers.has(sentinelMapLayerIds.rasterB)).toBe(true);
+    map.sourceLoaded = true;
+    map.fire('sourcedata', {
+      sourceId: 'sentinel-raster-b',
+      isSourceLoaded: true,
+    });
+
+    await expect(currentRequest).resolves.toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().appliedImagery).toMatchObject({
+      status: 'ready',
+      sceneId: 'scene-c',
+    });
   });
 
   it('de-applies the current scene and clears its persisted map resources', async () => {

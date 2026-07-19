@@ -413,7 +413,9 @@ export class MapLibreLayerController
       });
       return { status: 'success' };
     } catch (error) {
-      this.removeSlot(map, slot);
+      // A newer request can reuse the same inactive slot before this rejected
+      // continuation runs. Only the current request may remove that shared slot.
+      if (sequence === this.#applySequence) this.removeSlot(map, slot);
       if (signal.aborted || error instanceof DOMException) {
         operation.cancel();
         return { status: 'cancelled' };

@@ -40,6 +40,7 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
   await expect(page.getByText(/COG tiles rendered by TiTiler/u)).toBeVisible();
 
   await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('tab', { name: 'Rendering' }).click();
   const reflectanceCeiling = page.getByRole('slider', {
     name: 'Sentinel reflectance ceiling',
   });
@@ -90,6 +91,7 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
     .poll(() => rendererRequests.length)
     .toBeGreaterThan(requestsBeforeReload);
   await page.getByRole('button', { name: 'Open settings' }).click();
+  await page.getByRole('tab', { name: 'Rendering' }).click();
   await expect(
     page.getByRole('slider', { name: 'Sentinel reflectance ceiling' }),
   ).toHaveValue('6250');

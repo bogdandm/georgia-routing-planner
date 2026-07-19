@@ -26,6 +26,7 @@ interface DisplayStatus {
   readonly kind: 'ready' | 'pending' | 'error';
   readonly message: string;
   readonly startedAt: number | null;
+  readonly announcement: 'polite' | 'assertive';
 }
 
 /** Quiet, always-visible summary of map and imagery work for ordinary users. */
@@ -56,40 +57,64 @@ export function OperationalStatus() {
       kind: 'error',
       message: mapProviderConfiguration.message,
       startedAt: null,
+      announcement: 'assertive',
     };
-  } else if (layerError !== null) {
-    display = { kind: 'error', message: layerError, startedAt: null };
-  } else if (requestStatus.status === 'error') {
-    display = { kind: 'error', message: requestStatus.message, startedAt: null };
-  } else if (
-    mapSnapshot?.lifecycle === 'fatal' ||
-    (mapSnapshot?.lifecycle === 'degraded' && mapSnapshot.message !== null)
-  ) {
+  } else if (mapSnapshot?.lifecycle === 'fatal') {
     display = {
       kind: 'error',
       message: mapSnapshot.message ?? 'Map data is unavailable.',
       startedAt: null,
+      announcement: 'assertive',
+    };
+  } else if (layerError !== null) {
+    display = {
+      kind: 'error',
+      message: layerError,
+      startedAt: null,
+      announcement: 'polite',
+    };
+  } else if (requestStatus.status === 'error') {
+    display = {
+      kind: 'error',
+      message: requestStatus.message,
+      startedAt: null,
+      announcement: 'polite',
+    };
+  } else if (mapSnapshot?.lifecycle === 'degraded' && mapSnapshot.message !== null) {
+    display = {
+      kind: 'error',
+      message: mapSnapshot.message,
+      startedAt: null,
+      announcement: 'polite',
     };
   } else if (appliedImagery.status === 'loading') {
     display = {
       kind: 'pending',
       message: appliedImagery.message,
       startedAt: appliedImagery.startedAt,
+      announcement: 'polite',
     };
   } else if (requestStatus.status === 'pending') {
     display = {
       kind: 'pending',
       message: requestStatus.message,
       startedAt: requestStatus.startedAt,
+      announcement: 'polite',
     };
   } else if (mapSnapshot === null || mapSnapshot.lifecycle === 'loading') {
     display = {
       kind: 'pending',
       message: 'Starting the map workspace…',
       startedAt: null,
+      announcement: 'polite',
     };
   } else {
-    display = { kind: 'ready', message: requestStatus.message, startedAt: null };
+    display = {
+      kind: 'ready',
+      message: requestStatus.message,
+      startedAt: null,
+      announcement: 'polite',
+    };
   }
 
   useEffect(() => {
@@ -113,8 +138,8 @@ export function OperationalStatus() {
 
   return (
     <Box
-      role="status"
-      aria-live="polite"
+      role={display.announcement === 'assertive' ? 'alert' : 'status'}
+      aria-live={display.announcement}
       sx={{
         position: 'absolute',
         top: 56,

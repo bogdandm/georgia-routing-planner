@@ -5,6 +5,8 @@ export const logicalMapLayerIds = [
   'scene-footprint',
   'terrain-relief',
   'elevation-isolines',
+  'natural-features',
+  'restricted-areas',
   'hiking-paths',
   'roads',
   'places-and-pois',

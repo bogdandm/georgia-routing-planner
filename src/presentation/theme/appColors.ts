@@ -9,7 +9,7 @@ export const appColors = {
   },
   surface: {
     canvas: '#EAF5F7',
-    map: '#EAF5F7',
+    map: '#D8D8D3',
     panel: '#FFFFFF',
     subtle: '#F4F8FA',
     selected: '#E3F4FA',

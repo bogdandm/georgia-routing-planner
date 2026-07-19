@@ -23,7 +23,9 @@ export const sentinelMapLayerIds = {
 export const mapLayerIds = {
   background: 'basemap-background',
   landcover: 'basemap-landcover',
+  glacierAreas: 'basemap-glacier-areas',
   landuse: 'basemap-landuse',
+  restrictedAreas: 'basemap-restricted-areas',
   parks: 'basemap-parks',
   water: 'basemap-water',
   waterways: 'basemap-waterways',
@@ -42,7 +44,7 @@ export const mapLayerIds = {
 } as const;
 
 export const mapInsertionPoints = {
-  satelliteBeforeLayerId: mapLayerIds.water,
+  satelliteBeforeLayerId: mapLayerIds.landcover,
   terrainOverlaysBeforeLayerId: mapLayerIds.water,
   satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
   terrainShadingBeforeLayerId: mapLayerIds.boundaries,

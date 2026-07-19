@@ -126,6 +126,8 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
     ).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();

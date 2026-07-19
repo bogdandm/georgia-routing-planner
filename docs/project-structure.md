@@ -125,6 +125,9 @@ the native object, event listeners, terrain source, error aggregation, WebGL sta
 cleanup. [`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and
 uses stable IDs from `mapIds.ts`. Any added feature layer must extend that typed
 ordering instead of scattering MapLibre identifiers through presentation components.
+`mapVisualPalette.ts` is the single owner of semantic map colors and vector/satellite
+contrast paints; feature code must reference it instead of introducing local map-color
+literals.
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
 Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and

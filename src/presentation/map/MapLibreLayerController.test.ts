@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
-import { mapLayerIds, sentinelMapLayerIds } from '@/presentation/map/mapIds';
+import {
+  mapLayerIds,
+  sentinelMapLayerIds,
+  terrainOverlayLayerIds,
+} from '@/presentation/map/mapIds';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
@@ -206,6 +210,17 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.roadLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingPaths)).toBe('visible');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
+
+    expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
+      status: 'success',
+    });
+    expect(
+      controller.setLayerVisibility('elevation-isolines', false),
+    ).toEqual({ status: 'success' });
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourIndex)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourLabels)).toBe('none');
   });
 
   it('creates one relief layer and deterministically orders it around satellite imagery', async () => {
@@ -463,6 +478,8 @@ describe('MapLibreLayerController', () => {
       visibility: {
         'satellite-imagery': false,
         'scene-footprint': true,
+        'terrain-relief': false,
+        'elevation-isolines': false,
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,
@@ -482,6 +499,8 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has('sentinel-raster-a')).toBe(true);
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: { 'satellite-imagery': false, roads: false },
       appliedImagery: { status: 'hidden', sceneId: 'saved-scene' },

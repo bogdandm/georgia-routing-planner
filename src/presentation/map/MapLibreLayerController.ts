@@ -58,6 +58,12 @@ export const logicalNativeLayerGroups: Readonly<
     readonly string[]
   >
 > = {
+  'terrain-relief': [terrainOverlayLayerIds.reliefShade],
+  'elevation-isolines': [
+    terrainOverlayLayerIds.contourMinor,
+    terrainOverlayLayerIds.contourIndex,
+    terrainOverlayLayerIds.contourLabels,
+  ],
   'hiking-paths': [mapLayerIds.hikingPaths, mapLayerIds.hikingSteps],
   roads: [mapLayerIds.roadCasings, mapLayerIds.roads, mapLayerIds.roadLabels],
   'places-and-pois': [
@@ -587,6 +593,8 @@ export class MapLibreLayerController
     for (const layerId of [
       'satellite-imagery',
       'scene-footprint',
+      'terrain-relief',
+      'elevation-isolines',
       'hiking-paths',
       'roads',
       'places-and-pois',
@@ -663,6 +671,11 @@ export class MapLibreLayerController
             id: terrainOverlayLayerIds.reliefShade,
             type: 'hillshade',
             source: mapSourceIds.terrainDem,
+            layout: {
+              visibility: mapLayerStore.getState().visibility['terrain-relief']
+                ? 'visible'
+                : 'none',
+            },
             paint: {
               'hillshade-exaggeration': 0.22,
               'hillshade-shadow-color': '#4f4438',
@@ -760,6 +773,11 @@ export class MapLibreLayerController
           'source-layer': 'contours',
           minzoom,
           filter: ['==', ['get', 'level'], 0],
+          layout: {
+            visibility: mapLayerStore.getState().visibility['elevation-isolines']
+              ? 'visible'
+              : 'none',
+          },
           paint: {
             'line-color': '#8b7358',
             'line-opacity': 0.48,
@@ -778,6 +796,11 @@ export class MapLibreLayerController
           'source-layer': 'contours',
           minzoom,
           filter: ['>', ['get', 'level'], 0],
+          layout: {
+            visibility: mapLayerStore.getState().visibility['elevation-isolines']
+              ? 'visible'
+              : 'none',
+          },
           paint: {
             'line-color': '#6f5941',
             'line-opacity': 0.72,
@@ -797,6 +820,9 @@ export class MapLibreLayerController
           minzoom,
           filter: ['>', ['get', 'level'], 0],
           layout: {
+            visibility: mapLayerStore.getState().visibility['elevation-isolines']
+              ? 'visible'
+              : 'none',
             'symbol-placement': 'line',
             'symbol-spacing': 360,
             'text-field': [
@@ -875,7 +901,13 @@ export class MapLibreLayerController
     const map = this.#map;
     if (map === null) return;
     const { visibility } = mapLayerStore.getState();
-    for (const layerId of ['hiking-paths', 'roads', 'places-and-pois'] as const) {
+    for (const layerId of [
+      'terrain-relief',
+      'elevation-isolines',
+      'hiking-paths',
+      'roads',
+      'places-and-pois',
+    ] as const) {
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(

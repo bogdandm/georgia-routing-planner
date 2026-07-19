@@ -87,6 +87,8 @@ describe('AppDatabase', () => {
       visibility: {
         'satellite-imagery': false,
         'scene-footprint': true,
+        'terrain-relief': false,
+        'elevation-isolines': true,
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,
@@ -121,6 +123,10 @@ describe('AppDatabase', () => {
     });
 
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: {
+        'terrain-relief': true,
+        'elevation-isolines': true,
+      },
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
       terrainOverlays: {
         contourIntervalMeters: 50,

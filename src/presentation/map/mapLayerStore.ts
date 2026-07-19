@@ -24,6 +24,8 @@ export const initialMapLayerState: MapLayerState = {
   visibility: {
     'satellite-imagery': true,
     'scene-footprint': true,
+    'terrain-relief': true,
+    'elevation-isolines': true,
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,

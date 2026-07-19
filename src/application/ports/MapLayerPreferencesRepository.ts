@@ -3,6 +3,8 @@ import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 export const logicalMapLayerIds = [
   'satellite-imagery',
   'scene-footprint',
+  'terrain-relief',
+  'elevation-isolines',
   'hiking-paths',
   'roads',
   'places-and-pois',

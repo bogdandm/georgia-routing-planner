@@ -95,6 +95,8 @@ const mapLayerPreferencesSchema = z
       .object({
         'satellite-imagery': z.boolean(),
         'scene-footprint': z.boolean(),
+        'terrain-relief': z.boolean().default(true),
+        'elevation-isolines': z.boolean().default(true),
         'hiking-paths': z.boolean(),
         roads: z.boolean(),
         'places-and-pois': z.boolean(),
@@ -127,6 +129,8 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   visibility: {
     'satellite-imagery': true,
     'scene-footprint': true,
+    'terrain-relief': true,
+    'elevation-isolines': true,
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,

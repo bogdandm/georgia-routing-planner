@@ -127,6 +127,10 @@ describe('WorkspaceShell', () => {
       screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
     ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'Elevation isolines' }),
+    ).toBeChecked();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');
     expect(

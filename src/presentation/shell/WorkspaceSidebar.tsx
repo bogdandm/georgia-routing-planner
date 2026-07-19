@@ -214,7 +214,9 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         bgcolor: 'background.paper',
         borderRight: 1,
         borderColor: 'divider',
-        boxShadow: '4px 0 18px rgba(2, 48, 71, 0.1)',
+        borderRadius: 0,
+        overflow: 'hidden',
+        boxShadow: 'none',
       }}
     >
       <Stack

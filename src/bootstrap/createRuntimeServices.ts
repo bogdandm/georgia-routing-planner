@@ -105,6 +105,7 @@ export function createRuntimeServices(): RuntimeServices {
           idGenerator,
           sentinelQueryDiagnostics,
           mapProviderConfiguration.value.policy.requestTimeoutMs,
+          database,
         )
       : null;
   const httpClient = createHttpClient(logger);

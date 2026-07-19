@@ -167,15 +167,21 @@ The 2026-07-19 Georgia sample `S2A_38TMN_20250731_0_L2A` reported EPSG:32638 and
 220,705,355-byte true-color COG. A bounded request for its first 65,536 bytes again
 returned `206 Partial Content`, `Accept-Ranges: bytes`, and browser-permissive CORS.
 
+The `visual` TCI COG is an 8-bit display product whose prior stretch may clip bright
+snow to white. A later transform cannot reconstruct lost channel detail, so the
+application instead renders Earth Search's separate `red`, `green`, and `blue` L2A
+reflectance COGs.
+
 MapLibre GL JS does not directly render a GeoTIFF/COG as a raster source, and the
 inspected direct COG protocol accepts EPSG:3857 input but does not reproject the UTM
 Sentinel sample. The application therefore uses a configured dynamic COG tile adapter.
 The default template calls Development Seed's public
-[TiTiler demo](https://developmentseed.org/titiler/examples/notebooks/Working_with_CloudOptimizedGeoTIFF_simple/)
-[`/cog/tiles` endpoint](https://developmentseed.org/titiler/endpoints/cog/) with
-`WebMercatorQuad`, the MapLibre tile coordinates, and the percent-encoded validated COG
-URL. TiTiler performs bounded COG reads, reprojection, and web-tile encoding; MapLibre
-receives ordinary 256-pixel raster tiles.
+[TiTiler demo](https://developmentseed.org/titiler/examples/notebooks/Working_with_STAC_simple/)
+[`/stac/tiles` endpoint](https://developmentseed.org/titiler/endpoints/stac/) with
+`WebMercatorQuad`, the MapLibre tile coordinates, the validated STAC item, and ordered
+red/green/blue assets. Each channel uses the full 0–10,000 reflectance range before
+display gamma. TiTiler performs bounded COG reads, RGB composition, reprojection, and
+web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles.
 
 The default is anonymous and requires no browser secret, but it is a best-effort demo
 service with no project SLA. It is acceptable for the current low-traffic static MVP and

@@ -6,6 +6,9 @@ export type AppliedSatelliteImagerySnapshot =
       readonly status: 'loading';
       readonly sceneKey: string;
       readonly previousSceneKey: string | null;
+      readonly stage: 'preparing' | 'requesting-tiles' | 'rendering' | 'finalizing';
+      readonly message: string;
+      readonly startedAt: number;
     }
   | {
       readonly status: 'preview' | 'ready';
@@ -38,4 +41,5 @@ export interface SatelliteImageryMap {
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult>;
   fitFootprint(): SatelliteImageryCommandResult;
+  restorePersistedState(): Promise<void>;
 }

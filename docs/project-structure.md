@@ -92,7 +92,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Component transitions and messages                        | React component state               | Local rendering concern                            |
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
 | Sentinel sources, footprint, and layer commands           | `MapLibreLayerController`           | Provider URLs and native resources stay imperative |
-| Applied imagery and logical visibility                    | Zustand `mapLayerStore`             | Cross-tab, session-only, serializable state        |
+| Applied imagery and logical visibility                    | Dexie plus Zustand `mapLayerStore`  | Durable choices with a serializable live view      |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
@@ -102,12 +102,13 @@ Do not mirror authoritative map or durable data into Zustand. React consumes the
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
 the native map instance to be recreated.
 
-`WorkspaceShell` only composes the persistent regions. `WorkspaceRail` owns the Tracks,
-Satellite, Markers, and Layers destinations plus global Diagnostics and Settings
-actions. `WorkspaceSidebar` owns each section's implemented, disabled, or empty
-presentation. Create GPX is currently a disabled Tracks action and is never a rail
-section. Shared palette values live in `appColors.ts` so the MUI theme and pure MapLibre
-style use the same visual vocabulary without introducing a second styling system.
+`WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
+`WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global
+Diagnostics and Settings actions. `WorkspaceSidebar` owns each section's implemented,
+disabled, or empty presentation. Create GPX is currently a disabled Tracks action and is
+never a rail section. Shared palette values live in `appColors.ts` so the MUI theme and
+pure MapLibre style use the same visual vocabulary without introducing a second styling
+system.
 
 ## Map boundary
 

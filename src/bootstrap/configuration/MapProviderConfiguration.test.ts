@@ -36,7 +36,7 @@ describe('MapProviderConfiguration', () => {
       terrainOrigin: 'https://s3.amazonaws.com',
       satelliteId: 'earth-search-v1',
       satelliteOrigin: 'https://earth-search.aws.element84.com',
-      satelliteRendererId: 'titiler-demo-cog',
+      satelliteRendererId: 'titiler-demo-stac-rgb',
       satelliteRendererOrigin: 'https://titiler.xyz',
     });
   });

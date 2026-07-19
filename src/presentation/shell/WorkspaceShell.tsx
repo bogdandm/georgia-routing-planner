@@ -1,10 +1,12 @@
-import { Box } from '@mui/material';
+import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
+import { Box, IconButton, Tooltip } from '@mui/material';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
+import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
@@ -23,18 +25,21 @@ function ControlledFailure(): never {
 }
 
 export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
-  const { database, logger } = useRuntimeServices();
+  const { database, logger, mapLayers } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
   const developerMode = useUiStore((state) => state.developerMode);
+  const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setDeveloperDrawerOpen = useUiStore((state) => state.setDeveloperDrawerOpen);
   const setDeveloperMode = useUiStore((state) => state.setDeveloperMode);
   const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
+  const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
   const developerModeChangedByUser = useRef(false);
+  const navigationChangedByUser = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +51,9 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         const preferences = await database.loadUiPreferences();
         if (!cancelled && !developerModeChangedByUser.current) {
           setDeveloperMode(urlEnabled || preferences.developerMode);
+        }
+        if (!cancelled && !navigationChangedByUser.current) {
+          setNavigationCollapsed(preferences.navigationCollapsed);
         }
       } catch {
         if (!cancelled && !developerModeChangedByUser.current) {
@@ -59,7 +67,11 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     return () => {
       cancelled = true;
     };
-  }, [database, logger, setDeveloperMode]);
+  }, [database, logger, setDeveloperMode, setNavigationCollapsed]);
+
+  useEffect(() => {
+    void mapLayers?.restorePersistedState();
+  }, [mapLayers]);
 
   useEffect(() => {
     const restoreTabFromUrl = () => {
@@ -79,9 +91,15 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     return <ControlledFailure />;
   }
 
-  const persistDeveloperMode = async (value: boolean) => {
+  const persistUiPreferences = async (
+    nextDeveloperMode: boolean,
+    nextNavigationCollapsed: boolean,
+  ) => {
     try {
-      await database.saveUiPreferences({ developerMode: value });
+      await database.saveUiPreferences({
+        developerMode: nextDeveloperMode,
+        navigationCollapsed: nextNavigationCollapsed,
+      });
     } catch {
       logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
     }
@@ -97,7 +115,13 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         showTileBoundaries: false,
       });
     }
-    void persistDeveloperMode(value);
+    void persistUiPreferences(value, navigationCollapsed);
+  };
+
+  const handleNavigationCollapsedChange = (value: boolean) => {
+    navigationChangedByUser.current = true;
+    setNavigationCollapsed(value);
+    void persistUiPreferences(developerMode, value);
   };
 
   const handleSectionChange = (section: WorkspaceTab) => {
@@ -111,47 +135,114 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     <Box
       sx={{
         height: '100dvh',
-        display: 'flex',
+        position: 'relative',
         overflow: 'hidden',
         bgcolor: 'background.default',
       }}
     >
-      <WorkspaceRail
-        activeTab={activeTab}
-        developerToolsOpen={developerDrawerOpen}
-        developerMode={developerMode}
-        onSectionChange={handleSectionChange}
-        onToggleDeveloperTools={() => {
-          setDeveloperDrawerOpen(!developerDrawerOpen);
-        }}
-        onOpenSettings={() => {
-          setSettingsOpen(true);
-        }}
-      />
-      <WorkspaceSidebar activeTab={activeTab} />
-      <Box
-        id="satellite-results-pane"
-        sx={{
-          minHeight: 0,
-          display: activeTab === 'satellite' ? 'flex' : 'none',
-          flexShrink: 0,
-        }}
-      />
-
-      <Box component="main" sx={{ minWidth: 0, minHeight: 0, flex: 1 }}>
+      <Box component="main" sx={{ position: 'absolute', inset: 0 }}>
         <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
           {mapSurface}
           <MapSearchPlaceholder />
+          <OperationalStatus />
         </Box>
+      </Box>
+
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 6,
+          left: 6,
+          bottom: navigationCollapsed ? 'auto' : 6,
+          height: navigationCollapsed ? 60 : 'auto',
+          zIndex: 4,
+          display: 'flex',
+          gap: 0,
+          filter: navigationCollapsed
+            ? 'none'
+            : 'drop-shadow(0 8px 14px rgba(2, 48, 71, 0.2))',
+          transition: (theme) =>
+            theme.transitions.create(['height', 'bottom'], {
+              duration: theme.transitions.duration.shorter,
+            }),
+        }}
+      >
+        <WorkspaceRail
+          collapsed={navigationCollapsed}
+          activeTab={activeTab}
+          developerToolsOpen={developerDrawerOpen}
+          developerMode={developerMode}
+          onSectionChange={handleSectionChange}
+          onToggleDeveloperTools={() => {
+            setDeveloperDrawerOpen(!developerDrawerOpen);
+          }}
+          onOpenSettings={() => {
+            setSettingsOpen(true);
+          }}
+          onLogoClick={() => {
+            if (navigationCollapsed) handleNavigationCollapsedChange(false);
+          }}
+        />
+        <Box
+          sx={{
+            minWidth: 0,
+            height: '100%',
+            display: 'flex',
+            gap: 0,
+            opacity: navigationCollapsed ? 0 : 1,
+            transform: navigationCollapsed ? 'translateX(-16px)' : 'translateX(0)',
+            pointerEvents: navigationCollapsed ? 'none' : 'auto',
+            visibility: navigationCollapsed ? 'hidden' : 'visible',
+            transition: (theme) => theme.transitions.create(['opacity', 'transform']),
+          }}
+        >
+          <WorkspaceSidebar activeTab={activeTab} />
+          <Box
+            id="satellite-results-pane"
+            sx={{
+              minHeight: 0,
+              height: '100%',
+              display: activeTab === 'satellite' ? 'flex' : 'none',
+              flexShrink: 0,
+              overflow: 'hidden',
+              borderRadius: '0 8px 8px 0',
+            }}
+          />
+        </Box>
+        {navigationCollapsed ? null : (
+          <Tooltip title="Hide navigation" placement="right">
+            <IconButton
+              aria-label="Hide navigation"
+              onClick={() => {
+                handleNavigationCollapsedChange(true);
+              }}
+              size="small"
+              sx={{
+                position: 'absolute',
+                top: 12,
+                right: -18,
+                bgcolor: 'background.paper',
+                border: 1,
+                borderColor: 'divider',
+                boxShadow: 2,
+                '&:hover': { bgcolor: 'background.paper' },
+              }}
+            >
+              <ChevronLeftOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
 
       <SettingsDialog
         developerMode={developerMode}
+        navigationCollapsed={navigationCollapsed}
         open={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
         }}
         onDeveloperModeChange={handleDeveloperModeChange}
+        onNavigationCollapsedChange={handleNavigationCollapsedChange}
       />
       {developerMode ? (
         <DeveloperDrawer

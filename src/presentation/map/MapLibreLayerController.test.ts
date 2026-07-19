@@ -112,16 +112,20 @@ function scene(id: string): SatelliteScene {
     productId: `S2A_${id}`,
     thumbnailHref: null,
     visualAsset: {
-      kind: 'cog',
-      href: `https://sentinel.example.test/${id}/TCI.tif`,
-      mediaType: 'image/tiff; application=geotiff; profile=cloud-optimized',
+      kind: 'sentinel-rgb-cogs',
+      itemHref: `https://earth-search.example.test/items/${id}`,
+      redHref: `https://sentinel.example.test/${id}/B04.tif`,
+      greenHref: `https://sentinel.example.test/${id}/B03.tif`,
+      blueHref: `https://sentinel.example.test/${id}/B02.tif`,
       projectionEpsg: 32638,
     },
     attribution: 'Synthetic test data',
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  const services = createTestServices();
+  await services.database.delete();
   resetMapLayerStore();
 });
 
@@ -138,6 +142,7 @@ describe('MapLibreLayerController', () => {
       services.idGenerator,
       services.sentinelQueryDiagnostics,
       100,
+      services.database,
     );
     controller.attach(map as unknown as MapLibreMap);
 
@@ -167,9 +172,9 @@ describe('MapLibreLayerController', () => {
       readonly tiles: readonly string[];
       readonly bounds: readonly number[];
     };
-    expect(raster.tiles[0]).toContain('titiler.xyz/cog/tiles/WebMercatorQuad');
+    expect(raster.tiles[0]).toContain('titiler.xyz/stac/tiles/WebMercatorQuad');
     expect(raster.tiles[0]).toContain(
-      encodeURIComponent('https://sentinel.example.test/scene-a/TCI.tif'),
+      encodeURIComponent('https://earth-search.example.test/items/scene-a'),
     );
     expect(raster.bounds).toEqual([44, 42, 45, 43]);
     expect(map.layers.has(sentinelMapLayerIds.footprint)).toBe(true);
@@ -226,5 +231,33 @@ describe('MapLibreLayerController', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain(
       'private provider detail',
     );
+  });
+
+  it('restores the saved scene and visibility after a page refresh', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    await services.database.saveMapLayerPreferences({
+      visibility: {
+        'satellite-imagery': false,
+        'scene-footprint': true,
+        'hiking-paths': true,
+        roads: false,
+        'places-and-pois': true,
+      },
+      appliedScene: scene('saved-scene'),
+    });
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    await controller.restorePersistedState();
+
+    expect(map.sources.has('sentinel-raster-a')).toBe(true);
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: { 'satellite-imagery': false, roads: false },
+      appliedImagery: { status: 'hidden', sceneId: 'saved-scene' },
+    });
   });
 });

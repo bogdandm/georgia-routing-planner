@@ -500,6 +500,12 @@ Material UI is the default answer for application chrome and controls.
 
 ## Map rules
 
+Use [`docs/assets/map-style-reference.png`](docs/assets/map-style-reference.png) as the
+standing visual reference for map overlays on satellite imagery. Keep roads, paths, and
+labels subdued and semi-transparent so they do not obscure terrain; user GPX/routes use
+a clearly legible medium blue with a restrained light casing. Avoid bright white road
+networks, brown hiking routes, and saturated overlays that dominate the imagery.
+
 - Isolate MapLibre's imperative object and events in the map feature/adapter.
 - Keep layer IDs and source IDs centralized and typed.
 - Use GeoJSON source/layer rendering for many tracks; do not create thousands of DOM

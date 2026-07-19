@@ -35,9 +35,10 @@ selector. Viewport is the current source; Marker is visible but disabled until
 saved-marker behavior exists. The sidebar never receives the native MapLibre object and
 falls back to `defaultGeorgiaCamera` before the first snapshot is available.
 
-Changing among Tracks, Satellite, Markers, and Layers changes contextual React content,
-not the map owner. Opening Settings or Diagnostics follows the same invariant: the
-existing `MapWorkspace` and native MapLibre instance stay mounted.
+Changing sections changes floating contextual content, not the full-viewport map owner
+or its dimensions. Collapsing navigation keeps only the GR control above the map.
+Opening Settings or Diagnostics follows the same invariant: the existing `MapWorkspace`
+and native MapLibre instance stay mounted.
 
 Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
 captures interaction from the workspace, and it remains open until the user activates
@@ -215,7 +216,7 @@ sequenceDiagram
   Browser->>Controller: applyScene(scene, AbortSignal)
   Controller->>State: loading with safe scene key
   Controller->>Map: add hidden staging raster source/layer
-  Map->>Renderer: request bounded Web Mercator tiles for encoded COG URL
+    Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
   alt staging source becomes ready
     Controller->>Map: reveal staging raster and update footprint GeoJSON
     Controller->>Map: remove prior raster source/layer
@@ -233,10 +234,11 @@ derives bounds from the validated polygon while preserving current pitch and bea
 
 Layers commands use logical IDs. Hiking, road, and place commands expand to fixed native
 style groups; satellite and footprint commands target only controller-owned layers.
-Visibility is applied idempotently to the existing map and reflected in one serializable
-session store. Satellite search/results state remains mounted while another rail section
-is visible, and returning to Satellite reattaches the existing adjacent pane without a
-new provider request.
+Visibility is applied idempotently and projected into a serializable live store. Dexie
+persists visibility and the last successful scene for startup restoration. Satellite
+search/results state remains mounted while another rail section is visible, and
+returning to Satellite reattaches the existing adjacent pane without a new provider
+request.
 
 ## Teardown ownership
 

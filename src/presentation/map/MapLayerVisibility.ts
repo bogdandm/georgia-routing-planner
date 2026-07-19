@@ -1,12 +1,9 @@
-export const logicalMapLayerIds = [
-  'satellite-imagery',
-  'scene-footprint',
-  'hiking-paths',
-  'roads',
-  'places-and-pois',
-] as const;
+export {
+  logicalMapLayerIds,
+  type LogicalMapLayerId,
+} from '@/application/ports/MapLayerPreferencesRepository';
 
-export type LogicalMapLayerId = (typeof logicalMapLayerIds)[number];
+import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
 
 export type MapLayerVisibilityResult =
   | { readonly status: 'success' }

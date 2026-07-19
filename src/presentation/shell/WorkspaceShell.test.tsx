@@ -12,6 +12,7 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -22,6 +23,7 @@ let services: RuntimeServices;
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
   resetMapLayerStore();
+  resetSatelliteRequestStatus();
   services = createTestServices();
   await services.database.delete();
   services = createTestServices();
@@ -30,6 +32,7 @@ beforeEach(async () => {
     developerDrawerOpen: false,
     developerMode: false,
     mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+    navigationCollapsed: false,
     settingsOpen: false,
   });
 });
@@ -469,10 +472,10 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
-      await screen.findByText(
+      await screen.findAllByText(
         'Earth Search is rate limiting requests. Wait and try again.',
       ),
-    ).toBeVisible();
+    ).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
   });
 
@@ -502,7 +505,28 @@ describe('WorkspaceShell', () => {
     await waitFor(async () => {
       await expect(services.database.loadUiPreferences()).resolves.toEqual({
         developerMode: true,
+        navigationCollapsed: false,
       });
     });
+  });
+
+  it('collapses and restores the complete left navigation from settings', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('switch', { name: 'Collapse left navigation' }));
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Settings' }),
+      ).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('navigation')).toBeVisible();
+    expect(screen.getByRole('complementary', { hidden: true })).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Show navigation' }));
+    expect(screen.getByRole('navigation')).toBeVisible();
+    expect(screen.getByRole('complementary')).toBeVisible();
   });
 });

@@ -28,9 +28,10 @@ reviewed design wins and this document must be corrected.
 
 ## Desktop workspace
 
-The Material UI shell is a map-first desktop workbench. The compact rail and contextual
-sidebar occupy the left edge; the persistent map uses the remaining viewport. Native map
-navigation remains on the right, and the 2D/3D selector sits directly below it. The
+The Material UI shell is a map-first desktop workbench. The map always fills the
+viewport; the rail, contextual sidebar, and detail pane form one floating surface above
+it. Changing sections or opening a pane therefore never changes the map viewport. Native
+map navigation remains on the right, and the 2D/3D selector sits directly below it. The
 shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
 derived surface, border, status, and tag colors.
 
@@ -40,7 +41,7 @@ elevation placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable setting: developer-mode preference in Dexie.
+- Durable settings: developer-mode and collapsed-navigation preferences in Dexie.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
 
@@ -111,11 +112,14 @@ non-matching days retain only their cloud percentage without a tile outline. Aft
 locally loaded cards are revealed, the same load-more action fetches the next missing
 preceding month and appends it, continuing back through the Sentinel-2 archive.
 Whole-card click selects, expands metadata, and applies that concrete scene through the
-shared map adapter. A validated L2A COG is rendered as correctly georeferenced Web
-Mercator tiles below hiking references. The real polygon or multipolygon footprint is a
-separate orange outline above hiking geometry and below labels. While a replacement is
-loading the prior usable image remains present; a failed replacement reports a safe
-error and leaves that prior image available. Marker targeting remains unavailable.
+shared map adapter. A validated L2A item is rendered from its separate red, green, and
+blue reflectance COGs as correctly georeferenced Web Mercator tiles below hiking
+references. The full reflectance range is mapped before display gamma so snow detail is
+not lost through the already stretched 8-bit TCI asset. The real polygon or multipolygon
+footprint is a separate orange outline above hiking geometry and below labels. While a
+replacement is loading the prior usable image remains present; a failed replacement
+reports a safe error and leaves that prior image available. Marker targeting remains
+unavailable.
 
 Clicking a loaded calendar date selects the scene with the highest viewport coverage for
 that date, reveals its batch if needed, expands its card, and scrolls it into view.
@@ -154,20 +158,23 @@ unavailable.
 
 ### Layers
 
-Layers groups session-only controls under explicit source headings: Copernicus
-Sentinel-2 through the configured satellite catalog, and OpenStreetMap through the
-configured vector provider. The checkboxes cover Satellite imagery, Scene footprint,
-Hiking paths, Roads, and Places and POIs. Each logical ID maps to an allowlisted set of
-stable MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite
-controls remain disabled until a scene is applied. Hiding imagery retains the applied
-scene and does not remove its footprint, search results, or attribution contract. Base
-land and water remain visible and cannot be disabled. Opacity, drag ordering,
-persistence, and custom layers are unavailable.
+Layers groups durable controls under explicit source headings: Copernicus Sentinel-2
+through the configured satellite catalog, and OpenStreetMap through the configured
+vector provider. The checkboxes cover Satellite imagery, Scene footprint, Hiking paths,
+Roads, and Places and POIs. Each logical ID maps to an allowlisted set of stable
+MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
+remain disabled until a scene is applied. Hiding imagery retains the applied scene and
+does not remove its footprint, search results, or attribution contract. Base land and
+water remain visible and cannot be disabled. Opacity, drag ordering, custom layers are
+unavailable. Checkbox state and the last successfully applied scene are stored locally
+and restored after refresh.
 
 ## Persistent map controls
 
 - Place-or-coordinate search is overlaid on the map. The current search field is
   disabled.
+- A lightweight line below search reports readiness, pending work, or safe failures.
+- Navigation collapses with a short transition to only the clickable GR mark.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Attribution remains visible in every feature section and terrain mode.
@@ -261,7 +268,7 @@ startup never waits for them.
 must be HTTPS or application-relative; terrain and satellite renderer template tokens,
 supported tile sizes, zoom ranges, policy limits, layer mappings, and attribution are
 validated. The Sentinel renderer template accepts `{z}`, `{x}`, `{y}`, and an encoded
-`{assetUrl}`. Safe errors report an issue count without echoing the payload. `VITE_*`
+`{itemUrl}`. Safe errors report an issue count without echoing the payload. `VITE_*`
 configuration must never contain secrets.
 
 ## Current capability boundary

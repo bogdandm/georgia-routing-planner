@@ -100,8 +100,8 @@ const mapProviderConfigurationInputSchema = z
                 value.includes('{z}') &&
                 value.includes('{x}') &&
                 value.includes('{y}') &&
-                value.includes('{assetUrl}'),
-              'Satellite renderer endpoint must contain {z}, {x}, {y}, and {assetUrl}.',
+                value.includes('{itemUrl}'),
+              'Satellite renderer endpoint must contain {z}, {x}, {y}, and {itemUrl}.',
             ),
             tileSize: z.union([z.literal(256), z.literal(512)]),
             minZoom: z.number().int().min(0).max(22),
@@ -249,9 +249,9 @@ export const defaultMapProviderConfigurationInput = {
     attribution: 'Copernicus Sentinel data · Earth Search / Element 84',
     maximumPages: 10,
     renderer: {
-      id: 'titiler-demo-cog',
+      id: 'titiler-demo-stac-rgb',
       tileUrlTemplate:
-        'https://titiler.xyz/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={assetUrl}',
+        'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C10000&rescale=0%2C10000&rescale=0%2C10000&color_formula=Gamma%20RGB%201.8%2C%20Saturation%201.05&resampling=bilinear&reproject=bilinear',
       tileSize: 256,
       minZoom: 5,
       maxZoom: 16,

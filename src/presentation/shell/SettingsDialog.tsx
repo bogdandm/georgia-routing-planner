@@ -12,15 +12,19 @@ import {
 
 interface SettingsDialogProps {
   readonly developerMode: boolean;
+  readonly navigationCollapsed: boolean;
   readonly onClose: () => void;
   readonly onDeveloperModeChange: (value: boolean) => void;
+  readonly onNavigationCollapsedChange: (value: boolean) => void;
   readonly open: boolean;
 }
 
 export function SettingsDialog({
   developerMode,
+  navigationCollapsed,
   onClose,
   onDeveloperModeChange,
+  onNavigationCollapsedChange,
   open,
 }: SettingsDialogProps) {
   return (
@@ -43,6 +47,23 @@ export function SettingsDialog({
         <Typography variant="body2" color="text.secondary">
           Developer mode exposes local logs, health checks, and diagnostics export. It
           never uploads data automatically.
+        </Typography>
+        <FormGroup sx={{ mt: 2 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={navigationCollapsed}
+                onChange={(event) => {
+                  onNavigationCollapsedChange(event.target.checked);
+                }}
+              />
+            }
+            label="Collapse left navigation"
+          />
+        </FormGroup>
+        <Typography variant="body2" color="text.secondary">
+          Hides the workspace rail and tools to maximize the map. Use the expand button
+          on the map to restore navigation.
         </Typography>
       </DialogContent>
       <DialogActions>

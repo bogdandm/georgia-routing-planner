@@ -37,6 +37,16 @@ const assetSchema = z
   })
   .loose();
 
+const linkSchema = z
+  .object({
+    rel: z.string().trim().min(1),
+    href: z.string().trim().min(1),
+    method: z.string().trim().optional(),
+    body: z.unknown().optional(),
+    merge: z.boolean().optional(),
+  })
+  .loose();
+
 const itemSchema = z
   .object({
     type: z.literal('Feature'),
@@ -57,16 +67,7 @@ const itemSchema = z
       })
       .loose(),
     assets: z.record(z.string(), assetSchema),
-  })
-  .loose();
-
-const linkSchema = z
-  .object({
-    rel: z.string().trim().min(1),
-    href: z.string().trim().min(1),
-    method: z.string().trim().optional(),
-    body: z.unknown().optional(),
-    merge: z.boolean().optional(),
+    links: z.array(linkSchema).default([]),
   })
   .loose();
 

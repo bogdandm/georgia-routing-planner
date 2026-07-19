@@ -21,7 +21,7 @@ export const initialMapLayerState: MapLayerState = {
   },
 };
 
-/** Session-only serializable state shared by Satellite and Layers presentation. */
+/** Serializable state shared by Satellite and Layers; stable choices persist in Dexie. */
 export const mapLayerStore = createStore<MapLayerState>()(() => initialMapLayerState);
 
 export function resetMapLayerStore(): void {

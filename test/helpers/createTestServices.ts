@@ -92,6 +92,7 @@ export function createTestServices(
     idGenerator,
     sentinelQueryDiagnostics,
     parsedMapProviderConfiguration.policy.requestTimeoutMs,
+    database,
   );
 
   return {

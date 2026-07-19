@@ -6,6 +6,11 @@ import type {
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import type {
+  MapLayerPreferencesRepository,
+  MapLayerVisibilityPreferences,
+  PersistedMapLayerPreferences,
+} from '@/application/ports/MapLayerPreferencesRepository';
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
@@ -99,6 +104,9 @@ export class MapLibreLayerController
   #activeSlot: RasterSlot | null = null;
   #appliedScene: SatelliteScene | null = null;
   #applySequence = 0;
+  #pendingRestore: PersistedMapLayerPreferences | null = null;
+  #restoreController: AbortController | null = null;
+  #restoreInProgress = false;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -106,17 +114,20 @@ export class MapLibreLayerController
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
     private readonly requestTimeoutMs: number,
+    private readonly preferences: MapLayerPreferencesRepository,
   ) {}
 
   public attach(map: MapLibreMap): void {
     this.#map = map;
     this.applyBaseLayerVisibility();
+    void this.restorePendingScene();
   }
 
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
     this.#map = null;
     this.#applySequence += 1;
+    this.#restoreController?.abort();
   }
 
   public setLayerVisibility(
@@ -153,6 +164,7 @@ export class MapLibreLayerController
         ? state.appliedImagery
         : this.withRasterVisibility(state.appliedImagery, visible);
     mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
+    this.persistStableState();
     this.logger.log({
       level: 'info',
       name: 'map.layer.visibility-changed',
@@ -165,10 +177,36 @@ export class MapLibreLayerController
     scene: SatelliteScene,
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult> {
+    return this.applySceneInternal(scene, signal, true);
+  }
+
+  public async restorePersistedState(): Promise<void> {
+    try {
+      const persisted = await this.preferences.loadMapLayerPreferences();
+      this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
+      mapLayerStore.setState({
+        visibility: persisted.visibility,
+        errorMessage: null,
+      });
+      this.applyBaseLayerVisibility();
+      await this.restorePendingScene();
+    } catch {
+      this.logger.log({
+        level: 'warn',
+        name: 'storage.map-layers.load-failed',
+      });
+    }
+  }
+
+  private async applySceneInternal(
+    scene: SatelliteScene,
+    signal: AbortSignal,
+    persist: boolean,
+  ): Promise<SatelliteImageryCommandResult> {
     const map = this.#map;
     const sceneKey = satelliteSceneKey(scene);
     if (map === null) return this.applyFailure(sceneKey, 'The map is not ready yet.');
-    if (scene.visualAsset.kind !== 'cog') {
+    if (scene.visualAsset.kind !== 'sentinel-rgb-cogs') {
       return this.applyFailure(
         sceneKey,
         'This scene has no supported true-color asset.',
@@ -182,18 +220,33 @@ export class MapLibreLayerController
       this.idGenerator.generate(),
       this.diagnostics,
     );
+    const startedAt = Date.now();
     mapLayerStore.setState({
-      appliedImagery: { status: 'loading', sceneKey, previousSceneKey },
+      appliedImagery: {
+        status: 'loading',
+        sceneKey,
+        previousSceneKey,
+        stage: 'preparing',
+        message: 'Preparing the selected Sentinel scene…',
+        startedAt,
+      },
       errorMessage: null,
     });
 
     const slot = this.#activeSlot === rasterSlots[0] ? rasterSlots[1] : rasterSlots[0];
     try {
       operation.beginStep('select-visual-asset');
-      const tileUrl = this.createTileUrl(scene.visualAsset.href);
+      const tileUrl = this.createTileUrl(scene.visualAsset.itemHref);
       const bounds = sceneBounds(scene);
       operation.completeStep();
       operation.beginStep('decode-reproject');
+      this.updateLoadingProgress(
+        sceneKey,
+        previousSceneKey,
+        'requesting-tiles',
+        'Requesting true-color tiles from the imagery renderer…',
+        startedAt,
+      );
       this.removeSlot(map, slot);
       map.addSource(slot.sourceId, {
         type: 'raster',
@@ -214,12 +267,26 @@ export class MapLibreLayerController
         },
         mapInsertionPoints.satelliteBeforeLayerId,
       );
+      this.updateLoadingProgress(
+        sceneKey,
+        previousSceneKey,
+        'rendering',
+        'Downloading, reprojecting, and decoding visible map tiles…',
+        startedAt,
+      );
       await this.waitForSource(map, slot.sourceId, signal);
       if (sequence !== this.#applySequence || this.#map !== map) {
         throw new DOMException('Superseded imagery application.', 'AbortError');
       }
       operation.completeStep();
       operation.beginStep('apply-imagery');
+      this.updateLoadingProgress(
+        sceneKey,
+        previousSceneKey,
+        'finalizing',
+        'Finalizing the raster and scene footprint…',
+        startedAt,
+      );
       const state = mapLayerStore.getState();
       map.setPaintProperty(slot.layerId, 'raster-opacity', 1);
       this.updateFootprint(map, scene);
@@ -235,6 +302,7 @@ export class MapLibreLayerController
         errorMessage: null,
       });
       operation.complete();
+      if (persist) this.persistStableState();
       this.logger.log({
         level: 'info',
         name: 'satellite.imagery.applied',
@@ -279,11 +347,100 @@ export class MapLibreLayerController
     return { status: 'success' };
   }
 
-  private createTileUrl(assetUrl: string): string {
+  private createTileUrl(itemUrl: string): string {
     return this.renderer.tileUrlTemplate.replace(
-      '{assetUrl}',
-      encodeURIComponent(assetUrl),
+      '{itemUrl}',
+      encodeURIComponent(itemUrl),
     );
+  }
+
+  private updateLoadingProgress(
+    sceneKey: string,
+    previousSceneKey: string | null,
+    stage: Extract<
+      ReturnType<typeof mapLayerStore.getState>['appliedImagery'],
+      { readonly status: 'loading' }
+    >['stage'],
+    message: string,
+    startedAt: number,
+  ): void {
+    mapLayerStore.setState({
+      appliedImagery: {
+        status: 'loading',
+        sceneKey,
+        previousSceneKey,
+        stage,
+        message,
+        startedAt,
+      },
+    });
+  }
+
+  private async restorePendingScene(): Promise<void> {
+    const pending = this.#pendingRestore;
+    if (pending === null || this.#map === null || this.#restoreInProgress) return;
+    const appliedScene = pending.appliedScene;
+    if (appliedScene === null) {
+      this.#pendingRestore = null;
+      return;
+    }
+    this.#restoreInProgress = true;
+    const controller = new AbortController();
+    this.#restoreController = controller;
+    try {
+      const result = await this.applySceneInternal(
+        appliedScene,
+        controller.signal,
+        false,
+      );
+      if (result.status === 'success') {
+        this.applyVisibility(pending.visibility);
+        this.#pendingRestore = null;
+      }
+    } finally {
+      if (this.#restoreController === controller) this.#restoreController = null;
+      this.#restoreInProgress = false;
+    }
+  }
+
+  private applyVisibility(visibility: MapLayerVisibilityPreferences): void {
+    const map = this.#map;
+    if (map === null) return;
+    for (const layerId of [
+      'satellite-imagery',
+      'scene-footprint',
+      'hiking-paths',
+      'roads',
+      'places-and-pois',
+    ] as const) {
+      for (const nativeId of this.nativeLayerIds(layerId)) {
+        if (map.getLayer(nativeId) !== undefined) {
+          map.setLayoutProperty(
+            nativeId,
+            'visibility',
+            visibility[layerId] ? 'visible' : 'none',
+          );
+        }
+      }
+    }
+    const appliedImagery = this.withRasterVisibility(
+      mapLayerStore.getState().appliedImagery,
+      visibility['satellite-imagery'],
+    );
+    mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
+  }
+
+  private persistStableState(): void {
+    const appliedScene = this.#appliedScene;
+    const { visibility } = mapLayerStore.getState();
+    void this.preferences
+      .saveMapLayerPreferences({ visibility, appliedScene })
+      .catch(() => {
+        this.logger.log({
+          level: 'warn',
+          name: 'storage.map-layers.save-failed',
+        });
+      });
   }
 
   private nativeLayerIds(layerId: LogicalMapLayerId): readonly string[] {

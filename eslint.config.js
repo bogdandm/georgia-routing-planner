@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       'coverage/**',
+      '.codex-worktrees/**',
       'dist/**',
       'node_modules/**',
       'playwright-report/**',

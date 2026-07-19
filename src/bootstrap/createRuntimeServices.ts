@@ -29,6 +29,7 @@ import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -106,6 +107,11 @@ export function createRuntimeServices(): RuntimeServices {
       ? new MapLibreLayerController(
           mapProviderConfiguration.value.satellite.renderer,
           mapProviderConfiguration.value.terrain,
+          new MapLibreContourTileGenerator(
+            mapProviderConfiguration.value.terrain,
+            mapProviderConfiguration.value.policy.requestTimeoutMs,
+            logger,
+          ),
           logger,
           idGenerator,
           sentinelQueryDiagnostics,

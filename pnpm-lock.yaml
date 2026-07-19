@@ -49,6 +49,9 @@ importers:
       ky:
         specifier: 2.0.2
         version: 2.0.2
+      maplibre-contour:
+        specifier: 0.0.5
+        version: 0.0.5
       maplibre-gl:
         specifier: 5.24.0
         version: 5.24.0
@@ -3102,6 +3105,12 @@ packages:
       }
     engines: { node: '>=10' }
 
+  maplibre-contour@0.0.5:
+    resolution:
+      {
+        integrity: sha512-GLrai4T5e0MUiM3HBdPWYVTsN6Pc3XJ3996gQMGexUou3PCU/E+SAlngSv2BChMpQ0UMM/8Cog84ueHAjiFKAQ==,
+      }
+
   maplibre-gl@5.24.0:
     resolution:
       {
@@ -5927,6 +5936,8 @@ snapshots:
   make-dir@4.0.0:
     dependencies:
       semver: 7.8.5
+
+  maplibre-contour@0.0.5: {}
 
   maplibre-gl@5.24.0:
     dependencies:

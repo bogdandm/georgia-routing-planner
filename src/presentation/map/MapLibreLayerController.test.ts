@@ -16,7 +16,7 @@ class FakeLayerMap {
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
-  readonly moves: Array<{ readonly id: string; readonly beforeId?: string }> = [];
+  readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
 
@@ -71,7 +71,7 @@ class FakeLayerMap {
 
   public getStyle(): {
     readonly sources: Record<string, unknown>;
-    readonly layers: Array<{ readonly id: string }>;
+    readonly layers: { readonly id: string }[];
   } {
     return {
       sources: Object.fromEntries(this.sources),
@@ -97,7 +97,20 @@ class FakeLayerMap {
   }
 
   public addSource(id: string, source: unknown): void {
-    this.sources.set(id, source);
+    this.sources.set(
+      id,
+      typeof source === 'object' && source !== null && 'tiles' in source
+        ? {
+            ...source,
+            setTiles: (tiles: string[]) => {
+              const current = this.sources.get(id);
+              if (typeof current === 'object' && current !== null) {
+                this.sources.set(id, { ...current, tiles });
+              }
+            },
+          }
+        : source,
+    );
   }
 
   public removeSource(id: string): void {
@@ -173,6 +186,10 @@ describe('MapLibreLayerController', () => {
     const controller = new MapLibreLayerController(
       configuration.value.satellite.renderer,
       configuration.value.terrain,
+      {
+        createTileUrl: (intervalMeters) =>
+          `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
+      },
       services.logger,
       services.idGenerator,
       services.sentinelQueryDiagnostics,
@@ -229,6 +246,44 @@ describe('MapLibreLayerController', () => {
       initialized: true,
       preferences: { shadeAboveSatellite: true },
     });
+  });
+
+  it('renders bounded minor, index, and labeled contours and updates their interval atomically', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    const contourSource = map.sources.get('terrain-contours') as {
+      readonly tiles: readonly string[];
+      readonly minzoom: number;
+      readonly maxzoom: number;
+    };
+    expect(contourSource).toMatchObject({ minzoom: 11, maxzoom: 15 });
+    expect(contourSource.tiles[0]).toContain('minor=50&major=200');
+    expect(map.layers.get('terrain-contour-minor')).toMatchObject({
+      minzoom: 11,
+      filter: ['==', ['get', 'level'], 0],
+    });
+    expect(map.layers.get('terrain-contour-index')).toMatchObject({
+      filter: ['>', ['get', 'level'], 0],
+    });
+    expect(map.layers.get('terrain-contour-labels')).toMatchObject({
+      filter: ['>', ['get', 'level'], 0],
+    });
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: false,
+      }),
+    ).toEqual({ status: 'success' });
+    const updatedSource = map.sources.get('terrain-contours') as {
+      readonly tiles: readonly string[];
+    };
+    expect(updatedSource.tiles[0]).toContain('minor=25&major=200');
+    expect(map.layers.has('terrain-contour-minor')).toBe(true);
   });
 
   it('applies a georeferenced tile source, footprint, visibility, and fit command', async () => {

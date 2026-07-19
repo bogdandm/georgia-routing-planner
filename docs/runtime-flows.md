@@ -105,6 +105,8 @@ flowchart LR
   HTTP["HTTP hooks"] --> Logger
   Storage["Persistence"] --> Logger
   Sentinel["Sentinel use cases and raster adapter"] --> SentinelSnapshot["Sentinel query timeline store"]
+  Sentinel --> LayerState["Applied imagery and logical visibility state"]
+  LayerState --> Map
   SentinelSnapshot --> Drawer
   Snapshot --> Drawer["Developer drawer"]
   Logger --> Drawer
@@ -194,13 +196,52 @@ fixed one-item Sentinel POST probe; startup never waits for it.
 The sidebar captures one immutable viewport snapshot at submission, aborts a replaced
 request, and keeps provider data local to the current browser session. Successful
 results are grouped by UTC acquisition date. Catalog, pagination, validation, mapping,
-and coverage steps complete in the live timeline; visual selection and map rendering
-steps are marked skipped until the user can apply a scene.
+and coverage steps complete in the live timeline. Applying a result starts a new
+correlated operation for visual selection, provider reprojection, and MapLibre source
+application.
+
+## Sentinel imagery application and logical layers
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Browser as SatelliteBrowser
+  participant Controller as MapLibreLayerController
+  participant Renderer as Configured COG renderer
+  participant Map as MapLibre
+  participant State as Map layer store
+
+  User->>Browser: click scene card or loaded calendar day
+  Browser->>Controller: applyScene(scene, AbortSignal)
+  Controller->>State: loading with safe scene key
+  Controller->>Map: add hidden staging raster source/layer
+  Map->>Renderer: request bounded Web Mercator tiles for encoded COG URL
+  alt staging source becomes ready
+    Controller->>Map: reveal staging raster and update footprint GeoJSON
+    Controller->>Map: remove prior raster source/layer
+    Controller->>State: ready or hidden snapshot
+  else source error, timeout, cancellation, or stale command
+    Controller->>Map: remove staging resources only
+    Controller->>State: failed/cancelled; prior raster remains usable
+  end
+```
+
+Two internal raster slots make replacement atomic from the user's perspective. Provider
+URLs remain inside the controller and never enter Zustand or exported diagnostics. The
+footprint is updated only after the replacement raster is usable. `Fit footprint`
+derives bounds from the validated polygon while preserving current pitch and bearing.
+
+Layers commands use logical IDs. Hiking, road, and place commands expand to fixed native
+style groups; satellite and footprint commands target only controller-owned layers.
+Visibility is applied idempotently to the existing map and reflected in one serializable
+session store. Satellite search/results state remains mounted while another rail section
+is visible, and returning to Satellite reattaches the existing adjacent pane without a
+new provider request.
 
 ## Teardown ownership
 
-`MapWorkspace` destroys the facade and flushes camera persistence. The facade cancels a
-pending terrain wait, removes MapLibre and WebGL listeners, clears subscribers, and
-releases the native map reference. React effects also remove online/offline listeners
-and reset developer-only debug flags. New integrations must preserve this single-owner
-cleanup model.
+`MapWorkspace` destroys the facade and flushes camera persistence. The facade detaches
+the shared layer controller, cancels a pending terrain wait, removes MapLibre and WebGL
+listeners, clears subscribers, and releases the native map reference. React effects also
+remove online/offline listeners and reset developer-only debug flags. New integrations
+must preserve this single-owner cleanup model.

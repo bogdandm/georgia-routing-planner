@@ -10,6 +10,7 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { mapSourceIds } from '@/presentation/map/mapIds';
+import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
@@ -108,6 +109,7 @@ export class MapLibreFacade implements MapFacade {
     private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
+    private readonly layerController?: MapLibreLayerController,
   ) {
     this.snapshotStore?.update(this.#snapshot);
   }
@@ -119,6 +121,7 @@ export class MapLibreFacade implements MapFacade {
     }
     this.detach();
     this.#map = map;
+    this.layerController?.attach(map);
     map.on('load', this.handleLoad);
     map.on('idle', this.handleIdle);
     map.on('moveend', this.handleMoveEnd);
@@ -220,6 +223,7 @@ export class MapLibreFacade implements MapFacade {
     if (map === null) {
       return;
     }
+    this.layerController?.attach(map);
     const style = map.getStyle();
     this.updateSnapshot({
       lifecycle:
@@ -579,6 +583,7 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
+    this.layerController?.detach(map);
     this.#map = null;
     this.logger.log({ level: 'debug', name: 'map.lifecycle.unmounted' });
   }

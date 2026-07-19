@@ -26,6 +26,7 @@ import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
+import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -40,6 +41,7 @@ export interface RuntimeServices {
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly mapViewport: MapViewportSnapshotStore;
+  readonly mapLayers: MapLibreLayerController | null;
   readonly queryClient: QueryClient;
   readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
@@ -81,6 +83,8 @@ export function createRuntimeServices(): RuntimeServices {
         terrainOrigin: summary.terrainOrigin,
         satelliteId: summary.satelliteId,
         satelliteOrigin: summary.satelliteOrigin,
+        satelliteRendererId: summary.satelliteRendererId,
+        satelliteRendererOrigin: summary.satelliteRendererOrigin,
       },
     });
   } else {
@@ -93,6 +97,16 @@ export function createRuntimeServices(): RuntimeServices {
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const mapViewport = new MapViewportSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
+  const mapLayers =
+    mapProviderConfiguration.status === 'valid'
+      ? new MapLibreLayerController(
+          mapProviderConfiguration.value.satellite.renderer,
+          logger,
+          idGenerator,
+          sentinelQueryDiagnostics,
+          mapProviderConfiguration.value.policy.requestTimeoutMs,
+        )
+      : null;
   const httpClient = createHttpClient(logger);
   const satelliteCatalogGateway =
     mapProviderConfiguration.status === 'valid'
@@ -179,6 +193,7 @@ export function createRuntimeServices(): RuntimeServices {
     mapCameraRepository,
     mapDiagnostics,
     mapViewport,
+    mapLayers,
     mapProviderConfiguration,
     queryClient,
     loadSatelliteAvailability,

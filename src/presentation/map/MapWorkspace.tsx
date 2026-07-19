@@ -69,6 +69,7 @@ export function MapWorkspace({
     logger,
     mapCameraRepository,
     mapDiagnostics,
+    mapLayers,
     mapProviderConfiguration,
     mapViewport,
   } = useRuntimeServices();
@@ -105,11 +106,13 @@ export function MapWorkspace({
             }
           : undefined,
         mapDiagnostics,
+        mapLayers ?? undefined,
       ),
     [
       cameraPersistence,
       logger,
       mapDiagnostics,
+      mapLayers,
       mapProviderConfiguration,
       suppliedFacade,
     ],

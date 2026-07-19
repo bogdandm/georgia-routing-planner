@@ -41,7 +41,15 @@
       "L2A": "sentinel-2-l2a"
     },
     "attribution": "Copernicus Sentinel data · Earth Search / Element 84",
-    "maximumPages": 10
+    "maximumPages": 10,
+    "renderer": {
+      "id": "titiler-demo-cog",
+      "tileUrlTemplate": "https://titiler.xyz/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={assetUrl}",
+      "tileSize": 256,
+      "minZoom": 5,
+      "maxZoom": 16,
+      "attribution": "Copernicus Sentinel data · COG tiles rendered by TiTiler / Development Seed"
+    }
   },
   "policy": {
     "requestTimeoutMs": 15000,

@@ -20,6 +20,7 @@ import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
+import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -85,6 +86,13 @@ export function createTestServices(
       logger,
       clock,
     );
+  const mapLayers = new MapLibreLayerController(
+    parsedMapProviderConfiguration.satellite.renderer,
+    logger,
+    idGenerator,
+    sentinelQueryDiagnostics,
+    parsedMapProviderConfiguration.policy.requestTimeoutMs,
+  );
 
   return {
     buildInfo,
@@ -102,6 +110,7 @@ export function createTestServices(
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
     mapDiagnostics,
     mapViewport,
+    mapLayers,
     mapProviderConfiguration: {
       status: 'valid',
       value: parsedMapProviderConfiguration,

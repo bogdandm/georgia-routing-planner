@@ -43,6 +43,7 @@ src/
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
     map/                   map UI, pure style, facade, terrain, and camera coordination
+    satellite-browser/     live search controls and date-grouped scene presentation
     developer-tools/       local support and diagnostic UI
     theme/                 shared color tokens and Material UI theme
     styles/                application-level CSS
@@ -62,7 +63,13 @@ does not import React, MapLibre, `ky`, or STAC JSON.
 builds allowlisted STAC requests, validates all returned items before mapping them,
 follows only same-origin POST pagination tokens within the configured cap, and converts
 transport/schema failures to safe catalog errors. The composition root exposes the
-adapter through `SatelliteCatalogGateway`; React never receives its `ky` client.
+adapter through named search and availability use cases; React never receives its `ky`
+client. A serializable viewport snapshot store bridges settled map updates to Satellite
+controls without exposing MapLibre.
+
+Satellite presentation uses the CC0-licensed `@photostructure/tz-lookup` data resolver
+to map the submitted anchor coordinates to an IANA time zone entirely in the browser. No
+location or acquisition metadata is sent to a time-zone service.
 
 ## Composition root
 
@@ -86,7 +93,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
-| Submitted Sentinel criteria and derived grouped results   | Application DTOs / TanStack Query   | Disposable, not persisted                          |
+| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state      | Disposable, not persisted                          |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause

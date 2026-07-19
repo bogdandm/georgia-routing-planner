@@ -4,6 +4,14 @@
 
 These instructions apply to the entire Georgia Routing Planner repository.
 
+## Canonical UI prototype
+
+The canonical Penpot workspace is
+[Georgia Routing Planner prototype](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334).
+Keep implemented UI/UX review changes synchronized with the corresponding prototype
+surface. Preserve prototype-only future features; never replace them with placeholders
+or reduced current-application behavior.
+
 ## Git workflow and approval gate
 
 `main` is the protected approval branch. All implementation, documentation,

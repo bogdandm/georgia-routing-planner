@@ -128,18 +128,18 @@ diagnostic transitions are ignored and cannot change the primary operation outco
 
 ## Sentinel search core
 
-The provider-independent application flow and Earth Search adapter are implemented even
-though no search UI invokes them yet:
+The Satellite sidebar invokes the provider-independent application flow and Earth Search
+adapter through the injected `SearchSatelliteScenes` use case:
 
 ```mermaid
 sequenceDiagram
-  participant Command as Satellite command
+  participant Command as SatelliteBrowser
   participant UseCase as Search/availability use case
   participant Gateway as SatelliteCatalogGateway
   participant Geometry as Satellite coverage
   participant Timeline as Sentinel diagnostics
 
-  Command->>UseCase: viewport snapshot + UTC criteria + AbortSignal
+  Command->>UseCase: point anchor + viewport snapshot + UTC criteria + AbortSignal
   UseCase->>Timeline: begin correlated operation
   UseCase->>UseCase: validate bounds, dates, level, cloud limit
   UseCase->>Gateway: bounded criteria, item cap, operation ID, signal
@@ -151,12 +151,22 @@ sequenceDiagram
   UseCase-->>Command: stable UTC date groups or typed error
 ```
 
-Date endpoints are inclusive and searches are limited to 62 days and 100 matched items.
-The use cases reject a mixed L1C/L2A response instead of substituting product levels.
-Availability uses the lowest scene-level cloud value as the per-day summary. A newer
-operation replaces the visible timeline; late transitions from an older request are
-ignored by operation ID. Logs contain correlation IDs, counts, durations, and safe error
-codes, never exact viewport geometry.
+The Earth Search request intersects the immutable submitted center point, not the full
+map bounds. The submitted viewport remains part of the application criteria only for
+coverage calculation and edge evidence. The UI first derives the current UTC calendar
+month through today; users do not enter date endpoints. It reveals locally loaded scenes
+in eight-card sets. When that result is exhausted, the same load-more command submits
+the preceding calendar month with the immutable original viewport, product level, and
+cloud threshold, then appends the older groups. This continues back to the first
+Sentinel-2 archive month. Earth Search pages are capped at 100 items and followed
+internally up to the configured ten-page safety boundary, so a normal month is not
+truncated or turned into a user refinement task. The use cases reject a mixed L1C/L2A
+response instead of substituting product levels. The calendar's per-day cloud summary is
+a weighted average using each scene's submitted viewport coverage as its weight, with a
+simple average fallback when every coverage is zero. A newer operation replaces the
+visible timeline; late transitions from an older request are ignored by operation ID.
+Logs contain correlation IDs, counts, durations, and safe error codes, never exact
+viewport geometry.
 
 The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
 URL. It obtains the first page, follows at most the configured number of same-origin
@@ -170,6 +180,12 @@ Timeout, rate-limit, unsuccessful HTTP, network, schema, pagination, result-limi
 cancellation outcomes remain distinct typed codes. Logs and the timeline contain the
 operation ID, safe code, count, and duration only. Explicit provider health checks add a
 fixed one-item Sentinel POST probe; startup never waits for it.
+
+The sidebar captures one immutable viewport snapshot at submission, aborts a replaced
+request, and keeps provider data local to the current browser session. Successful
+results are grouped by UTC acquisition date. Catalog, pagination, validation, mapping,
+and coverage steps complete in the live timeline; visual selection and map rendering
+steps are marked skipped until the user can apply a scene.
 
 ## Teardown ownership
 

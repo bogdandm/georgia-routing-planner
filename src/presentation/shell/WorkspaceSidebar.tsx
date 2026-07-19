@@ -1,29 +1,22 @@
 import AddIcon from '@mui/icons-material/Add';
-import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
-import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SortOutlinedIcon from '@mui/icons-material/SortOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
   Box,
   Button,
-  Chip,
   Divider,
   IconButton,
   InputAdornment,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -32,6 +25,7 @@ import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import { EmptyState } from '@/presentation/shell/EmptyState';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
+import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 
@@ -114,82 +108,7 @@ interface SatelliteContentProps {
 }
 
 function SatelliteContent({ coordinates }: SatelliteContentProps) {
-  return (
-    <Stack spacing={2} sx={{ p: 2 }}>
-      <Select
-        fullWidth
-        size="small"
-        value="viewport"
-        inputProps={{ 'aria-label': 'Search area source' }}
-        renderValue={() => (
-          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ minWidth: 58, fontWeight: 700 }}>
-              Viewport
-            </Typography>
-            <Divider orientation="vertical" flexItem />
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {coordinates}
-            </Typography>
-          </Stack>
-        )}
-      >
-        <MenuItem value="viewport">Viewport</MenuItem>
-        <MenuItem value="marker" disabled>
-          Marker
-        </MenuItem>
-      </Select>
-
-      <Divider />
-      <Stack direction="row" sx={{ alignItems: 'center' }}>
-        <Typography component="h3" variant="subtitle2" sx={{ flex: 1 }}>
-          Date range
-        </Typography>
-        <Chip size="small" label="Not configured" />
-      </Stack>
-      <Paper
-        variant="outlined"
-        sx={{ p: 2, display: 'flex', gap: 1.5, bgcolor: appColors.surface.subtle }}
-      >
-        <CalendarMonthOutlinedIcon color="primary" />
-        <Box>
-          <Typography variant="body2" sx={{ fontWeight: 700 }}>
-            Acquisition calendar
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Date and cloud filters arrive with imagery search.
-          </Typography>
-        </Box>
-      </Paper>
-
-      <Divider />
-      <Typography component="h3" variant="subtitle2">
-        Sentinel options
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <ToggleButtonGroup disabled exclusive fullWidth size="small" value="l2a">
-          <ToggleButton value="l1c">L1C</ToggleButton>
-          <ToggleButton value="l2a">L2A</ToggleButton>
-        </ToggleButtonGroup>
-        <Chip
-          size="small"
-          label="Cloud ≤ 25%"
-          sx={{
-            bgcolor: appColors.tag.teal.background,
-            color: appColors.tag.teal.foreground,
-          }}
-        />
-      </Stack>
-      <Button disabled fullWidth variant="contained" startIcon={<SearchIcon />}>
-        Search images
-      </Button>
-
-      <EmptyState
-        icon={<SatelliteAltOutlinedIcon fontSize="large" />}
-        title="Imagery search is not available yet"
-        description="The map remains usable while the Sentinel workflow is deferred."
-      />
-    </Stack>
-  );
+  return <SatelliteBrowser fallbackCoordinates={coordinates} />;
 }
 
 function MarkersContent() {
@@ -294,7 +213,7 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
       sx={{
         position: 'relative',
         zIndex: 3,
-        width: { xs: 344, xl: 408 },
+        width: activeTab === 'satellite' ? { xs: 420, xl: 464 } : { xs: 344, xl: 408 },
         flexShrink: 0,
         minHeight: 0,
         display: 'flex',
@@ -323,7 +242,7 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         </Box>
         {definition.actions}
       </Stack>
-      <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto' }}>
+      <Box sx={{ minHeight: 0, flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
         {activeTab === 'tracks' ? <TracksContent /> : null}
         {activeTab === 'satellite' ? (
           <SatelliteContent coordinates={searchAreaCoordinates} />

@@ -9,16 +9,17 @@ This is the active implementation plan for the Satellite imagery workspace descr
 [`docs/map-providers.md`](./docs/map-providers.md). It replaces the completed map
 foundation plan that previously occupied this file.
 
-- Status: **implementation started; the live Sentinel diagnostics timeline foundation,
-  validated Earth Search catalog path, and provider-independent search core are
-  implemented while raster feasibility remains open**.
+- Status: **implementation started; latest-image viewport search, acquisition calendar,
+  horizontal cloud filtering, adjacent grouped results, and the correlated Sentinel
+  diagnostics timeline are implemented while raster rendering remains open**.
 - Active branch: `feature/sentinel-imagery-plan`, created from `main` on 2026-07-19.
 - Approval boundary: all implementation remains on a feature branch and reaches `main`
   only after the reviewed branch state is explicitly approved.
-- Current application boundary: the Satellite rail destination and live viewport-center
-  selector exist, while date/product filters, search, results, scene metadata, and
-  imagery rendering remain unavailable. Developer diagnostics now has the persistent
-  `Sentinel query` timeline that those operations will update.
+- Current application boundary: the Satellite rail destination performs a real bounded
+  Earth Search request for the live viewport and renders date-grouped scene summaries.
+  The acquisition calendar and adjacent expandable results pane are available; imagery
+  apply/render actions remain unavailable. Developer diagnostics stays open and updates
+  every implemented query step with live and completed durations.
 
 The implementation must be delivered as focused, independently testable commits. Each
 behavior commit includes its tests and leaves the repository buildable. This plan stays
@@ -38,9 +39,9 @@ merge into `main`.
 | S5.2    | Catalog and raster feasibility decision           | In progress |
 | S5.3    | Models, viewport geometry, and use cases          | Done        |
 | S5.4    | Validated STAC gateway and configuration          | Done        |
-| S5.5    | Search sidebar and acquisition calendar           | Pending     |
+| S5.5    | Search sidebar and acquisition calendar           | In progress |
 | S5.6    | MapLibre true-color imagery and footprint adapter | Pending     |
-| S5.7    | Results, metadata, and applied actions            | Pending     |
+| S5.7    | Results, metadata, and applied actions            | In progress |
 | S5.8    | Exported diagnostics and failure evidence         | Pending     |
 | S5.9    | E2E, accessibility, docs, and design sync         | Pending     |
 
@@ -75,28 +76,28 @@ Synchronization rules for this workstream:
 
 ### 2.1 Prototype-to-delivery ledger
 
-| Prototype surface          | Reviewed contract                                                                    | Current application                                             | Planned work                                                          | State    |
-| -------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------- | -------- |
-| Satellite rail destination | Opens contextual Satellite tools without remounting the map                          | Implemented                                                     | Regression coverage in S5.9                                           | Existing |
-| Search-area selector       | Compact `Viewport` / `<latitude, longitude>` selector; Marker is a later source      | Viewport center implemented; Marker disabled                    | Actual viewport bounds in S5.3; preserve Marker for later             | Partial  |
-| Date calendar              | Range selection plus acquisition/cloud hints below available days                    | Placeholder card only                                           | Availability query and accessible calendar in S5.5                    | Planned  |
-| Sentinel options           | Exclusive L1C/L2A choice and cloud threshold                                         | Disabled controls                                               | Typed criteria and active controls in S5.5                            | Planned  |
-| Other imagery              | Visible boundary that no other source is available in this prototype                 | Not represented exactly                                         | Honest unavailable row in S5.5; no invented provider                  | Planned  |
-| Search summary/action      | Concise criteria summary and `Search Images` action                                  | Disabled action                                                 | Submitted criteria, loading, cancellation, and validation in S5.5     | Planned  |
-| Adjacent results pane      | Overlay/adjacent pane titled for the search point, with scene and acquisition counts | Unavailable                                                     | Shell-owned pane in S5.7                                              | Planned  |
-| Date-grouped scene cards   | Platform, product level, cloud, coverage, warning, thumbnail, expand action          | Unavailable                                                     | Result grouping and cards in S5.7                                     | Planned  |
-| Expanded scene metadata    | Acquisition time, tile, orbit, product, edge distance, attribution                   | Unavailable                                                     | Validated metadata details in S5.7                                    | Planned  |
-| Applied scene actions      | Applied status, fit footprint, and hide imagery                                      | Unavailable                                                     | Map adapter and commands in S5.6/S5.7                                 | Planned  |
-| Persistent map composition | True-color scene beneath hiking references, with footprint and other state preserved | Reserved satellite layer band only                              | Rendering and layer-order work in S5.6                                | Planned  |
-| Sentinel query diagnostics | Persistent non-modal drawer with every query/render step, status, and live duration  | Drawer and typed timeline implemented; operations not yet wired | Instrument each boundary in S5.3-S5.8 and mirror the widget in Penpot | Partial  |
+| Prototype surface          | Reviewed contract                                                                    | Current application                                           | Planned work                                        | State    |
+| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------- | -------- |
+| Satellite rail destination | Opens contextual Satellite tools without remounting the map                          | Implemented                                                   | Regression coverage in S5.9                         | Existing |
+| Search-area selector       | Compact `Point` / `<latitude, longitude>` selector; Marker is a later source         | Center query plus captured coverage bounds; Marker disabled   | Preserve Marker for later                           | Partial  |
+| Date calendar              | Latest-image acquisition/cloud hints without date-range input                        | Read-only month grid highlights loaded acquisition dates      | Refine availability refresh behavior in S5.5        | Partial  |
+| Sentinel options           | L2A-only MVP with a horizontal cloud slider directly beneath the calendar            | Active fixed L2A search and horizontal cloud control          | Add availability refresh behavior in S5.5           | Partial  |
+| Other imagery              | No inactive provider placeholder                                                     | Removed                                                       | Add only with a real provider                       | Accepted |
+| Search summary/action      | Concise criteria summary and `Search Images` action                                  | Live request, loading/cancel, empty, and safe error states    | Refine submitted-summary treatment in S5.5          | Partial  |
+| Adjacent results pane      | Adjacent pane titled for the search point, with scene and acquisition counts         | Implemented as a shell sibling; close preserves map           | Add applied imagery actions in S5.7                 | Partial  |
+| Date-grouped scene cards   | Time, product level, cloud, coverage, warning, thumbnail, whole-card action          | Latest eight shown first; Load more crosses older months      | Connect card selection to imagery rendering in S5.7 | Partial  |
+| Expanded scene metadata    | Acquisition time, tile, orbit, product, edge distance, attribution                   | Unavailable                                                   | Validated metadata details in S5.7                  | Planned  |
+| Applied scene actions      | Applied status, fit footprint, and hide imagery                                      | Unavailable                                                   | Map adapter and commands in S5.6/S5.7               | Planned  |
+| Persistent map composition | True-color scene beneath hiking references, with footprint and other state preserved | Reserved satellite layer band only                            | Rendering and layer-order work in S5.6              | Planned  |
+| Sentinel query diagnostics | Persistent non-modal drawer with every query/render step, status, and live duration  | Search steps are live; rendering steps are explicitly skipped | Instrument rendering boundaries in S5.6             | Partial  |
 
 ## 3. Required user outcome
 
 At completion, a desktop Chrome user can:
 
 1. Open Satellite without recreating the persistent MapLibre map.
-2. Search the actual current viewport for Sentinel-2 L1C or L2A scenes using a bounded
-   inclusive date range and cloud-cover threshold.
+2. Search the actual current viewport for the latest Sentinel-2 L2A scenes using a
+   bounded lookback and horizontal cloud-cover threshold.
 3. See acquisition availability in the calendar and compare returned scenes grouped by
    UTC acquisition date.
 4. Understand each scene's platform, processing level, scene cloud cover, submitted
@@ -120,22 +121,47 @@ At completion, a desktop Chrome user can:
 
 - Satellite remains one of the four primary rail destinations; it is not a dialog or a
   separate page.
+- Every primary rail destination has a stable URL anchor: `#tracks`, `#satelite`,
+  `#markers`, or `#layers`. Direct navigation restores the matching tab.
 - The map is long-lived. Opening/closing the results pane, applying imagery, and
   changing filters must not remount it.
-- `Viewport` is the first implemented search source. It uses the submitted visible map
-  bounds, while the selector displays the settled viewport center as latitude then
-  longitude.
+- `Point` is the first implemented search source. Earth Search intersects the submitted
+  settled center, while the captured visible bounds remain client-side coverage input.
+  The selector displays latitude then longitude.
 - `Marker` remains visible but unavailable until saved-marker behavior exists. This work
   does not invent a marker repository or synthetic marker choices.
-- Search supports Sentinel-2 L1C and L2A as separate exclusive choices. Do not silently
-  substitute one collection for the other.
-- The cloud threshold filters scene-level STAC cloud metadata. The UI must not imply
-  that this is a cloud calculation limited to the viewport.
-- Date range endpoints are inclusive and interpreted as UTC calendar dates.
+- The MVP search UI exposes Sentinel-2 L2A only. Keep L1C out of the selector and render
+  workflow until a bounded browser path is deliberately rescheduled.
+- The horizontal cloud slider filters scene-level STAC cloud metadata. The UI must not
+  imply that this is a cloud calculation limited to the viewport.
+- Calendar cloud values use viewport-coverage-weighted daily averages. Days at or below
+  the current slider are subtly orange; non-matching days have no tile outline or fill.
+- A loaded calendar day is a shortcut to its highest-viewport-coverage card: reveal the
+  batch, select/expand, and scroll it into view. Break coverage ties by existing
+  acquisition-time order, and never reopen a user-closed results pane.
+- The UI starts with the current UTC calendar month through today; users do not enter a
+  date range. Results show the latest eight scenes first and reveal eight more per load.
+  Once the loaded set is exhausted, the same action fetches and appends the preceding
+  month with the immutable submitted viewport and filters, continuing back through the
+  Sentinel-2 archive.
+- Automatically reveal or fetch a bounded number of additional sets while the results
+  occupy less than 85% of the pane. Manual `Load more images` remains available after
+  automatic filling stops.
 - Results are concrete scenes, not hidden mosaics. Selecting another scene replaces the
   applied raster explicitly.
-- Partial coverage remains visible: uncovered basemap stays present, the footprint can
-  be inspected, and the coverage percentage and edge warning remain explicit.
+- Partial coverage remains visible: uncovered basemap stays present and coverage stays
+  explicit. Warn only when the scene border is less than 5 km from the search anchor;
+  being outside a scene or 80 km from its border is not itself a warning.
+- The whole scene card is the selection/apply target. Do not add a separate Apply button
+  or collapsed tile/orbit tags.
+- Within one acquisition day, order concrete scenes by acquisition time descending on
+  the client. Keep scenes separate; mosaic composition is a future capability.
+- Show date and search-coordinate-local acquisition time on one line. Resolve the IANA
+  zone offline from the immutable submitted center; do not use browser-local or UTC-only
+  display and do not show platform text on cards.
+- Render coverage at 50% or below as a yellow tag; render higher coverage as plain text.
+  Render cloud cover at 70% or higher as a red tag; render lower cloud values as plain
+  text.
 - True-color imagery sits below OSM hiking references, labels, catalog/Create GPX
   geometry, markers, and interaction highlights.
 - Applying imagery does not change the current camera automatically. `Fit footprint` is
@@ -144,8 +170,8 @@ At completion, a desktop Chrome user can:
   metadata. Final footprint visibility semantics await the review question in
   section 14.
 - Closing the results pane does not silently remove an applied scene.
-- `Other imagery` remains an honest unavailable boundary. Do not add a fake provider or
-  generic source picker.
+- Do not show an `Other imagery` placeholder. Add another source only with a real
+  connected provider.
 - Developer diagnostics is a persistent, non-modal, shadow-free drawer. It closes only
   from its header control, its active rail toggle, or disabling developer mode; Escape,
   workspace clicks, and tab changes do not close it.
@@ -263,7 +289,7 @@ MapLibre getter.
 
 | State                                                                 | Owner                                     | Persistence          |
 | --------------------------------------------------------------------- | ----------------------------------------- | -------------------- |
-| Draft date range, calendar month, product level, cloud threshold      | Satellite React feature                   | Session only         |
+| Calendar month, product level, cloud threshold, visible-result count  | Satellite React feature                   | Session only         |
 | Last submitted criteria                                               | Satellite React feature / query key       | Session only         |
 | Availability and search request lifecycle/results                     | TanStack Query                            | In-memory cache only |
 | Expanded/selected result and pane visibility                          | Satellite React feature                   | Session only         |
@@ -322,8 +348,9 @@ Exact file splitting should follow one primary export per file and avoid barrel 
 ## 7. Provider and rendering decision gate
 
 The catalog path and raster path are separate replaceable decisions. The catalog may be
-usable even when a candidate raster adapter fails, but the user-visible feature is not
-complete until both reviewed L1C and L2A flows have an honest rendering outcome.
+usable even when a candidate raster adapter fails, but the user-visible MVP feature is
+not complete until the L2A flow has an honest rendering outcome. L1C is deferred and is
+not an MVP completion gate.
 
 ### 7.1 Catalog candidate
 
@@ -352,15 +379,14 @@ MapLibre COG example uses `@geomatico/maplibre-cog-protocol`, but that adapter d
 that its input must already be EPSG:3857 and it does not reproject. Sentinel scene
 assets commonly use UTM grids, so package adoption is not assumed.
 
-S5.2 must compare at least these paths against one representative Georgia L1C scene and
-one L2A scene:
+S5.2 must compare at least these paths against one representative Georgia L2A scene:
 
 1. A browser-side COG/JP2 windowing, reprojection, and tile adapter with work isolated
    from the UI thread.
 2. An anonymous standards-compatible raster tile service only if its policy, CORS,
    attribution, longevity, request limits, and static-client security are acceptable.
 3. A deliberately reduced reviewed product scope only if neither path can meet the fixed
-   constraints; no silent L1C/L2A substitution or blurry preview stretching.
+   constraints; no blurry preview stretching.
 
 The gate records:
 
@@ -398,11 +424,9 @@ rather than weakening privacy/static-hosting constraints.
   L2A, but it is a raster reader rather than a reprojection/rendering adapter. The known
   MapLibre COG protocol still requires EPSG:3857 while the sample is UTM EPSG:32638.
 
-The catalog decision is therefore usable for provider-independent search work. S5.3 may
-proceed without embedding a raster assumption, but S5.6 cannot claim L1C apply support
-until the gate either proves a bounded JP2 path or receives an explicit product or
-deployment decision. L1C must remain a distinct, honestly unsupported render asset; it
-must never be substituted with the related L2A scene.
+The catalog decision is therefore usable for provider-independent search work. L1C
+research remains recorded as provider evidence, but L1C search and apply are outside the
+MVP UI and are not part of S5.6 delivery.
 
 ## 8. Search and derived-data contracts
 
@@ -419,8 +443,9 @@ must never be substituted with the related L2A scene.
 
 - Availability covers the displayed calendar month for the current product level and
   cloud threshold. It returns per-date scene count and a reviewed cloud summary.
-- The explicit search uses the selected inclusive range and the same product/cloud
-  criteria.
+- Search derives the latest bounded inclusive lookback and uses the selected product and
+  cloud criteria. The UI shows eight scenes first and reveals another eight with each
+  `Load more images` action; it has no user-entered date range.
 - Limit the supported date span and result count based on S5.2 provider measurements;
   show an actionable refinement message rather than truncating silently.
 - Follow provider pagination through validated HTTPS links only, cap pages/results, and
@@ -437,8 +462,9 @@ must never be substituted with the related L2A scene.
   a percentage.
 - The search interest point is the submitted viewport center. The edge distance is the
   shortest geodesic distance from that point to the scene boundary.
-- Show an edge warning when the interest point is outside the scene or inside but within
-  a reviewed distance threshold. Keep the wording distinct for those cases.
+- Show an edge warning only when the shortest anchor-to-scene-border distance is less
+  than 5 km, regardless of whether the anchor is inside or outside. Do not warn merely
+  because the anchor is outside or because the scene border is far away.
 - Use focused Turf packages only if they materially simplify robust intersection/area/
   distance calculations. Record license and bundle impact before adding them.
 
@@ -461,7 +487,7 @@ boundaries. The coordinates, dates, item IDs, counts, and asset URLs are illustr
 examples taken from a live Earth Search query on 2026-07-19 against July 2025 data. They
 are not application constants.
 
-### 9.1 Capture the submitted viewport
+### 9.1 Capture the submitted point and coverage viewport
 
 When the user presses **Search Images**, the map capability reads the settled center and
 visible bounds from MapLibre and returns a serializable snapshot:
@@ -476,8 +502,9 @@ visible bounds from MapLibre and returns a serializable snapshot:
 }
 ```
 
-The bounding-box order is the STAC/GeoJSON order `[west, south, east, north]`. The
-search captures this snapshot once; later panning does not mutate an in-flight query or
+The center becomes the STAC point intersection and the bounds remain client-side
+coverage input. The bounding-box order is `[west, south, east, north]`. The search
+captures this snapshot once; later panning does not mutate an in-flight query or
 existing results.
 
 ### 9.2 Build the typed search criteria
@@ -487,9 +514,10 @@ The React form maps the viewport snapshot and filters into an application DTO:
 ```json
 {
   "area": {
-    "type": "viewport",
-    "bbox": [44.55, 42.6, 44.75, 42.72]
+    "type": "point",
+    "coordinates": [44.6439, 42.6584]
   },
+  "coverageViewport": [44.55, 42.6, 44.75, 42.72],
   "startDate": "2025-07-02",
   "endDate": "2025-07-17",
   "productLevel": "L2A",
@@ -497,10 +525,9 @@ The React form maps the viewport snapshot and filters into an application DTO:
 }
 ```
 
-The product choice maps to one and only one STAC collection:
+The MVP product maps to one STAC collection:
 
 ```text
-L1C -> sentinel-2-l1c
 L2A -> sentinel-2-l2a
 ```
 
@@ -563,7 +590,7 @@ Example request for the visible month:
 ```json
 {
   "collections": ["sentinel-2-l2a"],
-  "bbox": [44.55, 42.6, 44.75, 42.72],
+  "intersects": { "type": "Point", "coordinates": [44.6439, 42.6584] },
   "datetime": "2025-07-01T00:00:00Z/2025-07-31T23:59:59Z",
   "query": {
     "eo:cloud_cover": {
@@ -605,9 +632,9 @@ the calendar annotations:
 }
 ```
 
-The meaning of `cloudSummaryPercent` remains governed by the prototype review question
-in section 14; the current recommendation is the lowest scene-level cloud value on that
-date.
+`cloudSummaryPercent` is the scene-cloud average weighted by each scene's submitted
+viewport coverage. If every scene has zero viewport coverage, use the unweighted
+average.
 
 ### 9.5 Execute the submitted scene search
 
@@ -627,7 +654,7 @@ Example request:
 ```json
 {
   "collections": ["sentinel-2-l2a"],
-  "bbox": [44.55, 42.6, 44.75, 42.72],
+  "intersects": { "type": "Point", "coordinates": [44.6439, 42.6584] },
   "datetime": "2025-07-02T00:00:00Z/2025-07-17T23:59:59Z",
   "query": {
     "eo:cloud_cover": {
@@ -1194,9 +1221,9 @@ Current evidence:
 
 - `SatelliteScene`, criteria, coverage, acquisition, availability, and result DTOs are
   implemented without React, MapLibre, STAC, or transport dependencies.
-- `SearchSatelliteScenes` and `LoadSatelliteAvailability` enforce inclusive UTC dates, a
-  62-day range, a 100-item cap, exclusive product levels, stable deduplication, and
-  cancellation through the catalog port.
+- `SearchSatelliteScenes` and `LoadSatelliteAvailability` enforce inclusive UTC dates,
+  current-then-previous calendar-month UI queries, a 1,000-item internal cap, exclusive
+  product levels, stable deduplication, and cancellation through the catalog port.
 - Focused Turf 7.3.5 modules provide polygon intersection/area and geodesic edge
   distance; each selected package is MIT-licensed and the full Turf bundle is not used.
 - MapLibre exposes a copied WGS84 viewport through `MapViewportProvider`; invalid and
@@ -1237,9 +1264,9 @@ Current evidence:
 - Public configuration validates the Earth Search URL, distinct L1C/L2A collection IDs,
   attribution, and a maximum of one to ten pages; bootstrap constructs the adapter
   behind `SatelliteCatalogGateway` only after configuration succeeds.
-- The gateway sends allowlisted bbox/date/cloud/field criteria through the central
-  no-retry `ky` client, propagates `AbortSignal`, and follows only same-origin HTTPS
-  POST pagination tokens with no query or fragment.
+- The gateway sends allowlisted point-intersection/date/cloud/field criteria through the
+  central no-retry `ky` client, propagates `AbortSignal`, and follows only same-origin
+  HTTPS POST pagination tokens with no query or fragment.
 - Zod validates the complete response before any scene is returned. L2A must expose an
   HTTPS true-color COG; known public L1C S3 keys map to HTTPS but remain explicitly
   `unsupported-jp2`.
@@ -1256,13 +1283,39 @@ Commit: `feat(satellite): add Earth Search gateway`
 
 ### S5.5 Build the prototype-aligned search sidebar and calendar
 
+Progress evidence (2026-07-19):
+
+- `SatelliteBrowser` captures the current serialized map viewport and submits the
+  current calendar month through today with fixed L2A and horizontal cloud-slider
+  criteria.
+- The UI has intentional waiting, loading/cancel, safe error, empty, and successful
+  states. Results remain local and disposable; changing map state never recreates the
+  native map.
+- A live Earth Search review returned 23 L2A scenes across 10 UTC acquisition days. The
+  provider's valid full-query `next` body and redundant next-link behavior are covered
+  by an infrastructure integration test.
+- A second live review at 100% cloud returned 153 scenes across 15 acquisition days;
+  pagination stayed internal while the UI rendered the latest eight plus `Load more`.
+- The persistent `Sentinel query` tab showed viewport capture through coverage as
+  completed with per-step timings; render-only steps were skipped honestly.
+- The read-only calendar highlights loaded dates and viewport-coverage-weighted average
+  scene-cloud values. The first eight latest cards appear in a dedicated right pane and
+  `Load more images` reveals the next set, then fetches and appends preceding calendar
+  months without exposing provider pagination or month boundaries as separate user
+  workflows.
+- The compact MVP sidebar is L2A-only: the cloud slider sits directly under the
+  calendar, inactive provider/readiness rows are absent, and its scroll container clips
+  incidental horizontal overflow. All rail tabs persist through their URL anchors.
+- Remaining work is availability refresh semantics, deeper keyboard/accessibility
+  coverage, and card-to-map application.
+
 Scope:
 
 - Extract Satellite UI from the generic `WorkspaceSidebar` into feature-focused
   components while preserving the shell and live map.
-- Implement the compact viewport selector, inclusive range calendar, month navigation,
-  availability annotations, L1C/L2A toggle, cloud threshold, other-imagery boundary,
-  criteria summary, and Search Images action.
+- Implement the compact viewport selector, read-only acquisition calendar, month
+  navigation, weighted availability annotations, horizontal L2A cloud slider, criteria
+  summary, and latest-images action.
 - Keep Marker visible and disabled with an honest explanation.
 - Choose the calendar implementation through an explicit dependency/accessibility/bundle
   review. Prefer the existing MUI family; do not hand-roll inaccessible date semantics.
@@ -1271,12 +1324,13 @@ Scope:
 
 Tests in the same commit:
 
-- Keyboard range selection, month navigation, focus, labels, and live status updates.
+- Keyboard month navigation, slider focus/labels, card selection, and live status
+  updates.
 - Availability loading/empty/error/partial states and reviewed per-day cloud summary.
 - Product/cloud changes update availability and query keys without duplicate retry.
 - Search captures current viewport once, disables invalid/repeated submission, and
   aborts superseded work.
-- Marker and Other imagery remain unavailable without fake data.
+- Marker remains unavailable without fake data; no inactive Other imagery row appears.
 
 Commit: `feat(satellite): build imagery search controls`
 
@@ -1315,9 +1369,11 @@ Scope:
 - Derive the pane title from the submitted center and compute scene/acquisition counts
   from returned data.
 - Render month/date grouping, compact scene cards, thumbnails/footprint diagrams,
-  coverage, edge warnings, expansion, and one expanded metadata card.
-- Wire apply, applied, fit footprint, hide imagery, scene switch, pane close, and retry
-  states to the narrow map capability.
+  coverage, sub-5-km border warnings, expansion, and one expanded metadata card.
+- Use the whole card as the selection/apply target; do not add a separate Apply button
+  or collapsed tile/orbit tags.
+- Wire applied, fit footprint, hide imagery, scene switch, pane close, and retry states
+  to the narrow map capability.
 - Keep selected/applied distinctions explicit and never imply a mosaic.
 
 Tests in the same commit:
@@ -1452,7 +1508,7 @@ Also verify:
 
 1. The selected catalog and render path has current provider/CORS/license/attribution
    and replacement evidence in stable documentation.
-2. L1C and L2A behavior matches the reviewed scope; neither is silently substituted.
+2. L2A behavior matches the reviewed MVP scope; L1C is not exposed in the UI.
 3. Search and rendering are cancellable, bounded, typed, and diagnosable.
 4. One explicit scene renders below OSM references with correct footprint, partial
    coverage, metadata, and attribution.
@@ -1469,18 +1525,20 @@ Also verify:
 11. The intended commits are pushed to a feature branch and available in a draft pull
     request targeting `main` before the feature is presented as finished.
 
-## 14. Prototype review questions and discrepancy log
+## 14. Review questions and discrepancy log
 
-These are design/data-contract questions, not permission to reinterpret the prototype.
-Recommended defaults let implementation planning continue, but the accepted answers must
-be reflected in Penpot and this plan before the affected UI is implemented.
+These are design/data-contract questions. Accepted answers must be reflected in this
+plan before the affected UI is implemented.
 
-| Question                           | Current prototype observation                                                                   | Recommended contract                                                                                  | Review state    |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------- |
-| Inclusive range/result consistency | The range label and selected cells end on 17 July 2026, while the first result is dated 18 July | Search results must stay within the inclusive submitted range; change sample result or selected range | Awaiting review |
-| Acquisition count consistency      | Header says `4 acquisition days`, while six visible acquisition dates span July and June        | Derive count from distinct UTC dates in all returned scenes and keep sample content consistent        | Awaiting review |
-| Calendar cloud annotation          | A single cloud percentage appears below a date even though that date may have several scenes    | Show the lowest scene cloud percentage for that date and use it only as an availability hint          | Awaiting review |
-| Hide imagery versus footprint      | The expanded card has `Hide imagery` but no separate footprint visibility action                | Hide the raster, retain selection/metadata and footprint so coverage stays inspectable                | Awaiting review |
+| Question                      | Current prototype observation                                                              | Recommended contract                                                                                      | Review state        |
+| ----------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------- |
+| Date search model             | Prototype showed a selectable date range                                                   | Remove date-range input; query latest bounded scenes and use the calendar only for acquisition highlights | Accepted 2026-07-19 |
+| Acquisition count consistency | Header says `4 acquisition days`, while six visible acquisition dates span July and June   | Derive count from distinct UTC dates in all returned scenes and keep sample content consistent            | Awaiting review     |
+| Calendar cloud annotation     | A date can contain several scenes with different cloud and viewport coverage               | Show scene-cloud percentage weighted by viewport coverage, with simple-average fallback at zero coverage  | Accepted 2026-07-19 |
+| Edge warning threshold        | Prototype sample warned at 1.8 km and earlier implementation warned for any outside anchor | Warn only when the scene border is less than 5 km from viewport center or future marker                   | Accepted 2026-07-19 |
+| Scene card action             | Prototype had a separate Apply action and collapsed tile/orbit tags                        | Whole card is the selection/apply target; remove separate Apply control and tile/orbit tags               | Accepted 2026-07-19 |
+| Cloud control                 | Prototype used a compact dropdown                                                          | Use a horizontal 0–100% slider with the current maximum visible                                           | Accepted 2026-07-19 |
+| Hide imagery versus footprint | The expanded card has `Hide imagery` but no separate footprint visibility action           | Hide the raster, retain selection/metadata and footprint so coverage stays inspectable                    | Awaiting review     |
 
 If review changes any recommended contract, update the relevant fixed decision, tests,
-Penpot sample state, and work package before implementation.
+and work package before implementation.

@@ -75,24 +75,50 @@ calculation, persistence, and export are unavailable.
 
 ### Satellite
 
-Satellite uses a compact `Viewport | <coordinates>` search-area selector. Viewport is
-the default source; Marker becomes available when a saved marker can supply the search
-target. The sidebar also contains date range, cloud threshold, L1C/L2A choice, and the
-search action.
+Satellite uses a compact `Point | <coordinates>` search-area selector. Point uses the
+submitted viewport center; Marker becomes available when a saved marker can supply the
+search target. The catalog returns only scenes whose footprint intersects that immutable
+point, while the full submitted viewport is retained for client-side coverage. The
+sidebar shows a read-only acquisition calendar, an L2A scene-cloud slider, and the
+latest-images action. Users do not construct a date range. L1C is not exposed in the
+current MVP UI.
 
-Results compare acquisition date, platform, product level, cloud cover, coverage, and
-scene-edge warnings. Applying a concrete scene draws its true-color imagery and
-footprint without resetting other workspace state. The adjacent metadata pane exposes
-acquisition, tile/orbit/product identity, attribution, fit-footprint, and imagery
-visibility actions.
+Results live in an adjacent right pane and compare acquisition date, platform, product
+level, cloud cover, and coverage. Cards within one acquisition day sort by acquisition
+time descending. Date and time share one line, localized with the IANA time zone
+resolved offline from the submitted search coordinates; platform text is omitted. The
+first eight latest images are visible initially; `Load more images` reveals the next
+bounded set and then continues into preceding calendar months using the submitted
+viewport and filters. A warning appears only when the scene border is less than 5 km
+from the submitted search anchor. Scene cards are the selection and future apply target;
+there is no separate Apply button or tile/orbit tag row. Coverage at 50% or below is a
+yellow tag; higher coverage is plain text. Cloud cover at 70% or higher is a red tag;
+lower cloud values are plain text. Every card remains an individual scene; mosaics are
+not currently composed.
 
-The current implementation shows live viewport coordinates and the compact selector. The
-internal application core now captures immutable viewport bounds, validates bounded
-inclusive UTC criteria, keeps L1C/L2A exclusive, and derives grouped scene coverage and
-edge evidence behind a catalog port. The validated Earth Search adapter is configured
-and composed at bootstrap, but no user command invokes it yet. Marker targeting,
-date/product filters, user-triggered search, results, metadata, and imagery rendering
-therefore remain unavailable.
+The current implementation searches the current calendar month through today, sorts
+scenes by acquisition time, and groups cards by month in the right pane. The calendar
+annotates each loaded day with the scene-cloud average weighted by each scene's viewport
+coverage. Days at or below the current cloud slider receive a subtle orange highlight;
+non-matching days retain only their cloud percentage without a tile outline. After
+locally loaded cards are revealed, the same load-more action fetches the preceding month
+and appends it, continuing back through the Sentinel-2 archive. Whole-card click selects
+and expands metadata. Marker targeting and imagery rendering remain unavailable.
+
+Clicking a loaded calendar date selects the scene with the highest viewport coverage for
+that date, reveals its batch if needed, expands its card, and scrolls it into view.
+Coverage ties retain the existing acquisition-time order. The shortcut never reopens a
+results pane that the user closed. The later imagery-apply command will attach to this
+same selection path.
+
+If the initial cards do not occupy most of the adjacent pane, the UI automatically
+reveals another local set or fetches preceding months, with a small bounded number of
+automatic month requests. The same load-more button remains available for further manual
+archive traversal.
+
+Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satelite`,
+`#markers`, or `#layers`. Loading an anchored URL restores that tab, and changing tabs
+updates the anchor.
 
 ### Markers
 
@@ -193,11 +219,11 @@ The `Sentinel query` tab exposes one local current-or-last-operation timeline. I
 lists viewport capture, criteria construction, STAC request, pagination, validation,
 scene mapping, coverage/grouping, visual-asset selection, decode/reprojection, and map
 application. Each row shows an explicit waiting, running, completed, failed, cancelled,
-or skipped state and a monotonic duration that refreshes while work is active. The
-timeline foundation is implemented even though Sentinel search and rendering are not
-currently available; those operations must publish their transitions as they are added.
-The timeline is memory-only and does not expose raw payloads, exact geometry, provider
-URLs, headers, tokens, or raw failures.
+or skipped state and a monotonic duration that refreshes while work is active.
+Implemented search operations publish their transitions in real time. Rendering-only
+steps remain visible and are marked skipped until a scene can be applied to the map. The
+timeline is memory-only and does not expose raw payloads, exact geometry, provider URLs,
+headers, tokens, or raw failures.
 
 Schema-version 2 exports include build/runtime data, bounded events, health results,
 notes, and a serializable map snapshot. Exported longitude/latitude are rounded to 0.1
@@ -220,5 +246,9 @@ never contain secrets.
 
 The application does not currently provide GPX catalog loading, GPX import, Create GPX
 editing/export, track elevation charts, saved-marker management, interactive layer
-management, Sentinel-2 search/rendering, offline-region downloads, accounts, or cloud
-synchronization.
+management, Sentinel-2 imagery rendering, offline-region downloads, accounts, or cloud
+synchronization. Satellite provides live viewport search for L2A scenes with a
+scene-cloud control. Successful results are grouped by UTC acquisition day and show a
+thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
+sub-5-km edge warning. Selecting a card does not render imagery until the raster adapter
+exists.

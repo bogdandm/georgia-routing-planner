@@ -182,15 +182,21 @@ unavailable.
 Layers groups durable controls under explicit source headings: Copernicus Sentinel-2,
 the configured terrain provider, and OpenStreetMap. The checkboxes cover Satellite
 imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and
-Places and POIs. Each logical ID maps to an allowlisted set of stable MapLibre layer
-IDs; arbitrary native IDs never cross the UI boundary. Satellite controls remain
-disabled until a scene is applied. Hiding imagery retains the applied scene and does not
-remove its footprint, search results, or attribution contract. Relief and isoline
-visibility are independent of 3D terrain mode and satellite availability. Base land and
-water remain visible and cannot be disabled. Opacity, drag ordering, and custom layers
-are unavailable. Checkbox state and the last successfully applied scene are stored
-locally and restored after refresh. The last successful imagery stretch is stored with
-those preferences and applied before a saved scene is restored.
+Places and POIs, plus Natural features and Restricted areas. The single **Natural
+features** checkbox controls vegetation, glacier, wetland, and water-body polygons;
+waterway lines and labels remain navigation context. The OpenStreetMap controls remain a
+single flat list. Every map data source added to the application must appear under its
+provider heading in Layers; each user-visible feature family from that source receives
+an explicit control unless it is part of the required base canvas. Each logical ID maps
+to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the
+UI boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
+retains the applied scene and does not remove its footprint, search results, or
+attribution contract. Relief and isoline visibility are independent of 3D terrain mode
+and satellite availability. Base land remains visible and cannot be disabled. Opacity,
+drag ordering, and custom layers are unavailable. Checkbox state and the last
+successfully applied scene are stored locally and restored after refresh. The last
+successful imagery stretch is stored with those preferences and applied before a saved
+scene is restored.
 
 ## Persistent map controls
 
@@ -214,8 +220,32 @@ those preferences and applied before a saved scene is restored.
 ## Hiking basemap
 
 The pure style factory maps validated OpenMapTiles source-layer names to land, water,
-boundaries, roads, paths, steps, hiking POIs, peaks, and labels. Source/layer IDs and
-ordering are stable contracts. Unsupported hiking route relations are not invented.
+boundaries, vegetation, glaciers, provider-identified restricted land, roads, paths,
+steps, hiking POIs, peaks, and labels. Source/layer IDs and ordering are stable
+contracts. Unsupported hiking route relations are not invented.
+
+One semantic palette owns all map colors. The vector-only mode uses a warm neutral-grey
+base with opaque land-cover fills so overlapping source polygons cannot create
+accidental shades. Grass and farmland stay close to the neutral base instead of reading
+as yellow surfaces; forests and scrub carry the stronger green distinction. When
+satellite imagery is visible, vegetation, land-use, park, and glacier fills are removed;
+the imagery supplies that surface context while orange transport lines, blue contours,
+and white label halos retain contrast. The style does not derive decorative boundaries
+from tiled surface polygons; the intentional red military perimeter is the only
+restricted-area outline. Imported and user-created GPX tracks reserve a brighter blue
+than the contour family so route geometry remains distinguishable.
+
+Waterway lines and water-body polygons use the same blue. Waterways render first, so
+lake and reservoir polygons cover river centerlines where the geometries overlap.
+
+Labels prefer `name:en`, then the provider's `name:latin` transliteration, before legacy
+English and native-name fallbacks. A native Georgian label can therefore remain when the
+source supplies neither an English name nor a Latin transliteration; the client does not
+invent spellings at render time.
+
+Military polygons are shown with a medium red perimeter and no fill. The current
+OpenMapTiles land-use schema does not expose a general private-access or ownership
+field, so the map does not claim to identify every private or otherwise closed property.
 
 - Default vector source: OpenFreeMap TileJSON; attribution stays visible.
 - Invalid configuration: MapLibre does not mount; a safe fatal message is shown.

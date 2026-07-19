@@ -122,6 +122,14 @@ camera and unrelated native resources remain untouched. MapLibre abort signals f
 through the contour protocol to bounded DEM requests; source failures update the overlay
 snapshot without removing the basemap.
 
+Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
+shared visual mode on the existing native layers. Semantic colors remain stable, while
+opaque vector-base land-cover fills switch off for satellite context, while true line
+features, hillshade strength, and label halos update atomically; the map instance,
+camera, sources, and user visibility choices are preserved. Surface polygons are not
+restyled as decorative line layers; the restricted-area layer is an intentional red
+perimeter derived from provider-tagged military geometry.
+
 ## Provider and WebGL failures
 
 - `error` events are classified from safe source IDs and normalized messages.
@@ -288,13 +296,16 @@ URLs remain inside the controller and never enter Zustand or exported diagnostic
 footprint is updated only after the replacement raster is usable. `Fit footprint`
 derives bounds from the validated polygon while preserving current pitch and bearing.
 
-Layers commands use logical IDs. Hiking, road, and place commands expand to fixed native
-style groups; satellite and footprint commands target only controller-owned layers.
-Visibility is applied idempotently and projected into a serializable live store. Dexie
-persists visibility, imagery stretch, and the last successful scene for startup
-restoration. Satellite search/results state remains mounted while another rail section
-is visible, and returning to Satellite reattaches the existing adjacent pane without a
-new provider request.
+Layers commands use logical IDs. The Natural features command expands to land-cover,
+glacier, and water-polygon layers; restricted-area, hiking, road, and place commands
+expand to their fixed native style groups. Satellite and footprint commands target only
+controller-owned layers. Adding a map data source includes adding its provider group and
+relevant logical visibility controls to Layers in the same change. Visibility is applied
+idempotently and projected into a serializable live store. Dexie persists visibility,
+imagery stretch, and the last successful scene for startup restoration. Satellite
+search/results state remains mounted while another rail section is visible, and
+returning to Satellite reattaches the existing adjacent pane without a new provider
+request.
 
 ## Teardown ownership
 

@@ -26,6 +26,8 @@ export const initialMapLayerState: MapLayerState = {
     'scene-footprint': true,
     'terrain-relief': true,
     'elevation-isolines': true,
+    'natural-features': true,
+    'restricted-areas': true,
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,

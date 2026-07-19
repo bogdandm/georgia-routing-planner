@@ -101,7 +101,10 @@ protected from UI, storage, HTTP, and map imports by ESLint restrictions.
 The replaceable map-provider defaults are:
 
 - OpenFreeMap's OpenMapTiles-compatible TileJSON and glyph endpoints for the vector
-  basemap.
+  basemap. Its shared map palette uses a neutral-grey ground, green vegetation,
+  pale-blue glaciers, orange roads and paths, blue contours, and red restricted-area
+  perimeters; satellite mode retains those meanings with imagery-safe opacity and
+  contrast.
 - AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for relief shading,
   client-generated contours, and optional 3D terrain.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.

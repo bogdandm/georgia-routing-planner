@@ -140,6 +140,11 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByRole('button', { name: 'L2A' })).not.toBeInTheDocument();
     expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('25');
     expect(screen.getByLabelText('Sentinel acquisition calendar')).toBeVisible();
+    const acquisitionCalendar = screen.getByRole('grid', { name: 'July 2026' });
+    expect(acquisitionCalendar.children).toHaveLength(42);
+    expect(
+      screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
+    ).toHaveStyle({ height: '34px' });
     const searchAreaSource = screen.getByRole('combobox', {
       name: 'Search area source',
     });

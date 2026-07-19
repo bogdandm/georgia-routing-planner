@@ -275,7 +275,8 @@ function AcquisitionCalendar({
   const month = displayMonthDate.getUTCMonth();
   const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const cells = Array.from({ length: 42 }, (_value, index) => {
+  const calendarCellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+  const cells = Array.from({ length: calendarCellCount }, (_value, index) => {
     const day = index - firstWeekday + 1;
     return day >= 1 && day <= daysInMonth ? day : null;
   });
@@ -287,7 +288,7 @@ function AcquisitionCalendar({
 
   return (
     <Box aria-label="Sentinel acquisition calendar">
-      <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 0.5 }}>
         <IconButton
           size="small"
           aria-label="Previous acquisition month"
@@ -327,7 +328,7 @@ function AcquisitionCalendar({
       <Box
         role="grid"
         aria-label={monthFormatter.format(displayMonthDate)}
-        sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.75 }}
+        sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25 }}
       >
         {weekDays.map((day) => (
           <Typography
@@ -361,7 +362,7 @@ function AcquisitionCalendar({
                   : `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
               }
               sx={{
-                height: 46,
+                height: 34,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -387,7 +388,9 @@ function AcquisitionCalendar({
                 '&.Mui-disabled': { color: 'text.primary' },
               }}
             >
-              <Typography variant="caption">{day}</Typography>
+              <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                {day}
+              </Typography>
               {cloud === undefined ? null : (
                 <Typography variant="caption" sx={{ color: 'inherit', lineHeight: 1 }}>
                   {cloud.toFixed(0)}%

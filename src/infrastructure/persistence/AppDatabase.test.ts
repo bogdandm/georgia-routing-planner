@@ -93,6 +93,10 @@ describe('AppDatabase', () => {
       },
       appliedScene,
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
+      terrainOverlays: {
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: true,
+      },
     } as const;
 
     await database.saveMapLayerPreferences(preferences);
@@ -118,6 +122,10 @@ describe('AppDatabase', () => {
 
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
+      terrainOverlays: {
+        contourIntervalMeters: 50,
+        shadeAboveSatellite: false,
+      },
     });
   });
 

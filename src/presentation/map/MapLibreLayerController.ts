@@ -10,7 +10,9 @@ import type {
   MapLayerPreferencesRepository,
   MapLayerVisibilityPreferences,
   PersistedMapLayerPreferences,
+  TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
+import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
@@ -150,6 +152,8 @@ export class MapLibreLayerController
   #restoreController: AbortController | null = null;
   #restoreInProgress = false;
   #renderingTuning: SatelliteRenderingTuning = defaultSatelliteRenderingTuning;
+  #terrainOverlayPreferences: TerrainOverlayPreferences =
+    defaultTerrainOverlayPreferences;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -253,6 +257,7 @@ export class MapLibreLayerController
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
       this.#renderingTuning = { ...persisted.renderingTuning };
+      this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
       this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
       mapLayerStore.setState({
         visibility: persisted.visibility,
@@ -270,6 +275,10 @@ export class MapLibreLayerController
 
   public getRenderingTuning(): SatelliteRenderingTuning {
     return { ...this.#renderingTuning };
+  }
+
+  public getTerrainOverlayPreferences(): TerrainOverlayPreferences {
+    return { ...this.#terrainOverlayPreferences };
   }
 
   public async setRenderingTuning(
@@ -544,7 +553,12 @@ export class MapLibreLayerController
     const { visibility } = mapLayerStore.getState();
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
-      .saveMapLayerPreferences({ visibility, appliedScene, renderingTuning })
+      .saveMapLayerPreferences({
+        visibility,
+        appliedScene,
+        renderingTuning,
+        terrainOverlays: { ...this.#terrainOverlayPreferences },
+      })
       .catch(() => {
         this.logger.log({
           level: 'warn',

@@ -341,6 +341,10 @@ describe('MapLibreLayerController', () => {
       },
       appliedScene: scene('saved-scene'),
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
+      terrainOverlays: {
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: true,
+      },
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -358,6 +362,10 @@ describe('MapLibreLayerController', () => {
       reflectanceMax: 6_500,
       gamma: 1.6,
       saturation: 1.2,
+    });
+    expect(controller.getTerrainOverlayPreferences()).toEqual({
+      contourIntervalMeters: 25,
+      shadeAboveSatellite: true,
     });
   });
 

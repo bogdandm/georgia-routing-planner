@@ -118,7 +118,7 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
     ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Search latest images' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'L1C' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'L2A' })).not.toBeInTheDocument();
     expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('25');
@@ -195,7 +195,7 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
-    await user.click(screen.getByRole('button', { name: 'Search latest images' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
       await screen.findByRole('heading', {
@@ -249,13 +249,80 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
-    await user.click(screen.getByRole('button', { name: 'Search latest images' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
     expect(await screen.findByText(/12 Jul 2026 · 14:12 GMT\+4/u)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Load more images' }));
 
     expect(await screen.findByText(/18 Jun 2026 · 14:12 GMT\+4/u)).toBeVisible();
     expect(requestedStarts).toEqual(['2026-07-01', '2026-06-01']);
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
+  });
+
+  it('searches May, loads June and July on navigation, and reuses complete months', async () => {
+    const requests: { readonly startDate: string; readonly endDate: string }[] = [];
+    const scenesByMonth = new Map([
+      ['2026-05', syntheticSatelliteScene('may-scene', '2026-05-14T10:12:00.000Z')],
+      ['2026-06', syntheticSatelliteScene('june-scene', '2026-06-18T10:12:00.000Z')],
+      ['2026-07', syntheticSatelliteScene('july-scene', '2026-07-12T10:12:00.000Z')],
+    ]);
+    services.database.close();
+    await services.database.delete();
+    services = createTestServices({
+      satelliteCatalogGateway: {
+        search: ({ criteria }) => {
+          requests.push({
+            startDate: criteria.startDate,
+            endDate: criteria.endDate,
+          });
+          const scene = scenesByMonth.get(criteria.startDate.slice(0, 7));
+          return Promise.resolve({
+            totalMatched: scene === undefined ? 0 : 1,
+            scenes: scene === undefined ? [] : [scene],
+          });
+        },
+      },
+    });
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    expect(screen.getByRole('grid', { name: 'May 2026' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+    expect(await screen.findByText(/14 May 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByRole('grid', { name: 'May 2026' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    expect(await screen.findByText(/18 Jun 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    expect(await screen.findByText(/12 Jul 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    expect(screen.getByText(/14 May 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByText(/18 Jun 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(requests).toEqual([
+      { startDate: '2026-05-01', endDate: '2026-05-31' },
+      { startDate: '2026-06-01', endDate: '2026-06-30' },
+      { startDate: '2026-07-01', endDate: '2026-07-18' },
+    ]);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    expect(screen.getByRole('grid', { name: 'May 2026' })).toBeVisible();
+    expect(requests).toHaveLength(3);
   });
 
   it('uses a calendar date as a best-coverage card shortcut without reopening the pane', async () => {
@@ -298,7 +365,7 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
-    await user.click(screen.getByRole('button', { name: 'Search latest images' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
     const dateShortcut = await screen.findByRole('gridcell', {
       name: /12 Jul 2026, imagery available/u,
     });
@@ -351,7 +418,7 @@ describe('WorkspaceShell', () => {
     fireEvent.change(screen.getByRole('slider', { name: 'Maximum cloud' }), {
       target: { value: '100' },
     });
-    await user.click(screen.getByRole('button', { name: 'Search latest images' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(await screen.findByLabelText('High cloud cover: 70%')).toBeVisible();
     expect(screen.getByLabelText(/Low viewport coverage: 40%/u)).toBeVisible();
@@ -386,14 +453,14 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
-    await user.click(screen.getByRole('button', { name: 'Search latest images' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
       await screen.findByText(
         'Earth Search is rate limiting requests. Wait and try again.',
       ),
     ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Search latest images' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
   });
 
   it('persists developer mode and opens the diagnostics drawer', async () => {

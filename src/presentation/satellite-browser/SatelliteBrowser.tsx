@@ -94,18 +94,29 @@ interface SubmittedSearch {
   readonly viewport: SatelliteSearchViewport;
   readonly productLevel: SatelliteProductLevel;
   readonly maxCloudCoverPercent: number;
+  readonly initialMonth: string;
 }
 
-function currentSearchMonth(today: Date): SearchMonthRange {
-  const end = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
-  );
-  const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+function searchMonthRange(month: string, today: Date): SearchMonthRange {
+  const start = new Date(`${month}-01T00:00:00.000Z`);
+  const currentMonth = `${String(today.getUTCFullYear()).padStart(4, '0')}-${String(
+    today.getUTCMonth() + 1,
+  ).padStart(2, '0')}`;
+  const end =
+    month === currentMonth
+      ? new Date(
+          Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+        )
+      : new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
   return {
-    month: toDateInputValue(start).slice(0, 7),
+    month,
     startDate: toDateInputValue(start),
     endDate: toDateInputValue(end),
   };
+}
+
+function currentSearchMonth(today: Date): SearchMonthRange {
+  return searchMonthRange(toDateInputValue(today).slice(0, 7), today);
 }
 
 function previousSearchMonth(month: string): SearchMonthRange {
@@ -119,6 +130,35 @@ function previousSearchMonth(month: string): SearchMonthRange {
     startDate: toDateInputValue(start),
     endDate: toDateInputValue(end),
   };
+}
+
+function nextUnloadedSearchMonth(
+  initialMonth: string,
+  loadedMonths: ReadonlySet<string>,
+): SearchMonthRange | null {
+  let candidate = previousSearchMonth(initialMonth);
+  while (candidate.month >= sentinelArchiveFirstMonth) {
+    if (!loadedMonths.has(candidate.month)) return candidate;
+    candidate = previousSearchMonth(candidate.month);
+  }
+  return null;
+}
+
+function hasSameSubmittedCriteria(
+  submitted: SubmittedSearch,
+  viewport: SatelliteSearchViewport,
+  maxCloudCoverPercent: number,
+): boolean {
+  return (
+    submitted.productLevel === 'L2A' &&
+    submitted.maxCloudCoverPercent === maxCloudCoverPercent &&
+    submitted.viewport.center.longitude === viewport.center.longitude &&
+    submitted.viewport.center.latitude === viewport.center.latitude &&
+    submitted.viewport.bounds.west === viewport.bounds.west &&
+    submitted.viewport.bounds.south === viewport.bounds.south &&
+    submitted.viewport.bounds.east === viewport.bounds.east &&
+    submitted.viewport.bounds.north === viewport.bounds.north
+  );
 }
 
 function mergeSearchResults(
@@ -160,20 +200,28 @@ function visibleGroups(
 }
 
 function AcquisitionCalendar({
+  displayMonth,
+  loadingMonth,
   maxCloudCoverPercent,
+  maximumMonth,
+  navigationDisabled,
+  onMonthChange,
   onSelectDate,
   result,
   today,
 }: {
+  readonly displayMonth: string;
+  readonly loadingMonth: string | null;
   readonly maxCloudCoverPercent: number;
+  readonly maximumMonth: string;
+  readonly navigationDisabled: boolean;
+  readonly onMonthChange: (month: string) => void;
   readonly onSelectDate: (date: string) => void;
   readonly result: SatelliteSearchResult | null;
   readonly today: Date;
 }) {
   const latestDate = result?.groups[0]?.date ?? toDateInputValue(today);
-  const [displayMonth, setDisplayMonth] = useState(
-    () => new Date(`${latestDate.slice(0, 7)}-01T00:00:00.000Z`),
-  );
+  const displayMonthDate = new Date(`${displayMonth}-01T00:00:00.000Z`);
 
   const availability = useMemo(() => {
     const byDate = new Map<string, number>();
@@ -183,8 +231,8 @@ function AcquisitionCalendar({
     }
     return byDate;
   }, [result]);
-  const year = displayMonth.getUTCFullYear();
-  const month = displayMonth.getUTCMonth();
+  const year = displayMonthDate.getUTCFullYear();
+  const month = displayMonthDate.getUTCMonth();
   const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const cells = Array.from({ length: 42 }, (_value, index) => {
@@ -193,7 +241,8 @@ function AcquisitionCalendar({
   });
 
   const changeMonth = (offset: number) => {
-    setDisplayMonth(new Date(Date.UTC(year, month + offset, 1)));
+    const nextMonth = new Date(Date.UTC(year, month + offset, 1));
+    onMonthChange(toDateInputValue(nextMonth).slice(0, 7));
   };
 
   return (
@@ -202,18 +251,32 @@ function AcquisitionCalendar({
         <IconButton
           size="small"
           aria-label="Previous acquisition month"
+          disabled={navigationDisabled || displayMonth <= sentinelArchiveFirstMonth}
           onClick={() => {
             changeMonth(-1);
           }}
         >
           <ChevronLeftIcon fontSize="small" />
         </IconButton>
-        <Typography variant="subtitle2" sx={{ flex: 1, textAlign: 'center' }}>
-          {monthFormatter.format(displayMonth)}
-        </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Typography variant="subtitle2">
+            {monthFormatter.format(displayMonthDate)}
+          </Typography>
+          {loadingMonth === displayMonth ? (
+            <CircularProgress
+              size={14}
+              aria-label={`Loading ${monthFormatter.format(displayMonthDate)} imagery`}
+            />
+          ) : null}
+        </Stack>
         <IconButton
           size="small"
           aria-label="Next acquisition month"
+          disabled={navigationDisabled || displayMonth >= maximumMonth}
           onClick={() => {
             changeMonth(1);
           }}
@@ -223,7 +286,7 @@ function AcquisitionCalendar({
       </Stack>
       <Box
         role="grid"
-        aria-label={monthFormatter.format(displayMonth)}
+        aria-label={monthFormatter.format(displayMonthDate)}
         sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.75 }}
       >
         {weekDays.map((day) => (
@@ -624,6 +687,8 @@ function SatelliteResultsPane({
 export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps) {
   const { clock, mapViewport, searchSatelliteScenes } = useRuntimeServices();
   const [today] = useState(() => clock.now());
+  const latestMonth = currentSearchMonth(today).month;
+  const [calendarMonth, setCalendarMonth] = useState(latestMonth);
   const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(25);
   const [searchState, setSearchState] = useState<SearchState>({ status: 'idle' });
   const [visibleCount, setVisibleCount] = useState(firstResultCount);
@@ -631,13 +696,16 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
   const [resultsOpen, setResultsOpen] = useState(false);
   const [submittedCoordinates, setSubmittedCoordinates] = useState(fallbackCoordinates);
   const [submittedTimeZone, setSubmittedTimeZone] = useState('Asia/Tbilisi');
-  const [oldestLoadedMonth, setOldestLoadedMonth] = useState<string | null>(null);
+  const [submittedSearch, setSubmittedSearch] = useState<SubmittedSearch | null>(null);
+  const [loadedMonths, setLoadedMonths] = useState<readonly string[]>([]);
+  const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [autoLoadAttempts, setAutoLoadAttempts] = useState(0);
   const [scrollRequestId, setScrollRequestId] = useState(0);
   const request = useRef<AbortController | null>(null);
-  const submittedSearch = useRef<SubmittedSearch | null>(null);
+  const loadedMonthsRef = useRef(new Set<string>());
+  const loadingMonthsRef = useRef(new Set<string>());
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -670,21 +738,107 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
     searchState.status !== 'loading' &&
     !loadingMore;
   const calendarResult = searchState.status === 'success' ? searchState.result : null;
+  const nextArchiveMonth =
+    submittedSearch === null
+      ? null
+      : nextUnloadedSearchMonth(submittedSearch.initialMonth, new Set(loadedMonths));
+
+  const markMonthLoaded = (month: string) => {
+    loadedMonthsRef.current.add(month);
+    setLoadedMonths([...loadedMonthsRef.current].toSorted());
+  };
+
+  const loadMonthIntoResults = async (
+    range: SearchMonthRange,
+    criteria: SubmittedSearch,
+    revealLoadedMonth: boolean,
+  ) => {
+    if (searchSatelliteScenes === null || searchState.status !== 'success') return;
+    if (loadedMonthsRef.current.has(range.month)) {
+      if (revealLoadedMonth) setVisibleCount(searchState.result.sceneCount);
+      return;
+    }
+    if (loadingMonthsRef.current.has(range.month)) return;
+
+    request.current?.abort();
+    const controller = new AbortController();
+    const baseResult = searchState.result;
+    request.current = controller;
+    loadingMonthsRef.current.add(range.month);
+    setLoadingMonth(range.month);
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const monthResult = await searchSatelliteScenes.execute(
+        {
+          viewport: criteria.viewport,
+          startDate: range.startDate,
+          endDate: range.endDate,
+          productLevel: criteria.productLevel,
+          maxCloudCoverPercent: criteria.maxCloudCoverPercent,
+        },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      const mergedResult = mergeSearchResults(baseResult, monthResult);
+      markMonthLoaded(range.month);
+      setSearchState({ status: 'success', result: mergedResult });
+      setVisibleCount(
+        revealLoadedMonth
+          ? mergedResult.sceneCount
+          : Math.min(mergedResult.sceneCount, baseResult.sceneCount + resultPageSize),
+      );
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setLoadMoreError(
+        error instanceof SatelliteSearchError
+          ? error.message
+          : `${monthFormatter.format(new Date(`${range.month}-01T00:00:00.000Z`))} imagery could not be loaded. Try again.`,
+      );
+    } finally {
+      loadingMonthsRef.current.delete(range.month);
+      if (request.current === controller) {
+        request.current = null;
+        setLoadingMonth(null);
+        setLoadingMore(false);
+      }
+    }
+  };
 
   const runSearch = async () => {
     if (viewport === null || searchSatelliteScenes === null) return;
+    const range = searchMonthRange(calendarMonth, clock.now());
+    const existingSearch = submittedSearch;
+    if (
+      existingSearch !== null &&
+      searchState.status === 'success' &&
+      hasSameSubmittedCriteria(existingSearch, viewport, maxCloudCoverPercent)
+    ) {
+      setResultsOpen(true);
+      setLoadMoreError(null);
+      if (loadedMonthsRef.current.has(range.month)) {
+        setVisibleCount(searchState.result.sceneCount);
+        return;
+      }
+      await loadMonthIntoResults(range, existingSearch, true);
+      return;
+    }
+
     request.current?.abort();
     const controller = new AbortController();
-    const range = currentSearchMonth(clock.now());
     request.current = controller;
-    submittedSearch.current = {
+    setSubmittedSearch({
       viewport,
       productLevel: 'L2A',
       maxCloudCoverPercent,
-    };
+      initialMonth: range.month,
+    });
+    loadedMonthsRef.current = new Set<string>();
+    loadingMonthsRef.current = new Set<string>([range.month]);
+    setLoadedMonths([]);
+    setLoadingMonth(range.month);
     setVisibleCount(firstResultCount);
     setSelectedSceneId(null);
-    setOldestLoadedMonth(range.month);
     setLoadMoreError(null);
     setAutoLoadAttempts(0);
     setSubmittedCoordinates(coordinates);
@@ -704,7 +858,10 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
         },
         controller.signal,
       );
-      if (!controller.signal.aborted) setSearchState({ status: 'success', result });
+      if (!controller.signal.aborted) {
+        markMonthLoaded(range.month);
+        setSearchState({ status: 'success', result });
+      }
     } catch (error) {
       if (controller.signal.aborted) return;
       setSearchState({
@@ -715,7 +872,11 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
             : 'The imagery search could not be completed.',
       });
     } finally {
-      if (request.current === controller) request.current = null;
+      loadingMonthsRef.current.delete(range.month);
+      if (request.current === controller) {
+        request.current = null;
+        setLoadingMonth(null);
+      }
     }
   };
 
@@ -725,58 +886,31 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
       setVisibleCount((count) => count + resultPageSize);
       return;
     }
-    if (
-      oldestLoadedMonth === null ||
-      oldestLoadedMonth <= sentinelArchiveFirstMonth ||
-      submittedSearch.current === null ||
-      searchSatelliteScenes === null
-    ) {
+    if (nextArchiveMonth === null || submittedSearch === null) return;
+    const criteria = submittedSearch;
+    await loadMonthIntoResults(nextArchiveMonth, criteria, false);
+  };
+
+  const changeCalendarMonth = (month: string) => {
+    setCalendarMonth(month);
+    setLoadMoreError(null);
+    if (searchState.status !== 'success' || submittedSearch === null) return;
+    if (loadedMonthsRef.current.has(month)) {
+      setVisibleCount(searchState.result.sceneCount);
       return;
     }
-
-    request.current?.abort();
-    const controller = new AbortController();
-    const range = previousSearchMonth(oldestLoadedMonth);
-    const criteria = submittedSearch.current;
-    request.current = controller;
-    setLoadingMore(true);
-    setLoadMoreError(null);
-    try {
-      const olderResult = await searchSatelliteScenes.execute(
-        {
-          ...criteria,
-          startDate: range.startDate,
-          endDate: range.endDate,
-        },
-        controller.signal,
-      );
-      if (controller.signal.aborted) return;
-      setSearchState((current) =>
-        current.status === 'success'
-          ? {
-              status: 'success',
-              result: mergeSearchResults(current.result, olderResult),
-            }
-          : current,
-      );
-      setOldestLoadedMonth(range.month);
-      setVisibleCount(searchState.result.sceneCount + resultPageSize);
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      setLoadMoreError(
-        error instanceof SatelliteSearchError
-          ? error.message
-          : 'Older imagery could not be loaded. Try again.',
-      );
-    } finally {
-      if (request.current === controller) request.current = null;
-      setLoadingMore(false);
-    }
+    void loadMonthIntoResults(
+      searchMonthRange(month, clock.now()),
+      submittedSearch,
+      true,
+    );
   };
 
   const cancelSearch = () => {
     request.current?.abort();
     request.current = null;
+    loadingMonthsRef.current.clear();
+    setLoadingMonth(null);
     setLoadingMore(false);
     setSearchState({ status: 'idle' });
     setResultsOpen(false);
@@ -838,12 +972,19 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
           Acquisition calendar
         </Typography>
         <AcquisitionCalendar
-          key={calendarResult?.groups[0]?.date ?? 'no-results'}
+          displayMonth={calendarMonth}
+          loadingMonth={loadingMonth}
           maxCloudCoverPercent={maxCloudCoverPercent}
+          maximumMonth={latestMonth}
+          navigationDisabled={searchState.status === 'loading' || loadingMore}
+          onMonthChange={changeCalendarMonth}
           onSelectDate={selectCalendarDate}
           result={calendarResult}
           today={today}
         />
+        {loadMoreError === null || resultsOpen ? null : (
+          <Alert severity="error">{loadMoreError}</Alert>
+        )}
         <Box>
           <Stack direction="row" sx={{ alignItems: 'center' }}>
             <Typography id="cloud-cover-slider-label" variant="body2" sx={{ flex: 1 }}>
@@ -886,7 +1027,7 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
             disabled={!canSearch}
             onClick={() => void runSearch()}
           >
-            Search latest images
+            Search images
           </Button>
         )}
 
@@ -907,10 +1048,8 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
           !searchUnavailable ? (
             <Typography variant="caption" color="text.secondary">
               Point {coordinates} ·{' '}
-              {monthFormatter.format(
-                new Date(`${currentSearchMonth(today).month}-01T00:00:00.000Z`),
-              )}{' '}
-              → older · cloud ≤ {maxCloudCoverPercent}%
+              {monthFormatter.format(new Date(`${calendarMonth}-01T00:00:00.000Z`))} →
+              older · cloud ≤ {maxCloudCoverPercent}%
             </Typography>
           ) : null}
         </Box>
@@ -919,10 +1058,7 @@ export function SatelliteBrowser({ fallbackCoordinates }: SatelliteBrowserProps)
         ? createPortal(
             <SatelliteResultsPane
               coordinates={submittedCoordinates}
-              canLoadOlder={
-                oldestLoadedMonth !== null &&
-                oldestLoadedMonth > sentinelArchiveFirstMonth
-              }
+              canLoadOlder={nextArchiveMonth !== null}
               loadingMore={loadingMore}
               loadMoreError={loadMoreError}
               onAutoLoadMore={() => {

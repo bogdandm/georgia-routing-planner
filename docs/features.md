@@ -96,14 +96,22 @@ yellow tag; higher coverage is plain text. Cloud cover at 70% or higher is a red
 lower cloud values are plain text. Every card remains an individual scene; mosaics are
 not currently composed.
 
-The current implementation searches the current calendar month through today, sorts
-scenes by acquisition time, and groups cards by month in the right pane. The calendar
+The displayed calendar month is the search month. The current month ends at today;
+earlier months cover their complete UTC month. After the first search, calendar arrows
+load a displayed month only when that month has not completed successfully for the
+submitted point, viewport, product, and cloud criteria. Successful months, including
+empty ones, are reused when navigating back. Newly loaded scene groups are appended to
+the right results pane without replacing other months or resetting the displayed
+calendar month.
+
+Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport
 coverage. Days at or below the current cloud slider receive a subtle orange highlight;
 non-matching days retain only their cloud percentage without a tile outline. After
-locally loaded cards are revealed, the same load-more action fetches the preceding month
-and appends it, continuing back through the Sentinel-2 archive. Whole-card click selects
-and expands metadata. Marker targeting and imagery rendering remain unavailable.
+locally loaded cards are revealed, the same load-more action fetches the next missing
+preceding month and appends it, continuing back through the Sentinel-2 archive.
+Whole-card click selects and expands metadata. Marker targeting and imagery rendering
+remain unavailable.
 
 Clicking a loaded calendar date selects the scene with the highest viewport coverage for
 that date, reveals its batch if needed, expands its card, and scrolls it into view.

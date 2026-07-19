@@ -140,10 +140,13 @@ At completion, a desktop Chrome user can:
   batch, select/expand, and scroll it into view. Break coverage ties by existing
   acquisition-time order, and never reopen a user-closed results pane.
 - The UI starts with the current UTC calendar month through today; users do not enter a
-  date range. Results show the latest eight scenes first and reveal eight more per load.
-  Once the loaded set is exhausted, the same action fetches and appends the preceding
-  month with the immutable submitted viewport and filters, continuing back through the
-  Sentinel-2 archive.
+  date range. The displayed calendar month is the next explicit search month. Successful
+  months are cached for the submitted criteria, calendar navigation loads only missing
+  months, and appended groups remain available in the results pane. Results show the
+  latest eight scenes first and reveal eight more per load. Once the loaded set is
+  exhausted, the same action fetches and appends the next missing preceding month with
+  the immutable submitted viewport and filters, continuing back through the Sentinel-2
+  archive.
 - Automatically reveal or fetch a bounded number of additional sets while the results
   occupy less than 85% of the pane. Manual `Load more images` remains available after
   automatic filling stops.
@@ -443,9 +446,11 @@ MVP UI and are not part of S5.6 delivery.
 
 - Availability covers the displayed calendar month for the current product level and
   cloud threshold. It returns per-date scene count and a reviewed cloud summary.
-- Search derives the latest bounded inclusive lookback and uses the selected product and
-  cloud criteria. The UI shows eight scenes first and reveals another eight with each
-  `Load more images` action; it has no user-entered date range.
+- Search uses the displayed month and selected product/cloud criteria. The current month
+  ends at today; prior months include their final day. A successfully completed month,
+  including an empty month, is not queried again for the same submitted criteria. The UI
+  shows eight scenes first and reveals another eight with each `Load more images`
+  action; it has no user-entered date range.
 - Limit the supported date span and result count based on S5.2 provider measurements;
   show an actionable refinement message rather than truncating silently.
 - Follow provider pagination through validated HTTPS links only, cap pages/results, and
@@ -1286,8 +1291,9 @@ Commit: `feat(satellite): add Earth Search gateway`
 Progress evidence (2026-07-19):
 
 - `SatelliteBrowser` captures the current serialized map viewport and submits the
-  current calendar month through today with fixed L2A and horizontal cloud-slider
-  criteria.
+  displayed calendar month with fixed L2A and horizontal cloud-slider criteria. Calendar
+  navigation appends only missing months and reuses completed months without resetting
+  the displayed month.
 - The UI has intentional waiting, loading/cancel, safe error, empty, and successful
   states. Results remain local and disposable; changing map state never recreates the
   native map.
@@ -1303,11 +1309,13 @@ Progress evidence (2026-07-19):
   `Load more images` reveals the next set, then fetches and appends preceding calendar
   months without exposing provider pagination or month boundaries as separate user
   workflows.
+- Component coverage verifies searching May, navigating to June and July, retaining all
+  three months in the results pane, and revisiting completed months without duplicate
+  catalog requests.
 - The compact MVP sidebar is L2A-only: the cloud slider sits directly under the
   calendar, inactive provider/readiness rows are absent, and its scroll container clips
   incidental horizontal overflow. All rail tabs persist through their URL anchors.
-- Remaining work is availability refresh semantics, deeper keyboard/accessibility
-  coverage, and card-to-map application.
+- Remaining work is deeper keyboard/accessibility coverage and card-to-map application.
 
 Scope:
 

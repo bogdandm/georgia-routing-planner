@@ -153,20 +153,30 @@ sequenceDiagram
 
 The Earth Search request intersects the immutable submitted center point, not the full
 map bounds. The submitted viewport remains part of the application criteria only for
-coverage calculation and edge evidence. The UI first derives the current UTC calendar
-month through today; users do not enter date endpoints. It reveals locally loaded scenes
-in eight-card sets. When that result is exhausted, the same load-more command submits
-the preceding calendar month with the immutable original viewport, product level, and
-cloud threshold, then appends the older groups. This continues back to the first
-Sentinel-2 archive month. Earth Search pages are capped at 100 items and followed
-internally up to the configured ten-page safety boundary, so a normal month is not
-truncated or turned into a user refinement task. The use cases reject a mixed L1C/L2A
-response instead of substituting product levels. The calendar's per-day cloud summary is
-a weighted average using each scene's submitted viewport coverage as its weight, with a
-simple average fallback when every coverage is zero. A newer operation replaces the
-visible timeline; late transitions from an older request are ignored by operation ID.
-Logs contain correlation IDs, counts, durations, and safe error codes, never exact
-viewport geometry.
+coverage calculation and edge evidence. The displayed UTC calendar month supplies the
+date range; the current month ends at today and past months end on their final day.
+Users do not enter date endpoints.
+
+Each successful month is recorded as complete for the submitted viewport, product, and
+cloud criteria, including a successful empty result. Calendar navigation checks that
+session cache before requesting the displayed month. A missing month runs the same
+cancellable search use case and appends its groups to the existing results. Revisiting a
+complete month performs no provider request. Changing submitted criteria starts a new
+session and clears the completed-month set.
+
+The UI reveals locally loaded scenes in eight-card sets. When that result is exhausted,
+the same load-more command finds the next missing month before the initially submitted
+month, uses the immutable original viewport, product level, and cloud threshold, and
+appends the returned groups. This continues back to the first Sentinel-2 archive month
+without skipping a gap created by direct calendar navigation. Earth Search pages are
+capped at 100 items and followed internally up to the configured ten-page safety
+boundary, so a normal month is not truncated or turned into a user refinement task. The
+use cases reject a mixed L1C/L2A response instead of substituting product levels. The
+calendar's per-day cloud summary is a weighted average using each scene's submitted
+viewport coverage as its weight, with a simple average fallback when every coverage is
+zero. A newer operation replaces the visible timeline; late transitions from an older
+request are ignored by operation ID. Logs contain correlation IDs, counts, durations,
+and safe error codes, never exact viewport geometry.
 
 The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
 URL. It obtains the first page, follows at most the configured number of same-origin

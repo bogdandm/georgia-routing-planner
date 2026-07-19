@@ -5,6 +5,9 @@ import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
+import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
+import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
   loadMapProviderConfiguration,
@@ -15,11 +18,14 @@ import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
+import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
+import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
+import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -33,7 +39,12 @@ export interface RuntimeServices {
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
+  readonly mapViewport: MapViewportSnapshotStore;
   readonly queryClient: QueryClient;
+  readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
+  readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
+  readonly searchSatelliteScenes: SearchSatelliteScenes | null;
+  readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
 }
 
 /**
@@ -68,6 +79,8 @@ export function createRuntimeServices(): RuntimeServices {
         vectorOrigin: summary.vectorOrigin,
         terrainId: summary.terrainId,
         terrainOrigin: summary.terrainOrigin,
+        satelliteId: summary.satelliteId,
+        satelliteOrigin: summary.satelliteOrigin,
       },
     });
   } else {
@@ -78,7 +91,40 @@ export function createRuntimeServices(): RuntimeServices {
     });
   }
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const mapViewport = new MapViewportSnapshotStore();
+  const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const httpClient = createHttpClient(logger);
+  const satelliteCatalogGateway =
+    mapProviderConfiguration.status === 'valid'
+      ? new EarthSearchSatelliteCatalogGateway(
+          httpClient,
+          mapProviderConfiguration.value.satellite,
+          mapProviderConfiguration.value.policy.requestTimeoutMs,
+          sentinelQueryDiagnostics,
+          logger,
+          clock,
+        )
+      : null;
+  const searchSatelliteScenes =
+    satelliteCatalogGateway === null
+      ? null
+      : new SearchSatelliteScenes(
+          satelliteCatalogGateway,
+          sentinelQueryDiagnostics,
+          logger,
+          idGenerator,
+          clock,
+        );
+  const loadSatelliteAvailability =
+    satelliteCatalogGateway === null
+      ? null
+      : new LoadSatelliteAvailability(
+          satelliteCatalogGateway,
+          sentinelQueryDiagnostics,
+          logger,
+          idGenerator,
+          clock,
+        );
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -132,7 +178,12 @@ export function createRuntimeServices(): RuntimeServices {
     logger,
     mapCameraRepository,
     mapDiagnostics,
+    mapViewport,
     mapProviderConfiguration,
     queryClient,
+    loadSatelliteAvailability,
+    satelliteCatalogGateway,
+    searchSatelliteScenes,
+    sentinelQueryDiagnostics,
   };
 }

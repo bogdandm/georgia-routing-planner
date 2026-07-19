@@ -701,6 +701,14 @@ base path, build version, and bootstrap without querying external data providers
 
 ## 8. Delivery phases
 
+Phases group capabilities and dependencies; they are not a requirement to implement
+every group in numeric order. After the completed map foundation, the active delivery
+focus advances the viewport-based Sentinel-2 imagery slice before the catalog, track,
+Create GPX, and saved-marker groups. Marker-targeted imagery search remains dependent on
+the saved-marker capability, and detailed Layers controls remain dependent on a reviewed
+Layers prototype. The active work breakdown and current verification state live in
+[`PLAN.md`](./PLAN.md).
+
 ### Phase 0: repository and quality scaffold
 
 Deliver:
@@ -811,16 +819,16 @@ Acceptance:
 
 Deliver:
 
-- STAC search limited to Sentinel-2 L1C/L2A by viewport or saved-marker area, date, and
-  cloud cover.
+- STAC search limited to Sentinel-2 L1C/L2A by viewport, date, and cloud cover; add the
+  saved-marker search source when the saved-marker capability exists.
 - Date-grouped acquisition availability and cloud-cover summaries.
 - Explicit scene selection and true-color raster display.
 - Scene footprint/coverage, product level, imagery metadata, and attribution.
 - Cancellable loading and actionable errors.
 - Sanitized request tracing, provider timing, and quota/rate-limit diagnostics.
-- Compact Satellite search sidebar, adjacent results/metadata pane, and Layers controls
-  for supported imagery/reference visibility and opacity while preserving typed
-  ordering.
+- Compact Satellite search sidebar, adjacent results/metadata pane, and typed
+  imagery/reference visibility and opacity capabilities while preserving layer ordering.
+  Add detailed Layers UI only after its own reviewed prototype exists.
 
 Acceptance:
 

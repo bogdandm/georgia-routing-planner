@@ -1,4 +1,5 @@
 import type { MapFacade } from '@/presentation/map/MapFacade';
+import type { MapViewportSnapshot } from '@/application/ports/MapViewportProvider';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
@@ -44,6 +45,16 @@ export class FakeMapFacade implements MapFacade {
 
   public getCamera(): MapCamera {
     return this.snapshot.camera;
+  }
+
+  public getViewportSnapshot(): MapViewportSnapshot {
+    return {
+      bounds: { west: 42.8, south: 41.6, east: 44, north: 42.6 },
+      center: {
+        longitude: this.snapshot.camera.longitude,
+        latitude: this.snapshot.camera.latitude,
+      },
+    };
   }
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {

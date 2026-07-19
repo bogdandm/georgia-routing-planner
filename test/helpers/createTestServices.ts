@@ -8,12 +8,18 @@ import {
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
+import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
+import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
+import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
+import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
+import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -37,7 +43,13 @@ class TestIdGenerator implements IdGenerator {
   }
 }
 
-export function createTestServices(): RuntimeServices {
+interface CreateTestServicesOptions {
+  readonly satelliteCatalogGateway?: SatelliteCatalogGateway;
+}
+
+export function createTestServices(
+  options: CreateTestServicesOptions = {},
+): RuntimeServices {
   const clock = new TestClock();
   const idGenerator = new TestIdGenerator();
   const logger = new BoundedDiagnosticLogger(clock, idGenerator);
@@ -49,7 +61,13 @@ export function createTestServices(): RuntimeServices {
     mode: 'test',
   };
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
+  const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
+  const mapViewport = new MapViewportSnapshotStore();
   const httpClient = createHttpClient(logger);
+  const parsedMapProviderConfiguration = parseMapProviderConfiguration(
+    defaultMapProviderConfigurationInput,
+    'https://example.test/georgia-routing-planner/',
+  );
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -57,6 +75,16 @@ export function createTestServices(): RuntimeServices {
     mapDiagnostics,
     httpClient,
   );
+  const satelliteCatalogGateway =
+    options.satelliteCatalogGateway ??
+    new EarthSearchSatelliteCatalogGateway(
+      httpClient,
+      parsedMapProviderConfiguration.satellite,
+      parsedMapProviderConfiguration.policy.requestTimeoutMs,
+      sentinelQueryDiagnostics,
+      logger,
+      clock,
+    );
 
   return {
     buildInfo,
@@ -73,15 +101,29 @@ export function createTestServices(): RuntimeServices {
     logger,
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
     mapDiagnostics,
+    mapViewport,
     mapProviderConfiguration: {
       status: 'valid',
-      value: parseMapProviderConfiguration(
-        defaultMapProviderConfigurationInput,
-        'https://example.test/georgia-routing-planner/',
-      ),
+      value: parsedMapProviderConfiguration,
     },
     queryClient: new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     }),
+    loadSatelliteAvailability: new LoadSatelliteAvailability(
+      satelliteCatalogGateway,
+      sentinelQueryDiagnostics,
+      logger,
+      idGenerator,
+      clock,
+    ),
+    satelliteCatalogGateway,
+    searchSatelliteScenes: new SearchSatelliteScenes(
+      satelliteCatalogGateway,
+      sentinelQueryDiagnostics,
+      logger,
+      idGenerator,
+      clock,
+    ),
+    sentinelQueryDiagnostics,
   };
 }

@@ -25,6 +25,7 @@
     "eslint.config.js",
     "vite.config.ts",
     "vitest.config.ts",
+    "vitest.coverage.config.ts",
     "vitest.integration.config.ts",
     "playwright.config.ts",
     "tools/**/*.ts",

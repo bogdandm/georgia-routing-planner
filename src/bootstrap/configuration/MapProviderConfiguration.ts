@@ -76,6 +76,24 @@ const mapProviderConfigurationInputSchema = z
         message: 'Terrain maxZoom must be greater than minZoom.',
         path: ['maxZoom'],
       }),
+    satellite: z
+      .object({
+        id: z.string().regex(/^[a-z0-9-]+$/u),
+        label: z.string().min(1).max(80),
+        searchUrl: endpointSchema,
+        collections: z
+          .object({
+            L1C: z.string().min(1).max(80),
+            L2A: z.string().min(1).max(80),
+          })
+          .strict()
+          .refine((collections) => collections.L1C !== collections.L2A, {
+            message: 'Satellite collections must be distinct.',
+          }),
+        attribution: z.string().trim().min(1).max(200),
+        maximumPages: z.number().int().min(1).max(10),
+      })
+      .strict(),
     policy: z
       .object({
         requestTimeoutMs: z.number().int().min(1_000).max(30_000),
@@ -119,6 +137,17 @@ interface MapProviderConfigurationInput {
     readonly attribution: string;
     readonly exaggeration: number;
   };
+  readonly satellite: {
+    readonly id: string;
+    readonly label: string;
+    readonly searchUrl: string;
+    readonly collections: {
+      readonly L1C: string;
+      readonly L2A: string;
+    };
+    readonly attribution: string;
+    readonly maximumPages: number;
+  };
   readonly policy: {
     readonly requestTimeoutMs: number;
     readonly equivalentErrorWindowMs: number;
@@ -137,6 +166,8 @@ export interface MapProviderConfigurationSummary {
   readonly vectorOrigin: string;
   readonly terrainId: string;
   readonly terrainOrigin: string;
+  readonly satelliteId: string;
+  readonly satelliteOrigin: string;
 }
 
 /** Anonymous, credential-free provider defaults used when no public override is supplied. */
@@ -176,6 +207,17 @@ export const defaultMapProviderConfigurationInput = {
       'Terrain data: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank">Mapzen/AWS Open Data providers</a>',
     exaggeration: 1.15,
   },
+  satellite: {
+    id: 'earth-search-v1',
+    label: 'Earth Search',
+    searchUrl: 'https://earth-search.aws.element84.com/v1/search',
+    collections: {
+      L1C: 'sentinel-2-l1c',
+      L2A: 'sentinel-2-l2a',
+    },
+    attribution: 'Copernicus Sentinel data · Earth Search / Element 84',
+    maximumPages: 10,
+  },
   policy: {
     requestTimeoutMs: 15_000,
     equivalentErrorWindowMs: 10_000,
@@ -205,6 +247,10 @@ export function parseMapProviderConfiguration(
     terrain: {
       ...parsed.terrain,
       tileUrl: resolveEndpoint(parsed.terrain.tileUrl, baseUrl),
+    },
+    satellite: {
+      ...parsed.satellite,
+      searchUrl: resolveEndpoint(parsed.satellite.searchUrl, baseUrl),
     },
   };
 }
@@ -242,5 +288,7 @@ export function summarizeMapProviderConfiguration(
     vectorOrigin: new URL(configuration.vector.tileJsonUrl).origin,
     terrainId: configuration.terrain.id,
     terrainOrigin: new URL(configuration.terrain.tileUrl).origin,
+    satelliteId: configuration.satellite.id,
+    satelliteOrigin: new URL(configuration.satellite.searchUrl).origin,
   };
 }

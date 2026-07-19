@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 
 const openFreeMapOrigin = 'https://tiles.openfreemap.org';
 const terrainOrigin = 'https://s3.amazonaws.com';
+const earthSearchOrigin = 'https://earth-search.aws.element84.com';
 const terrainDemFixture = Buffer.from(
   [
     'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAADGklEQVR4nO3OQQ0AMBAEoZVe6ZUxjyNBAHsbnNUPINQPINQPINQP',
@@ -164,6 +165,13 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
     },
   );
   await page.route(
+    new RegExp(`^${earthSearchOrigin.replaceAll('.', '\\.')}`),
+    (route) =>
+      route.fulfill({
+        json: { type: 'FeatureCollection', features: [], links: [] },
+      }),
+  );
+  await page.route(
     new RegExp(`^${terrainOrigin.replaceAll('.', '\\.')}/elevation-tiles-prod/`),
     (route) =>
       route.fulfill({
@@ -185,5 +193,9 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
 }
 
 export function isConfiguredProviderRequest(url: URL): boolean {
-  return url.origin === openFreeMapOrigin || url.origin === terrainOrigin;
+  return (
+    url.origin === openFreeMapOrigin ||
+    url.origin === terrainOrigin ||
+    url.origin === earthSearchOrigin
+  );
 }

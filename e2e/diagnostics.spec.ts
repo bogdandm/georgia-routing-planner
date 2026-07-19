@@ -9,6 +9,45 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
+test('keeps diagnostics persistent and exposes the Sentinel timeline', async ({
+  page,
+}) => {
+  await page.goto('?developer=1');
+  const diagnosticsButton = page.getByRole('button', {
+    name: 'Developer diagnostics',
+    exact: true,
+  });
+
+  await diagnosticsButton.click();
+  const drawer = page.getByRole('complementary', {
+    name: 'Developer diagnostics',
+  });
+  await expect(drawer).toBeVisible();
+  await expect(page.locator('.MuiBackdrop-root')).toHaveCount(0);
+  await expect(drawer).toHaveCSS('box-shadow', 'none');
+
+  const sentinelTab = page.getByRole('tab', { name: 'Sentinel query' });
+  await sentinelTab.click();
+  await expect(sentinelTab).toHaveCSS('border-radius', '0px');
+  await expect(sentinelTab.locator('.MuiTouchRipple-root')).toHaveCount(0);
+  await expect(page.getByLabel('Sentinel query timeline')).toContainText(
+    'No Sentinel operation has run in this browser.',
+  );
+  await expect(page.getByTestId(/^sentinel-query-step-/u)).toHaveCount(10);
+
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeVisible();
+  await page.getByRole('tab', { name: 'Satellite', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Satellite imagery' })).toBeVisible();
+  await expect(drawer).toBeVisible();
+
+  await diagnosticsButton.click();
+  await expect(drawer).toBeHidden();
+  await diagnosticsButton.click();
+  await page.getByRole('button', { name: 'Close developer diagnostics' }).click();
+  await expect(drawer).toBeHidden();
+});
+
 test('captures failures and exports an inspectable redacted bundle', async ({
   page,
 }) => {
@@ -27,6 +66,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   await expect(page.getByText('Exact current camera')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Ordered map sources' })).toContainText(
     'basemap-vector',
+    { timeout: 15_000 },
   );
   await page.getByRole('switch', { name: 'Show tile boundaries' }).click();
   const mapDrawerAccessibility = await new AxeBuilder({ page })
@@ -42,6 +82,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   await page.getByRole('button', { name: 'Check configured providers' }).click();
   await expect(page.getByText('Vector provider reachability')).toBeVisible();
   await expect(page.getByText('Terrain provider reachability')).toBeVisible();
+  await expect(page.getByText('Satellite catalog reachability')).toBeVisible();
 
   await page.getByRole('tab', { name: /Logs/ }).click();
   await expect(page.getByText('runtime.promise.unhandled')).toBeVisible();

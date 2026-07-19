@@ -32,6 +32,17 @@
     "attribution": "Terrain data: <a href=\"https://github.com/tilezen/joerd/blob/master/docs/attribution.md\" target=\"_blank\">Mapzen/AWS Open Data providers</a>",
     "exaggeration": 1.15
   },
+  "satellite": {
+    "id": "earth-search-v1",
+    "label": "Earth Search",
+    "searchUrl": "https://earth-search.aws.element84.com/v1/search",
+    "collections": {
+      "L1C": "sentinel-2-l1c",
+      "L2A": "sentinel-2-l2a"
+    },
+    "attribution": "Copernicus Sentinel data · Earth Search / Element 84",
+    "maximumPages": 10
+  },
   "policy": {
     "requestTimeoutMs": 15000,
     "equivalentErrorWindowMs": 10000

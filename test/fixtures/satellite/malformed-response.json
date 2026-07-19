@@ -1,0 +1,14 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "unsafe-item",
+      "collection": "sentinel-2-l2a",
+      "geometry": { "type": "Point", "coordinates": [44.5, 42.5] },
+      "properties": { "datetime": "not-a-date" },
+      "assets": {}
+    }
+  ],
+  "links": []
+}

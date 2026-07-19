@@ -65,6 +65,7 @@ export class HealthCheckService {
         signal,
         { Range: 'bytes=0-1023' },
       ),
+      this.checkSatelliteProvider(configuration, signal),
     ]);
     this.logger.log({
       level: results.some((result) => result.status === 'fail') ? 'warn' : 'info',
@@ -188,6 +189,41 @@ export class HealthCheckService {
         summary: 'The configured provider did not respond successfully.',
         remediation:
           'Check connectivity and provider status. No automatic provider switch was attempted.',
+      };
+    }
+  }
+
+  private async checkSatelliteProvider(
+    configuration: MapProviderConfiguration,
+    signal: AbortSignal,
+  ): Promise<HealthCheckResult> {
+    const startedAt = this.clock.monotonicNow();
+    try {
+      await this.httpClient.post(configuration.satellite.searchUrl, {
+        signal,
+        timeout: configuration.policy.requestTimeoutMs,
+        json: {
+          collections: [configuration.satellite.collections.L2A],
+          intersects: { type: 'Point', coordinates: [44.005, 42.005] },
+          datetime: '2025-01-01T00:00:00.000Z/2025-01-01T23:59:59.999Z',
+          fields: { include: ['id'] },
+          limit: 1,
+        },
+      });
+      return {
+        name: 'Satellite catalog reachability',
+        status: 'pass',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'The configured Sentinel STAC search endpoint accepted a probe.',
+      };
+    } catch {
+      return {
+        name: 'Satellite catalog reachability',
+        status: 'fail',
+        durationMs: this.clock.monotonicNow() - startedAt,
+        summary: 'The configured Sentinel STAC search endpoint rejected the probe.',
+        remediation:
+          'Check connectivity and provider status. No automatic catalog switch was attempted.',
       };
     }
   }

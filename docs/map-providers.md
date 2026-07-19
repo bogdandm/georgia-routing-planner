@@ -127,7 +127,28 @@ elevation semantics.
 - MapLibre demo vector/terrain endpoints: useful for examples and tests, but rejected as
   production defaults because they are demo infrastructure without a product SLA.
 
-## Sentinel-2 true-color COG feasibility spike
+## Sentinel-2 catalog and raster feasibility
+
+The evidence below was revalidated on **2026-07-19** against Earth Search v1 and public
+AWS Sentinel objects. Earth Search remains the selected replaceable catalog candidate:
+
+- Root/search origin: `https://earth-search.aws.element84.com/v1`.
+- Collections: `sentinel-2-l1c` and `sentinel-2-l2a`.
+- Search transport: anonymous STAC 1.0 JSON over HTTPS; production code must still
+  validate every response and bounded pagination link.
+- Service policy: public best-effort access with no SLA. A private catalog or silent
+  provider fallback is not assumed.
+
+The validated public configuration supplies the exact search URL, distinct collection
+IDs, plain-text attribution, and a one-to-ten page cap (default five). The production
+gateway sends a single collection, WGS84 point intersection, inclusive UTC interval,
+scene-level cloud filter, descending acquisition sort, allowlisted fields, and at most
+100 items. It follows only one unambiguous `POST` next link at a time when the link has
+the configured HTTPS origin/path, no query or fragment, and a bounded opaque `next`
+token. Invalid items, counts, assets, or pagination fail closed; raw bodies, links,
+tokens, and exact geometry are never logged.
+
+### L2A true-color COG
 
 This was a non-product, time-boxed check. Earth Search v1 returned the item
 `S2A_38TMM_20250731_0_L2A` for a Tbilisi-area bounding box. Its `visual` asset was the
@@ -142,11 +163,20 @@ Earth Search asset supports browser CORS and partial range access without creden
 The [AWS dataset record](https://registry.opendata.aws/sentinel-2-l2a-cogs/) documents
 the free/open Sentinel terms and public Earth Search catalog.
 
+The 2026-07-19 Georgia sample `S2A_38TMN_20250731_0_L2A` reported EPSG:32638 and a
+220,705,355-byte true-color COG. A bounded request for its first 65,536 bytes again
+returned `206 Partial Content`, `Accept-Ranges: bytes`, and browser-permissive CORS.
+
 No product render was added. MapLibre GL JS does not directly render a GeoTIFF/COG as a
 raster source, and Chrome does not provide the geospatial windowing/reprojection needed
-by itself. The spike therefore has no meaningful full render-time number: it stopped
-after the successful 16 KiB range read rather than downloading or decoding the full
-asset. Rendering Sentinel imagery requires a replaceable imagery adapter, such as:
+by itself. [geotiff.js](https://github.com/geotiffjs/geotiff.js) can read remote COG
+windows and overviews, use workers, and accept cancellation, but it deliberately does
+not provide a high-level reprojection or MapLibre tiling API. The inspected
+[MapLibre COG protocol](https://github.com/geomatico/maplibre-cog-protocol) requires
+EPSG:3857 input and does not reproject the UTM sample. The spike therefore has no
+meaningful full render-time number: it stopped after bounded range reads rather than
+downloading or decoding the full asset. Rendering Sentinel imagery requires a
+replaceable imagery adapter, such as:
 
 1. Browser-side COG range reading, reprojection, and tile generation behind a worker.
 2. A standards-compatible dynamic tile service, if a provider policy is approved.
@@ -154,6 +184,24 @@ asset. Rendering Sentinel imagery requires a replaceable imagery adapter, such a
 The adapter must expose raster tiles/texture data to MapLibre without changing catalog
 search or scene-selection workflows. The current application does not implement STAC
 search, scene choice, imagery caching/UI, or production COG decoding.
+
+### L1C true-color JP2
+
+The same bounded Georgia query returned `S2A_38TMN_20250731_0_L1C`, EPSG:32638. Its
+`visual` asset is a 10980-by-10980 JPEG 2000 object referenced as
+`s3://sentinel-s2-l1c/tiles/38/T/MN/2025/7/31/0/TCI.jp2`; the concrete item has no
+thumbnail. The public bucket/key maps to the equivalent anonymous HTTPS URL. A bounded
+1,024-byte request returned `206 Partial Content`, `Accept-Ranges: bytes`, and
+browser-permissive CORS; the complete object is 104,134,127 bytes.
+
+This proves transport but not a production render path. Current general-purpose
+[OpenJPEG](https://github.com/uclouvain/openjpeg)/WebAssembly decoders do not establish
+a maintained browser adapter that requests only the visible region, reprojects UTM to
+Web Mercator, feeds MapLibre, and supports bounded memory plus prompt cancellation.
+Downloading and decoding the whole 104 MB object is rejected. L1C search metadata can be
+implemented independently, but the application must label its visual asset as
+unsupported until a bounded adapter or an approved raster tile service is selected. It
+must never apply the corresponding L2A scene as a substitute.
 
 ## Verification record
 

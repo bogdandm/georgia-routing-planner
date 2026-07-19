@@ -1,0 +1,45 @@
+{
+  "type": "FeatureCollection",
+  "context": { "limit": 100, "matched": 1, "returned": 1 },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "S2A_38TMN_20250731_0_L2A",
+      "collection": "sentinel-2-l2a",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [44.000177, 42.359721],
+            [45.120421, 42.359721],
+            [45.120421, 43.352783],
+            [44.000177, 43.352783],
+            [44.000177, 42.359721]
+          ]
+        ]
+      },
+      "properties": {
+        "datetime": "2025-07-31T07:58:21.070000Z",
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 2.628153,
+        "proj:epsg": 32638,
+        "grid:code": "MGRS-38TMN",
+        "s2:product_type": "S2MSI2A",
+        "s2:product_uri": "S2A_MSIL2A_20250731T075021_N0511_R135_T38TMN_20250731T110117.SAFE"
+      },
+      "assets": {
+        "visual": {
+          "href": "https://sentinel-cogs.example.test/S2A_38TMN_20250731_0_L2A/TCI.tif",
+          "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "roles": ["visual"]
+        },
+        "thumbnail": {
+          "href": "https://sentinel-cogs.example.test/S2A_38TMN_20250731_0_L2A/preview.jpg",
+          "type": "image/jpeg",
+          "roles": ["thumbnail"]
+        }
+      }
+    }
+  ],
+  "links": []
+}

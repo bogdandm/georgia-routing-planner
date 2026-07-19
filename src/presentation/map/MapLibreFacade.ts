@@ -5,6 +5,7 @@ import type {
 } from 'maplibre-gl';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type { MapViewportSnapshot } from '@/application/ports/MapViewportProvider';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
@@ -143,6 +144,23 @@ export class MapLibreFacade implements MapFacade {
 
   public getCamera(): MapCamera {
     return this.#snapshot.camera;
+  }
+
+  public getViewportSnapshot(): MapViewportSnapshot | null {
+    const map = this.#map;
+    if (map === null) return null;
+
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+    return {
+      bounds: {
+        west: bounds.getWest(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        north: bounds.getNorth(),
+      },
+      center: { longitude: center.lng, latitude: center.lat },
+    };
   }
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {

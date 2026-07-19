@@ -28,6 +28,8 @@ Before modifying files:
 Rules:
 
 - Never commit directly to `main`.
+- When asked for code review directly by user - do not run tests, e2e tests or other
+  pnpm commands to run automatic checks. Your job is to review code only.
 - Never merge, fast-forward, rebase, or cherry-pick work into `main` until the user
   explicitly approves the current feature-branch state for integration.
 - Do not interpret silence, a request for more work, or approval of an individual design
@@ -529,6 +531,16 @@ Automated tests are required by default. Add or update tests in the same change 
 production behavior. Do not postpone the entire test suite to a subsequent change and do
 not rely on manual browser verification as the only evidence.
 
+Use the smallest automated-test tier that proves the changed behavior. Isolated UI
+copy/style changes, local component-state fixes, and small interaction changes should
+use focused unit or React component tests plus a brief manual browser check when visual
+behavior changed. Do not add or run Playwright merely because a change is user-visible.
+Reserve local Playwright runs and new E2E coverage for major workflows or high-risk
+boundaries: cross-feature journeys, URL/base-path routing, reload persistence, MapLibre
+or WebGL lifecycle, provider/raster integration, file import/export, diagnostics export,
+deployment, and other behavior that cannot be represented faithfully below the browser
+boundary. CI may continue to run the existing E2E suite independently.
+
 Use this test distribution:
 
 - Many fast domain/application unit tests.
@@ -583,7 +595,10 @@ disabled, and error states deliberately.
 
 ### End-to-end tests
 
-Use Playwright's Chromium project for critical workflows:
+Use Playwright's Chromium project only for critical workflows. Minor fixes and isolated
+features covered by focused unit, component, or infrastructure tests do not require a
+local E2E run or a new E2E scenario. Add or run Playwright when the change creates or
+materially alters a major workflow such as:
 
 - Application opens on GitHub Pages-style base path.
 - Track search and selection.
@@ -673,7 +688,9 @@ Before declaring a change complete:
 2. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test` for code changes.
 3. Add or update automatic tests for every changed behavior and relevant failure path.
 4. Run `pnpm build` for dependency, configuration, map, worker, or deployment changes.
-5. Run relevant Playwright tests for user-flow changes.
+5. Run relevant Playwright tests only for major workflows and high-risk browser
+   boundaries described in the end-to-end policy. Focused tests are sufficient for minor
+   isolated fixes and features.
 6. Verify new loading/error/empty states visually in current Chrome.
 7. Verify new failure paths emit useful bounded diagnostic events with no secret or
    personal payload.

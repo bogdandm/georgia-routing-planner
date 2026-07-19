@@ -39,6 +39,11 @@ Changing among Tracks, Satellite, Markers, and Layers changes contextual React c
 not the map owner. Opening Settings or Diagnostics follows the same invariant: the
 existing `MapWorkspace` and native MapLibre instance stay mounted.
 
+Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
+captures interaction from the workspace, and it remains open until the user activates
+its header close control, toggles the Diagnostics rail action, or disables developer
+mode.
+
 ## Settled camera write
 
 1. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch.
@@ -99,6 +104,8 @@ flowchart LR
   Browser["Global/error boundary"] --> Logger["Bounded redacting logger"]
   HTTP["HTTP hooks"] --> Logger
   Storage["Persistence"] --> Logger
+  Sentinel["Sentinel use cases and raster adapter"] --> SentinelSnapshot["Sentinel query timeline store"]
+  SentinelSnapshot --> Drawer
   Snapshot --> Drawer["Developer drawer"]
   Logger --> Drawer
   Health["Local and explicit provider checks"] --> Diagnostics["Diagnostics service"]
@@ -111,6 +118,84 @@ Logging is best-effort and must never fail the primary operation. Redaction happ
 before an event enters the bounded buffer. Bundle creation copies serializable state,
 coarsens camera location, and creates a local object URL that is revoked immediately
 after download. Nothing is uploaded.
+
+Sentinel commands will open one timeline operation ID and publish a fixed sequence of
+best-effort step transitions through the `SentinelQueryDiagnostics` application port.
+The local store keeps only the current or most recent operation. While the persistent
+drawer is open and the operation is running, its UI requests a monotonic-duration
+refresh every 250 milliseconds; this performs no provider polling. Invalid or late
+diagnostic transitions are ignored and cannot change the primary operation outcome.
+
+## Sentinel search core
+
+The Satellite sidebar invokes the provider-independent application flow and Earth Search
+adapter through the injected `SearchSatelliteScenes` use case:
+
+```mermaid
+sequenceDiagram
+  participant Command as SatelliteBrowser
+  participant UseCase as Search/availability use case
+  participant Gateway as SatelliteCatalogGateway
+  participant Geometry as Satellite coverage
+  participant Timeline as Sentinel diagnostics
+
+  Command->>UseCase: point anchor + viewport snapshot + UTC criteria + AbortSignal
+  UseCase->>Timeline: begin correlated operation
+  UseCase->>UseCase: validate bounds, dates, level, cloud limit
+  UseCase->>Gateway: bounded criteria, item cap, operation ID, signal
+  Gateway-->>UseCase: readonly scenes + total matched
+  UseCase->>UseCase: enforce level/cap and deduplicate IDs
+  UseCase->>Geometry: coverage and center-to-edge evidence
+  Geometry-->>UseCase: percent, relation, distance, warning
+  UseCase->>Timeline: complete, fail, or cancel matching operation
+  UseCase-->>Command: stable UTC date groups or typed error
+```
+
+The Earth Search request intersects the immutable submitted center point, not the full
+map bounds. The submitted viewport remains part of the application criteria only for
+coverage calculation and edge evidence. The displayed UTC calendar month supplies the
+date range; the current month ends at today and past months end on their final day.
+Users do not enter date endpoints.
+
+Each successful month is recorded as complete for the submitted viewport, product, and
+cloud criteria, including a successful empty result. Calendar navigation checks that
+session cache before requesting the displayed month. A missing month runs the same
+cancellable search use case and appends its groups to the existing results. Revisiting a
+complete month performs no provider request. Changing submitted criteria starts a new
+session and clears the completed-month set.
+
+The UI reveals locally loaded scenes in eight-card sets. When that result is exhausted,
+the same load-more command finds the next missing month before the initially submitted
+month, uses the immutable original viewport, product level, and cloud threshold, and
+appends the returned groups. This continues back to the first Sentinel-2 archive month
+without skipping a gap created by direct calendar navigation. Earth Search pages are
+capped at 100 items and followed internally up to the configured ten-page safety
+boundary, so a normal month is not truncated or turned into a user refinement task. The
+use cases reject a mixed L1C/L2A response instead of substituting product levels. The
+calendar's per-day cloud summary is a weighted average using each scene's submitted
+viewport coverage as its weight, with a simple average fallback when every coverage is
+zero. A newer operation replaces the visible timeline; late transitions from an older
+request are ignored by operation ID. Logs contain correlation IDs, counts, durations,
+and safe error codes, never exact viewport geometry.
+
+The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
+URL. It obtains the first page, follows at most the configured number of same-origin
+`POST` next tokens, validates every collected page with Zod, and then maps items to
+readonly scenes. A page containing any malformed item fails as a whole; the application
+does not present incomplete comparisons as trustworthy partial results. L1C `s3://`
+visual keys are converted only for the known public bucket and remain marked as
+unsupported JP2. L2A visual assets must be HTTPS true-color COGs.
+
+Timeout, rate-limit, unsuccessful HTTP, network, schema, pagination, result-limit, and
+cancellation outcomes remain distinct typed codes. Logs and the timeline contain the
+operation ID, safe code, count, and duration only. Explicit provider health checks add a
+fixed one-item Sentinel POST probe; startup never waits for it.
+
+The sidebar captures one immutable viewport snapshot at submission, aborts a replaced
+request, and keeps provider data local to the current browser session. Successful
+results are grouped by UTC acquisition date. Catalog, pagination, validation, mapping,
+and coverage steps complete in the live timeline; visual selection and map rendering
+steps are marked skipped until the user can apply a scene.
 
 ## Teardown ownership
 

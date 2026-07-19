@@ -1,4 +1,5 @@
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import HealthAndSafetyOutlinedIcon from '@mui/icons-material/HealthAndSafetyOutlined';
 import {
@@ -9,6 +10,7 @@ import {
   Divider,
   Drawer,
   FormControlLabel,
+  IconButton,
   List,
   ListItem,
   ListItemText,
@@ -30,6 +32,7 @@ import {
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
+import { SentinelQueryTimeline } from '@/presentation/developer-tools/SentinelQueryTimeline';
 import { useUiStore } from '@/presentation/shell/uiStore';
 
 interface DeveloperDrawerProps {
@@ -38,15 +41,21 @@ interface DeveloperDrawerProps {
   readonly onTriggerFailure: () => void;
 }
 
-type DeveloperTab = 'overview' | 'map' | 'logs' | 'health';
+type DeveloperTab = 'overview' | 'sentinel-query' | 'map' | 'logs' | 'health';
 
 export function DeveloperDrawer({
   onClose,
   onTriggerFailure,
   open,
 }: DeveloperDrawerProps) {
-  const { buildInfo, diagnostics, logger, mapDiagnostics, mapProviderConfiguration } =
-    useRuntimeServices();
+  const {
+    buildInfo,
+    diagnostics,
+    logger,
+    mapDiagnostics,
+    mapProviderConfiguration,
+    sentinelQueryDiagnostics,
+  } = useRuntimeServices();
   const [activeTab, setActiveTab] = useState<DeveloperTab>('overview');
   const [healthChecks, setHealthChecks] = useState<readonly HealthCheckResult[]>([]);
   const [notes, setNotes] = useState('');
@@ -68,6 +77,19 @@ export function DeveloperDrawer({
     readMapSnapshot,
     readMapSnapshot,
   );
+  const subscribeToSentinelQuery = useCallback(
+    (listener: () => void) => sentinelQueryDiagnostics.subscribe(listener),
+    [sentinelQueryDiagnostics],
+  );
+  const readSentinelQuerySnapshot = useCallback(
+    () => sentinelQueryDiagnostics.getSnapshot(),
+    [sentinelQueryDiagnostics],
+  );
+  const sentinelQuerySnapshot = useSyncExternalStore(
+    subscribeToSentinelQuery,
+    readSentinelQuerySnapshot,
+    readSentinelQuerySnapshot,
+  );
   const events = logger.getEvents().slice(-50).reverse();
 
   useEffect(
@@ -76,6 +98,18 @@ export function DeveloperDrawer({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!open || sentinelQuerySnapshot.status !== 'running') return;
+
+    sentinelQueryDiagnostics.refreshRunningDurations();
+    const intervalId = window.setInterval(() => {
+      sentinelQueryDiagnostics.refreshRunningDurations();
+    }, 250);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [open, sentinelQueryDiagnostics, sentinelQuerySnapshot.status]);
 
   const handleTabChange = (_event: SyntheticEvent, value: DeveloperTab) => {
     setActiveTab(value);
@@ -126,20 +160,39 @@ export function DeveloperDrawer({
     <Drawer
       anchor="right"
       open={open}
-      onClose={handleClose}
+      variant="persistent"
       slotProps={{
         paper: {
+          role: 'complementary',
           'aria-labelledby': 'developer-diagnostics-title',
-          sx: { width: { xs: '100%', sm: 440 } },
+          sx: {
+            width: { xs: '100%', sm: 440 },
+            borderLeft: 1,
+            borderColor: 'divider',
+            boxShadow: 'none',
+          },
         },
       }}
     >
       <Box sx={{ p: 2 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <BugReportOutlinedIcon color="primary" />
-          <Typography id="developer-diagnostics-title" component="h2" variant="h6">
-            Developer diagnostics
-          </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}
+        >
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <BugReportOutlinedIcon color="primary" />
+            <Typography id="developer-diagnostics-title" component="h2" variant="h6">
+              Developer diagnostics
+            </Typography>
+          </Stack>
+          <IconButton
+            aria-label="Close developer diagnostics"
+            size="small"
+            onClick={handleClose}
+          >
+            <CloseOutlinedIcon />
+          </IconButton>
         </Stack>
         <Typography variant="body2" color="text.secondary">
           Local, bounded, and safe to export. Nothing is uploaded automatically.
@@ -151,11 +204,35 @@ export function DeveloperDrawer({
         onChange={handleTabChange}
         variant="scrollable"
         aria-label="Developer diagnostics sections"
+        sx={{
+          minHeight: 44,
+          px: 1,
+          '& .MuiTab-root': {
+            minWidth: 'auto',
+            minHeight: 44,
+            m: 0,
+            px: 1.5,
+            py: 1,
+            borderRadius: 0,
+            color: 'text.secondary',
+            fontSize: '0.8125rem',
+            lineHeight: 1.25,
+          },
+          '& .MuiTab-root.Mui-selected': {
+            color: 'primary.main',
+            bgcolor: 'transparent',
+          },
+          '& .MuiTabs-indicator': {
+            height: 2,
+            borderRadius: 0,
+          },
+        }}
       >
-        <Tab value="overview" label="Overview" />
-        <Tab value="map" label="Map" />
-        <Tab value="logs" label={`Logs (${String(events.length)})`} />
-        <Tab value="health" label="Health" />
+        <Tab disableRipple value="overview" label="Overview" />
+        <Tab disableRipple value="sentinel-query" label="Sentinel query" />
+        <Tab disableRipple value="map" label="Map" />
+        <Tab disableRipple value="logs" label={`Logs (${String(events.length)})`} />
+        <Tab disableRipple value="health" label="Health" />
       </Tabs>
       <Divider />
 
@@ -193,6 +270,10 @@ export function DeveloperDrawer({
               Trigger controlled component failure
             </Button>
           </Stack>
+        ) : null}
+
+        {activeTab === 'sentinel-query' ? (
+          <SentinelQueryTimeline snapshot={sentinelQuerySnapshot} />
         ) : null}
 
         {activeTab === 'map' ? (
@@ -392,7 +473,6 @@ export function DeveloperDrawer({
         >
           Download diagnostics
         </Button>
-        <Button onClick={handleClose}>Close</Button>
       </Stack>
     </Drawer>
   );

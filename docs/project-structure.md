@@ -12,7 +12,9 @@ flowchart LR
   Browser["Chrome"] --> Main["main.tsx"]
   Main --> Bootstrap["bootstrap composition root"]
   Bootstrap --> UI["presentation"]
-  UI --> Ports["application ports"]
+  UI --> UseCases["application use cases"]
+  UseCases --> Domain["domain values and calculations"]
+  UseCases --> Ports["application ports"]
   Infra["infrastructure adapters"] --> Ports
   UI --> MapLibre["MapLibre facade"]
   Infra --> IndexedDB["IndexedDB / Dexie"]
@@ -33,12 +35,15 @@ frameworks.
 src/
   main.tsx                 browser entry and provider nesting
   bootstrap/               one-time dependency construction and React service context
-  application/ports/       framework-free capability contracts and shared values
-  infrastructure/          HTTP, IndexedDB, clock, and ID implementations
+  domain/satellite/        framework-free Sentinel values and geometry calculations
+  application/satellite/   cancellable Sentinel search and availability orchestration
+  application/ports/       framework-free catalog, viewport, diagnostics, and storage ports
+  infrastructure/          HTTP, STAC, IndexedDB, clock, and ID implementations
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
     map/                   map UI, pure style, facade, terrain, and camera coordination
+    satellite-browser/     live search controls and date-grouped scene presentation
     developer-tools/       local support and diagnostic UI
     theme/                 shared color tokens and Material UI theme
     styles/                application-level CSS
@@ -48,16 +53,31 @@ tools/                     Node-only audit, diagnostics, and E2E runners
 docs/                      maintainer-facing system documentation
 ```
 
-`domain/` and feature use-case folders are not present. The current application layer
-contains capability ports used by the implemented map, diagnostics, and persistence
-boundaries.
+The satellite domain contains readonly criteria, scene, coverage, and grouped-result
+values plus deterministic Turf-backed coverage/edge calculations. The satellite
+application layer validates submitted UTC criteria, enforces result bounds and product
+separation, deduplicates scenes, and publishes correlated diagnostics through ports. It
+does not import React, MapLibre, `ky`, or STAC JSON.
+
+`infrastructure/stac/` owns the configured Earth Search adapter and Zod schemas. It
+builds allowlisted STAC requests, validates all returned items before mapping them,
+follows only same-origin POST pagination tokens within the configured cap, and converts
+transport/schema failures to safe catalog errors. The composition root exposes the
+adapter through named search and availability use cases; React never receives its `ky`
+client. A serializable viewport snapshot store bridges settled map updates to Satellite
+controls without exposing MapLibre.
+
+Satellite presentation uses the CC0-licensed `@photostructure/tz-lookup` data resolver
+to map the submitted anchor coordinates to an IANA time zone entirely in the browser. No
+location or acquisition metadata is sent to a time-zone service.
 
 ## Composition root
 
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It creates the clock, ID generator, bounded
 logger, Dexie database, camera repository, validated provider configuration, map
-snapshot store, HTTP client, health/diagnostics services, and TanStack Query client.
+snapshot store, Sentinel query timeline store, HTTP client, health/diagnostics services,
+and TanStack Query client.
 
 [`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
 this order: runtime services, TanStack Query, MUI theme, error boundary, workspace
@@ -72,6 +92,8 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                    | Imperative MapLibre lifecycle stays isolated       |
 | Settled camera                                            | Dexie through `MapCameraRepository` | Durable local state                                |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`       | Serializable view shared by UI, health, and export |
+| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`     | Memory-only live developer timeline                |
+| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state      | Disposable, not persisted                          |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
@@ -92,3 +114,8 @@ the native object, event listeners, terrain source, error aggregation, WebGL sta
 cleanup. [`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and
 uses stable IDs from `mapIds.ts`. Any added feature layer must extend that typed
 ordering instead of scattering MapLibre identifiers through presentation components.
+
+The same facade implements the narrow `MapViewportProvider` capability. It returns a
+copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel
+validation rejects non-finite, inverted, antimeridian-crossing, or center-mismatched
+snapshots; exact bounds never enter the default diagnostics bundle.

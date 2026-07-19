@@ -52,7 +52,10 @@ test('loads the production map style and reloads under a repository subpath', as
   ).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Layer controls are not available yet' }),
+  ).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('#layers');
   expect(externalRequests).toEqual([]);
 });
 

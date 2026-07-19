@@ -1,648 +1,1503 @@
-# Phase 1 Plan: Map Foundation
+# Sentinel-2 Imagery Implementation Plan
 
-## 1. Purpose and relationship to the roadmap
+## 1. Purpose, status, and branch boundary
 
-This is the detailed implementation plan for Phase 1 of
-[TOP_LVL_PLAN.md](./TOP_LVL_PLAN.md). It replaces the Phase 0 network-free smoke canvas
-with the first production map foundation: a MapLibre viewport backed by validated,
-replaceable OSM and terrain configuration, durable camera state, a resilient 2D/3D
-terrain control, and privacy-safe map diagnostics.
+This is the active implementation plan for the Satellite imagery workspace described in
+[`TOP_LVL_PLAN.md`](./TOP_LVL_PLAN.md) and the stable contracts in
+[`docs/features.md`](./docs/features.md),
+[`docs/runtime-flows.md`](./docs/runtime-flows.md), and
+[`docs/map-providers.md`](./docs/map-providers.md). It replaces the completed map
+foundation plan that previously occupied this file.
 
-Phase 1 establishes the map as a stable platform for catalog previews, manual planning,
-and Sentinel-2 imagery. It does not implement those later product features.
+- Status: **implementation started; latest-image viewport search, acquisition calendar,
+  horizontal cloud filtering, adjacent grouped results, and the correlated Sentinel
+  diagnostics timeline are implemented while raster rendering remains open**.
+- Active branch: `feature/sentinel-imagery-plan`, created from `main` on 2026-07-19.
+- Approval boundary: all implementation remains on a feature branch and reaches `main`
+  only after the reviewed branch state is explicitly approved.
+- Current application boundary: the Satellite rail destination performs a real bounded
+  Earth Search request for the live viewport and renders date-grouped scene summaries.
+  The acquisition calendar and adjacent expandable results pane are available; imagery
+  apply/render actions remain unavailable. Developer diagnostics stays open and updates
+  every implemented query step with live and completed durations.
 
-This file is a historical phase plan, not the current UI/UX specification. The approved
-workspace hierarchy is defined in [`docs/features.md`](./docs/features.md) from the
-reviewed Penpot concepts. In particular, later manual planning is the Tracks-owned
-`Create GPX` workflow and must never be inferred from this plan as a top-level Plan tab
-or rail item.
+The implementation must be delivered as focused, independently testable commits. Each
+behavior commit includes its tests and leaves the repository buildable. This plan stays
+current as review resolves the open prototype questions and as feasibility work selects
+the raster path.
 
-## 2. Phase status and Git boundary
+### 1.1 Work-package status
 
-- Status: **implemented, automatically verified, approved, and merged into `main`
-  through pull request #1**. The normal-Chrome real-provider revalidation documented
-  below remains a release check.
-- Phase 0 was already merged into `main` when this plan began.
-- Historical planning branch: `docs/phase-1-map-foundation-plan`.
-- Historical implementation branch: `feature/map-foundation`.
-- Current branch, pull-request, and approval rules are defined by `AGENTS.md`; the old
-  phase branches in this file are not instructions for new work.
+Update this table in the same commit that materially changes a package's state. `Done`
+means its acceptance evidence exists on the feature branch; it does not mean approval to
+merge into `main`.
 
-Phase 1 must be delivered as a sequence of small, reviewable commits. It must not be
-collapsed into one phase-sized implementation commit. Every implementation commit must
-include its relevant tests and leave the repository in a buildable, testable state.
+| Package | Outcome                                           | Status      |
+| ------- | ------------------------------------------------- | ----------- |
+| S5.0    | Plan, branch, prototype ledger, governance        | Done        |
+| S5.1    | Persistent drawer and live Sentinel timeline      | In progress |
+| S5.2    | Catalog and raster feasibility decision           | In progress |
+| S5.3    | Models, viewport geometry, and use cases          | Done        |
+| S5.4    | Validated STAC gateway and configuration          | Done        |
+| S5.5    | Search sidebar and acquisition calendar           | In progress |
+| S5.6    | MapLibre true-color imagery and footprint adapter | Pending     |
+| S5.7    | Results, metadata, and applied actions            | In progress |
+| S5.8    | Exported diagnostics and failure evidence         | Pending     |
+| S5.9    | E2E, accessibility, docs, and design sync         | Pending     |
 
-### Implementation outcome (2026-07-18)
+## 2. Design authority and synchronization
 
-- Work packages P1.1 through P1.12 were implemented as focused commits on
-  `feature/map-foundation` and merged into `main` through pull request #1.
-- The production defaults are OpenFreeMap/OpenMapTiles vectors plus AWS Open Data Mapzen
-  Terrarium DEM, behind a versioned Zod configuration boundary with a tracked valid
-  example.
-- Camera restoration, settled persistence, terrain transitions, provider failures,
-  MapLibre/WebGL lifecycle evidence, health checks, and the developer Map view are
-  implemented with bounded failure behavior.
-- Diagnostics schema version 2 adds a coarse (`0.1` degree) exported camera and safe map
-  snapshot; the inspection CLI migrates supported Phase 0 version 1 bundles.
-- Required browser tests use generated vector/DEM fixtures and reject unexpected public
-  requests. No runtime or development dependency was added.
-- Anonymous CORS checks succeeded for the selected vector, terrain, and Sentinel COG
-  endpoints. The combined post-fix real-provider application smoke remains outstanding
-  because the available in-app Chrome disabled IndexedDB and then blocked local
-  renavigation; [docs/map-providers.md](./docs/map-providers.md) records the observation
-  and normal-Chrome checklist.
-- No deployment, provider secret, or personal GPX data was part of the Phase 1
-  implementation.
+The canonical layout and interaction prototype is
+[prototype 2](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334).
+The reviewed “Redesign B — Satellite imagery discovery workspace (1920×1080)” frame is
+the current Satellite reference.
 
-### Automated acceptance evidence (2026-07-18)
+Use this authority order:
 
-- `pnpm repo:audit`, `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
-  `pnpm test:integration`, `pnpm test:coverage`, `pnpm build`, `pnpm e2e`, and the
-  aggregate `pnpm check` pass on the implementation branch.
-- Unit/component evidence: 18 files and 77 tests passed. Integration evidence: 1 file
-  and 1 test passed. Chromium evidence: all 8 required flows passed against the built
-  repository-subpath application with local provider fixtures.
-- Coverage is 90.13% statements, 85.91% branches, 87.01% functions, and 89.85% lines.
-- The production provider example parses through the same Zod boundary used at startup.
-- The production build transforms 1,129 modules. Its largest emitted assets are the
-  application chunk at 785.89 kB and the isolated MapLibre chunk at 1,027.74 kB before
-  gzip (243.86 kB and 272.98 kB after gzip in the observed run). Vite reports its
-  advisory 500 kB chunk warning; no new dependency was introduced and code splitting is
-  deferred as a documented optimization rather than a Phase 1 correctness blocker.
-- The first local eight-worker browser run found that the camera scenario's 5-second
-  ready assertion was too tight under concurrent map startup. The test now uses a
-  bounded 15-second readiness window, consistent with the plan's requirement to avoid
-  brittle first-load timing thresholds; the full rerun passed 8 of 8.
+1. Penpot owns layout, feature placement, control grouping, visual hierarchy, and
+   interaction intent.
+2. Stable repository documentation owns behavior, architecture, data, privacy, provider,
+   attribution, and failure contracts.
+3. This plan owns delivery order, progress, verification, and unresolved implementation
+   decisions.
 
-## 3. Required outcome
+Synchronization rules for this workstream:
 
-At completion, the application must:
+- Every accepted review change to the implemented Satellite UI must be applied to the
+  corresponding Penpot surface and recorded in this plan.
+- Every accepted Penpot change must update the in-scope implementation and the relevant
+  permanent documentation in the same workstream.
+- Inspect the current Penpot hierarchy before each design edit and preserve reviewer
+  changes. Apply one requested review change per Penpot operation.
+- Do not replace unimplemented prototype features with the application's temporary
+  disabled controls, empty states, placeholders, or reduced behavior.
+- Do not treat illustrative scene IDs, dates, coordinates, counts, or percentages as
+  production constants.
 
-- Contain no tracked dependency directories, generated build/test output, local logs,
-  diagnostics exports, secrets, editor state, or temporary files, with a repeatable
-  repository audit included in normal checks.
-- Use unambiguous top-level source names: `bootstrap` for runtime construction,
-  `presentation` for React/UI code, and `application` only for use cases and ports.
-- Render one long-lived MapLibre map centered on Georgia with an OSM-derived vector
-  basemap and hiking-relevant overlay layers.
-- Keep required OSM, vector-provider, and terrain attribution visible.
-- Load all provider endpoints and provider-specific source-layer mappings through a
-  validated, replaceable configuration boundary.
-- Restore the last valid camera after reload and fall back safely when persisted data is
-  absent or corrupt.
-- Pan, zoom, rotate, and pitch smoothly in current stable desktop Chrome.
-- Switch between a flat 2D presentation and 3D terrain without recreating the map,
-  replacing its style, or losing the current center, zoom, and bearing.
-- Keep a usable 2D map when terrain is unavailable and give the user actionable,
-  accessible failure feedback.
-- Isolate MapLibre's native object, events, sources, layers, and cleanup inside the map
-  feature adapter/facade.
-- Record bounded lifecycle, source, style, terrain, camera-summary, and WebGL evidence
-  without logging high-frequency events or sensitive URL data.
-- Expose a sanitized map snapshot and map/WebGL health information in developer mode and
-  diagnostics exports.
-- Pass deterministic automatic tests without contacting a public tile, terrain, or
-  imagery provider.
+### 2.1 Prototype-to-delivery ledger
 
-## 4. Fixed decisions
+| Prototype surface          | Reviewed contract                                                                    | Current application                                           | Planned work                                        | State    |
+| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------- | -------- |
+| Satellite rail destination | Opens contextual Satellite tools without remounting the map                          | Implemented                                                   | Regression coverage in S5.9                         | Existing |
+| Search-area selector       | Compact `Point` / `<latitude, longitude>` selector; Marker is a later source         | Center query plus captured coverage bounds; Marker disabled   | Preserve Marker for later                           | Partial  |
+| Date calendar              | Latest-image acquisition/cloud hints without date-range input                        | Read-only month grid highlights loaded acquisition dates      | Refine availability refresh behavior in S5.5        | Partial  |
+| Sentinel options           | L2A-only MVP with a horizontal cloud slider directly beneath the calendar            | Active fixed L2A search and horizontal cloud control          | Add availability refresh behavior in S5.5           | Partial  |
+| Other imagery              | No inactive provider placeholder                                                     | Removed                                                       | Add only with a real provider                       | Accepted |
+| Search summary/action      | Concise criteria summary and `Search Images` action                                  | Live request, loading/cancel, empty, and safe error states    | Refine submitted-summary treatment in S5.5          | Partial  |
+| Adjacent results pane      | Adjacent pane titled for the search point, with scene and acquisition counts         | Implemented as a shell sibling; close preserves map           | Add applied imagery actions in S5.7                 | Partial  |
+| Date-grouped scene cards   | Time, product level, cloud, coverage, warning, thumbnail, whole-card action          | Latest eight shown first; Load more crosses older months      | Connect card selection to imagery rendering in S5.7 | Partial  |
+| Expanded scene metadata    | Acquisition time, tile, orbit, product, edge distance, attribution                   | Unavailable                                                   | Validated metadata details in S5.7                  | Planned  |
+| Applied scene actions      | Applied status, fit footprint, and hide imagery                                      | Unavailable                                                   | Map adapter and commands in S5.6/S5.7               | Planned  |
+| Persistent map composition | True-color scene beneath hiking references, with footprint and other state preserved | Reserved satellite layer band only                            | Rendering and layer-order work in S5.6              | Planned  |
+| Sentinel query diagnostics | Persistent non-modal drawer with every query/render step, status, and live duration  | Search steps are live; rendering steps are explicitly skipped | Instrument rendering boundaries in S5.6             | Partial  |
 
-The following decisions come from the top-level plan and Phase 0 architecture:
+## 3. Required user outcome
 
-- Continue using MapLibre GL JS through `react-map-gl/maplibre`; do not add a second map
-  engine or React map wrapper.
-- Keep React components functional and declarative. MapLibre imperative behavior belongs
-  in a typed map adapter/facade.
-- Use one map instance for the lifetime of the workspace. Rail-section, detail-pane,
-  dialog, diagnostics, and terrain-state changes must not remount it.
-- Use a MapLibre-compatible vector source for OSM data. Do not make the production
-  basemap depend on the public `tile.openstreetmap.org` raster service.
-- Build a restrained hiking-focused style with centrally defined source and layer IDs.
-  Satellite imagery added later must be able to sit below hiking vectors and labels.
-- Use a `raster-dem` source compatible with MapLibre terrain. Provider encoding, tile
-  size, zoom limits, URLs, and attribution are configuration, not feature constants.
-- Keep the MVP static and anonymous. Public `VITE_*` values cannot contain secrets.
-- Persist durable camera state through the existing Dexie settings repository. Do not
-  mirror the authoritative camera continuously into Zustand.
-- Use the existing typed logger, diagnostics service, health checks, and composition
-  root rather than creating map-specific global services with overlapping ownership.
-- Keep CI deterministic with checked-in synthetic fixtures and Playwright request
-  interception. Public-provider availability is never a required test dependency.
-- Add no runtime dependency unless the implementation demonstrates a concrete gap in
-  MapLibre, React, Zod, Dexie, MUI, and the browser APIs already installed.
-- Reserve `application` for the clean-architecture application layer. Remove the vague
-  `src/app` name by moving composition to `src/bootstrap` and React/UI code to
-  `src/presentation` before adding Phase 1 map files.
-- Keep generated dependencies and local outputs out of Git. The lockfile, source
-  fixtures, and intentional configuration examples remain tracked; installed packages,
-  build output, reports, caches, logs, secrets, and personal exports do not.
+At completion, a desktop Chrome user can:
 
-## 5. Provider feasibility and configuration gate
+1. Open Satellite without recreating the persistent MapLibre map.
+2. Search the actual current viewport for the latest Sentinel-2 L2A scenes using a
+   bounded lookback and horizontal cloud-cover threshold.
+3. See acquisition availability in the calendar and compare returned scenes grouped by
+   UTC acquisition date.
+4. Understand each scene's platform, processing level, scene cloud cover, submitted
+   viewport coverage, and any search-point-to-scene-edge warning.
+5. Expand one scene to inspect its acquisition, tile, orbit, product identity,
+   attribution, and coverage evidence.
+6. Apply one concrete true-color scene, see its footprint, fit the map to that
+   footprint, switch scenes, and hide the imagery without losing search results.
+7. Change 2D/3D terrain or move among workspace destinations without resetting the
+   applied scene or unrelated workspace state.
+8. Recover from no results, cancellation, malformed provider data, offline/network
+   failure, rate limiting, COG/tile decode failure, and WebGL/source failure through
+   intentional accessible states.
+9. Export diagnostics that distinguish catalog, validation, render, and provider
+   failures without exporting exact search geometry, asset URLs, request bodies, or
+   other sensitive data.
+10. Keep the persistent diagnostics drawer open while using the workspace and inspect
+    every Sentinel chain step with its current status and live/finished duration.
 
-Provider selection is a required Phase 1 gate because anonymous static clients cannot
-protect credentials and provider policies, CORS behavior, schemas, and availability can
-change.
+## 4. Fixed product and UX decisions
 
-Before making a provider the production default, record an evidence-based decision in
-`docs/map-providers.md` covering:
+- Satellite remains one of the four primary rail destinations; it is not a dialog or a
+  separate page.
+- Every primary rail destination has a stable URL anchor: `#tracks`, `#satelite`,
+  `#markers`, or `#layers`. Direct navigation restores the matching tab.
+- The map is long-lived. Opening/closing the results pane, applying imagery, and
+  changing filters must not remount it.
+- `Point` is the first implemented search source. Earth Search intersects the submitted
+  settled center, while the captured visible bounds remain client-side coverage input.
+  The selector displays latitude then longitude.
+- `Marker` remains visible but unavailable until saved-marker behavior exists. This work
+  does not invent a marker repository or synthetic marker choices.
+- The MVP search UI exposes Sentinel-2 L2A only. Keep L1C out of the selector and render
+  workflow until a bounded browser path is deliberately rescheduled.
+- The horizontal cloud slider filters scene-level STAC cloud metadata. The UI must not
+  imply that this is a cloud calculation limited to the viewport.
+- Calendar cloud values use viewport-coverage-weighted daily averages. Days at or below
+  the current slider are subtly orange; non-matching days have no tile outline or fill.
+- A loaded calendar day is a shortcut to its highest-viewport-coverage card: reveal the
+  batch, select/expand, and scroll it into view. Break coverage ties by existing
+  acquisition-time order, and never reopen a user-closed results pane.
+- The UI starts with the current UTC calendar month through today; users do not enter a
+  date range. The displayed calendar month is the next explicit search month. Successful
+  months are cached for the submitted criteria, calendar navigation loads only missing
+  months, and appended groups remain available in the results pane. Results show the
+  latest eight scenes first and reveal eight more per load. Once the loaded set is
+  exhausted, the same action fetches and appends the next missing preceding month with
+  the immutable submitted viewport and filters, continuing back through the Sentinel-2
+  archive.
+- Automatically reveal or fetch a bounded number of additional sets while the results
+  occupy less than 85% of the pane. Manual `Load more images` remains available after
+  automatic filling stops.
+- Results are concrete scenes, not hidden mosaics. Selecting another scene replaces the
+  applied raster explicitly.
+- Partial coverage remains visible: uncovered basemap stays present and coverage stays
+  explicit. Warn only when the scene border is less than 5 km from the search anchor;
+  being outside a scene or 80 km from its border is not itself a warning.
+- The whole scene card is the selection/apply target. Do not add a separate Apply button
+  or collapsed tile/orbit tags.
+- Within one acquisition day, order concrete scenes by acquisition time descending on
+  the client. Keep scenes separate; mosaic composition is a future capability.
+- Show date and search-coordinate-local acquisition time on one line. Resolve the IANA
+  zone offline from the immutable submitted center; do not use browser-local or UTC-only
+  display and do not show platform text on cards.
+- Render coverage at 50% or below as a yellow tag; render higher coverage as plain text.
+  Render cloud cover at 70% or higher as a red tag; render lower cloud values as plain
+  text.
+- True-color imagery sits below OSM hiking references, labels, catalog/Create GPX
+  geometry, markers, and interaction highlights.
+- Applying imagery does not change the current camera automatically. `Fit footprint` is
+  the explicit camera command.
+- `Hide imagery` stops raster display without deleting results or the selected scene's
+  metadata. Final footprint visibility semantics await the review question in
+  section 14.
+- Closing the results pane does not silently remove an applied scene.
+- Do not show an `Other imagery` placeholder. Add another source only with a real
+  connected provider.
+- Developer diagnostics is a persistent, non-modal, shadow-free drawer. It closes only
+  from its header control, its active rail toggle, or disabling developer mode; Escape,
+  workspace clicks, and tab changes do not close it.
+- `Sentinel query` is a dedicated diagnostics tab. It always lists the reviewed chain
+  from viewport capture through raster/footprint application, showing `Waiting`,
+  `Running`, `Completed`, `Failed`, `Cancelled`, or `Skipped` plus a monotonic duration.
+- The timeline holds only the current or most recent operation in memory. A new
+  operation replaces the prior snapshot, and the widget never exposes raw
+  request/response bodies, exact geometry, arbitrary URLs, headers, tokens, or provider
+  errors.
+- Each work package must wire its own steps into the timeline in the same commit as the
+  behavior. Core observability is not deferred to the final diagnostics hardening work.
+- Detailed Layers UI is not invented without a reviewed Layers prototype. This work
+  exposes typed imagery visibility/opacity capabilities so a later reviewed Layers
+  surface can use them.
 
-1. Anonymous browser use from the GitHub Pages origin and local development origin.
-2. No secret, confidential token, or referrer-only credential embedded in the bundle.
-3. Published usage policy, attribution text/link, license obligations, and reasonable
-   MVP traffic limits.
-4. HTTPS and CORS behavior for vector metadata/tiles, glyphs, sprites, and DEM tiles.
-5. Vector source-layer names required for paths, roads, water, land cover, boundaries,
-   settlements, peaks, passes, and hiking-relevant points of interest.
-6. DEM encoding (`mapbox` or `terrarium`), tile size, useful zoom range, no-data
-   behavior, and attribution.
-7. Current Chrome behavior for style load, pitch, terrain, and recoverable tile errors.
-8. A replacement/fallback path that requires configuration and style-mapping changes,
-   not changes to React feature workflows.
+## 5. Scope boundaries
 
-The production application must fail configuration validation with an actionable
-bootstrap/map message rather than silently contacting an unintended endpoint. If no
-acceptable anonymous vector or terrain provider exists, stop at this gate and report the
-constraint; do not work around it by publishing a private key.
+### 5.1 Included
 
-The top-level risk register also calls for a small Sentinel COG feasibility spike in
-Phase 1. Time-box a non-product investigation of one public true-color COG in current
-Chrome and record CORS, range-request, render-time, and replacement-adapter findings in
-the same provider document. Do not add STAC search, scene selection, or a production
-satellite UI in this phase.
+- Anonymous, configuration-driven STAC search for the reviewed Sentinel collections.
+- Actual viewport-bounds capture and bounded search geometry.
+- Date availability, range selection, product-level selection, cloud threshold, search,
+  result grouping, selection, metadata, and attribution.
+- One replaceable true-color rendering adapter chosen by the feasibility gate.
+- Scene footprint, coverage, edge distance, fit, hide, and applied-state handling.
+- TanStack Query lifecycle, AbortSignal propagation, typed errors, diagnostics, tests,
+  stable documentation, and Penpot synchronization.
+- Persistent live developer visualization of the full Sentinel query/render chain,
+  including per-step state and monotonic elapsed time.
 
-## 6. Phase non-goals
+### 5.2 Excluded
 
-- Sentinel/STAC search, date/cloud filters, or a user-visible satellite layer.
-- GPX parsing, catalog generation, track previews, track selection, or downloads.
-- Manual waypoints, route segments, route editing, or elevation calculation.
-- Offline regional map packages, service-worker tile caching, or prefetching.
-- Geocoding, directions, automatic routing, or turn-by-turn navigation.
-- Multiple base-style themes or a general-purpose layer editor.
-- 3D buildings, custom terrain meshes, globe projection, or rich animations.
-- Mobile layout or Safari-specific behavior.
-- Exact camera coordinates in default exported diagnostics.
-- Automatic failover between public providers. A clear degraded state is preferable to
-  hidden source switching with different data/licensing semantics.
-- Backend, proxy, OAuth, telemetry upload, or secret management.
+- Automatic scene mosaics or cloud-free composites.
+- Band math, false-color products, NDVI, change detection, download/export, or image
+  editing.
+- Saved-marker search until the Markers capability exists.
+- Other satellite providers, local imagery import, generic WMS/XYZ forms, or arbitrary
+  Layers controls.
+- Offline imagery packages, service-worker prefetching, or durable COG/tile caching.
+- Accounts, provider credentials, a proxy, server-side reprojection, or a new backend.
+- Mobile-specific layout, Safari support, and globe-specific imagery behavior.
+- Changing unrelated future Penpot surfaces to resemble the incomplete application.
 
-## 7. Ownership and architecture
+## 6. Architecture and ownership
 
-### 7.1 Source terminology
+### 6.1 Target dependency flow
 
-The current names `src/app` and `src/application` represent different architectural
-concepts, but the distinction is too subtle. Phase 1 uses these explicit terms:
+```text
+Satellite React workspace
+        |
+        v
+application use cases -----------------------> application ports
+        |                                           ^
+        v                                           |
+serializable criteria/results        Earth Search STAC gateway
+                                                    |
+                                                    v
+                                           configured ky client
 
-- `src/bootstrap`: the composition root, runtime-service construction, providers, build
-  metadata, startup error capture, and the browser entry wiring.
-- `src/presentation`: React components, the workspace shell, theme, feature UI, UI
-  stores, and MapLibre presentation adapters.
-- `src/application`: framework-independent use cases and capability ports. It must not
-  contain React, MUI, MapLibre, Dexie, or browser API code.
-- `src/infrastructure`: implementations of application ports using browser storage,
-  HTTP, files, or other external mechanisms.
+Satellite React commands -> narrow imagery-map capability -> MapLibre adapter
+                                                        |
+                                                        v
+                                      raster source/layer + footprint source/layer
 
-As part of the rename, replace the overly broad `ApplicationServices` composition bundle
-names with `RuntimeServices` (or an equally explicit approved name), including the
-factory, context, provider, and hook. Rename `App`/`AppErrorBoundary` to workspace-
-shell names. Update import aliases, architecture lint rules, tests, and documentation in
-the same behavior-preserving commit.
+application use cases + raster adapter -> SentinelQueryDiagnostics port
+                                                   |
+                                                   v
+                                  local timeline snapshot store -> developer drawer
+```
 
-### 7.2 State ownership
+The catalog path follows normal clean-architecture dependency injection. The imperative
+MapLibre path remains a presentation adapter because it controls a UI rendering engine.
+React receives only serializable scene/render snapshots and narrow commands; neither
+application use cases nor Zustand receive the native map.
 
-| State or behavior                                           | Owner                                  | Persistence         |
-| ----------------------------------------------------------- | -------------------------------------- | ------------------- |
-| Native `Map`/`MapRef`, listeners, sources, layers, controls | Map adapter/facade                     | Never               |
-| Loading, ready, degraded, fatal presentation state          | Map feature component                  | No                  |
-| Current high-frequency camera during gestures               | MapLibre                               | No                  |
-| Last settled, validated camera                              | Map camera repository via Dexie        | Yes                 |
-| 2D/3D control and pending/error state                       | Map feature component/controller       | No in Phase 1       |
-| Last useful map diagnostics snapshot                        | Map diagnostics snapshot store/service | In memory only      |
-| Settings/dialog/drawer state                                | Existing Zustand UI store              | No                  |
-| Provider configuration                                      | Validated application configuration    | Build/runtime asset |
+Sentinel orchestration depends only on the small `SentinelQueryDiagnostics` application
+port. Its diagnostics implementation stores one serializable current/last-operation
+snapshot and publishes it through `useSyncExternalStore`; application code does not
+depend on React or the concrete developer drawer.
 
-Do not put a native map object, class instance, mutable source, or per-frame camera
-value in Zustand, TanStack Query, Dexie, or the runtime-services context.
+### 6.2 Proposed contracts
 
-### 7.3 Map boundary
+Names may be refined during implementation, but responsibilities remain separate:
 
-The presentation feature may expose small typed capabilities such as:
+- `SatelliteSearchCriteria`: search area, inclusive UTC date range, product level, and
+  cloud threshold.
+- `SatelliteSearchArea`: discriminated union beginning with a viewport bounds snapshot;
+  later Marker support can add another variant without changing the gateway.
+- `SatelliteScene`: stable item ID, platform, level, acquisition time, footprint, cloud
+  cover, tile/orbit/product metadata, validated render asset reference, and attribution
+  label.
+- `SatelliteAcquisitionGroup`: UTC date with one or more concrete scenes and derived
+  availability summary.
+- `SatelliteSceneCoverage`: submitted-area coverage percentage, center/interest-point
+  relation, and optional edge warning.
+- `LoadSatelliteAvailability`: returns date summaries for the visible calendar month.
+- `SearchSatelliteScenes`: validates limits, invokes the gateway,
+  deduplicates/paginates, calculates derived display data, and returns date-grouped
+  scenes.
+- `SatelliteCatalogGateway`: small cancellable STAC search capability.
+- `SentinelQueryDiagnostics`: best-effort lifecycle sink for the fixed Sentinel chain;
+  invalid instrumentation transitions are ignored and can never fail the operation.
+- `SentinelQueryDiagnosticsStore`: local current/last-operation snapshot, subscriber
+  boundary, and live monotonic-duration refresh used by the diagnostics drawer.
+- `SatelliteImageryMap`: narrow presentation capability for apply, hide, fit footprint,
+  subscribe, and get a serializable render snapshot.
+- `MapLibreSatelliteImageryAdapter`: owns protocol registration, raster/footprint
+  sources and layers, scene switching, cancellation, cleanup, and render diagnostics.
 
-```ts
-interface MapFacade {
-  getCamera(): MapCamera;
-  getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
-  setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
-  setDebugOptions(options: MapDebugOptions): void;
+Do not introduce a broad satellite service, map manager, generic command bus, or native
+MapLibre getter.
+
+### 6.3 State ownership
+
+| State                                                                 | Owner                                     | Persistence          |
+| --------------------------------------------------------------------- | ----------------------------------------- | -------------------- |
+| Calendar month, product level, cloud threshold, visible-result count  | Satellite React feature                   | Session only         |
+| Last submitted criteria                                               | Satellite React feature / query key       | Session only         |
+| Availability and search request lifecycle/results                     | TanStack Query                            | In-memory cache only |
+| Expanded/selected result and pane visibility                          | Satellite React feature                   | Session only         |
+| Applied scene ID, render state, raster visibility, footprint snapshot | Imagery-map adapter, exposed serializably | Session only         |
+| Native raster/GeoJSON sources, layers, protocols, listeners           | MapLibre imagery adapter                  | Never                |
+| Settled camera and existing terrain state                             | Existing map owner/repository             | Existing policy      |
+| Provider/catalog configuration                                        | Validated runtime configuration           | Build/runtime asset  |
+| Current/last Sentinel step statuses and durations                     | Sentinel diagnostics snapshot store       | Memory only          |
+
+No raw STAC response, COG bytes, native map instance, class instance, or full geometry
+is stored in Zustand, TanStack Query persistence, or Dexie.
+
+### 6.4 Target repository shape
+
+Create files only when they contain real behavior. Expected ownership is:
+
+```text
+src/
+  domain/satellite/
+    SatelliteScene.ts
+    satelliteCoverage.ts
+  application/satellite/
+    LoadSatelliteAvailability.ts
+    SearchSatelliteScenes.ts
+  application/ports/
+    SatelliteCatalogGateway.ts
+    SentinelQueryDiagnostics.ts
+  diagnostics/snapshots/
+    SentinelQueryDiagnosticsStore.ts
+  infrastructure/stac/
+    EarthSearchSatelliteCatalogGateway.ts
+    earthSearchSchemas.ts
+  presentation/satellite-browser/
+    SatelliteWorkspace.tsx
+    SatelliteSearchForm.tsx
+    SatelliteCalendar.tsx
+    SatelliteResultsPane.tsx
+    SatelliteSceneCard.tsx
+    SatelliteSceneDetails.tsx
+  presentation/developer-tools/
+    SentinelQueryTimeline.tsx
+  presentation/map/
+    SatelliteImageryMap.ts
+    MapLibreSatelliteImageryAdapter.ts
+test/fixtures/satellite/
+  availability-response.json
+  search-response.json
+  malformed-response.json
+  raster/...
+e2e/
+  satellite-imagery.spec.ts
+```
+
+Exact file splitting should follow one primary export per file and avoid barrel files.
+
+## 7. Provider and rendering decision gate
+
+The catalog path and raster path are separate replaceable decisions. The catalog may be
+usable even when a candidate raster adapter fails, but the user-visible MVP feature is
+not complete until the L2A flow has an honest rendering outcome. L1C is deferred and is
+not an MVP completion gate.
+
+### 7.1 Catalog candidate
+
+Earth Search v1 is the initial candidate because it offers a public STAC search API and
+the repository already recorded successful anonymous access to a Sentinel true-color
+COG. It is best-effort and has no SLA. Before product code depends on it, S5.2 must
+revalidate:
+
+- Current collection IDs and the L1C/L2A asset sets.
+- POST search support for bbox/intersects, inclusive datetime, cloud filtering,
+  deterministic sorting, fields, pagination links, and cancellation.
+- Browser CORS from local development and the GitHub Pages origin.
+- STAC conformance, response media type, rate/quota behavior, timeout behavior, and
+  attribution/licensing.
+- The exact metadata fields and fallbacks used for platform, tile, orbit, product,
+  processing level, footprint, and true-color asset selection.
+- HTTPS-only asset references and any requester-pays/authentication flags.
+
+All endpoints and collection mappings are validated configuration. The static client
+must not contain credentials or fall back silently to a different provider.
+
+### 7.2 Raster decision
+
+The existing provider spike proves range access, not renderability. The official
+MapLibre COG example uses `@geomatico/maplibre-cog-protocol`, but that adapter documents
+that its input must already be EPSG:3857 and it does not reproject. Sentinel scene
+assets commonly use UTM grids, so package adoption is not assumed.
+
+S5.2 must compare at least these paths against one representative Georgia L2A scene:
+
+1. A browser-side COG/JP2 windowing, reprojection, and tile adapter with work isolated
+   from the UI thread.
+2. An anonymous standards-compatible raster tile service only if its policy, CORS,
+   attribution, longevity, request limits, and static-client security are acceptable.
+3. A deliberately reduced reviewed product scope only if neither path can meet the fixed
+   constraints; no blurry preview stretching.
+
+The gate records:
+
+- Projection, format, bands, overviews, block size, compression, no-data/alpha behavior,
+  and browser decoder support for each product level.
+- Requests, transferred bytes, time to first visible pixels, interaction responsiveness,
+  memory behavior, cancellation latency, cache bounds, and cleanup after scene switch.
+- Chrome/WebGL behavior in 2D and terrain mode, source/layer ordering, CORS/range
+  behavior, and failure categories.
+- Candidate dependency versions, licenses, transitive size, maintenance activity, worker
+  requirements, CSP/base-path behavior, and production bundle impact.
+- A provider/adapter replacement boundary that leaves search and scene-selection use
+  cases unchanged.
+
+The chosen path and rejected alternatives become durable evidence in
+`docs/map-providers.md` before later work packages add product behavior. If no
+acceptable path exists, stop after the gate and request a product or deployment decision
+rather than weakening privacy/static-hosting constraints.
+
+### 7.3 Current gate evidence (2026-07-19)
+
+- Earth Search v1 still exposes `sentinel-2-l1c` and `sentinel-2-l2a`, and a bounded
+  Georgia query returned concrete items from both collections.
+- The representative L2A item exposes a 220,705,355-byte EPSG:32638 true-color COG.
+  Anonymous HTTPS range requests returned `206 Partial Content` with permissive CORS.
+- The representative L1C item exposes a 104,134,127-byte EPSG:32638 true-color JP2 as
+  `s3://.../TCI.jp2`; the item contains no thumbnail even though the collection-level
+  template advertises one. Translating the known public bucket/key to HTTPS permits
+  anonymous CORS range requests, so transport is feasible.
+- The remaining L1C blocker is bounded browser decoding and reprojection. Available
+  generic OpenJPEG/WASM decoders do not establish a maintained MapLibre adapter that
+  reads only the visible JP2 region; downloading and decoding the whole 104 MB scene is
+  outside the memory, cancellation, and interaction constraints.
+- `geotiff.js` supports remote COG windows, overviews, workers, and cancellation for
+  L2A, but it is a raster reader rather than a reprojection/rendering adapter. The known
+  MapLibre COG protocol still requires EPSG:3857 while the sample is UTM EPSG:32638.
+
+The catalog decision is therefore usable for provider-independent search work. L1C
+research remains recorded as provider evidence, but L1C search and apply are outside the
+MVP UI and are not part of S5.6 delivery.
+
+## 8. Search and derived-data contracts
+
+### 8.1 Viewport snapshot
+
+- Extend the serializable map capability with settled WGS84 viewport bounds plus center.
+- Capture the submitted bounds when the user searches; later panning does not mutate an
+  in-flight request or relabel existing results.
+- Reject non-finite, inverted, world-spanning, or unsupported antimeridian bounds with a
+  typed user-facing error.
+- Do not add exact bounds to default diagnostics exports.
+
+### 8.2 Availability and search
+
+- Availability covers the displayed calendar month for the current product level and
+  cloud threshold. It returns per-date scene count and a reviewed cloud summary.
+- Search uses the displayed month and selected product/cloud criteria. The current month
+  ends at today; prior months include their final day. A successfully completed month,
+  including an empty month, is not queried again for the same submitted criteria. The UI
+  shows eight scenes first and reveals another eight with each `Load more images`
+  action; it has no user-entered date range.
+- Limit the supported date span and result count based on S5.2 provider measurements;
+  show an actionable refinement message rather than truncating silently.
+- Follow provider pagination through validated HTTPS links only, cap pages/results, and
+  deduplicate by collection plus stable item ID.
+- TanStack Query owns retry. The `ky` adapter does not add a second automatic retry
+  layer.
+- Abort superseded requests and classify user cancellation separately from failure.
+
+### 8.3 Coverage and edge evidence
+
+- `viewport coverage` is the geodesic intersection area of the submitted viewport
+  polygon and the validated scene footprint divided by submitted viewport area.
+- Clamp only final display rounding; reject invalid geometries instead of manufacturing
+  a percentage.
+- The search interest point is the submitted viewport center. The edge distance is the
+  shortest geodesic distance from that point to the scene boundary.
+- Show an edge warning only when the shortest anchor-to-scene-border distance is less
+  than 5 km, regardless of whether the anchor is inside or outside. Do not warn merely
+  because the anchor is outside or because the scene border is far away.
+- Use focused Turf packages only if they materially simplify robust intersection/area/
+  distance calculations. Record license and bundle impact before adding them.
+
+### 8.4 Mapping and validation
+
+- Validate the feature collection, every item, geometry, dates, collection, product
+  level, cloud value, asset media type/roles, asset URL, and pagination link with Zod.
+- Map external data into readonly internal types before domain/application logic uses
+  it.
+- Decide whether one malformed item makes the response partial or failed. The preferred
+  policy is to omit invalid items, report a bounded validation summary, and fail only
+  when no trustworthy result can be produced or the response envelope is invalid.
+- Preserve acquisition timestamps internally in UTC; group/display by UTC date.
+- Do not expose raw response bodies or provider error objects to React or diagnostics.
+
+## 9. End-to-end Sentinel query chain and payloads
+
+This section fixes the intended top-level data flow and the external/internal payload
+boundaries. The coordinates, dates, item IDs, counts, and asset URLs are illustrative
+examples taken from a live Earth Search query on 2026-07-19 against July 2025 data. They
+are not application constants.
+
+### 9.1 Capture the submitted point and coverage viewport
+
+When the user presses **Search Images**, the map capability reads the settled center and
+visible bounds from MapLibre and returns a serializable snapshot:
+
+```json
+{
+  "center": {
+    "latitude": 42.6584,
+    "longitude": 44.6439
+  },
+  "bbox": [44.55, 42.6, 44.75, 42.72]
 }
 ```
 
-The exact API may change during implementation, but it must remain capability-oriented.
-It must not expose `Map`, `MapRef`, arbitrary `getMap()`, or generic command strings.
-React receives serializable snapshots and typed outcomes. Event handlers translate
-MapLibre events at this boundary and remove every listener on teardown.
+The center becomes the STAC point intersection and the bounds remain client-side
+coverage input. The bounding-box order is `[west, south, east, north]`. The search
+captures this snapshot once; later panning does not mutate an in-flight query or
+existing results.
 
-### 7.4 Provider configuration boundary
+### 9.2 Build the typed search criteria
 
-Define and validate a readonly configuration model before constructing a style. It must
-represent at least:
+The React form maps the viewport snapshot and filters into an application DTO:
 
-- Vector metadata/tile endpoint information.
-- Provider-specific source-layer mappings.
-- Glyph and sprite endpoints when the chosen style requires them.
-- Vector and OSM attribution.
-- Terrain metadata/tile endpoint, encoding, tile size, zoom limits, and attribution.
-- Conservative request timeout/error-display policy where applicable.
-
-Use Zod at the external boundary and map parsed data into an internal readonly type.
-Configuration errors are typed and safe to show. Never log full tile templates, query
-strings, tokens, headers, or raw configuration objects.
-
-### 7.5 Stable source and layer contract
-
-Centralize stable application IDs instead of scattering string literals. The initial
-order from bottom to top is:
-
-1. Background/land cover.
-2. A reserved future satellite insertion point.
-3. Water and terrain shading, if used.
-4. Administrative boundaries.
-5. Roads.
-6. Hiking paths/tracks/steps.
-7. Hiking points such as shelters, peaks, and passes.
-8. Place and feature labels.
-9. Reserved future catalog tracks, Create GPX geometry, and saved markers/waypoints
-   above the basemap.
-
-Layer definitions must be deterministic and testable without constructing a WebGL
-context. Provider source-layer names are mapped once in the style factory.
-
-## 8. Target repository shape
-
-Create files only when they contain real behavior, configuration, tests, or fixtures.
-Names may be refined, but ownership should remain recognizable:
-
-```text
-georgia-routing-planner/
-  docs/
-    map-providers.md
-  e2e/
-    map-foundation.spec.ts
-  src/
-    bootstrap/
-      createRuntimeServices.ts
-      RuntimeServicesContext.ts
-      RuntimeServicesProvider.tsx
-      useRuntimeServices.ts
-      configuration/
-        MapProviderConfiguration.ts
-    presentation/
-      shell/
-        WorkspaceShell.tsx
-        WorkspaceErrorBoundary.tsx
-      theme/
-        createAppTheme.ts
-      developer-tools/
-        DeveloperDrawer.tsx
-      map/
-        MapWorkspace.tsx
-        MapFacade.ts
-        MapLibreFacade.ts
-        MapStatusOverlay.tsx
-        TerrainModeControl.tsx
-        mapIds.ts
-        mapStyleFactory.ts
-        mapTypes.ts
-    application/
-      ports/
-        MapCameraRepository.ts
-    diagnostics/
-      export/
-        diagnosticBundleSchema.ts
-      snapshots/
-        MapDiagnosticsSnapshotStore.ts
-        HealthCheckService.ts
-    infrastructure/
-      persistence/
-        AppDatabase.ts
-        DexieMapCameraRepository.ts
-  test/
-    fixtures/
-      map/
-        provider-configuration.json
-        style-metadata.json
-        vector-tile.pbf
-        terrain-dem.png
-  tools/
-    repository/
-      auditRepository.ts
+```json
+{
+  "area": {
+    "type": "point",
+    "coordinates": [44.6439, 42.6584]
+  },
+  "coverageViewport": [44.55, 42.6, 44.75, 42.72],
+  "startDate": "2025-07-02",
+  "endDate": "2025-07-17",
+  "productLevel": "L2A",
+  "maxCloudCover": 25
+}
 ```
 
-The fixture names are illustrative. Keep fixture data synthetic, minimal, licensed for
-repository use, and free of personal GPX or real user-location data.
-
-## 9. User-visible behavior
-
-### 9.1 Startup and map loading
-
-Use an explicit state model rather than one boolean:
+The MVP product maps to one STAC collection:
 
 ```text
-configuration -> style loading -> ready
-       |               |           |
-       v               v           v
-     fatal           fatal      degraded
+L2A -> sentinel-2-l2a
 ```
 
-- `fatal` means there is no usable map, for example invalid provider configuration,
-  WebGL initialization failure, or an unrecoverable style error. Show an accessible map
-  error panel with remediation and diagnostics guidance.
-- `degraded` means the base map remains usable but one source or terrain is unavailable.
-  Keep interaction enabled, show bounded feedback, and provide retry when retry is safe.
-- Do not cover the map permanently for an isolated tile failure.
-- Loading feedback must have an accessible status name and disappear when the map is
-  usable.
+Earth Search currently exposes both collections from its
+[STAC root](https://earth-search.aws.element84.com/v1/), with separate
+[L1C](https://earth-search.aws.element84.com/v1/collections/sentinel-2-l1c) and
+[L2A](https://earth-search.aws.element84.com/v1/collections/sentinel-2-l2a) collection
+contracts.
 
-### 9.2 Camera persistence
+### 9.3 Create TanStack Query keys
 
-Persist a versioned `MapCamera` containing longitude, latitude, zoom, bearing, and
-pitch. Validate finite numbers and clamp values to supported ranges before use.
+The availability query covers the displayed calendar month:
 
-- Load the persisted camera before the production map is mounted so the user does not
-  see a default-to-restored jump.
-- Use the documented Georgia-wide camera when no valid record exists.
-- Persist on settled camera events, not every animation frame or pointer movement.
-- Debounce/coalesce writes and flush the last settled value on safe teardown when
-  practical.
-- A corrupt camera record repairs only that record, logs one bounded warning, and falls
-  back to the Georgia default without breaking other settings.
-- A persistence failure leaves the current session usable and produces non-blocking
-  feedback/diagnostics; it must not make map movement fail.
+```json
+[
+  "satellite",
+  "availability",
+  "earth-search",
+  "L2A",
+  "2025-07",
+  25,
+  [44.55, 42.6, 44.75, 42.72]
+]
+```
 
-### 9.3 2D/3D terrain
+The submitted scene query includes the complete immutable criteria:
 
-Place an accessible `2D / 3D` MUI control over or immediately beside the map. The native
-map remains the same instance in both modes.
+```json
+[
+  "satellite",
+  "scenes",
+  "earth-search",
+  "L2A",
+  "2025-07-02",
+  "2025-07-17",
+  25,
+  [44.55, 42.6, 44.75, 42.72]
+]
+```
 
-- 2D removes MapLibre terrain and returns pitch to zero while preserving center, zoom,
-  and bearing.
-- 3D ensures the configured DEM source is ready, enables terrain with a documented
-  exaggeration, and restores the last useful nonzero pitch or a conservative default.
-- Disable repeated transitions while a terrain transition is pending.
-- If DEM metadata or tiles fail, return to a usable 2D state and show an actionable
-  error. The user can retry explicitly.
-- Switching modes must not reload the base style or duplicate sources/listeners.
-- Terrain attribution remains visible whenever its data is requested or displayed.
+Exact coordinates may exist in the in-memory key, but must not appear in default
+diagnostics exports. TanStack Query owns in-memory caching, stale-result protection,
+cancellation, and the single retry policy.
 
-### 9.4 Map controls and attribution
+### 9.4 Execute the availability query
 
-- Enable expected desktop pan, wheel/double-click zoom, rotate, and pitch interactions.
-- Provide MapLibre navigation/compass controls with accessible surrounding labels where
-  native accessibility is insufficient.
-- Keep attribution visible and keyboard reachable; do not set
-  `attributionControl={false}` in the production map.
-- Preserve visible focus and ensure MUI overlays do not block normal map gestures.
-- Do not introduce custom zoom buttons when MapLibre's supported control is adequate.
+The query chain is:
 
-## 10. Work packages
+```text
+TanStack Query
+-> LoadSatelliteAvailability
+-> SatelliteCatalogGateway
+-> EarthSearchSatelliteCatalogGateway
+-> configured ky client
+-> POST https://earth-search.aws.element84.com/v1/search
+```
 
-### P1.1 Audit repository hygiene and ignored artifacts
+Example request for the visible month:
 
-This is the first implementation task and first Phase 1 commit. Start with a read-only
-inventory using `git ls-files`, `git status --short --ignored`, `git check-ignore`, and
-a filesystem review before changing ignore rules or removing anything from the index.
+```json
+{
+  "collections": ["sentinel-2-l2a"],
+  "intersects": { "type": "Point", "coordinates": [44.6439, 42.6584] },
+  "datetime": "2025-07-01T00:00:00Z/2025-07-31T23:59:59Z",
+  "query": {
+    "eo:cloud_cover": {
+      "lte": 25
+    }
+  },
+  "sortby": [
+    {
+      "field": "properties.datetime",
+      "direction": "desc"
+    }
+  ],
+  "fields": {
+    "include": [
+      "id",
+      "collection",
+      "properties.datetime",
+      "properties.platform",
+      "properties.eo:cloud_cover"
+    ]
+  },
+  "limit": 100
+}
+```
 
-The planning-branch baseline already confirms that `node_modules/`, `dist/`,
-`coverage/`, `playwright-report/`, `test-results/`, and `debug.log` are ignored and not
-tracked. They remain visible in a normal file explorer because `.gitignore` affects Git,
-not the local filesystem. Re-run the audit from the implementation branch and cover at
-least:
+The gateway validates the response, groups items by UTC acquisition date, and produces
+the calendar annotations:
 
-- Installed packages and local package stores, including `node_modules/` and a
-  repository-local `.pnpm-store/`.
-- Vite/TypeScript/ESLint/tool caches and build output.
-- Coverage, Playwright blob/HTML reports, screenshots, videos, traces, and test results.
-- Logs, PID files, crash dumps, temporary/editor backup files, and OS metadata.
-- `.env` variants and credentials, while retaining intentional `.env.example` files.
-- Exported diagnostics, catalog build/audit output, and other user-local data.
-- IDE state, except explicitly shared minimal recommendations such as
-  `.vscode/extensions.json`.
+```json
+{
+  "month": "2025-07",
+  "dates": [
+    {
+      "date": "2025-07-17",
+      "sceneCount": 2,
+      "cloudSummaryPercent": 4
+    }
+  ]
+}
+```
 
-Do not ignore source-like directories or broad file extensions merely to make the audit
-pass. `pnpm-lock.yaml`, checked-in synthetic test fixtures, source maps intentionally
-used as fixtures, and reviewed configuration examples are repository inputs and remain
-tracked.
+`cloudSummaryPercent` is the scene-cloud average weighted by each scene's submitted
+viewport coverage. If every scene has zero viewport coverage, use the unweighted
+average.
 
-Add a dependency-free `pnpm repo:audit` command that fails when `git ls-files` contains
-a forbidden artifact/secret path. Put the path-classification rules in a small testable
-module, cover allowed exceptions, and run the command from `pnpm check` and CI. If an
-artifact is already tracked, remove it from the Git index without deleting the user's
-local copy unless deletion is separately requested. Report every such path explicitly.
+### 9.5 Execute the submitted scene search
 
-### P1.2 Clarify bootstrap, presentation, and application names
+The application chain is:
 
-Perform one behavior-preserving source move before new map work:
+```text
+TanStack Query
+-> SearchSatelliteScenes
+-> SatelliteCatalogGateway
+-> EarthSearchSatelliteCatalogGateway
+-> configured ky client
+-> POST https://earth-search.aws.element84.com/v1/search
+```
 
-- Move `src/app/bootstrap` to `src/bootstrap`.
-- Move the React shell/error boundary, theme, global presentation styles, and existing
-  `src/features` code under explicit `src/presentation` subdirectories.
-- Keep `src/application` for framework-independent ports and future use cases.
-- Rename `ApplicationServices` symbols to `RuntimeServices`, and rename the generic
-  `App`/`AppErrorBoundary` components to `WorkspaceShell`/`WorkspaceErrorBoundary`.
-- Update imports, aliases, ESLint architecture boundaries, tests, README, `AGENTS.md`,
-  and diagrams so no current instruction recreates `src/app`.
+Example request:
 
-Do not mix map behavior into this commit. All existing unit, integration, accessibility,
-diagnostics, and Chromium shell tests must pass after the moves, proving the change is
-terminology and ownership only.
+```json
+{
+  "collections": ["sentinel-2-l2a"],
+  "intersects": { "type": "Point", "coordinates": [44.6439, 42.6584] },
+  "datetime": "2025-07-02T00:00:00Z/2025-07-17T23:59:59Z",
+  "query": {
+    "eo:cloud_cover": {
+      "lte": 25
+    }
+  },
+  "sortby": [
+    {
+      "field": "properties.datetime",
+      "direction": "desc"
+    }
+  ],
+  "fields": {
+    "include": [
+      "id",
+      "collection",
+      "bbox",
+      "geometry",
+      "properties.datetime",
+      "properties.platform",
+      "properties.eo:cloud_cover",
+      "properties.proj:epsg",
+      "properties.grid:code",
+      "properties.s2:tile_id",
+      "properties.s2:product_type",
+      "properties.s2:product_uri",
+      "assets.visual",
+      "assets.thumbnail",
+      "links"
+    ]
+  },
+  "limit": 100
+}
+```
 
-### P1.3 Retire the smoke-component boundary
+Earth Search advertises STAC 1.0 Item Search, query, fields, and sorting conformance
+from the linked STAC root. The client still validates actual response behavior and does
+not infer support only from conformance declarations.
 
-Replace `MapSmokeCanvas` with a production-named `MapWorkspace` while initially keeping
-the network-free Phase 0 style. Introduce the smallest typed facade/controller boundary
-needed for lifecycle, camera, terrain, and diagnostic snapshots.
+### 9.6 Receive a STAC FeatureCollection
 
-Deliverables:
+The response content type is GeoJSON/STAC JSON. A trimmed L2A response is:
 
-- A single map instance with explicit mount/load/idle/error/unmount handling.
-- Listener registration and deterministic cleanup owned by the adapter.
-- A fake facade/controller for component tests.
-- Existing shell, diagnostics, accessibility, and no-network tests remain green.
+```json
+{
+  "type": "FeatureCollection",
+  "stac_version": "1.0.0",
+  "context": {
+    "limit": 100,
+    "matched": 10,
+    "returned": 10
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "S2A_38TMN_20250731_0_L2A",
+      "collection": "sentinel-2-l2a",
+      "bbox": [44.000177, 42.359721, 45.120421, 43.352783],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": ["validated scene footprint coordinates"]
+      },
+      "properties": {
+        "datetime": "2025-07-31T07:58:21.070000Z",
+        "platform": "sentinel-2a",
+        "eo:cloud_cover": 2.628153,
+        "proj:epsg": 32638,
+        "grid:code": "MGRS-38TMN",
+        "s2:tile_id": "S2A_OPER_MSI_L2A_TL_2APS_20250731T110117_A052785_T38TMN_N05.11",
+        "s2:product_type": "S2MSI2A",
+        "s2:product_uri": "S2A_MSIL2A_20250731T075021_N0511_R135_T38TMN_20250731T110117.SAFE"
+      },
+      "assets": {
+        "visual": {
+          "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/TCI.tif",
+          "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "roles": ["visual"],
+          "gsd": 10,
+          "proj:shape": [10980, 10980]
+        },
+        "thumbnail": {
+          "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/preview.jpg",
+          "type": "image/jpeg",
+          "roles": ["thumbnail"]
+        }
+      }
+    }
+  ],
+  "links": [
+    {
+      "rel": "next",
+      "method": "POST",
+      "href": "https://earth-search.aws.element84.com/v1/search",
+      "body": {
+        "next": "provider pagination token"
+      }
+    }
+  ]
+}
+```
 
-### P1.4 Validate provider feasibility
+The full provider response contains more fields and assets. Zod schemas accept only the
+required allowlisted structure and ignore unrelated extensions after validating the
+envelope.
 
-Complete the vector, DEM, and time-boxed Sentinel COG checks described in Section 5.
-Document exact evidence dates because provider behavior is time-sensitive. Record the
-chosen default and a rejected alternative where useful.
+### 9.7 Follow bounded pagination
 
-This package changes no product scope. It prevents the implementation from baking in an
-unusable provider or a credential that cannot be kept secret.
+When a validated response contains a `links` entry with `rel: "next"`, the gateway:
 
-### P1.5 Add validated map provider configuration
+1. Verifies HTTPS, the configured Earth Search origin, POST method, and response type.
+2. Replays the validated provider-supplied body, including its opaque `next` token.
+3. Appends valid items, deduplicated by collection plus item ID.
+4. Stops at the configured page/result cap or when no next link exists.
 
-Add a Zod boundary and internal readonly configuration. Construct it in the composition
-root or a dedicated configuration factory, then inject only the parsed form.
+An observed next-page body has this shape:
 
-Test:
+```json
+{
+  "datetime": "2025-07-01T00:00:00Z/2025-07-31T23:59:59Z",
+  "query": {
+    "eo:cloud_cover": {
+      "lte": 25
+    }
+  },
+  "sortby": [
+    {
+      "field": "properties.datetime",
+      "direction": "desc"
+    }
+  ],
+  "collections": ["sentinel-2-l2a"],
+  "bbox": [44.55, 42.6, 44.75, 42.72],
+  "limit": 100,
+  "next": "2025-07-29T07:58:25.174000Z"
+}
+```
 
-- Valid production-shaped and local-fixture configurations.
-- Missing endpoints and source-layer mappings.
-- Unsupported DEM encodings and invalid zoom/tile-size values.
-- Relative GitHub Pages base-path handling where local assets are used.
-- Error messages and diagnostics contain no query secrets or full provider payload.
+Do not concatenate or execute arbitrary pagination URLs and do not truncate silently.
 
-### P1.6 Build the OSM hiking style
+### 9.8 Validate and map the external JSON
 
-Implement a pure style factory using stable source/layer IDs and the parsed provider
-mapping. Use restrained theme-compatible colors and retain room for future imagery,
-tracks, Create GPX geometry, and saved markers/waypoints.
+The boundary is:
 
-Cover land/background, water, boundaries, roads, hiking paths, useful hiking POIs, and
-labels only where supported by the selected source. Unsupported optional source layers
-must be documented; do not invent data that the provider does not expose.
+```text
+unknown JSON
+-> Zod STAC envelope/item/geometry/asset schemas
+-> validated external items
+-> readonly SatelliteScene[]
+```
 
-Test the produced style shape, source mapping, layer order, visibility defaults,
-attribution, and absence of secrets. Keep production provider I/O outside unit tests.
+A mapped internal L2A scene is:
 
-### P1.7 Persist and restore the camera
+```json
+{
+  "sceneId": "S2A_38TMN_20250731_0_L2A",
+  "level": "L2A",
+  "platform": "Sentinel-2A",
+  "acquiredAt": "2025-07-31T07:58:21.070Z",
+  "cloudCoverPercent": 2.628153,
+  "tileCode": "38TMN",
+  "orbit": "R135",
+  "productType": "S2MSI2A",
+  "productId": "S2A_MSIL2A_20250731T075021_N0511_R135_T38TMN_20250731T110117.SAFE",
+  "projectionEpsg": 32638,
+  "footprint": {
+    "type": "Polygon",
+    "coordinates": ["validated scene footprint coordinates"]
+  },
+  "visualAsset": {
+    "format": "cog",
+    "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/TCI.tif",
+    "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized"
+  },
+  "thumbnailUrl": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/preview.jpg"
+}
+```
 
-Add a small `MapCameraRepository` port and a Dexie-backed adapter using the existing
-settings table unless an index/schema change genuinely requires a database migration. Do
-not increment the Dexie schema version merely for a new key in an existing key-value
-table.
+`tileCode` comes from a validated MGRS grid code. The observed item has no dedicated
+relative-orbit property, so `orbit` may be extracted only from a strictly validated
+Sentinel product URI; otherwise it remains `null`. Missing metadata is never invented.
 
-Load the camera before map mount, persist settled moves, repair corrupt records, and
-cover read/write failures. Add fake-indexeddb tests, component behavior tests, and a
-Chromium reload flow.
+### 9.9 Calculate coverage, edge evidence, and acquisition groups
 
-### P1.8 Implement terrain mode
+For each validated scene:
 
-Add the DEM source and 2D/3D control without replacing the base style or map instance.
-Model transition states explicitly: `flat`, `enabling`, `terrain`, `disabling`, and
-`failed` (or an equivalent discriminated union).
+```text
+viewport coverage percent =
+geodesic area(intersection(submitted viewport polygon, scene footprint))
+/ geodesic area(submitted viewport polygon)
+* 100
+```
 
-Test successful toggles, repeated clicks, unavailable DEM, source error, retry, camera
-preservation, source/listener deduplication, and teardown during a pending transition.
+The edge calculation is:
 
-### P1.9 Add loading and recoverable error feedback
+```text
+submitted viewport center
+-> shortest geodesic distance to the scene polygon boundary
+-> inside/outside/near-edge classification
+-> distance and warning DTO
+```
 
-Translate MapLibre errors into typed, user-actionable categories. Distinguish WebGL,
-style/configuration, base-vector, glyph/sprite, and DEM failures as far as the available
-event evidence permits.
+Focused Turf modules may provide intersection, area, and point-to-boundary distance
+after the S5.2 dependency/bundle review.
 
-- Fatal failures replace the unusable canvas with remediation.
-- Source/terrain failures use a non-blocking alert/snackbar and keep a usable map.
-- Repeated equivalent tile failures are aggregated instead of producing alert storms.
-- Retry actions are explicit and must not create duplicate map instances or listeners.
-- Offline state is described accurately; do not promise offline map availability.
+The final result is grouped and sorted by UTC acquisition date:
 
-### P1.10 Extend map and WebGL diagnostics
+```json
+{
+  "sceneCount": 8,
+  "acquisitionDayCount": 4,
+  "groups": [
+    {
+      "date": "2025-07-17",
+      "scenes": [
+        {
+          "sceneId": "S2A_38TMN_20250717_0_L2A",
+          "cloudCoverPercent": 4,
+          "viewportCoveragePercent": 92,
+          "edgeDistanceKm": 14.6
+        }
+      ]
+    }
+  ]
+}
+```
 
-Capture stable, bounded events for:
+Counts are derived from validated data, not copied from prototype sample labels.
 
-- Map mount, load, first idle, style ready, and unmount.
-- WebGL capability plus context lost and restored.
-- Terrain enable/disable/failure and duration.
-- Aggregated source/tile errors by safe category and source ID.
-- Settled camera changes at a throttled summary rate.
-- Current ordered source/layer IDs, terrain state, style identity, last idle time, and
-  safe WebGL renderer/capability information.
+### 9.10 Present results and select a scene
 
-Do not log continuous render/move events, full URLs, query strings, tile coordinates,
-raw error objects, or exact persisted records.
+The presentation chain is:
 
-Extend the versioned diagnostics bundle deliberately. If the schema changes from Phase 0
-version 1, introduce version 2 and a tested v1-to-current compatibility migration in
-`diagnostics:inspect`; do not mutate the meaning of version 1 in place.
+```text
+SatelliteSearchResult
+-> SatelliteResultsPane
+-> UTC date groups
+-> SatelliteSceneCard
+-> selected SatelliteSceneDetails
+```
 
-The local developer UI may display the exact current camera for immediate inspection,
-but default exported diagnostics must round longitude/latitude to a documented coarse
-precision or omit them. Full route/track geometry remains excluded.
+The card may request `assets.thumbnail.href` as a lightweight JPEG preview when the
+asset exists. A thumbnail is never stretched over the map as the production raster.
 
-### P1.11 Add developer map inspection and health
+Selecting a scene does not immediately move the camera. It sends the mapped scene to the
+narrow imagery-map capability:
 
-Add a `Map` view to the developer drawer, or an equivalently clear map section, showing
-serializable snapshots rather than the native map object. Include:
+```text
+user selects/applies scene
+-> SatelliteImageryMap.apply(scene, AbortSignal)
+-> MapLibreSatelliteImageryAdapter
+-> validated visual asset
+```
 
-- Camera, style, ordered sources/layers, terrain mode, and last idle state.
-- Recent aggregated source failures.
-- WebGL version/capability/context state.
-- Supported MapLibre debug flags such as tile boundaries or collision boxes, available
-  only while developer mode is active and reset safely.
+### 9.11 L2A raster request and MapLibre chain
 
-Extend health checks with a non-destructive map readiness check and a terrain/provider
-reachability check that runs only on explicit user request. Normal application startup
-must not wait for optional provider health checks.
+The observed L2A visual asset is:
 
-### P1.12 Harden deterministic browser coverage and documentation
+```json
+{
+  "url": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MN/2025/7/S2A_38TMN_20250731_0_L2A/TCI.tif",
+  "format": "COG",
+  "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized",
+  "projection": "EPSG:32638",
+  "resolutionMeters": 10,
+  "shape": [10980, 10980]
+}
+```
 
-Create synthetic vector and DEM fixtures sufficient to run the production style and
-terrain paths in real Chromium. Intercept every configured provider request and fail the
-test on unexpected public network access.
+The required rendering chain is:
 
-Update README status, map configuration instructions, attribution/licensing notes,
-manual verification steps, known provider limitations, and diagnostics behavior. Keep
-the top-level roadmap unchanged unless implementation discovers a material product or
-phase-boundary change.
+```text
+MapLibre requests Web Mercator tile z/x/y
+-> raster adapter converts tile bounds to the scene projection
+-> HTTP Range requests read only required COG headers/blocks/overviews
+-> provider returns 206 Partial Content
+-> worker decodes the requested RGB window
+-> adapter reprojects/resamples EPSG:32638 pixels to EPSG:3857
+-> adapter returns one 256x256 RGBA/PNG tile
+-> MapLibre raster source renders the tile
+```
+
+Representative range request:
+
+```http
+GET /sentinel-s2-l2a-cogs/.../TCI.tif HTTP/1.1
+Host: sentinel-cogs.s3.us-west-2.amazonaws.com
+Range: bytes=0-16383
+```
+
+Representative response:
+
+```http
+HTTP/1.1 206 Partial Content
+Content-Type: image/tiff
+Content-Range: bytes 0-16383/<asset-size>
+Content-Length: 16384
+```
+
+MapLibre's
+[official COG example](https://maplibre.org/maplibre-gl-js/docs/examples/add-a-cog-raster-source/)
+shows the custom-protocol shape:
+
+```ts
+maplibregl.addProtocol('cog', cogProtocol);
+
+map.addSource('sentinel-imagery', {
+  type: 'raster',
+  url: 'cog://<validated-visual-asset-url>',
+  tileSize: 256,
+});
+
+map.addLayer(
+  {
+    id: 'sentinel-imagery',
+    type: 'raster',
+    source: 'sentinel-imagery',
+  },
+  firstOsmReferenceLayerId,
+);
+```
+
+This code is the desired MapLibre boundary, not a selected dependency. The example
+adapter documents that its inputs must already use EPSG:3857 and that it does not
+reproject. The observed Georgia scene uses EPSG:32638, so S5.2 must prove or choose the
+reprojection-capable implementation before S5.6 adopts a production adapter.
+
+### 9.12 L1C raster branch
+
+The same live area/month query returned L1C metadata, but the visual asset differs:
+
+```json
+{
+  "sceneId": "S2A_38TMN_20250731_0_L1C",
+  "collection": "sentinel-2-l1c",
+  "productType": "S2MSI1C",
+  "projectionEpsg": 32638,
+  "visualAsset": {
+    "href": "s3://sentinel-s2-l1c/tiles/38/T/MN/2025/7/31/0/TCI.jp2",
+    "type": "image/jp2",
+    "roles": ["visual"],
+    "shape": [10980, 10980]
+  },
+  "thumbnail": null
+}
+```
+
+The browser cannot fetch the literal `s3://` URL through normal HTTP. For this known
+public AWS dataset, the bucket/key can be mapped to
+`https://sentinel-s2-l1c.s3.amazonaws.com/.../TCI.jp2`; the representative object
+supports anonymous CORS range requests. The provider item itself still has no thumbnail,
+and Chrome does not provide a MapLibre-ready JPEG 2000 region decoder. Therefore:
+
+```text
+L1C STAC search/metadata
+-> works through the same JSON query chain
+
+L1C map rendering
+-> requires an approved tile service
+   or a bounded browser JP2 + reprojection adapter
+-> remains an S5.2 feasibility decision
+```
+
+Do not silently render the related L2A scene when the user selected L1C, and do not
+present metadata-only L1C results as successfully applicable imagery.
+
+### 9.13 Add the footprint and applied-state snapshot
+
+The validated STAC geometry becomes a GeoJSON source:
+
+```json
+{
+  "type": "Feature",
+  "properties": {
+    "sceneId": "S2A_38TMN_20250731_0_L2A"
+  },
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": ["validated scene footprint coordinates"]
+  }
+}
+```
+
+The map adapter owns:
+
+```text
+satellite raster source/layer
+satellite footprint GeoJSON source/layers
+applied scene ID
+raster loading/ready/failed/hidden state
+attribution
+cleanup and cancellation
+```
+
+`Fit footprint` derives bounds from the validated geometry and calls the typed
+map-camera capability. `Hide imagery` changes raster visibility according to the
+reviewed footprint semantics without deleting search results.
+
+### 9.14 Cancellation and typed failure chain
+
+Cancellation travels through every boundary:
+
+```text
+TanStack Query AbortSignal
+-> LoadSatelliteAvailability/SearchSatelliteScenes
+-> SatelliteCatalogGateway
+-> ky/fetch
+-> pagination
+-> raster protocol/worker/range requests
+```
+
+Stale operation IDs prevent cancelled or superseded responses from replacing current
+state. Failures map into explicit categories:
+
+```json
+{
+  "kind": "rate-limit | timeout | offline | http | schema | pagination | unsupported-asset | decode | reprojection | map-source | cancelled",
+  "retryable": true,
+  "message": "Safe actionable user-facing message"
+}
+```
+
+Raw response bodies, headers, URLs with arbitrary queries, asset URLs, geometries, and
+provider error objects never reach React or default diagnostics.
+
+### 9.15 Complete query chain
+
+```text
+MapLibre settled viewport snapshot
+-> typed search criteria
+-> TanStack Query key and AbortSignal
+-> availability/search application use case
+-> SatelliteCatalogGateway
+-> POST Earth Search /v1/search
+-> STAC FeatureCollection JSON
+-> bounded pagination
+-> Zod envelope/item/geometry/asset validation
+-> readonly SatelliteScene[]
+-> coverage, edge distance, UTC grouping, and counts
+-> Satellite results UI
+-> selected visual asset
+-> raster adapter
+-> COG/JP2 range or approved tile requests
+-> decode and reprojection
+-> MapLibre raster layer plus GeoJSON footprint
+```
+
+## 10. Step-by-step work packages
+
+### S5.0 Establish the reviewed plan and design governance
+
+Scope:
+
+- Create the feature branch from `main`.
+- Replace the completed historical `PLAN.md` with this active plan.
+- Save the canonical Penpot URL and synchronization rules in `AGENTS.md`.
+- Inspect the live Satellite prototype and record the UI ledger and discrepancies.
+
+Verification:
+
+- `git diff --check`
+- `pnpm format:check`
+- Manual review that the prototype link opens the intended file/page and no Penpot
+  content was overwritten.
+
+Commit: `docs: plan Sentinel imagery implementation`
+
+### S5.1 Make diagnostics persistent and establish the live Sentinel timeline
+
+Scope:
+
+- Convert the existing developer drawer from a temporary modal to a persistent,
+  non-modal surface with no backdrop or elevation shadow.
+- Add an always-visible header close control and make the Diagnostics rail action toggle
+  the drawer without allowing Escape, workspace interaction, or section changes to close
+  it.
+- Isolate the drawer's compact light-surface tabs from the dark navigation-rail `MuiTab`
+  styling.
+- Define the `SentinelQueryDiagnostics` application port and a best-effort local
+  snapshot store for the current or most recent operation.
+- Add the `Sentinel query` diagnostics tab with all ten query/render steps, explicit
+  statuses, static technical boundary descriptions, and live monotonic durations.
+- Update stable diagnostics ownership/behavior documentation and mirror the accepted
+  drawer/timeline design in Penpot without replacing future Satellite features.
+
+Tests in the same commits:
+
+- Drawer has no dialog/backdrop behavior, ignores Escape, and closes from both explicit
+  controls.
+- Drawer tabs use the local compact treatment and remain keyboard accessible.
+- Timeline transition, subscription, elapsed-time, completion, failure, cancellation,
+  skipped-step, and invalid-transition behavior.
+- Timeline UI renders every step with its current status and duration.
+
+Commits: `fix(diagnostics): keep developer drawer persistent` followed by
+`feat(diagnostics): add live Sentinel query timeline`
+
+Current evidence:
+
+- Drawer behavior, styling, timeline store/UI, tests, stable documentation, and current
+  Chrome visual verification are complete on the feature branch.
+- Penpot synchronization remains pending because the connected design tool timed out
+  before returning even the root hierarchy on 2026-07-19. The visible prototype was
+  inspected read-only; no blind coordinate edit was attempted and S5.1 remains in
+  progress until the hierarchy can be read and the changes mirrored one operation at a
+  time.
+
+### S5.2 Choose and document the catalog/rendering path
+
+Scope:
+
+- Revalidate Earth Search collections, search behavior, CORS, attribution, and sample
+  Georgia metadata.
+- Exercise representative L1C and L2A assets in current Chrome.
+- Prototype candidate raster paths behind a throwaway narrow adapter, not product UI.
+- Measure render/cancellation/memory/bundle characteristics and inspect dependency
+  licenses.
+- Select or reject the product path and update `docs/map-providers.md` plus any approved
+  configuration example.
+
+Acceptance:
+
+- One documented, replaceable, anonymous static-client path can render the required
+  product levels, or the work stops with precise evidence and a product decision
+  request.
+- No provider key, backend, hosted telemetry, or unbounded whole-scene download is
+  added.
+- The spike is not left wired into production UI.
+
+Current evidence:
+
+- Earth Search catalog/CORS and concrete Georgia L1C/L2A item contracts are revalidated.
+- L2A COG and L1C JP2 bounded range requests are proven; neither asset was downloaded in
+  full.
+- L1C bounded decode/reprojection remains unresolved, so this package stays in progress
+  and no production raster dependency is selected yet.
+
+Commit: `docs(satellite): choose catalog and raster path`
+
+### S5.3 Add satellite models, viewport search geometry, and use cases
+
+Scope:
+
+- Add readonly search, scene, acquisition, coverage, and result types.
+- Add the `SatelliteCatalogGateway` port and cancellable availability/search use cases.
+- Extend the map snapshot/capability with validated settled viewport bounds.
+- Implement date validation, grouping, stable ordering, deduplication, coverage, and
+  edge calculations.
+- Define typed application errors for invalid criteria, result limit, geometry, and
+  provider capability failures.
+- Begin one timeline operation per explicit availability/search command and publish the
+  viewport-capture, criteria-building, coverage/grouping, completion, failure, and
+  cancellation transitions through `SentinelQueryDiagnostics`.
+
+Tests in the same commit:
+
+- Inclusive UTC ranges, invalid/reversed/oversized ranges, L1C/L2A separation.
+- Deterministic acquisition grouping and stable scene order.
+- Full, partial, zero, invalid, and boundary-touching coverage.
+- Point inside/outside/near-edge distance semantics.
+- Viewport bounds capture, antimeridian rejection/handling, and no exact geometry in
+  diagnostics.
+
+Current evidence:
+
+- `SatelliteScene`, criteria, coverage, acquisition, availability, and result DTOs are
+  implemented without React, MapLibre, STAC, or transport dependencies.
+- `SearchSatelliteScenes` and `LoadSatelliteAvailability` enforce inclusive UTC dates,
+  current-then-previous calendar-month UI queries, a 1,000-item internal cap, exclusive
+  product levels, stable deduplication, and cancellation through the catalog port.
+- Focused Turf 7.3.5 modules provide polygon intersection/area and geodesic edge
+  distance; each selected package is MIT-licensed and the full Turf bundle is not used.
+- MapLibre exposes a copied WGS84 viewport through `MapViewportProvider`; invalid and
+  antimeridian-crossing bounds are rejected before catalog access.
+- Timeline transitions now carry operation IDs, so a superseded request cannot mutate
+  the newer request's live status. Tests verify exact viewport values do not enter logs.
+- `pnpm check` passes with 102 tests, 91.16% statement coverage, 83.48% branch coverage,
+  integration tests, strict type checking, linting, formatting, repository audit, and a
+  production build.
+
+Commit: `feat(satellite): model viewport scene search`
+
+### S5.4 Implement the validated STAC gateway and configuration
+
+Scope:
+
+- Add validated satellite provider configuration without exposing secrets.
+- Implement the Earth Search adapter using the configured central `ky` policy and Zod
+  schemas.
+- Support availability and explicit scene search, bounded pagination, deterministic
+  sorting, partial-item validation policy, and AbortSignal.
+- Map HTTP/timeout/offline/rate-limit/schema/cancellation errors into typed outcomes.
+- Construct the gateway and use cases in `createRuntimeServices` with explicit types.
+- Add bounded feature diagnostics and safe provider health evidence.
+- Publish catalog request, pagination, schema validation, and scene-mapping step
+  transitions without leaking raw provider payloads into the timeline.
+
+Tests in the same commit:
+
+- MSW success for L1C and L2A, empty results, multiple pages, and field fallbacks.
+- Malformed envelope/item/geometry/date/cloud/assets/pagination URL.
+- Cancellation, timeout, offline, 4xx, 429, 5xx, and partial validation.
+- Configuration validation, HTTPS/origin safety, and fake token/query/body redaction.
+- Fixture bytes are synthetic/minimal and no public provider is contacted.
+
+Current evidence:
+
+- Public configuration validates the Earth Search URL, distinct L1C/L2A collection IDs,
+  attribution, and a maximum of one to ten pages; bootstrap constructs the adapter
+  behind `SatelliteCatalogGateway` only after configuration succeeds.
+- The gateway sends allowlisted point-intersection/date/cloud/field criteria through the
+  central no-retry `ky` client, propagates `AbortSignal`, and follows only same-origin
+  HTTPS POST pagination tokens with no query or fragment.
+- Zod validates the complete response before any scene is returned. L2A must expose an
+  HTTPS true-color COG; known public L1C S3 keys map to HTTPS but remain explicitly
+  `unsupported-jp2`.
+- Timeout, rate-limit, HTTP, network, schema, pagination, result-limit, and cancellation
+  outcomes remain typed. Logs/timeline events retain safe codes and operation IDs but no
+  bodies, URLs, tokens, or exact geometry.
+- Explicit provider health checks include a fixed bounded Sentinel POST probe and remain
+  outside application startup.
+- `pnpm check` passes with 120 combined tests, 16 focused integration tests, 90.83%
+  statement coverage, 80.44% branch coverage, strict type checking, linting, formatting,
+  repository audit, and production build.
+
+Commit: `feat(satellite): add Earth Search gateway`
+
+### S5.5 Build the prototype-aligned search sidebar and calendar
+
+Progress evidence (2026-07-19):
+
+- `SatelliteBrowser` captures the current serialized map viewport and submits the
+  displayed calendar month with fixed L2A and horizontal cloud-slider criteria. Calendar
+  navigation appends only missing months and reuses completed months without resetting
+  the displayed month.
+- The UI has intentional waiting, loading/cancel, safe error, empty, and successful
+  states. Results remain local and disposable; changing map state never recreates the
+  native map.
+- A live Earth Search review returned 23 L2A scenes across 10 UTC acquisition days. The
+  provider's valid full-query `next` body and redundant next-link behavior are covered
+  by an infrastructure integration test.
+- A second live review at 100% cloud returned 153 scenes across 15 acquisition days;
+  pagination stayed internal while the UI rendered the latest eight plus `Load more`.
+- The persistent `Sentinel query` tab showed viewport capture through coverage as
+  completed with per-step timings; render-only steps were skipped honestly.
+- The read-only calendar highlights loaded dates and viewport-coverage-weighted average
+  scene-cloud values. The first eight latest cards appear in a dedicated right pane and
+  `Load more images` reveals the next set, then fetches and appends preceding calendar
+  months without exposing provider pagination or month boundaries as separate user
+  workflows.
+- Component coverage verifies searching May, navigating to June and July, retaining all
+  three months in the results pane, and revisiting completed months without duplicate
+  catalog requests.
+- The compact MVP sidebar is L2A-only: the cloud slider sits directly under the
+  calendar, inactive provider/readiness rows are absent, and its scroll container clips
+  incidental horizontal overflow. All rail tabs persist through their URL anchors.
+- Remaining work is deeper keyboard/accessibility coverage and card-to-map application.
+
+Scope:
+
+- Extract Satellite UI from the generic `WorkspaceSidebar` into feature-focused
+  components while preserving the shell and live map.
+- Implement the compact viewport selector, read-only acquisition calendar, month
+  navigation, weighted availability annotations, horizontal L2A cloud slider, criteria
+  summary, and latest-images action.
+- Keep Marker visible and disabled with an honest explanation.
+- Choose the calendar implementation through an explicit dependency/accessibility/bundle
+  review. Prefer the existing MUI family; do not hand-roll inaccessible date semantics.
+- Add loading, unavailable, empty, stale, validation-error, and retry states without
+  clearing the last successful results unnecessarily.
+
+Tests in the same commit:
+
+- Keyboard month navigation, slider focus/labels, card selection, and live status
+  updates.
+- Availability loading/empty/error/partial states and reviewed per-day cloud summary.
+- Product/cloud changes update availability and query keys without duplicate retry.
+- Search captures current viewport once, disables invalid/repeated submission, and
+  aborts superseded work.
+- Marker remains unavailable without fake data; no inactive Other imagery row appears.
+
+Commit: `feat(satellite): build imagery search controls`
+
+### S5.6 Integrate true-color imagery and footprint with MapLibre
+
+Scope:
+
+- Implement the chosen raster adapter behind `SatelliteImageryMap`.
+- Register protocol/worker resources once, with deterministic cancellation and cleanup.
+- Add stable satellite raster and footprint source/layer IDs at the reserved layer band.
+- Apply one concrete scene, switch atomically, expose render loading/ready/failed/hidden
+  snapshots, fit footprint, and hide/show raster.
+- Preserve the applied scene across 2D/3D transitions and unrelated sidebar changes.
+- Retain OSM attribution and add Sentinel/Copernicus/provider attribution while imagery
+  is applied.
+- Aggregate tile/decode/source errors and keep a usable base map on failure.
+- Publish asset selection, decode/reprojection, and map-apply step transitions with the
+  same operation ID used by the submitted scene workflow.
+
+Tests in the same commit:
+
+- Fake facade/adapter unit tests for add order, no duplicate sources/listeners, atomic
+  replacement, cancellation, cleanup, and idempotent hide/show.
+- Style/layer-order tests prove imagery is below hiking references and user geometry.
+- Terrain transition, fit bounds, style/context recovery, and failed scene replacement.
+- Local raster/COG fixture in Chromium; no public imagery request in required tests.
+
+Commit: `feat(map): render selected Sentinel imagery`
+
+### S5.7 Add results, metadata, selection, and applied actions
+
+Scope:
+
+- Add the adjacent shell-owned results pane from the Penpot layout without covering or
+  remounting the map.
+- Derive the pane title from the submitted center and compute scene/acquisition counts
+  from returned data.
+- Render month/date grouping, compact scene cards, thumbnails/footprint diagrams,
+  coverage, sub-5-km border warnings, expansion, and one expanded metadata card.
+- Use the whole card as the selection/apply target; do not add a separate Apply button
+  or collapsed tile/orbit tags.
+- Wire applied, fit footprint, hide imagery, scene switch, pane close, and retry states
+  to the narrow map capability.
+- Keep selected/applied distinctions explicit and never imply a mosaic.
+
+Tests in the same commit:
+
+- Correct grouping/counts for zero, one, and multiple scenes/dates/months.
+- Expansion and selection preserve list state; applied status follows the map snapshot.
+- Metadata fallbacks never invent tile/orbit/product values.
+- Apply loading/failure/retry, switch failure preserving the prior scene, fit, hide, and
+  close-pane behavior.
+- Pane focus order, accessible names, warnings, status announcements, and desktop
+  overflow/scroll behavior.
+
+Commit: `feat(satellite): add scene results and metadata`
+
+### S5.8 Harden exported diagnostics, failure behavior, and developer evidence
+
+Scope:
+
+- Add stable events for availability, search, validation, apply, render, switch, hide,
+  cancel, and failure outcomes with operation IDs and monotonic durations.
+- Verify that every implemented boundary updates the already-shipped live timeline; this
+  package may refine evidence but must not introduce core step visibility for the first
+  time.
+- Add a sanitized satellite snapshot to developer mode/support bundles when it
+  materially improves diagnosis; version schemas and CLI compatibility if the bundle
+  changes.
+- Add a non-destructive provider/catalog/render health check only if it can run without
+  delaying normal startup or downloading large data.
+- Bound repeated tile/decode errors and include remediation hints for offline, rate
+  limit, unsupported asset, decode, and WebGL/source failures.
+
+Safe fields may include provider ID/origin, product level, date-span length, threshold,
+result/invalid-item/page counts, public scene ID or hashed stable ID, render state,
+duration, request count, and transferred-byte buckets. Never export exact bounds/center,
+footprint geometry, asset/tile URLs, arbitrary query strings, request/response bodies,
+headers, tokens, cookies, raw errors, or unbounded tile coordinates.
+
+Tests in the same commit:
+
+- Fake coordinates, filenames, tokens, query strings, headers, and asset URLs are absent
+  from logs, snapshots, bundles, and CLI output.
+- Repeated failures aggregate within caps and logging failure cannot break
+  search/render.
+- Bundle version compatibility and actionable unsupported-version messages.
+
+Commit: `feat(diagnostics): capture satellite imagery evidence`
+
+### S5.9 Harden end-to-end behavior, accessibility, documentation, and design sync
+
+Scope:
+
+- Add deterministic Chromium workflows against controlled STAC and raster fixtures.
+- Cover GitHub Pages base path, search, grouping, apply, switch, hide, fit, terrain
+  preservation, cancellation, malformed data, provider failure, and diagnostics export.
+- Run axe on the search sidebar and results/details pane; complete a manual
+  current-Chrome keyboard/visual pass.
+- Update `docs/features.md`, `docs/runtime-flows.md`, `docs/project-structure.md`,
+  `docs/map-providers.md`, provider configuration example, `README.md`, and
+  `docs/README.md` only where their durable contracts changed.
+- Apply accepted UI review changes to Penpot one operation at a time. Preserve unrelated
+  future prototype features and update this plan's ledger/status.
+
+Acceptance:
+
+- Required browser tests reject every unexpected public request.
+- The map does not remount and active imagery survives terrain/rail changes.
+- Loading, empty, partial, error, applied, and hidden states match the reviewed
+  prototype and are keyboard accessible.
+- Stable docs contain no phase/stage/roadmap or delivery-progress leakage.
+
+Commit: `test(satellite): harden imagery workflows` followed by
+`docs: document Sentinel imagery operation` when the scopes are independently
+reviewable.
 
 ## 11. Automatic test and acceptance matrix
 
-| Concern             | Unit/component/integration evidence                    | Chromium evidence                               |
-| ------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| Repository hygiene  | Artifact classifier and allowed-exception tests        | `pnpm repo:audit` sees no tracked output        |
-| Source terminology  | Architecture lint/import and existing behavior tests   | Renamed workspace shell behaves unchanged       |
-| Facade boundary     | Fake facade drives loading/ready/error and cleanup     | Native map initializes once                     |
-| Provider config     | Zod valid/invalid/secret fixtures                      | Local deterministic config loads                |
-| OSM style           | Pure style/source/layer-order assertions               | Synthetic vector feature renders                |
-| Attribution         | Style/config attribution assertions                    | Visible and keyboard-reachable attribution      |
-| Camera              | Validation, clamping, debounce, repository failures    | Pan/zoom/rotate/pitch then reload restores      |
-| Terrain             | Transition reducer/controller and failure tests        | 2D/3D toggles with local DEM                    |
-| Camera preservation | Controller snapshots before/after                      | Center/zoom/bearing preserved across toggle     |
-| Failure feedback    | Fatal/degraded/retry component states                  | Intercepted vector/DEM/WebGL failures recover   |
-| Diagnostics         | Event bounds, aggregation, redaction, schema migration | Developer map view and exported bundle          |
-| Lifecycle cleanup   | Listener/source deduplication tests                    | Remount/retry does not duplicate map or events  |
-| Accessibility       | RTL roles, names, status, focus, axe                   | Keyboard control and serious/critical axe pass  |
-| Network isolation   | Fixture adapters reject unexpected calls               | No unhandled public request in required E2E     |
-| Pages base path     | Configuration/base URL unit tests                      | Production bundle runs under repository subpath |
+| Boundary            | Required evidence                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain/application  | Criteria validation, UTC grouping, stable order, dedupe, bounds, coverage, edge distance, caps, cancellation                             |
+| STAC infrastructure | Zod mapping, collections, fields, pagination, CORS/config assumptions, timeout/offline/429/5xx/malformed/partial errors via MSW          |
+| Raster adapter      | Representative format/projection, layer order, atomic switch, cancellation, cache/resource bounds, cleanup, terrain and context recovery |
+| React search        | All calendar/form states, keyboard range selection, availability, query keys, search submission, retry, Marker/Other boundaries          |
+| React results       | Counts/grouping, expansion, metadata, apply/applied/failed/hidden, fit, pane close, responsive desktop overflow                          |
+| Diagnostics         | Operation correlation, bounded fields, schema compatibility, secret/location/URL/body redaction                                          |
+| Chromium            | Search → compare → apply → switch → terrain → hide, controlled failures, base path, no unexpected network, axe                           |
+| Penpot              | Accepted review changes mirrored without replacing unimplemented future features                                                         |
 
-Required browser scenarios:
-
-1. Open the built application under `/georgia-routing-planner/` with local fixtures and
-   reach a ready map.
-2. Pan, zoom, rotate, and pitch; reload and verify the last settled camera.
-3. Toggle 3D on and off; verify the same map instance and preserved center/zoom/bearing.
-4. Fail the DEM request; verify the base map remains usable, a concise error appears,
-   and retry can enable terrain after the fixture recovers.
-5. Fail required style/vector metadata; verify a fatal or degraded state appropriate to
-   the failure and useful diagnostics.
-6. Trigger WebGL context loss/restoration in a controlled way where Chromium supports
-   it; verify UI and bounded events.
-7. Enable developer mode, inspect map state, export diagnostics, and validate it with
-   `pnpm diagnostics:inspect`.
-8. Assert no unexpected public network request and no serious/critical axe violation in
-   the Phase 1 controls and failure states.
+Required browser fixtures must be synthetic or redistribution-safe. No test copies a
+personal track or requires Earth Search/AWS availability.
 
 ## 12. Performance, privacy, and reliability limits
 
-- Record a first-load and first-idle duration in diagnostics, but do not set a brittle
-  CI millisecond threshold on shared runners.
-- Camera persistence and diagnostic snapshot updates must occur on settled/throttled
-  events, never per animation frame.
-- Aggregate identical source errors over a bounded time window and retain only capped
-  counts plus representative safe categories.
-- Keep the existing logger ring-buffer cap. Any increase requires measured evidence and
-  an explicit memory bound.
-- Never export full tile URLs, query strings, access tokens, authorization headers,
-  sprite/glyph payloads, tile coordinates, or raw MapLibre error objects.
-- Export only stable source/layer IDs and provider origins or approved labels.
-- Treat camera longitude/latitude as potentially personal. Default bundle precision must
-  be coarse and covered by redaction tests.
-- Revoke listeners, subscriptions, timers, and pending persistence work on teardown.
-- Pass `AbortSignal` through explicit provider probes. MapLibre-owned internal tile
-  cancellation remains within the adapter and is not reimplemented.
+- The feasibility gate sets explicit search-result, pagination, date-span, worker,
+  memory, request, transferred-byte, time-to-first-pixel, and cancellation budgets
+  before the raster dependency is accepted.
+- Keep COG/raster decoding off the UI thread when the chosen approach performs
+  meaningful CPU work. Cap workers instead of defaulting to all logical processors.
+- Do not download an entire full-resolution Sentinel scene merely to show the current
+  viewport.
+- Cancel obsolete availability/search/render work and ignore stale completion by
+  operation ID.
+- Keep the last successfully applied scene visible until its replacement is ready; if
+  replacement fails, report failure and retain the prior usable scene.
+- Bound in-memory tile/metadata caches and release scene-specific resources on switch,
+  hide teardown, or map destruction according to the reviewed behavior.
+- Do not persist search history, results, image bytes, exact bounds, or applied-scene
+  geometry in IndexedDB for this workstream.
+- Never send search coordinates anywhere except the explicitly configured catalog/raster
+  providers required by the user command. Document that network boundary in the UI and
+  stable privacy behavior.
+- Provider/search/render failure must never remove the OSM map, terrain control, or
+  existing local workspace state.
 
-## 13. Quality gates
+## 13. Quality gates and definition of done
 
-Every implementation commit runs the narrow tests for its behavior. Before presenting
-Phase 1 for approval, run:
+Run narrow tests with every work package. Before feature handoff, run:
 
 ```text
 pnpm repo:audit
@@ -657,111 +1512,41 @@ pnpm e2e
 pnpm check
 ```
 
-The final state must also satisfy:
+Also verify:
 
-- `pnpm repo:audit` reports no tracked dependency, generated, secret, local-only, or
-  temporary artifact and is part of `pnpm check`/CI.
-- No ambiguous `src/app` directory or `ApplicationServices` composition-bundle name
-  remains; architecture lint rules enforce the documented source boundaries.
-- Existing global and domain/application coverage thresholds remain enforced.
-- No required test contacts a public vector, terrain, OSM, or imagery endpoint.
-- Current stable desktop Chrome passes the real-provider manual smoke check documented
-  with the provider decision date.
-- Required attribution is visible in both 2D and 3D.
-- Bundle inspection accepts both a new Phase 1 bundle and the checked-in Phase 0 v1
-  fixture when a schema migration was introduced.
-- Production build works under the GitHub Pages base path.
-- No secret, personal GPX data, exact default-export camera, or unbounded map event data
-  appears in logs, fixtures, build output, or diagnostics.
+1. The selected catalog and render path has current provider/CORS/license/attribution
+   and replacement evidence in stable documentation.
+2. L2A behavior matches the reviewed MVP scope; L1C is not exposed in the UI.
+3. Search and rendering are cancellable, bounded, typed, and diagnosable.
+4. One explicit scene renders below OSM references with correct footprint, partial
+   coverage, metadata, and attribution.
+5. Switching/terrain/navigation does not recreate the map or lose unrelated state.
+6. No secret, exact default-export location, asset URL, raw geometry, response body,
+   personal data, generated artifact, or unexpected public-network test is included.
+7. Automatic coverage remains above repository thresholds without meaningless assertions
+   or ignores.
+8. Production build works under the GitHub Pages base path and bundle impact is
+   measured.
+9. Current Chrome passes the reviewed visual and keyboard flows; axe passes critical
+   Satellite states.
+10. This plan, permanent docs, tests, code, and Penpot reflect the same accepted design.
+11. The intended commits are pushed to a feature branch and available in a draft pull
+    request targeting `main` before the feature is presented as finished.
 
-## 14. Historical commit sequence
+## 14. Review questions and discrepancy log
 
-Implementation occurred on `feature/map-foundation`. The sequence below records why the
-phase was split into independently testable changes; it is not a branch instruction for
-current work.
+These are design/data-contract questions. Accepted answers must be reflected in this
+plan before the affected UI is implemented.
 
-| Commit                                                      | Scope                                                                                                                          | Commit-level verification                                 |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| `chore: audit repository hygiene and ignored artifacts`     | Complete the tracked/ignored inventory, tighten `.gitignore`, add `repo:audit`, its classifier tests, and CI/check integration | Audit tests, `pnpm repo:audit`, existing checks           |
-| `refactor: clarify source architecture names`               | Move to `bootstrap`/`presentation`, retain `application` for use cases/ports, and rename runtime/shell symbols                 | Architecture lint, typecheck, all existing tests and E2E  |
-| `refactor(map): isolate the MapLibre lifecycle`             | Rename the smoke surface, introduce the typed facade boundary, lifecycle cleanup, and fake while retaining the local style     | Existing shell/E2E plus facade/component tests            |
-| `docs: record Phase 1 provider feasibility`                 | Select vector/DEM defaults and record policy/CORS/schema evidence plus the bounded Sentinel COG spike                          | Formatting/link review; no production provider calls      |
-| `feat(config): validate map provider configuration`         | Add Zod configuration, safe errors, composition, and fixture config                                                            | Config unit tests, secret-redaction tests, build          |
-| `feat(map): render the OSM hiking basemap`                  | Add pure style factory, stable IDs/layer order, attribution, and loading states                                                | Style tests, component tests, local-vector Chromium smoke |
-| `feat(map): persist settled camera state`                   | Add camera value/schema, repository port/adapter, restore/debounce/repair behavior                                             | Unit, fake-indexeddb, component, reload E2E               |
-| `feat(map): add resilient 2D and 3D terrain modes`          | Add DEM source, MUI toggle, transitions, fallback, retry, and camera preservation                                              | Transition/component tests and local-DEM E2E              |
-| `feat(map): add recoverable provider failure feedback`      | Add typed fatal/degraded states, aggregation, retry, and accessible alerts                                                     | Component tests and intercepted-failure E2E               |
-| `feat(diagnostics): capture bounded map and WebGL evidence` | Add aggregation, snapshot state, health hooks, bundle schema/version migration, and redaction                                  | Diagnostics/schema/CLI compatibility/integration tests    |
-| `feat(developer-tools): expose map diagnostics`             | Add developer map view, safe debug flags, health states, accessible feedback                                                   | RTL/axe and developer-mode E2E                            |
-| `test(map): harden MapLibre provider failure workflows`     | Add remaining real-map context-loss, network-isolation, and lifecycle regression cases                                         | Full `pnpm e2e` and coverage gates                        |
-| `fix(map): fall back when camera storage stalls`            | Bound initial camera restoration so unavailable browser storage cannot block MapLibre mount                                    | Component tests, typecheck, and lint                      |
-| `test(map): allow bounded startup under browser load`       | Replace the camera flow's brittle 5-second ready assertion with a bounded load-tolerant window                                 | Formatting and full `pnpm e2e`                            |
-| `docs: document Phase 1 map operation`                      | Record configuration, attribution, manual checks, README status, and plan outcome                                              | Formatting/link review and full `pnpm check`              |
+| Question                      | Current prototype observation                                                              | Recommended contract                                                                                      | Review state        |
+| ----------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------- |
+| Date search model             | Prototype showed a selectable date range                                                   | Remove date-range input; query latest bounded scenes and use the calendar only for acquisition highlights | Accepted 2026-07-19 |
+| Acquisition count consistency | Header says `4 acquisition days`, while six visible acquisition dates span July and June   | Derive count from distinct UTC dates in all returned scenes and keep sample content consistent            | Awaiting review     |
+| Calendar cloud annotation     | A date can contain several scenes with different cloud and viewport coverage               | Show scene-cloud percentage weighted by viewport coverage, with simple-average fallback at zero coverage  | Accepted 2026-07-19 |
+| Edge warning threshold        | Prototype sample warned at 1.8 km and earlier implementation warned for any outside anchor | Warn only when the scene border is less than 5 km from viewport center or future marker                   | Accepted 2026-07-19 |
+| Scene card action             | Prototype had a separate Apply action and collapsed tile/orbit tags                        | Whole card is the selection/apply target; remove separate Apply control and tile/orbit tags               | Accepted 2026-07-19 |
+| Cloud control                 | Prototype used a compact dropdown                                                          | Use a horizontal 0–100% slider with the current maximum visible                                           | Accepted 2026-07-19 |
+| Hide imagery versus footprint | The expanded card has `Hide imagery` but no separate footprint visibility action           | Hide the raster, retain selection/metadata and footprint so coverage stays inspectable                    | Awaiting review     |
 
-Small adjustments to this sequence are allowed when a reviewable dependency boundary
-requires them, but the following rules are not optional:
-
-- Do not squash all Phase 1 work into one mega-commit.
-- Do not create artificially tiny commits that leave dead code, unused configuration,
-  disabled tests, or a broken build.
-- Keep tests with the production behavior they verify; do not defer most tests to the
-  final hardening commit.
-- The hardening commit covers cross-cutting browser cases, not missing unit tests from
-  earlier behavior.
-- Documentation-only feasibility evidence may stand alone, but code commits remain
-  independently executable and reviewable.
-
-## 15. Historical approval checklist
-
-The Phase 1 handoff reported:
-
-- Active branch and the ordered commit list.
-- Repository audit result, `.gitignore` changes, any paths removed from the index, and
-  confirmation that local user files were not deleted.
-- Final `bootstrap`/`presentation`/`application` ownership and the old-to-new path and
-  symbol mapping.
-- Chosen vector/terrain providers, evidence date, attribution/license requirements, and
-  known limits.
-- Sentinel COG spike conclusion and what remains deferred to the imagery phase.
-- Map boundary, state ownership, provider configuration, and persistence changes.
-- Exact commands run with results and coverage summary.
-- Real local-fixture Chromium flows and real-provider manual smoke result.
-- Diagnostics schema/version and compatibility result.
-- Loading/error/accessibility behavior demonstrated.
-- Production bundle impact and any new dependency with rationale.
-- Known limitations, deviations from this plan, and deferred work.
-- Confirmation that no public deployment, provider secret, personal GPX data, or
-  unexpected public-network test dependency was added.
-
-Phase 1 remained on its feature branch until explicit approval and was then merged
-through pull request #1.
-
-## 16. Definition of Phase 1 done (met)
-
-Phase 1 was accepted after satisfying the following conditions:
-
-1. A repeatable repository audit proves dependencies, build/test output, caches, logs,
-   secrets, exports, and temporary artifacts are ignored and not tracked.
-2. `src/app` and the generic application-service composition names are gone;
-   `bootstrap`, `presentation`, `application`, and `infrastructure` have distinct,
-   enforced responsibilities.
-3. A validated, replaceable provider configuration renders the OSM hiking map with
-   correct attribution.
-4. The map supports smooth desktop pan, zoom, rotate, and pitch in current Chrome.
-5. The last valid settled camera restores after reload and corrupt persistence degrades
-   safely.
-6. 2D/3D terrain toggles on the same map instance, preserves camera intent, and falls
-   back to a usable 2D map on DEM failure.
-7. MapLibre lifecycle and native objects remain isolated behind a typed feature boundary
-   with deterministic cleanup.
-8. Loading, fatal, degraded, retry, offline, and WebGL-loss states are accessible and
-   covered automatically.
-9. Map/source/terrain/WebGL instrumentation is useful, bounded, sanitized, and visible
-   in developer mode and the exported diagnostics bundle.
-10. Diagnostics inspection remains compatible with supported Phase 0 bundles.
-11. Required tests run with local vector/DEM fixtures and no public-provider dependency;
-    a separately documented real-provider smoke check passes.
-12. The provider and Sentinel COG feasibility decisions, configuration, attribution, and
-    operating limits are documented for the maintainer.
-13. The verified implementation existed as multiple focused, testable commits on the
-    feature branch and was presented for approval before `main` changed.
+If review changes any recommended contract, update the relevant fixed decision, tests,
+and work package before implementation.

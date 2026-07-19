@@ -65,8 +65,13 @@ export function MapWorkspace({
   mapCanvas,
   cameraRestoreTimeoutMs: restoreTimeoutMs = cameraRestoreTimeoutMs,
 }: MapWorkspaceProps) {
-  const { logger, mapCameraRepository, mapDiagnostics, mapProviderConfiguration } =
-    useRuntimeServices();
+  const {
+    logger,
+    mapCameraRepository,
+    mapDiagnostics,
+    mapProviderConfiguration,
+    mapViewport,
+  } = useRuntimeServices();
   const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainState, setTerrainState] = useState<TerrainControlState>('flat');
@@ -115,6 +120,18 @@ export function MapWorkspace({
   );
   const getSnapshot = useCallback(() => facade.getDiagnosticsSnapshot(), [facade]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  useEffect(() => {
+    const publishViewport = () => {
+      mapViewport.update(facade.getViewportSnapshot());
+    };
+    publishViewport();
+    const unsubscribe = facade.subscribe(publishViewport);
+    return () => {
+      unsubscribe();
+      mapViewport.update(null);
+    };
+  }, [facade, mapViewport]);
   const mapStyle = useMemo(
     () =>
       mapProviderConfiguration.status === 'valid'

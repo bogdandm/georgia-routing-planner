@@ -102,6 +102,10 @@ function staleRequestError(): DOMException {
   return new DOMException('Terrain request revision is obsolete.', 'AbortError');
 }
 
+function disposedBackendError(): DOMException {
+  return new DOMException('Terrain compute backend was disposed.', 'AbortError');
+}
+
 /**
  * Runs terrain work in one recoverable module worker and permanently selects the shared
  * inline engine for the page session only after the single restart also fails.
@@ -342,8 +346,11 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     signal: AbortSignal,
   ): Promise<TResult> {
     await this.loaded;
+    this.throwIfDisposed();
     await this.#control;
+    this.throwIfDisposed();
     for (;;) {
+      this.throwIfDisposed();
       if (signal.aborted) throw staleRequestError();
       const inline = this.#inline;
       if (inline !== null) return inlineOperation(inline);
@@ -351,7 +358,9 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
         return await workerOperation(this.requireRpc());
       } catch (error) {
         if (!(error instanceof WorkerRpcTransportError)) throw error;
+        this.throwIfDisposed();
         await this.recover();
+        this.throwIfDisposed();
       }
     }
   }
@@ -389,6 +398,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   }
 
   private async recoverInternal(): Promise<void> {
+    if (this.#disposed) return;
     if (!this.#restartAttempted) {
       this.#restartAttempted = true;
       this.setStatus('restarting');
@@ -402,18 +412,24 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
         const rpc = this.createChannel();
         this.#rpc = rpc;
         await this.initializeChannel(rpc);
+        if (this.hasBeenDisposed()) {
+          rpc.dispose();
+          if (this.#rpc === rpc) this.#rpc = null;
+          return;
+        }
         this.setStatus('worker');
         return;
       } catch {
         this.#rpc?.dispose();
         this.#rpc = null;
+        if (this.hasBeenDisposed()) return;
       }
     }
     this.activateInline();
   }
 
   private activateInline(): void {
-    if (this.#inline !== null) return;
+    if (this.#disposed || this.#inline !== null) return;
     this.#rpc?.dispose();
     this.#rpc = null;
     const inline = this.#inlineFactory();
@@ -455,7 +471,16 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   }
 
   private requireRpc(): WorkerRpcClient {
+    this.throwIfDisposed();
     if (this.#rpc === null) throw new WorkerRpcTransportError();
     return this.#rpc;
+  }
+
+  private throwIfDisposed(): void {
+    if (this.#disposed) throw disposedBackendError();
+  }
+
+  private hasBeenDisposed(): boolean {
+    return this.#disposed;
   }
 }

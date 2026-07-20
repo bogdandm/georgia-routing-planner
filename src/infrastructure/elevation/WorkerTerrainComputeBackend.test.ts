@@ -361,6 +361,94 @@ describe('WorkerTerrainComputeBackend', () => {
     server.dispose();
   });
 
+  it('makes disposal terminal for active and subsequent requests', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const started = vi.fn();
+    const server = new WorkerRpcServer(serverEndpoint, {
+      initialize: () => ({ initialized: true }),
+      dem: () =>
+        new Promise(() => {
+          started();
+        }),
+    });
+    const workerFactory = vi.fn(() => clientEndpoint);
+    const inlineFactory = vi.fn(() => new FakeInlineBackend());
+    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const backend = new WorkerTerrainComputeBackend(
+      terrain(),
+      10_000,
+      logger,
+      workerFactory,
+      inlineFactory,
+    );
+    await backend.loaded;
+    const activeRequest = backend.fetchTile(5, 8, 9, new AbortController());
+    await vi.waitFor(() => {
+      expect(started).toHaveBeenCalledOnce();
+    });
+
+    backend.dispose();
+
+    await expect(activeRequest).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(
+      backend.fetchTile(5, 9, 9, new AbortController()),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(workerFactory).toHaveBeenCalledOnce();
+    expect(inlineFactory).not.toHaveBeenCalled();
+    server.dispose();
+  });
+
+  it.each([
+    ['cacheControl', { cacheControl: {} }],
+    ['expires', { expires: 42 }],
+  ] as const)(
+    'restarts after invalid DEM %s metadata instead of accepting the result',
+    async (_field, invalidMetadata) => {
+      const servers: WorkerRpcServer[] = [];
+      let workerIndex = 0;
+      const workerFactory = vi.fn(() => {
+        const currentWorker = workerIndex;
+        workerIndex += 1;
+        const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+        servers.push(
+          new WorkerRpcServer(serverEndpoint, {
+            initialize: () => ({ initialized: true }),
+            dem: () => ({
+              kind: 'dem',
+              data: new Uint8Array([currentWorker + 1]).buffer,
+              ...(currentWorker === 0
+                ? invalidMetadata
+                : {
+                    cacheControl: 'public, max-age=3600',
+                    expires: 'Wed, 22 Jul 2026 00:00:00 GMT',
+                  }),
+            }),
+          }),
+        );
+        return clientEndpoint;
+      });
+      const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+      const backend = new WorkerTerrainComputeBackend(
+        terrain(),
+        10_000,
+        logger,
+        workerFactory,
+        () => new FakeInlineBackend(),
+      );
+      await backend.loaded;
+
+      const result = await backend.fetchTile(5, 8, 9, new AbortController());
+
+      expect(Array.from(new Uint8Array(await result.data.arrayBuffer()))).toEqual([2]);
+      expect(result.cacheControl).toBe('public, max-age=3600');
+      expect(result.expires).toBe('Wed, 22 Jul 2026 00:00:00 GMT');
+      expect(workerFactory).toHaveBeenCalledTimes(2);
+      expect(backend.getStatus()).toBe('worker');
+      backend.dispose();
+      for (const server of servers) server.dispose();
+    },
+  );
+
   it('publishes validated live contour queue state without exposing tile details', async () => {
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const server = new WorkerRpcServer(serverEndpoint, {

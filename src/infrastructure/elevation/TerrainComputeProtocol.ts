@@ -73,6 +73,13 @@ export interface TerrainWorkerContourResult {
   readonly data: ArrayBuffer;
 }
 
+const terrainWorkerDemResultSchema = z.strictObject({
+  kind: z.literal('dem'),
+  data: z.custom<ArrayBuffer>(isArrayBuffer),
+  cacheControl: z.string().optional(),
+  expires: z.string().optional(),
+});
+
 export const terrainWorkerEventNames = {
   diagnostic: 'terrain-diagnostic',
   metrics: 'terrain-metrics',
@@ -160,14 +167,7 @@ export function parseTerrainWorkerInteractionRequest(
 export function isTerrainWorkerDemResult(
   value: unknown,
 ): value is TerrainWorkerDemResult {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'kind' in value &&
-    value.kind === 'dem' &&
-    'data' in value &&
-    isArrayBuffer(value.data)
-  );
+  return terrainWorkerDemResultSchema.safeParse(value).success;
 }
 
 export function isTerrainWorkerContourResult(
@@ -184,6 +184,12 @@ export function isTerrainWorkerContourResult(
 }
 
 function isArrayBuffer(value: unknown): value is ArrayBuffer {
-  // Worker payloads can cross JavaScript realms, where instanceof is unreliable.
-  return Object.prototype.toString.call(value) === '[object ArrayBuffer]';
+  // The built-in method performs a cross-realm internal-slot brand check that cannot
+  // be spoofed with Symbol.toStringTag as Object.prototype.toString can.
+  try {
+    ArrayBuffer.prototype.slice.call(value, 0, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }

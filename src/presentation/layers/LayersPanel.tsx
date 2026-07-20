@@ -4,6 +4,7 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
+  Slider,
   Stack,
   Typography,
 } from '@mui/material';
@@ -127,6 +128,10 @@ export function LayersPanel() {
     mapLayers?.setLayerVisibility(layerId, visible);
   };
 
+  const changeOpenStreetMapOpacity = (_event: Event, value: number | number[]) => {
+    if (typeof value === 'number') mapLayers?.setOpenStreetMapOpacity(value / 100);
+  };
+
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
       <Box>
@@ -156,6 +161,32 @@ export function LayersPanel() {
           <Typography variant="caption" color="text.secondary">
             {group.description}
           </Typography>
+          {group.id === 'openstreetmap' ? (
+            <Box sx={{ mt: 1, px: 0.25 }}>
+              <Stack
+                direction="row"
+                sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <Typography id="openstreetmap-opacity-label" variant="body2">
+                  Group opacity
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {Math.round(state.openStreetMapOpacity * 100)}%
+                </Typography>
+              </Stack>
+              <Slider
+                aria-labelledby="openstreetmap-opacity-label"
+                disabled={mapLayers === null}
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(state.openStreetMapOpacity * 100)}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${String(value)}%`}
+                onChange={changeOpenStreetMapOpacity}
+              />
+            </Box>
+          ) : null}
           <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
             {group.controls.map((control) => {
               const disabled =

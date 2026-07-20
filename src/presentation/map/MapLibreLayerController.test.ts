@@ -245,6 +245,32 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
   });
 
+  it('applies one opacity preference across OpenStreetMap fills, lines, points, and labels', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(controller.setOpenStreetMapOpacity(0.5)).toEqual({ status: 'success' });
+
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(0.5);
+    expect(map.paintProperties.get(`${mapLayerIds.restrictedAreas}.line-opacity`)).toBe(
+      0.44,
+    );
+    expect(map.paintProperties.get(`${mapLayerIds.roads}.line-opacity`)).toBe(0.43);
+    expect(map.paintProperties.get(`${mapLayerIds.hikingPois}.circle-opacity`)).toBe(
+      0.5,
+    );
+    expect(map.paintProperties.get(`${mapLayerIds.placeLabels}.text-opacity`)).toBe(
+      0.5,
+    );
+    expect(mapLayerStore.getState().openStreetMapOpacity).toBe(0.5);
+    await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+      openStreetMapOpacity: 0.5,
+    });
+  });
+
   it('creates one relief layer and deterministically orders it around satellite imagery', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -566,6 +592,7 @@ describe('MapLibreLayerController', () => {
         roads: false,
         'places-and-pois': true,
       },
+      openStreetMapOpacity: 0.55,
       appliedScene: scene('saved-scene'),
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {

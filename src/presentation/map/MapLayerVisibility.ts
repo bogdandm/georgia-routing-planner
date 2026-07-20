@@ -15,4 +15,5 @@ export interface MapLayerVisibility {
     layerId: LogicalMapLayerId,
     visible: boolean,
   ): MapLayerVisibilityResult;
+  setOpenStreetMapOpacity(opacity: number): MapLayerVisibilityResult;
 }

@@ -16,6 +16,17 @@ provide the link again.
 `main` is the protected approval branch. All implementation, documentation,
 configuration, data, test, and maintenance changes must be made on a feature branch.
 
+## Parallel-agent worktrees
+
+Agents work in isolated Git worktrees by default. The maintainer may run up to four
+agents in parallel; each agent must use its own worktree and branch so its file edits,
+tests, and Git operations do not interfere with another agent's work.
+
+The main repository checkout may be switched to a branch when the maintainer explicitly
+requests it. Treat that checkout as maintainer-controlled: do not switch its branch,
+edit its files, or run Git operations there unless the request explicitly scopes the
+work to it.
+
 Before modifying files:
 
 1. Run `git status --short --branch` and identify the current branch and existing user

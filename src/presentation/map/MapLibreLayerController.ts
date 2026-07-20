@@ -232,8 +232,13 @@ export class MapLibreLayerController
     return this.contourTiles.createDemTileUrl();
   }
 
+  public setTerrainInteractionActive(active: boolean): void {
+    this.contourTiles.setInteractionActive(active);
+  }
+
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
+    this.contourTiles.setInteractionActive(false);
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
     this.#map = null;

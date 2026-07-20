@@ -57,6 +57,11 @@ interface FailureBucket {
   readonly lastLoggedAtMs: number;
 }
 
+type MapLayerControllerLifecycle = Pick<
+  MapLibreLayerController,
+  'attach' | 'detach' | 'setTerrainInteractionActive'
+>;
+
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   const sourceId = (event as unknown as { readonly sourceId?: unknown }).sourceId;
   return typeof sourceId === 'string' ? sourceId : null;
@@ -127,7 +132,7 @@ export class MapLibreFacade implements MapFacade {
     private readonly onViewSettled: (view: MapViewState) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
-    private readonly layerController?: MapLibreLayerController,
+    private readonly layerController?: MapLayerControllerLifecycle,
   ) {
     this.snapshotStore?.update(this.#snapshot);
   }
@@ -145,6 +150,7 @@ export class MapLibreFacade implements MapFacade {
     map.on('load', this.handleLoad);
     map.on('styledata', this.handleStyleData);
     map.on('idle', this.handleIdle);
+    map.on('movestart', this.handleMoveStart);
     map.on('moveend', this.handleMoveEnd);
     map.on('error', this.handleError);
     map.getCanvas().addEventListener('webglcontextlost', this.handleContextLost);
@@ -303,6 +309,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMoveEnd = (): void => {
+    this.layerController?.setTerrainInteractionActive(false);
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
@@ -317,6 +324,10 @@ export class MapLibreFacade implements MapFacade {
         });
       }
     }
+  };
+
+  private readonly handleMoveStart = (): void => {
+    this.layerController?.setTerrainInteractionActive(true);
   };
 
   private readonly handleError = (event: MapLibreErrorEvent): void => {
@@ -610,6 +621,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('load', this.handleLoad);
     map.off('styledata', this.handleStyleData);
     map.off('idle', this.handleIdle);
+    map.off('movestart', this.handleMoveStart);
     map.off('moveend', this.handleMoveEnd);
     map.off('error', this.handleError);
     map.getCanvas().removeEventListener('webglcontextlost', this.handleContextLost);

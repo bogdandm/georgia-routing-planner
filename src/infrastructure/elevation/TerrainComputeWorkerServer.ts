@@ -41,6 +41,14 @@ interface TerrainWorkerEngine {
   dispose(): void;
 }
 
+interface QueuedContour {
+  readonly signal: AbortSignal;
+  readonly run: () => Promise<WorkerRpcTransferResult>;
+  readonly resolve: (result: WorkerRpcTransferResult) => void;
+  readonly reject: (error: Error) => void;
+  readonly handleAbort: () => void;
+}
+
 export type TerrainWorkerEngineFactory = (
   terrain: MapProviderConfiguration['terrain'],
   requestTimeoutMs: number,
@@ -77,6 +85,9 @@ export class TerrainComputeWorkerServer {
   #engine: TerrainWorkerEngine | null = null;
   #revision = 0;
   #pendingCount = 0;
+  #interactionActive = false;
+  #contourRunning = false;
+  readonly #contourQueue: QueuedContour[] = [];
 
   public constructor(
     endpoint: WorkerRpcEndpoint,
@@ -86,7 +97,11 @@ export class TerrainComputeWorkerServer {
       logger,
     ) => new TerrainComputeEngine(terrain, requestTimeoutMs, logger),
     private readonly monotonicNow: () => number = () => performance.now(),
+    private readonly maximumQueuedContours = 32,
   ) {
+    if (maximumQueuedContours < 1) {
+      throw new RangeError('The terrain contour queue must accept at least one job.');
+    }
     const logger: DiagnosticLogger = {
       log: (input) => {
         this.#rpc.publishEvent(terrainWorkerEventNames.diagnostic, input);
@@ -105,6 +120,7 @@ export class TerrainComputeWorkerServer {
             logger,
           );
           this.#revision = request.revision;
+          this.#interactionActive = request.interactionActive;
           this.#engine.setFilterEnabled(request.filterEnabled);
           return { initialized: true };
         },
@@ -134,34 +150,54 @@ export class TerrainComputeWorkerServer {
         contour: async (payload, context) => {
           const request = parseTerrainWorkerContourRequest(payload);
           this.assertCurrentRevision(request.revision);
-          return this.execute('contour', context.signal, async (abortController) => {
-            const response = await this.requireEngine().fetchContourTile(
-              request.zoom,
-              request.x,
-              request.y,
-              request.options,
-              abortController,
-            );
-            this.assertCurrentRevision(request.revision);
-            // The engine cache retains its buffer; only the owned copy is transferred.
-            const data = response.arrayBuffer.slice(0);
-            const value: TerrainWorkerContourResult = { kind: 'contour', data };
-            return { value, transfer: [data] } satisfies WorkerRpcTransferResult;
-          });
+          const queuedAt = this.monotonicNow();
+          return this.scheduleContour(context.signal, () =>
+            this.execute(
+              'contour',
+              context.signal,
+              async (abortController) => {
+                this.assertCurrentRevision(request.revision);
+                const response = await this.requireEngine().fetchContourTile(
+                  request.zoom,
+                  request.x,
+                  request.y,
+                  request.options,
+                  abortController,
+                );
+                this.assertCurrentRevision(request.revision);
+                // The engine cache retains its buffer; only the owned copy is transferred.
+                const data = response.arrayBuffer.slice(0);
+                const value: TerrainWorkerContourResult = { kind: 'contour', data };
+                return {
+                  value,
+                  transfer: [data],
+                } satisfies WorkerRpcTransferResult;
+              },
+              queuedAt,
+            ),
+          );
         },
         'set-filter': (payload) => {
           const request = parseTerrainWorkerSetFilterRequest(payload);
           if (request.revision <= this.#revision) return { revision: this.#revision };
+          this.cancelQueuedContours(
+            new DOMException('Terrain request revision is obsolete.', 'AbortError'),
+          );
           this.#revision = request.revision;
           this.requireEngine().setFilterEnabled(request.enabled);
           return { revision: this.#revision };
         },
         interaction: (payload) => {
-          parseTerrainWorkerInteractionRequest(payload);
-          return { accepted: true };
+          const request = parseTerrainWorkerInteractionRequest(payload);
+          this.#interactionActive = request.active;
+          if (!request.active) this.drainContourQueue();
+          return { active: request.active };
         },
       },
       () => {
+        this.cancelQueuedContours(
+          new DOMException('Terrain worker disposed.', 'AbortError'),
+        );
         this.#engine?.dispose();
         this.#engine = null;
       },
@@ -176,8 +212,8 @@ export class TerrainComputeWorkerServer {
     operation: TerrainComputeMetrics['operation'],
     signal: AbortSignal,
     execute: (abortController: AbortController) => Promise<WorkerRpcTransferResult>,
+    queuedAt = this.monotonicNow(),
   ): Promise<WorkerRpcTransferResult> {
-    const queuedAt = this.monotonicNow();
     this.#pendingCount += 1;
     const { controller, release } = linkedAbortController(signal);
     const startedAt = this.monotonicNow();
@@ -213,13 +249,93 @@ export class TerrainComputeWorkerServer {
     this.#rpc.publishEvent(terrainWorkerEventNames.metrics, {
       ...metrics,
       executionMode: 'worker',
-      pendingCount: this.#pendingCount,
+      pendingCount: this.#pendingCount + this.#contourQueue.length,
     } satisfies TerrainComputeMetrics);
   }
 
   private requireEngine(): TerrainWorkerEngine {
     if (this.#engine === null) throw new Error('Terrain worker is not initialized.');
     return this.#engine;
+  }
+
+  private scheduleContour(
+    signal: AbortSignal,
+    run: () => Promise<WorkerRpcTransferResult>,
+  ): Promise<WorkerRpcTransferResult> {
+    if (signal.aborted) {
+      return Promise.reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('Terrain contour request canceled.', 'AbortError'),
+      );
+    }
+    return new Promise((resolve, reject) => {
+      const item: QueuedContour = {
+        signal,
+        run,
+        resolve,
+        reject,
+        handleAbort: () => {
+          this.removeQueuedContour(item);
+          reject(
+            signal.reason instanceof Error
+              ? signal.reason
+              : new DOMException('Terrain contour request canceled.', 'AbortError'),
+          );
+        },
+      };
+      signal.addEventListener('abort', item.handleAbort, { once: true });
+      if (this.#contourQueue.length >= this.maximumQueuedContours) {
+        const superseded = this.#contourQueue.shift();
+        if (superseded !== undefined) {
+          superseded.signal.removeEventListener('abort', superseded.handleAbort);
+          superseded.reject(
+            new DOMException(
+              'Terrain contour request was superseded by a newer viewport.',
+              'AbortError',
+            ),
+          );
+        }
+      }
+      this.#contourQueue.push(item);
+      this.drainContourQueue();
+    });
+  }
+
+  private drainContourQueue(): void {
+    if (this.#interactionActive || this.#contourRunning) return;
+    const item = this.#contourQueue.shift();
+    if (item === undefined) return;
+    item.signal.removeEventListener('abort', item.handleAbort);
+    if (item.signal.aborted) {
+      item.reject(
+        item.signal.reason instanceof Error
+          ? item.signal.reason
+          : new DOMException('Terrain contour request canceled.', 'AbortError'),
+      );
+      this.drainContourQueue();
+      return;
+    }
+    this.#contourRunning = true;
+    void item
+      .run()
+      .then(item.resolve, item.reject)
+      .finally(() => {
+        this.#contourRunning = false;
+        this.drainContourQueue();
+      });
+  }
+
+  private removeQueuedContour(item: QueuedContour): void {
+    const index = this.#contourQueue.indexOf(item);
+    if (index >= 0) this.#contourQueue.splice(index, 1);
+  }
+
+  private cancelQueuedContours(reason: Error): void {
+    for (const item of this.#contourQueue.splice(0)) {
+      item.signal.removeEventListener('abort', item.handleAbort);
+      item.reject(reason);
+    }
   }
 
   private assertCurrentRevision(revision: number): void {

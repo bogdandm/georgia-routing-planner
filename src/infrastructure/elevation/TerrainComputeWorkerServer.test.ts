@@ -191,4 +191,87 @@ describe('TerrainComputeWorkerServer', () => {
     client.dispose();
     server.dispose();
   });
+
+  it('keeps DEM active while movement bounds, cancels, and sequentially drains contours', async () => {
+    const [clientEndpoint, serverEndpoint] = pair();
+    const contourCalls: number[] = [];
+    const contourFinishes = new Map<number, (value: TerrainContourTile) => void>();
+    const fetchTile = vi.fn((): Promise<TerrainDemResponse> =>
+      Promise.resolve({ data: new Blob([new Uint8Array([1])]) }),
+    );
+    const fetchContourTile = vi.fn(
+      (
+        _zoom: number,
+        x: number,
+        _y: number,
+        _options: TerrainContourOptions,
+        _abortController: AbortController,
+      ) =>
+        new Promise<TerrainContourTile>((resolve) => {
+          contourCalls.push(x);
+          contourFinishes.set(x, resolve);
+        }),
+    );
+    const factory: TerrainWorkerEngineFactory = () => ({
+      fetchTile,
+      fetchContourTile,
+      setFilterEnabled: vi.fn(),
+      dispose: vi.fn(),
+    });
+    const server = new TerrainComputeWorkerServer(serverEndpoint, factory, () => 0, 2);
+    const client = new WorkerRpcClient(clientEndpoint);
+    await client.request('initialize', initialization());
+    await client.request('interaction', { active: true });
+
+    await expect(
+      client.request('dem', {
+        zoom: 5,
+        x: 8,
+        y: 9,
+        revision: 0,
+        priority: 'high',
+      }),
+    ).resolves.toMatchObject({ kind: 'dem' });
+
+    const first = client.request('contour', contourRequest(1));
+    const secondController = new AbortController();
+    const second = client.request(
+      'contour',
+      contourRequest(2),
+      secondController.signal,
+    );
+    const third = client.request('contour', contourRequest(3));
+
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    secondController.abort();
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' });
+    const fourth = client.request('contour', contourRequest(4));
+    expect(fetchContourTile).not.toHaveBeenCalled();
+
+    await client.request('interaction', { active: false });
+    await vi.waitFor(() => {
+      expect(contourCalls).toEqual([3]);
+    });
+    contourFinishes.get(3)?.({ arrayBuffer: new Uint8Array([3]).buffer });
+    await expect(third).resolves.toMatchObject({ kind: 'contour' });
+    await vi.waitFor(() => {
+      expect(contourCalls).toEqual([3, 4]);
+    });
+    contourFinishes.get(4)?.({ arrayBuffer: new Uint8Array([4]).buffer });
+    await expect(fourth).resolves.toMatchObject({ kind: 'contour' });
+
+    client.dispose();
+    server.dispose();
+  });
 });
+
+function contourRequest(x: number) {
+  return {
+    zoom: 5,
+    x,
+    y: 9,
+    revision: 0,
+    priority: 'low',
+    options: { levels: [50, 200], demFilterRevision: '0' },
+  };
+}

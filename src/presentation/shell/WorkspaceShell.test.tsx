@@ -129,7 +129,8 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
-    expect(screen.getByRole('slider', { name: 'Group opacity' })).toHaveValue('100');
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
     expect(screen.queryByText(/<a href=/u)).not.toBeInTheDocument();
@@ -183,10 +184,18 @@ describe('WorkspaceShell', () => {
     const setOpacity = vi
       .spyOn(mapLayers, 'setOpenStreetMapOpacity')
       .mockReturnValue({ status: 'success' });
+    mapLayerStore.setState({
+      appliedImagery: {
+        status: 'ready',
+        sceneKey: 'test-scene-key',
+        sceneId: 'test-scene',
+        visible: true,
+      },
+    });
     renderWorkspaceShell();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
 
-    fireEvent.change(screen.getByRole('slider', { name: 'Group opacity' }), {
+    fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), {
       target: { value: '60' },
     });
 

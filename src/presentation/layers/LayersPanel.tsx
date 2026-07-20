@@ -123,6 +123,12 @@ export function LayersPanel() {
     state.appliedImagery.status === 'hidden' ||
     (state.appliedImagery.status === 'failed' &&
       state.appliedImagery.previousSceneKey !== null);
+  const satelliteImageryVisible =
+    state.appliedImagery.status === 'ready' ||
+    state.appliedImagery.status === 'preview' ||
+    ((state.appliedImagery.status === 'loading' ||
+      state.appliedImagery.status === 'failed') &&
+      state.appliedImagery.previousSceneKey !== null);
 
   const changeVisibility = (layerId: LogicalMapLayerId, visible: boolean) => {
     mapLayers?.setLayerVisibility(layerId, visible);
@@ -162,21 +168,17 @@ export function LayersPanel() {
             {group.description}
           </Typography>
           {group.id === 'openstreetmap' ? (
-            <Box sx={{ mt: 1, px: 0.25 }}>
-              <Stack
-                direction="row"
-                sx={{ justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <Typography id="openstreetmap-opacity-label" variant="body2">
-                  Group opacity
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {Math.round(state.openStreetMapOpacity * 100)}%
-                </Typography>
-              </Stack>
+            <Stack
+              direction="row"
+              spacing={1.25}
+              sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
+            >
+              <Typography id="openstreetmap-opacity-label" variant="body2">
+                Opacity
+              </Typography>
               <Slider
                 aria-labelledby="openstreetmap-opacity-label"
-                disabled={mapLayers === null}
+                disabled={mapLayers === null || !satelliteImageryVisible}
                 min={0}
                 max={100}
                 step={5}
@@ -184,8 +186,16 @@ export function LayersPanel() {
                 valueLabelDisplay="auto"
                 valueLabelFormat={(value) => `${String(value)}%`}
                 onChange={changeOpenStreetMapOpacity}
+                sx={{ flex: 1, mx: 0.5 }}
               />
-            </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+              >
+                {Math.round(state.openStreetMapOpacity * 100)}%
+              </Typography>
+            </Stack>
           ) : null}
           <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
             {group.controls.map((control) => {

@@ -1080,6 +1080,7 @@ export class MapLibreLayerController
     const mode: MapVisualMode =
       this.#activeSlot !== null && imagery.status !== 'hidden' ? 'satellite' : 'vector';
     const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
+    const effectiveOpacity = mode === 'satellite' ? opacity : 1;
     for (const [layerId, properties] of Object.entries(
       openStreetMapOpacityProperties,
     )) {
@@ -1091,7 +1092,7 @@ export class MapLibreLayerController
         map.setPaintProperty(
           layerId,
           property,
-          opacity * (typeof baseOpacity === 'number' ? baseOpacity : 1),
+          effectiveOpacity * (typeof baseOpacity === 'number' ? baseOpacity : 1),
         );
       }
     }

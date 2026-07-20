@@ -245,7 +245,7 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
   });
 
-  it('applies one opacity preference across OpenStreetMap fills, lines, points, and labels', async () => {
+  it('applies one opacity preference to OpenStreetMap overlays only over satellite imagery', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -253,12 +253,15 @@ describe('MapLibreLayerController', () => {
     controller.attach(map as unknown as MapLibreMap);
 
     expect(controller.setOpenStreetMapOpacity(0.5)).toEqual({ status: 'success' });
+    expect(map.paintProperties.get(`${mapLayerIds.roads}.line-opacity`)).toBe(0.86);
 
-    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(0.5);
+    await controller.applyScene(scene('opacity-scene'), new AbortController().signal);
+
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(0);
     expect(map.paintProperties.get(`${mapLayerIds.restrictedAreas}.line-opacity`)).toBe(
-      0.44,
+      0.4,
     );
-    expect(map.paintProperties.get(`${mapLayerIds.roads}.line-opacity`)).toBe(0.43);
+    expect(map.paintProperties.get(`${mapLayerIds.roads}.line-opacity`)).toBe(0.48);
     expect(map.paintProperties.get(`${mapLayerIds.hikingPois}.circle-opacity`)).toBe(
       0.5,
     );

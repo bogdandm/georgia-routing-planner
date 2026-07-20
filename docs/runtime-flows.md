@@ -330,8 +330,8 @@ expand to their fixed native style groups. Satellite and footprint commands targ
 controller-owned layers. Adding a map data source includes adding its provider group and
 relevant logical visibility controls to Layers in the same change. Visibility is applied
 idempotently and projected into a serializable live store. The OpenStreetMap group
-opacity scales the existing mode-specific paint opacity for its controlled fills, lines,
-points, and labels, so vector and satellite contrast relationships remain intact. Dexie
+opacity scales the existing satellite-mode paint opacity for its controlled fills,
+lines, points, and labels. Vector mode always uses the unscaled base paint. Dexie
 persists visibility, shared OpenStreetMap opacity, imagery stretch, and the last
 successful scene for startup restoration. Satellite search/results state remains mounted
 while another rail section is visible, and returning to Satellite reattaches the

@@ -278,7 +278,10 @@ describe('MapLibreLayerController', () => {
       aboveOrder.indexOf('sentinel-raster-a'),
     );
     expect(aboveOrder.indexOf('terrain-relief-shade')).toBeLessThan(
-      aboveOrder.indexOf(mapLayerIds.water),
+      aboveOrder.indexOf(mapLayerIds.boundaries),
+    );
+    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeGreaterThan(
+      aboveOrder.indexOf(mapLayerIds.landcover),
     );
     expect(mapLayerStore.getState().terrainOverlays).toMatchObject({
       initialized: true,

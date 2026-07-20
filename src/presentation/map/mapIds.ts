@@ -45,8 +45,9 @@ export const mapLayerIds = {
 
 export const mapInsertionPoints = {
   satelliteBeforeLayerId: mapLayerIds.landcover,
-  terrainOverlaysBeforeLayerId: mapLayerIds.water,
+  // Relief and contours need to render over opaque land-cover and land-use fills.
+  // Keep transport and labels above them by inserting before administrative boundaries.
+  terrainOverlaysBeforeLayerId: mapLayerIds.boundaries,
   satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
-  terrainShadingBeforeLayerId: mapLayerIds.boundaries,
   userOverlaysAfterLayerId: mapLayerIds.placeLabels,
 } as const;

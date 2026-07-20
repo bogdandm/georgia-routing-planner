@@ -16,6 +16,17 @@ provide the link again.
 `main` is the protected approval branch. All implementation, documentation,
 configuration, data, test, and maintenance changes must be made on a feature branch.
 
+## Parallel-agent worktrees
+
+Agents work in isolated Git worktrees by default. The maintainer may run up to four
+agents in parallel; each agent must use its own worktree and branch so its file edits,
+tests, and Git operations do not interfere with another agent's work.
+
+The main repository checkout may be switched to a branch when the maintainer explicitly
+requests it. Treat that checkout as maintainer-controlled: do not switch its branch,
+edit its files, or run Git operations there unless the request explicitly scopes the
+work to it.
+
 Before modifying files:
 
 1. Run `git status --short --branch` and identify the current branch and existing user
@@ -536,6 +547,15 @@ networks, brown hiking routes, and saturated overlays that dominate the imagery.
 Automated tests are required by default. Add or update tests in the same change as
 production behavior. Do not postpone the entire test suite to a subsequent change and do
 not rely on manual browser verification as the only evidence.
+
+### Documentation-only verification
+
+When a change modifies only Markdown or other non-executable documentation, do not run
+TypeScript checking, ESLint, unit/component/integration tests, coverage, Playwright, or
+production builds. Verify only the changed documentation with its formatter, the
+documentation-boundary checks required by this file, and `git diff --check`. If the
+change also modifies executable code, configuration, schemas, or test fixtures, use the
+normal verification rules for those files.
 
 ### Managed Windows coverage timing
 

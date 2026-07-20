@@ -120,15 +120,16 @@ duplicate sources, listeners, and out-of-order camera changes.
 On style readiness, style data changes, satellite swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 generated contour source, minor/index lines, and index labels. The invariant is base
-surface, relief/satellite in the selected order, contours, then OSM data layers.
-Updating the contour interval calls the existing vector source's tile update, so the map
-camera and unrelated native resources remain untouched. MapLibre abort signals flow
-through both the shared DEM and contour protocols to the same filtered provider. The
-provider fetches the center and eight neighbors concurrently under one timeout, applies
-the configured pure repair policy, and retains completed PNGs and decoded neighbor
-context in bounded LRUs. Relief, 3D terrain, and generated isolines therefore cannot
-observe different elevation bytes. Source failures update the overlay snapshot without
-removing the basemap.
+surface fills, relief/satellite in the selected order, contours, then OSM boundaries,
+transport, and labels. This keeps terrain relief visible over grass, forest, and other
+opaque land-cover fills. Updating the contour interval calls the existing vector
+source's tile update, so the map camera and unrelated native resources remain untouched.
+MapLibre abort signals flow through both the shared DEM and contour protocols to the
+same filtered provider. The provider fetches the center and eight neighbors concurrently
+under one timeout, applies the configured pure repair policy, and retains completed PNGs
+and decoded neighbor context in bounded LRUs. Relief, 3D terrain, and generated isolines
+therefore cannot observe different elevation bytes. Source failures update the overlay
+snapshot without removing the basemap.
 
 The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
 the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a

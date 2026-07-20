@@ -24,3 +24,15 @@ body {
 .maplibregl-ctrl-top-right .maplibregl-ctrl {
   margin: 0 0 6px;
 }
+
+.map-orbit-pivot {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(255 255 255 / 95%);
+  border-radius: 50%;
+  background: rgb(25 118 210 / 28%);
+  box-shadow:
+    0 0 0 2px rgb(25 118 210 / 75%),
+    0 1px 5px rgb(0 0 0 / 42%);
+  pointer-events: none;
+}

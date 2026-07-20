@@ -71,13 +71,19 @@ captures interaction from the workspace, and it remains open until the user acti
 its header close control, toggles the Diagnostics rail action, or disables developer
 mode.
 
-## Settled camera write
+## Settled map-view write and restore
 
-1. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch.
-2. The facade updates its snapshot, notifies React, and calls the camera-settled port.
-3. `SettledCameraPersistence` keeps only the newest camera during its debounce window.
-4. Writes are chained so IndexedDB saves cannot overtake one another.
-5. Save failure is logged and shown as a non-blocking warning; map interaction
+1. Startup reads one versioned camera-plus-terrain-mode value before mounting the map.
+2. A saved 3D mode is applied as soon as MapLibre is ready; a saved 2D mode remains
+   flat.
+3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
+   with the current terrain mode.
+4. The facade updates its snapshot, notifies React, and calls the view-settled port.
+5. `SettledCameraPersistence` keeps only the newest serializable view during its
+   debounce window. Successful terrain transitions also publish their final view
+   explicitly.
+6. Writes are chained so IndexedDB saves cannot overtake one another.
+7. Save failure is logged and shown as a non-blocking warning; map interaction
    continues.
 
 This flow intentionally excludes continuous `move`/render events from React, IndexedDB,
@@ -113,7 +119,8 @@ sequenceDiagram
 
 Only one terrain transition may run at a time. Repeated requests for the same target
 share its promise; an opposite request receives an explicit failure. This prevents
-duplicate sources, listeners, and out-of-order camera changes.
+duplicate sources, listeners, and out-of-order camera changes. Selecting 2D also resets
+pitch and bearing to zero, so the flat map returns north-up.
 
 ## Terrain overlay reconciliation
 

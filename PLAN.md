@@ -176,6 +176,20 @@ Planned commits:
 1. `fix(map): filter corrupt Terrarium elevation pixels`
 2. `docs(map): describe filtered Terrarium processing`
 
+### T8. Native camera interaction — Done
+
+- Keep MapLibre's desktop pan, wheel/double-click zoom, keyboard, touch, compass, and
+  pitch semantics, with a focused 3D-only middle-drag orbit around the pressed terrain
+  point at restrained sensitivity; leave right drag to the browser.
+- Show a small terrain-anchored pivot ring while middle drag is active, then remove it
+  on release, cancellation, teardown, or return to 2D.
+- Persist camera and terrain mode as one serializable view, restore 3D after reload, and
+  reset pitch plus bearing when switching to 2D.
+- Cover conventional camera gestures, pivot stability, compass reset, keyboard control,
+  camera persistence, and 2D/3D transitions with focused and Chromium tests.
+
+Commit: `feat(map): refine native camera interactions`
+
 ## 5. Verification
 
 Run the smallest relevant checks after each work package, followed by the complete gate:

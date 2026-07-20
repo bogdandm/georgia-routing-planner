@@ -10,7 +10,7 @@ export default defineConfig({
   // longest satellite workflow; local development retains two workers.
   timeout: process.env.CI ? 45_000 : 30_000,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   workers: process.env.CI ? 1 : 2,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

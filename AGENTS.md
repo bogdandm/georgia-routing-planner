@@ -50,6 +50,10 @@ Rules:
   and obtain approval again.
 - Commits are allowed and encouraged on feature branches after relevant checks pass.
   Keep commits focused and use clear imperative or Conventional Commit-style messages.
+- An explicit request to remove, postpone, or take a feature out of scope authorizes
+  staging and committing the corresponding tracked-file deletions on the feature branch.
+  Do not ask for separate confirmation merely because Git represents removal by staging
+  the deleted paths.
 - Do not implement an entire workstream as one mega-commit. When a temporary `PLAN.md`
   exists, it must split the work into smaller independently reviewable commits; each
   implementation commit must include its relevant automated tests and leave the
@@ -574,6 +578,48 @@ remove assertions, add sleeps, or increase application polling delays to make th
 green. Report both the canonical timeout and the successful bounded-concurrency result
 in the handoff so other agents can distinguish infrastructure timing from a behavioral
 failure.
+
+The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
+and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling
+in `e2e/map-foundation.spec.ts`; preserve that local ceiling instead of raising the
+whole Playwright suite timeout. Send keyboard shortcuts through the canvas locator so
+focus and key delivery are one action, and allow ten seconds for the settled camera to
+reach IndexedDB.
+
+When an environment-specific timeout recurs and the behavior passes under a focused,
+bounded run, record the exact test, cause, and validated command or local ceiling in
+this file during the same change. Do not leave later agents to rediscover known timing
+limits, and do not generalize one slow test into blanket sleeps, retries, or suite-wide
+timeout increases.
+
+### GitHub Actions Chromium concurrency
+
+GitHub's Linux runner does not reliably sustain two fully parallel WebGL/MapLibre
+workers. The contention can make the controlled terrain source miss its application
+deadline, leave tests in flat mode with a `Retry 3D` alert, and push the terrain or
+satellite workflows past Playwright's 30-second default. Keep `workers: 1` when `CI` is
+set and two workers for local runs. CI retries remain disabled so a real failure is
+reported once instead of repeating the same resource contention.
+
+Even with one worker, software-rendered Chromium can need more than Playwright's
+five-second assertion default to make the synthetic DEM source ready. Terrain E2E tests
+must wait for the persisted `terrain` view state before sending dependent camera input;
+`aria-pressed` also represents the intermediate `enabling` state. After restoring an
+already-persisted terrain view, wait for the selected 3D control to become enabled
+because the stored value cannot distinguish the new map's pending transition from
+readiness. The application DEM deadline is 15 seconds, so use the focused 20-second
+readiness assertion and the existing 45-second terrain workflow ceiling. Use the focused
+10-second camera persistence assertion after restored-map keyboard input. The complete
+satellite-imagery workflow can exceed 45 seconds on GitHub even with one worker, so keep
+its focused two-minute ceiling in `e2e/satellite-imagery.spec.ts`. Do not replace these
+with arbitrary sleeps or suite-wide timeout increases.
+
+Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
+coverage, run the CI-shaped command on Windows PowerShell:
+
+```powershell
+$env:CI='1'; pnpm e2e; Remove-Item Env:CI
+```
 
 Use the smallest automated-test tier that proves the changed behavior. Isolated UI
 copy/style changes, local component-state fixes, and small interaction changes should

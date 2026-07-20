@@ -5,6 +5,7 @@ import type {
 } from 'maplibre-gl';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapViewportSnapshot } from '@/application/ports/MapViewportProvider';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
@@ -12,6 +13,7 @@ import type { MapFacade } from '@/presentation/map/MapFacade';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import { MiddleMouseCameraControl } from '@/presentation/map/MiddleMouseCameraControl';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
@@ -118,10 +120,11 @@ export class MapLibreFacade implements MapFacade {
   #mountedAt = 0;
   #lastCameraDiagnosticAt = 0;
   #styleSnapshotQueued = false;
+  readonly #middleMouseCamera = new MiddleMouseCameraControl();
 
   public constructor(
     private readonly logger: DiagnosticLogger,
-    private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
+    private readonly onViewSettled: (view: MapViewState) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
     private readonly layerController?: MapLibreLayerController,
@@ -136,6 +139,8 @@ export class MapLibreFacade implements MapFacade {
     }
     this.detach();
     this.#map = map;
+    this.#middleMouseCamera.attach(map.getCanvasContainer(), map);
+    this.#middleMouseCamera.setEnabled(this.#snapshot.terrainMode === 'terrain');
     this.layerController?.attach(map);
     map.on('load', this.handleLoad);
     map.on('styledata', this.handleStyleData);
@@ -301,7 +306,7 @@ export class MapLibreFacade implements MapFacade {
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
-      this.onCameraSettled(camera);
+      this.onViewSettled({ camera, terrainMode: this.#snapshot.terrainMode });
       const now = Date.now();
       if (now - this.#lastCameraDiagnosticAt >= 5_000) {
         this.#lastCameraDiagnosticAt = now;
@@ -425,16 +430,18 @@ export class MapLibreFacade implements MapFacade {
       map.easeTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,
-        bearing: camera.bearing,
+        bearing: 0,
         pitch: 0,
         duration: 250,
       });
+      const flatCamera = { ...camera, bearing: 0, pitch: 0 };
       this.updateSnapshot({
         lifecycle: 'ready',
         terrainMode: 'flat',
-        camera: { ...camera, pitch: 0 },
+        camera: flatCamera,
         message: null,
       });
+      this.onViewSettled({ camera: flatCamera, terrainMode: 'flat' });
       this.logger.log({ level: 'info', name: 'map.terrain.disabled' });
       return { status: 'success', mode };
     }
@@ -472,6 +479,7 @@ export class MapLibreFacade implements MapFacade {
         sourceIds: Object.keys(map.getStyle().sources),
         message: null,
       });
+      this.onViewSettled({ camera: { ...camera, pitch }, terrainMode: 'terrain' });
       this.logger.log({ level: 'info', name: 'map.terrain.enabled' });
       return { status: 'success', mode };
     } catch {
@@ -587,6 +595,7 @@ export class MapLibreFacade implements MapFacade {
 
   private updateSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.#snapshot = { ...this.#snapshot, ...changed };
+    this.#middleMouseCamera.setEnabled(this.#snapshot.terrainMode === 'terrain');
     this.snapshotStore?.update(this.#snapshot);
     for (const listener of this.#listeners) {
       listener();
@@ -607,6 +616,7 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
+    this.#middleMouseCamera.detach();
     this.layerController?.detach(map);
     this.#map = null;
     this.logger.log({ level: 'debug', name: 'map.lifecycle.unmounted' });

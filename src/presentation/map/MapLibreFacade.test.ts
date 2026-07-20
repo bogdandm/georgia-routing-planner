@@ -39,6 +39,10 @@ class FakeNativeMap {
     return this.#canvas;
   }
 
+  public getCanvasContainer(): HTMLCanvasElement {
+    return this.#canvas;
+  }
+
   public loaded(): boolean {
     return false;
   }
@@ -169,11 +173,14 @@ describe('MapLibreFacade', () => {
     expect(nativeMap.showTileBoundaries).toBe(true);
     expect(onCameraSettled).toHaveBeenCalledOnce();
     expect(onCameraSettled).toHaveBeenCalledWith({
-      longitude: 44.8,
-      latitude: 41.7,
-      zoom: 8,
-      bearing: 12,
-      pitch: 35,
+      camera: {
+        longitude: 44.8,
+        latitude: 41.7,
+        zoom: 8,
+        bearing: 12,
+        pitch: 35,
+      },
+      terrainMode: 'flat',
     });
     expect(facade.getViewportSnapshot()).toEqual({
       bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
@@ -248,7 +255,7 @@ describe('MapLibreFacade', () => {
     expect(nativeMap.easeCalls.at(-1)).toMatchObject({
       center: [44.8, 41.7],
       zoom: 8,
-      bearing: 12,
+      bearing: 0,
       pitch: 0,
     });
 

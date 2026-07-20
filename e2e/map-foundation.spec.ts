@@ -11,10 +11,21 @@ interface StoredCamera {
   readonly pitch: number;
 }
 
-async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
+interface StoredMapView {
+  readonly camera: StoredCamera;
+  readonly terrainMode: 'flat' | 'terrain';
+}
+
+// The application gives the controlled DEM source up to 15 seconds to become ready.
+// Assert the persisted completion signal with a small runner margin instead of treating
+// the terrain control's immediate `enabling` state as a completed transition.
+const terrainPersistenceTimeoutMs = 20_000;
+const cameraPersistenceTimeoutMs = 10_000;
+
+async function readStoredMapView(page: Page): Promise<StoredMapView | null> {
   return page.evaluate(
     () =>
-      new Promise<StoredCamera | null>((resolve, reject) => {
+      new Promise<StoredMapView | null>((resolve, reject) => {
         const openRequest = indexedDB.open('GeorgiaRoutingPlanner');
         openRequest.onerror = () => {
           reject(openRequest.error ?? new Error('Could not open fixture database.'));
@@ -28,10 +39,62 @@ async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
             reject(getRequest.error ?? new Error('Could not read camera record.'));
           };
           getRequest.onsuccess = () => {
-            const record = getRequest.result as
-              { value?: { camera?: StoredCamera } } | undefined;
+            const record = getRequest.result as { value?: StoredMapView } | undefined;
             database.close();
-            resolve(record?.value?.camera ?? null);
+            resolve(record?.value ?? null);
+          };
+        };
+      }),
+  );
+}
+
+async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
+  return (await readStoredMapView(page))?.camera ?? null;
+}
+
+async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
+  readonly relief: boolean;
+  readonly isolines: boolean;
+} | null> {
+  return page.evaluate(
+    () =>
+      new Promise<{
+        readonly relief: boolean;
+        readonly isolines: boolean;
+      } | null>((resolve, reject) => {
+        const openRequest = indexedDB.open('GeorgiaRoutingPlanner');
+        openRequest.onerror = () => {
+          reject(openRequest.error ?? new Error('Could not open fixture database.'));
+        };
+        openRequest.onsuccess = () => {
+          const database = openRequest.result;
+          const transaction = database.transaction('settings', 'readonly');
+          const getRequest = transaction.objectStore('settings').get('map.layers');
+          getRequest.onerror = () => {
+            database.close();
+            reject(getRequest.error ?? new Error('Could not read layer settings.'));
+          };
+          getRequest.onsuccess = () => {
+            const record = getRequest.result as
+              | {
+                  value?: {
+                    visibility?: {
+                      'terrain-relief'?: boolean;
+                      'elevation-isolines'?: boolean;
+                    };
+                  };
+                }
+              | undefined;
+            database.close();
+            const visibility = record?.value?.visibility;
+            resolve(
+              visibility === undefined
+                ? null
+                : {
+                    relief: visibility['terrain-relief'] ?? true,
+                    isolines: visibility['elevation-isolines'] ?? true,
+                  },
+            );
           };
         };
       }),
@@ -45,6 +108,7 @@ test.beforeEach(async ({ page }) => {
 test('persists a settled camera and restores it before interaction after reload', async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
@@ -57,18 +121,33 @@ test('persists a settled camera and restores it before interaction after reload'
   await expect
     .poll(async () => (await readStoredCamera(page))?.zoom ?? null)
     .not.toBeNull();
+  expect((await readStoredCamera(page))?.zoom).not.toBeCloseTo(5.8, 1);
+
+  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
+    .toBe('terrain');
   const cameraBeforeReload = await readStoredCamera(page);
   expect(cameraBeforeReload).not.toBeNull();
-  expect(cameraBeforeReload?.zoom).not.toBeCloseTo(5.8, 1);
 
   await page.reload();
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 15_000,
   });
+  await expect(
+    page.getByRole('button', { name: 'Show 3D terrain map' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
+    timeout: terrainPersistenceTimeoutMs,
+  });
   await canvas.focus();
   await page.keyboard.press('ArrowRight');
   await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude)
+    .poll(async () => (await readStoredCamera(page))?.longitude, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
     .not.toBe(cameraBeforeReload?.longitude);
   const cameraAfterReload = await readStoredCamera(page);
 
@@ -90,6 +169,9 @@ test('persists terrain overlay visibility from the Layers tab', async ({ page })
   await expect(isolines).toBeChecked();
   await relief.uncheck();
   await isolines.uncheck();
+  await expect
+    .poll(() => readStoredTerrainOverlayVisibility(page))
+    .toEqual({ relief: false, isolines: false });
 
   await page.reload();
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
@@ -102,6 +184,7 @@ test('persists terrain overlay visibility from the Layers tab', async ({ page })
 test('switches between 2D and synthetic 3D terrain on the same map', async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   const terrainRequests: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/elevation-tiles-prod/terrarium/')) {
@@ -129,13 +212,27 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await terrainButton.click();
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
+    .toBe('terrain');
   await expect(
     page.getByRole('link', { name: 'Mapzen/AWS Open Data providers' }).first(),
   ).toBeVisible();
+  await canvas.focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect
+    .poll(async () => Math.abs((await readStoredCamera(page))?.bearing ?? 0))
+    .toBeGreaterThan(0);
 
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(async () => (await readStoredCamera(page))?.pitch).toBe(0);
+  await expect.poll(async () => (await readStoredCamera(page))?.bearing).toBe(0);
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode)
+    .toBe('flat');
   const cameraAfterTerrain = await readStoredCamera(page);
   expect(cameraAfterTerrain?.longitude).toBeCloseTo(
     cameraBeforeTerrain?.longitude ?? 0,
@@ -146,12 +243,95 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
     4,
   );
   expect(cameraAfterTerrain?.zoom).toBeCloseTo(cameraBeforeTerrain?.zoom ?? 0, 4);
-  expect(cameraAfterTerrain?.bearing).toBeCloseTo(cameraBeforeTerrain?.bearing ?? 0, 4);
+  expect(cameraAfterTerrain?.bearing).toBe(0);
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
     { timeout: 15_000 },
   );
+});
+
+test('uses conventional native camera gestures and resets them with the compass', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  const initialCamera = await readStoredCamera(page);
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down();
+  await page.mouse.move(centerX + 90, centerY + 30, { steps: 4 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.longitude)
+    .not.toBe(initialCamera?.longitude);
+
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down({ button: 'middle' });
+  await expect(page.locator('.map-orbit-pivot')).toHaveCount(0);
+  await page.mouse.move(centerX + 40, centerY - 40, { steps: 2 });
+  await page.mouse.up({ button: 'middle' });
+
+  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Show 3D terrain map' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
+    .toBe('terrain');
+  const cameraBeforeOrbit = await readStoredCamera(page);
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down({ button: 'middle' });
+  const pivot = page.locator('.map-orbit-pivot');
+  await expect(pivot).toHaveCount(1);
+  const pivotBeforeOrbit = await pivot.boundingBox();
+  expect(pivotBeforeOrbit).not.toBeNull();
+  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
+  if (pivotBeforeOrbit !== null) {
+    await expect
+      .poll(async () => {
+        const current = await pivot.boundingBox();
+        return current === null
+          ? Number.POSITIVE_INFINITY
+          : Math.hypot(current.x - pivotBeforeOrbit.x, current.y - pivotBeforeOrbit.y);
+      })
+      .toBeLessThan(4);
+  }
+  await page.mouse.up({ button: 'middle' });
+  await expect(pivot).toHaveCount(0);
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.bearing)
+    .not.toBe(cameraBeforeOrbit?.bearing);
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.pitch ?? 0)
+    .toBeGreaterThan(0);
+
+  const cameraBeforeKeyboard = await readStoredCamera(page);
+  await canvas.press('Shift+ArrowRight');
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.bearing, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .not.toBe(cameraBeforeKeyboard?.bearing);
+
+  await page.locator('.maplibregl-ctrl-compass').click();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.bearing ?? null)
+    .toBe(0);
+  await expect.poll(async () => (await readStoredCamera(page))?.pitch ?? null).toBe(0);
 });
 
 test('falls back after DEM failure and enables terrain after explicit retry', async ({

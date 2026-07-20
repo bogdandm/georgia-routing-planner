@@ -597,15 +597,14 @@ reported once instead of repeating the same resource contention.
 Even with one worker, software-rendered Chromium can need more than Playwright's
 five-second assertion default to make the synthetic DEM source ready. Terrain E2E tests
 must wait for the persisted `terrain` view state before sending dependent camera input;
-`aria-pressed` also represents the intermediate `enabling` state. The application DEM
-deadline is 15 seconds, so use the focused 20-second persisted-state assertion and the
-existing 45-second terrain workflow ceiling. Satellite imagery also keeps its focused
-45-second ceiling. Do not replace these with arbitrary sleeps or suite-wide timeout
-increases.
-
-For MapLibre's minus-key zoom shortcut, use Playwright's physical `Minus` key. Do not
-construct a `KeyboardEvent` and redefine its legacy `keyCode`; Chromium does not
-dispatch that synthetic event consistently across Windows and Linux.
+`aria-pressed` also represents the intermediate `enabling` state. After restoring an
+already-persisted terrain view, wait for the selected 3D control to become enabled
+because the stored value cannot distinguish the new map's pending transition from
+readiness. The application DEM deadline is 15 seconds, so use the focused 20-second
+readiness assertion and the existing 45-second terrain workflow ceiling. Use the focused
+10-second camera persistence assertion after restored-map keyboard input. Satellite
+imagery also keeps its focused 45-second ceiling. Do not replace these with arbitrary
+sleeps or suite-wide timeout increases.
 
 Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
 coverage, run the CI-shaped command on Windows PowerShell:

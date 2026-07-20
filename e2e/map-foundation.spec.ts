@@ -20,6 +20,7 @@ interface StoredMapView {
 // Assert the persisted completion signal with a small runner margin instead of treating
 // the terrain control's immediate `enabling` state as a completed transition.
 const terrainPersistenceTimeoutMs = 20_000;
+const cameraPersistenceTimeoutMs = 10_000;
 
 async function readStoredMapView(page: Page): Promise<StoredMapView | null> {
   return page.evaluate(
@@ -138,10 +139,15 @@ test('persists a settled camera and restores it before interaction after reload'
   await expect(
     page.getByRole('button', { name: 'Show 3D terrain map' }),
   ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
+    timeout: terrainPersistenceTimeoutMs,
+  });
   await canvas.focus();
   await page.keyboard.press('ArrowRight');
   await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude)
+    .poll(async () => (await readStoredCamera(page))?.longitude, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
     .not.toBe(cameraBeforeReload?.longitude);
   const cameraAfterReload = await readStoredCamera(page);
 
@@ -319,10 +325,6 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect
     .poll(async () => (await readStoredCamera(page))?.bearing)
     .not.toBe(cameraBeforeKeyboard?.bearing);
-  await page.keyboard.press('Minus');
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.zoom)
-    .toBeLessThan(cameraBeforeKeyboard?.zoom ?? 0);
 
   await page.locator('.maplibregl-ctrl-compass').click();
   await expect

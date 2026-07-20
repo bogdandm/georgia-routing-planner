@@ -23,7 +23,7 @@ describe('DiagnosticsService', () => {
     const bundle = services.diagnostics.createBundle('Bearer private-token');
     const serialized = JSON.stringify(bundle);
 
-    expect(bundle.schemaVersion).toBe(2);
+    expect(bundle.schemaVersion).toBe(3);
     expect(bundle.build.commit).toBe('test-commit');
     expect(serialized).not.toContain('private-token');
     expect(serialized).not.toContain('41.7151');

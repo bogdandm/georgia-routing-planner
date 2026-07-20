@@ -145,12 +145,12 @@ aggregated provider failures, WebGL capabilities, and developer-only MapLibre de
 flags. Provider reachability is checked only after the user explicitly requests it;
 normal startup never waits for an optional provider probe.
 
-“Download diagnostics” exports a schema-version 2 JSON file locally. Nothing is
+“Download diagnostics” exports a schema-version 3 JSON file locally. Nothing is
 uploaded. The export pipeline allowlists fields and removes tokens, headers, local
 Windows paths, GPX filenames, route geometry, and exact coordinates. Exported camera
 longitude/latitude are rounded to `0.1` degree; the exact persisted camera remains
 local. The inspection CLI accepts current bundles and migrates supported schema-version
-1 bundles before summarizing them.
+1 and 2 bundles before summarizing them.
 
 Inspect a received bundle without evaluating its content:
 

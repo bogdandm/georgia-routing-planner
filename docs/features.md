@@ -320,26 +320,40 @@ corrected PNG cache supplies relief, 3D, and elevation isolines.
 
 ## Failure and offline feedback
 
-Map errors are classified as vector, glyph/sprite, terrain, style, WebGL, or unknown.
-Equivalent recoverable errors are counted in capped buckets and logged at a bounded
-interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
-degraded states. Offline messaging promises only that already rendered areas may remain
-visible, not full offline map support. Map lifecycle and imagery errors do not create a
-wide map banner: the shared line below search is their single UI surface. Ready remains
-background-free; pending and error states use a lightly translucent surface for map
-contrast, and selecting an error reveals its complete safe detail. Hovering any
-truncated status message reveals the full text in a multiline tooltip. The non-ready
-surface transitions quickly and remains translucent enough to preserve map context.
-Pending text uses the dark primary color and a medium weight rather than the muted Ready
-treatment, preserving legibility over imagery. Status padding is invariant so state
-changes never shift the icon or text.
+Map errors are classified as vector, glyph/sprite, satellite raster, terrain, style,
+WebGL, or unknown. Satellite raster failures expose a safe transport reason and exact
+HTTP status when MapLibre provides one. Rate limits, server responses, timeouts, and
+network failures schedule one deduplicated exponential refresh of the failed tiles,
+capped at three attempts; client errors and unclassified failures do not retry
+automatically. Equivalent recoverable errors are counted in capped buckets and logged at
+a bounded interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors
+are degraded states. The inactive slot used to prepare a newly selected scene also
+retries transient failed tiles. If a transient tile still fails after staging retries,
+the usable partial raster is promoted after the bounded retries; the safe failure class
+remains visible. Non-retryable or whole-source failures preserve the previous raster.
+For active imagery, successful source-data for each failed canonical tile must clear the
+controller's pending set before a loaded source starts the stability window. Only that
+tile-confirmed recovery restores the ready lifecycle when no other failure remains and
+clears the user-facing error. This prevents the status from blinking while other tiles
+from the same source are still failing. Offline messaging promises only that already
+rendered areas may remain visible, not full offline map support. Map lifecycle and
+imagery errors do not create a wide map banner: the shared line below search is their
+single UI surface. Ready remains background-free; pending and error states use a lightly
+translucent surface for map contrast, and selecting an error reveals its complete safe
+detail. Hovering any truncated status message reveals the full text in a multiline
+tooltip. The non-ready surface transitions quickly and remains translucent enough to
+preserve map context. Pending text uses the dark primary color and a medium weight
+rather than the muted Ready treatment, preserving legibility over imagery. Status
+padding is invariant so state changes never shift the icon or text.
 
 ## Diagnostics and developer mode
 
 Diagnostics are local, bounded, and redacted before storage in the event ring buffer.
 The developer Map view shows exact local camera state, ordered source/layer IDs,
-terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Debug flags
-reset when developer mode ends.
+terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Each
+failure includes its source ID, safe reason, HTTP status when known, occurrence count,
+last occurrence, recovery state, and retry attempt. Debug flags reset when developer
+mode ends.
 
 The diagnostics drawer is a persistent, non-modal workspace surface: it has no backdrop
 or elevation shadow and does not close on Escape, backdrop interaction, or section

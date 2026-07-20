@@ -1,4 +1,5 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import { DiagnosticBatchWindow } from '@/presentation/map/DiagnosticBatchWindow';
 
 export interface ContourTimingSample {
   readonly durationMs: number;
@@ -12,32 +13,39 @@ export class ContourTimingDiagnostics {
   #durationMs = 0;
   #tileCount = 0;
   #failed = false;
-  #lastLoggedAt: number | null = null;
+  readonly #window: DiagnosticBatchWindow;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
-    private readonly monotonicNow: () => number = () => performance.now(),
-    private readonly batchSize = 32,
-    private readonly intervalMs = 5_000,
-  ) {}
+    batchSize = 32,
+    intervalMs = 5_000,
+  ) {
+    this.#window = new DiagnosticBatchWindow(
+      () => this.flushAggregate(),
+      batchSize,
+      intervalMs,
+    );
+  }
 
   public record(sample: ContourTimingSample): void {
+    if (this.#window.disposed) return;
     this.#count += 1;
     this.#durationMs += sample.durationMs;
     this.#tileCount += sample.tileCount;
     this.#failed ||= sample.failed;
-    const now = this.monotonicNow();
-    if (
-      this.#lastLoggedAt === null ||
-      this.#count >= this.batchSize ||
-      now - this.#lastLoggedAt >= this.intervalMs
-    ) {
-      this.flush(now);
-    }
+    this.#window.record();
   }
 
-  private flush(now: number): void {
-    this.logger.log({
+  public flush(): void {
+    this.#window.flush();
+  }
+
+  public dispose(): void {
+    this.#window.dispose();
+  }
+
+  private flushAggregate(): void {
+    const input = {
       level: this.#failed ? 'warn' : 'debug',
       name: 'map.contours.tiles-generated',
       data: {
@@ -46,11 +54,11 @@ export class ContourTimingDiagnostics {
         tileCount: this.#tileCount,
         status: this.#failed ? 'failed' : 'success',
       },
-    });
+    } as const;
     this.#count = 0;
     this.#durationMs = 0;
     this.#tileCount = 0;
     this.#failed = false;
-    this.#lastLoggedAt = now;
+    this.logger.log(input);
   }
 }

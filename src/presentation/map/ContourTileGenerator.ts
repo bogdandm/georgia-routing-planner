@@ -76,6 +76,8 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
   #revision = 0;
   #disposed = false;
   readonly #releaseMetrics: () => void;
+  readonly #timingDiagnostics: ContourTimingDiagnostics;
+  readonly #computeDiagnostics: TerrainComputeDiagnostics;
 
   public constructor(
     terrain: MapProviderConfiguration['terrain'],
@@ -96,17 +98,17 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
     });
     this.#source.manager = new TerrainComputeManagerAdapter(this.#backend);
     this.#source.setupMaplibre({ addProtocol });
-    const timingDiagnostics = new ContourTimingDiagnostics(logger);
+    this.#timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {
-      timingDiagnostics.record({
+      this.#timingDiagnostics.record({
         durationMs: timing.duration,
         tileCount: timing.tilesUsed,
         failed: timing.error === true,
       });
     });
-    const computeDiagnostics = new TerrainComputeDiagnostics(logger);
+    this.#computeDiagnostics = new TerrainComputeDiagnostics(logger);
     this.#releaseMetrics = this.#backend.subscribeMetrics((metrics) => {
-      computeDiagnostics.record(metrics);
+      this.#computeDiagnostics.record(metrics);
     });
   }
 
@@ -165,6 +167,8 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
     removeProtocol(this.#source.sharedDemProtocolId);
     removeProtocol(this.#source.contourProtocolId);
     this.#releaseMetrics();
+    this.#timingDiagnostics.dispose();
+    this.#computeDiagnostics.dispose();
     this.#backend.dispose();
   }
 }

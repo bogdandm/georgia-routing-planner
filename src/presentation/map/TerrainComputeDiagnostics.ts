@@ -1,5 +1,6 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { TerrainComputeMetrics } from '@/infrastructure/elevation/TerrainComputeBackend';
+import { DiagnosticBatchWindow } from '@/presentation/map/DiagnosticBatchWindow';
 
 type AggregateOperation = TerrainComputeMetrics['operation'] | 'mixed';
 
@@ -11,16 +12,23 @@ export class TerrainComputeDiagnostics {
   #pendingCount = 0;
   #operation: AggregateOperation | null = null;
   #status: TerrainComputeMetrics['status'] = 'success';
-  #lastLoggedAt: number | null = null;
+  #executionMode: TerrainComputeMetrics['executionMode'] = 'worker';
+  readonly #window: DiagnosticBatchWindow;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
-    private readonly monotonicNow: () => number = () => performance.now(),
-    private readonly batchSize = 32,
-    private readonly intervalMs = 5_000,
-  ) {}
+    batchSize = 32,
+    intervalMs = 5_000,
+  ) {
+    this.#window = new DiagnosticBatchWindow(
+      () => this.flushAggregate(),
+      batchSize,
+      intervalMs,
+    );
+  }
 
   public record(metrics: TerrainComputeMetrics): void {
+    if (this.#window.disposed) return;
     this.#count += 1;
     this.#queueDurationMs += metrics.queueDurationMs;
     this.#computeDurationMs += metrics.computeDurationMs;
@@ -29,26 +37,25 @@ export class TerrainComputeDiagnostics {
       this.#operation === null || this.#operation === metrics.operation
         ? metrics.operation
         : 'mixed';
+    this.#executionMode = metrics.executionMode;
     if (metrics.status === 'failed' || this.#status === 'failed') {
       this.#status = 'failed';
     } else if (metrics.status === 'canceled') {
       this.#status = 'canceled';
     }
-    const now = this.monotonicNow();
-    if (
-      this.#lastLoggedAt === null ||
-      this.#count >= this.batchSize ||
-      now - this.#lastLoggedAt >= this.intervalMs
-    ) {
-      this.flush(now, metrics.executionMode);
-    }
+    this.#window.record();
   }
 
-  private flush(
-    now: number,
-    executionMode: TerrainComputeMetrics['executionMode'],
-  ): void {
-    this.logger.log({
+  public flush(): void {
+    this.#window.flush();
+  }
+
+  public dispose(): void {
+    this.#window.dispose();
+  }
+
+  private flushAggregate(): void {
+    const input = {
       level: this.#status === 'failed' ? 'warn' : 'debug',
       name: 'map.terrain-compute.completed',
       data: {
@@ -56,17 +63,17 @@ export class TerrainComputeDiagnostics {
         queueDurationMs: Math.round(this.#queueDurationMs),
         computeDurationMs: Math.round(this.#computeDurationMs),
         pendingCount: this.#pendingCount,
-        executionMode,
+        executionMode: this.#executionMode,
         operation: this.#operation ?? 'mixed',
         status: this.#status,
       },
-    });
+    } as const;
     this.#count = 0;
     this.#queueDurationMs = 0;
     this.#computeDurationMs = 0;
     this.#pendingCount = 0;
     this.#operation = null;
     this.#status = 'success';
-    this.#lastLoggedAt = now;
+    this.logger.log(input);
   }
 }

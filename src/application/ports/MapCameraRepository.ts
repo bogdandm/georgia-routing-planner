@@ -6,10 +6,18 @@ export interface MapCamera {
   readonly pitch: number;
 }
 
-/** Persists the last settled map camera without exposing the storage technology. */
+export type MapViewMode = 'flat' | 'terrain';
+
+/** Serializable durable map view; native MapLibre objects never cross this boundary. */
+export interface MapViewState {
+  readonly camera: MapCamera;
+  readonly terrainMode: MapViewMode;
+}
+
+/** Persists the last settled map view without exposing the storage technology. */
 export interface MapCameraRepository {
-  load(): Promise<MapCamera | null>;
-  save(camera: MapCamera): Promise<void>;
+  load(): Promise<MapViewState | null>;
+  save(view: MapViewState): Promise<void>;
 }
 
 const cameraKeys = [

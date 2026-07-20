@@ -33,23 +33,42 @@ afterEach(async () => {
 describe('DexieMapCameraRepository', () => {
   it('stores a versioned camera and clamps it to supported MapLibre ranges', async () => {
     await repository.save({
-      ...camera,
-      longitude: 500,
-      latitude: -100,
-      zoom: 30,
-      bearing: -500,
-      pitch: 100,
+      camera: {
+        ...camera,
+        longitude: 500,
+        latitude: -100,
+        zoom: 30,
+        bearing: -500,
+        pitch: 100,
+      },
+      terrainMode: 'terrain',
     });
 
     await expect(repository.load()).resolves.toEqual({
-      longitude: 180,
-      latitude: -85,
-      zoom: 20,
-      bearing: -180,
-      pitch: 85,
+      camera: {
+        longitude: 180,
+        latitude: -85,
+        zoom: 20,
+        bearing: -180,
+        pitch: 85,
+      },
+      terrainMode: 'terrain',
     });
     await expect(services.database.settings.get('map.camera')).resolves.toMatchObject({
-      value: { schemaVersion: 1 },
+      value: { schemaVersion: 2, terrainMode: 'terrain' },
+    });
+  });
+
+  it('infers terrain mode when loading a legacy pitched camera', async () => {
+    await services.database.settings.put({
+      key: 'map.camera',
+      value: { schemaVersion: 1, camera },
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+
+    await expect(repository.load()).resolves.toEqual({
+      camera,
+      terrainMode: 'terrain',
     });
   });
 
@@ -86,6 +105,8 @@ describe('DexieMapCameraRepository', () => {
     vi.spyOn(services.database.settings, 'put').mockRejectedValueOnce(
       new Error('write unavailable'),
     );
-    await expect(repository.save(camera)).rejects.toThrow('write unavailable');
+    await expect(repository.save({ camera, terrainMode: 'terrain' })).rejects.toThrow(
+      'write unavailable',
+    );
   });
 });

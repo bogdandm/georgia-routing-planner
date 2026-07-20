@@ -80,6 +80,10 @@ export class FakeMapFacade implements MapFacade {
 
   public setSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...changed };
+    this.notify();
+  }
+
+  private notify(): void {
     for (const listener of this.#listeners) {
       listener();
     }

@@ -1,8 +1,8 @@
-import type { MapCamera } from '@/application/ports/MapCameraRepository';
+import type { MapCamera, MapViewMode } from '@/application/ports/MapCameraRepository';
 
 export type { MapCamera } from '@/application/ports/MapCameraRepository';
 
-export type TerrainMode = 'flat' | 'terrain';
+export type TerrainMode = MapViewMode;
 
 export interface MapDebugOptions {
   readonly showCollisionBoxes: boolean;

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -75,7 +75,8 @@ describe('MapWorkspace', () => {
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
-        load: () => Promise.resolve(restoredCamera),
+        load: () =>
+          Promise.resolve({ camera: restoredCamera, terrainMode: 'flat' as const }),
         save: () => Promise.resolve(),
       },
     };
@@ -93,6 +94,46 @@ describe('MapWorkspace', () => {
 
     expect(screen.queryByText('Restored zoom 10')).not.toBeInTheDocument();
     await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
+  });
+
+  it('restores persisted 3D mode when the native map becomes ready', async () => {
+    const facade = new FakeMapFacade();
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          Promise.resolve({
+            camera: {
+              longitude: 45.2,
+              latitude: 42.4,
+              zoom: 10,
+              bearing: 18,
+              pitch: 25,
+            },
+            terrainMode: 'terrain' as const,
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Restored terrain map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Restored terrain map');
+    expect(facade.terrainModeRequests).toEqual([]);
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('falls back to the Georgia overview when camera storage never settles', async () => {

@@ -2,7 +2,6 @@ import type {
   DiagnosticLevel,
   DiagnosticLogger,
 } from '@/application/ports/DiagnosticLogger';
-import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
   BrowserTerrariumPngCodec,
   type TerrariumPngCodec,
@@ -13,6 +12,7 @@ import {
   type TerrariumRepairCounts,
   type TerrariumTileGrid,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
+import type { TerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 
 interface SourceTile {
   readonly blob: Blob;
@@ -96,8 +96,7 @@ export class FilteredTerrariumTileProvider {
   #lastDiagnosticAt: number | null = null;
 
   public constructor(
-    private readonly terrain: MapProviderConfiguration['terrain'],
-    private readonly requestTimeoutMs: number,
+    private readonly configuration: TerrainComputeConfiguration,
     private readonly logger: DiagnosticLogger,
     private readonly codec: TerrariumPngCodec = new BrowserTerrariumPngCodec(),
     private readonly fetchImplementation: FetchImplementation = globalThis.fetch.bind(
@@ -153,7 +152,7 @@ export class FilteredTerrariumTileProvider {
       controller.abort(
         new DOMException('Terrarium tile request timed out.', 'TimeoutError'),
       );
-    }, this.requestTimeoutMs);
+    }, this.configuration.requestTimeoutMs);
 
     try {
       if (parentAbortController.signal.aborted) handleAbort();
@@ -189,7 +188,7 @@ export class FilteredTerrariumTileProvider {
           loaded[2][2]?.decoded ?? null,
         ],
       ];
-      const filtered = filterTerrariumTile(decodedGrid, this.terrain.filter);
+      const filtered = filterTerrariumTile(decodedGrid, this.configuration.filter);
       const data =
         filtered.counts.repairedCount === 0
           ? center.blob
@@ -383,7 +382,7 @@ export class FilteredTerrariumTileProvider {
     y: number,
     signal: AbortSignal,
   ): Promise<SourceTile> {
-    const url = this.terrain.tileUrl
+    const url = this.configuration.tileUrl
       .replace('{z}', String(zoom))
       .replace('{x}', String(x))
       .replace('{y}', String(y));
@@ -404,7 +403,7 @@ export class FilteredTerrariumTileProvider {
   }
 
   private trimCache<T>(cache: Map<string, T>): void {
-    while (cache.size > this.terrain.filter.cacheSize) {
+    while (cache.size > this.configuration.filter.cacheSize) {
       const oldest = cache.keys().next().value;
       if (oldest === undefined) return;
       cache.delete(oldest);

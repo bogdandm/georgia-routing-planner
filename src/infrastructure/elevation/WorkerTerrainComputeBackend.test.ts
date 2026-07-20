@@ -15,10 +15,10 @@ import type {
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
-  TerrainDecodedDemTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import {
+  parseTerrainWorkerInitializeRequest,
   terrainWorkerEventNames,
   type TerrainWorkerInitializeRequest,
 } from '@/infrastructure/elevation/TerrainComputeProtocol';
@@ -89,10 +89,6 @@ class FakeInlineBackend implements TerrainComputeBackend {
     Promise.resolve({ data: new Blob([new Uint8Array([9])]) }),
   );
 
-  public fetchAndParseTile(): Promise<TerrainDecodedDemTile> {
-    return Promise.reject(new Error('Not used.'));
-  }
-
   public fetchContourTile(
     _zoom: number,
     _x: number,
@@ -131,10 +127,6 @@ class FakeInlineBackend implements TerrainComputeBackend {
   ): () => void {
     return () => undefined;
   }
-
-  public subscribeDiagnostic(_listener: (input: DiagnosticInput) => void): () => void {
-    return () => undefined;
-  }
 }
 
 function terrain() {
@@ -145,6 +137,45 @@ function terrain() {
 }
 
 describe('WorkerTerrainComputeBackend', () => {
+  it('initializes the current canonical configuration without inline fallback', async () => {
+    const servers: WorkerRpcServer[] = [];
+    const initializations: TerrainWorkerInitializeRequest[] = [];
+    const workerFactory = vi.fn(() => {
+      const [clientEndpoint, serverEndpoint] = pair();
+      servers.push(
+        new WorkerRpcServer(serverEndpoint, {
+          initialize: (payload) => {
+            const request = parseTerrainWorkerInitializeRequest(payload);
+            initializations.push(request);
+            return { initialized: true };
+          },
+        }),
+      );
+      return clientEndpoint;
+    });
+    const inlineFactory = vi.fn(() => new FakeInlineBackend());
+    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+
+    const backend = new WorkerTerrainComputeBackend(
+      terrain(),
+      10_000,
+      logger,
+      workerFactory,
+      inlineFactory,
+    );
+    await backend.loaded;
+
+    expect(backend.getStatus()).toBe('worker');
+    expect(workerFactory).toHaveBeenCalledOnce();
+    expect(inlineFactory).not.toHaveBeenCalled();
+    expect(initializations[0]?.configuration).toMatchObject({
+      schemaVersion: 1,
+      filter: { negativeSpikeThresholdMeters: 300 },
+    });
+    backend.dispose();
+    for (const server of servers) server.dispose();
+  });
+
   it('replays state, retries once on a fresh worker, then keeps features through inline fallback', async () => {
     const clients: MemoryEndpoint[] = [];
     const servers: WorkerRpcServer[] = [];
@@ -244,6 +275,137 @@ describe('WorkerTerrainComputeBackend', () => {
     await expect(backend.fetchTile(5, 8, 9, new AbortController())).rejects.toThrow(
       'Provider unavailable',
     );
+    expect(workerFactory).toHaveBeenCalledOnce();
+    expect(backend.getStatus()).toBe('worker');
+    backend.dispose();
+    server.dispose();
+  });
+
+  it.each(['dem', 'contour'] as const)(
+    'restarts and retries after a malformed %s result',
+    async (operation) => {
+      const servers: WorkerRpcServer[] = [];
+      let workerIndex = 0;
+      const workerFactory = vi.fn(() => {
+        const currentWorker = workerIndex;
+        workerIndex += 1;
+        const [clientEndpoint, serverEndpoint] = pair();
+        servers.push(
+          new WorkerRpcServer(serverEndpoint, {
+            initialize: () => ({ initialized: true }),
+            dem: () =>
+              currentWorker === 0
+                ? { kind: 'invalid' }
+                : { kind: 'dem', data: new Uint8Array([2]).buffer },
+            contour: () =>
+              currentWorker === 0
+                ? { kind: 'invalid' }
+                : { kind: 'contour', data: new Uint8Array([3]).buffer },
+          }),
+        );
+        return clientEndpoint;
+      });
+      const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+      const backend = new WorkerTerrainComputeBackend(
+        terrain(),
+        10_000,
+        logger,
+        workerFactory,
+        () => new FakeInlineBackend(),
+      );
+      await backend.loaded;
+
+      if (operation === 'dem') {
+        const result = await backend.fetchTile(5, 8, 9, new AbortController());
+        expect(Array.from(new Uint8Array(await result.data.arrayBuffer()))).toEqual([
+          2,
+        ]);
+      } else {
+        const result = await backend.fetchContourTile(
+          5,
+          8,
+          9,
+          { levels: [50, 200] },
+          new AbortController(),
+        );
+        expect(Array.from(new Uint8Array(result.arrayBuffer))).toEqual([3]);
+      }
+      expect(workerFactory).toHaveBeenCalledTimes(2);
+      expect(backend.getStatus()).toBe('worker');
+      backend.dispose();
+      for (const server of servers) server.dispose();
+    },
+  );
+
+  it('uses terminal inline fallback after a second malformed result', async () => {
+    const servers: WorkerRpcServer[] = [];
+    const workerFactory = vi.fn(() => {
+      const [clientEndpoint, serverEndpoint] = pair();
+      servers.push(
+        new WorkerRpcServer(serverEndpoint, {
+          initialize: () => ({ initialized: true }),
+          dem: () => ({ kind: 'invalid' }),
+        }),
+      );
+      return clientEndpoint;
+    });
+    const inline = new FakeInlineBackend();
+    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const backend = new WorkerTerrainComputeBackend(
+      terrain(),
+      10_000,
+      logger,
+      workerFactory,
+      () => inline,
+    );
+    await backend.loaded;
+
+    const result = await backend.fetchTile(5, 8, 9, new AbortController());
+
+    expect(Array.from(new Uint8Array(await result.data.arrayBuffer()))).toEqual([9]);
+    expect(workerFactory).toHaveBeenCalledTimes(2);
+    expect(backend.getStatus()).toBe('inline');
+    backend.dispose();
+    for (const server of servers) server.dispose();
+  });
+
+  it('keeps request cancellation out of worker recovery', async () => {
+    const [clientEndpoint, serverEndpoint] = pair();
+    const started = vi.fn();
+    const canceled = vi.fn();
+    const server = new WorkerRpcServer(serverEndpoint, {
+      initialize: () => ({ initialized: true }),
+      dem: (_payload, context) =>
+        new Promise((_resolve, reject) => {
+          started();
+          context.signal.addEventListener('abort', () => {
+            canceled();
+            reject(new DOMException('Canceled', 'AbortError'));
+          });
+        }),
+    });
+    const workerFactory = vi.fn(() => clientEndpoint);
+    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const backend = new WorkerTerrainComputeBackend(
+      terrain(),
+      10_000,
+      logger,
+      workerFactory,
+      () => new FakeInlineBackend(),
+    );
+    await backend.loaded;
+    const controller = new AbortController();
+    const request = backend.fetchTile(5, 8, 9, controller);
+    await vi.waitFor(() => {
+      expect(started).toHaveBeenCalledOnce();
+    });
+
+    controller.abort();
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => {
+      expect(canceled).toHaveBeenCalledOnce();
+    });
     expect(workerFactory).toHaveBeenCalledOnce();
     expect(backend.getStatus()).toBe('worker');
     backend.dispose();

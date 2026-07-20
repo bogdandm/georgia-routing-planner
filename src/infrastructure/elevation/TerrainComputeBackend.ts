@@ -1,19 +1,10 @@
-import type { DiagnosticInput } from '@/application/ports/DiagnosticLogger';
-
 export type TerrainComputeStatus = 'worker' | 'restarting' | 'inline';
-export type TerrainComputePriority = 'high' | 'low';
 export const defaultTerrainContourQueueCapacity = 32;
 
 export interface TerrainDemResponse {
   readonly data: Blob;
   readonly cacheControl?: string;
   readonly expires?: string;
-}
-
-export interface TerrainDecodedDemTile {
-  readonly width: number;
-  readonly height: number;
-  readonly data: Float32Array;
 }
 
 export interface TerrainContourTile {
@@ -58,12 +49,6 @@ export interface TerrainComputeBackend {
     y: number,
     abortController: AbortController,
   ): Promise<TerrainDemResponse>;
-  fetchAndParseTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDecodedDemTile>;
   fetchContourTile(
     zoom: number,
     x: number,
@@ -78,6 +63,5 @@ export interface TerrainComputeBackend {
   subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void;
   subscribeQueueState(listener: (state: TerrainComputeQueueState) => void): () => void;
   subscribeMetrics(listener: (metrics: TerrainComputeMetrics) => void): () => void;
-  subscribeDiagnostic(listener: (input: DiagnosticInput) => void): () => void;
   dispose(): void;
 }

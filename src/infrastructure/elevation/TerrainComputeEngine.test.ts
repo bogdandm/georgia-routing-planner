@@ -6,6 +6,7 @@ import {
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { TerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
+import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { TerrainComputeEngine } from '@/infrastructure/elevation/TerrainComputeEngine';
 import {
   encodeTerrariumElevation,
@@ -19,6 +20,10 @@ function terrain() {
     defaultMapProviderConfigurationInput,
     'https://example.test/',
   ).terrain;
+}
+
+function configuration() {
+  return toTerrainComputeConfiguration(terrain(), 10_000);
 }
 
 function decodedTile(): DecodedTerrariumTile {
@@ -40,7 +45,7 @@ describe('TerrainComputeEngine', () => {
     const fetchImplementation = vi.fn(() =>
       Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
     );
-    const engine = new TerrainComputeEngine(terrain(), 10_000, logger, {
+    const engine = new TerrainComputeEngine(configuration(), logger, {
       codec,
       fetchImplementation,
     });
@@ -73,7 +78,7 @@ describe('TerrainComputeEngine', () => {
           );
         }),
     );
-    const engine = new TerrainComputeEngine(terrain(), 10_000, logger, {
+    const engine = new TerrainComputeEngine(configuration(), logger, {
       codec,
       fetchImplementation,
     });

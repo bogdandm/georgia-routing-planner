@@ -1,5 +1,4 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
   TerrainComputeBackend,
   TerrainComputeMetrics,
@@ -7,9 +6,9 @@ import type {
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
-  TerrainDecodedDemTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
+import type { TerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import {
   TerrainComputeEngine,
   type TerrainComputeEngineOptions,
@@ -21,12 +20,11 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
   readonly #engine: TerrainComputeEngine;
 
   public constructor(
-    terrain: MapProviderConfiguration['terrain'],
-    requestTimeoutMs: number,
+    configuration: TerrainComputeConfiguration,
     logger: DiagnosticLogger,
     options: TerrainComputeEngineOptions = {},
   ) {
-    this.#engine = new TerrainComputeEngine(terrain, requestTimeoutMs, logger, options);
+    this.#engine = new TerrainComputeEngine(configuration, logger, options);
     this.loaded = this.#engine.loaded;
   }
 
@@ -37,15 +35,6 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
     abortController: AbortController,
   ): Promise<TerrainDemResponse> {
     return this.#engine.fetchTile(zoom, x, y, abortController);
-  }
-
-  public fetchAndParseTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDecodedDemTile> {
-    return this.#engine.fetchAndParseTile(zoom, x, y, abortController);
   }
 
   public fetchContourTile(
@@ -94,10 +83,6 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
   public subscribeMetrics(
     _listener: (metrics: TerrainComputeMetrics) => void,
   ): () => void {
-    return () => undefined;
-  }
-
-  public subscribeDiagnostic(): () => void {
     return () => undefined;
   }
 

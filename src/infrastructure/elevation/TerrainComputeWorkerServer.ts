@@ -1,5 +1,4 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
   TerrainComputeMetrics,
   TerrainContourOptions,
@@ -7,6 +6,7 @@ import type {
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
+import type { TerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { TerrainComputeEngine } from '@/infrastructure/elevation/TerrainComputeEngine';
 import {
   parseTerrainWorkerContourRequest,
@@ -51,8 +51,7 @@ interface QueuedContour {
 }
 
 export type TerrainWorkerEngineFactory = (
-  terrain: MapProviderConfiguration['terrain'],
-  requestTimeoutMs: number,
+  configuration: TerrainComputeConfiguration,
   logger: DiagnosticLogger,
 ) => TerrainWorkerEngine;
 
@@ -93,10 +92,9 @@ export class TerrainComputeWorkerServer {
   public constructor(
     endpoint: WorkerRpcEndpoint,
     private readonly engineFactory: TerrainWorkerEngineFactory = (
-      terrain,
-      requestTimeoutMs,
+      configuration,
       logger,
-    ) => new TerrainComputeEngine(terrain, requestTimeoutMs, logger),
+    ) => new TerrainComputeEngine(configuration, logger),
     private readonly monotonicNow: () => number = () => performance.now(),
     private readonly maximumQueuedContours = defaultTerrainContourQueueCapacity,
   ) {
@@ -115,11 +113,7 @@ export class TerrainComputeWorkerServer {
         initialize: (payload) => {
           const request = parseTerrainWorkerInitializeRequest(payload);
           this.#engine?.dispose();
-          this.#engine = this.engineFactory(
-            request.terrain,
-            request.requestTimeoutMs,
-            logger,
-          );
+          this.#engine = this.engineFactory(request.configuration, logger);
           this.#revision = request.revision;
           this.#interactionActive = request.interactionActive;
           this.#engine.setFilterEnabled(request.filterEnabled);

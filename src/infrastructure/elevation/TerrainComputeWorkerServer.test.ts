@@ -10,6 +10,7 @@ import type {
   TerrainContourTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
+import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import {
   TerrainComputeWorkerServer,
   type TerrainWorkerEngineFactory,
@@ -72,12 +73,12 @@ function pair(): readonly [MemoryEndpoint, MemoryEndpoint] {
 }
 
 function initialization(): TerrainWorkerInitializeRequest {
+  const terrain = parseMapProviderConfiguration(
+    defaultMapProviderConfigurationInput,
+    'https://example.test/',
+  ).terrain;
   return {
-    terrain: parseMapProviderConfiguration(
-      defaultMapProviderConfigurationInput,
-      'https://example.test/',
-    ).terrain,
-    requestTimeoutMs: 10_000,
+    configuration: toTerrainComputeConfiguration(terrain, 10_000),
     filterEnabled: true,
     revision: 0,
     interactionActive: false,
@@ -115,14 +116,12 @@ describe('TerrainComputeWorkerServer', () => {
       x: 8,
       y: 9,
       revision: 0,
-      priority: 'high',
     });
     const contour = await client.request<{ readonly data: ArrayBuffer }>('contour', {
       zoom: 5,
       x: 8,
       y: 9,
       revision: 0,
-      priority: 'low',
       options: { levels: [50, 200], demFilterRevision: '0' },
     });
 
@@ -174,7 +173,6 @@ describe('TerrainComputeWorkerServer', () => {
         x: 8,
         y: 9,
         revision: 0,
-        priority: 'high',
       },
       controller.signal,
     );
@@ -186,7 +184,6 @@ describe('TerrainComputeWorkerServer', () => {
       x: 8,
       y: 9,
       revision: 0,
-      priority: 'high',
     });
     await client.request('set-filter', { enabled: false, revision: 1 });
     finish?.({ data: new Blob([new Uint8Array([1])]) });
@@ -237,7 +234,6 @@ describe('TerrainComputeWorkerServer', () => {
         x: 8,
         y: 9,
         revision: 0,
-        priority: 'high',
       }),
     ).resolves.toMatchObject({ kind: 'dem' });
 
@@ -290,14 +286,12 @@ describe('TerrainComputeWorkerServer', () => {
     server.dispose();
   });
 });
-
 function contourRequest(x: number) {
   return {
     zoom: 5,
     x,
     y: 9,
     revision: 0,
-    priority: 'low',
     options: { levels: [50, 200], demFilterRevision: '0' },
   };
 }

@@ -14,6 +14,48 @@ import { WorkerTerrainComputeBackend } from '@/infrastructure/elevation/WorkerTe
 import { ContourTimingDiagnostics } from '@/presentation/map/ContourTimingDiagnostics';
 import { TerrainComputeDiagnostics } from '@/presentation/map/TerrainComputeDiagnostics';
 
+type TerrainManagerContract = InstanceType<typeof maplibreContour.DemSource>['manager'];
+
+/** Keeps the third-party manager shape private while the application backend stays truthful. */
+class TerrainComputeManagerAdapter implements TerrainManagerContract {
+  public readonly loaded: Promise<void>;
+
+  public constructor(private readonly backend: WorkerTerrainComputeBackend) {
+    this.loaded = backend.loaded;
+  }
+
+  public fetchTile(
+    ...parameters: Parameters<TerrainManagerContract['fetchTile']>
+  ): ReturnType<TerrainManagerContract['fetchTile']> {
+    return this.backend.fetchTile(
+      parameters[0],
+      parameters[1],
+      parameters[2],
+      parameters[3],
+    );
+  }
+
+  public fetchAndParseTile(
+    ..._parameters: Parameters<TerrainManagerContract['fetchAndParseTile']>
+  ): ReturnType<TerrainManagerContract['fetchAndParseTile']> {
+    return Promise.reject(
+      new Error('Parsed DEM access is internal to terrain contour computation.'),
+    );
+  }
+
+  public fetchContourTile(
+    ...parameters: Parameters<TerrainManagerContract['fetchContourTile']>
+  ): ReturnType<TerrainManagerContract['fetchContourTile']> {
+    return this.backend.fetchContourTile(
+      parameters[0],
+      parameters[1],
+      parameters[2],
+      parameters[3],
+      parameters[4],
+    );
+  }
+}
+
 export interface ContourTileGenerator {
   createDemTileUrl(): string;
   createTileUrl(intervalMeters: ContourIntervalMeters): string;
@@ -79,7 +121,7 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       // additional worker survives after the application runtime is released.
       worker: false,
     });
-    this.#source.manager = this.#backend;
+    this.#source.manager = new TerrainComputeManagerAdapter(this.#backend);
     this.#source.setupMaplibre({ addProtocol: registerProtocolWithOwnedBuffers });
     const timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {

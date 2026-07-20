@@ -1,48 +1,21 @@
 import { z } from 'zod';
 
 import type { DiagnosticInput } from '@/application/ports/DiagnosticLogger';
-import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
   TerrainComputeMetrics,
-  TerrainComputePriority,
   TerrainComputeQueueState,
   TerrainContourOptions,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
-
-const terrainSchema = z.strictObject({
-  id: z.string(),
-  label: z.string(),
-  tileUrl: z.string(),
-  encoding: z.enum(['mapbox', 'terrarium']),
-  tileSize: z.union([z.literal(256), z.literal(512)]),
-  minZoom: z.number().int(),
-  maxZoom: z.number().int(),
-  attribution: z.string(),
-  exaggeration: z.number(),
-  filter: z.strictObject({
-    minimumElevationMeters: z.number(),
-    maximumElevationMeters: z.number(),
-    sentinelElevationsMeters: z.array(z.number()).readonly(),
-    spikeThresholdMeters: z.number(),
-    negativeSpikeThresholdMeters: z.number(),
-    maximumNeighborMadMeters: z.number(),
-    minimumConsensusNeighbors: z.number().int(),
-    maximumSpikeSupportNeighbors: z.number().int(),
-    cacheSize: z.number().int().positive(),
-  }),
-  overlays: z.strictObject({
-    contourMinZoom: z.number().int(),
-    contourMaxZoom: z.number().int(),
-    contourCacheSize: z.number().int().positive(),
-  }),
-});
+import {
+  terrainComputeConfigurationSchema,
+  type TerrainComputeConfiguration,
+} from '@/infrastructure/elevation/TerrainComputeConfiguration';
 
 const coordinateSchema = z.strictObject({
   zoom: z.number().int().nonnegative(),
   x: z.number().int().nonnegative(),
   y: z.number().int().nonnegative(),
   revision: z.number().int().nonnegative(),
-  priority: z.enum(['high', 'low']),
 });
 
 const contourOptionsSchema = z.strictObject({
@@ -62,8 +35,7 @@ const contourOptionsSchema = z.strictObject({
 });
 
 export interface TerrainWorkerInitializeRequest {
-  readonly terrain: MapProviderConfiguration['terrain'];
-  readonly requestTimeoutMs: number;
+  readonly configuration: TerrainComputeConfiguration;
   readonly filterEnabled: boolean;
   readonly revision: number;
   readonly interactionActive: boolean;
@@ -74,7 +46,6 @@ export interface TerrainWorkerTileRequest {
   readonly x: number;
   readonly y: number;
   readonly revision: number;
-  readonly priority: TerrainComputePriority;
 }
 
 export interface TerrainWorkerContourRequest extends TerrainWorkerTileRequest {
@@ -117,8 +88,7 @@ export function parseTerrainWorkerInitializeRequest(
 ): TerrainWorkerInitializeRequest {
   return z
     .strictObject({
-      terrain: terrainSchema,
-      requestTimeoutMs: z.number().int().positive(),
+      configuration: terrainComputeConfigurationSchema,
       filterEnabled: z.boolean(),
       revision: z.number().int().nonnegative(),
       interactionActive: z.boolean(),
@@ -166,7 +136,6 @@ export function parseTerrainWorkerContourRequest(
     x: parsed.x,
     y: parsed.y,
     revision: parsed.revision,
-    priority: parsed.priority,
     options,
   };
 }

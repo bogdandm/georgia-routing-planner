@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { filterTerrariumTile } from '../../src/infrastructure/elevation/TerrariumDemFilter';
 import {
   assertEquivalent,
   createBenchmarkScenarios,
@@ -16,6 +17,7 @@ describe('Terrarium filter benchmark', () => {
     expect(first.map((scenario) => scenario.name)).toEqual([
       'valid-varied',
       'sparse-spikes',
+      'asymmetric-shallow-pits',
       'many-invalid',
       'corrupt-scanline',
       'cross-tile-edges',
@@ -25,6 +27,23 @@ describe('Terrarium filter benchmark', () => {
     expect(
       first.every((scenario) => scenario.grid.flat().every((tile) => tile !== null)),
     ).toBe(true);
+  });
+
+  it('detects regression from asymmetric to positive-only spike thresholds', () => {
+    const scenario = createBenchmarkScenarios(42).find(
+      ({ name }) => name === 'asymmetric-shallow-pits',
+    );
+    expect(scenario).toBeDefined();
+    if (scenario === undefined) return;
+
+    expect(() => {
+      assertEquivalent(scenario, undefined, (grid, policy) =>
+        filterTerrariumTile(grid, {
+          ...policy,
+          negativeSpikeThresholdMeters: policy.spikeThresholdMeters,
+        }),
+      );
+    }).toThrow(/repair counts differ/u);
   });
 
   it('checks correctness before timings can be reported', () => {

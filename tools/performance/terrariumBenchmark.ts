@@ -166,17 +166,28 @@ export function createBenchmarkScenarios(
     );
   }
 
-  const manyInvalid = createGrid(seed + 2, (_x, _y, noise) => 900 + noise * 20);
+  const asymmetricPits = createGrid(seed + 2, (_x, _y, noise) => 1_000 + noise * 8);
+  const asymmetricCenter = asymmetricPits[1][1];
+  for (let index = 0; index < 32; index += 1) {
+    setElevation(
+      asymmetricCenter,
+      16 + (index % 8) * 30,
+      16 + Math.floor(index / 8) * 30,
+      650,
+    );
+  }
+
+  const manyInvalid = createGrid(seed + 3, (_x, _y, noise) => 900 + noise * 20);
   const manyInvalidCenter = manyInvalid[1][1];
   for (let y = 4; y < 252; y += 8) {
     for (let x = 4; x < 252; x += 8) setElevation(manyInvalidCenter, x, y, -32_768);
   }
 
-  const scanline = createGrid(seed + 3, (x, y) => 1_100 + x * 0.1 + y * 0.05);
+  const scanline = createGrid(seed + 4, (x, y) => 1_100 + x * 0.1 + y * 0.05);
   const scanlineCenter = scanline[1][1];
   for (let x = 0; x < 256; x += 1) setElevation(scanlineCenter, x, 5, -700);
 
-  const crossTile = createGrid(seed + 4, (x, y) => 1_500 + x * 0.2 + y * 0.1);
+  const crossTile = createGrid(seed + 5, (x, y) => 1_500 + x * 0.2 + y * 0.1);
   const crossCenter = crossTile[1][1];
   const crossWest = crossTile[1][0];
   const crossNorth = crossTile[0][1];
@@ -188,17 +199,18 @@ export function createBenchmarkScenarios(
   }
 
   const highGradient = createGrid(
-    seed + 5,
+    seed + 6,
     (x, y, noise) => 3_500 + Math.sin(x / 2) * 420 + Math.cos(y / 2) * 420 + noise * 70,
   );
 
   return [
     { name: 'valid-varied', seed, grid: varied },
     { name: 'sparse-spikes', seed: seed + 1, grid: sparseSpikes },
-    { name: 'many-invalid', seed: seed + 2, grid: manyInvalid },
-    { name: 'corrupt-scanline', seed: seed + 3, grid: scanline },
-    { name: 'cross-tile-edges', seed: seed + 4, grid: crossTile },
-    { name: 'high-gradient', seed: seed + 5, grid: highGradient },
+    { name: 'asymmetric-shallow-pits', seed: seed + 2, grid: asymmetricPits },
+    { name: 'many-invalid', seed: seed + 3, grid: manyInvalid },
+    { name: 'corrupt-scanline', seed: seed + 4, grid: scanline },
+    { name: 'cross-tile-edges', seed: seed + 5, grid: crossTile },
+    { name: 'high-gradient', seed: seed + 6, grid: highGradient },
   ];
 }
 

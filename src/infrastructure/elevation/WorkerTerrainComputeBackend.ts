@@ -10,10 +10,13 @@ import type {
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
-  TerrainDecodedDemTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
+import {
+  toTerrainComputeConfiguration,
+  type TerrainComputeConfiguration,
+} from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { InlineTerrainComputeBackend } from '@/infrastructure/elevation/InlineTerrainComputeBackend';
 import {
   isTerrainWorkerContourResult,
@@ -108,7 +111,8 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   readonly #statusListeners = new Set<(status: TerrainComputeStatus) => void>();
   readonly #queueStateListeners = new Set<(state: TerrainComputeQueueState) => void>();
   readonly #metricsListeners = new Set<(metrics: TerrainComputeMetrics) => void>();
-  readonly #diagnosticListeners = new Set<(input: DiagnosticInput) => void>();
+  readonly #configuration: TerrainComputeConfiguration;
+  readonly #inlineFactory: TerrainInlineBackendFactory;
   #status: TerrainComputeStatus = 'worker';
   #queueState: TerrainComputeQueueState = {
     executionMode: 'worker',
@@ -127,13 +131,16 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   #disposed = false;
 
   public constructor(
-    private readonly terrain: MapProviderConfiguration['terrain'],
-    private readonly requestTimeoutMs: number,
+    terrain: MapProviderConfiguration['terrain'],
+    requestTimeoutMs: number,
     private readonly logger: DiagnosticLogger,
     private readonly workerFactory: TerrainWorkerFactory = defaultWorkerFactory,
-    private readonly inlineFactory: TerrainInlineBackendFactory = () =>
-      new InlineTerrainComputeBackend(terrain, requestTimeoutMs, logger),
+    inlineFactory?: TerrainInlineBackendFactory,
   ) {
+    this.#configuration = toTerrainComputeConfiguration(terrain, requestTimeoutMs);
+    this.#inlineFactory =
+      inlineFactory ??
+      (() => new InlineTerrainComputeBackend(this.#configuration, logger));
     try {
       this.#rpc = this.createChannel();
       this.loaded = this.initializeInitialChannel();
@@ -155,40 +162,32 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
       x,
       y,
       revision,
-      priority: 'high',
     };
-    const result = await this.executeWithRecovery(
-      (rpc) => rpc.request('dem', request, abortController.signal),
+    const response = await this.executeWithRecovery<TerrainDemResponse>(
+      async (rpc) => {
+        const result = await rpc.request<unknown>(
+          'dem',
+          request,
+          abortController.signal,
+        );
+        if (!isTerrainWorkerDemResult(result)) {
+          throw new WorkerRpcTransportError(
+            'The terrain worker returned an invalid DEM result.',
+          );
+        }
+        return {
+          data: new Blob([result.data], { type: 'image/png' }),
+          ...(result.cacheControl === undefined
+            ? {}
+            : { cacheControl: result.cacheControl }),
+          ...(result.expires === undefined ? {} : { expires: result.expires }),
+        };
+      },
       (inline) => inline.fetchTile(zoom, x, y, abortController),
       abortController.signal,
     );
     if (revision !== this.#revision) throw staleRequestError();
-    if (result instanceof Object && 'data' in result && result.data instanceof Blob) {
-      return result as TerrainDemResponse;
-    }
-    if (!isTerrainWorkerDemResult(result)) {
-      throw new WorkerRpcTransportError(
-        'The terrain worker returned an invalid DEM result.',
-      );
-    }
-    return {
-      data: new Blob([result.data], { type: 'image/png' }),
-      ...(result.cacheControl === undefined
-        ? {}
-        : { cacheControl: result.cacheControl }),
-      ...(result.expires === undefined ? {} : { expires: result.expires }),
-    };
-  }
-
-  public fetchAndParseTile(
-    _zoom: number,
-    _x: number,
-    _y: number,
-    _abortController: AbortController,
-  ): Promise<TerrainDecodedDemTile> {
-    return Promise.reject(
-      new Error('Parsed terrain tiles are internal to the terrain compute backend.'),
-    );
+    return response;
   }
 
   public async fetchContourTile(
@@ -205,27 +204,26 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
       y,
       options,
       revision,
-      priority: 'low',
     };
-    const result = await this.executeWithRecovery(
-      (rpc) => rpc.request('contour', request, abortController.signal),
+    const response = await this.executeWithRecovery<TerrainContourTile>(
+      async (rpc) => {
+        const result = await rpc.request<unknown>(
+          'contour',
+          request,
+          abortController.signal,
+        );
+        if (!isTerrainWorkerContourResult(result)) {
+          throw new WorkerRpcTransportError(
+            'The terrain worker returned an invalid contour result.',
+          );
+        }
+        return { arrayBuffer: result.data };
+      },
       (inline) => inline.fetchContourTile(zoom, x, y, options, abortController),
       abortController.signal,
     );
     if (revision !== this.#revision) throw staleRequestError();
-    if (
-      result instanceof Object &&
-      'arrayBuffer' in result &&
-      result.arrayBuffer instanceof ArrayBuffer
-    ) {
-      return result as TerrainContourTile;
-    }
-    if (!isTerrainWorkerContourResult(result)) {
-      throw new WorkerRpcTransportError(
-        'The terrain worker returned an invalid contour result.',
-      );
-    }
-    return { arrayBuffer: result.data };
+    return response;
   }
 
   public setFilterEnabled(enabled: boolean): void {
@@ -288,13 +286,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     };
   }
 
-  public subscribeDiagnostic(listener: (input: DiagnosticInput) => void): () => void {
-    this.#diagnosticListeners.add(listener);
-    return () => {
-      this.#diagnosticListeners.delete(listener);
-    };
-  }
-
   public dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -305,7 +296,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     this.#statusListeners.clear();
     this.#queueStateListeners.clear();
     this.#metricsListeners.clear();
-    this.#diagnosticListeners.clear();
   }
 
   private async initializeInitialChannel(): Promise<void> {
@@ -321,7 +311,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     rpc.subscribeEvent(terrainWorkerEventNames.diagnostic, (payload) => {
       if (!isDiagnosticInput(payload)) return;
       this.logger.log(payload);
-      for (const listener of this.#diagnosticListeners) listener(payload);
     });
     rpc.subscribeEvent(terrainWorkerEventNames.metrics, (payload) => {
       if (!isMetrics(payload)) return;
@@ -339,8 +328,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
 
   private initializeChannel(rpc: WorkerRpcClient): Promise<unknown> {
     const request: TerrainWorkerInitializeRequest = {
-      terrain: this.terrain,
-      requestTimeoutMs: this.requestTimeoutMs,
+      configuration: this.#configuration,
       filterEnabled: this.#filterEnabled,
       revision: this.#revision,
       interactionActive: this.#interactionActive,
@@ -428,7 +416,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     if (this.#inline !== null) return;
     this.#rpc?.dispose();
     this.#rpc = null;
-    const inline = this.inlineFactory();
+    const inline = this.#inlineFactory();
     if (!this.#filterEnabled) inline.setFilterEnabled(false);
     inline.setInteractionActive(this.#interactionActive);
     this.#inline = inline;

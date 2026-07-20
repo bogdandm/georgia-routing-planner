@@ -319,16 +319,7 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect
     .poll(async () => (await readStoredCamera(page))?.bearing)
     .not.toBe(cameraBeforeKeyboard?.bearing);
-  await canvas.evaluate((element) => {
-    const event = new KeyboardEvent('keydown', {
-      key: '-',
-      code: 'Minus',
-      bubbles: true,
-      cancelable: true,
-    });
-    Object.defineProperty(event, 'keyCode', { value: 189 });
-    element.dispatchEvent(event);
-  });
+  await page.keyboard.press('Minus');
   await expect
     .poll(async () => (await readStoredCamera(page))?.zoom)
     .toBeLessThan(cameraBeforeKeyboard?.zoom ?? 0);

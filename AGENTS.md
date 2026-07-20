@@ -603,6 +603,10 @@ existing 45-second terrain workflow ceiling. Satellite imagery also keeps its fo
 45-second ceiling. Do not replace these with arbitrary sleeps or suite-wide timeout
 increases.
 
+For MapLibre's minus-key zoom shortcut, use Playwright's physical `Minus` key. Do not
+construct a `KeyboardEvent` and redefine its legacy `keyCode`; Chromium does not
+dispatch that synthetic event consistently across Windows and Linux.
+
 Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
 coverage, run the CI-shaped command on Windows PowerShell:
 

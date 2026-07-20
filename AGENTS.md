@@ -580,13 +580,11 @@ in the handoff so other agents can distinguish infrastructure timing from a beha
 failure.
 
 The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
-and several debounced IndexedDB assertions. On managed Windows it has a 45-second
-per-test ceiling in `e2e/map-foundation.spec.ts`; preserve that local ceiling instead of
-raising the whole Playwright suite timeout. Playwright's high-level
-`Equal`/`Shift+Equal`/`Minus` key presses have intermittently omitted the legacy key
-code that MapLibre's keyboard handler reads and then exhausted the five-second assertion
-deadline. Keep the test's explicit Chromium `KeyboardEvent` with key code 189 for the
-zoom assertion unless a MapLibre upgrade removes that compatibility dependency.
+and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling
+in `e2e/map-foundation.spec.ts`; preserve that local ceiling instead of raising the
+whole Playwright suite timeout. Send keyboard shortcuts through the canvas locator so
+focus and key delivery are one action, and allow ten seconds for the settled camera to
+reach IndexedDB.
 
 When an environment-specific timeout recurs and the behavior passes under a focused,
 bounded run, record the exact test, cause, and validated command or local ceiling in
@@ -611,15 +609,10 @@ already-persisted terrain view, wait for the selected 3D control to become enabl
 because the stored value cannot distinguish the new map's pending transition from
 readiness. The application DEM deadline is 15 seconds, so use the focused 20-second
 readiness assertion and the existing 45-second terrain workflow ceiling. Use the focused
-10-second camera persistence assertion after restored-map keyboard input. Satellite
-imagery also keeps its focused 45-second ceiling. Do not replace these with arbitrary
-sleeps or suite-wide timeout increases.
-
-The isolated native-camera workflow can reach roughly 40 seconds on GitHub's
-software-rendered Chromium even with one worker. Keep its focused 60-second test
-ceiling, send keyboard shortcuts through the canvas locator so focus and key delivery
-are one action, and use the 10-second persisted-camera assertion for the resulting
-settled view.
+10-second camera persistence assertion after restored-map keyboard input. The complete
+satellite-imagery workflow can exceed 45 seconds on GitHub even with one worker, so keep
+its focused two-minute ceiling in `e2e/satellite-imagery.spec.ts`. Do not replace these
+with arbitrary sleeps or suite-wide timeout increases.
 
 Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
 coverage, run the CI-shaped command on Windows PowerShell:

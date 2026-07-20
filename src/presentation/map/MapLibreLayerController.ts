@@ -1052,7 +1052,7 @@ export class MapLibreLayerController
             ],
           },
         },
-        mapInsertionPoints.terrainOverlaysBeforeLayerId,
+        mapInsertionPoints.contoursBeforeLayerId,
       );
     }
     if (map.getLayer(terrainOverlayLayerIds.contourIndex) === undefined) {
@@ -1083,7 +1083,7 @@ export class MapLibreLayerController
             ],
           },
         },
-        mapInsertionPoints.terrainOverlaysBeforeLayerId,
+        mapInsertionPoints.contoursBeforeLayerId,
       );
     }
     if (map.getLayer(terrainOverlayLayerIds.contourLabels) === undefined) {
@@ -1115,7 +1115,7 @@ export class MapLibreLayerController
             'text-halo-width': 1.2,
           },
         },
-        mapInsertionPoints.terrainOverlaysBeforeLayerId,
+        mapInsertionPoints.contoursBeforeLayerId,
       );
     }
   }
@@ -1127,25 +1127,25 @@ export class MapLibreLayerController
     const minorIndex = layerIds.indexOf(terrainOverlayLayerIds.contourMinor);
     const indexIndex = layerIds.indexOf(terrainOverlayLayerIds.contourIndex);
     const labelIndex = layerIds.indexOf(terrainOverlayLayerIds.contourLabels);
-    const osmIndex = layerIds.indexOf(mapInsertionPoints.terrainOverlaysBeforeLayerId);
+    const waterIndex = layerIds.indexOf(mapInsertionPoints.contoursBeforeLayerId);
     const orderIsCorrect =
       rasterIndex >= 0 &&
       minorIndex > rasterIndex &&
       indexIndex > minorIndex &&
       labelIndex > indexIndex &&
-      labelIndex < osmIndex;
+      labelIndex < waterIndex;
     if (orderIsCorrect) return;
     map.moveLayer(
       terrainOverlayLayerIds.contourMinor,
-      mapInsertionPoints.terrainOverlaysBeforeLayerId,
+      mapInsertionPoints.contoursBeforeLayerId,
     );
     map.moveLayer(
       terrainOverlayLayerIds.contourIndex,
-      mapInsertionPoints.terrainOverlaysBeforeLayerId,
+      mapInsertionPoints.contoursBeforeLayerId,
     );
     map.moveLayer(
       terrainOverlayLayerIds.contourLabels,
-      mapInsertionPoints.terrainOverlaysBeforeLayerId,
+      mapInsertionPoints.contoursBeforeLayerId,
     );
   }
 

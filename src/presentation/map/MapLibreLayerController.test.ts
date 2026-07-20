@@ -480,6 +480,13 @@ describe('MapLibreLayerController', () => {
     expect(map.layers.get('terrain-contour-labels')).toMatchObject({
       filter: ['>', ['get', 'level'], 0],
     });
+    const layerOrder = [...map.layers.keys()];
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourMinor)).toBeGreaterThan(
+      layerOrder.indexOf(mapLayerIds.waterways),
+    );
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeLessThan(
+      layerOrder.indexOf(mapLayerIds.water),
+    );
 
     expect(
       controller.setTerrainOverlayPreferences({

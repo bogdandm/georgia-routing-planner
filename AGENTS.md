@@ -575,6 +575,27 @@ green. Report both the canonical timeout and the successful bounded-concurrency 
 in the handoff so other agents can distinguish infrastructure timing from a behavioral
 failure.
 
+### Managed Chromium timing
+
+GitHub's software-rendered Chromium can take several times longer than a desktop run
+when MapLibre, terrain decoding, IndexedDB persistence, and diagnostics export overlap.
+Keep CI at one browser worker, a 120-second per-test ceiling, and a 20-second assertion
+ceiling. Local runs use a 90-second per-test ceiling and a 10-second assertion ceiling.
+Retries remain disabled so a real failure produces one authoritative set of artifacts.
+
+These limits cover the observed terrain-visibility reload, diagnostics export, and
+satellite reload workflows. The earlier 5-second assertion and 30-second test limits
+expired under hosted-runner contention even though the terrain and satellite workflows
+passed on their next execution. Do not replace these limits with sleeps or loosen
+application deadlines.
+
+Before pushing MapLibre, terrain, persistence, diagnostics, or satellite E2E changes,
+run the CI-shaped suite on Windows PowerShell:
+
+```powershell
+$env:CI='1'; pnpm e2e; Remove-Item Env:CI
+```
+
 Use the smallest automated-test tier that proves the changed behavior. Isolated UI
 copy/style changes, local component-state fixes, and small interaction changes should
 use focused unit or React component tests plus a brief manual browser check when visual

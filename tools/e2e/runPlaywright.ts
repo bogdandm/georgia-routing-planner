@@ -9,7 +9,8 @@ const playwrightCli = fileURLToPath(
   new URL('../../node_modules/@playwright/test/cli.js', import.meta.url),
 );
 const basePath = '/georgia-routing-planner/';
-const previewUrl = `http://127.0.0.1:4173${basePath}`;
+const previewPort = process.env.E2E_PORT ?? '4173';
+const previewUrl = `http://127.0.0.1:${previewPort}${basePath}`;
 
 function runCommand(command: string, arguments_: readonly string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -70,7 +71,7 @@ async function main(): Promise<void> {
   await runCommand(process.execPath, [viteCli, 'build']);
   const preview = spawn(
     process.execPath,
-    [viteCli, 'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort'],
+    [viteCli, 'preview', '--host', '127.0.0.1', '--port', previewPort, '--strictPort'],
     {
       cwd: projectRoot,
       env: { ...process.env, BASE_PATH: basePath },

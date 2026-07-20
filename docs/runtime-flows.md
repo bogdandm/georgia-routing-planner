@@ -148,21 +148,22 @@ pitch and bearing to zero, so the flat map returns north-up.
 On style readiness, style data changes, satellite swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 generated contour source, minor/index lines, and index labels. The invariant is base
-surface fills, relief/satellite in the selected order, contours, then OSM boundaries,
-transport, and labels. This keeps terrain relief visible over grass, forest, and other
-opaque land-cover fills. Updating the contour interval calls the existing vector
-source's tile update, so the map camera and unrelated native resources remain untouched.
-MapLibre abort signals flow through both the shared DEM and contour protocols to the
-same filtered provider. The provider fetches the center and eight neighbors concurrently
-under one timeout. Concurrent neighborhoods share in-flight fetch and decode work for
-overlapping source tiles; canceling one consumer aborts that source request only after
-its final consumer releases it. The provider applies the configured pure repair policy
-and retains completed PNGs and decoded neighbor context in bounded LRUs. Relief, 3D
-terrain, and generated isolines therefore cannot observe different elevation bytes.
-Source failures update the overlay snapshot without removing the basemap. Expected
-request cancellation during source replacement is ignored as lifecycle noise.
-Contour-generation timings are likewise grouped into bounded batches so visible-tile
-work cannot displace lifecycle and failure evidence from the diagnostics buffer.
+surface fills, relief/satellite in the selected order, waterways, contours, water-body
+polygons, then OSM boundaries, transport, and labels. This keeps terrain relief visible
+over grass, forest, and other opaque land-cover fills while water bodies mask generated
+isolines. Updating the contour interval calls the existing vector source's tile update,
+so the map camera and unrelated native resources remain untouched. MapLibre abort
+signals flow through both the shared DEM and contour protocols to the same filtered
+provider. The provider fetches the center and eight neighbors concurrently under one
+timeout. Concurrent neighborhoods share in-flight fetch and decode work for overlapping
+source tiles; canceling one consumer aborts that source request only after its final
+consumer releases it. The provider applies the configured pure repair policy and retains
+completed PNGs and decoded neighbor context in bounded LRUs. Relief, 3D terrain, and
+generated isolines therefore cannot observe different elevation bytes. Source failures
+update the overlay snapshot without removing the basemap. Expected request cancellation
+during source replacement is ignored as lifecycle noise. Contour-generation timings are
+likewise grouped into bounded batches so visible-tile work cannot displace lifecycle and
+failure evidence from the diagnostics buffer.
 
 The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
 the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a

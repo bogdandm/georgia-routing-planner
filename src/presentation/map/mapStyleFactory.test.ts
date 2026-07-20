@@ -31,6 +31,9 @@ describe('createHikingMapStyle', () => {
     expect(layerIds.indexOf(mapInsertionPoints.satelliteBeforeLayerId)).toBeLessThan(
       layerIds.indexOf(mapLayerIds.water),
     );
+    expect(layerIds.indexOf(mapLayerIds.waterways)).toBeLessThan(
+      layerIds.indexOf(mapLayerIds.water),
+    );
     expect(layerIds.indexOf(mapLayerIds.hikingPaths)).toBeGreaterThan(
       layerIds.indexOf(mapLayerIds.roads),
     );
@@ -59,6 +62,7 @@ describe('createHikingMapStyle', () => {
     expect(serialized).toContain(mapVisualPalette.transport.motorway);
     expect(mapVisualPalette.vegetation.grass).toBe('#DEE2DA');
     expect(mapVisualPalette.vegetation.farmland).toBe('#DFE0DA');
+    expect(mapVisualPalette.water.line).toBe(mapVisualPalette.water.fill);
     expect(mapVisualPalette.terrain.contourIndex).toBe('#023047');
     expect(mapVisualPalette.userGeometry.gpxTrack).toBe('#168BFF');
     const roads = style.layers.find((layer) => layer.id === mapLayerIds.roads);

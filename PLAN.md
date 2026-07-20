@@ -145,7 +145,10 @@ Commit: `docs(map): describe terrain overlay behavior`
 - Prefer English labels, then provider transliteration, before native-name fallback.
 - Preserve imagery detail by removing land-cover fills in satellite mode and retaining
   high-contrast true line features and label halos.
-- Do not outline tiled polygon sources; their clipped tile fragments create false seams.
+- Avoid decorative outlines on tiled surface polygons; keep only the intentional
+  restricted-area perimeter.
+- Add durable Layers controls for the combined natural-feature polygons and restricted
+  areas, under the OpenStreetMap provider heading.
 - Document the private-access data limitation and reserve bright blue for future GPX.
 
 Commit: `feat(map): unify overlay palette and labels`
@@ -207,17 +210,18 @@ Verified on 2026-07-19:
 
 - Formatting, lint, strict type checking, repository audit, documentation-boundary grep,
   and diff validation pass.
-- 160 unit/component tests and 18 integration tests pass.
-- Coverage passes with 88.5% statements, 79.08% branches, 90% functions, and 90.75%
-  lines across 178 tests.
+- 180 unit/component tests and 18 integration tests pass.
+- Coverage passes with 88.5% statements, 78.97% branches, 90% functions, and 90.75%
+  lines across 180 tests. The canonical run exposed only managed-workspace timing
+  contention; the documented two-worker, ten-second-ceiling rerun passed completely.
 - The production build passes. The existing large-bundle advisory remains non-blocking.
 - All 12 controlled Chromium workflows pass with two workers, including axe checks,
   terrain failure recovery, diagnostics export, Sentinel ordering, and durable relief /
   isoline visibility from Layers.
-- A live current-Chrome check confirmed that both Layers controls update immediately and
-  survive reload, provider attribution remains clickable on the map, the Layers sidebar
-  contains no raw attribution markup, and rapid contour-producing zoom changes recover
-  to Ready without detached-buffer errors.
+- A live current-Chrome check confirmed that the combined Natural features control
+  updates immediately and restores enabled, provider attribution remains clickable on
+  the map, the Layers sidebar contains no raw attribution markup, and rapid
+  contour-producing zoom changes recover to Ready without detached-buffer errors.
 - The supplied diagnostics bundle was traced to a cached contour `ArrayBuffer` being
   transferred more than once. The protocol adapter now clones each delivery while
   preserving the cache-owned buffer, with a regression test for repeated cache hits.

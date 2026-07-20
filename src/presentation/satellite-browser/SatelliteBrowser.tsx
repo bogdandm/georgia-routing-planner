@@ -74,6 +74,7 @@ type SearchState =
 
 const firstResultCount = 8;
 const resultPageSize = 8;
+const catalogCloudCoverCeilingPercent = 100;
 const sentinelArchiveFirstMonth = '2015-06';
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
 const monthFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -110,7 +111,6 @@ interface SearchMonthRange {
 interface SubmittedSearch {
   readonly viewport: SatelliteSearchViewport;
   readonly productLevel: SatelliteProductLevel;
-  readonly maxCloudCoverPercent: number;
   readonly initialMonth: string;
 }
 
@@ -164,11 +164,9 @@ function nextUnloadedSearchMonth(
 function hasSameSubmittedCriteria(
   submitted: SubmittedSearch,
   viewport: SatelliteSearchViewport,
-  maxCloudCoverPercent: number,
 ): boolean {
   return (
     submitted.productLevel === 'L2A' &&
-    submitted.maxCloudCoverPercent === maxCloudCoverPercent &&
     submitted.viewport.center.longitude === viewport.center.longitude &&
     submitted.viewport.center.latitude === viewport.center.latitude &&
     submitted.viewport.bounds.west === viewport.bounds.west &&
@@ -218,6 +216,29 @@ function singleSceneResult(
 
 function flattenMatches(result: SatelliteSearchResult): readonly SatelliteSceneMatch[] {
   return result.groups.flatMap((group) => group.scenes);
+}
+
+function filterResultByCloudCover(
+  result: SatelliteSearchResult,
+  maxCloudCoverPercent: number,
+  selectedSceneId: string | null,
+): SatelliteSearchResult {
+  const groups = result.groups
+    .map((group) => ({
+      ...group,
+      scenes: group.scenes.filter(
+        (match) =>
+          match.scene.cloudCoverPercent <= maxCloudCoverPercent ||
+          match.scene.id === selectedSceneId,
+      ),
+    }))
+    .filter((group) => group.scenes.length > 0);
+  return {
+    groups,
+    sceneCount: groups.reduce((count, group) => count + group.scenes.length, 0),
+    acquisitionDateCount: groups.length,
+    totalMatched: result.totalMatched,
+  };
 }
 
 function visibleGroups(
@@ -275,7 +296,8 @@ function AcquisitionCalendar({
   const month = displayMonthDate.getUTCMonth();
   const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  const cells = Array.from({ length: 42 }, (_value, index) => {
+  const calendarCellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+  const cells = Array.from({ length: calendarCellCount }, (_value, index) => {
     const day = index - firstWeekday + 1;
     return day >= 1 && day <= daysInMonth ? day : null;
   });
@@ -287,7 +309,7 @@ function AcquisitionCalendar({
 
   return (
     <Box aria-label="Sentinel acquisition calendar">
-      <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 0.5 }}>
         <IconButton
           size="small"
           aria-label="Previous acquisition month"
@@ -327,7 +349,7 @@ function AcquisitionCalendar({
       <Box
         role="grid"
         aria-label={monthFormatter.format(displayMonthDate)}
-        sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.75 }}
+        sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25 }}
       >
         {weekDays.map((day) => (
           <Typography
@@ -361,7 +383,7 @@ function AcquisitionCalendar({
                   : `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
               }
               sx={{
-                height: 46,
+                height: 34,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -387,7 +409,9 @@ function AcquisitionCalendar({
                 '&.Mui-disabled': { color: 'text.primary' },
               }}
             >
-              <Typography variant="caption">{day}</Typography>
+              <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                {day}
+              </Typography>
               {cloud === undefined ? null : (
                 <Typography variant="caption" sx={{ color: 'inherit', lineHeight: 1 }}>
                   {cloud.toFixed(0)}%
@@ -879,9 +903,22 @@ export function SatelliteBrowser({
     searchState.status === 'idle' && restoredScene !== null && restoredResult !== null;
   const restoredSceneKey =
     restoredScene === null ? null : satelliteSceneKey(restoredScene);
+  const cloudFilteredResult = useMemo(
+    () =>
+      searchState.status === 'success'
+        ? filterResultByCloudCover(
+            searchState.result,
+            maxCloudCoverPercent,
+            selectedSceneId,
+          )
+        : null,
+    [maxCloudCoverPercent, searchState, selectedSceneId],
+  );
   const paneSearchState: SearchState = showingRestoredScene
     ? { status: 'success', result: restoredResult }
-    : searchState;
+    : searchState.status === 'success' && cloudFilteredResult !== null
+      ? { status: 'success', result: cloudFilteredResult }
+      : searchState;
   const paneSelectedSceneId = showingRestoredScene ? restoredScene.id : selectedSceneId;
   const paneOpen =
     resultsOpen ||
@@ -916,7 +953,15 @@ export function SatelliteBrowser({
   ) => {
     if (searchSatelliteScenes === null || searchState.status !== 'success') return;
     if (loadedMonthsRef.current.has(range.month)) {
-      if (revealLoadedMonth) setVisibleCount(searchState.result.sceneCount);
+      if (revealLoadedMonth) {
+        setVisibleCount(
+          filterResultByCloudCover(
+            searchState.result,
+            maxCloudCoverPercent,
+            selectedSceneId,
+          ).sceneCount,
+        );
+      }
       return;
     }
     if (loadingMonthsRef.current.has(range.month)) return;
@@ -939,18 +984,28 @@ export function SatelliteBrowser({
           startDate: range.startDate,
           endDate: range.endDate,
           productLevel: criteria.productLevel,
-          maxCloudCoverPercent: criteria.maxCloudCoverPercent,
+          maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
         },
         controller.signal,
       );
       if (controller.signal.aborted) return;
       const mergedResult = mergeSearchResults(baseResult, monthResult);
+      const matchingMergedCount = filterResultByCloudCover(
+        mergedResult,
+        maxCloudCoverPercent,
+        selectedSceneId,
+      ).sceneCount;
+      const matchingBaseCount = filterResultByCloudCover(
+        baseResult,
+        maxCloudCoverPercent,
+        selectedSceneId,
+      ).sceneCount;
       markMonthLoaded(range.month);
       setSearchState({ status: 'success', result: mergedResult });
       setVisibleCount(
         revealLoadedMonth
-          ? mergedResult.sceneCount
-          : Math.min(mergedResult.sceneCount, baseResult.sceneCount + resultPageSize),
+          ? matchingMergedCount
+          : Math.min(matchingMergedCount, matchingBaseCount + resultPageSize),
       );
       completeSatelliteRequest(
         `${String(mergedResult.sceneCount)} Sentinel image${mergedResult.sceneCount === 1 ? '' : 's'} available`,
@@ -980,12 +1035,12 @@ export function SatelliteBrowser({
     if (
       existingSearch !== null &&
       searchState.status === 'success' &&
-      hasSameSubmittedCriteria(existingSearch, viewport, maxCloudCoverPercent)
+      hasSameSubmittedCriteria(existingSearch, viewport)
     ) {
       setResultsOpen(true);
       setLoadMoreError(null);
       if (loadedMonthsRef.current.has(range.month)) {
-        setVisibleCount(searchState.result.sceneCount);
+        setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
         return;
       }
       await loadMonthIntoResults(range, existingSearch, true);
@@ -998,7 +1053,6 @@ export function SatelliteBrowser({
     setSubmittedSearch({
       viewport,
       productLevel: 'L2A',
-      maxCloudCoverPercent,
       initialMonth: range.month,
     });
     loadedMonthsRef.current = new Set<string>();
@@ -1023,7 +1077,7 @@ export function SatelliteBrowser({
           startDate: range.startDate,
           endDate: range.endDate,
           productLevel: 'L2A',
-          maxCloudCoverPercent,
+          maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
         },
         controller.signal,
       );
@@ -1056,7 +1110,7 @@ export function SatelliteBrowser({
 
   const loadMoreImages = async () => {
     if (searchState.status !== 'success') return;
-    if (visibleCount < searchState.result.sceneCount) {
+    if (visibleCount < (cloudFilteredResult?.sceneCount ?? 0)) {
       setVisibleCount((count) => count + resultPageSize);
       return;
     }
@@ -1070,7 +1124,7 @@ export function SatelliteBrowser({
     setLoadMoreError(null);
     if (searchState.status !== 'success' || submittedSearch === null) return;
     if (loadedMonthsRef.current.has(month)) {
-      setVisibleCount(searchState.result.sceneCount);
+      setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
       return;
     }
     void loadMonthIntoResults(
@@ -1273,7 +1327,7 @@ export function SatelliteBrowser({
             <Typography variant="caption" color="text.secondary">
               Point {coordinates} ·{' '}
               {monthFormatter.format(new Date(`${calendarMonth}-01T00:00:00.000Z`))} →
-              older · cloud ≤ {maxCloudCoverPercent}%
+              older · highlight cloud ≤ {maxCloudCoverPercent}%
             </Typography>
           ) : null}
         </Box>

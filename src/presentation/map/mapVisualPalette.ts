@@ -30,7 +30,7 @@ export const mapVisualPalette = {
   },
   water: {
     fill: '#78B7D5',
-    line: '#287FA2',
+    line: '#78B7D5',
     label: '#075E7A',
   },
   transport: {

@@ -142,6 +142,11 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByRole('button', { name: 'L2A' })).not.toBeInTheDocument();
     expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('25');
     expect(screen.getByLabelText('Sentinel acquisition calendar')).toBeVisible();
+    const acquisitionCalendar = screen.getByRole('grid', { name: 'July 2026' });
+    expect(acquisitionCalendar.children).toHaveLength(42);
+    expect(
+      screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
+    ).toHaveStyle({ height: '34px' });
     const searchAreaSource = screen.getByRole('combobox', {
       name: 'Search area source',
     });
@@ -443,19 +448,21 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('highlights only low coverage and high cloud values', async () => {
-    const scene = syntheticSatelliteScene(
+  it('keeps all dates but filters scene cards by cloud cover client-side', async () => {
+    const highCloudScene = syntheticSatelliteScene(
       'threshold-scene',
       '2026-07-12T10:12:00.000Z',
     );
-    services.database.close();
-    await services.database.delete();
-    services = createTestServices({
-      satelliteCatalogGateway: catalogGatewayReturning({
-        totalMatched: 1,
+    const lowCloudScene = syntheticSatelliteScene(
+      'matching-scene',
+      '2026-07-09T10:12:00.000Z',
+    );
+    const search = vi.fn<SatelliteCatalogGateway['search']>(() =>
+      Promise.resolve({
+        totalMatched: 2,
         scenes: [
           {
-            ...scene,
+            ...highCloudScene,
             cloudCoverPercent: 70,
             footprint: {
               type: 'Polygon',
@@ -470,34 +477,67 @@ describe('WorkspaceShell', () => {
               ],
             },
           },
+          { ...lowCloudScene, cloudCoverPercent: 10 },
         ],
       }),
+    );
+    services.database.close();
+    await services.database.delete();
+    services = createTestServices({
+      satelliteCatalogGateway: { search },
     });
     services.mapViewport.update(testViewport);
     const user = userEvent.setup();
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+
+    expect(search).toHaveBeenCalledOnce();
+    expect(search.mock.calls[0]?.[0].criteria.maxCloudCoverPercent).toBe(100);
+    expect(
+      await screen.findByRole('button', { name: 'Apply 9 Jul 2026 imagery' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('gridcell', {
+        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
+      }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('gridcell', {
+        name: /9 Jul 2026, imagery available, 10 percent weighted cloud, matches/u,
+      }),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole('gridcell', {
+        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
+      }),
+    );
+    expect(
+      screen.getByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }));
+    expect(
+      screen.queryByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('slider', { name: 'Maximum cloud' }), {
       target: { value: '100' },
     });
-    await user.click(screen.getByRole('button', { name: 'Search images' }));
-
-    expect(await screen.findByLabelText('High cloud cover: 70%')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('High cloud cover: 70%')).toBeVisible();
     expect(screen.getByLabelText(/Low viewport coverage: 40%/u)).toBeVisible();
     expect(
       screen.getByRole('gridcell', {
         name: /12 Jul 2026, imagery available, 70 percent weighted cloud, matches/u,
       }),
     ).toBeVisible();
-    fireEvent.change(screen.getByRole('slider', { name: 'Maximum cloud' }), {
-      target: { value: '50' },
-    });
-    expect(
-      screen.getByRole('gridcell', {
-        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
-      }),
-    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+    expect(search).toHaveBeenCalledOnce();
   });
 
   it('shows the safe provider error without removing the search controls', async () => {

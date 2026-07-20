@@ -103,12 +103,16 @@ lower cloud values are plain text. Every card remains an individual scene; mosai
 not currently composed.
 
 The displayed calendar month is the search month. The current month ends at today;
-earlier months cover their complete UTC month. After the first search, calendar arrows
-load a displayed month only when that month has not completed successfully for the
-submitted point, viewport, product, and cloud criteria. Successful months, including
-empty ones, are reused when navigating back. Newly loaded scene groups are appended to
-the right results pane without replacing other months or resetting the displayed
-calendar month.
+earlier months cover their complete UTC month. The provider search loads the complete
+0–100% scene-cloud range. The cloud slider filters scene cards client-side while every
+loaded acquisition date remains visible in the calendar; dates at or below the threshold
+receive the orange highlight. Selecting a date above the threshold temporarily reveals
+its selected scene card; de-applying it or selecting another scene restores the filter.
+After the first search, calendar arrows load a displayed month only when that month has
+not completed successfully for the submitted point, viewport, and product. Successful
+months, including empty ones, are reused when navigating back. Newly loaded scene groups
+are appended to the right results pane without replacing other months or resetting the
+displayed calendar month.
 
 Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport
@@ -244,6 +248,9 @@ and white label halos retain contrast. The style does not derive decorative boun
 from tiled surface polygons; the intentional red military perimeter is the only
 restricted-area outline. Imported and user-created GPX tracks reserve a brighter blue
 than the contour family so route geometry remains distinguishable.
+
+Waterway lines and water-body polygons use the same blue. Waterways render first, so
+lake and reservoir polygons cover river centerlines where the geometries overlap.
 
 Labels prefer `name:en`, then the provider's `name:latin` transliteration, before legacy
 English and native-name fallbacks. A native Georgian label can therefore remain when the

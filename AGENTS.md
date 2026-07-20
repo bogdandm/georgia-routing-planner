@@ -62,7 +62,7 @@ Rules:
 - A feature is not handed off as finished until its relevant checks pass and its
   feature-branch state is available in a GitHub pull request targeting `main`. When you
   believe the feature is finished, commit the intended changes, push the feature branch,
-  open a draft pull request, and give the user its review link. This standing
+  open a ready-for-review pull request, and give the user its review link. This standing
   instruction authorizes that feature-completion push and pull-request creation without
   a separate prompt. If a pull request already exists for the branch, update it and
   return the existing link instead of creating a duplicate.
@@ -70,9 +70,10 @@ Rules:
   external actions unless the user requests them.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to
   remove user work.
-- The GitHub CLI (`gh`) is installed and available for this project. Use it for
-  requested GitHub repository and remote workflows, and verify `gh auth status` before
-  an operation that contacts GitHub.
+- The GitHub CLI (`gh`) is installed and available for this project. Use it directly for
+  GitHub repository and remote workflows, including creating pull requests; do not try a
+  GitHub connector first or report a connector-to-CLI fallback. Verify `gh auth status`
+  before an operation that contacts GitHub.
 - In managed Codex runs, a sandboxed `gh auth status` or other `gh` command may falsely
   report that the token is invalid because the sandbox cannot access the host keyring or
   network. When a sandboxed `gh` command reports an authentication or likely

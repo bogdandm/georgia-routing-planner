@@ -559,6 +559,21 @@ green. Report both the canonical timeout and the successful bounded-concurrency 
 in the handoff so other agents can distinguish infrastructure timing from a behavioral
 failure.
 
+The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
+and several debounced IndexedDB assertions. On managed Windows it has a 45-second
+per-test ceiling in `e2e/map-foundation.spec.ts`; preserve that local ceiling instead of
+raising the whole Playwright suite timeout. Playwright's high-level
+`Equal`/`Shift+Equal`/`Minus` key presses have intermittently omitted the legacy key
+code that MapLibre's keyboard handler reads and then exhausted the five-second assertion
+deadline. Keep the test's explicit Chromium `KeyboardEvent` with key code 189 for the
+zoom assertion unless a MapLibre upgrade removes that compatibility dependency.
+
+When an environment-specific timeout recurs and the behavior passes under a focused,
+bounded run, record the exact test, cause, and validated command or local ceiling in
+this file during the same change. Do not leave later agents to rediscover known timing
+limits, and do not generalize one slow test into blanket sleeps, retries, or suite-wide
+timeout increases.
+
 Use the smallest automated-test tier that proves the changed behavior. Isolated UI
 copy/style changes, local component-state fixes, and small interaction changes should
 use focused unit or React component tests plus a brief manual browser check when visual

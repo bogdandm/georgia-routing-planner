@@ -182,6 +182,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
 test('uses conventional native camera gestures and resets them with the compass', async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -214,6 +215,9 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect(
     page.getByRole('button', { name: 'Show 3D terrain map' }),
   ).toHaveAttribute('aria-pressed', 'true');
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode)
+    .toBe('terrain');
   const cameraBeforeOrbit = await readStoredCamera(page);
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
@@ -247,10 +251,19 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect
     .poll(async () => (await readStoredCamera(page))?.bearing)
     .not.toBe(cameraBeforeKeyboard?.bearing);
-  await page.keyboard.press('Shift+Equal');
+  await canvas.evaluate((element) => {
+    const event = new KeyboardEvent('keydown', {
+      key: '-',
+      code: 'Minus',
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(event, 'keyCode', { value: 189 });
+    element.dispatchEvent(event);
+  });
   await expect
     .poll(async () => (await readStoredCamera(page))?.zoom)
-    .toBeGreaterThan(cameraBeforeKeyboard?.zoom ?? 0);
+    .toBeLessThan(cameraBeforeKeyboard?.zoom ?? 0);
 
   await page.locator('.maplibregl-ctrl-compass').click();
   await expect

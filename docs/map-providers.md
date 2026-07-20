@@ -146,7 +146,10 @@ pixels and changes the center tile range to 969.49–1,191.20 m. Thresholds and 
 configuration, not rendering constants. Requests use the provider timeout and MapLibre
 abort signal. Diagnostics export only duration and aggregate no-data, sentinel,
 impossible-value, spike, repaired, and unrepaired counts; tile URLs, indices,
-coordinates, and pixels are excluded.
+coordinates, and pixels are excluded. Overlapping neighborhoods coalesce in-flight
+source fetch and decode work, and diagnostics are emitted in fixed-size aggregate
+batches instead of one event per rendered tile. Mixed results retain the batch's most
+severe status without creating a new event for every cancellation transition.
 
 Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
 and persisted locally. Disabling it bypasses decoding and repair and returns the
@@ -270,6 +273,11 @@ manual review, not sustained production traffic. The renderer ID, HTTPS template
 size, zoom bounds, and attribution are validated public configuration so a managed
 TiTiler-compatible deployment can replace it without changing catalog, UI, or map
 commands. There is no silent renderer fallback.
+
+The renderer has its own validated 60-second request ceiling, separate from the shorter
+catalog and terrain request policy. This accommodates slow imagery delivery while still
+ending a stalled staging operation predictably; replacing, clearing, or superseding a
+scene cancels the wait immediately.
 
 The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and

@@ -76,8 +76,9 @@ describe('diagnostic redaction', () => {
   it('retains only aggregate DEM repair evidence', () => {
     const result = redactDiagnosticInput({
       level: 'debug',
-      name: 'map.dem.tile-filtered',
+      name: 'map.dem.tiles-processed',
       data: {
+        count: 32,
         durationMs: 82,
         noDataCount: 1,
         sentinelCount: 2,
@@ -91,6 +92,7 @@ describe('diagnostic redaction', () => {
     });
 
     expect(result.data).toEqual({
+      count: 32,
       durationMs: 82,
       noDataCount: 1,
       sentinelCount: 2,

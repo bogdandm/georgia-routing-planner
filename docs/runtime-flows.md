@@ -126,10 +126,15 @@ opaque land-cover fills. Updating the contour interval calls the existing vector
 source's tile update, so the map camera and unrelated native resources remain untouched.
 MapLibre abort signals flow through both the shared DEM and contour protocols to the
 same filtered provider. The provider fetches the center and eight neighbors concurrently
-under one timeout, applies the configured pure repair policy, and retains completed PNGs
-and decoded neighbor context in bounded LRUs. Relief, 3D terrain, and generated isolines
-therefore cannot observe different elevation bytes. Source failures update the overlay
-snapshot without removing the basemap.
+under one timeout. Concurrent neighborhoods share in-flight fetch and decode work for
+overlapping source tiles; canceling one consumer aborts that source request only after
+its final consumer releases it. The provider applies the configured pure repair policy
+and retains completed PNGs and decoded neighbor context in bounded LRUs. Relief, 3D
+terrain, and generated isolines therefore cannot observe different elevation bytes.
+Source failures update the overlay snapshot without removing the basemap. Expected
+request cancellation during source replacement is ignored as lifecycle noise.
+Contour-generation timings are likewise grouped into bounded batches so visible-tile
+work cannot displace lifecycle and failure evidence from the diagnostics buffer.
 
 The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
 the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a

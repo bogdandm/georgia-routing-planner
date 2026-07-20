@@ -122,6 +122,14 @@ function sourceIdFromError(event: MapLibreErrorEvent): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
+  const errorName = (event.error as unknown as { readonly name?: unknown }).name;
+  return (
+    errorName === 'AbortError' ||
+    /\b(?:abort(?:ed)?|cancel(?:ed|led)|superseded)\b/iu.test(event.error.message)
+  );
+}
+
 class SentinelRasterLoadError extends Error {
   public constructor(public readonly userMessage: string) {
     super(userMessage);
@@ -192,7 +200,7 @@ export class MapLibreLayerController
     private readonly logger: DiagnosticLogger,
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
-    private readonly requestTimeoutMs: number,
+    private readonly satelliteRendererTimeoutMs: number,
     private readonly preferences: MapLayerPreferencesRepository,
   ) {}
 
@@ -682,6 +690,7 @@ export class MapLibreLayerController
 
   private readonly handleTerrainOverlayError = (event: MapLibreErrorEvent): void => {
     if (
+      isCanceledMapRequest(event) ||
       sourceIdFromError(event) !== mapSourceIds.terrainContours ||
       this.#contourFailureReported
     ) {
@@ -1096,7 +1105,7 @@ export class MapLibreLayerController
             'The imagery renderer did not finish in time. The previous image remains visible; try again.',
           ),
         );
-      }, this.requestTimeoutMs);
+      }, this.satelliteRendererTimeoutMs);
       signal.addEventListener('abort', handleAbort, { once: true });
       map.on('sourcedata', handleSourceData);
       map.on('error', handleError);

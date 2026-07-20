@@ -132,7 +132,9 @@ orange outline above hiking geometry and below labels. While a replacement is lo
 the prior usable image remains present; a failed replacement reports a safe, clickable
 error and leaves that prior image available. The error detail distinguishes rejected
 values, rate limiting, renderer availability, timeout, and an unclassified unusable tile
-without exposing provider URLs. Marker targeting remains unavailable.
+without exposing provider URLs. Marker targeting remains unavailable. The imagery
+staging wait allows up to 60 seconds for slow renderer connections; a replacement or
+clear command cancels that wait immediately and preserves the last usable image.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
 exposed through the web storage APIs, so the application neither claims their size nor

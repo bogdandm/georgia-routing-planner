@@ -6,6 +6,7 @@ import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ContourIntervalMeters } from '@/application/ports/MapLayerPreferencesRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
+import { ContourTimingDiagnostics } from '@/presentation/map/ContourTimingDiagnostics';
 
 export interface ContourTileGenerator {
   createDemTileUrl(): string;
@@ -72,18 +73,12 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
         filteredTiles.getTile(zoom, x, y, abortController);
     }
     this.#source.setupMaplibre({ addProtocol: registerProtocolWithOwnedBuffers });
+    const timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {
-      logger.log({
-        level: timing.error === true ? 'warn' : 'debug',
-        name:
-          timing.error === true
-            ? 'map.contours.tile-failed'
-            : 'map.contours.tile-generated',
-        data: {
-          durationMs: Math.round(timing.duration),
-          tileCount: timing.tilesUsed,
-          status: timing.error === true ? 'failed' : 'success',
-        },
+      timingDiagnostics.record({
+        durationMs: timing.duration,
+        tileCount: timing.tilesUsed,
+        failed: timing.error === true,
       });
     });
   }

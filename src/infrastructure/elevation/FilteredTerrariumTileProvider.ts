@@ -1,4 +1,7 @@
-import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type {
+  DiagnosticLevel,
+  DiagnosticLogger,
+} from '@/application/ports/DiagnosticLogger';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
   BrowserTerrariumPngCodec,
@@ -7,6 +10,7 @@ import {
 import {
   filterTerrariumTile,
   type DecodedTerrariumTile,
+  type TerrariumRepairCounts,
   type TerrariumTileGrid,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
 
@@ -18,6 +22,27 @@ interface SourceTile {
 
 interface LoadedTile extends SourceTile {
   readonly decoded: DecodedTerrariumTile;
+}
+
+interface SharedLoadedTileRequest {
+  readonly controller: AbortController;
+  readonly promise: Promise<LoadedTile>;
+  consumers: number;
+}
+
+type DemProcessingStatus =
+  'success' | 'partial' | 'disabled' | 'canceled' | 'timed-out' | 'failed';
+
+interface DemDiagnosticAggregate {
+  count: number;
+  durationMs: number;
+  noDataCount: number;
+  sentinelCount: number;
+  impossibleCount: number;
+  spikeCount: number;
+  repairedCount: number;
+  unrepairedCount: number;
+  status: DemProcessingStatus;
 }
 
 export interface FilteredTerrariumResponse {
@@ -35,6 +60,26 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
+const emptyRepairCounts: TerrariumRepairCounts = {
+  noDataCount: 0,
+  sentinelCount: 0,
+  impossibleCount: 0,
+  spikeCount: 0,
+  repairedCount: 0,
+  unrepairedCount: 0,
+};
+
+const diagnosticBatchSize = 32;
+const diagnosticIntervalMs = 5_000;
+const diagnosticStatusPriority: Readonly<Record<DemProcessingStatus, number>> = {
+  disabled: 0,
+  success: 1,
+  canceled: 2,
+  partial: 3,
+  'timed-out': 4,
+  failed: 5,
+};
+
 /**
  * Fetches a 3x3 tile neighborhood, repairs only rejected center pixels, and retains a
  * bounded LRU of completed PNGs. Coordinates and URLs never cross the diagnostics port.
@@ -42,8 +87,11 @@ function isAbortError(error: unknown): boolean {
 export class FilteredTerrariumTileProvider {
   readonly #cache = new Map<string, FilteredTerrariumResponse>();
   readonly #decodedTileCache = new Map<string, LoadedTile>();
+  readonly #decodedTileRequests = new Map<string, SharedLoadedTileRequest>();
   #enabled = true;
   #revision = 0;
+  #diagnosticAggregate: DemDiagnosticAggregate | null = null;
+  #lastDiagnosticAt: number | null = null;
 
   public constructor(
     private readonly terrain: MapProviderConfiguration['terrain'],
@@ -63,6 +111,12 @@ export class FilteredTerrariumTileProvider {
     this.#revision += 1;
     this.#cache.clear();
     this.#decodedTileCache.clear();
+    for (const request of this.#decodedTileRequests.values()) {
+      request.controller.abort(
+        new DOMException('DEM filter mode changed.', 'AbortError'),
+      );
+    }
+    this.#decodedTileRequests.clear();
   }
 
   public async getTile(
@@ -105,6 +159,11 @@ export class FilteredTerrariumTileProvider {
           ...(sourceTile.expires === null ? {} : { expires: sourceTile.expires }),
         };
         if (revision === this.#revision) this.putCache(key, response);
+        this.recordDiagnostic(
+          'disabled',
+          this.monotonicNow() - startedAt,
+          emptyRepairCounts,
+        );
         return response;
       }
       const loaded = await this.loadNeighborhood(zoom, x, y, controller.signal);
@@ -133,20 +192,11 @@ export class FilteredTerrariumTileProvider {
         ...(center.expires === null ? {} : { expires: center.expires }),
       };
       if (revision === this.#revision) this.putCache(key, response);
-      this.logger.log({
-        level: filtered.counts.unrepairedCount === 0 ? 'debug' : 'warn',
-        name: 'map.dem.tile-filtered',
-        data: {
-          durationMs: Math.round(this.monotonicNow() - startedAt),
-          noDataCount: filtered.counts.noDataCount,
-          sentinelCount: filtered.counts.sentinelCount,
-          impossibleCount: filtered.counts.impossibleCount,
-          spikeCount: filtered.counts.spikeCount,
-          repairedCount: filtered.counts.repairedCount,
-          unrepairedCount: filtered.counts.unrepairedCount,
-          status: filtered.counts.unrepairedCount === 0 ? 'success' : 'partial',
-        },
-      });
+      this.recordDiagnostic(
+        filtered.counts.unrepairedCount === 0 ? 'success' : 'partial',
+        this.monotonicNow() - startedAt,
+        filtered.counts,
+      );
       return response;
     } catch (error) {
       const timedOut =
@@ -154,18 +204,11 @@ export class FilteredTerrariumTileProvider {
         controller.signal.reason.name === 'TimeoutError';
       const canceled =
         !timedOut && (isAbortError(error) || parentAbortController.signal.aborted);
-      this.logger.log({
-        level: canceled ? 'debug' : 'warn',
-        name: timedOut
-          ? 'map.dem.tile-timeout'
-          : canceled
-            ? 'map.dem.tile-canceled'
-            : 'map.dem.tile-filter-failed',
-        data: {
-          durationMs: Math.round(this.monotonicNow() - startedAt),
-          status: timedOut ? 'timed-out' : canceled ? 'canceled' : 'failed',
-        },
-      });
+      this.recordDiagnostic(
+        timedOut ? 'timed-out' : canceled ? 'canceled' : 'failed',
+        this.monotonicNow() - startedAt,
+        emptyRepairCounts,
+      );
       throw error;
     } finally {
       clearTimeout(timeout);
@@ -229,14 +272,81 @@ export class FilteredTerrariumTileProvider {
       this.#decodedTileCache.set(key, cached);
       return cached;
     }
-    const sourceTile = await this.fetchSourceTile(zoom, x, y, signal);
-    const loaded = {
-      ...sourceTile,
-      decoded: await this.codec.decode(sourceTile.blob, signal),
-    };
-    this.#decodedTileCache.set(key, loaded);
-    this.trimCache(this.#decodedTileCache);
-    return loaded;
+    let request = this.#decodedTileRequests.get(key);
+    if (request === undefined) {
+      const controller = new AbortController();
+      const promise = this.fetchSourceTile(zoom, x, y, controller.signal).then(
+        async (sourceTile) => {
+          const loaded = {
+            ...sourceTile,
+            decoded: await this.codec.decode(sourceTile.blob, controller.signal),
+          };
+          this.#decodedTileCache.set(key, loaded);
+          this.trimCache(this.#decodedTileCache);
+          return loaded;
+        },
+      );
+      request = { controller, promise, consumers: 0 };
+      this.#decodedTileRequests.set(key, request);
+      void promise
+        .finally(() => {
+          if (this.#decodedTileRequests.get(key) === request) {
+            this.#decodedTileRequests.delete(key);
+          }
+        })
+        .catch(() => undefined);
+    }
+    return this.waitForSharedTile(key, request, signal);
+  }
+
+  private waitForSharedTile(
+    key: string,
+    request: SharedLoadedTileRequest,
+    signal: AbortSignal,
+  ): Promise<LoadedTile> {
+    request.consumers += 1;
+    return new Promise((resolve, reject) => {
+      let active = true;
+      const release = () => {
+        if (!active) return;
+        active = false;
+        signal.removeEventListener('abort', handleAbort);
+        request.consumers -= 1;
+        if (request.consumers === 0 && this.#decodedTileRequests.get(key) === request) {
+          this.#decodedTileRequests.delete(key);
+          request.controller.abort(
+            new DOMException('Terrarium tile request canceled.', 'AbortError'),
+          );
+        }
+      };
+      const handleAbort = () => {
+        release();
+        reject(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new DOMException('Terrarium tile request canceled.', 'AbortError'),
+        );
+      };
+      if (signal.aborted) {
+        handleAbort();
+        return;
+      }
+      signal.addEventListener('abort', handleAbort, { once: true });
+      void request.promise.then(
+        (tile) => {
+          if (!active) return;
+          release();
+          resolve(tile);
+        },
+        (error: unknown) => {
+          if (!active) return;
+          release();
+          reject(
+            error instanceof Error ? error : new Error('DEM tile request failed.'),
+          );
+        },
+      );
+    });
   }
 
   private async fetchSourceTile(
@@ -271,5 +381,66 @@ export class FilteredTerrariumTileProvider {
       if (oldest === undefined) return;
       cache.delete(oldest);
     }
+  }
+
+  private recordDiagnostic(
+    status: DemProcessingStatus,
+    durationMs: number,
+    counts: TerrariumRepairCounts,
+  ): void {
+    const aggregate = this.#diagnosticAggregate ?? {
+      ...emptyRepairCounts,
+      count: 0,
+      durationMs: 0,
+      status,
+    };
+    if (diagnosticStatusPriority[status] > diagnosticStatusPriority[aggregate.status]) {
+      aggregate.status = status;
+    }
+    aggregate.count += 1;
+    aggregate.durationMs += durationMs;
+    aggregate.noDataCount += counts.noDataCount;
+    aggregate.sentinelCount += counts.sentinelCount;
+    aggregate.impossibleCount += counts.impossibleCount;
+    aggregate.spikeCount += counts.spikeCount;
+    aggregate.repairedCount += counts.repairedCount;
+    aggregate.unrepairedCount += counts.unrepairedCount;
+    this.#diagnosticAggregate = aggregate;
+    const now = this.monotonicNow();
+    if (
+      this.#lastDiagnosticAt === null ||
+      aggregate.count >= diagnosticBatchSize ||
+      now - this.#lastDiagnosticAt >= diagnosticIntervalMs
+    ) {
+      this.flushDiagnostics();
+    }
+  }
+
+  private flushDiagnostics(): void {
+    const aggregate = this.#diagnosticAggregate;
+    if (aggregate === null) return;
+    const level: DiagnosticLevel =
+      aggregate.status === 'failed' ||
+      aggregate.status === 'timed-out' ||
+      aggregate.status === 'partial'
+        ? 'warn'
+        : 'debug';
+    this.logger.log({
+      level,
+      name: 'map.dem.tiles-processed',
+      data: {
+        count: aggregate.count,
+        durationMs: Math.round(aggregate.durationMs),
+        noDataCount: aggregate.noDataCount,
+        sentinelCount: aggregate.sentinelCount,
+        impossibleCount: aggregate.impossibleCount,
+        spikeCount: aggregate.spikeCount,
+        repairedCount: aggregate.repairedCount,
+        unrepairedCount: aggregate.unrepairedCount,
+        status: aggregate.status,
+      },
+    });
+    this.#diagnosticAggregate = null;
+    this.#lastDiagnosticAt = this.monotonicNow();
   }
 }

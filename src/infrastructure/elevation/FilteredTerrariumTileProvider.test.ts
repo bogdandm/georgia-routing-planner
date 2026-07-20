@@ -161,8 +161,87 @@ describe('FilteredTerrariumTileProvider', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(log).toHaveBeenCalledOnce();
     const event = log.mock.calls[0]?.[0];
-    expect(event?.name).toBe('map.dem.tile-timeout');
+    expect(event?.name).toBe('map.dem.tiles-processed');
+    expect(event?.data?.count).toBe(1);
     expect(event?.data?.status).toBe('timed-out');
+  });
+
+  it('coalesces overlapping source-tile requests across adjacent neighborhoods', async () => {
+    const fetchImplementation = vi.fn((_input: RequestInfo | URL) =>
+      Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      terrain(),
+      10_000,
+      logger,
+      codec,
+      fetchImplementation,
+    );
+
+    await Promise.all([
+      provider.getTile(5, 8, 9, new AbortController()),
+      provider.getTile(5, 9, 9, new AbortController()),
+    ]);
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(12);
+  });
+
+  it('keeps shared source work alive when only one consumer is canceled', async () => {
+    let releaseFetches: (() => void) | undefined;
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetches = resolve;
+    });
+    const fetchImplementation = vi.fn(async () => {
+      await fetchGate;
+      return new Response(new Blob(['tile']), { status: 200 });
+    });
+    const provider = new FilteredTerrariumTileProvider(
+      terrain(),
+      10_000,
+      logger,
+      codec,
+      fetchImplementation,
+    );
+    const canceled = new AbortController();
+    const retained = new AbortController();
+
+    const first = provider.getTile(5, 8, 9, canceled);
+    const second = provider.getTile(5, 8, 9, retained);
+    canceled.abort();
+    releaseFetches?.();
+
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    const retainedResult = await second;
+    expect(retainedResult.data).toBeInstanceOf(Blob);
+    expect(fetchImplementation).toHaveBeenCalledTimes(9);
+  });
+
+  it('batches mixed completion states without logging each tile transition', async () => {
+    const log = vi.fn<(input: DiagnosticInput) => void>();
+    const aggregateLogger: DiagnosticLogger = { log, getEvents: () => [] };
+    const fetchImplementation = vi.fn((_input: RequestInfo | URL) =>
+      Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
+    );
+    let now = 0;
+    const provider = new FilteredTerrariumTileProvider(
+      terrain(),
+      10_000,
+      aggregateLogger,
+      codec,
+      fetchImplementation,
+      () => now,
+    );
+
+    await provider.getTile(5, 8, 9, new AbortController());
+    const canceled = new AbortController();
+    canceled.abort();
+    await expect(provider.getTile(5, 20, 9, canceled)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    now = 1;
+    await provider.getTile(5, 24, 9, new AbortController());
+
+    expect(log).toHaveBeenCalledOnce();
   });
 
   it('keeps the processed-tile cache within its configured LRU bound', async () => {

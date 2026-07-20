@@ -60,6 +60,18 @@ function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   return typeof sourceId === 'string' ? sourceId : null;
 }
 
+function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
+  const error = event.error;
+  const errorName =
+    typeof (error as unknown as { readonly name?: unknown }).name === 'string'
+      ? (error as unknown as { readonly name: string }).name
+      : null;
+  return (
+    errorName === 'AbortError' ||
+    /\b(?:abort(?:ed)?|cancel(?:ed|led)|superseded)\b/iu.test(error.message)
+  );
+}
+
 function categorizeMapError(
   event: MapLibreErrorEvent,
   lifecycle: MapDiagnosticsSnapshot['lifecycle'],
@@ -303,6 +315,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleError = (event: MapLibreErrorEvent): void => {
+    if (isCanceledMapRequest(event)) return;
     const category = categorizeMapError(event, this.#snapshot.lifecycle);
     const sourceId = getErrorSourceId(event);
     if (category !== 'style') {

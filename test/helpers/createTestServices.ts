@@ -107,7 +107,7 @@ export function createTestServices(
     logger,
     idGenerator,
     sentinelQueryDiagnostics,
-    parsedMapProviderConfiguration.policy.requestTimeoutMs,
+    parsedMapProviderConfiguration.satellite.renderer.requestTimeoutMs,
     database,
   );
 

@@ -321,6 +321,24 @@ describe('MapLibreFacade', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('private');
   });
 
+  it('ignores canceled source requests during tile-template replacement', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    nativeMap.fire('error', {
+      error: new DOMException('The operation was aborted.', 'AbortError'),
+      sourceId: 'terrain-dem',
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      recoverableFailures: [],
+    });
+  });
+
   it('treats an unrecoverable pre-load style error as fatal', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

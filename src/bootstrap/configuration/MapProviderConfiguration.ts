@@ -169,6 +169,7 @@ const mapProviderConfigurationInputSchema = z
             tileSize: z.union([z.literal(256), z.literal(512)]),
             minZoom: z.number().int().min(0).max(22),
             maxZoom: z.number().int().min(0).max(22),
+            requestTimeoutMs: z.number().int().min(5_000).max(180_000),
             attribution: safeAttributionSchema,
           })
           .strict()
@@ -253,6 +254,8 @@ interface MapProviderConfigurationInput {
       readonly tileSize: 256 | 512;
       readonly minZoom: number;
       readonly maxZoom: number;
+      /** Maximum wait for visible rendered imagery tiles on slow connections. */
+      readonly requestTimeoutMs: number;
       readonly attribution: string;
     };
   };
@@ -349,6 +352,7 @@ export const defaultMapProviderConfigurationInput = {
       tileSize: 256,
       minZoom: 5,
       maxZoom: 16,
+      requestTimeoutMs: 60_000,
       attribution:
         'Copernicus Sentinel data · COG tiles rendered by TiTiler / Development Seed',
     },

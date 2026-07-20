@@ -135,13 +135,21 @@ sequenceDiagram
   else error, timeout, or cancellation
     Facade->>Map: clear 3D terrain; retain shared overlay source
     Facade-->>UI: failed / usable flat map
+    loop two bounded backoff retries
+      UI->>Facade: setTerrainMode(terrain)
+      Facade->>Map: refresh shared DEM tiles and reapply terrain
+    end
   end
 ```
 
 Only one terrain transition may run at a time. Repeated requests for the same target
 share its promise; an opposite request receives an explicit failure. This prevents
 duplicate sources, listeners, and out-of-order camera changes. Selecting 2D also resets
-pitch and bearing to zero, so the flat map returns north-up.
+pitch and bearing to zero, so the flat map returns north-up. The UI automatically
+retries a failed 3D enable twice with bounded backoff. Each retry advances a private
+source revision so MapLibre does not reuse a failed tile-cache entry. If all attempts
+fail, the shared status below search remains the only user-facing failure surface; no
+map banner is mounted.
 
 ## Terrain overlay reconciliation
 

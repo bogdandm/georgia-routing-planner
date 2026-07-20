@@ -210,7 +210,7 @@ describe('MapWorkspace', () => {
     );
   });
 
-  it('keeps 2D usable after terrain failure and retries explicitly', async () => {
+  it('keeps 2D usable and retries terrain automatically without a local banner', async () => {
     const user = userEvent.setup();
     const facade = new FakeMapFacade();
     let attempts = 0;
@@ -226,22 +226,28 @@ describe('MapWorkspace', () => {
 
     render(
       <RuntimeServicesProvider services={createTestServices()}>
-        <MapWorkspace facade={facade} mapCanvas={<div>Usable 2D map</div>} />
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Usable 2D map</div>}
+          terrainRetryDelaysMs={[0]}
+        />
       </RuntimeServicesProvider>,
     );
 
     await screen.findByText('Usable 2D map');
     await user.click(screen.getByRole('button', { name: 'Show 3D terrain map' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Fixture terrain is unavailable. The 2D basemap is still available.',
-    );
-    expect(screen.getByText('Usable 2D map')).toBeVisible();
-
-    await user.click(screen.getByRole('button', { name: 'Retry 3D' }));
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain', 'terrain']);
+    });
     expect(
       screen.queryByText('Fixture terrain is unavailable.'),
     ).not.toBeInTheDocument();
-    expect(facade.terrainModeRequests).toEqual(['terrain', 'terrain']);
+    expect(screen.queryByRole('button', { name: 'Retry 3D' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText('Usable 2D map')).toBeVisible();
   });
 
   it('returns the control to 2D after a late terrain source failure', async () => {

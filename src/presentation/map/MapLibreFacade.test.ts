@@ -18,6 +18,7 @@ class FakeNativeMap {
   public showCollisionBoxes = false;
   public sourceLoaded = true;
   public addSourceCalls = 0;
+  public readonly terrainTileUpdates: string[][] = [];
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
   public repaintCalls = 0;
@@ -93,7 +94,17 @@ class FakeNativeMap {
 
   public addSource(id: string, source: unknown): void {
     this.addSourceCalls += 1;
-    this.#sources.set(id, source);
+    this.#sources.set(
+      id,
+      id === 'terrain-dem'
+        ? {
+            ...(source as Record<string, unknown>),
+            setTiles: (tiles: string[]) => {
+              this.terrainTileUpdates.push(tiles);
+            },
+          }
+        : source,
+    );
   }
 
   public removeSource(id: string): void {
@@ -308,6 +319,9 @@ describe('MapLibreFacade', () => {
 
     const retry = facade.setTerrainMode('terrain');
     expect(nativeMap.listenerCount()).toBe(9);
+    expect(nativeMap.terrainTileUpdates).toEqual([
+      ['test-dem://tiles/{z}/{x}/{y}?terrainEnableRetry=1'],
+    ]);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);

@@ -15,6 +15,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Parallel V8 instrumentation on managed Windows can push the benchmark and
+    // WorkspaceShell interaction cases beyond Vitest's five-second default.
+    testTimeout: 10_000,
     include: ['src/**/*.test.{ts,tsx}', 'test/**/*.test.{ts,tsx}'],
     setupFiles: ['./test/setup/vitest.setup.ts'],
     coverage: {

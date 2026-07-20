@@ -45,6 +45,7 @@ const initialSnapshot: MapDiagnosticsSnapshot = {
 
 interface MapProviderOptions {
   readonly terrain: MapProviderConfiguration['terrain'];
+  readonly demTileUrl: string;
   readonly requestTimeoutMs: number;
   readonly equivalentErrorWindowMs: number;
 }
@@ -57,6 +58,18 @@ interface FailureBucket {
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   const sourceId = (event as unknown as { readonly sourceId?: unknown }).sourceId;
   return typeof sourceId === 'string' ? sourceId : null;
+}
+
+function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
+  const error = event.error;
+  const errorName =
+    typeof (error as unknown as { readonly name?: unknown }).name === 'string'
+      ? (error as unknown as { readonly name: string }).name
+      : null;
+  return (
+    errorName === 'AbortError' ||
+    /\b(?:abort(?:ed)?|cancel(?:ed|led)|superseded)\b/iu.test(error.message)
+  );
 }
 
 function categorizeMapError(
@@ -302,6 +315,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleError = (event: MapLibreErrorEvent): void => {
+    if (isCanceledMapRequest(event)) return;
     const category = categorizeMapError(event, this.#snapshot.lifecycle);
     const sourceId = getErrorSourceId(event);
     if (category !== 'style') {
@@ -436,7 +450,7 @@ export class MapLibreFacade implements MapFacade {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(provider.terrain),
+          createTerrainDemSource(provider.terrain, provider.demTileUrl),
         );
       }
       map.setTerrain({

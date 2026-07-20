@@ -548,6 +548,15 @@ Automated tests are required by default. Add or update tests in the same change 
 production behavior. Do not postpone the entire test suite to a subsequent change and do
 not rely on manual browser verification as the only evidence.
 
+### Documentation-only verification
+
+When a change modifies only Markdown or other non-executable documentation, do not run
+TypeScript checking, ESLint, unit/component/integration tests, coverage, Playwright, or
+production builds. Verify only the changed documentation with its formatter, the
+documentation-boundary checks required by this file, and `git diff --check`. If the
+change also modifies executable code, configuration, schemas, or test fixtures, use the
+normal verification rules for those files.
+
 ### Managed Windows coverage timing
 
 On the managed Windows workspace, parallel V8 coverage can make otherwise passing

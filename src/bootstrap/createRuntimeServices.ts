@@ -115,7 +115,7 @@ export function createRuntimeServices(): RuntimeServices {
           logger,
           idGenerator,
           sentinelQueryDiagnostics,
-          mapProviderConfiguration.value.policy.requestTimeoutMs,
+          mapProviderConfiguration.value.satellite.renderer.requestTimeoutMs,
           database,
         )
       : null;

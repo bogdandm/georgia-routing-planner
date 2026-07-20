@@ -102,6 +102,7 @@ export function MapWorkspace({
         mapProviderConfiguration.status === 'valid'
           ? {
               terrain: mapProviderConfiguration.value.terrain,
+              demTileUrl: mapLayers?.createDemTileUrl() ?? '',
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
               equivalentErrorWindowMs:
                 mapProviderConfiguration.value.policy.equivalentErrorWindowMs,

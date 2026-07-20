@@ -16,6 +16,11 @@ interface StoredMapView {
   readonly terrainMode: 'flat' | 'terrain';
 }
 
+// The application gives the controlled DEM source up to 15 seconds to become ready.
+// Assert the persisted completion signal with a small runner margin instead of treating
+// the terrain control's immediate `enabling` state as a completed transition.
+const terrainPersistenceTimeoutMs = 20_000;
+
 async function readStoredMapView(page: Page): Promise<StoredMapView | null> {
   return page.evaluate(
     () =>
@@ -46,6 +51,55 @@ async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
   return (await readStoredMapView(page))?.camera ?? null;
 }
 
+async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
+  readonly relief: boolean;
+  readonly isolines: boolean;
+} | null> {
+  return page.evaluate(
+    () =>
+      new Promise<{
+        readonly relief: boolean;
+        readonly isolines: boolean;
+      } | null>((resolve, reject) => {
+        const openRequest = indexedDB.open('GeorgiaRoutingPlanner');
+        openRequest.onerror = () => {
+          reject(openRequest.error ?? new Error('Could not open fixture database.'));
+        };
+        openRequest.onsuccess = () => {
+          const database = openRequest.result;
+          const transaction = database.transaction('settings', 'readonly');
+          const getRequest = transaction.objectStore('settings').get('map.layers');
+          getRequest.onerror = () => {
+            database.close();
+            reject(getRequest.error ?? new Error('Could not read layer settings.'));
+          };
+          getRequest.onsuccess = () => {
+            const record = getRequest.result as
+              | {
+                  value?: {
+                    visibility?: {
+                      'terrain-relief'?: boolean;
+                      'elevation-isolines'?: boolean;
+                    };
+                  };
+                }
+              | undefined;
+            database.close();
+            const visibility = record?.value?.visibility;
+            resolve(
+              visibility === undefined
+                ? null
+                : {
+                    relief: visibility['terrain-relief'] ?? true,
+                    isolines: visibility['elevation-isolines'] ?? true,
+                  },
+            );
+          };
+        };
+      }),
+  );
+}
+
 test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
@@ -53,6 +107,7 @@ test.beforeEach(async ({ page }) => {
 test('persists a settled camera and restores it before interaction after reload', async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
@@ -69,7 +124,9 @@ test('persists a settled camera and restores it before interaction after reload'
 
   await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
   await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode)
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
     .toBe('terrain');
   const cameraBeforeReload = await readStoredCamera(page);
   expect(cameraBeforeReload).not.toBeNull();
@@ -106,6 +163,9 @@ test('persists terrain overlay visibility from the Layers tab', async ({ page })
   await expect(isolines).toBeChecked();
   await relief.uncheck();
   await isolines.uncheck();
+  await expect
+    .poll(() => readStoredTerrainOverlayVisibility(page))
+    .toEqual({ relief: false, isolines: false });
 
   await page.reload();
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
@@ -146,6 +206,11 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await terrainButton.click();
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
+    .toBe('terrain');
   await expect(
     page.getByRole('link', { name: 'Mapzen/AWS Open Data providers' }).first(),
   ).toBeVisible();
@@ -217,7 +282,9 @@ test('uses conventional native camera gestures and resets them with the compass'
     page.getByRole('button', { name: 'Show 3D terrain map' }),
   ).toHaveAttribute('aria-pressed', 'true');
   await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode)
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
     .toBe('terrain');
   const cameraBeforeOrbit = await readStoredCamera(page);
   await page.mouse.move(centerX, centerY);

@@ -591,10 +591,17 @@ GitHub's Linux runner does not reliably sustain two fully parallel WebGL/MapLibr
 workers. The contention can make the controlled terrain source miss its application
 deadline, leave tests in flat mode with a `Retry 3D` alert, and push the terrain or
 satellite workflows past Playwright's 30-second default. Keep `workers: 1` when `CI` is
-set and two workers for local runs. The terrain-transition and satellite-imagery
-workflows have focused 45-second ceilings; do not replace these with suite-wide timeout
-increases. CI retries remain disabled so a real failure is reported once instead of
-repeating the same resource contention.
+set and two workers for local runs. CI retries remain disabled so a real failure is
+reported once instead of repeating the same resource contention.
+
+Even with one worker, software-rendered Chromium can need more than Playwright's
+five-second assertion default to make the synthetic DEM source ready. Terrain E2E tests
+must wait for the persisted `terrain` view state before sending dependent camera input;
+`aria-pressed` also represents the intermediate `enabling` state. The application DEM
+deadline is 15 seconds, so use the focused 20-second persisted-state assertion and the
+existing 45-second terrain workflow ceiling. Satellite imagery also keeps its focused
+45-second ceiling. Do not replace these with arbitrary sleeps or suite-wide timeout
+increases.
 
 Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
 coverage, run the CI-shaped command on Windows PowerShell:

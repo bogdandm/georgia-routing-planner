@@ -254,7 +254,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
 test('uses conventional native camera gestures and resets them with the compass', async ({
   page,
 }) => {
-  test.setTimeout(45_000);
+  test.setTimeout(60_000);
   await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -319,11 +319,12 @@ test('uses conventional native camera gestures and resets them with the compass'
     .poll(async () => (await readStoredCamera(page))?.pitch ?? 0)
     .toBeGreaterThan(0);
 
-  await canvas.focus();
   const cameraBeforeKeyboard = await readStoredCamera(page);
-  await page.keyboard.press('Shift+ArrowRight');
+  await canvas.press('Shift+ArrowRight');
   await expect
-    .poll(async () => (await readStoredCamera(page))?.bearing)
+    .poll(async () => (await readStoredCamera(page))?.bearing, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
     .not.toBe(cameraBeforeKeyboard?.bearing);
 
   await page.locator('.maplibregl-ctrl-compass').click();

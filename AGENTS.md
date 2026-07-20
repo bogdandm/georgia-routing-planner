@@ -615,6 +615,12 @@ readiness assertion and the existing 45-second terrain workflow ceiling. Use the
 imagery also keeps its focused 45-second ceiling. Do not replace these with arbitrary
 sleeps or suite-wide timeout increases.
 
+The isolated native-camera workflow can reach roughly 40 seconds on GitHub's
+software-rendered Chromium even with one worker. Keep its focused 60-second test
+ceiling, send keyboard shortcuts through the canvas locator so focus and key delivery
+are one action, and use the 10-second persisted-camera assertion for the resulting
+settled view.
+
 Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
 coverage, run the CI-shaped command on Windows PowerShell:
 

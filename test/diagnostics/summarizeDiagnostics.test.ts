@@ -38,7 +38,7 @@ describe('summarizeDiagnostics', () => {
   it('prints a deterministic safe troubleshooting summary', () => {
     expect(summarizeDiagnostics(validBundle)).toBe(
       [
-        'Georgia Routing Planner diagnostics v2 (migrated from v1)',
+        'Georgia Routing Planner diagnostics v3 (migrated from v1)',
         'Build: 0.0.0 (abc123, production)',
         'Browser: Synthetic Chrome',
         'Exported: 2026-07-18T00:00:00.000Z',
@@ -48,7 +48,7 @@ describe('summarizeDiagnostics', () => {
         'Recent errors: 1',
         '- storage.failed: Storage unavailable.',
         'Slow operations: 1',
-        'Next: investigate failed health checks and the newest error events.',
+        'Next: investigate failed health checks, active map failures, and the newest error events.',
         '',
       ].join('\n'),
     );
@@ -56,14 +56,14 @@ describe('summarizeDiagnostics', () => {
 
   it('rejects unsupported schema versions', () => {
     expect(() => {
-      summarizeDiagnostics({ ...validBundle, schemaVersion: 3 });
+      summarizeDiagnostics({ ...validBundle, schemaVersion: 4 });
     }).toThrow();
   });
 
-  it('summarizes the current v2 map snapshot', () => {
+  it('summarizes the current v3 map snapshot with safe source failure details', () => {
     const v2Bundle = {
       ...validBundle,
-      schemaVersion: 2,
+      schemaVersion: 3,
       map: {
         lifecycle: 'degraded',
         camera: {
@@ -89,8 +89,12 @@ describe('summarizeDiagnostics', () => {
           {
             category: 'base-vector',
             sourceId: 'basemap-vector',
+            reason: 'http-server',
+            httpStatus: 503,
             count: 3,
             lastOccurredAt: '2026-07-18T00:00:03.000Z',
+            recoveryState: 'scheduled',
+            retryAttempt: 1,
           },
         ],
         message: 'Some basemap tiles could not load.',
@@ -98,10 +102,16 @@ describe('summarizeDiagnostics', () => {
     } as const;
 
     const summary = summarizeDiagnostics(v2Bundle);
-    expect(summary).toContain('Georgia Routing Planner diagnostics v2\n');
+    expect(summary).toContain('Georgia Routing Planner diagnostics v3\n');
     expect(summary).toContain('Map: degraded, flat, 1 recoverable failure category(s)');
     expect(summary).toContain(
       'Map style: Georgia hiking basemap v1; 1 source(s), 2 layer(s)',
+    );
+    expect(summary).toContain(
+      '- basemap-vector: http-server HTTP 503; scheduled; retry 1; 3 occurrence(s)',
+    );
+    expect(summary).toContain(
+      'Next: investigate failed health checks, active map failures, and the newest error events.',
     );
   });
 });

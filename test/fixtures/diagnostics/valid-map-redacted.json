@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "exportedAt": "2026-07-18T00:00:00.000Z",
   "build": {
     "appVersion": "0.0.0",
@@ -52,8 +52,12 @@
       {
         "category": "base-vector",
         "sourceId": "basemap-vector",
+        "reason": "http-server",
+        "httpStatus": 503,
         "count": 2,
-        "lastOccurredAt": "2026-07-18T00:00:01.000Z"
+        "lastOccurredAt": "2026-07-18T00:00:01.000Z",
+        "recoveryState": "scheduled",
+        "retryAttempt": 1
       }
     ],
     "message": "Some basemap tiles could not load."

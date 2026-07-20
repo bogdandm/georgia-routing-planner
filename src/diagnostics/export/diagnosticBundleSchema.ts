@@ -58,7 +58,7 @@ export const diagnosticBundleV1Schema = z
   .object({ schemaVersion: z.literal(1), ...commonBundleShape })
   .strict();
 
-export const mapDiagnosticSnapshotSchema = z
+const mapDiagnosticSnapshotV2Schema = z
   .object({
     lifecycle: z.enum(['loading', 'ready', 'degraded', 'fatal']),
     camera: z
@@ -105,14 +105,61 @@ export const mapDiagnosticSnapshotSchema = z
   })
   .strict();
 
-export const diagnosticBundleSchema = z
+export const diagnosticBundleV2Schema = z
   .object({
     schemaVersion: z.literal(2),
+    ...commonBundleShape,
+    map: mapDiagnosticSnapshotV2Schema.nullable(),
+  })
+  .strict();
+
+export const mapDiagnosticSnapshotSchema = mapDiagnosticSnapshotV2Schema.extend({
+  recoverableFailures: z.array(
+    z
+      .object({
+        category: z.enum([
+          'base-vector',
+          'glyph-sprite',
+          'satellite-raster',
+          'terrain',
+          'style',
+          'webgl',
+          'unknown',
+        ]),
+        sourceId: z.string().nullable(),
+        reason: z.enum([
+          'http-client',
+          'http-server',
+          'network',
+          'rate-limit',
+          'timeout',
+          'unknown',
+        ]),
+        httpStatus: z.number().int().min(100).max(599).nullable(),
+        count: z.number().int().nonnegative(),
+        lastOccurredAt: z.iso.datetime(),
+        recoveryState: z.enum([
+          'exhausted',
+          'not-applicable',
+          'not-retryable',
+          'recovered',
+          'scheduled',
+        ]),
+        retryAttempt: z.number().int().nonnegative(),
+      })
+      .strict(),
+  ),
+});
+
+export const diagnosticBundleSchema = z
+  .object({
+    schemaVersion: z.literal(3),
     ...commonBundleShape,
     map: mapDiagnosticSnapshotSchema.nullable(),
   })
   .strict();
 
 export type DiagnosticBundleV1 = z.infer<typeof diagnosticBundleV1Schema>;
+export type DiagnosticBundleV2 = z.infer<typeof diagnosticBundleV2Schema>;
 export type DiagnosticBundle = z.infer<typeof diagnosticBundleSchema>;
 export type HealthCheckResult = z.infer<typeof healthCheckSchema>;

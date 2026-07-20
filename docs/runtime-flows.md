@@ -52,6 +52,15 @@ evidence. Clicking that active entry aborts any pending application, removes bot
 slots and the footprint, clears the applied-scene preference, and returns map layer
 state to empty.
 
+After a raster is active, MapLibre tile errors flow through the facade for safe
+classification and through the layer controller for recovery. The controller ignores
+duplicate errors while a retry is scheduled, reloads the existing source after a bounded
+exponential delay, and stops after three attempts. HTTP 4xx failures other than 429 and
+unknown failures remain visible without automatic retry. A later loaded-source event
+cancels pending recovery, marks the diagnostic bucket recovered, and returns the facade
+to ready when no other active failure remains. Raw tile URLs, response bodies, and tile
+coordinates never enter logs, React state, or the diagnostics bundle.
+
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the
 existing source, reconciles relief/satellite/contour/OSM order, publishes a serializable

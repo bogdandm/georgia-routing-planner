@@ -137,7 +137,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(5);
+    expect(nativeMap.listenerCount()).toBe(6);
 
     nativeMap.fire('load');
     nativeMap.addSource('late-style-source', { type: 'geojson' });
@@ -272,7 +272,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(7);
+    expect(nativeMap.listenerCount()).toBe(8);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -284,7 +284,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(7);
+    expect(nativeMap.listenerCount()).toBe(8);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);
@@ -310,13 +310,66 @@ describe('MapLibreFacade', () => {
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'degraded',
       recoverableFailures: [
-        { category: 'base-vector', sourceId: 'basemap-vector', count: 3 },
+        {
+          category: 'base-vector',
+          sourceId: 'basemap-vector',
+          reason: 'unknown',
+          httpStatus: null,
+          count: 3,
+          recoveryState: 'not-applicable',
+          retryAttempt: 0,
+        },
       ],
     });
     expect(
       services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
     ).toHaveLength(1);
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('private');
+  });
+
+  it('shows a safe exact satellite HTTP failure and records source recovery', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    nativeMap.fire('error', {
+      error: {
+        message: 'AJAXError: Service Unavailable (503): https://private.example/tile',
+        status: 503,
+      },
+      sourceId: 'sentinel-raster-a',
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'degraded',
+      message: 'The satellite imagery renderer returned a server error (HTTP 503).',
+      recoverableFailures: [
+        {
+          category: 'satellite-raster',
+          sourceId: 'sentinel-raster-a',
+          reason: 'http-server',
+          httpStatus: 503,
+          recoveryState: 'not-applicable',
+          retryAttempt: 0,
+        },
+      ],
+    });
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain(
+      'private.example',
+    );
+
+    nativeMap.fire('sourcedata', {
+      sourceId: 'sentinel-raster-a',
+      isSourceLoaded: true,
+    });
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      message: null,
+      recoverableFailures: [{ recoveryState: 'recovered' }],
+    });
+    expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
   });
 
   it('treats an unrecoverable pre-load style error as fatal', () => {

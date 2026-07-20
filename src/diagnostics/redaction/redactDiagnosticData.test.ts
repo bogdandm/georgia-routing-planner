@@ -43,6 +43,8 @@ describe('diagnostic redaction', () => {
       message: 'authorization=private',
       data: {
         status: 'failed',
+        attempt: 2,
+        recoveryState: 'scheduled',
         durationMs: 25,
         filename: 'private.gpx',
         token: 'private-token',
@@ -53,7 +55,12 @@ describe('diagnostic redaction', () => {
       level: 'warn',
       name: 'test.event',
       message: 'authorization=[redacted]',
-      data: { status: 'failed', durationMs: 25 },
+      data: {
+        status: 'failed',
+        attempt: 2,
+        recoveryState: 'scheduled',
+        durationMs: 25,
+      },
     });
   });
 

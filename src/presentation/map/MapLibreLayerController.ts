@@ -52,11 +52,16 @@ import type {
 } from '@/presentation/map/TerrainOverlayMap';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
+import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
+import type { MapRecoveryState } from '@/presentation/map/mapTypes';
 
 const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
   { sourceId: mapSourceIds.sentinelRasterB, layerId: sentinelMapLayerIds.rasterB },
 ] as const;
+
+const maximumRasterRecoveryAttempts = 3;
+const rasterRecoveryBaseDelayMs = 1_000;
 
 export const logicalNativeLayerGroups: Readonly<
   Record<
@@ -184,6 +189,8 @@ export class MapLibreLayerController
     null;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
+  #rasterRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  #rasterRecoveryAttempts = 0;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -218,6 +225,7 @@ export class MapLibreLayerController
     if (this.#map !== map) return;
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
+    this.cancelRasterRecovery();
     this.#map = null;
     this.#appliedVisualMode = null;
     this.#visualModeLayerAnchors.clear();
@@ -277,6 +285,7 @@ export class MapLibreLayerController
   }
 
   public clearScene(): SatelliteImageryCommandResult {
+    this.cancelRasterRecovery();
     this.#applySequence += 1;
     this.#restoreController?.abort();
     this.#restoreController = null;
@@ -302,6 +311,75 @@ export class MapLibreLayerController
 
   public getAppliedScene(): SatelliteScene | null {
     return this.#appliedScene;
+  }
+
+  /** Schedules one bounded source reload for a transient failure on the active raster. */
+  public handleRasterSourceFailure(event: MapLibreErrorEvent): {
+    readonly state: MapRecoveryState;
+    readonly retryAttempt: number;
+  } {
+    const sourceId = sourceIdFromError(event);
+    if (
+      this.#map === null ||
+      this.#activeSlot === null ||
+      this.#appliedScene === null ||
+      sourceId !== this.#activeSlot.sourceId
+    ) {
+      return { state: 'not-applicable', retryAttempt: 0 };
+    }
+    const details = mapFailureDetails(event);
+    if (!details.retryable) {
+      return { state: 'not-retryable', retryAttempt: this.#rasterRecoveryAttempts };
+    }
+    if (this.#rasterRecoveryTimer !== null) {
+      return { state: 'scheduled', retryAttempt: this.#rasterRecoveryAttempts + 1 };
+    }
+    if (this.#rasterRecoveryAttempts >= maximumRasterRecoveryAttempts) {
+      return { state: 'exhausted', retryAttempt: this.#rasterRecoveryAttempts };
+    }
+
+    const retryAttempt = this.#rasterRecoveryAttempts + 1;
+    const delayMs =
+      rasterRecoveryBaseDelayMs *
+      2 ** this.#rasterRecoveryAttempts *
+      (details.reason === 'rate-limit' ? 5 : 1);
+    const map = this.#map;
+    const slot = this.#activeSlot;
+    const appliedScene = this.#appliedScene;
+    if (appliedScene.visualAsset.kind !== 'sentinel-rgb-cogs') {
+      return { state: 'not-retryable', retryAttempt: this.#rasterRecoveryAttempts };
+    }
+    const itemHref = appliedScene.visualAsset.itemHref;
+    this.#rasterRecoveryTimer = setTimeout(() => {
+      this.#rasterRecoveryTimer = null;
+      if (
+        this.#map !== map ||
+        this.#activeSlot !== slot ||
+        this.#appliedScene === null
+      ) {
+        return;
+      }
+      const source = map.getSource(slot.sourceId) as
+        { readonly setTiles?: (tiles: string[]) => void } | undefined;
+      if (source?.setTiles === undefined) return;
+      this.#rasterRecoveryAttempts = retryAttempt;
+      source.setTiles([this.createTileUrl(itemHref)]);
+      this.logger.log({
+        level: 'info',
+        name: 'satellite.imagery.retry-requested',
+        data: {
+          attempt: retryAttempt,
+          reason: details.reason,
+          ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
+        },
+      });
+    }, delayMs);
+    return { state: 'scheduled', retryAttempt };
+  }
+
+  public handleRasterSourceRecovered(sourceId: string): void {
+    if (sourceId !== this.#activeSlot?.sourceId) return;
+    this.cancelRasterRecovery();
   }
 
   public async restorePersistedState(): Promise<void> {
@@ -399,6 +477,7 @@ export class MapLibreLayerController
     signal: AbortSignal,
     persist: boolean,
   ): Promise<SatelliteImageryCommandResult> {
+    this.cancelRasterRecovery();
     const map = this.#map;
     const sceneKey = satelliteSceneKey(scene);
     if (map === null) return this.applyFailure(sceneKey, 'The map is not ready yet.');
@@ -1082,6 +1161,12 @@ export class MapLibreLayerController
   private removeSlot(map: MapLibreMap, slot: RasterSlot): void {
     if (map.getLayer(slot.layerId) !== undefined) map.removeLayer(slot.layerId);
     if (map.getSource(slot.sourceId) !== undefined) map.removeSource(slot.sourceId);
+  }
+
+  private cancelRasterRecovery(): void {
+    if (this.#rasterRecoveryTimer !== null) clearTimeout(this.#rasterRecoveryTimer);
+    this.#rasterRecoveryTimer = null;
+    this.#rasterRecoveryAttempts = 0;
   }
 
   private withRasterVisibility(

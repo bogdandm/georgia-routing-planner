@@ -236,6 +236,11 @@ The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`,
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and
 never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
 failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
+For an already active raster, HTTP 429, HTTP 5xx, timeout, and network failures trigger
+up to three deduplicated source reloads with exponential delay. The current status names
+the exact HTTP code when available; developer diagnostics also retain the stable source
+ID, safe failure class, aggregate count, recovery state, and retry attempt. URLs,
+queries, response bodies, and tile coordinates remain excluded.
 
 The map adapter prepares a replacement raster under a second stable source/layer slot
 and reveals it only after MapLibre reports the source loaded. Failure, timeout,

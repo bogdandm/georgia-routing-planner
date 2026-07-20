@@ -1,6 +1,6 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -26,6 +26,7 @@ class FakeLayerMap {
   readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
+  setTilesCalls = 0;
 
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
@@ -112,6 +113,7 @@ class FakeLayerMap {
         ? {
             ...source,
             setTiles: (tiles: string[]) => {
+              this.setTilesCalls += 1;
               const current = this.sources.get(id);
               if (typeof current === 'object' && current !== null) {
                 this.sources.set(id, { ...current, tiles });
@@ -185,7 +187,68 @@ beforeEach(async () => {
   resetMapLayerStore();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('MapLibreLayerController', () => {
+  it('retries an active satellite raster with bounded exponential recovery', async () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('scene-retry'), new AbortController().signal);
+
+    const event = {
+      sourceId: 'sentinel-raster-a',
+      error: {
+        message: 'AJAXError: Service Unavailable (503): https://private.example/tile',
+        status: 503,
+      },
+    } as unknown as Parameters<typeof controller.handleRasterSourceFailure>[0];
+    expect(controller.handleRasterSourceFailure(event)).toEqual({
+      state: 'scheduled',
+      retryAttempt: 1,
+    });
+    expect(controller.handleRasterSourceFailure(event)).toEqual({
+      state: 'scheduled',
+      retryAttempt: 1,
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(map.setTilesCalls).toBe(1);
+    expect(services.logger.getEvents().at(-1)).toMatchObject({
+      name: 'satellite.imagery.retry-requested',
+      data: { attempt: 1, reason: 'http-server', status: 503 },
+    });
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain(
+      'private.example',
+    );
+
+    expect(controller.handleRasterSourceFailure(event)).toEqual({
+      state: 'scheduled',
+      retryAttempt: 2,
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(controller.handleRasterSourceFailure(event)).toEqual({
+      state: 'scheduled',
+      retryAttempt: 3,
+    });
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(map.setTilesCalls).toBe(3);
+    expect(controller.handleRasterSourceFailure(event)).toEqual({
+      state: 'exhausted',
+      retryAttempt: 3,
+    });
+
+    controller.handleRasterSourceRecovered('sentinel-raster-a');
+    expect(controller.handleRasterSourceFailure(event)).toEqual({
+      state: 'scheduled',
+      retryAttempt: 1,
+    });
+  });
+
   it('maps logical controls to allowlisted native style layers', () => {
     const services = createTestServices();
     const configuration = services.mapProviderConfiguration;

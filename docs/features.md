@@ -287,26 +287,33 @@ Disabling terrain returns pitch to zero while retaining center, zoom, and bearin
 
 ## Failure and offline feedback
 
-Map errors are classified as vector, glyph/sprite, terrain, style, WebGL, or unknown.
-Equivalent recoverable errors are counted in capped buckets and logged at a bounded
-interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
-degraded states. Offline messaging promises only that already rendered areas may remain
-visible, not full offline map support. Map lifecycle and imagery errors do not create a
-wide map banner: the shared line below search is their single UI surface. Ready remains
-background-free; pending and error states use a lightly translucent surface for map
-contrast, and selecting an error reveals its complete safe detail. Hovering any
-truncated status message reveals the full text in a multiline tooltip. The non-ready
-surface transitions quickly and remains translucent enough to preserve map context.
-Pending text uses the dark primary color and a medium weight rather than the muted Ready
-treatment, preserving legibility over imagery. Status padding is invariant so state
-changes never shift the icon or text.
+Map errors are classified as vector, glyph/sprite, satellite raster, terrain, style,
+WebGL, or unknown. Satellite raster failures expose a safe transport reason and exact
+HTTP status when MapLibre provides one. Rate limits, server responses, timeouts, and
+network failures schedule one deduplicated exponential source reload, capped at three
+attempts; client errors and unclassified failures do not retry automatically. Equivalent
+recoverable errors are counted in capped buckets and logged at a bounded interval. Style
+startup and WebGL loss are fatal; provider-tile and DEM errors are degraded states. A
+successful source-load event marks the failure recovered, restores the ready lifecycle
+when no other failure remains, and clears the user-facing error. Offline messaging
+promises only that already rendered areas may remain visible, not full offline map
+support. Map lifecycle and imagery errors do not create a wide map banner: the shared
+line below search is their single UI surface. Ready remains background-free; pending and
+error states use a lightly translucent surface for map contrast, and selecting an error
+reveals its complete safe detail. Hovering any truncated status message reveals the full
+text in a multiline tooltip. The non-ready surface transitions quickly and remains
+translucent enough to preserve map context. Pending text uses the dark primary color and
+a medium weight rather than the muted Ready treatment, preserving legibility over
+imagery. Status padding is invariant so state changes never shift the icon or text.
 
 ## Diagnostics and developer mode
 
 Diagnostics are local, bounded, and redacted before storage in the event ring buffer.
 The developer Map view shows exact local camera state, ordered source/layer IDs,
-terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Debug flags
-reset when developer mode ends.
+terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Each
+failure includes its source ID, safe reason, HTTP status when known, occurrence count,
+last occurrence, recovery state, and retry attempt. Debug flags reset when developer
+mode ends.
 
 The diagnostics drawer is a persistent, non-modal workspace surface: it has no backdrop
 or elevation shadow and does not close on Escape, backdrop interaction, or section

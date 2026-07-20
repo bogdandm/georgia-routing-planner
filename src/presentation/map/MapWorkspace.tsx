@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -11,6 +12,7 @@ import {
 import Map, { NavigationControl, type MapRef } from 'react-map-gl/maplibre';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
@@ -36,10 +38,10 @@ const unavailableMapStyle: StyleSpecification = {
 
 const cameraRestoreTimeoutMs = 2_000;
 
-async function loadCameraWithDeadline(
-  load: () => Promise<MapCamera | null>,
+async function loadMapViewWithDeadline(
+  load: () => Promise<MapViewState | null>,
   timeoutMs: number,
-): Promise<MapCamera | null> {
+): Promise<MapViewState | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -68,12 +70,12 @@ export function MapWorkspace({
     logger,
     mapCameraRepository,
     mapDiagnostics,
-    elevationProvider,
     mapLayers,
     mapProviderConfiguration,
     mapViewport,
   } = useRuntimeServices();
-  const [restoredCamera, setRestoredCamera] = useState<MapCamera | null>(null);
+  const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
+  const terrainRestoreAttempted = useRef(false);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
@@ -97,16 +99,12 @@ export function MapWorkspace({
       suppliedFacade ??
       new MapLibreFacade(
         logger,
-        (camera) => {
-          cameraPersistence.schedule(camera);
+        (view) => {
+          cameraPersistence.schedule(view);
         },
         mapProviderConfiguration.status === 'valid'
           ? {
               terrain: mapProviderConfiguration.value.terrain,
-              sourceLayers: {
-                peaks: mapProviderConfiguration.value.vector.sourceLayers.peaks,
-                pois: mapProviderConfiguration.value.vector.sourceLayers.pois,
-              },
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
               equivalentErrorWindowMs:
                 mapProviderConfiguration.value.policy.equivalentErrorWindowMs,
@@ -114,14 +112,12 @@ export function MapWorkspace({
           : undefined,
         mapDiagnostics,
         mapLayers ?? undefined,
-        elevationProvider ?? undefined,
       ),
     [
       cameraPersistence,
       logger,
       mapDiagnostics,
       mapLayers,
-      elevationProvider,
       mapProviderConfiguration,
       suppliedFacade,
     ],
@@ -219,10 +215,12 @@ export function MapWorkspace({
   useEffect(() => {
     let active = true;
     // Storage must not be allowed to keep the primary map behind a loader indefinitely.
-    void loadCameraWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
-      .then((camera) => {
+    void loadMapViewWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
+      .then((view) => {
         if (active) {
-          setRestoredCamera(camera ?? defaultGeorgiaCamera);
+          setRestoredView(
+            view ?? { camera: defaultGeorgiaCamera, terrainMode: 'flat' },
+          );
         }
       })
       .catch(() => {
@@ -231,7 +229,7 @@ export function MapWorkspace({
           setCameraMessage(
             'The saved camera could not be restored. The Georgia overview is shown instead.',
           );
-          setRestoredCamera(defaultGeorgiaCamera);
+          setRestoredView({ camera: defaultGeorgiaCamera, terrainMode: 'flat' });
         }
       });
 
@@ -239,6 +237,19 @@ export function MapWorkspace({
       active = false;
     };
   }, [logger, mapCameraRepository, restoreTimeoutMs]);
+
+  useEffect(() => {
+    if (
+      restoredView?.terrainMode !== 'terrain' ||
+      snapshot.lifecycle !== 'ready' ||
+      snapshot.terrainMode === 'terrain' ||
+      terrainRestoreAttempted.current
+    ) {
+      return;
+    }
+    terrainRestoreAttempted.current = true;
+    void handleTerrainModeChange('terrain');
+  }, [handleTerrainModeChange, restoredView, snapshot.lifecycle, snapshot.terrainMode]);
 
   useEffect(() => {
     return () => {
@@ -250,8 +261,8 @@ export function MapWorkspace({
   }, [cameraPersistence, facade]);
 
   const resolvedMapCanvas: ReactNode =
-    restoredCamera !== null && typeof mapCanvas === 'function'
-      ? mapCanvas(restoredCamera)
+    restoredView !== null && typeof mapCanvas === 'function'
+      ? mapCanvas(restoredView.camera)
       : typeof mapCanvas === 'function'
         ? null
         : mapCanvas;
@@ -270,12 +281,12 @@ export function MapWorkspace({
           {mapProviderConfiguration.message} The basemap was not started. Check the
           deployment configuration or open developer diagnostics.
         </Alert>
-      ) : restoredCamera === null ? null : (
+      ) : restoredView === null ? null : (
         (resolvedMapCanvas ?? (
           <Map
             ref={handleMapRef}
             attributionControl={{ compact: false }}
-            initialViewState={restoredCamera}
+            initialViewState={restoredView.camera}
             mapStyle={mapStyle}
             boxZoom
             doubleClickZoom
@@ -308,7 +319,7 @@ export function MapWorkspace({
           {cameraMessage}
         </Alert>
       ) : null}
-      {restoredCamera !== null && mapProviderConfiguration.status === 'valid' ? (
+      {restoredView !== null && mapProviderConfiguration.status === 'valid' ? (
         <TerrainModeControl
           state={terrainState}
           onModeChange={(mode) => {

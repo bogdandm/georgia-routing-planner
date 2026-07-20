@@ -25,11 +25,16 @@ function createMapDouble() {
   };
 }
 
+function createPivotDouble() {
+  return { show: vi.fn(), hide: vi.fn(), destroy: vi.fn() };
+}
+
 describe('MiddleMouseCameraControl', () => {
   it('orbits around the pressed point with restrained bearing and pitch deltas', () => {
     const container = document.createElement('div');
     const { easeTo, map, unproject } = createMapDouble();
-    const control = new MiddleMouseCameraControl();
+    const pivot = createPivotDouble();
+    const control = new MiddleMouseCameraControl(pivot);
     control.attach(container, map);
     control.setEnabled(true);
 
@@ -55,6 +60,7 @@ describe('MiddleMouseCameraControl', () => {
     );
 
     expect(unproject).toHaveBeenCalledWith([10, 10]);
+    expect(pivot.show).toHaveBeenCalledWith(map, { lng: 44.8, lat: 41.7 });
     expect(easeTo).toHaveBeenCalledWith({
       around: { lng: 44.8, lat: 41.7 },
       bearing: 38,
@@ -62,13 +68,18 @@ describe('MiddleMouseCameraControl', () => {
       duration: 0,
       essential: true,
     });
+    window.dispatchEvent(
+      new MouseEvent('mouseup', { bubbles: true, button: 1, buttons: 0 }),
+    );
+    expect(pivot.hide).toHaveBeenCalled();
     control.detach();
   });
 
   it('consumes middle drag without moving the camera while 2D is active', () => {
     const container = document.createElement('div');
     const { easeTo, map } = createMapDouble();
-    const control = new MiddleMouseCameraControl();
+    const pivot = createPivotDouble();
+    const control = new MiddleMouseCameraControl(pivot);
     control.attach(container, map);
     const down = new MouseEvent('mousedown', {
       bubbles: true,
@@ -82,13 +93,14 @@ describe('MiddleMouseCameraControl', () => {
     );
     expect(down.defaultPrevented).toBe(true);
     expect(easeTo).not.toHaveBeenCalled();
+    expect(pivot.show).not.toHaveBeenCalled();
   });
 
   it('blocks native right-button camera input and removes listeners on detach', () => {
     const container = document.createElement('div');
     const bubbleListener = vi.fn();
     container.addEventListener('mousedown', bubbleListener);
-    const control = new MiddleMouseCameraControl();
+    const control = new MiddleMouseCameraControl(createPivotDouble());
     control.attach(container);
     container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
     expect(bubbleListener).not.toHaveBeenCalled();

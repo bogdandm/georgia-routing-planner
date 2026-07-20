@@ -2,35 +2,9 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
-import type { PointInspectorPopup } from '@/presentation/map/MapLibrePointInspector';
-import type { MapPointInspection } from '@/presentation/map/mapTypes';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
-
-class FakePointInspector implements PointInspectorPopup {
-  public attached = false;
-  public closed = false;
-  public destroyed = false;
-  public lastInspection: Exclude<MapPointInspection, { status: 'closed' }> | null =
-    null;
-
-  public attach(): void {
-    this.attached = true;
-  }
-
-  public show(inspection: Exclude<MapPointInspection, { status: 'closed' }>): void {
-    this.lastInspection = inspection;
-  }
-
-  public close(): void {
-    this.closed = true;
-  }
-
-  public destroy(): void {
-    this.destroyed = true;
-  }
-}
 
 class FakeNativeMap {
   readonly #listeners = new Map<string, Set<TestListener>>();
@@ -42,8 +16,6 @@ class FakeNativeMap {
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
   public repaintCalls = 0;
-  public terrainElevation: number | null = null;
-  public readonly sourceFeatures: unknown[] = [];
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -113,14 +85,6 @@ class FakeNativeMap {
     return this.#sources.get(id);
   }
 
-  public querySourceFeatures(): unknown[] {
-    return this.sourceFeatures;
-  }
-
-  public queryTerrainElevation(): number | null {
-    return this.terrainElevation;
-  }
-
   public addSource(id: string, source: unknown): void {
     this.addSourceCalls += 1;
     this.#sources.set(id, source);
@@ -177,7 +141,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(6);
+    expect(nativeMap.listenerCount()).toBe(5);
 
     nativeMap.fire('load');
     nativeMap.addSource('late-style-source', { type: 'geojson' });
@@ -209,11 +173,14 @@ describe('MapLibreFacade', () => {
     expect(nativeMap.showTileBoundaries).toBe(true);
     expect(onCameraSettled).toHaveBeenCalledOnce();
     expect(onCameraSettled).toHaveBeenCalledWith({
-      longitude: 44.8,
-      latitude: 41.7,
-      zoom: 8,
-      bearing: 12,
-      pitch: 35,
+      camera: {
+        longitude: 44.8,
+        latitude: 41.7,
+        zoom: 8,
+        bearing: 12,
+        pitch: 35,
+      },
+      terrainMode: 'flat',
     });
     expect(facade.getViewportSnapshot()).toEqual({
       bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
@@ -287,7 +254,7 @@ describe('MapLibreFacade', () => {
     expect(nativeMap.easeCalls.at(-1)).toMatchObject({
       center: [44.8, 41.7],
       zoom: 8,
-      bearing: 12,
+      bearing: 0,
       pitch: 0,
     });
 
@@ -312,7 +279,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(7);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -324,7 +291,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(7);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);
@@ -398,121 +365,5 @@ describe('MapLibreFacade', () => {
     facade.destroy();
     nativeMap.getCanvas().dispatchEvent(new Event('webglcontextlost'));
     expect(facade.getDiagnosticsSnapshot()).toEqual(snapshotBeforeDestroy);
-  });
-
-  it('inspects a clicked point, chooses a nearby POI, and omits private details from diagnostics', async () => {
-    const services = createTestServices();
-    const nativeMap = new FakeNativeMap();
-    nativeMap.addSource('basemap-vector', { type: 'vector' });
-    nativeMap.sourceFeatures.push({
-      type: 'Feature',
-      id: 7,
-      geometry: { type: 'Point', coordinates: [44.8002, 41.7002] },
-      properties: { name: 'Private fixture hut', subclass: 'alpine_hut' },
-      source: 'basemap-vector',
-      sourceLayer: 'poi',
-      state: {},
-      layer: { id: 'fixture', type: 'circle', source: 'basemap-vector' },
-    });
-    const pointInspector = new FakePointInspector();
-    const facade = new MapLibreFacade(
-      services.logger,
-      undefined,
-      {
-        terrain:
-          services.mapProviderConfiguration.status === 'valid'
-            ? services.mapProviderConfiguration.value.terrain
-            : (() => {
-                throw new Error('Expected valid fixture configuration.');
-              })(),
-        sourceLayers: { pois: 'poi', peaks: 'mountain_peak' },
-        requestTimeoutMs: 100,
-        equivalentErrorWindowMs: 10_000,
-      },
-      undefined,
-      undefined,
-      { sample: () => Promise.resolve({ status: 'available', meters: 1_234.4 }) },
-      pointInspector,
-    );
-    facade.attach(nativeMap as unknown as MapLibreMap);
-    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
-
-    expect(facade.getPointInspection()).toMatchObject({
-      status: 'open',
-      elevation: { status: 'loading' },
-    });
-    await vi.waitFor(() => {
-      expect(facade.getPointInspection()).toMatchObject({
-        status: 'open',
-        elevation: { status: 'available', meters: 1_234.4 },
-        nearbyPoi: {
-          status: 'found',
-          poi: { name: 'Private fixture hut', category: 'alpine_hut' },
-        },
-      });
-    });
-
-    const diagnosticJson = JSON.stringify(services.logger.getEvents());
-    expect(diagnosticJson).not.toContain('44.8');
-    expect(diagnosticJson).not.toContain('41.7');
-    expect(diagnosticJson).not.toContain('Private fixture hut');
-    facade.closePointInspection();
-    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
-    expect(pointInspector).toMatchObject({ attached: true, closed: true });
-  });
-
-  it('cancels stale elevation work when a newer point is selected', async () => {
-    const services = createTestServices();
-    const nativeMap = new FakeNativeMap();
-    nativeMap.addSource('basemap-vector', { type: 'vector' });
-    const pending: {
-      readonly signal: AbortSignal;
-      readonly resolve: (value: { status: 'available'; meters: number }) => void;
-    }[] = [];
-    const provider = services.mapProviderConfiguration;
-    expect(provider.status).toBe('valid');
-    if (provider.status !== 'valid') return;
-    const facade = new MapLibreFacade(
-      services.logger,
-      undefined,
-      {
-        terrain: provider.value.terrain,
-        sourceLayers: { pois: 'poi', peaks: 'mountain_peak' },
-        requestTimeoutMs: 100,
-        equivalentErrorWindowMs: 10_000,
-      },
-      undefined,
-      undefined,
-      {
-        sample: (_coordinate, signal) =>
-          new Promise((resolve) => {
-            pending.push({ signal, resolve });
-          }),
-      },
-      new FakePointInspector(),
-    );
-    facade.attach(nativeMap as unknown as MapLibreMap);
-    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
-    await vi.waitFor(() => {
-      expect(pending).toHaveLength(1);
-    });
-    nativeMap.fire('click', { lngLat: { lng: 45.1, lat: 42.1 } });
-    await vi.waitFor(() => {
-      expect(pending).toHaveLength(2);
-    });
-    expect(pending[0]?.signal.aborted).toBe(true);
-
-    if (pending[0] !== undefined) {
-      pending[0].resolve({ status: 'available', meters: 99 });
-    }
-    if (pending[1] !== undefined) {
-      pending[1].resolve({ status: 'available', meters: 555 });
-    }
-    await vi.waitFor(() => {
-      expect(facade.getPointInspection()).toMatchObject({
-        coordinate: { longitude: 45.1, latitude: 42.1 },
-        elevation: { status: 'available', meters: 555 },
-      });
-    });
   });
 });

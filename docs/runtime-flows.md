@@ -71,13 +71,19 @@ captures interaction from the workspace, and it remains open until the user acti
 its header close control, toggles the Diagnostics rail action, or disables developer
 mode.
 
-## Settled camera write
+## Settled map-view write and restore
 
-1. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch.
-2. The facade updates its snapshot, notifies React, and calls the camera-settled port.
-3. `SettledCameraPersistence` keeps only the newest camera during its debounce window.
-4. Writes are chained so IndexedDB saves cannot overtake one another.
-5. Save failure is logged and shown as a non-blocking warning; map interaction
+1. Startup reads one versioned camera-plus-terrain-mode value before mounting the map.
+2. A saved 3D mode is applied as soon as MapLibre is ready; a saved 2D mode remains
+   flat.
+3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
+   with the current terrain mode.
+4. The facade updates its snapshot, notifies React, and calls the view-settled port.
+5. `SettledCameraPersistence` keeps only the newest serializable view during its
+   debounce window. Successful terrain transitions also publish their final view
+   explicitly.
+6. Writes are chained so IndexedDB saves cannot overtake one another.
+7. Save failure is logged and shown as a non-blocking warning; map interaction
    continues.
 
 This flow intentionally excludes continuous `move`/render events from React, IndexedDB,
@@ -109,39 +115,8 @@ sequenceDiagram
 
 Only one terrain transition may run at a time. Repeated requests for the same target
 share its promise; an opposite request receives an explicit failure. This prevents
-duplicate sources, listeners, and out-of-order camera changes.
-
-## Point inspection
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant Facade as MapLibreFacade
-  participant Popup as Native marker/popup
-  participant Vector as Loaded OSM vectors
-  participant DEM as ElevationProvider
-
-  User->>Facade: native map click
-  Facade->>Popup: reuse anchor; show loading content
-  Facade->>Vector: query loaded POI and peak source features
-  Facade->>Facade: geodesic filter and deterministic nearest selection
-  Facade->>DEM: sample configured raster-dem with AbortSignal
-  alt current request completes
-    DEM-->>Facade: elevation, unavailable, or safe failure
-    Facade->>Popup: update content at the same LngLat
-  else new click, close, or teardown
-    Facade->>DEM: abort superseded request
-  end
-  Popup->>Popup: MapLibre reprojects for camera and terrain changes
-```
-
-The facade owns one marker/popup pair and releases it with its map listeners. Native
-source querying and screen placement do not cross the facade. The DEM adapter derives a
-maximum-zoom slippy tile and pixel from the selected coordinate, uses the centralized
-HTTP client, decodes the configured Terrarium or Mapbox formula, and never persists the
-sample. Inspection diagnostics contain duration and result categories only; exact
-coordinates and raw POI properties are excluded. MapLibre's terrain depth handling
-removes a popup whose anchor becomes fully covered by terrain.
+duplicate sources, listeners, and out-of-order camera changes. Selecting 2D also resets
+pitch and bearing to zero, so the flat map returns north-up.
 
 ## Terrain overlay reconciliation
 

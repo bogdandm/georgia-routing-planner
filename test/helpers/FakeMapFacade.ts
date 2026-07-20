@@ -5,7 +5,6 @@ import {
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
-  type MapPointInspection,
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
@@ -17,7 +16,6 @@ export class FakeMapFacade implements MapFacade {
   public terrainModeRequests: TerrainMode[] = [];
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
-  public pointInspection: MapPointInspection = { status: 'closed' };
   public snapshot: MapDiagnosticsSnapshot = {
     lifecycle: 'loading',
     camera: defaultGeorgiaCamera,
@@ -62,15 +60,6 @@ export class FakeMapFacade implements MapFacade {
     return this.snapshot;
   }
 
-  public getPointInspection(): MapPointInspection {
-    return this.pointInspection;
-  }
-
-  public closePointInspection(): void {
-    this.pointInspection = { status: 'closed' };
-    this.notify();
-  }
-
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {
     this.terrainModeRequests.push(mode);
     if (this.terrainTransition !== null) {
@@ -91,11 +80,6 @@ export class FakeMapFacade implements MapFacade {
 
   public setSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...changed };
-    this.notify();
-  }
-
-  public setPointInspection(inspection: MapPointInspection): void {
-    this.pointInspection = inspection;
     this.notify();
   }
 

@@ -86,19 +86,19 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 
 ## State ownership
 
-| State                                                    | Owner                                              | Reason                                             |
-| -------------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------- |
-| Dialogs, active rail section, developer flags            | Zustand `uiStore`                                  | Cross-component, transient, serializable UI state  |
-| Component transitions and messages                       | React component state                              | Local rendering concern                            |
-| Native map, listeners, camera, terrain, point inspection | `MapLibreFacade` / `MapLibrePointInspector`        | Native lifecycle and popup placement stay isolated |
-| Point elevation sampling                                 | `ElevationProvider` / `RasterDemElevationProvider` | DEM access and pixel decoding stay outside React   |
-| Sentinel and terrain-overlay sources/layer commands      | `MapLibreLayerController`                          | Provider URLs and native resources stay imperative |
-| Imagery, visibility, stretch, and overlay preferences    | Dexie plus map layer controller                    | Durable choices with a serializable live view      |
-| Browser storage and optional heap measurements           | `BrowserStorageUsageReader`                        | Read-only platform metrics behind an app port      |
-| Settled camera                                           | Dexie through `MapCameraRepository`                | Durable local state                                |
-| Map diagnostic snapshot                                  | `MapDiagnosticsSnapshotStore`                      | Serializable view shared by UI, health, and export |
-| Current/last Sentinel step status and duration           | `SentinelQueryDiagnosticsStore`                    | Memory-only live developer timeline                |
-| Submitted Sentinel criteria and derived grouped results  | `SatelliteBrowser` React state                     | Disposable, not persisted                          |
+| State                                                   | Owner                                                      | Reason                                                 |
+| ------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| Dialogs, active rail section, developer flags           | Zustand `uiStore`                                          | Cross-component, transient, serializable UI state      |
+| Component transitions and messages                      | React component state                                      | Local rendering concern                                |
+| Native map, listeners, camera, and terrain              | `MapLibreFacade`                                           | Native lifecycle stays isolated                        |
+| Middle-drag orbit and terrain pivot marker              | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
+| Sentinel and terrain-overlay sources/layer commands     | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
+| Imagery, visibility, stretch, and overlay preferences   | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
+| Browser storage and optional heap measurements          | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port          |
+| Settled camera and terrain mode                         | Dexie through `MapCameraRepository`                        | Durable serializable map view                          |
+| Map diagnostic snapshot                                 | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export     |
+| Current/last Sentinel step status and duration          | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                    |
+| Submitted Sentinel criteria and derived grouped results | `SatelliteBrowser` React state                             | Disposable, not persisted                              |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause

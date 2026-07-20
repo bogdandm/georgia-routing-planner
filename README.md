@@ -17,10 +17,9 @@ The application provides a compact map workspace with Tracks, Satellite, Markers
 Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain; live
 Sentinel-2 L2A search and georeferenced true-color scene rendering; logical map layer
 visibility; configurable relief shading and elevation isolines; native desktop camera
-gestures; terrain-anchored point inspection with DEM elevation and nearby OSM context;
-durable settled-camera restoration; provider failure feedback; settings; and bounded
-map/WebGL diagnostics. Unavailable feature actions are shown as disabled controls or
-explicit empty states instead of synthetic data.
+gestures; durable settled-camera restoration; provider failure feedback; settings; and
+bounded map/WebGL diagnostics. Unavailable feature actions are shown as disabled
+controls or explicit empty states instead of synthetic data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
 [AGENTS.md](./AGENTS.md) for required engineering conventions.
@@ -168,15 +167,13 @@ After `pnpm dev`, use current stable desktop Chrome to:
    visible and keyboard reachable.
 2. Pan, wheel/double-click zoom, use restrained middle-drag orbit in 3D, and use the
    native keyboard commands; reset with the compass, reload, and confirm the settled
-   camera restores.
+   camera and 3D mode restore.
 3. Toggle 3D on and off, confirming the map is not replaced, the camera intent is
-   preserved, and terrain attribution is visible while 3D is active.
-4. Click a map point, rapidly pan/zoom/rotate/pitch, and toggle 2D/3D; confirm the
-   native popup remains attached to its terrain point and reports elevation plus nearby
-   OSM context when available.
-5. Enable developer mode, inspect the Map tab, run the explicit provider checks, and
+   preserved, 2D returns north-up, and terrain attribution is visible while 3D is
+   active.
+4. Enable developer mode, inspect the Map tab, run the explicit provider checks, and
    validate an exported bundle with `pnpm diagnostics:inspect -- <bundle.json>`.
-6. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
+5. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
    context, accessibility, and public-network isolation behavior.
 
 Known operating limits:

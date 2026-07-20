@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   MapCamera,
   MapCameraRepository,
+  MapViewState,
 } from '@/application/ports/MapCameraRepository';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import { createTestServices } from '../../../test/helpers/createTestServices';
@@ -14,6 +15,7 @@ const camera: MapCamera = {
   bearing: 12,
   pitch: 35,
 };
+const view: MapViewState = { camera, terrainMode: 'terrain' };
 
 afterEach(() => {
   vi.useRealTimers();
@@ -22,7 +24,7 @@ afterEach(() => {
 describe('SettledCameraPersistence', () => {
   it('coalesces settled camera events and flushes the final value', async () => {
     vi.useFakeTimers();
-    const save = vi.fn((_camera: MapCamera) => Promise.resolve());
+    const save = vi.fn((_view: MapViewState) => Promise.resolve());
     const repository: MapCameraRepository = {
       load: () => Promise.resolve(null),
       save,
@@ -35,13 +37,16 @@ describe('SettledCameraPersistence', () => {
       400,
     );
 
-    persistence.schedule(camera);
-    persistence.schedule({ ...camera, zoom: 11 });
+    persistence.schedule(view);
+    persistence.schedule({ ...view, camera: { ...camera, zoom: 11 } });
     await vi.advanceTimersByTimeAsync(400);
     await persistence.flush();
 
     expect(save).toHaveBeenCalledTimes(1);
-    expect(save).toHaveBeenCalledWith({ ...camera, zoom: 11 });
+    expect(save).toHaveBeenCalledWith({
+      camera: { ...camera, zoom: 11 },
+      terrainMode: 'terrain',
+    });
   });
 
   it('keeps camera interaction usable and reports a failed write', async () => {
@@ -57,7 +62,7 @@ describe('SettledCameraPersistence', () => {
       onFailure,
     );
 
-    persistence.schedule(camera);
+    persistence.schedule(view);
     await persistence.flush();
 
     expect(onFailure).toHaveBeenCalledOnce();

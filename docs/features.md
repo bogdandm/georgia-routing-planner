@@ -219,27 +219,13 @@ arrow keys pan, `+`/`-` zoom, and Shift+arrow keys rotate or pitch after the can
 receives focus. Middle drag is disabled in flat 2D. In 3D it rotates and pitches at a
 restrained sensitivity around the terrain point beneath the initial press; each pointer
 update is one zero-duration MapLibre camera command with that geographic `around`
-anchor. Right drag is left to the browser and does not move the camera. MapLibre retains
-projection, terrain anchoring, camera limits, movement events, and the native compass
-reset. The explicit 2D command returns pitch to zero, while 3D restores the last useful
-terrain pitch. Settled results continue through the existing camera-persistence queue.
-
-Clicking any map point opens one reused native MapLibre marker/popup pair at the clicked
-longitude/latitude. MapLibre, rather than React, projects the anchor on every camera and
-terrain render, and the restrained popup tip plus small anchor dot identify the exact
-point. Coordinates are displayed to five decimal places and elevation to the nearest
-metre. The popup remains available while elevation loads and distinguishes missing DEM
-coverage, provider failure, and cancellation by a newer selection or close action.
-
-Nearby context comes only from validated, already-loaded OpenMapTiles `poi` and
-`mountain_peak` vector features. A POI qualifies within a 100 m geodesic radius. The
-client chooses the smallest geodesic distance, then breaks exact distance ties by stable
-feature identity, preferred name, and category; preferred names follow the map's
-English/transliteration/native fallback. If no loaded POI qualifies, the popup says so
-instead of making a remote search. In 3D, MapLibre's marker depth test hides a covered
-anchor and dismisses its popup when terrain fully occludes the point, preventing a DOM
-card from appearing falsely in front of a ridge; the user can inspect again after
-changing the view.
+anchor. A small blue-ring MapLibre marker identifies that pivot only while the middle
+button remains pressed; it follows terrain and disappears when covered, released, or
+returned to 2D. Right drag is left to the browser and does not move the camera. MapLibre
+retains projection, terrain anchoring, camera limits, movement events, and the native
+compass reset. The explicit 2D command returns pitch to zero and bearing to north, while
+3D restores the last useful terrain pitch. Settled results continue through the existing
+map-view persistence queue.
 
 ## Hiking basemap
 
@@ -274,13 +260,17 @@ field, so the map does not claim to identify every private or otherwise closed p
   failure appears only in the shared status below search.
 - Tests: pure style assertions plus synthetic MVT/glyph Chromium coverage.
 
-## Camera persistence
+## Map-view persistence
 
-The map starts only after the last valid camera is read, preventing a visible jump from
-the Georgia overview to the saved position. `moveend` sends settled cameras to a
-debounced persistence queue; animation-frame events are never persisted.
+The map starts only after the last valid camera and terrain mode are read, preventing a
+visible jump from the Georgia overview to the saved position. `moveend` sends settled
+map views to a debounced persistence queue; successful 2D/3D transitions publish their
+mode explicitly. Animation-frame events are never persisted. A restored 3D view enables
+terrain as soon as the native map is ready instead of leaving a pitched flat view.
 
-- Stored value: versioned `map.camera` record in the existing Dexie settings table.
+- Stored value: schema-version 2 `map.camera` record containing camera and terrain mode
+  in the existing Dexie settings table. A schema-version 1 camera migrates to 3D when it
+  has a positive pitch and otherwise migrates to 2D.
 - Validation: finite values are clamped to supported longitude, latitude, zoom, bearing,
   and pitch ranges.
 - Corrupt value: delete it, log a repair event, and use the Georgia overview.
@@ -302,7 +292,7 @@ existing map-layer record. Provider failure leaves unrelated layers and controls
 
 The 2D/3D control operates on the same MapLibre instance and shared DEM source. Enabling
 3D applies terrain, restores a useful pitch, and waits for the source to become usable.
-Disabling terrain returns pitch to zero while retaining center, zoom, and bearing.
+Disabling terrain returns pitch and bearing to zero while retaining center and zoom.
 
 - Duplicate clicks share one in-flight transition.
 - Conflicting transitions fail explicitly instead of racing.

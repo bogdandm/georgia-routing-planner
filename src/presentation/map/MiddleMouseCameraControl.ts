@@ -1,5 +1,10 @@
 import type { LngLat, Map as MapLibreMap } from 'maplibre-gl';
 
+import {
+  MapLibreOrbitPivotIndicator,
+  type OrbitPivotIndicator,
+} from '@/presentation/map/MapLibreOrbitPivotIndicator';
+
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
 const maximumPitchDegrees = 85;
@@ -16,6 +21,10 @@ export class MiddleMouseCameraControl {
   #active = false;
   #orbitAnchor: LngLat | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
+
+  public constructor(
+    private readonly pivotIndicator: OrbitPivotIndicator = new MapLibreOrbitPivotIndicator(),
+  ) {}
 
   public attach(container: HTMLElement, map?: MapLibreMap): void {
     if (this.#container === container && this.#map === (map ?? null)) return;
@@ -40,6 +49,7 @@ export class MiddleMouseCameraControl {
       container.removeEventListener('auxclick', this.handleAuxClick, true);
     }
     this.finishGesture();
+    this.pivotIndicator.destroy();
     this.#container = null;
     this.#map = null;
   }
@@ -60,6 +70,7 @@ export class MiddleMouseCameraControl {
       event.clientX - bounds.left,
       event.clientY - bounds.top,
     ]);
+    this.pivotIndicator.show(this.#map, this.#orbitAnchor);
     this.#lastPointer = { x: event.clientX, y: event.clientY };
     this.#active = true;
     window.addEventListener('mousemove', this.handleMouseMove, true);
@@ -108,6 +119,7 @@ export class MiddleMouseCameraControl {
     this.#active = false;
     this.#orbitAnchor = null;
     this.#lastPointer = null;
+    this.pivotIndicator.hide();
     window.removeEventListener('mousemove', this.handleMouseMove, true);
     window.removeEventListener('mouseup', this.handleMouseUp, true);
   }

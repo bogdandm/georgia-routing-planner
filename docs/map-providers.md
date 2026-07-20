@@ -148,13 +148,6 @@ MapLibre transfers protocol responses to a worker. The adapter therefore gives e
 delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
 or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
 
-Point inspection samples the same configured DEM endpoint without adding a provider. The
-adapter requests the maximum configured zoom tile containing the selected point, decodes
-one pixel with the declared Terrarium or Mapbox formula, and carries an `AbortSignal` so
-a newer click or close action cancels stale work. Loaded native terrain elevation is
-preferred when available. Diagnostics retain only safe request origin and outcome
-fields; clicked coordinates are never logged.
-
 The terrain configuration validates contour minimum/maximum zoom and cache size. The
 contour maximum cannot exceed the DEM provider maximum. Replacing the provider requires
 compatible HTTPS/CORS image tiles, correct Terrarium or Mapbox encoding, updated

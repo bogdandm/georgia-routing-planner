@@ -1,40 +1,8 @@
-import type { MapCamera } from '@/application/ports/MapCameraRepository';
+import type { MapCamera, MapViewMode } from '@/application/ports/MapCameraRepository';
 
 export type { MapCamera } from '@/application/ports/MapCameraRepository';
 
-export type TerrainMode = 'flat' | 'terrain';
-
-export interface MapCoordinate {
-  readonly longitude: number;
-  readonly latitude: number;
-}
-
-export interface NearbyPoi {
-  readonly name: string | null;
-  readonly category: string;
-  readonly distanceMeters: number;
-}
-
-export type PointElevationState =
-  | { readonly status: 'loading' }
-  | { readonly status: 'available'; readonly meters: number }
-  | { readonly status: 'unavailable' }
-  | { readonly status: 'error' };
-
-export type NearbyPoiState =
-  | { readonly status: 'loading' }
-  | { readonly status: 'found'; readonly poi: NearbyPoi }
-  | { readonly status: 'none' }
-  | { readonly status: 'error' };
-
-export type MapPointInspection =
-  | { readonly status: 'closed' }
-  | {
-      readonly status: 'open';
-      readonly coordinate: MapCoordinate;
-      readonly elevation: PointElevationState;
-      readonly nearbyPoi: NearbyPoiState;
-    };
+export type TerrainMode = MapViewMode;
 
 export interface MapDebugOptions {
   readonly showCollisionBoxes: boolean;

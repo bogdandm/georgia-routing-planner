@@ -2,7 +2,6 @@ import type {
   MapCamera,
   MapDebugOptions,
   MapDiagnosticsSnapshot,
-  MapPointInspection,
   TerrainMode,
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
@@ -16,8 +15,6 @@ export interface MapFacade extends MapViewportProvider {
   subscribe(listener: () => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
-  getPointInspection(): MapPointInspection;
-  closePointInspection(): void;
 
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;

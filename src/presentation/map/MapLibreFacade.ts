@@ -1,12 +1,11 @@
 import type {
   ErrorEvent as MapLibreErrorEvent,
   Map as MapLibreMap,
-  MapMouseEvent,
   MapSourceDataEvent,
 } from 'maplibre-gl';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type { ElevationProvider } from '@/application/ports/ElevationProvider';
+import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapViewportSnapshot } from '@/application/ports/MapViewportProvider';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
@@ -16,17 +15,11 @@ import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MiddleMouseCameraControl } from '@/presentation/map/MiddleMouseCameraControl';
 import {
-  MapLibrePointInspector,
-  type PointInspectorPopup,
-} from '@/presentation/map/MapLibrePointInspector';
-import { selectNearestPoi } from '@/presentation/map/selectNearestPoi';
-import {
   defaultGeorgiaCamera,
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapFailureCategory,
-  type MapPointInspection,
   type MapSourceFailure,
   type MapWebGlCapabilities,
   type TerrainMode,
@@ -54,10 +47,6 @@ const initialSnapshot: MapDiagnosticsSnapshot = {
 
 interface MapProviderOptions {
   readonly terrain: MapProviderConfiguration['terrain'];
-  readonly sourceLayers?: Pick<
-    MapProviderConfiguration['vector']['sourceLayers'],
-    'peaks' | 'pois'
-  >;
   readonly requestTimeoutMs: number;
   readonly equivalentErrorWindowMs: number;
 }
@@ -118,26 +107,15 @@ export class MapLibreFacade implements MapFacade {
   #mountedAt = 0;
   #lastCameraDiagnosticAt = 0;
   #styleSnapshotQueued = false;
-  #pointInspection: MapPointInspection = { status: 'closed' };
-  #pointInspectionSequence = 0;
-  #pointInspectionAbort: AbortController | null = null;
-  readonly #pointInspector: PointInspectorPopup;
   readonly #middleMouseCamera = new MiddleMouseCameraControl();
 
   public constructor(
     private readonly logger: DiagnosticLogger,
-    private readonly onCameraSettled: (camera: MapCamera) => void = () => undefined,
+    private readonly onViewSettled: (view: MapViewState) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
     private readonly layerController?: MapLibreLayerController,
-    private readonly elevationProvider?: ElevationProvider,
-    pointInspector?: PointInspectorPopup,
   ) {
-    this.#pointInspector =
-      pointInspector ??
-      new MapLibrePointInspector(() => {
-        this.closePointInspection();
-      });
     this.snapshotStore?.update(this.#snapshot);
   }
 
@@ -150,13 +128,11 @@ export class MapLibreFacade implements MapFacade {
     this.#map = map;
     this.#middleMouseCamera.attach(map.getCanvasContainer(), map);
     this.#middleMouseCamera.setEnabled(this.#snapshot.terrainMode === 'terrain');
-    this.#pointInspector.attach(map);
     this.layerController?.attach(map);
     map.on('load', this.handleLoad);
     map.on('styledata', this.handleStyleData);
     map.on('idle', this.handleIdle);
     map.on('moveend', this.handleMoveEnd);
-    map.on('click', this.handleMapClick);
     map.on('error', this.handleError);
     map.getCanvas().addEventListener('webglcontextlost', this.handleContextLost);
     map
@@ -200,21 +176,6 @@ export class MapLibreFacade implements MapFacade {
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {
     return this.#snapshot;
-  }
-
-  public getPointInspection(): MapPointInspection {
-    return this.#pointInspection;
-  }
-
-  public closePointInspection(): void {
-    this.#pointInspectionSequence += 1;
-    this.#pointInspectionAbort?.abort();
-    this.#pointInspectionAbort = null;
-    if (this.#pointInspection.status !== 'closed') {
-      this.#pointInspector.close();
-      this.updatePointInspection({ status: 'closed' });
-      this.logger.log({ level: 'debug', name: 'map.point-inspection.closed' });
-    }
   }
 
   /** Serializes terrain transitions so sources, listeners, and camera changes cannot race. */
@@ -261,7 +222,6 @@ export class MapLibreFacade implements MapFacade {
 
   public destroy(): void {
     this.detachMap();
-    this.#pointInspector.destroy();
     this.#listeners.clear();
   }
 
@@ -333,7 +293,7 @@ export class MapLibreFacade implements MapFacade {
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
-      this.onCameraSettled(camera);
+      this.onViewSettled({ camera, terrainMode: this.#snapshot.terrainMode });
       const now = Date.now();
       if (now - this.#lastCameraDiagnosticAt >= 5_000) {
         this.#lastCameraDiagnosticAt = now;
@@ -345,129 +305,6 @@ export class MapLibreFacade implements MapFacade {
       }
     }
   };
-
-  private readonly handleMapClick = (event: MapMouseEvent): void => {
-    const map = this.#map;
-    if (map === null) return;
-
-    this.#pointInspectionSequence += 1;
-    const sequence = this.#pointInspectionSequence;
-    this.#pointInspectionAbort?.abort();
-    const abortController = new AbortController();
-    this.#pointInspectionAbort = abortController;
-    const coordinate = {
-      longitude: event.lngLat.lng,
-      latitude: event.lngLat.lat,
-    };
-    this.updatePointInspection({
-      status: 'open',
-      coordinate,
-      elevation: { status: 'loading' },
-      nearbyPoi: { status: 'loading' },
-    });
-    this.logger.log({ level: 'info', name: 'map.point-inspection.started' });
-    void this.inspectPoint(map, coordinate, sequence, abortController.signal);
-  };
-
-  private async inspectPoint(
-    map: MapLibreMap,
-    coordinate: { readonly longitude: number; readonly latitude: number },
-    sequence: number,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const startedAt = performance.now();
-    let nearbyPoi: Exclude<MapPointInspection, { status: 'closed' }>['nearbyPoi'];
-    try {
-      const sourceLayers = this.provider?.sourceLayers;
-      if (
-        sourceLayers === undefined ||
-        map.getSource(mapSourceIds.basemapVector) === undefined
-      ) {
-        nearbyPoi = { status: 'error' };
-      } else {
-        const features = [
-          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
-            sourceLayer: sourceLayers.pois,
-          }),
-          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
-            sourceLayer: sourceLayers.peaks,
-          }),
-        ];
-        const poi = selectNearestPoi(features, coordinate);
-        nearbyPoi = poi === null ? { status: 'none' } : { status: 'found', poi };
-      }
-    } catch {
-      nearbyPoi = { status: 'error' };
-    }
-
-    if (!this.isCurrentInspection(map, sequence, signal)) return;
-    this.updatePointInspection({
-      status: 'open',
-      coordinate,
-      elevation: { status: 'loading' },
-      nearbyPoi,
-    });
-
-    let elevation: Exclude<MapPointInspection, { status: 'closed' }>['elevation'];
-    try {
-      const nativeElevation = map.queryTerrainElevation([
-        coordinate.longitude,
-        coordinate.latitude,
-      ]);
-      if (typeof nativeElevation === 'number' && Number.isFinite(nativeElevation)) {
-        elevation = {
-          status: 'available',
-          meters: nativeElevation / (this.provider?.terrain.exaggeration ?? 1),
-        };
-      } else if (this.elevationProvider === undefined) {
-        elevation = { status: 'unavailable' };
-      } else {
-        const sample = await this.elevationProvider.sample(coordinate, signal);
-        elevation =
-          sample.status === 'available'
-            ? { status: 'available', meters: sample.meters }
-            : { status: 'unavailable' };
-      }
-    } catch (error) {
-      if (
-        signal.aborted ||
-        (error instanceof DOMException && error.name === 'AbortError')
-      ) {
-        return;
-      }
-      elevation = { status: 'error' };
-    }
-
-    if (!this.isCurrentInspection(map, sequence, signal)) return;
-    this.#pointInspectionAbort = null;
-    this.updatePointInspection({
-      status: 'open',
-      coordinate,
-      elevation,
-      nearbyPoi,
-    });
-    this.logger.log({
-      level:
-        elevation.status === 'error' || nearbyPoi.status === 'error' ? 'warn' : 'info',
-      name: 'map.point-inspection.completed',
-      data: {
-        durationMs: Math.max(0, performance.now() - startedAt),
-        elevationStatus: elevation.status,
-        poiStatus: nearbyPoi.status,
-        nearbyPoi: nearbyPoi.status === 'found',
-      },
-    });
-  }
-
-  private isCurrentInspection(
-    map: MapLibreMap,
-    sequence: number,
-    signal: AbortSignal,
-  ): boolean {
-    return (
-      this.#map === map && this.#pointInspectionSequence === sequence && !signal.aborted
-    );
-  }
 
   private readonly handleError = (event: MapLibreErrorEvent): void => {
     const category = categorizeMapError(event, this.#snapshot.lifecycle);
@@ -579,16 +416,18 @@ export class MapLibreFacade implements MapFacade {
       map.easeTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,
-        bearing: camera.bearing,
+        bearing: 0,
         pitch: 0,
         duration: 250,
       });
+      const flatCamera = { ...camera, bearing: 0, pitch: 0 };
       this.updateSnapshot({
         lifecycle: 'ready',
         terrainMode: 'flat',
-        camera: { ...camera, pitch: 0 },
+        camera: flatCamera,
         message: null,
       });
+      this.onViewSettled({ camera: flatCamera, terrainMode: 'flat' });
       this.logger.log({ level: 'info', name: 'map.terrain.disabled' });
       return { status: 'success', mode };
     }
@@ -626,6 +465,7 @@ export class MapLibreFacade implements MapFacade {
         sourceIds: Object.keys(map.getStyle().sources),
         message: null,
       });
+      this.onViewSettled({ camera: { ...camera, pitch }, terrainMode: 'terrain' });
       this.logger.log({ level: 'info', name: 'map.terrain.enabled' });
       return { status: 'success', mode };
     } catch {
@@ -748,12 +588,6 @@ export class MapLibreFacade implements MapFacade {
     }
   }
 
-  private updatePointInspection(inspection: MapPointInspection): void {
-    this.#pointInspection = inspection;
-    if (inspection.status === 'open') this.#pointInspector.show(inspection);
-    for (const listener of this.#listeners) listener();
-  }
-
   private detach(): void {
     const map = this.#map;
     if (map === null) {
@@ -763,7 +597,6 @@ export class MapLibreFacade implements MapFacade {
     map.off('styledata', this.handleStyleData);
     map.off('idle', this.handleIdle);
     map.off('moveend', this.handleMoveEnd);
-    map.off('click', this.handleMapClick);
     map.off('error', this.handleError);
     map.getCanvas().removeEventListener('webglcontextlost', this.handleContextLost);
     map
@@ -771,11 +604,6 @@ export class MapLibreFacade implements MapFacade {
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
     this.#middleMouseCamera.detach();
     this.layerController?.detach(map);
-    this.#pointInspectionSequence += 1;
-    this.#pointInspectionAbort?.abort();
-    this.#pointInspectionAbort = null;
-    this.#pointInspector.close();
-    this.#pointInspection = { status: 'closed' };
     this.#map = null;
     this.logger.log({ level: 'debug', name: 'map.lifecycle.unmounted' });
   }

@@ -39,6 +39,10 @@ Rules:
   and obtain approval again.
 - Commits are allowed and encouraged on feature branches after relevant checks pass.
   Keep commits focused and use clear imperative or Conventional Commit-style messages.
+- An explicit request to remove, postpone, or take a feature out of scope authorizes
+  staging and committing the corresponding tracked-file deletions on the feature branch.
+  Do not ask for separate confirmation merely because Git represents removal by staging
+  the deleted paths.
 - Do not implement an entire workstream as one mega-commit. When a temporary `PLAN.md`
   exists, it must split the work into smaller independently reviewable commits; each
   implementation commit must include its relevant automated tests and leave the

@@ -150,24 +150,21 @@ Commit: `docs(map): describe terrain overlay behavior`
 
 Commit: `feat(map): unify overlay palette and labels`
 
-### T7. Native camera interaction and point inspection — Done
+### T7. Native camera interaction — Done
 
 - Keep MapLibre's desktop pan, wheel/double-click zoom, keyboard, touch, compass, and
   pitch semantics, with a focused 3D-only middle-drag orbit around the pressed terrain
   point at restrained sensitivity; leave right drag to the browser.
-- Reuse one facade-owned native marker/popup so MapLibre tracks the selected terrain
-  point during every camera render and dismisses fully terrain-occluded anchors.
-- Show five-decimal coordinates, configured DEM elevation, and the deterministic nearest
-  loaded OSM POI within a 100 m geodesic radius.
-- Abort superseded elevation samples, retain explicit loading/unavailable/error states,
-  and exclude coordinates plus raw POI metadata from diagnostics.
-- Cover selection, DEM math, cancellation, native ownership, accessibility, camera
-  gestures, popup tracking, and 2D/3D transitions with focused and Chromium tests.
+- Show a small terrain-anchored pivot ring while middle drag is active, then remove it
+  on release, cancellation, teardown, or return to 2D.
+- Persist camera and terrain mode as one serializable view, restore 3D after reload, and
+  reset pitch plus bearing when switching to 2D.
+- Cover conventional camera gestures, pivot stability, compass reset, keyboard control,
+  camera persistence, and 2D/3D transitions with focused and Chromium tests.
 
 Commits:
 
-1. `feat(map): add terrain-anchored point inspection`
-2. `docs(map): describe camera and point inspection`
+1. `feat(map): refine native camera interactions`
 
 ## 5. Verification
 

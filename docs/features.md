@@ -103,12 +103,16 @@ lower cloud values are plain text. Every card remains an individual scene; mosai
 not currently composed.
 
 The displayed calendar month is the search month. The current month ends at today;
-earlier months cover their complete UTC month. After the first search, calendar arrows
-load a displayed month only when that month has not completed successfully for the
-submitted point, viewport, product, and cloud criteria. Successful months, including
-empty ones, are reused when navigating back. Newly loaded scene groups are appended to
-the right results pane without replacing other months or resetting the displayed
-calendar month.
+earlier months cover their complete UTC month. The provider search loads the complete
+0–100% scene-cloud range. The cloud slider filters scene cards client-side while every
+loaded acquisition date remains visible in the calendar; dates at or below the threshold
+receive the orange highlight. Selecting a date above the threshold temporarily reveals
+its selected scene card; de-applying it or selecting another scene restores the filter.
+After the first search, calendar arrows load a displayed month only when that month has
+not completed successfully for the submitted point, viewport, and product. Successful
+months, including empty ones, are reused when navigating back. Newly loaded scene groups
+are appended to the right results pane without replacing other months or resetting the
+displayed calendar month.
 
 Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport
@@ -128,7 +132,9 @@ orange outline above hiking geometry and below labels. While a replacement is lo
 the prior usable image remains present; a failed replacement reports a safe, clickable
 error and leaves that prior image available. The error detail distinguishes rejected
 values, rate limiting, renderer availability, timeout, and an unclassified unusable tile
-without exposing provider URLs. Marker targeting remains unavailable.
+without exposing provider URLs. Marker targeting remains unavailable. The imagery
+staging wait allows up to 60 seconds for slow renderer connections; a replacement or
+clear command cancels that wait immediately and preserves the last usable image.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
 exposed through the web storage APIs, so the application neither claims their size nor
@@ -205,8 +211,9 @@ scene is restored.
   navigation appears to retract into that fixed anchor.
 - Settings is non-modal and does not dim or block the map, allowing imagery stretch to
   be judged while a slider is adjusted.
-- Settings > Rendering controls minor contour spacing and whether relief shading sits
-  above satellite imagery. Index contours remain labeled at 200 m intervals.
+- Settings > Rendering controls the default-enabled invalid DEM repair, minor contour
+  spacing, and whether relief shading sits above satellite imagery. Index contours
+  remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Attribution remains visible in every feature section and terrain mode.
@@ -284,6 +291,11 @@ Disabling terrain returns pitch to zero while retaining center, zoom, and bearin
 - DEM error, cancellation, or timeout returns to 2D and preserves camera intent; the
   controller keeps ownership of the shared source so relief can recover on later tiles.
 - Retry reuses the same facade and map rather than remounting either.
+
+Before the shared DEM source is decoded by MapLibre, the client repairs only transparent
+or configured-invalid values and isolated extreme local outliers. Decisions at tile
+borders use neighboring source pixels. Valid terrain is not smoothed, and the same
+corrected PNG cache supplies relief, 3D, and elevation isolines.
 
 ## Failure and offline feedback
 

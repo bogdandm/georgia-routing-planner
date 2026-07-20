@@ -99,6 +99,7 @@ describe('AppDatabase', () => {
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
         contourIntervalMeters: 25,
+        filterInvalidDemPixels: false,
         shadeAboveSatellite: true,
       },
     } as const;
@@ -134,6 +135,7 @@ describe('AppDatabase', () => {
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
       terrainOverlays: {
         contourIntervalMeters: 50,
+        filterInvalidDemPixels: true,
         shadeAboveSatellite: false,
       },
     });
@@ -167,6 +169,7 @@ describe('AppDatabase', () => {
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       terrainOverlays: {
         contourIntervalMeters: 50,
+        filterInvalidDemPixels: true,
         shadeAboveSatellite: false,
       },
     });

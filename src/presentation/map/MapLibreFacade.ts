@@ -46,6 +46,7 @@ const initialSnapshot: MapDiagnosticsSnapshot = {
 
 interface MapProviderOptions {
   readonly terrain: MapProviderConfiguration['terrain'];
+  readonly demTileUrl: string;
   readonly requestTimeoutMs: number;
   readonly equivalentErrorWindowMs: number;
 }
@@ -66,6 +67,18 @@ function isSatelliteSourceId(sourceId: string): boolean {
   return (
     sourceId === mapSourceIds.sentinelRasterA ||
     sourceId === mapSourceIds.sentinelRasterB
+  );
+}
+
+function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
+  const error = event.error;
+  const errorName =
+    typeof (error as unknown as { readonly name?: unknown }).name === 'string'
+      ? (error as unknown as { readonly name: string }).name
+      : null;
+  return (
+    errorName === 'AbortError' ||
+    /\b(?:abort(?:ed)?|cancel(?:ed|led)|superseded)\b/iu.test(error.message)
   );
 }
 
@@ -351,6 +364,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleError = (event: MapLibreErrorEvent): void => {
+    if (isCanceledMapRequest(event)) return;
     const category = categorizeMapError(event, this.#snapshot.lifecycle);
     const sourceId = getErrorSourceId(event);
     if (
@@ -598,7 +612,7 @@ export class MapLibreFacade implements MapFacade {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(provider.terrain),
+          createTerrainDemSource(provider.terrain, provider.demTileUrl),
         );
       }
       map.setTerrain({

@@ -106,6 +106,8 @@ The terrain default is
 - Relief: low-contrast hillshade from the same source in both flat and 3D modes.
 - Contours: browser-generated vector tiles from zoom 11 through 15, with a 32-tile
   least-recently-used DEM cache.
+- Preprocessing: a shared filtered-Terrarium protocol repairs only rejected pixels
+  before the PNG reaches relief, 3D terrain, or contour generation.
 
 The [AWS Open Data entry](https://registry.opendata.aws/terrain-tiles/) describes global
 bare-earth elevation and anonymous bucket access. The upstream
@@ -115,6 +117,45 @@ documents the Terrarium endpoint, 256-pixel size, and zoom limit.
 A browser-origin single-range request to a Georgia-covering PNG returned status 206 and
 exactly 1,024 requested bytes in 538 ms. This verifies HTTPS, CORS, and byte-range
 behavior for the observed endpoint.
+
+### Conservative Terrarium repair
+
+The configured tile at `15/20448/12164`, covering the reported map point, contained no
+transparent pixels and no RGB `0/0/0` Terrarium sentinel. Its decoded range was −710.68
+m to 1,191.20 m. Exactly 256 pixels were below zero: the complete local row 5. The
+eastern neighbor repeated the same one-row pattern (−701.53 m minimum), while the
+western, northern, and southern neighbors remained within 830.05 m to 1,278.50 m. The
+bad scanline crosses one shared tile border and begins at another; it is not a coastline
+transition or an artifact introduced by contour rendering.
+
+The filter uses a one-pixel halo decoded from all eight neighboring tiles. It rejects
+transparent pixels, configured sentinel elevations, values outside the configured
+physical range, and isolated local extremes. The local test requires at least five
+neighbors close to their median, median absolute deviation no greater than 80 m, a
+center residual of at least 500 m, and no more than one neighbor supporting the extreme
+center value. This preserves coherent ridges and cliffs, including narrow features with
+two supporting pixels. Rejected pixels are replaced with the median of valid immediate
+neighbors; accepted pixels are never resampled, blurred, or re-encoded. A tile with no
+repairs returns the original PNG bytes.
+
+The default physical range is −500 m through 9,000 m and the explicit sentinel list is
+`[-32768]`. These bounds cover global terrestrial elevations conservatively while
+rejecting the observed inland −700 m scanline. Applying the policy repairs all 256 bad
+pixels and changes the center tile range to 969.49–1,191.20 m. Thresholds and the
+48-entry processed-PNG and decoded-context LRU bounds are validated provider
+configuration, not rendering constants. Requests use the provider timeout and MapLibre
+abort signal. Diagnostics export only duration and aggregate no-data, sentinel,
+impossible-value, spike, repaired, and unrepaired counts; tile URLs, indices,
+coordinates, and pixels are excluded. Overlapping neighborhoods coalesce in-flight
+source fetch and decode work, and diagnostics are emitted in fixed-size aggregate
+batches instead of one event per rendered tile. Mixed results retain the batch's most
+severe status without creating a new event for every cancellation transition.
+
+Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
+and persisted locally. Disabling it bypasses decoding and repair and returns the
+original center PNG. Both modes retain one shared protocol for relief, 3D terrain, and
+contours; changing the preference invalidates their mode-dependent caches and reloads
+all three consumers together so they cannot disagree.
 
 ### Attribution, limits, and failure policy
 
@@ -151,10 +192,11 @@ MapLibre transfers protocol responses to a worker. The adapter therefore gives e
 delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
 or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
 
-The terrain configuration validates contour minimum/maximum zoom and cache size. The
-contour maximum cannot exceed the DEM provider maximum. Replacing the provider requires
-compatible HTTPS/CORS image tiles, correct Terrarium or Mapbox encoding, updated
-attribution, and a review of contour density and cache bounds.
+The terrain configuration validates filter thresholds, physical bounds, filter cache
+size, contour minimum/maximum zoom, and contour cache size. The contour maximum cannot
+exceed the DEM provider maximum. Replacing the provider requires compatible HTTPS/CORS
+image tiles, correct Terrarium or Mapbox encoding, updated attribution, and a review of
+contour density and cache bounds.
 
 ## Rejected defaults
 
@@ -231,6 +273,11 @@ manual review, not sustained production traffic. The renderer ID, HTTPS template
 size, zoom bounds, and attribution are validated public configuration so a managed
 TiTiler-compatible deployment can replace it without changing catalog, UI, or map
 commands. There is no silent renderer fallback.
+
+The renderer has its own validated 60-second request ceiling, separate from the shorter
+catalog and terrain request policy. This accommodates slow imagery delivery while still
+ending a stalled staging operation predictably; replacing, clearing, or superseding a
+scene cancels the wait immediately.
 
 The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and

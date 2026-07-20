@@ -328,8 +328,12 @@ describe('MapLibreLayerController', () => {
       configuration.value.satellite.renderer,
       configuration.value.terrain,
       {
+        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
         createTileUrl: (intervalMeters) =>
           `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
+        setFilterEnabled: (enabled) => {
+          void enabled;
+        },
       },
       services.logger,
       services.idGenerator,
@@ -397,6 +401,7 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
+        filterInvalidDemPixels: true,
         shadeAboveSatellite: true,
       }),
     ).toEqual({ status: 'success' });
@@ -450,6 +455,7 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 25,
+        filterInvalidDemPixels: true,
         shadeAboveSatellite: false,
       }),
     ).toEqual({ status: 'success' });
@@ -458,6 +464,39 @@ describe('MapLibreLayerController', () => {
     };
     expect(updatedSource.tiles[0]).toContain('minor=25&major=200');
     expect(map.layers.has('terrain-contour-minor')).toBe(true);
+  });
+
+  it('reloads the shared DEM and contour sources when filtering changes', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(map.sources.get('terrain-dem')).toMatchObject({
+      tiles: [expect.stringContaining('filter=on')],
+    });
+    expect(map.sources.get('terrain-contours')).toMatchObject({
+      tiles: [expect.stringContaining('filter=on')],
+    });
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 50,
+        filterInvalidDemPixels: false,
+        shadeAboveSatellite: false,
+      }),
+    ).toEqual({ status: 'success' });
+
+    expect(map.sources.get('terrain-dem')).toMatchObject({
+      tiles: [expect.stringContaining('filter=off')],
+    });
+    expect(map.sources.get('terrain-contours')).toMatchObject({
+      tiles: [expect.stringContaining('filter=off')],
+    });
+    expect(controller.getTerrainOverlayPreferences().filterInvalidDemPixels).toBe(
+      false,
+    );
   });
 
   it('applies a georeferenced tile source, footprint, visibility, and fit command', async () => {
@@ -537,7 +576,11 @@ describe('MapLibreLayerController', () => {
         cachePartition: 'none',
       },
       configuration.value.terrain,
-      { createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}' },
+      {
+        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
+        createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}',
+        setFilterEnabled: () => undefined,
+      },
       services.logger,
       services.idGenerator,
       services.sentinelQueryDiagnostics,
@@ -811,6 +854,7 @@ describe('MapLibreLayerController', () => {
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
         contourIntervalMeters: 25,
+        filterInvalidDemPixels: false,
         shadeAboveSatellite: true,
       },
     });
@@ -836,6 +880,7 @@ describe('MapLibreLayerController', () => {
     });
     expect(controller.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
+      filterInvalidDemPixels: false,
       shadeAboveSatellite: true,
     });
   });

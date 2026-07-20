@@ -112,13 +112,17 @@ sequenceDiagram
   participant UI as TerrainModeControl
   participant Facade as MapLibreFacade
   participant Map as MapLibre
+  participant Filter as Filtered Terrarium protocol
   participant DEM as Terrain provider
 
   User->>UI: select 3D
   UI->>Facade: setTerrainMode(terrain)
   Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: set terrain and preserve camera intent
-  Map->>DEM: request configured DEM tiles
+  Map->>Filter: request shared raster-dem tile
+  Filter->>DEM: fetch center and neighboring tile context
+  Filter->>Filter: decode, reject, repair, re-encode, cache
+  Filter-->>Map: corrected Terrarium PNG
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
     Facade-->>UI: success / terrain
@@ -141,8 +145,24 @@ surface fills, relief/satellite in the selected order, contours, then OSM bounda
 transport, and labels. This keeps terrain relief visible over grass, forest, and other
 opaque land-cover fills. Updating the contour interval calls the existing vector
 source's tile update, so the map camera and unrelated native resources remain untouched.
-MapLibre abort signals flow through the contour protocol to bounded DEM requests; source
-failures update the overlay snapshot without removing the basemap.
+MapLibre abort signals flow through both the shared DEM and contour protocols to the
+same filtered provider. The provider fetches the center and eight neighbors concurrently
+under one timeout. Concurrent neighborhoods share in-flight fetch and decode work for
+overlapping source tiles; canceling one consumer aborts that source request only after
+its final consumer releases it. The provider applies the configured pure repair policy
+and retains completed PNGs and decoded neighbor context in bounded LRUs. Relief, 3D
+terrain, and generated isolines therefore cannot observe different elevation bytes.
+Source failures update the overlay snapshot without removing the basemap. Expected
+request cancellation during source replacement is ignored as lifecycle noise.
+Contour-generation timings are likewise grouped into bounded batches so visible-tile
+work cannot displace lifecycle and failure evidence from the diagnostics buffer.
+
+The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
+the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a
+bounded revision on both native tile templates. MapLibre consequently reloads relief, 3D
+terrain, and isolines together without remounting the map. Disabled mode preserves the
+same shared protocol and cancellation/timeout behavior but fetches only the original
+center PNG and bypasses decoding, neighborhood lookup, repair, and re-encoding.
 
 Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
 shared visual mode on the existing native layers. Semantic colors remain stable, while
@@ -239,26 +259,33 @@ coverage calculation and edge evidence. The displayed UTC calendar month supplie
 date range; the current month ends at today and past months end on their final day.
 Users do not enter date endpoints.
 
-Each successful month is recorded as complete for the submitted viewport, product, and
-cloud criteria, including a successful empty result. Calendar navigation checks that
-session cache before requesting the displayed month. A missing month runs the same
-cancellable search use case and appends its groups to the existing results. Revisiting a
-complete month performs no provider request. Changing submitted criteria starts a new
-session and clears the completed-month set.
+Each successful month is recorded as complete for the submitted viewport and product,
+including a successful empty result. Provider requests use the complete 0–100% cloud
+range. The slider filters loaded scene cards client-side and updates the calendar's
+orange highlights immediately. Acquisition dates above the threshold remain visible
+without an outline, and changing the slider neither invalidates loaded months nor
+performs another provider request. A calendar selection above the threshold remains in
+the results projection while it is selected, so the active card can be inspected and
+de-applied. Clearing that selection or selecting a different scene reapplies the cloud
+filter. Calendar navigation checks the session cache before requesting the displayed
+month. A missing month runs the same cancellable search use case and appends its groups
+to the existing results. Revisiting a complete month performs no provider request.
+Changing submitted provider criteria starts a new session and clears the completed-month
+set.
 
 The UI reveals locally loaded scenes in eight-card sets. When that result is exhausted,
 the same load-more command finds the next missing month before the initially submitted
-month, uses the immutable original viewport, product level, and cloud threshold, and
-appends the returned groups. This continues back to the first Sentinel-2 archive month
-without skipping a gap created by direct calendar navigation. Earth Search pages are
-capped at 100 items and followed internally up to the configured ten-page safety
-boundary, so a normal month is not truncated or turned into a user refinement task. The
-use cases reject a mixed L1C/L2A response instead of substituting product levels. The
-calendar's per-day cloud summary is a weighted average using each scene's submitted
-viewport coverage as its weight, with a simple average fallback when every coverage is
-zero. A newer operation replaces the visible timeline; late transitions from an older
-request are ignored by operation ID. Logs contain correlation IDs, counts, durations,
-and safe error codes, never exact viewport geometry.
+month, uses the immutable original viewport and product level with the complete cloud
+range, and appends the returned groups. This continues back to the first Sentinel-2
+archive month without skipping a gap created by direct calendar navigation. Earth Search
+pages are capped at 100 items and followed internally up to the configured ten-page
+safety boundary, so a normal month is not truncated or turned into a user refinement
+task. The use cases reject a mixed L1C/L2A response instead of substituting product
+levels. The calendar's per-day cloud summary is a weighted average using each scene's
+submitted viewport coverage as its weight, with a simple average fallback when every
+coverage is zero. A newer operation replaces the visible timeline; late transitions from
+an older request are ignored by operation ID. Logs contain correlation IDs, counts,
+durations, and safe error codes, never exact viewport geometry.
 
 The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
 URL. It obtains the first page, follows at most the configured number of same-origin

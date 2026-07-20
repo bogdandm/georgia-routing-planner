@@ -22,6 +22,11 @@ Agents work in isolated Git worktrees by default. The maintainer may run up to f
 agents in parallel; each agent must use its own worktree and branch so its file edits,
 tests, and Git operations do not interfere with another agent's work.
 
+Each worktree must also use a distinct, explicit development-server port. Check that the
+chosen port is free before starting Vite and pass both `--port <port>` and
+`--strictPort`; do not rely on Vite's automatic port fallback, because browser review
+could otherwise open a different worktree's server.
+
 The main repository checkout may be switched to a branch when the maintainer explicitly
 requests it. Treat that checkout as maintainer-controlled: do not switch its branch,
 edit its files, or run Git operations there unless the request explicitly scopes the

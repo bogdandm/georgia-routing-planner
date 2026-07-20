@@ -248,6 +248,8 @@ Verified on 2026-07-20 for the filtered Terrarium source:
   coalesce source fetch/decode work, expected source-replacement cancellations do not
   degrade the map, and DEM plus contour timings use bounded aggregate diagnostics so
   lifecycle evidence remains visible.
+- CI serializes Chromium because concurrent WebGL, DEM, and contour work exceeded the
+  hosted runner's measured 30-second workflow ceiling; local runs retain two workers.
 - The opened current-Chrome build was verified in 3D around `42.0768, 44.5653`. The lake
   and its isolines render coherently with no rectangular trench or contour collapse, and
   diagnostics report the map ready with the shared terrain, relief, and contour sources.

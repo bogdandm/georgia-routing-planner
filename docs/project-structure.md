@@ -38,7 +38,7 @@ src/
   domain/satellite/        framework-free Sentinel values and geometry calculations
   application/satellite/   cancellable Sentinel search and availability orchestration
   application/ports/       framework-free catalog, viewport, diagnostics, and storage ports
-  infrastructure/          HTTP, STAC, IndexedDB, clock, and ID implementations
+  infrastructure/          HTTP, STAC, elevation/worker, IndexedDB, clock, and ID adapters
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
@@ -93,7 +93,8 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated           |
 | Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
 | Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
-| Terrarium decoding, conservative repair, PNG cache        | `FilteredTerrariumTileProvider`                            | External pixels stay behind infrastructure boundary    |
+| DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`           | One algorithm runs in worker or inline compatibility   |
+| Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                |
 | Imagery, visibility, stretch, and overlay preferences     | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
 | Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port          |
 | Settled camera and terrain mode                           | Dexie through `MapCameraRepository`                        | Durable serializable map view                          |
@@ -131,16 +132,23 @@ ordering instead of scattering MapLibre identifiers through presentation compone
 contrast paints; feature code must reference it instead of introducing local map-color
 literals.
 
-`FilteredTerrariumTileProvider` uses browser image/canvas primitives behind a typed
-codec, while `TerrariumDemFilter` owns the pure rejection and replacement policy. Its
-bounded, cancellation-aware protocol is injected into `maplibre-contour`; that library's
-shared DEM URL is also the only `raster-dem` URL given to MapLibre.
+`TerrainComputeEngine` owns the `maplibre-contour` local manager and its bounded
+filtered-PNG, parsed-DEM, and contour caches. `FilteredTerrariumTileProvider` uses
+browser image/canvas primitives behind a typed codec, while `TerrariumDemFilter` owns
+the pure rejection and replacement policy. `WorkerTerrainComputeBackend` normally runs
+that engine in one Vite module worker through the reusable request-correlated
+`WorkerRpc` transport. A failed worker is restarted once; a second transport failure
+selects `InlineTerrainComputeBackend`, which calls the same engine and exposes only a
+serializable compatibility status. Worker objects and caches never enter React, Zustand,
+or application ports.
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
 Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and
 layers, and allowlisted logical visibility commands. `ContourTileGenerator` wraps the
 MapLibre protocol that turns bounded DEM tile requests into vector contours; it does not
-expose caches, provider URLs, or the native map to React. The controller validates
+expose caches, provider URLs, or the native map to React. The facade forwards camera
+movement state through the controller so the worker can prioritize DEM requests and
+defer new contour calculations until movement settles. The controller validates
 persistent imagery tuning and terrain-overlay preferences, atomically updates source
 tiles, and reconciles native order after style or satellite changes. Satellite, Layers,
 and Settings consume its serializable Zustand snapshot. Search results remain local

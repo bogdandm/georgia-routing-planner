@@ -135,8 +135,11 @@ neighbors close to their median, median absolute deviation no greater than 80 m,
 center residual of at least 500 m, and no more than one neighbor supporting the extreme
 center value. This preserves coherent ridges and cliffs, including narrow features with
 two supporting pixels. Rejected pixels are replaced with the median of valid immediate
-neighbors; accepted pixels are never resampled, blurred, or re-encoded. A tile with no
-repairs returns the original PNG bytes.
+neighbors; accepted pixels are never resampled, blurred, or re-encoded. The production
+filter reuses fixed eight-value neighbor/deviation buffers, reuses the classification
+median for repair, and clones output bytes only at the first changed pixel. A
+deterministic reference oracle verifies identical repair counts and RGBA bytes across
+the benchmark scenarios. A tile with no repairs returns the original PNG bytes.
 
 The default physical range is −500 m through 9,000 m and the explicit sentinel list is
 `[-32768]`. These bounds cover global terrestrial elevations conservatively while
@@ -187,6 +190,14 @@ vector tiles containing `ele` and minor/index `level` properties. The applicatio
 50 m minor and 200 m index thresholds by default, labels index lines only, and replaces
 the source tile template atomically when spacing changes. No geometry, token, backend,
 or hosted processing service is introduced.
+
+One application-owned module worker runs DEM decode, repair, PNG encode, parsed-DEM
+caching, and contour generation; MapLibre retains its own renderer worker. DEM requests
+remain active during camera movement, while new contour requests wait in a bounded,
+cancellation-aware queue until the camera settles. Ordinary provider and calculation
+failures remain per-request. A broken worker channel is restarted once and then falls
+back to the identical inline engine for the page session, preserving terrain features
+with a possible responsiveness reduction.
 
 MapLibre transfers protocol responses to a worker. The adapter therefore gives each
 delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred

@@ -69,6 +69,7 @@ pnpm e2e
 | `pnpm test:coverage`                        | Enforce the repository coverage thresholds.                              |
 | `pnpm e2e`                                  | Build and test the Pages-like subpath in Chromium with axe.              |
 | `pnpm diagnostics:inspect -- <bundle.json>` | Validate and summarize an exported diagnostics bundle.                   |
+| `pnpm performance:terrain`                  | Benchmark deterministic Terrarium filter candidates locally.             |
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
 | `pnpm check`                                | Run all non-browser CI checks; CI invokes `pnpm e2e` separately.         |
 
@@ -108,7 +109,9 @@ The replaceable map-provider defaults are:
 - AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for relief shading,
   client-generated contours, and optional 3D terrain. A bounded client-side filter
   repairs only configured invalid values and isolated extreme pixels before all three
-  consumers see the tile.
+  consumers see the tile. One application worker owns repair and contour calculation; a
+  failed worker restarts once and then preserves features through the same inline engine
+  with a visible compatibility warning.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and
@@ -132,6 +135,12 @@ mounts and presents a safe configuration message without echoing the input or it
 Provider attribution remains visible in MapLibre. The OpenFreeMap/OpenMapTiles/OSM
 credits are shown in 2D; Mapzen/AWS terrain attribution is added whenever relief,
 contours, or 3D terrain use the DEM source.
+
+`pnpm performance:terrain -- --iterations 30 --json` runs the non-CI deterministic
+Terrarium benchmark. It checks candidate output against the reference oracle before
+timing six seeded 256 x 256 scenarios and prints environment, median, p95, and
+throughput evidence. Compare runs only on the same machine and runtime; wall-clock
+values are not a unit-test contract.
 
 ## Developer mode and diagnostics
 

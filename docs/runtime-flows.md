@@ -131,17 +131,33 @@ surface fills, relief/satellite in the selected order, contours, then OSM bounda
 transport, and labels. This keeps terrain relief visible over grass, forest, and other
 opaque land-cover fills. Updating the contour interval calls the existing vector
 source's tile update, so the map camera and unrelated native resources remain untouched.
-MapLibre abort signals flow through both the shared DEM and contour protocols to the
-same filtered provider. The provider fetches the center and eight neighbors concurrently
-under one timeout. Concurrent neighborhoods share in-flight fetch and decode work for
-overlapping source tiles; canceling one consumer aborts that source request only after
-its final consumer releases it. The provider applies the configured pure repair policy
-and retains completed PNGs and decoded neighbor context in bounded LRUs. Relief, 3D
-terrain, and generated isolines therefore cannot observe different elevation bytes.
-Source failures update the overlay snapshot without removing the basemap. Expected
-request cancellation during source replacement is ignored as lifecycle noise.
-Contour-generation timings are likewise grouped into bounded batches so visible-tile
-work cannot displace lifecycle and failure evidence from the diagnostics buffer.
+MapLibre abort signals flow through both the shared DEM and contour protocols, the
+request-correlated worker channel, and the same filtered provider. The provider fetches
+the center and eight neighbors concurrently under one timeout. Concurrent neighborhoods
+share in-flight fetch and decode work for overlapping source tiles; canceling one
+consumer aborts that source request only after its final consumer releases it. The
+provider applies the configured pure repair policy and retains completed PNGs and
+decoded neighbor context in bounded LRUs. Relief, 3D terrain, and generated isolines
+therefore cannot observe different elevation bytes.
+
+One dedicated module worker owns PNG decode/encode, repair, parsed DEM data, and contour
+generation. `movestart` marks the channel interactive: DEM requests continue while new
+contour requests enter a bounded low-priority queue. Cancellation removes a queued
+request immediately, a full queue cancels its oldest viewport request, and `moveend`
+drains current contours one at a time. An already-running synchronous contour is allowed
+to finish. Detach always clears interactive mode.
+
+Provider, timeout, decode, and compute errors fail only their request. A worker `error`,
+`messageerror`, or channel loss starts one fresh worker, replays validated configuration
+plus the current filter revision, and retries still-current requests. If that worker
+also fails, the page keeps terrain available through the same engine on the window
+thread and publishes a non-blocking compatibility warning. A later page session starts
+with a worker again. Queue and compute timings are aggregated before entering
+diagnostics and exclude tile coordinates, URLs, pixels, and geometry. Source failures
+update the overlay snapshot without removing the basemap. Expected request cancellation
+during source replacement is ignored as lifecycle noise. Contour-generation timings are
+likewise grouped into bounded batches so visible-tile work cannot displace lifecycle and
+failure evidence from the diagnostics buffer.
 
 The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
 the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a
@@ -344,3 +360,8 @@ cleanup preserves facade subscribers so React Strict Mode can immediately reatta
 retained facade without leaving map readiness or the Satellite controller stale. React
 effects also remove online/offline listeners and reset developer-only debug flags. New
 integrations must preserve this single-owner cleanup model.
+
+For final page teardown or Vite module replacement, runtime-service disposal removes the
+registered DEM/contour protocols, terminates the terrain worker, rejects pending RPC
+work, clears worker caches, detaches controller listeners, and closes local runtime
+resources. A page retained in Chrome's back-forward cache keeps its runtime intact.

@@ -227,7 +227,7 @@ pnpm test
 pnpm test:integration
 pnpm test:coverage
 pnpm build
-pnpm exec tsx tools/performance/benchmarkTerrariumFilter.ts --iterations 30 --json
+pnpm performance:terrain -- --iterations 30 --json
 $env:CI='1'; pnpm e2e; Remove-Item Env:CI
 rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
 git diff --check
@@ -252,6 +252,45 @@ than rerunning with another ceiling or adding sleeps.
 - Keep stable documentation free of work-item sequencing, branch state, estimates, or
   approval progress; those details remain in this file.
 
+## Verification evidence
+
+Implementation commits:
+
+- `0d8b3f2 perf(elevation): benchmark and optimize shared terrain compute`
+- `61001f7 feat(map): move terrain compute off the UI thread`
+- `b58e17a perf(map): prioritize terrain while moving`
+
+The authoritative Node benchmark ran on Node 24.18.0 with an AMD Ryzen 7 5800H, seed
+`2026072000`, five warmups, and 30 alternating measured iterations for each of the six
+256 by 256 scenarios. Reference and candidate repair counts and RGBA bytes matched
+before timing. The combined reference median was 87.886 ms and the retained candidate
+median was 20.298 ms, a 76.904% reduction. Every scenario improved; the least favorable
+per-scenario p95 change was a 73.608% reduction, so the combined-median and maximum-p95
+regression gates both passed. The retained implementation uses fixed neighbor/deviation
+buffers, one classification/repair neighborhood pass, and lazy output cloning. A padded
+halo matrix was not retained because the smaller changes already exceeded the stretch
+result without adding another representation.
+
+A same-environment verification repeat through
+`pnpm performance:terrain -- --iterations 30 --json` reported an 83.182 ms reference
+median, 20.592 ms candidate median, 75.245% median improvement, and -74.254% maximum p95
+regression. The timing variation did not change the candidate decision.
+
+Current stable Chrome loaded the production Vite module worker and returned a 51,200
+byte filtered PNG plus a 65,536 byte contour vector buffer through the real worker RPC
+path. Clean map reload, filtered relief, 3D terrain activation, and canvas keyboard pan
+all returned to `Ready` without source/style errors. During integration, isolines
+exposed that `maplibre-contour` forwards the `demFilterRevision` URL cache-buster as a
+contour option. The worker boundary now explicitly validates and strips that
+transport-only field; the worker-server regression test exercises the exact payload.
+
+Full verification passed repository audit, formatting, lint, strict typecheck, 207
+unit/component tests, 18 integration tests, 225 coverage tests with all thresholds,
+production build, documentation-boundary checks, and 13 CI-shaped Chromium workflows.
+The production build emits a dedicated 115.66 kB terrain worker asset. Coverage exposed
+that `vitest.coverage.config.ts` had lost the documented managed-Windows 10-second
+ceiling; `122ecaa` restores it, after which the canonical coverage command passed.
+
 ## Assumptions and definition of done
 
 - Supported stable desktop Chrome provides module workers, `OffscreenCanvas`, and
@@ -266,6 +305,6 @@ than rerunning with another ceiling or adding sleeps.
 - Terrain filter optimization is conditional on the benchmark gate. Worker isolation,
   cancellation, recovery, and scheduling remain required even if no candidate is kept.
 - The work is complete only when relevant checks and performance evidence pass, the
-  intended commits are pushed, and a draft pull request targeting `main` is available
+  intended commits are pushed, and a ready pull request targeting `main` is available
   for review. The feature branch remains awaiting approval until the maintainer
   explicitly authorizes integration.

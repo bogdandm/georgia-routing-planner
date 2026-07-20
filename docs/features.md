@@ -295,6 +295,13 @@ Client-side contour generation reads bounded DEM tiles and renders subdued minor
 plus emphasized, labeled 200 m index lines from zoom 11. Minor spacing defaults to 50 m
 and supports 20, 25, 40, 50, or 100 m so every choice divides the index cadence.
 
+DEM repair and contour calculation normally run in one dedicated terrain worker. Camera
+movement continues DEM work but defers newly requested contours until movement settles;
+existing contour tiles remain under MapLibre's normal retention rules. If the worker
+cannot recover after one restart, the same calculations continue inline and Settings >
+Rendering shows a non-blocking compatibility warning that movement may be slower. A
+successful worker session has no warning.
+
 Relief normally sits below satellite imagery; the Rendering setting moves it above the
 active raster without remounting MapLibre. Contours remain above both and below OSM
 roads, paths, labels, and POIs. Preferences are validated and stored locally with the

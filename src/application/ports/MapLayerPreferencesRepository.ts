@@ -36,11 +36,13 @@ export type ContourIntervalMeters = (typeof supportedContourIntervals)[number];
 
 export interface TerrainOverlayPreferences {
   readonly contourIntervalMeters: ContourIntervalMeters;
+  readonly filterInvalidDemPixels: boolean;
   readonly shadeAboveSatellite: boolean;
 }
 
 export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
   contourIntervalMeters: 50,
+  filterInvalidDemPixels: true,
   shadeAboveSatellite: false,
 };
 

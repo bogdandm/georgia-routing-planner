@@ -86,19 +86,20 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 
 ## State ownership
 
-| State                                                   | Owner                                                      | Reason                                                 |
-| ------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| Dialogs, active rail section, developer flags           | Zustand `uiStore`                                          | Cross-component, transient, serializable UI state      |
-| Component transitions and messages                      | React component state                                      | Local rendering concern                                |
-| Native map, listeners, camera, and terrain              | `MapLibreFacade`                                           | Native lifecycle stays isolated                        |
-| Middle-drag orbit and terrain pivot marker              | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
-| Sentinel and terrain-overlay sources/layer commands     | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
-| Imagery, visibility, stretch, and overlay preferences   | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
-| Browser storage and optional heap measurements          | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port          |
-| Settled camera and terrain mode                         | Dexie through `MapCameraRepository`                        | Durable serializable map view                          |
-| Map diagnostic snapshot                                 | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export     |
-| Current/last Sentinel step status and duration          | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                    |
-| Submitted Sentinel criteria and derived grouped results | `SatelliteBrowser` React state                             | Disposable, not persisted                              |
+| State                                                     | Owner                                                      | Reason                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
+| Dialogs, active rail section, developer flags             | Zustand `uiStore`                                          | Cross-component, transient, serializable UI state      |
+| Component transitions and messages                        | React component state                                      | Local rendering concern                                |
+| Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated           |
+| Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
+| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
+| Terrarium decoding, conservative repair, PNG cache        | `FilteredTerrariumTileProvider`                            | External pixels stay behind infrastructure boundary    |
+| Imagery, visibility, stretch, and overlay preferences     | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
+| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port          |
+| Settled camera and terrain mode                           | Dexie through `MapCameraRepository`                        | Durable serializable map view                          |
+| Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export     |
+| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                    |
+| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                             | Disposable, not persisted                              |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
@@ -130,16 +131,21 @@ ordering instead of scattering MapLibre identifiers through presentation compone
 contrast paints; feature code must reference it instead of introducing local map-color
 literals.
 
+`FilteredTerrariumTileProvider` uses browser image/canvas primitives behind a typed
+codec, while `TerrariumDemFilter` owns the pure rejection and replacement policy. Its
+bounded, cancellation-aware protocol is injected into `maplibre-contour`; that library's
+shared DEM URL is also the only `raster-dem` URL given to MapLibre.
+
 `MapLibreLayerController` attaches to the same native map through the facade and owns
 Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and
 layers, and allowlisted logical visibility commands. `ContourTileGenerator` wraps the
 MapLibre protocol that turns bounded DEM tile requests into vector contours; it does not
-expose caches, URLs, or the native map to React. The controller validates persistent
-imagery tuning and terrain-overlay preferences, atomically updates source tiles, and
-reconciles native order after style or satellite changes. Satellite, Layers, and
-Settings consume its serializable Zustand snapshot. Search results remain local React
-state in a mounted-but-hidden Satellite browser so rail navigation does not reset the
-session.
+expose caches, provider URLs, or the native map to React. The controller validates
+persistent imagery tuning and terrain-overlay preferences, atomically updates source
+tiles, and reconciles native order after style or satellite changes. Satellite, Layers,
+and Settings consume its serializable Zustand snapshot. Search results remain local
+React state in a mounted-but-hidden Satellite browser so rail navigation does not reset
+the session.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

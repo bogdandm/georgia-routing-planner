@@ -72,6 +72,18 @@ const mapProviderConfigurationInputSchema = z
         maxZoom: z.number().int().min(0).max(22),
         attribution: safeAttributionSchema,
         exaggeration: z.number().min(1).max(2),
+        filter: z
+          .object({
+            minimumElevationMeters: z.number().min(-12_000).max(0),
+            maximumElevationMeters: z.number().min(1_000).max(12_000),
+            sentinelElevationsMeters: z.array(z.number()).max(8),
+            spikeThresholdMeters: z.number().positive().max(5_000),
+            maximumNeighborMadMeters: z.number().positive().max(1_000),
+            minimumConsensusNeighbors: z.number().int().min(3).max(8),
+            maximumSpikeSupportNeighbors: z.number().int().min(0).max(3),
+            cacheSize: z.number().int().min(8).max(128),
+          })
+          .strict(),
         overlays: z
           .object({
             contourMinZoom: z.number().int().min(0).max(22),
@@ -101,6 +113,26 @@ const mapProviderConfigurationInputSchema = z
             code: 'custom',
             message: 'Contour maxZoom must not exceed the terrain provider maxZoom.',
             path: ['overlays', 'contourMaxZoom'],
+          });
+        }
+        if (
+          terrain.filter.minimumElevationMeters >= terrain.filter.maximumElevationMeters
+        ) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Terrain filter minimum elevation must be below its maximum.',
+            path: ['filter', 'maximumElevationMeters'],
+          });
+        }
+        if (
+          terrain.filter.minimumConsensusNeighbors +
+            terrain.filter.maximumSpikeSupportNeighbors >
+          8
+        ) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Terrain filter neighbor thresholds must fit an 8-pixel window.',
+            path: ['filter', 'minimumConsensusNeighbors'],
           });
         }
       }),
@@ -137,6 +169,7 @@ const mapProviderConfigurationInputSchema = z
             tileSize: z.union([z.literal(256), z.literal(512)]),
             minZoom: z.number().int().min(0).max(22),
             maxZoom: z.number().int().min(0).max(22),
+            requestTimeoutMs: z.number().int().min(5_000).max(180_000),
             attribution: safeAttributionSchema,
           })
           .strict()
@@ -188,6 +221,17 @@ interface MapProviderConfigurationInput {
     readonly maxZoom: number;
     readonly attribution: string;
     readonly exaggeration: number;
+    /** Conservative Terrarium repair policy, expressed in decoded elevation metres. */
+    readonly filter: {
+      readonly minimumElevationMeters: number;
+      readonly maximumElevationMeters: number;
+      readonly sentinelElevationsMeters: readonly number[];
+      readonly spikeThresholdMeters: number;
+      readonly maximumNeighborMadMeters: number;
+      readonly minimumConsensusNeighbors: number;
+      readonly maximumSpikeSupportNeighbors: number;
+      readonly cacheSize: number;
+    };
     readonly overlays: {
       readonly contourMinZoom: number;
       readonly contourMaxZoom: number;
@@ -210,6 +254,8 @@ interface MapProviderConfigurationInput {
       readonly tileSize: 256 | 512;
       readonly minZoom: number;
       readonly maxZoom: number;
+      /** Maximum wait for visible rendered imagery tiles on slow connections. */
+      readonly requestTimeoutMs: number;
       readonly attribution: string;
     };
   };
@@ -273,6 +319,16 @@ export const defaultMapProviderConfigurationInput = {
     attribution:
       'Terrain data: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank">Mapzen/AWS Open Data providers</a>',
     exaggeration: 1.15,
+    filter: {
+      minimumElevationMeters: -500,
+      maximumElevationMeters: 9_000,
+      sentinelElevationsMeters: [-32_768],
+      spikeThresholdMeters: 500,
+      maximumNeighborMadMeters: 80,
+      minimumConsensusNeighbors: 5,
+      maximumSpikeSupportNeighbors: 1,
+      cacheSize: 48,
+    },
     overlays: {
       contourMinZoom: 11,
       contourMaxZoom: 15,
@@ -296,6 +352,7 @@ export const defaultMapProviderConfigurationInput = {
       tileSize: 256,
       minZoom: 5,
       maxZoom: 16,
+      requestTimeoutMs: 60_000,
       attribution:
         'Copernicus Sentinel data · COG tiles rendered by TiTiler / Development Seed',
     },

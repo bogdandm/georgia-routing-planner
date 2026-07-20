@@ -121,6 +121,7 @@ const mapLayerPreferencesSchema = z
           z.literal(50),
           z.literal(100),
         ]),
+        filterInvalidDemPixels: z.boolean().default(true),
         shadeAboveSatellite: z.boolean(),
       })
       .default(defaultTerrainOverlayPreferences),

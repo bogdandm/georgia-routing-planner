@@ -14,11 +14,14 @@ describe('terrain overlay style contracts', () => {
       'https://example.test/app/',
     );
 
-    expect(createTerrainDemSource(configuration.terrain)).toEqual({
+    expect(
+      createTerrainDemSource(
+        configuration.terrain,
+        'georgia-terrain-shared://{z}/{x}/{y}',
+      ),
+    ).toEqual({
       type: 'raster-dem',
-      tiles: [
-        'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
-      ],
+      tiles: ['georgia-terrain-shared://{z}/{x}/{y}'],
       tileSize: 256,
       minzoom: 0,
       maxzoom: 15,

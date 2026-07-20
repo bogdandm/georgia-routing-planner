@@ -78,6 +78,7 @@ const mapProviderConfigurationInputSchema = z
             maximumElevationMeters: z.number().min(1_000).max(12_000),
             sentinelElevationsMeters: z.array(z.number()).max(8),
             spikeThresholdMeters: z.number().positive().max(5_000),
+            negativeSpikeThresholdMeters: z.number().positive().max(5_000).default(300),
             maximumNeighborMadMeters: z.number().positive().max(1_000),
             minimumConsensusNeighbors: z.number().int().min(3).max(8),
             maximumSpikeSupportNeighbors: z.number().int().min(0).max(3),
@@ -227,7 +228,10 @@ interface MapProviderConfigurationInput {
       readonly minimumElevationMeters: number;
       readonly maximumElevationMeters: number;
       readonly sentinelElevationsMeters: readonly number[];
+      /** Minimum upward residual from the local median that may be rejected. */
       readonly spikeThresholdMeters: number;
+      /** Minimum downward residual from the local median that may be rejected. */
+      readonly negativeSpikeThresholdMeters: number;
       readonly maximumNeighborMadMeters: number;
       readonly minimumConsensusNeighbors: number;
       readonly maximumSpikeSupportNeighbors: number;
@@ -326,6 +330,7 @@ export const defaultMapProviderConfigurationInput = {
       maximumElevationMeters: 9_000,
       sentinelElevationsMeters: [-32_768],
       spikeThresholdMeters: 500,
+      negativeSpikeThresholdMeters: 300,
       maximumNeighborMadMeters: 80,
       minimumConsensusNeighbors: 5,
       maximumSpikeSupportNeighbors: 1,

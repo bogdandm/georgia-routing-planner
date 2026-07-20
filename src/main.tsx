@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { runApplicationBootstrap } from '@/bootstrap/runApplicationBootstrap';
+import { registerPageLifecycleDisposal } from '@/bootstrap/registerPageLifecycleDisposal';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { WorkspaceErrorBoundary } from '@/presentation/shell/WorkspaceErrorBoundary';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
@@ -13,21 +14,11 @@ import { createAppTheme } from '@/presentation/theme/createAppTheme';
 
 runApplicationBootstrap((rootElement, services) => {
   const root = createRoot(rootElement);
-  let disposed = false;
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
+  const dispose = registerPageLifecycleDisposal(() => {
     root.unmount();
     services.dispose();
-  };
-  const handlePageHide = (event: PageTransitionEvent) => {
-    if (!event.persisted) dispose();
-  };
-  window.addEventListener('pagehide', handlePageHide, { once: true });
-  import.meta.hot?.dispose(() => {
-    window.removeEventListener('pagehide', handlePageHide);
-    dispose();
   });
+  import.meta.hot?.dispose(dispose);
   root.render(
     <StrictMode>
       <RuntimeServicesProvider services={services}>

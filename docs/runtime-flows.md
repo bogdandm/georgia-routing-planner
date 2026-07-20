@@ -445,4 +445,6 @@ For final page teardown or Vite module replacement, runtime-service disposal rem
 registered DEM/contour protocols, releases terrain timing subscriptions, flushes partial
 diagnostic batches, terminates the terrain worker, rejects pending RPC work, clears
 worker caches, detaches controller listeners, and closes local runtime resources. A page
-retained in Chrome's back-forward cache keeps its runtime intact.
+retained in Chrome's back-forward cache keeps its runtime and `pagehide` listener
+intact. After restoration, a later final navigation removes that listener and disposes
+the runtime; Vite module replacement uses the same explicit, idempotent cleanup path.

@@ -73,11 +73,11 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
   const satelliteIndex = layers.findIndex((id) => id.startsWith('sentinel-raster-'));
   const reliefIndex = layers.indexOf('terrain-relief-shade');
   const contourIndex = layers.indexOf('terrain-contour-minor');
-  const osmIndex = layers.indexOf('basemap-water');
+  const boundaryIndex = layers.indexOf('basemap-boundaries');
   expect(satelliteIndex).toBeGreaterThanOrEqual(0);
   expect(reliefIndex).toBeGreaterThan(satelliteIndex);
   expect(contourIndex).toBeGreaterThan(reliefIndex);
-  expect(osmIndex).toBeGreaterThan(contourIndex);
+  expect(boundaryIndex).toBeGreaterThan(contourIndex);
   await page
     .getByRole('button', { name: 'Close developer diagnostics', exact: true })
     .click();

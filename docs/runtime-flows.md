@@ -123,11 +123,12 @@ pitch and bearing to zero, so the flat map returns north-up.
 On style readiness, style data changes, satellite swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 generated contour source, minor/index lines, and index labels. The invariant is base
-surface, relief/satellite in the selected order, contours, then OSM data layers.
-Updating the contour interval calls the existing vector source's tile update, so the map
-camera and unrelated native resources remain untouched. MapLibre abort signals flow
-through the contour protocol to bounded DEM requests; source failures update the overlay
-snapshot without removing the basemap.
+surface fills, relief/satellite in the selected order, contours, then OSM boundaries,
+transport, and labels. This keeps terrain relief visible over grass, forest, and other
+opaque land-cover fills. Updating the contour interval calls the existing vector
+source's tile update, so the map camera and unrelated native resources remain untouched.
+MapLibre abort signals flow through the contour protocol to bounded DEM requests; source
+failures update the overlay snapshot without removing the basemap.
 
 Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
 shared visual mode on the existing native layers. Semantic colors remain stable, while

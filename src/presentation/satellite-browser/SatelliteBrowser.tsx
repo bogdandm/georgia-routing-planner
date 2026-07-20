@@ -30,6 +30,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
@@ -456,15 +457,23 @@ function SceneCard({
   const hidden = appliedImagery.status === 'hidden' && applied;
   const acquiredAt = new Date(scene.acquiredAt);
   const title = dayFormatter.format(acquiredAt);
+  const handleCardClick = (event: MouseEvent<HTMLElement>) => {
+    const clickedSecondaryAction =
+      event.target instanceof Element &&
+      event.target.closest('[data-scene-card-secondary-action]') !== null;
+    if (!clickedSecondaryAction) onSelect();
+  };
   return (
     <Paper
       id={`satellite-scene-${encodeURIComponent(scene.id)}`}
       variant="outlined"
+      onClick={handleCardClick}
       sx={{
         overflow: 'hidden',
         borderWidth: selected ? 2 : 1,
         borderColor: selected ? 'primary.main' : 'divider',
         bgcolor: selected ? appColors.surface.selected : 'background.paper',
+        cursor: 'pointer',
       }}
     >
       <ButtonBase
@@ -472,7 +481,6 @@ function SceneCard({
           applied ? `Remove ${title} imagery from map` : `Apply ${title} imagery`
         }
         aria-pressed={selected}
-        onClick={onSelect}
         sx={{ display: 'block', width: '100%', textAlign: 'left' }}
       >
         <Stack direction="row" spacing={1.5} sx={{ p: 1.5 }}>
@@ -611,6 +619,7 @@ function SceneCard({
             <Stack direction="row" spacing={1}>
               <Button
                 size="small"
+                data-scene-card-secondary-action
                 startIcon={<CenterFocusStrongIcon />}
                 onClick={onFitFootprint}
               >
@@ -618,6 +627,7 @@ function SceneCard({
               </Button>
               <Button
                 size="small"
+                data-scene-card-secondary-action
                 startIcon={hidden ? <VisibilityIcon /> : <VisibilityOffIcon />}
                 onClick={() => {
                   onToggleImagery(hidden);

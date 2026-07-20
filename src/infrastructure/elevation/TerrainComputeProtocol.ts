@@ -5,6 +5,7 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import type {
   TerrainComputeMetrics,
   TerrainComputePriority,
+  TerrainComputeQueueState,
   TerrainContourOptions,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 
@@ -23,6 +24,7 @@ const terrainSchema = z.strictObject({
     maximumElevationMeters: z.number(),
     sentinelElevationsMeters: z.array(z.number()).readonly(),
     spikeThresholdMeters: z.number(),
+    negativeSpikeThresholdMeters: z.number(),
     maximumNeighborMadMeters: z.number(),
     minimumConsensusNeighbors: z.number().int(),
     maximumSpikeSupportNeighbors: z.number().int(),
@@ -103,10 +105,12 @@ export interface TerrainWorkerContourResult {
 export const terrainWorkerEventNames = {
   diagnostic: 'terrain-diagnostic',
   metrics: 'terrain-metrics',
+  queueState: 'terrain-queue-state',
 } as const;
 
 export type TerrainWorkerDiagnosticEvent = DiagnosticInput;
 export type TerrainWorkerMetricsEvent = TerrainComputeMetrics;
+export type TerrainWorkerQueueStateEvent = TerrainComputeQueueState;
 
 export function parseTerrainWorkerInitializeRequest(
   value: unknown,

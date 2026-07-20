@@ -3,6 +3,7 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import type {
   TerrainComputeBackend,
   TerrainComputeMetrics,
+  TerrainComputeQueueState,
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
@@ -69,8 +70,23 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
     return 'inline';
   }
 
+  public getQueueState(): TerrainComputeQueueState {
+    return {
+      executionMode: 'inline',
+      activeCount: 0,
+      queuedContourCount: 0,
+      queueCapacity: 0,
+    };
+  }
+
   public subscribeStatus(
     _listener: (status: TerrainComputeStatus) => void,
+  ): () => void {
+    return () => undefined;
+  }
+
+  public subscribeQueueState(
+    _listener: (state: TerrainComputeQueueState) => void,
   ): () => void {
     return () => undefined;
   }

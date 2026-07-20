@@ -11,13 +11,17 @@ import {
 import type {
   TerrainComputeBackend,
   TerrainComputeMetrics,
+  TerrainComputeQueueState,
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
   TerrainDecodedDemTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
-import type { TerrainWorkerInitializeRequest } from '@/infrastructure/elevation/TerrainComputeProtocol';
+import {
+  terrainWorkerEventNames,
+  type TerrainWorkerInitializeRequest,
+} from '@/infrastructure/elevation/TerrainComputeProtocol';
 import { WorkerTerrainComputeBackend } from '@/infrastructure/elevation/WorkerTerrainComputeBackend';
 import {
   type WorkerRpcEndpoint,
@@ -103,7 +107,22 @@ class FakeInlineBackend implements TerrainComputeBackend {
     return 'inline';
   }
 
+  public getQueueState(): TerrainComputeQueueState {
+    return {
+      executionMode: 'inline',
+      activeCount: 0,
+      queuedContourCount: 0,
+      queueCapacity: 0,
+    };
+  }
+
   public subscribeStatus(): () => void {
+    return () => undefined;
+  }
+
+  public subscribeQueueState(
+    _listener: (state: TerrainComputeQueueState) => void,
+  ): () => void {
     return () => undefined;
   }
 
@@ -227,6 +246,43 @@ describe('WorkerTerrainComputeBackend', () => {
     );
     expect(workerFactory).toHaveBeenCalledOnce();
     expect(backend.getStatus()).toBe('worker');
+    backend.dispose();
+    server.dispose();
+  });
+
+  it('publishes validated live contour queue state without exposing tile details', async () => {
+    const [clientEndpoint, serverEndpoint] = pair();
+    const server = new WorkerRpcServer(serverEndpoint, {
+      initialize: () => ({ initialized: true }),
+    });
+    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const backend = new WorkerTerrainComputeBackend(
+      terrain(),
+      10_000,
+      logger,
+      () => clientEndpoint,
+      () => new FakeInlineBackend(),
+    );
+    await backend.loaded;
+    const listener = vi.fn<(state: TerrainComputeQueueState) => void>();
+    backend.subscribeQueueState(listener);
+
+    server.publishEvent(terrainWorkerEventNames.queueState, {
+      executionMode: 'worker',
+      activeCount: 1,
+      queuedContourCount: 4,
+      queueCapacity: 32,
+    });
+    await vi.waitFor(() => {
+      expect(listener).toHaveBeenCalledWith({
+        executionMode: 'worker',
+        activeCount: 1,
+        queuedContourCount: 4,
+        queueCapacity: 32,
+      });
+    });
+    expect(backend.getQueueState()).toEqual(listener.mock.calls.at(-1)?.[0]);
+
     backend.dispose();
     server.dispose();
   });

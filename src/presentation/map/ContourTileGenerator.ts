@@ -7,6 +7,7 @@ import type { ContourIntervalMeters } from '@/application/ports/MapLayerPreferen
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
   TerrainComputeMetrics,
+  TerrainComputeQueueState,
   TerrainComputeStatus,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { WorkerTerrainComputeBackend } from '@/infrastructure/elevation/WorkerTerrainComputeBackend';
@@ -19,7 +20,9 @@ export interface ContourTileGenerator {
   setFilterEnabled(enabled: boolean): void;
   setInteractionActive(active: boolean): void;
   getStatus(): TerrainComputeStatus;
+  getQueueState(): TerrainComputeQueueState;
   subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void;
+  subscribeQueueState(listener: (state: TerrainComputeQueueState) => void): () => void;
   subscribeMetrics(listener: (metrics: TerrainComputeMetrics) => void): () => void;
   dispose(): void;
 }
@@ -121,8 +124,18 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
     return this.#backend.getStatus();
   }
 
+  public getQueueState(): TerrainComputeQueueState {
+    return this.#backend.getQueueState();
+  }
+
   public subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void {
     return this.#backend.subscribeStatus(listener);
+  }
+
+  public subscribeQueueState(
+    listener: (state: TerrainComputeQueueState) => void,
+  ): () => void {
+    return this.#backend.subscribeQueueState(listener);
   }
 
   public subscribeMetrics(

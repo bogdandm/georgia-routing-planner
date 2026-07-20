@@ -1,4 +1,5 @@
 import { ThemeProvider } from '@mui/material';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { userEvent } from '@testing-library/user-event';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,9 +49,13 @@ afterEach(async () => {
 function renderWorkspaceShell() {
   return render(
     <RuntimeServicesProvider services={services}>
-      <ThemeProvider theme={createAppTheme()}>
-        <WorkspaceShell mapSurface={<div aria-label="Fake map">Local map ready</div>} />
-      </ThemeProvider>
+      <QueryClientProvider client={services.queryClient}>
+        <ThemeProvider theme={createAppTheme()}>
+          <WorkspaceShell
+            mapSurface={<div aria-label="Fake map">Local map ready</div>}
+          />
+        </ThemeProvider>
+      </QueryClientProvider>
     </RuntimeServicesProvider>,
   );
 }
@@ -104,6 +109,37 @@ function syntheticSatelliteScene(id: string, acquiredAt: string): SatelliteScene
 }
 
 describe('WorkspaceShell', () => {
+  it('creates a share link only after the explicit rail action', async () => {
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      camera: {
+        longitude: 44.80123,
+        latitude: 41.71234,
+        zoom: 12.35,
+        bearing: 18,
+        pitch: 35,
+      },
+    });
+    renderWorkspaceShell();
+
+    expect(window.location.search).toBe('');
+    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    expect(screen.getByRole('dialog', { name: 'Share this map view' })).toBeVisible();
+    const link = screen.getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Share link',
+    });
+    expect(link.value).toContain('map=1');
+    expect(link.value).toContain('lat=41.71234');
+    expect(window.location.search).toBe('');
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('z=12.35'));
+    expect(await screen.findByText('Share link copied')).toBeVisible();
+  });
+
   it('navigates the contextual feature panels without covering the map', async () => {
     const user = userEvent.setup();
     services.mapViewport.update(testViewport);
@@ -129,6 +165,8 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
     expect(screen.queryByText(/<a href=/u)).not.toBeInTheDocument();
@@ -174,6 +212,30 @@ describe('WorkspaceShell', () => {
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
     expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+  });
+
+  it('sends one shared OpenStreetMap opacity command from Layers', async () => {
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setOpacity = vi
+      .spyOn(mapLayers, 'setOpenStreetMapOpacity')
+      .mockReturnValue({ status: 'success' });
+    mapLayerStore.setState({
+      appliedImagery: {
+        status: 'ready',
+        sceneKey: 'test-scene-key',
+        sceneId: 'test-scene',
+        visible: true,
+      },
+    });
+    renderWorkspaceShell();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), {
+      target: { value: '60' },
+    });
+
+    expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {
@@ -785,6 +847,39 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/Terrain processing is running/u),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the live bounded terrain queue beneath Ready', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByText('Ready')).toBeVisible();
+    expect(
+      screen.queryByLabelText('Terrain compute queue state'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      mapLayerStore.setState({
+        terrainComputeQueue: {
+          executionMode: 'worker',
+          activeCount: 1,
+          queuedContourCount: 4,
+          queueCapacity: 32,
+        },
+      });
+    });
+    expect(screen.getByLabelText('Terrain compute queue state')).toHaveTextContent(
+      'Terrain worker · queue 4/32 · 1 active',
+    );
   });
 
   it('announces fatal map failures assertively', () => {

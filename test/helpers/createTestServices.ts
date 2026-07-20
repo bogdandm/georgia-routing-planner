@@ -9,6 +9,7 @@ import {
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import { SearchPlaces } from '@/application/map/SearchPlaces';
 import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
@@ -105,7 +106,14 @@ export function createTestServices(
       },
       setInteractionActive: () => undefined,
       getStatus: () => 'worker',
+      getQueueState: () => ({
+        executionMode: 'worker',
+        activeCount: 0,
+        queuedContourCount: 0,
+        queueCapacity: 32,
+      }),
       subscribeStatus: () => () => undefined,
+      subscribeQueueState: () => () => undefined,
       subscribeMetrics: () => () => undefined,
       dispose: () => undefined,
     } satisfies ContourTileGenerator,
@@ -133,6 +141,9 @@ export function createTestServices(
     httpClient,
     idGenerator,
     logger,
+    elevationProvider: {
+      sample: () => Promise.resolve({ status: 'available' as const, meters: 1_234 }),
+    },
     mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
     mapDiagnostics,
     mapViewport,
@@ -155,6 +166,12 @@ export function createTestServices(
     searchSatelliteScenes: new SearchSatelliteScenes(
       satelliteCatalogGateway,
       sentinelQueryDiagnostics,
+      logger,
+      idGenerator,
+      clock,
+    ),
+    searchPlaces: new SearchPlaces(
+      { search: () => Promise.resolve([]) },
       logger,
       idGenerator,
       clock,

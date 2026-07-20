@@ -42,9 +42,10 @@ pnpm dev
 ```
 
 The local development URL printed by Vite serves the application from `/`. Development
-uses the public provider defaults unless `VITE_MAP_PROVIDER_CONFIGURATION` supplies a
-validated replacement. Unit, integration, and browser tests use controlled local
-fixtures and never depend on a public provider.
+uses the public provider defaults unless `VITE_MAP_PROVIDER_CONFIGURATION` or
+`VITE_GEOCODING_PROVIDER_CONFIGURATION` supplies a validated replacement. Unit,
+integration, and browser tests use controlled local fixtures and never depend on a
+public provider.
 
 Playwright uses its own pinned Chromium build. Install it before the first local browser
 test:
@@ -113,16 +114,20 @@ The replaceable map-provider defaults are:
   failed worker restarts once and then preserves features through the same inline engine
   with a visible compatibility warning.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
+- Public OpenStreetMap Nominatim for submit-driven place search.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and
 replacement constraints are recorded in
 [docs/map-providers.md](./docs/map-providers.md). The application includes a complete
 validated override example in
 [docs/map-provider-configuration.example.json](./docs/map-provider-configuration.example.json).
-For example, PowerShell can load that file before starting Vite:
+The geocoding override has its own independently validated
+[example](./docs/geocoding-provider-configuration.example.json). For example, PowerShell
+can load either or both files before starting Vite:
 
 ```powershell
 $env:VITE_MAP_PROVIDER_CONFIGURATION = Get-Content -Raw docs/map-provider-configuration.example.json
+$env:VITE_GEOCODING_PROVIDER_CONFIGURATION = Get-Content -Raw docs/geocoding-provider-configuration.example.json
 pnpm dev
 ```
 
@@ -154,12 +159,12 @@ aggregated provider failures, WebGL capabilities, and developer-only MapLibre de
 flags. Provider reachability is checked only after the user explicitly requests it;
 normal startup never waits for an optional provider probe.
 
-“Download diagnostics” exports a schema-version 2 JSON file locally. Nothing is
+“Download diagnostics” exports a schema-version 3 JSON file locally. Nothing is
 uploaded. The export pipeline allowlists fields and removes tokens, headers, local
 Windows paths, GPX filenames, route geometry, and exact coordinates. Exported camera
 longitude/latitude are rounded to `0.1` degree; the exact persisted camera remains
 local. The inspection CLI accepts current bundles and migrates supported schema-version
-1 bundles before summarizing them.
+1 and 2 bundles before summarizing them.
 
 Inspect a received bundle without evaluating its content:
 

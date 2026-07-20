@@ -4,7 +4,11 @@ import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
 import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import type { TerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
-import type { TerrainComputeStatus } from '@/infrastructure/elevation/TerrainComputeBackend';
+import type {
+  TerrainComputeQueueState,
+  TerrainComputeStatus,
+} from '@/infrastructure/elevation/TerrainComputeBackend';
+import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 
 export interface TerrainOverlaySnapshot {
   readonly initialized: boolean;
@@ -16,7 +20,9 @@ export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly errorMessage: string | null;
   readonly terrainComputeStatus: TerrainComputeStatus;
+  readonly terrainComputeQueue: TerrainComputeQueueState;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
+  readonly openStreetMapOpacity: number;
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
 
@@ -24,6 +30,12 @@ export const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
   errorMessage: null,
   terrainComputeStatus: 'worker',
+  terrainComputeQueue: {
+    executionMode: 'worker',
+    activeCount: 0,
+    queuedContourCount: 0,
+    queueCapacity: defaultTerrainContourQueueCapacity,
+  },
   visibility: {
     'satellite-imagery': true,
     'scene-footprint': true,
@@ -35,6 +47,7 @@ export const initialMapLayerState: MapLayerState = {
     roads: true,
     'places-and-pois': true,
   },
+  openStreetMapOpacity: 1,
   terrainOverlays: {
     initialized: false,
     preferences: defaultTerrainOverlayPreferences,

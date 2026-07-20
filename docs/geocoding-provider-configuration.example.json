@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "osm-nominatim-public",
+  "searchUrl": "https://nominatim.openstreetmap.org/search",
+  "attribution": "Search data © OpenStreetMap contributors",
+  "minimumRequestIntervalMs": 1000,
+  "requestTimeoutMs": 12000,
+  "maximumResults": 10
+}

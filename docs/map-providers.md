@@ -93,6 +93,38 @@ The base source, support endpoints, layer mapping, and attribution are parsed
 configuration. Replacing OpenFreeMap therefore requires a compatible TileJSON/schema
 configuration and style-mapping review, not changes to React workflows.
 
+## Place search: public Nominatim
+
+The replaceable default place-search endpoint is the public OpenStreetMap Nominatim
+Search API. Search is submit-only because the public usage policy forbids client-side
+autocomplete. Each request supplies a bounded `viewbox`; the application begins with the
+visible viewport and doubles the bounded area until it reaches a 500 km radius from the
+original viewport center. Matches from narrower areas remain first while wider responses
+append new displayed name-and-category combinations. This collapses one named street
+split across several OSM ways without suppressing same-name features whose full location
+labels differ, and avoids allowing a nearby road or business name to hide a more distant
+settlement. Provider categories are normalized into settlements, administrative areas,
+mountains, water, and other results. Settlement classification uses explicit OSM place
+types rather than the whole `place` category, keeping squares and similar objects out of
+the default list. The first four categories are visible by default; streets, businesses,
+and other POIs require the explicit secondary-results action.
+
+JSONv2 `category` and `type` are the result object's open-ended primary OSM tag, not a
+stable Nominatim enum. The adapter therefore allowlists reviewed tags: cities, towns,
+villages, hamlets, and isolated dwellings; administrative boundaries; peaks, ranges,
+ridges, saddles, volcanoes, and mountain passes; and named rivers, streams, canals,
+waterfalls, springs, bays, straits, and water bodies. Every other tag is
+deterministically classified as `other`. Requests select the `address`, `natural`, and
+`manmade` provider layers so POI and railway matches cannot consume the bounded result
+quota. Raw tag values are retained at the port boundary while presentation converts them
+to readable labels.
+
+The adapter enforces a minimum one-second interval between network requests, caches
+query-and-viewbox responses for five minutes, limits each provider response to the
+configured maximum, validates JSON with Zod, and exposes typed timeout, rate-limit,
+invalid-response, provider, and network failures. Queries and result metadata are not
+written to diagnostics. UI attribution links to the OpenStreetMap copyright page.
+
 ## Terrain: AWS Open Data Mapzen Terrain Tiles
 
 The terrain default is
@@ -132,14 +164,17 @@ The filter uses a one-pixel halo decoded from all eight neighboring tiles. It re
 transparent pixels, configured sentinel elevations, values outside the configured
 physical range, and isolated local extremes. The local test requires at least five
 neighbors close to their median, median absolute deviation no greater than 80 m, a
-center residual of at least 500 m, and no more than one neighbor supporting the extreme
-center value. This preserves coherent ridges and cliffs, including narrow features with
-two supporting pixels. Rejected pixels are replaced with the median of valid immediate
-neighbors; accepted pixels are never resampled, blurred, or re-encoded. The production
-filter reuses fixed eight-value neighbor/deviation buffers, reuses the classification
-median for repair, and clones output bytes only at the first changed pixel. A
-deterministic reference oracle verifies identical repair counts and RGBA bytes across
-the benchmark scenarios. A tile with no repairs returns the original PNG bytes.
+neighbors close to their median, median absolute deviation no greater than 80 m, no more
+than one neighbor supporting the extreme center value, and a center residual of at least
+500 m upward or 300 m downward. The asymmetric limit reflects confirmed provider
+corruption while keeping upward peak detection more conservative. This preserves
+coherent ridges and cliffs, including narrow features with two supporting pixels.
+Rejected pixels are replaced with the median of valid immediate neighbors; accepted
+pixels are never resampled, blurred, or re-encoded. The production filter reuses fixed
+eight-value neighbor/deviation buffers, reuses the classification median for repair, and
+clones output bytes only at the first changed pixel. A deterministic reference oracle
+verifies identical repair counts and RGBA bytes across the benchmark scenarios. A tile
+with no repairs returns the original PNG bytes.
 
 The default physical range is −500 m through 9,000 m and the explicit sentinel list is
 `[-32768]`. These bounds cover global terrestrial elevations conservatively while
@@ -153,6 +188,12 @@ coordinates, and pixels are excluded. Overlapping neighborhoods coalesce in-flig
 source fetch and decode work, and diagnostics are emitted in fixed-size aggregate
 batches instead of one event per rendered tile. Mixed results retain the batch's most
 severe status without creating a new event for every cancellation transition.
+
+At Lisi Lake, tiles `15/20455/12195` and `15/20456/12195` contain 63 compact downward
+spikes against a 626–635 m local surface. Their residuals range from −315.19 m to
+−1,826.25 m, with source minima of −683.80 m and −1,197.81 m. The repeated pixel-offset
+pattern crosses the shared tile boundary while surrounding tiles remain plausible. A 300
+m downward threshold rejects all 63; 400 m leaves five and 500 m leaves eighteen.
 
 Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
 and persisted locally. Disabling it bypasses decoding and repair and returns the
@@ -294,9 +335,28 @@ The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`,
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and
 never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
 failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
+TiTiler's CloudFront distribution reflects `Access-Control-Allow-Origin` but can reuse a
+cached tile across request origins. Renderers that declare the `application-origin`
+cache-partition policy therefore receive a sanitized, stable `application_origin` value
+derived from scheme, host, and port. The default GitHub Pages deployment uses
+`https-bogdandm-github-io`, while local ports receive distinct values; renderers
+configured with `none` receive no extra parameter. This value contains no path, query,
+user data, or secret. For an already active raster, HTTP 429, HTTP 5xx, timeout, and
+network failures trigger up to three deduplicated failed-tile refreshes with exponential
+delay. Refreshing only the failed canonical tile coordinates keeps already rendered
+imagery available. The current status names the exact HTTP code when available;
+developer diagnostics also retain the stable source ID, safe failure class, aggregate
+count, recovery state, and retry attempt. URLs, queries, response bodies, and tile
+coordinates remain excluded. MapLibre status zero is reported as `no-response`, which
+accurately covers blocked CORS responses as well as connection failures without
+inventing an HTTP status.
 
 The map adapter prepares a replacement raster under a second stable source/layer slot
-and reveals it only after MapLibre reports the source loaded. Failure, timeout,
+and reveals it only after MapLibre reports the source loaded. Transient staging failures
+receive the same bounded failed-tile refreshes and stability check as active imagery. A
+remaining transient tile does not reject otherwise usable partial imagery; it is
+promoted after the bounded retries while its failure remains visible until MapLibre
+later returns successful data for that exact tile. A non-retryable failure, timeout,
 cancellation, or supersession removes only staging resources and leaves the prior scene
 and basemap usable. The validated WGS84 footprint renders independently as GeoJSON,
 making partial coverage explicit. The application never logs or stores the COG or tile

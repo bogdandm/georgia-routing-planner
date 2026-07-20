@@ -48,6 +48,7 @@ export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
 
 export interface PersistedMapLayerPreferences {
   readonly visibility: MapLayerVisibilityPreferences;
+  readonly openStreetMapOpacity: number;
   readonly appliedScene: SatelliteScene | null;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;

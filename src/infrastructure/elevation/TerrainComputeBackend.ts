@@ -2,6 +2,7 @@ import type { DiagnosticInput } from '@/application/ports/DiagnosticLogger';
 
 export type TerrainComputeStatus = 'worker' | 'restarting' | 'inline';
 export type TerrainComputePriority = 'high' | 'low';
+export const defaultTerrainContourQueueCapacity = 32;
 
 export interface TerrainDemResponse {
   readonly data: Blob;
@@ -40,6 +41,14 @@ export interface TerrainComputeMetrics {
   readonly status: 'success' | 'failed' | 'canceled';
 }
 
+/** Serializable live workload state; it intentionally excludes tile identity and data. */
+export interface TerrainComputeQueueState {
+  readonly executionMode: TerrainComputeStatus;
+  readonly activeCount: number;
+  readonly queuedContourCount: number;
+  readonly queueCapacity: number;
+}
+
 /** Capability boundary used by MapLibre protocols without exposing Worker or engine objects. */
 export interface TerrainComputeBackend {
   readonly loaded: Promise<void>;
@@ -65,7 +74,9 @@ export interface TerrainComputeBackend {
   setFilterEnabled(enabled: boolean): void;
   setInteractionActive(active: boolean): void;
   getStatus(): TerrainComputeStatus;
+  getQueueState(): TerrainComputeQueueState;
   subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void;
+  subscribeQueueState(listener: (state: TerrainComputeQueueState) => void): () => void;
   subscribeMetrics(listener: (metrics: TerrainComputeMetrics) => void): () => void;
   subscribeDiagnostic(listener: (input: DiagnosticInput) => void): () => void;
   dispose(): void;

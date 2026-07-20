@@ -1,10 +1,14 @@
 import type { MapFacade } from '@/presentation/map/MapFacade';
-import type { MapViewportSnapshot } from '@/application/ports/MapViewportProvider';
+import type {
+  MapViewportBounds,
+  MapViewportSnapshot,
+} from '@/application/ports/MapViewportProvider';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
+  type MapPointInspection,
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
@@ -14,6 +18,16 @@ export class FakeMapFacade implements MapFacade {
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
+  public navigationRequests: {
+    readonly longitude: number;
+    readonly latitude: number;
+    readonly zoom?: number;
+  }[] = [];
+  public fitBoundsRequests: {
+    readonly bounds: MapViewportBounds;
+    readonly maxZoom: number;
+  }[] = [];
+  public pointInspection: MapPointInspection = { status: 'closed' };
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
   public snapshot: MapDiagnosticsSnapshot = {
@@ -58,6 +72,32 @@ export class FakeMapFacade implements MapFacade {
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {
     return this.snapshot;
+  }
+
+  public getPointInspection(): MapPointInspection {
+    return this.pointInspection;
+  }
+
+  public closePointInspection(): void {
+    this.pointInspection = { status: 'closed' };
+    this.notify();
+  }
+
+  public setPointInspection(inspection: MapPointInspection): void {
+    this.pointInspection = inspection;
+    this.notify();
+  }
+
+  public navigateTo(target: {
+    readonly longitude: number;
+    readonly latitude: number;
+    readonly zoom?: number;
+  }): void {
+    this.navigationRequests.push(target);
+  }
+
+  public fitBounds(bounds: MapViewportBounds, maxZoom: number): void {
+    this.fitBoundsRequests.push({ bounds, maxZoom });
   }
 
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {

@@ -18,14 +18,21 @@ configuration, data, test, and maintenance changes must be made on a feature bra
 
 ## Parallel-agent worktrees
 
-Agents work in isolated Git worktrees by default. The maintainer may run up to four
-agents in parallel; each agent must use its own worktree and branch so its file edits,
-tests, and Git operations do not interfere with another agent's work.
+Every agent must create and use a fresh, dedicated Git worktree and purpose-specific
+branch for its task. Do not reuse the main repository checkout, another agent's
+worktree, or an old feature worktree merely because the agent started there. The
+maintainer may run up to four agents in parallel; separate worktrees keep their file
+edits, tests, and Git operations isolated.
 
-The main repository checkout may be switched to a branch when the maintainer explicitly
-requests it. Treat that checkout as maintainer-controlled: do not switch its branch,
-edit its files, or run Git operations there unless the request explicitly scopes the
-work to it.
+Each worktree must also use a distinct, explicit development-server port. Check that the
+chosen port is free before starting Vite and pass both `--port <port>` and
+`--strictPort`; do not rely on Vite's automatic port fallback, because browser review
+could otherwise open a different worktree's server.
+
+The only exception is when the maintainer directly instructs that agent to use the main
+repository checkout for the current task. Treat the main checkout as
+maintainer-controlled in every other case: do not switch its branch, edit its files, or
+run Git operations there.
 
 Before modifying files:
 
@@ -62,7 +69,7 @@ Rules:
 - A feature is not handed off as finished until its relevant checks pass and its
   feature-branch state is available in a GitHub pull request targeting `main`. When you
   believe the feature is finished, commit the intended changes, push the feature branch,
-  open a draft pull request, and give the user its review link. This standing
+  open a ready-for-review pull request, and give the user its review link. This standing
   instruction authorizes that feature-completion push and pull-request creation without
   a separate prompt. If a pull request already exists for the branch, update it and
   return the existing link instead of creating a duplicate.
@@ -70,9 +77,10 @@ Rules:
   external actions unless the user requests them.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to
   remove user work.
-- The GitHub CLI (`gh`) is installed and available for this project. Use it for
-  requested GitHub repository and remote workflows, and verify `gh auth status` before
-  an operation that contacts GitHub.
+- The GitHub CLI (`gh`) is installed and available for this project. Use it directly for
+  GitHub repository and remote workflows, including creating pull requests; do not try a
+  GitHub connector first or report a connector-to-CLI fallback. Verify `gh auth status`
+  before an operation that contacts GitHub.
 - In managed Codex runs, a sandboxed `gh auth status` or other `gh` command may falsely
   report that the token is invalid because the sandbox cannot access the host keyring or
   network. When a sandboxed `gh` command reports an authentication or likely
@@ -564,20 +572,39 @@ normal verification rules for those files.
 ### Managed Windows coverage timing
 
 On the managed Windows workspace, parallel V8 coverage can make otherwise passing
-`WorkspaceShell` interaction tests exceed Vitest's five-second per-test default because
-several JSDOM workers compete for CPU. Always try the canonical `pnpm test:coverage`
-command first. If the only failures are timeouts and the named tests pass when focused,
-rerun the complete coverage suite with bounded concurrency and a ten-second ceiling:
+`WorkspaceShell` interaction tests exceed Vitest's five-second default because several
+JSDOM workers compete for CPU. The coverage configuration therefore owns a ten-second
+per-test ceiling. Run the canonical command once:
 
 ```powershell
-.\node_modules\.bin\vitest.cmd run --config vitest.coverage.config.ts --coverage --maxWorkers=2 --testTimeout=10000
+pnpm test:coverage
 ```
 
-If two workers still show contention, retry with `--maxWorkers=1`. Do not skip tests,
-remove assertions, add sleeps, or increase application polling delays to make the run
-green. Report both the canonical timeout and the successful bounded-concurrency result
-in the handoff so other agents can distinguish infrastructure timing from a behavioral
-failure.
+Do not first run coverage with a five-second ceiling, and do not repeat the complete
+suite merely to apply the known ten-second requirement. If a test still exceeds ten
+seconds, investigate it as a new failure; do not add sleeps, remove assertions, or
+silently increase the ceiling again.
+
+### Managed Chromium timing
+
+GitHub's software-rendered Chromium can take several times longer than a desktop run
+when MapLibre, terrain decoding, IndexedDB persistence, and diagnostics export overlap.
+Keep CI at one browser worker, a 120-second per-test ceiling, and a 20-second assertion
+ceiling. Local runs use a 90-second per-test ceiling and a 10-second assertion ceiling.
+Retries remain disabled so a real failure produces one authoritative set of artifacts.
+
+These limits cover the observed terrain-visibility reload, diagnostics export, and
+satellite reload workflows. The earlier 5-second assertion and 30-second test limits
+expired under hosted-runner contention even though the terrain and satellite workflows
+passed on their next execution. Do not replace these limits with sleeps or loosen
+application deadlines.
+
+Before pushing MapLibre, terrain, persistence, diagnostics, or satellite E2E changes,
+run the CI-shaped suite on Windows PowerShell:
+
+```powershell
+$env:CI='1'; pnpm e2e; Remove-Item Env:CI
+```
 
 The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
 and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling
@@ -769,6 +796,14 @@ pnpm check          # all non-destructive CI checks
 
 If a command is not yet implemented, add it with the relevant implementation rather than
 documenting a different ad-hoc command.
+
+## Local servers and ports
+
+Before starting any local development, preview, test, or helper server, check that its
+intended TCP port has no listener. Never attempt to start a server on an unchecked or
+occupied port. If the port is occupied, do not terminate or replace the existing
+process; select an available port and pass it explicitly, unless the task requires the
+original port, in which case report the conflict before proceeding.
 
 ## Verification and definition of done
 

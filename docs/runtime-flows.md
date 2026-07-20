@@ -45,12 +45,33 @@ Settings is a non-modal floating dialog without a dimming backdrop. Releasing an
 stretch slider validates and stores the new numeric values, prepares a replacement
 raster for the current scene, and swaps only after MapLibre reports it ready. A failed
 tuning attempt rolls back the controller values and keeps the prior raster visible. At
-startup, validated stretch preferences load before a saved Sentinel scene is restored.
-When restoration reaches a ready or hidden state, Satellite projects the controller's
-saved scene into a one-entry Images pane using the current viewport for coverage
-evidence. Clicking that active entry aborts any pending application, removes both raster
-slots and the footprint, clears the applied-scene preference, and returns map layer
-state to empty.
+startup, validated stretch preferences load first; saved Sentinel imagery waits for the
+MapLibre style-ready attach before creating raster sources. If a development detach
+cancels restoration, the controller resumes it after the same style-ready map
+reattaches. Late errors from a source that has already been removed are ignored. When
+restoration reaches a ready or hidden state, Satellite projects the controller's saved
+scene into a one-entry Images pane using the current viewport for coverage evidence.
+Clicking that active entry aborts any pending application, removes both raster slots and
+the footprint, clears the applied-scene preference, and returns map layer state to
+empty.
+
+The inactive slot used to prepare a newly selected scene does not fail on its first
+transient tile error. It refreshes failed canonical tile coordinates with bounded
+backoff. When only a transient tile remains unavailable, it promotes the usable partial
+raster after the retries are exhausted and keeps the failure visible. Non-retryable or
+whole-source failures preserve the previous raster and surface a safe status-specific
+explanation.
+
+After a raster is active, MapLibre tile errors flow through the facade for safe
+classification and through the layer controller for recovery. The controller ignores
+duplicate errors while a retry is scheduled, refreshes the failed raster tiles after a
+bounded exponential delay, and stops after three attempts. HTTP 4xx failures other than
+429 and unknown failures remain visible without automatic retry. A successful
+source-data event for every failed canonical tile clears the controller's pending set;
+only then can a loaded source start the two-second stability window. Another source
+error cancels that window. The facade returns to ready when no active failure remains.
+Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
+the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the
@@ -127,18 +148,19 @@ pitch and bearing to zero, so the flat map returns north-up.
 On style readiness, style data changes, satellite swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 generated contour source, minor/index lines, and index labels. The invariant is base
-surface fills, relief/satellite in the selected order, contours, then OSM boundaries,
-transport, and labels. This keeps terrain relief visible over grass, forest, and other
-opaque land-cover fills. Updating the contour interval calls the existing vector
-source's tile update, so the map camera and unrelated native resources remain untouched.
-MapLibre abort signals flow through both the shared DEM and contour protocols, the
-request-correlated worker channel, and the same filtered provider. The provider fetches
-the center and eight neighbors concurrently under one timeout. Concurrent neighborhoods
-share in-flight fetch and decode work for overlapping source tiles; canceling one
-consumer aborts that source request only after its final consumer releases it. The
-provider applies the configured pure repair policy and retains completed PNGs and
-decoded neighbor context in bounded LRUs. Relief, 3D terrain, and generated isolines
-therefore cannot observe different elevation bytes.
+surface fills, relief/satellite in the selected order, waterways, contours, water-body
+polygons, then OSM boundaries, transport, and labels. This keeps terrain relief visible
+over grass, forest, and other opaque land-cover fills while water bodies mask generated
+isolines. Updating the contour interval calls the existing vector source's tile update,
+so the map camera and unrelated native resources remain untouched. MapLibre abort
+signals flow through both the shared DEM and contour protocols, the request-correlated
+worker channel, and the same filtered provider. The provider fetches the center and
+eight neighbors concurrently under one timeout. Concurrent neighborhoods share in-flight
+fetch and decode work for overlapping source tiles; canceling one consumer aborts that
+source request only after its final consumer releases it. The provider applies the
+configured pure repair policy and retains completed PNGs and decoded neighbor context in
+bounded LRUs. Relief, 3D terrain, and generated isolines therefore cannot observe
+different elevation bytes.
 
 One dedicated module worker owns PNG decode/encode, repair, parsed DEM data, and contour
 generation. `movestart` marks the channel interactive: DEM requests continue while new
@@ -146,6 +168,12 @@ contour requests enter a bounded low-priority queue. Cancellation removes a queu
 request immediately, a full queue cancels its oldest viewport request, and `moveend`
 drains current contours one at a time. An already-running synchronous contour is allowed
 to finish. Detach always clears interactive mode.
+
+The worker publishes a coordinate-free queue snapshot whenever active work or the
+contour backlog changes. The recoverable backend validates that event, the layer
+controller stores only execution mode and counts, and the Ready status renders the
+current queued count against the fixed capacity only while work is pending. Restart and
+inline fallback reset the snapshot so stale worker work cannot remain visible.
 
 Provider, timeout, decode, and compute errors fail only their request. A worker `error`,
 `messageerror`, or channel loss starts one fresh worker, replays validated configuration
@@ -177,6 +205,8 @@ perimeter derived from provider-tagged military geometry.
 ## Provider and WebGL failures
 
 - `error` events are classified from safe source IDs and normalized messages.
+- Routine aborted, cancelled, and superseded tile requests are ignored before snapshot
+  mutation or subscriber notification; camera movement must not create a render storm.
 - Style errors during startup become fatal because no usable basemap exists.
 - Vector, glyph, and terrain errors update capped failure buckets and a degraded
   snapshot; repeated equivalent events do not create alert or log storms.
@@ -345,11 +375,47 @@ glacier, and water-polygon layers; restricted-area, hiking, road, and place comm
 expand to their fixed native style groups. Satellite and footprint commands target only
 controller-owned layers. Adding a map data source includes adding its provider group and
 relevant logical visibility controls to Layers in the same change. Visibility is applied
-idempotently and projected into a serializable live store. Dexie persists visibility,
-imagery stretch, and the last successful scene for startup restoration. Satellite
-search/results state remains mounted while another rail section is visible, and
-returning to Satellite reattaches the existing adjacent pane without a new provider
-request.
+idempotently and projected into a serializable live store. The OpenStreetMap group
+opacity scales the existing satellite-mode paint opacity for its controlled fills,
+lines, points, and labels. Vector mode always uses the unscaled base paint. Dexie
+persists visibility, shared OpenStreetMap opacity, imagery stretch, and the last
+successful scene for startup restoration. Satellite search/results state remains mounted
+while another rail section is visible, and returning to Satellite reattaches the
+existing adjacent pane without a new provider request.
+
+## Place search expansion
+
+`MapSearchPlaceholder` captures an immutable viewport with an explicit text submission.
+`SearchPlaces` asks the replaceable gateway for results inside that area, accumulates
+visually unique name-and-category matches in inner-to-outer order, and emits the growing
+list after each response. This collapses OSM streets split across several ways while
+preserving same-name features whose full location labels differ. It doubles the area
+around the same center until the radius reaches 500 km even when an earlier area already
+matched. Sub-metre cap tolerance and a defensive attempt ceiling guarantee the expansion
+terminates even when floating-point bounds or a provider cache repeat an area. The
+Nominatim adapter serializes the requests at no more than one per second, caches each
+query-and-area combination, and passes cancellation through every wait and HTTP request.
+Provider failure ends the search without discarding results that were already visible in
+the component; a new submission or closing the result list cancels the obsolete query.
+Map camera interactions do not close the list and therefore do not cancel the query. The
+adapter also maps provider categories into settlements, administrative areas, mountains,
+water, and other results. Presentation prioritizes the first four groups and hides the
+other group until explicitly requested. Each displayed match includes its geodesic
+distance from the original viewport center; later camera movement does not change that
+search anchor. Only explicit settlement types are classified as settlements, so objects
+such as `place=square` remain in the optional other-results group.
+
+## Point inspection lifecycle
+
+`MapLibreFacade` owns the serializable inspection state and the native popup adapter.
+The first map click opens loading state and starts cancellable POI/elevation work. If an
+inspection is already open and intersects the map viewport, the next map click closes
+it, aborts that work, and does not inspect the new coordinate; the following click may
+start another inspection. An entirely offscreen popup is closed and replaced by the same
+click. Sequence checks prevent a late provider result from reopening a closed popup.
+Explicit popup close uses the same cancellation path. Diagnostics record only lifecycle,
+duration, outcome, and result count, never the clicked coordinate or arbitrary POI
+metadata.
 
 ## Teardown ownership
 

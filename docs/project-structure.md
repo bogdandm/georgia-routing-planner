@@ -139,8 +139,8 @@ the pure rejection and replacement policy. `WorkerTerrainComputeBackend` normall
 that engine in one Vite module worker through the reusable request-correlated
 `WorkerRpc` transport. A failed worker is restarted once; a second transport failure
 selects `InlineTerrainComputeBackend`, which calls the same engine and exposes only a
-serializable compatibility status. Worker objects and caches never enter React, Zustand,
-or application ports.
+serializable compatibility and bounded-queue state. Worker objects and caches never
+enter React, Zustand, or application ports.
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
 Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and
@@ -148,12 +148,13 @@ layers, and allowlisted logical visibility commands. `ContourTileGenerator` wrap
 MapLibre protocol that turns bounded DEM tile requests into vector contours; it does not
 expose caches, provider URLs, or the native map to React. The facade forwards camera
 movement state through the controller so the worker can prioritize DEM requests and
-defer new contour calculations until movement settles. The controller validates
-persistent imagery tuning and terrain-overlay preferences, atomically updates source
-tiles, and reconciles native order after style or satellite changes. Satellite, Layers,
-and Settings consume its serializable Zustand snapshot. Search results remain local
-React state in a mounted-but-hidden Satellite browser so rail navigation does not reset
-the session.
+defer new contour calculations until movement settles. It also forwards the worker's
+coordinate-free active and queued counts into the map-layer store for the operational
+status line. The controller validates persistent imagery tuning and terrain-overlay
+preferences, atomically updates source tiles, and reconciles native order after style or
+satellite changes. Satellite, Layers, and Settings consume its serializable Zustand
+snapshot. Search results remain local React state in a mounted-but-hidden Satellite
+browser so rail navigation does not reset the session.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

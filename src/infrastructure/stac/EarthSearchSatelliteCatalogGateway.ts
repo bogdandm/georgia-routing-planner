@@ -22,6 +22,7 @@ import type {
 } from '@/domain/satellite/SatelliteScene';
 import {
   earthSearchFeatureCollectionSchema,
+  earthSearchItemSchema,
   earthSearchNextBodySchema,
   earthSearchPaginationEnvelopeSchema,
   type EarthSearchItem,
@@ -416,6 +417,39 @@ export class EarthSearchSatelliteCatalogGateway implements SatelliteCatalogGatew
         data: { operationId: context.operationId, code: safeError.code },
       });
       throw safeError;
+    }
+  }
+
+  public async getScene(
+    collection: string,
+    id: string,
+    context: SatelliteCatalogRequestContext,
+  ): Promise<SatelliteScene | null> {
+    const productLevel =
+      collection === this.configuration.collections.L2A
+        ? 'L2A'
+        : collection === this.configuration.collections.L1C
+          ? 'L1C'
+          : null;
+    if (productLevel === null || !/^[a-z0-9._-]{1,300}$/iu.test(id)) return null;
+    const endpoint = new URL(this.configuration.searchUrl);
+    endpoint.pathname = `${endpoint.pathname.replace(/\/search\/?$/u, '')}/collections/${encodeURIComponent(collection)}/items/${encodeURIComponent(id)}`;
+    endpoint.search = '';
+    endpoint.hash = '';
+    try {
+      const raw = await this.httpClient
+        .get(endpoint, {
+          context: { operationId: context.operationId },
+          signal: context.signal,
+          timeout: this.requestTimeoutMs,
+        })
+        .json<unknown>();
+      const item = earthSearchItemSchema.parse(raw);
+      return mapItem(item, productLevel, collection, this.configuration.attribution);
+    } catch (error) {
+      if (isAbortError(error) || context.signal.aborted) throw error;
+      if (error instanceof HTTPError && error.response.status === 404) return null;
+      throw mapTransportError(error);
     }
   }
 

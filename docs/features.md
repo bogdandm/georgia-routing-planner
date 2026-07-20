@@ -187,23 +187,37 @@ imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Road
 Places and POIs, plus Natural features and Restricted areas. The single **Natural
 features** checkbox controls vegetation, glacier, wetland, and water-body polygons;
 waterway lines and labels remain navigation context. The OpenStreetMap controls remain a
-single flat list. Every map data source added to the application must appear under its
-provider heading in Layers; each user-visible feature family from that source receives
-an explicit control unless it is part of the required base canvas. Each logical ID maps
-to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the
-UI boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
-retains the applied scene and does not remove its footprint, search results, or
-attribution contract. Relief and isoline visibility are independent of 3D terrain mode
-and satellite availability. Base land remains visible and cannot be disabled. Opacity,
-drag ordering, and custom layers are unavailable. Checkbox state and the last
-successfully applied scene are stored locally and restored after refresh. The last
-successful imagery stretch is stored with those preferences and applied before a saved
-scene is restored.
+single flat list with one shared opacity slider. While satellite imagery is visible, the
+slider scales the five controlled OpenStreetMap feature families together while
+preserving their relative visual weights and individual visibility choices. It is
+disabled in vector-only mode. Every map data source added to the application must appear
+under its provider heading in Layers; each user-visible feature family from that source
+receives an explicit control unless it is part of the required base canvas. Each logical
+ID maps to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never
+cross the UI boundary. Satellite controls remain disabled until a scene is applied.
+Hiding imagery retains the applied scene and does not remove its footprint, search
+results, or attribution contract. Relief and isoline visibility are independent of 3D
+terrain mode and satellite availability. Base land remains visible and cannot be
+disabled. Per-layer opacity, drag ordering, and custom layers are unavailable. Checkbox
+state, shared OpenStreetMap opacity, and the last successfully applied scene are stored
+locally and restored after refresh. The last successful imagery stretch is stored with
+those preferences and applied before a saved scene is restored.
 
 ## Persistent map controls
 
-- Place-or-coordinate search is overlaid on the map. The current search field is
-  disabled.
+- Place-or-coordinate search is overlaid on the map. Submitted place searches begin in
+  the visible viewport, then repeatedly double the bounded search area up to a 500 km
+  radius from the original viewport center. Results from every area are appended as they
+  arrive and deduplicated, so a nearby street name does not hide a more distant
+  settlement with the same name. Direct coordinates remain local and do not contact the
+  place provider. The result list shows each match's geodesic distance from that center.
+  It shows settlements, administrative place boundaries, mountains, and water features
+  by default. Squares, streets, businesses, and other POIs remain behind an explicit
+  **Show other results** action. A fixed-height, full-width progress bar shows outward
+  expansion against the 500 km maximum without shifting completed results. Map pan,
+  zoom, and camera controls do not dismiss results or cancel an active search.
+  Nominatim's open-ended OSM tags are shown as readable labels; only explicitly reviewed
+  geographic tags enter the default list and unknown tags stay in other results.
 - A lightweight line below search reports readiness, pending work, or safe failures;
   selecting an error opens its complete safe detail.
 - Navigation collapses with a short transition to only the clickable GR mark. The GR
@@ -216,6 +230,11 @@ scene is restored.
   remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
+- Clicking the map opens an anchored, accessible point-inspection popup with formatted
+  coordinates, terrain elevation, and the nearest validated OSM point of interest within
+  100 m. While any part of that popup intersects the map viewport, the next map click
+  only closes it; a subsequent click opens a new inspection. If camera movement puts the
+  popup entirely outside the viewport, the next click immediately replaces it.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.
@@ -302,6 +321,11 @@ cannot recover after one restart, the same calculations continue inline and Sett
 Rendering shows a non-blocking compatibility warning that movement may be slower. A
 successful worker session has no warning.
 
+While terrain work is active, the Ready status below search also shows the execution
+mode, exact number of queued contour jobs against the 32-job bound, and any currently
+active work. The secondary line is absent when the worker is idle. This workload summary
+is transient and contains no tile coordinates or provider URLs.
+
 Relief normally sits below satellite imagery; the Rendering setting moves it above the
 active raster without remounting MapLibre. Contours remain above both and below OSM
 roads, paths, labels, and POIs. Preferences are validated and stored locally with the
@@ -324,26 +348,42 @@ corrected PNG cache supplies relief, 3D, and elevation isolines.
 
 ## Failure and offline feedback
 
-Map errors are classified as vector, glyph/sprite, terrain, style, WebGL, or unknown.
-Equivalent recoverable errors are counted in capped buckets and logged at a bounded
-interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
-degraded states. Offline messaging promises only that already rendered areas may remain
-visible, not full offline map support. Map lifecycle and imagery errors do not create a
-wide map banner: the shared line below search is their single UI surface. Ready remains
-background-free; pending and error states use a lightly translucent surface for map
-contrast, and selecting an error reveals its complete safe detail. Hovering any
-truncated status message reveals the full text in a multiline tooltip. The non-ready
-surface transitions quickly and remains translucent enough to preserve map context.
-Pending text uses the dark primary color and a medium weight rather than the muted Ready
-treatment, preserving legibility over imagery. Status padding is invariant so state
-changes never shift the icon or text.
+Map errors are classified as vector, glyph/sprite, satellite raster, terrain, style,
+WebGL, or unknown. Satellite raster failures expose a safe transport reason and exact
+HTTP status when MapLibre provides one. Rate limits, server responses, timeouts, and
+network failures schedule one deduplicated exponential refresh of the failed tiles,
+capped at three attempts; client errors and unclassified failures do not retry
+automatically. Equivalent recoverable errors are counted in capped buckets and logged at
+a bounded interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors
+are degraded states. The inactive slot used to prepare a newly selected scene also
+retries transient failed tiles. If a transient tile still fails after staging retries,
+the usable partial raster is promoted after the bounded retries; the safe failure class
+remains visible. Non-retryable or whole-source failures preserve the previous raster.
+For active imagery, successful source-data for each failed canonical tile must clear the
+controller's pending set before a loaded source starts the stability window. Only that
+tile-confirmed recovery restores the ready lifecycle when no other failure remains and
+clears the user-facing error. This prevents the status from blinking while other tiles
+from the same source are still failing. Offline messaging promises only that already
+rendered areas may remain visible, not full offline map support. Map lifecycle and
+imagery errors do not create a wide map banner: the shared line below search is their
+single UI surface. Ready remains background-free; pending and error states use a lightly
+translucent surface for map contrast, and selecting an error reveals its complete safe
+detail. Hovering any truncated status message reveals the full text in a multiline
+tooltip. The non-ready surface transitions quickly and remains translucent enough to
+preserve map context. Pending text uses the dark primary color and a medium weight
+rather than the muted Ready treatment, preserving legibility over imagery. Status
+padding is invariant so state changes never shift the icon or text. Its compact terrain
+line appears only for active work or a live contour backlog, without turning normal
+background work into an error or blocking the rest of the map.
 
 ## Diagnostics and developer mode
 
 Diagnostics are local, bounded, and redacted before storage in the event ring buffer.
 The developer Map view shows exact local camera state, ordered source/layer IDs,
-terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Debug flags
-reset when developer mode ends.
+terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Each
+failure includes its source ID, safe reason, HTTP status when known, occurrence count,
+last occurrence, recovery state, and retry attempt. Debug flags reset when developer
+mode ends.
 
 The diagnostics drawer is a persistent, non-modal workspace surface: it has no backdrop
 or elevation shadow and does not close on Escape, backdrop interaction, or section

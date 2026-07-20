@@ -15,6 +15,7 @@ export const benchmarkPolicy: TerrariumFilterPolicy = {
   maximumElevationMeters: 9_000,
   sentinelElevationsMeters: [-32_768],
   spikeThresholdMeters: 500,
+  negativeSpikeThresholdMeters: 300,
   maximumNeighborMadMeters: 80,
   minimumConsensusNeighbors: 5,
   maximumSpikeSupportNeighbors: 1,

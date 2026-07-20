@@ -27,7 +27,20 @@ class FakeContourTileGenerator implements ContourTileGenerator {
     return 'inline';
   }
 
+  public getQueueState() {
+    return {
+      executionMode: 'inline' as const,
+      activeCount: 0,
+      queuedContourCount: 0,
+      queueCapacity: 0,
+    };
+  }
+
   public subscribeStatus(): () => void {
+    return () => undefined;
+  }
+
+  public subscribeQueueState(): () => void {
     return () => undefined;
   }
 

@@ -10,6 +10,7 @@ export interface TerrariumFilterPolicy {
   readonly maximumElevationMeters: number;
   readonly sentinelElevationsMeters: readonly number[];
   readonly spikeThresholdMeters: number;
+  readonly negativeSpikeThresholdMeters: number;
   readonly maximumNeighborMadMeters: number;
   readonly minimumConsensusNeighbors: number;
   readonly maximumSpikeSupportNeighbors: number;
@@ -198,7 +199,10 @@ function spikeRejectionReason(
     }
   }
   const medianAbsoluteDeviation = medianInPlace(deviations, neighborCount);
-  return Math.abs(elevation - neighborMedian) >= policy.spikeThresholdMeters &&
+  const residual = elevation - neighborMedian;
+  const threshold =
+    residual < 0 ? policy.negativeSpikeThresholdMeters : policy.spikeThresholdMeters;
+  return Math.abs(residual) >= threshold &&
     medianAbsoluteDeviation <= policy.maximumNeighborMadMeters &&
     consensusCount >= policy.minimumConsensusNeighbors &&
     supportCount <= policy.maximumSpikeSupportNeighbors

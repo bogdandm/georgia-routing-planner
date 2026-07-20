@@ -42,4 +42,11 @@ export interface SatelliteCatalogGateway {
     query: SatelliteCatalogQuery,
     context: SatelliteCatalogRequestContext,
   ): Promise<SatelliteCatalogResult>;
+
+  /** Resolves one allowlisted collection/item identity used by a versioned share link. */
+  getScene?(
+    collection: string,
+    id: string,
+    context: SatelliteCatalogRequestContext,
+  ): Promise<SatelliteScene | null>;
 }

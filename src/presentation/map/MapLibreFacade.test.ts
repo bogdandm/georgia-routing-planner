@@ -1,10 +1,15 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
+import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 class FakeNativeMap {
   readonly #listeners = new Map<string, Set<TestListener>>();
@@ -16,6 +21,7 @@ class FakeNativeMap {
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
   public repaintCalls = 0;
+  public terrainElevation: number | null = null;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -118,6 +124,14 @@ class FakeNativeMap {
     this.repaintCalls += 1;
   }
 
+  public queryTerrainElevation(): number | null {
+    return this.terrainElevation;
+  }
+
+  public querySourceFeatures(): [] {
+    return [];
+  }
+
   public fire(type: string, event?: unknown): void {
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
@@ -141,6 +155,10 @@ describe('MapLibreFacade', () => {
     const layerController = {
       attach: vi.fn(),
       detach: vi.fn(),
+      handleRasterSourceData: vi.fn(() => false),
+      handleRasterSourceFailure: vi.fn(),
+      handleRasterSourceRecovered: vi.fn(),
+      isRasterSourceRecoveryComplete: vi.fn(() => false),
       setTerrainInteractionActive,
     };
     const facade = new MapLibreFacade(
@@ -153,7 +171,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(6);
+    expect(nativeMap.listenerCount()).toBe(8);
 
     nativeMap.fire('load');
     nativeMap.addSource('late-style-source', { type: 'geojson' });
@@ -297,7 +315,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(10);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -309,7 +327,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(10);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);
@@ -322,7 +340,6 @@ describe('MapLibreFacade', () => {
     const facade = new MapLibreFacade(services.logger);
     facade.attach(nativeMap as unknown as MapLibreMap);
     nativeMap.fire('load');
-
     for (let occurrence = 0; occurrence < 3; occurrence += 1) {
       nativeMap.fire('error', {
         error: {
@@ -335,13 +352,168 @@ describe('MapLibreFacade', () => {
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'degraded',
       recoverableFailures: [
-        { category: 'base-vector', sourceId: 'basemap-vector', count: 3 },
+        {
+          category: 'base-vector',
+          sourceId: 'basemap-vector',
+          reason: 'unknown',
+          httpStatus: null,
+          count: 3,
+          recoveryState: 'not-applicable',
+          retryAttempt: 0,
+        },
       ],
     });
     expect(
       services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
     ).toHaveLength(1);
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('private');
+  });
+
+  it('shows a safe exact satellite HTTP failure and records source recovery', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    let failedTileRecovered = false;
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      handleRasterSourceFailure: vi.fn(() => ({
+        state: 'scheduled' as const,
+        retryAttempt: 1,
+        retryDelayMs: 1_000,
+      })),
+      handleRasterSourceData: vi.fn((event: unknown) => {
+        const tile = (
+          event as {
+            readonly tile?: {
+              readonly tileID?: { readonly canonical?: unknown };
+            };
+          }
+        ).tile?.tileID?.canonical;
+        if (tile !== undefined) failedTileRecovered = true;
+        return failedTileRecovered;
+      }),
+      isRasterSourceRecoveryComplete: vi.fn(() => failedTileRecovered),
+      handleRasterSourceRecovered: vi.fn(),
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    nativeMap.addSource('sentinel-raster-a', { type: 'raster' });
+
+    nativeMap.fire('error', {
+      error: {
+        message: 'AJAXError: Service Unavailable (503): https://private.example/tile',
+        status: 503,
+      },
+      sourceId: 'sentinel-raster-a',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'degraded',
+      message:
+        'The satellite imagery renderer returned a server error (HTTP 503). Retrying automatically.',
+      recoverableFailures: [
+        {
+          category: 'satellite-raster',
+          sourceId: 'sentinel-raster-a',
+          reason: 'http-server',
+          httpStatus: 503,
+          recoveryState: 'scheduled',
+          retryAttempt: 1,
+        },
+      ],
+    });
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain(
+      'private.example',
+    );
+
+    nativeMap.fire('sourcedata', {
+      sourceId: 'sentinel-raster-a',
+      isSourceLoaded: true,
+    });
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'degraded',
+      recoverableFailures: [{ recoveryState: 'scheduled' }],
+    });
+    vi.advanceTimersByTime(1_999);
+    nativeMap.fire('error', {
+      error: { message: 'AJAXError: Service Unavailable', status: 503 },
+      sourceId: 'sentinel-raster-a',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+    });
+    vi.advanceTimersByTime(1);
+    expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('degraded');
+
+    nativeMap.fire('sourcedata', {
+      sourceId: 'sentinel-raster-a',
+      isSourceLoaded: true,
+      sourceDataType: 'content',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+    });
+    vi.advanceTimersByTime(2_000);
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      message: null,
+      recoverableFailures: [{ recoveryState: 'recovered' }],
+    });
+    expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
+  });
+
+  it('shows status zero as retryable no-response evidence without claiming HTTP 0', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    nativeMap.addSource('sentinel-raster-a', { type: 'raster' });
+
+    nativeMap.fire('error', {
+      error: { message: 'AJAXError: Failed to fetch', status: 0 },
+      sourceId: 'sentinel-raster-a',
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'degraded',
+      message:
+        'The satellite imagery tile received no HTTP response (network, CORS, or provider connection failure).',
+      recoverableFailures: [
+        {
+          reason: 'no-response',
+          httpStatus: null,
+        },
+      ],
+    });
+    expect(facade.getDiagnosticsSnapshot().message).not.toContain('HTTP 0');
+  });
+
+  it('ignores a late satellite error after its staging source was removed', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    nativeMap.fire('error', {
+      error: { message: 'AJAXError: Failed to fetch', status: 0 },
+      sourceId: 'sentinel-raster-b',
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      message: null,
+      recoverableFailures: [],
+    });
+    expect(
+      services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
+    ).toHaveLength(0);
   });
 
   it('ignores canceled source requests during tile-template replacement', () => {
@@ -359,6 +531,119 @@ describe('MapLibreFacade', () => {
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'ready',
       recoverableFailures: [],
+    });
+  });
+
+  it('ignores routine cancelled tile requests without notifying subscribers', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const subscriber = vi.fn();
+    facade.subscribe(subscriber);
+
+    nativeMap.fire('error', {
+      error: { name: 'AbortError', message: 'The tile request was aborted.' },
+      sourceId: 'basemap-vector',
+    });
+
+    expect(subscriber).not.toHaveBeenCalled();
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      recoverableFailures: [],
+    });
+    expect(
+      services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
+    ).toHaveLength(0);
+  });
+
+  it('closes an open inspection on the next map click and opens another on the following click', async () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    nativeMap.addSource('basemap-vector', { type: 'vector' });
+    const samples: ((value: { status: 'available'; meters: number }) => void)[] = [];
+    const elevationProvider = {
+      sample: () =>
+        new Promise<{ status: 'available'; meters: number }>((resolve) => {
+          samples.push(resolve);
+        }),
+    };
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      {
+        terrain: provider.value.terrain,
+        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+        sourceLayers: { pois: 'poi', peaks: 'mountain_peak' },
+        requestTimeoutMs: 100,
+        equivalentErrorWindowMs: 10_000,
+      },
+      undefined,
+      undefined,
+      elevationProvider,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('click', { lngLat: { lng: 44.801234, lat: 41.712345 } });
+    nativeMap.fire('click', { lngLat: { lng: 45.123456, lat: 42.234567 } });
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+    expect(popup.close).toHaveBeenCalledOnce();
+
+    nativeMap.fire('click', { lngLat: { lng: 45.123456, lat: 42.234567 } });
+    samples[1]?.({ status: 'available', meters: 900 });
+    await Promise.resolve();
+    samples[0]?.({ status: 'available', meters: 100 });
+    await Promise.resolve();
+
+    expect(facade.getPointInspection()).toMatchObject({
+      coordinate: { longitude: 45.123456, latitude: 42.234567 },
+      elevation: { status: 'available', meters: 900 },
+      nearbyPoi: { status: 'none' },
+    });
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain('45.123456');
+    facade.closePointInspection();
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
+  it('replaces an inspection immediately when its popup is outside the map viewport', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(false),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+
+    nativeMap.fire('click', { lngLat: { lng: 45.1, lat: 42.2 } });
+
+    expect(popup.close).toHaveBeenCalledOnce();
+    expect(facade.getPointInspection()).toMatchObject({
+      status: 'open',
+      coordinate: { longitude: 45.1, latitude: 42.2 },
     });
   });
 

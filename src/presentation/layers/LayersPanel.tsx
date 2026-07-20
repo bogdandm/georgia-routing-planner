@@ -4,6 +4,7 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
+  Slider,
   Stack,
   Typography,
 } from '@mui/material';
@@ -122,9 +123,19 @@ export function LayersPanel() {
     state.appliedImagery.status === 'hidden' ||
     (state.appliedImagery.status === 'failed' &&
       state.appliedImagery.previousSceneKey !== null);
+  const satelliteImageryVisible =
+    state.appliedImagery.status === 'ready' ||
+    state.appliedImagery.status === 'preview' ||
+    ((state.appliedImagery.status === 'loading' ||
+      state.appliedImagery.status === 'failed') &&
+      state.appliedImagery.previousSceneKey !== null);
 
   const changeVisibility = (layerId: LogicalMapLayerId, visible: boolean) => {
     mapLayers?.setLayerVisibility(layerId, visible);
+  };
+
+  const changeOpenStreetMapOpacity = (_event: Event, value: number | number[]) => {
+    if (typeof value === 'number') mapLayers?.setOpenStreetMapOpacity(value / 100);
   };
 
   return (
@@ -156,6 +167,36 @@ export function LayersPanel() {
           <Typography variant="caption" color="text.secondary">
             {group.description}
           </Typography>
+          {group.id === 'openstreetmap' ? (
+            <Stack
+              direction="row"
+              spacing={1.25}
+              sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
+            >
+              <Typography id="openstreetmap-opacity-label" variant="body2">
+                Opacity
+              </Typography>
+              <Slider
+                aria-labelledby="openstreetmap-opacity-label"
+                disabled={mapLayers === null || !satelliteImageryVisible}
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(state.openStreetMapOpacity * 100)}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${String(value)}%`}
+                onChange={changeOpenStreetMapOpacity}
+                sx={{ flex: 1, mx: 0.5 }}
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+              >
+                {Math.round(state.openStreetMapOpacity * 100)}%
+              </Typography>
+            </Stack>
+          ) : null}
           <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
             {group.controls.map((control) => {
               const disabled =

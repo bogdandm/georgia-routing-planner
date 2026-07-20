@@ -6,6 +6,7 @@ import type {
   TerrainContourTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
+import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { TerrainComputeEngine } from '@/infrastructure/elevation/TerrainComputeEngine';
 import {
   parseTerrainWorkerContourRequest,
@@ -97,7 +98,7 @@ export class TerrainComputeWorkerServer {
       logger,
     ) => new TerrainComputeEngine(terrain, requestTimeoutMs, logger),
     private readonly monotonicNow: () => number = () => performance.now(),
-    private readonly maximumQueuedContours = 32,
+    private readonly maximumQueuedContours = defaultTerrainContourQueueCapacity,
   ) {
     if (maximumQueuedContours < 1) {
       throw new RangeError('The terrain contour queue must accept at least one job.');
@@ -122,6 +123,7 @@ export class TerrainComputeWorkerServer {
           this.#revision = request.revision;
           this.#interactionActive = request.interactionActive;
           this.#engine.setFilterEnabled(request.filterEnabled);
+          this.publishQueueState();
           return { initialized: true };
         },
         dem: async (payload, context) => {
@@ -191,6 +193,7 @@ export class TerrainComputeWorkerServer {
           const request = parseTerrainWorkerInteractionRequest(payload);
           this.#interactionActive = request.active;
           if (!request.active) this.drainContourQueue();
+          else this.publishQueueState();
           return { active: request.active };
         },
       },
@@ -215,6 +218,7 @@ export class TerrainComputeWorkerServer {
     queuedAt = this.monotonicNow(),
   ): Promise<WorkerRpcTransferResult> {
     this.#pendingCount += 1;
+    this.publishQueueState();
     const { controller, release } = linkedAbortController(signal);
     const startedAt = this.monotonicNow();
     try {
@@ -237,6 +241,7 @@ export class TerrainComputeWorkerServer {
     } finally {
       release();
       this.#pendingCount -= 1;
+      this.publishQueueState();
     }
   }
 
@@ -251,6 +256,15 @@ export class TerrainComputeWorkerServer {
       executionMode: 'worker',
       pendingCount: this.#pendingCount + this.#contourQueue.length,
     } satisfies TerrainComputeMetrics);
+  }
+
+  private publishQueueState(): void {
+    this.#rpc.publishEvent(terrainWorkerEventNames.queueState, {
+      executionMode: 'worker',
+      activeCount: this.#pendingCount,
+      queuedContourCount: this.#contourQueue.length,
+      queueCapacity: this.maximumQueuedContours,
+    });
   }
 
   private requireEngine(): TerrainWorkerEngine {
@@ -298,6 +312,7 @@ export class TerrainComputeWorkerServer {
         }
       }
       this.#contourQueue.push(item);
+      this.publishQueueState();
       this.drainContourQueue();
     });
   }
@@ -306,6 +321,7 @@ export class TerrainComputeWorkerServer {
     if (this.#interactionActive || this.#contourRunning) return;
     const item = this.#contourQueue.shift();
     if (item === undefined) return;
+    this.publishQueueState();
     item.signal.removeEventListener('abort', item.handleAbort);
     if (item.signal.aborted) {
       item.reject(
@@ -328,7 +344,10 @@ export class TerrainComputeWorkerServer {
 
   private removeQueuedContour(item: QueuedContour): void {
     const index = this.#contourQueue.indexOf(item);
-    if (index >= 0) this.#contourQueue.splice(index, 1);
+    if (index >= 0) {
+      this.#contourQueue.splice(index, 1);
+      this.publishQueueState();
+    }
   }
 
   private cancelQueuedContours(reason: Error): void {
@@ -336,6 +355,7 @@ export class TerrainComputeWorkerServer {
       item.signal.removeEventListener('abort', item.handleAbort);
       item.reject(reason);
     }
+    this.publishQueueState();
   }
 
   private assertCurrentRevision(revision: number): void {

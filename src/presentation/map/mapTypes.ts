@@ -4,6 +4,38 @@ export type { MapCamera } from '@/application/ports/MapCameraRepository';
 
 export type TerrainMode = MapViewMode;
 
+export interface MapCoordinate {
+  readonly longitude: number;
+  readonly latitude: number;
+}
+
+export interface NearbyPoi {
+  readonly name: string | null;
+  readonly category: string;
+  readonly distanceMeters: number;
+}
+
+export type PointElevationState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'available'; readonly meters: number }
+  | { readonly status: 'unavailable' }
+  | { readonly status: 'error' };
+
+export type NearbyPoiState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'found'; readonly poi: NearbyPoi }
+  | { readonly status: 'none' }
+  | { readonly status: 'error' };
+
+export type MapPointInspection =
+  | { readonly status: 'closed' }
+  | {
+      readonly status: 'open';
+      readonly coordinate: MapCoordinate;
+      readonly elevation: PointElevationState;
+      readonly nearbyPoi: NearbyPoiState;
+    };
+
 export interface MapDebugOptions {
   readonly showCollisionBoxes: boolean;
   readonly showTileBoundaries: boolean;
@@ -12,13 +44,35 @@ export interface MapDebugOptions {
 export type MapLifecycleState = 'loading' | 'ready' | 'degraded' | 'fatal';
 
 export type MapFailureCategory =
-  'base-vector' | 'glyph-sprite' | 'terrain' | 'style' | 'webgl' | 'unknown';
+  | 'base-vector'
+  | 'glyph-sprite'
+  | 'satellite-raster'
+  | 'terrain'
+  | 'style'
+  | 'webgl'
+  | 'unknown';
+
+export type MapFailureReason =
+  | 'http-client'
+  | 'http-server'
+  | 'network'
+  | 'no-response'
+  | 'rate-limit'
+  | 'timeout'
+  | 'unknown';
+
+export type MapRecoveryState =
+  'exhausted' | 'not-applicable' | 'not-retryable' | 'recovered' | 'scheduled';
 
 export interface MapSourceFailure {
   readonly category: MapFailureCategory;
   readonly sourceId: string | null;
+  readonly reason: MapFailureReason;
+  readonly httpStatus: number | null;
   readonly count: number;
   readonly lastOccurredAt: string;
+  readonly recoveryState: MapRecoveryState;
+  readonly retryAttempt: number;
 }
 
 export interface MapWebGlCapabilities {

@@ -95,6 +95,7 @@ describe('AppDatabase', () => {
         roads: false,
         'places-and-pois': true,
       },
+      openStreetMapOpacity: 0.65,
       appliedScene,
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {

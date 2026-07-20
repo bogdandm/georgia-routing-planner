@@ -22,6 +22,10 @@ describe('MapProviderConfiguration', () => {
       tileSize: 256,
       minZoom: 0,
       maxZoom: 15,
+      filter: {
+        spikeThresholdMeters: 500,
+        negativeSpikeThresholdMeters: 300,
+      },
       overlays: {
         contourMinZoom: 11,
         contourMaxZoom: 15,
@@ -45,6 +49,19 @@ describe('MapProviderConfiguration', () => {
       satelliteRendererId: 'titiler-demo-stac-rgb',
       satelliteRendererOrigin: 'https://titiler.xyz',
     });
+  });
+
+  it('defaults the downward spike threshold for existing external configuration', () => {
+    const input = structuredClone(
+      defaultMapProviderConfigurationInput,
+    ) as unknown as Record<string, unknown>;
+    const terrain = input.terrain as Record<string, unknown>;
+    const filter = terrain.filter as Record<string, unknown>;
+    delete filter.negativeSpikeThresholdMeters;
+
+    const configuration = parseMapProviderConfiguration(input, baseUrl);
+
+    expect(configuration.terrain.filter.negativeSpikeThresholdMeters).toBe(300);
   });
 
   it('resolves fixture endpoints under a GitHub Pages-style base path', () => {

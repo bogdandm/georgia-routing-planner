@@ -45,9 +45,10 @@ export const mapLayerIds = {
 
 export const mapInsertionPoints = {
   satelliteBeforeLayerId: mapLayerIds.landcover,
-  // Relief and contours need to render over opaque land-cover and land-use fills.
-  // Keep transport and labels above them by inserting before administrative boundaries.
+  // Relief needs to render over opaque land-cover and land-use fills.
   terrainOverlaysBeforeLayerId: mapLayerIds.boundaries,
+  // Water polygons mask generated terrain contours while waterways remain visible.
+  contoursBeforeLayerId: mapLayerIds.water,
   satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
   userOverlaysAfterLayerId: mapLayerIds.placeLabels,
 } as const;

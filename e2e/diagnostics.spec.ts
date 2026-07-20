@@ -110,7 +110,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   };
   const serialized = JSON.stringify(bundle);
 
-  expect(bundle.schemaVersion).toBe(2);
+  expect(bundle.schemaVersion).toBe(3);
   expect(bundle.events.map((event) => event.name)).toContain(
     'react.error-boundary.caught',
   );

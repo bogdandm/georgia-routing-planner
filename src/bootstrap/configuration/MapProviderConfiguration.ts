@@ -78,6 +78,7 @@ const mapProviderConfigurationInputSchema = z
             maximumElevationMeters: z.number().min(1_000).max(12_000),
             sentinelElevationsMeters: z.array(z.number()).max(8),
             spikeThresholdMeters: z.number().positive().max(5_000),
+            negativeSpikeThresholdMeters: z.number().positive().max(5_000).default(300),
             maximumNeighborMadMeters: z.number().positive().max(1_000),
             minimumConsensusNeighbors: z.number().int().min(3).max(8),
             maximumSpikeSupportNeighbors: z.number().int().min(0).max(3),
@@ -155,6 +156,7 @@ const mapProviderConfigurationInputSchema = z
         renderer: z
           .object({
             id: z.string().regex(/^[a-z0-9-]+$/u),
+            cachePartition: z.enum(['none', 'application-origin']),
             tileUrlTemplate: endpointSchema.refine(
               (value) =>
                 value.includes('{z}') &&
@@ -226,7 +228,10 @@ interface MapProviderConfigurationInput {
       readonly minimumElevationMeters: number;
       readonly maximumElevationMeters: number;
       readonly sentinelElevationsMeters: readonly number[];
+      /** Minimum upward residual from the local median that may be rejected. */
       readonly spikeThresholdMeters: number;
+      /** Minimum downward residual from the local median that may be rejected. */
+      readonly negativeSpikeThresholdMeters: number;
       readonly maximumNeighborMadMeters: number;
       readonly minimumConsensusNeighbors: number;
       readonly maximumSpikeSupportNeighbors: number;
@@ -250,6 +255,7 @@ interface MapProviderConfigurationInput {
     readonly maximumPages: number;
     readonly renderer: {
       readonly id: string;
+      readonly cachePartition: 'none' | 'application-origin';
       readonly tileUrlTemplate: string;
       readonly tileSize: 256 | 512;
       readonly minZoom: number;
@@ -324,6 +330,7 @@ export const defaultMapProviderConfigurationInput = {
       maximumElevationMeters: 9_000,
       sentinelElevationsMeters: [-32_768],
       spikeThresholdMeters: 500,
+      negativeSpikeThresholdMeters: 300,
       maximumNeighborMadMeters: 80,
       minimumConsensusNeighbors: 5,
       maximumSpikeSupportNeighbors: 1,
@@ -347,6 +354,7 @@ export const defaultMapProviderConfigurationInput = {
     maximumPages: 10,
     renderer: {
       id: 'titiler-demo-stac-rgb',
+      cachePartition: 'application-origin',
       tileUrlTemplate:
         'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear',
       tileSize: 256,

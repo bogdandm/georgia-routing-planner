@@ -5,6 +5,7 @@ import {
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
+  TerrainComputeQueueState,
   TerrainContourOptions,
   TerrainContourTile,
   TerrainDemResponse,
@@ -13,7 +14,10 @@ import {
   TerrainComputeWorkerServer,
   type TerrainWorkerEngineFactory,
 } from '@/infrastructure/elevation/TerrainComputeWorkerServer';
-import type { TerrainWorkerInitializeRequest } from '@/infrastructure/elevation/TerrainComputeProtocol';
+import {
+  terrainWorkerEventNames,
+  type TerrainWorkerInitializeRequest,
+} from '@/infrastructure/elevation/TerrainComputeProtocol';
 import {
   WorkerRpcClient,
   type WorkerRpcEndpoint,
@@ -220,6 +224,10 @@ describe('TerrainComputeWorkerServer', () => {
     });
     const server = new TerrainComputeWorkerServer(serverEndpoint, factory, () => 0, 2);
     const client = new WorkerRpcClient(clientEndpoint);
+    const queueStates: TerrainComputeQueueState[] = [];
+    client.subscribeEvent(terrainWorkerEventNames.queueState, (payload) => {
+      queueStates.push(payload as TerrainComputeQueueState);
+    });
     await client.request('initialize', initialization());
     await client.request('interaction', { active: true });
 
@@ -247,10 +255,22 @@ describe('TerrainComputeWorkerServer', () => {
     await expect(second).rejects.toMatchObject({ name: 'AbortError' });
     const fourth = client.request('contour', contourRequest(4));
     expect(fetchContourTile).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(queueStates.at(-1)).toEqual({
+        executionMode: 'worker',
+        activeCount: 0,
+        queuedContourCount: 2,
+        queueCapacity: 2,
+      });
+    });
 
     await client.request('interaction', { active: false });
     await vi.waitFor(() => {
       expect(contourCalls).toEqual([3]);
+      expect(queueStates.at(-1)).toMatchObject({
+        activeCount: 1,
+        queuedContourCount: 1,
+      });
     });
     contourFinishes.get(3)?.({ arrayBuffer: new Uint8Array([3]).buffer });
     await expect(third).resolves.toMatchObject({ kind: 'contour' });
@@ -259,6 +279,12 @@ describe('TerrainComputeWorkerServer', () => {
     });
     contourFinishes.get(4)?.({ arrayBuffer: new Uint8Array([4]).buffer });
     await expect(fourth).resolves.toMatchObject({ kind: 'contour' });
+    await vi.waitFor(() => {
+      expect(queueStates.at(-1)).toMatchObject({
+        activeCount: 0,
+        queuedContourCount: 0,
+      });
+    });
 
     client.dispose();
     server.dispose();

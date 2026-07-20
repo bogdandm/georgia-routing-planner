@@ -6,12 +6,14 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import type {
   TerrainComputeBackend,
   TerrainComputeMetrics,
+  TerrainComputeQueueState,
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
   TerrainDecodedDemTile,
   TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
+import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { InlineTerrainComputeBackend } from '@/infrastructure/elevation/InlineTerrainComputeBackend';
 import {
   isTerrainWorkerContourResult,
@@ -71,6 +73,28 @@ function isMetrics(value: unknown): value is TerrainComputeMetrics {
   );
 }
 
+function isQueueState(value: unknown): value is TerrainComputeQueueState {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'executionMode' in value &&
+    value.executionMode === 'worker' &&
+    'activeCount' in value &&
+    typeof value.activeCount === 'number' &&
+    Number.isInteger(value.activeCount) &&
+    value.activeCount >= 0 &&
+    'queuedContourCount' in value &&
+    typeof value.queuedContourCount === 'number' &&
+    Number.isInteger(value.queuedContourCount) &&
+    value.queuedContourCount >= 0 &&
+    'queueCapacity' in value &&
+    typeof value.queueCapacity === 'number' &&
+    Number.isInteger(value.queueCapacity) &&
+    value.queueCapacity > 0 &&
+    value.queuedContourCount <= value.queueCapacity
+  );
+}
+
 function staleRequestError(): DOMException {
   return new DOMException('Terrain request revision is obsolete.', 'AbortError');
 }
@@ -82,9 +106,16 @@ function staleRequestError(): DOMException {
 export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   public readonly loaded: Promise<void>;
   readonly #statusListeners = new Set<(status: TerrainComputeStatus) => void>();
+  readonly #queueStateListeners = new Set<(state: TerrainComputeQueueState) => void>();
   readonly #metricsListeners = new Set<(metrics: TerrainComputeMetrics) => void>();
   readonly #diagnosticListeners = new Set<(input: DiagnosticInput) => void>();
   #status: TerrainComputeStatus = 'worker';
+  #queueState: TerrainComputeQueueState = {
+    executionMode: 'worker',
+    activeCount: 0,
+    queuedContourCount: 0,
+    queueCapacity: defaultTerrainContourQueueCapacity,
+  };
   #rpc: WorkerRpcClient | null = null;
   #inline: TerrainComputeBackend | null = null;
   #restartAttempted = false;
@@ -228,10 +259,23 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     return this.#status;
   }
 
+  public getQueueState(): TerrainComputeQueueState {
+    return this.#queueState;
+  }
+
   public subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void {
     this.#statusListeners.add(listener);
     return () => {
       this.#statusListeners.delete(listener);
+    };
+  }
+
+  public subscribeQueueState(
+    listener: (state: TerrainComputeQueueState) => void,
+  ): () => void {
+    this.#queueStateListeners.add(listener);
+    return () => {
+      this.#queueStateListeners.delete(listener);
     };
   }
 
@@ -259,6 +303,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     this.#inline?.dispose();
     this.#inline = null;
     this.#statusListeners.clear();
+    this.#queueStateListeners.clear();
     this.#metricsListeners.clear();
     this.#diagnosticListeners.clear();
   }
@@ -281,6 +326,10 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     rpc.subscribeEvent(terrainWorkerEventNames.metrics, (payload) => {
       if (!isMetrics(payload)) return;
       for (const listener of this.#metricsListeners) listener(payload);
+    });
+    rpc.subscribeEvent(terrainWorkerEventNames.queueState, (payload) => {
+      if (!isQueueState(payload)) return;
+      this.setQueueState(payload);
     });
     rpc.subscribeTransportFailure(() => {
       if (!this.#disposed && this.#rpc === rpc) void this.recover();
@@ -383,6 +432,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     if (!this.#filterEnabled) inline.setFilterEnabled(false);
     inline.setInteractionActive(this.#interactionActive);
     this.#inline = inline;
+    this.setQueueState(inline.getQueueState());
     this.setStatus('inline');
     this.logger.log({
       level: 'warn',
@@ -394,7 +444,26 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   private setStatus(status: TerrainComputeStatus): void {
     if (this.#status === status) return;
     this.#status = status;
+    this.setQueueState({
+      executionMode: status,
+      activeCount: 0,
+      queuedContourCount: 0,
+      queueCapacity: status === 'inline' ? 0 : defaultTerrainContourQueueCapacity,
+    });
     for (const listener of this.#statusListeners) listener(status);
+  }
+
+  private setQueueState(state: TerrainComputeQueueState): void {
+    if (
+      this.#queueState.executionMode === state.executionMode &&
+      this.#queueState.activeCount === state.activeCount &&
+      this.#queueState.queuedContourCount === state.queuedContourCount &&
+      this.#queueState.queueCapacity === state.queueCapacity
+    ) {
+      return;
+    }
+    this.#queueState = state;
+    for (const listener of this.#queueStateListeners) listener(state);
   }
 
   private requireRpc(): WorkerRpcClient {

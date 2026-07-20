@@ -311,6 +311,32 @@ export function SettingsDialog({
               </Typography>
             </Box>
 
+            <Box>
+              <FormControlLabel
+                sx={{ m: 0 }}
+                control={
+                  <Switch
+                    checked={terrainOverlayPreferences.filterInvalidDemPixels}
+                    onChange={(event) => {
+                      onTerrainOverlayPreferencesChange({
+                        ...terrainOverlayPreferences,
+                        filterInvalidDemPixels: event.target.checked,
+                      });
+                    }}
+                  />
+                }
+                label="Repair invalid DEM elevation pixels"
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block' }}
+              >
+                Enabled by default. Applies the same conservative repair to relief, 3D
+                terrain, and elevation isolines without smoothing valid terrain.
+              </Typography>
+            </Box>
+
             <FormControl size="small" fullWidth>
               <InputLabel id="contour-distance-label">Contour distance</InputLabel>
               <Select

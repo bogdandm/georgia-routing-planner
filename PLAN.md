@@ -166,6 +166,8 @@ Commit: `feat(map): unify overlay palette and labels`
 - Add deterministic synthetic tests for unchanged terrain, no-data, positive/negative
   spikes, coherent ridges, tile edges, the observed scanline, cancellation, and bounds.
 - Update permanent provider, runtime, feature, structure, and setup documentation.
+- Expose a locally persisted, default-enabled Settings switch that reloads the shared
+  relief, 3D, and contour sources together when invalid-pixel repair changes.
 - Verify the repaired 3D terrain and isolines around the affected lake in the opened
   local browser, then commit in reviewable units and open a draft pull request.
 
@@ -238,13 +240,16 @@ Verified on 2026-07-20 for the filtered Terrarium source:
   values in local row 5, with minima of -710.68 m and -701.53 m. The scanline crosses
   their shared tile boundary; adjacent rows and the other seven tiles remain plausible.
 - Formatting, lint, strict type checking, documentation-boundary grep, diff validation,
-  175 unit/component tests, 18 integration tests, and the production build pass.
-- Bounded-concurrency coverage passes across 193 tests with 88% statements, 79.6%
-  branches, 90.38% functions, and 90.08% lines. The canonical run exposed the documented
-  managed-workspace five-second `WorkspaceShell` timeout only.
+  177 unit/component tests, 18 integration tests, and the production build pass.
+- Bounded-concurrency coverage passes across 195 tests with 88.08% statements, 79.37%
+  branches, 90.46% functions, and 90.19% lines. The canonical run exposed only the
+  documented managed-workspace five-second `WorkspaceShell` timeouts.
 - Ten of twelve controlled Chromium workflows pass, including every DEM and terrain
   scenario. Two unrelated diagnostics timeline assertions remain reproducibly failing
   because their older event rows are not visible; neither touches terrain processing.
 - The opened current-Chrome build was verified in 3D around `42.0768, 44.5653`. The lake
   and its isolines render coherently with no rectangular trench or contour collapse, and
   diagnostics report the map ready with the shared terrain, relief, and contour sources.
+- The default-enabled invalid-pixel repair switch was disabled, persisted across reload,
+  re-enabled, and followed by a successful live 3D transition. The map remained Ready
+  while both DEM and contour tile templates reloaded together.

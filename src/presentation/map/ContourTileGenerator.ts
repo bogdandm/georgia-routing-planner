@@ -10,6 +10,7 @@ import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/Filter
 export interface ContourTileGenerator {
   createDemTileUrl(): string;
   createTileUrl(intervalMeters: ContourIntervalMeters): string;
+  setFilterEnabled(enabled: boolean): void;
 }
 
 export function withOwnedProtocolBuffers(
@@ -41,6 +42,9 @@ function registerProtocolWithOwnedBuffers(
 /** Registers the bounded client-side contour protocol for one application runtime. */
 export class MapLibreContourTileGenerator implements ContourTileGenerator {
   readonly #source: InstanceType<typeof maplibreContour.DemSource>;
+  readonly #filteredTiles: FilteredTerrariumTileProvider | null;
+  #filterEnabled = true;
+  #revision = 0;
 
   public constructor(
     terrain: MapProviderConfiguration['terrain'],
@@ -58,12 +62,12 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       // additional worker survives after the application runtime is released.
       worker: false,
     });
-    if (terrain.encoding === 'terrarium') {
-      const filteredTiles = new FilteredTerrariumTileProvider(
-        terrain,
-        requestTimeoutMs,
-        logger,
-      );
+    this.#filteredTiles =
+      terrain.encoding === 'terrarium'
+        ? new FilteredTerrariumTileProvider(terrain, requestTimeoutMs, logger)
+        : null;
+    if (this.#filteredTiles !== null) {
+      const filteredTiles = this.#filteredTiles;
       this.#source.manager.fetchTile = (zoom, x, y, abortController) =>
         filteredTiles.getTile(zoom, x, y, abortController);
     }
@@ -85,15 +89,31 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
   }
 
   public createDemTileUrl(): string {
-    return this.#source.sharedDemProtocolUrl;
+    return `${this.#source.sharedDemProtocolUrl}?demFilterRevision=${String(this.#revision)}`;
   }
 
   public createTileUrl(intervalMeters: ContourIntervalMeters): string {
-    return this.#source.contourProtocolUrl({
+    const url = this.#source.contourProtocolUrl({
       thresholds: { 11: [intervalMeters, 200] },
       elevationKey: 'ele',
       levelKey: 'level',
       contourLayer: 'contours',
     });
+    return `${url}&demFilterRevision=${String(this.#revision)}`;
+  }
+
+  public setFilterEnabled(enabled: boolean): void {
+    if (this.#filteredTiles === null || this.#filterEnabled === enabled) return;
+    this.#filterEnabled = enabled;
+    this.#filteredTiles.setEnabled(enabled);
+    this.#revision += 1;
+    const manager = this.#source.manager as unknown as {
+      readonly tileCache?: { clear(): void };
+      readonly parsedCache?: { clear(): void };
+      readonly contourCache?: { clear(): void };
+    };
+    manager.tileCache?.clear();
+    manager.parsedCache?.clear();
+    manager.contourCache?.clear();
   }
 }

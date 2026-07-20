@@ -10,11 +10,14 @@ import {
   type TerrariumTileGrid,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
 
-interface LoadedTile {
+interface SourceTile {
   readonly blob: Blob;
-  readonly decoded: DecodedTerrariumTile;
   readonly cacheControl: string | null;
   readonly expires: string | null;
+}
+
+interface LoadedTile extends SourceTile {
+  readonly decoded: DecodedTerrariumTile;
 }
 
 export interface FilteredTerrariumResponse {
@@ -39,6 +42,8 @@ function isAbortError(error: unknown): boolean {
 export class FilteredTerrariumTileProvider {
   readonly #cache = new Map<string, FilteredTerrariumResponse>();
   readonly #decodedTileCache = new Map<string, LoadedTile>();
+  #enabled = true;
+  #revision = 0;
 
   public constructor(
     private readonly terrain: MapProviderConfiguration['terrain'],
@@ -51,13 +56,24 @@ export class FilteredTerrariumTileProvider {
     private readonly monotonicNow: () => number = () => performance.now(),
   ) {}
 
+  /** Changes processing mode and invalidates all mode-dependent tile results. */
+  public setEnabled(enabled: boolean): void {
+    if (this.#enabled === enabled) return;
+    this.#enabled = enabled;
+    this.#revision += 1;
+    this.#cache.clear();
+    this.#decodedTileCache.clear();
+  }
+
   public async getTile(
     zoom: number,
     x: number,
     y: number,
     parentAbortController: AbortController,
   ): Promise<FilteredTerrariumResponse> {
-    const key = `${String(zoom)}/${String(x)}/${String(y)}`;
+    const revision = this.#revision;
+    const filterEnabled = this.#enabled;
+    const key = `${String(revision)}/${String(zoom)}/${String(x)}/${String(y)}`;
     const cached = this.#cache.get(key);
     if (cached !== undefined) {
       this.#cache.delete(key);
@@ -79,6 +95,18 @@ export class FilteredTerrariumTileProvider {
 
     try {
       if (parentAbortController.signal.aborted) handleAbort();
+      if (!filterEnabled) {
+        const sourceTile = await this.fetchSourceTile(zoom, x, y, controller.signal);
+        const response: FilteredTerrariumResponse = {
+          data: sourceTile.blob,
+          ...(sourceTile.cacheControl === null
+            ? {}
+            : { cacheControl: sourceTile.cacheControl }),
+          ...(sourceTile.expires === null ? {} : { expires: sourceTile.expires }),
+        };
+        if (revision === this.#revision) this.putCache(key, response);
+        return response;
+      }
       const loaded = await this.loadNeighborhood(zoom, x, y, controller.signal);
       const center = loaded[1][1];
       const decodedGrid: TerrariumTileGrid = [
@@ -104,7 +132,7 @@ export class FilteredTerrariumTileProvider {
         ...(center.cacheControl === null ? {} : { cacheControl: center.cacheControl }),
         ...(center.expires === null ? {} : { expires: center.expires }),
       };
-      this.putCache(key, response);
+      if (revision === this.#revision) this.putCache(key, response);
       this.logger.log({
         level: filtered.counts.unrepairedCount === 0 ? 'debug' : 'warn',
         name: 'map.dem.tile-filtered',
@@ -201,6 +229,22 @@ export class FilteredTerrariumTileProvider {
       this.#decodedTileCache.set(key, cached);
       return cached;
     }
+    const sourceTile = await this.fetchSourceTile(zoom, x, y, signal);
+    const loaded = {
+      ...sourceTile,
+      decoded: await this.codec.decode(sourceTile.blob, signal),
+    };
+    this.#decodedTileCache.set(key, loaded);
+    this.trimCache(this.#decodedTileCache);
+    return loaded;
+  }
+
+  private async fetchSourceTile(
+    zoom: number,
+    x: number,
+    y: number,
+    signal: AbortSignal,
+  ): Promise<SourceTile> {
     const url = this.terrain.tileUrl
       .replace('{z}', String(zoom))
       .replace('{x}', String(x))
@@ -209,15 +253,11 @@ export class FilteredTerrariumTileProvider {
     if (!response.ok)
       throw new Error(`Terrarium provider returned HTTP ${String(response.status)}.`);
     const blob = await response.blob();
-    const loaded = {
+    return {
       blob,
-      decoded: await this.codec.decode(blob, signal),
       cacheControl: response.headers.get('cache-control'),
       expires: response.headers.get('expires'),
     };
-    this.#decodedTileCache.set(key, loaded);
-    this.trimCache(this.#decodedTileCache);
-    return loaded;
   }
 
   private putCache(key: string, value: FilteredTerrariumResponse): void {

@@ -59,6 +59,49 @@ function terrain() {
 }
 
 describe('FilteredTerrariumTileProvider', () => {
+  it('bypasses decoding and neighborhood requests while filtering is disabled', async () => {
+    const decode = vi.fn(() => Promise.resolve(decodedTile()));
+    const encode = vi.fn(() => Promise.resolve(new Blob(['filtered'])));
+    const testCodec: TerrariumPngCodec = { decode, encode };
+    const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      return Promise.resolve(new Response(new Blob([url]), { status: 200 }));
+    });
+    const provider = new FilteredTerrariumTileProvider(
+      terrain(),
+      10_000,
+      logger,
+      testCodec,
+      fetchImplementation,
+    );
+    provider.setEnabled(false);
+
+    const raw = await provider.getTile(5, 8, 9, new AbortController());
+
+    expect(fetchImplementation).toHaveBeenCalledOnce();
+    expect(decode).not.toHaveBeenCalled();
+    const requestedTile = fetchImplementation.mock.calls[0]?.[0];
+    expect(
+      typeof requestedTile === 'string'
+        ? requestedTile
+        : requestedTile instanceof URL
+          ? requestedTile.href
+          : requestedTile?.url,
+    ).toContain('/5/8/9.png');
+    expect(raw.data).toBeInstanceOf(Blob);
+
+    provider.setEnabled(true);
+    await provider.getTile(5, 8, 9, new AbortController());
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(10);
+    expect(decode).toHaveBeenCalledTimes(9);
+  });
+
   it('propagates cancellation through pending tile requests', async () => {
     const fetchImplementation = vi.fn(
       (_input: RequestInfo | URL, init?: RequestInit) =>

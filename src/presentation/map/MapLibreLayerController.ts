@@ -180,8 +180,8 @@ export class MapLibreLayerController
   #terrainOverlayPreferences: TerrainOverlayPreferences =
     defaultTerrainOverlayPreferences;
   #contourFailureReported = false;
-  #appliedContourInterval: TerrainOverlayPreferences['contourIntervalMeters'] | null =
-    null;
+  #appliedDemTileUrl: string | null = null;
+  #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
 
@@ -313,6 +313,9 @@ export class MapLibreLayerController
       const persisted = await this.preferences.loadMapLayerPreferences();
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
+      this.contourTiles.setFilterEnabled(
+        persisted.terrainOverlays.filterInvalidDemPixels,
+      );
       this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
       mapLayerStore.setState({
         visibility: persisted.visibility,
@@ -347,6 +350,7 @@ export class MapLibreLayerController
     }
     const previous = this.#terrainOverlayPreferences;
     this.#terrainOverlayPreferences = { ...value };
+    this.contourTiles.setFilterEnabled(value.filterInvalidDemPixels);
     this.#contourFailureReported = false;
     if (this.#map === null) {
       mapLayerStore.setState({
@@ -362,8 +366,16 @@ export class MapLibreLayerController
     const result = this.reconcileTerrainOverlays();
     if (result.status === 'success') {
       this.persistStableState();
+      if (previous.filterInvalidDemPixels !== value.filterInvalidDemPixels) {
+        this.logger.log({
+          level: 'info',
+          name: 'map.dem.filter-changed',
+          data: { status: value.filterInvalidDemPixels ? 'enabled' : 'disabled' },
+        });
+      }
     } else {
       this.#terrainOverlayPreferences = previous;
+      this.contourTiles.setFilterEnabled(previous.filterInvalidDemPixels);
       this.reconcileTerrainOverlays();
     }
     return result;
@@ -690,11 +702,21 @@ export class MapLibreLayerController
       return { status: 'success' };
     }
     try {
-      if (map.getSource(mapSourceIds.terrainDem) === undefined) {
+      const demTileUrl = this.contourTiles.createDemTileUrl();
+      const existingDemSource = map.getSource(mapSourceIds.terrainDem);
+      if (existingDemSource === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(this.terrain, this.contourTiles.createDemTileUrl()),
+          createTerrainDemSource(this.terrain, demTileUrl),
         );
+        this.#appliedDemTileUrl = demTileUrl;
+      } else if (this.#appliedDemTileUrl !== demTileUrl) {
+        const source = existingDemSource as { setTiles?: (tiles: string[]) => void };
+        if (source.setTiles === undefined) {
+          throw new Error('The terrain source cannot update its tiles.');
+        }
+        source.setTiles([demTileUrl]);
+        this.#appliedDemTileUrl = demTileUrl;
       }
       if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
         map.addLayer(
@@ -731,12 +753,8 @@ export class MapLibreLayerController
           maxzoom: this.terrain.overlays.contourMaxZoom,
           attribution: this.terrain.attribution,
         });
-        this.#appliedContourInterval =
-          this.#terrainOverlayPreferences.contourIntervalMeters;
-      } else if (
-        this.#appliedContourInterval !==
-        this.#terrainOverlayPreferences.contourIntervalMeters
-      ) {
+        this.#appliedContourTileUrl = contourTileUrl;
+      } else if (this.#appliedContourTileUrl !== contourTileUrl) {
         const source = existingContourSource as {
           setTiles?: (tiles: string[]) => void;
         };
@@ -744,8 +762,7 @@ export class MapLibreLayerController
           throw new Error('The contour source cannot update its tiles.');
         }
         source.setTiles([contourTileUrl]);
-        this.#appliedContourInterval =
-          this.#terrainOverlayPreferences.contourIntervalMeters;
+        this.#appliedContourTileUrl = contourTileUrl;
       }
       this.ensureContourLayers(map);
       this.ensureContourOrder(map);

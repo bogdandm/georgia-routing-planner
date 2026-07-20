@@ -14,6 +14,10 @@ class FakeContourTileGenerator implements ContourTileGenerator {
   public createTileUrl(intervalMeters: 20 | 25 | 40 | 50 | 100): string {
     return `contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`;
   }
+
+  public setFilterEnabled(enabled: boolean): void {
+    void enabled;
+  }
 }
 
 describe('ContourTileGenerator contract', () => {

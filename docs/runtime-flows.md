@@ -130,6 +130,13 @@ context in bounded LRUs. Relief, 3D terrain, and generated isolines therefore ca
 observe different elevation bytes. Source failures update the overlay snapshot without
 removing the basemap.
 
+The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
+the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a
+bounded revision on both native tile templates. MapLibre consequently reloads relief, 3D
+terrain, and isolines together without remounting the map. Disabled mode preserves the
+same shared protocol and cancellation/timeout behavior but fetches only the original
+center PNG and bypasses decoding, neighborhood lookup, repair, and re-encoding.
+
 Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
 shared visual mode on the existing native layers. Semantic colors remain stable, while
 opaque vector-base land-cover fills switch off for satellite context, while true line

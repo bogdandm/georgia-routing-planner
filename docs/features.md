@@ -209,8 +209,9 @@ scene is restored.
   navigation appears to retract into that fixed anchor.
 - Settings is non-modal and does not dim or block the map, allowing imagery stretch to
   be judged while a slider is adjusted.
-- Settings > Rendering controls minor contour spacing and whether relief shading sits
-  above satellite imagery. Index contours remain labeled at 200 m intervals.
+- Settings > Rendering controls the default-enabled invalid DEM repair, minor contour
+  spacing, and whether relief shading sits above satellite imagery. Index contours
+  remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Attribution remains visible in every feature section and terrain mode.

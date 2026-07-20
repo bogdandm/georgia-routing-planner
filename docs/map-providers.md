@@ -148,6 +148,12 @@ abort signal. Diagnostics export only duration and aggregate no-data, sentinel,
 impossible-value, spike, repaired, and unrepaired counts; tile URLs, indices,
 coordinates, and pixels are excluded.
 
+Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
+and persisted locally. Disabling it bypasses decoding and repair and returns the
+original center PNG. Both modes retain one shared protocol for relief, 3D terrain, and
+contours; changing the preference invalidates their mode-dependent caches and reloads
+all three consumers together so they cannot disagree.
+
 ### Attribution, limits, and failure policy
 
 The source attribution is shown whenever the DEM source is configured or terrain is

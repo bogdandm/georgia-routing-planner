@@ -22,6 +22,10 @@ describe('MapProviderConfiguration', () => {
       tileSize: 256,
       minZoom: 0,
       maxZoom: 15,
+      filter: {
+        spikeThresholdMeters: 500,
+        negativeSpikeThresholdMeters: 300,
+      },
       overlays: {
         contourMinZoom: 11,
         contourMaxZoom: 15,
@@ -32,6 +36,7 @@ describe('MapProviderConfiguration', () => {
       id: 'earth-search-v1',
       collections: { L1C: 'sentinel-2-l1c', L2A: 'sentinel-2-l2a' },
       maximumPages: 10,
+      renderer: { requestTimeoutMs: 60_000 },
     });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
       schemaVersion: 1,
@@ -44,6 +49,19 @@ describe('MapProviderConfiguration', () => {
       satelliteRendererId: 'titiler-demo-stac-rgb',
       satelliteRendererOrigin: 'https://titiler.xyz',
     });
+  });
+
+  it('defaults the downward spike threshold for existing external configuration', () => {
+    const input = structuredClone(
+      defaultMapProviderConfigurationInput,
+    ) as unknown as Record<string, unknown>;
+    const terrain = input.terrain as Record<string, unknown>;
+    const filter = terrain.filter as Record<string, unknown>;
+    delete filter.negativeSpikeThresholdMeters;
+
+    const configuration = parseMapProviderConfiguration(input, baseUrl);
+
+    expect(configuration.terrain.filter.negativeSpikeThresholdMeters).toBe(300);
   });
 
   it('resolves fixture endpoints under a GitHub Pages-style base path', () => {
@@ -152,6 +170,14 @@ describe('MapProviderConfiguration', () => {
       mutate: (input: Record<string, unknown>) => {
         const satellite = input.satellite as Record<string, unknown>;
         satellite.searchUrl = 'http://earth-search.example.test/search';
+      },
+    },
+    {
+      name: 'satellite renderer timeout below the supported floor',
+      mutate: (input: Record<string, unknown>) => {
+        const satellite = input.satellite as Record<string, unknown>;
+        const renderer = satellite.renderer as Record<string, unknown>;
+        renderer.requestTimeoutMs = 4_999;
       },
     },
   ])('rejects $name', ({ mutate }) => {

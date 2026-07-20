@@ -160,6 +160,7 @@ export function MapWorkspace({
                 peaks: mapProviderConfiguration.value.vector.sourceLayers.peaks,
                 pois: mapProviderConfiguration.value.vector.sourceLayers.pois,
               },
+              demTileUrl: mapLayers?.createDemTileUrl() ?? '',
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
               equivalentErrorWindowMs:
                 mapProviderConfiguration.value.policy.equivalentErrorWindowMs,

@@ -5,6 +5,7 @@ import type {
 
 const exportableFieldNames = new Set([
   'appVersion',
+  'attempt',
   'buildMode',
   'cameraZoom',
   'capability',
@@ -16,14 +17,21 @@ const exportableFieldNames = new Set([
   'durationMs',
   'operationId',
   'origin',
+  'impossibleCount',
+  'noDataCount',
   'quotaBytes',
   'ready',
   'reason',
+  'recoveryState',
+  'repairedCount',
   'schemaVersion',
   'satelliteId',
   'satelliteOrigin',
   'sourceId',
+  'sentinelCount',
+  'spikeCount',
   'status',
+  'unrepairedCount',
   'usageBytes',
 ]);
 

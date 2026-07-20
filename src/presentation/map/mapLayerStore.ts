@@ -15,6 +15,7 @@ export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly errorMessage: string | null;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
+  readonly openStreetMapOpacity: number;
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
 
@@ -32,6 +33,7 @@ export const initialMapLayerState: MapLayerState = {
     roads: true,
     'places-and-pois': true,
   },
+  openStreetMapOpacity: 1,
   terrainOverlays: {
     initialized: false,
     preferences: defaultTerrainOverlayPreferences,

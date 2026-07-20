@@ -18,6 +18,7 @@ import type { MapFacade } from '@/presentation/map/MapFacade';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import { MiddleMouseCameraControl } from '@/presentation/map/MiddleMouseCameraControl';
 import {
   MapLibrePointInspector,
@@ -62,6 +63,7 @@ interface MapProviderOptions {
     MapProviderConfiguration['vector']['sourceLayers'],
     'peaks' | 'pois'
   >;
+  readonly demTileUrl: string;
   readonly requestTimeoutMs: number;
   readonly equivalentErrorWindowMs: number;
 }
@@ -71,11 +73,19 @@ interface FailureBucket {
   readonly lastLoggedAtMs: number;
 }
 
+const sourceRecoveryStabilityMs = 2_000;
+
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   const sourceId = (event as unknown as { readonly sourceId?: unknown }).sourceId;
   return typeof sourceId === 'string' ? sourceId : null;
 }
 
+function isSatelliteSourceId(sourceId: string): boolean {
+  return (
+    sourceId === mapSourceIds.sentinelRasterA ||
+    sourceId === mapSourceIds.sentinelRasterB
+  );
+}
 function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
   const error = event.error;
   const errorName =
@@ -95,6 +105,11 @@ function categorizeMapError(
   const sourceId = getErrorSourceId(event);
   if (sourceId === mapSourceIds.terrainDem) return 'terrain';
   if (sourceId === mapSourceIds.basemapVector) return 'base-vector';
+  if (
+    sourceId === mapSourceIds.sentinelRasterA ||
+    sourceId === mapSourceIds.sentinelRasterB
+  )
+    return 'satellite-raster';
 
   const message = event.error.message.toLowerCase();
   if (message.includes('glyph') || message.includes('sprite')) return 'glyph-sprite';
@@ -102,7 +117,11 @@ function categorizeMapError(
   return 'unknown';
 }
 
-function recoverableMessage(category: MapFailureCategory): string {
+function recoverableMessage(
+  category: MapFailureCategory,
+  details: ReturnType<typeof mapFailureDetails>,
+  recoveryState: MapSourceFailure['recoveryState'],
+): string {
   switch (category) {
     case 'base-vector':
       return 'Some basemap tiles could not load. You can keep using areas that are already visible.';
@@ -110,6 +129,34 @@ function recoverableMessage(category: MapFailureCategory): string {
       return 'Some map labels or icons could not load. Roads and terrain remain available.';
     case 'terrain':
       return '3D terrain is unavailable. The 2D basemap remains usable.';
+    case 'satellite-raster': {
+      const status =
+        details.httpStatus === null ? '' : ` (HTTP ${String(details.httpStatus)})`;
+      const recovery =
+        recoveryState === 'scheduled'
+          ? ' Retrying automatically.'
+          : recoveryState === 'exhausted'
+            ? ' Automatic retries were exhausted; reapply the scene to try again.'
+            : recoveryState === 'not-retryable'
+              ? ' Reapply the scene after correcting the request or provider issue.'
+              : '';
+      switch (details.reason) {
+        case 'rate-limit':
+          return `The satellite imagery renderer is rate-limiting requests${status}.${recovery}`;
+        case 'http-server':
+          return `The satellite imagery renderer returned a server error${status}.${recovery}`;
+        case 'timeout':
+          return `The satellite imagery request timed out${status}.${recovery}`;
+        case 'network':
+          return `The satellite imagery request failed because of a network connection error.${recovery}`;
+        case 'no-response':
+          return `The satellite imagery tile received no HTTP response (network, CORS, or provider connection failure).${recovery}`;
+        case 'http-client':
+          return `The satellite imagery renderer rejected the tile request${status}.${recovery}`;
+        default:
+          return `Some satellite imagery tiles could not load${status}. Open developer diagnostics for details.${recovery}`;
+      }
+    }
     default:
       return 'Part of the map could not load. The available basemap remains usable.';
   }
@@ -131,6 +178,7 @@ export class MapLibreFacade implements MapFacade {
   } | null = null;
   #cancelTerrainWait: (() => void) | null = null;
   readonly #failureBuckets = new Map<string, FailureBucket>();
+  readonly #sourceRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   #mountedAt = 0;
   #lastCameraDiagnosticAt = 0;
   #styleSnapshotQueued = false;
@@ -173,6 +221,7 @@ export class MapLibreFacade implements MapFacade {
     map.on('idle', this.handleIdle);
     map.on('moveend', this.handleMoveEnd);
     map.on('click', this.handleMapClick);
+    map.on('sourcedata', this.handleSourceData);
     map.on('error', this.handleError);
     map.getCanvas().addEventListener('webglcontextlost', this.handleContextLost);
     map
@@ -535,12 +584,35 @@ export class MapLibreFacade implements MapFacade {
     if (isCanceledMapRequest(event)) return;
     const category = categorizeMapError(event, this.#snapshot.lifecycle);
     const sourceId = getErrorSourceId(event);
+    if (
+      category === 'satellite-raster' &&
+      sourceId !== null &&
+      this.#map?.getSource(sourceId) === undefined
+    ) {
+      // Removing or superseding a raster can deliver a late error from its old tiles.
+      // It no longer represents any source the user can see or recover.
+      return;
+    }
+    const details = mapFailureDetails(event);
     if (category !== 'style') {
-      this.recordRecoverableFailure(category, sourceId);
+      if (sourceId !== null) this.cancelSourceRecovery(sourceId);
+      const recovery =
+        category === 'satellite-raster'
+          ? (this.layerController?.handleRasterSourceFailure(event) ?? {
+              state: 'not-applicable' as const,
+              retryAttempt: 0,
+              retryDelayMs: 0,
+            })
+          : {
+              state: 'not-applicable' as const,
+              retryAttempt: 0,
+              retryDelayMs: 0,
+            };
+      this.recordRecoverableFailure(category, sourceId, details, recovery);
       this.updateSnapshot({
         lifecycle: 'degraded',
         ...(category === 'terrain' ? { terrainMode: 'flat' as const } : {}),
-        message: recoverableMessage(category),
+        message: recoverableMessage(category, details, recovery.state),
       });
       return;
     }
@@ -553,6 +625,96 @@ export class MapLibreFacade implements MapFacade {
       name: 'map.style.failed',
     });
   };
+
+  private readonly handleSourceData = (event: MapSourceDataEvent): void => {
+    const sourceId = event.sourceId;
+    const recoveredFailedTiles = isSatelliteSourceId(sourceId)
+      ? (this.layerController?.handleRasterSourceData(event) ?? false)
+      : true;
+    let loaded = event.isSourceLoaded;
+    if (!loaded && this.#map !== null) {
+      try {
+        loaded = this.#map.isSourceLoaded(sourceId);
+      } catch {
+        // A stale source-data event can arrive after its replaceable source was removed.
+        return;
+      }
+    }
+    if (!loaded) return;
+    if (isSatelliteSourceId(sourceId) && !recoveredFailedTiles) return;
+    if (this.#sourceRecoveryTimers.has(sourceId)) return;
+    const hasActiveFailure = [...this.#failureBuckets.values()].some(
+      (bucket) =>
+        bucket.failure.sourceId === sourceId &&
+        bucket.failure.recoveryState !== 'recovered',
+    );
+    if (!hasActiveFailure) return;
+    this.#sourceRecoveryTimers.set(
+      sourceId,
+      setTimeout(() => {
+        this.#sourceRecoveryTimers.delete(sourceId);
+        this.confirmSourceRecovery(sourceId);
+      }, sourceRecoveryStabilityMs),
+    );
+  };
+
+  private confirmSourceRecovery(sourceId: string): void {
+    const map = this.#map;
+    if (map === null) return;
+    try {
+      if (!map.isSourceLoaded(sourceId)) return;
+    } catch {
+      return;
+    }
+    if (
+      isSatelliteSourceId(sourceId) &&
+      !(this.layerController?.isRasterSourceRecoveryComplete(sourceId) ?? false)
+    )
+      return;
+    let recovered = false;
+    for (const [key, bucket] of this.#failureBuckets) {
+      if (
+        bucket.failure.sourceId !== sourceId ||
+        bucket.failure.recoveryState === 'recovered'
+      ) {
+        continue;
+      }
+      recovered = true;
+      this.#failureBuckets.set(key, {
+        ...bucket,
+        failure: { ...bucket.failure, recoveryState: 'recovered' },
+      });
+    }
+    if (!recovered) return;
+    this.layerController?.handleRasterSourceRecovered(sourceId);
+    const recoverableFailures = [...this.#failureBuckets.values()].map(
+      (bucket) => bucket.failure,
+    );
+    const hasActiveFailure = recoverableFailures.some(
+      (failure) => failure.recoveryState !== 'recovered',
+    );
+    this.updateSnapshot({
+      recoverableFailures,
+      lifecycle: hasActiveFailure ? 'degraded' : 'ready',
+      message: hasActiveFailure ? this.#snapshot.message : null,
+    });
+    this.logger.log({
+      level: 'info',
+      name: 'map.source.recovered',
+      data: { sourceId },
+    });
+  }
+
+  private cancelSourceRecovery(sourceId: string): void {
+    const timer = this.#sourceRecoveryTimers.get(sourceId);
+    if (timer !== undefined) clearTimeout(timer);
+    this.#sourceRecoveryTimers.delete(sourceId);
+  }
+
+  private cancelAllSourceRecoveries(): void {
+    for (const timer of this.#sourceRecoveryTimers.values()) clearTimeout(timer);
+    this.#sourceRecoveryTimers.clear();
+  }
 
   private readonly handleContextLost = (event: Event): void => {
     event.preventDefault();
@@ -669,7 +831,7 @@ export class MapLibreFacade implements MapFacade {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(provider.terrain),
+          createTerrainDemSource(provider.terrain, provider.demTileUrl),
         );
       }
       map.setTerrain({
@@ -762,15 +924,24 @@ export class MapLibreFacade implements MapFacade {
   private recordRecoverableFailure(
     category: MapFailureCategory,
     sourceId: string | null,
+    details: ReturnType<typeof mapFailureDetails>,
+    recovery: {
+      readonly state: MapSourceFailure['recoveryState'];
+      readonly retryAttempt: number;
+    },
   ): void {
     const now = Date.now();
-    const key = `${category}:${sourceId ?? 'none'}`;
+    const key = `${category}:${sourceId ?? 'none'}:${details.reason}:${details.httpStatus === null ? 'none' : String(details.httpStatus)}`;
     const previous = this.#failureBuckets.get(key);
     const failure: MapSourceFailure = {
       category,
       sourceId,
+      reason: details.reason,
+      httpStatus: details.httpStatus,
       count: Math.min(9_999, (previous?.failure.count ?? 0) + 1),
       lastOccurredAt: new Date(now).toISOString(),
+      recoveryState: recovery.state,
+      retryAttempt: recovery.retryAttempt,
     };
     const windowMs = this.provider?.equivalentErrorWindowMs ?? 10_000;
     const shouldLog =
@@ -799,6 +970,10 @@ export class MapLibreFacade implements MapFacade {
         data: {
           category,
           count: failure.count,
+          reason: details.reason,
+          recoveryState: recovery.state,
+          retryAttempt: recovery.retryAttempt,
+          ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
           ...(sourceId === null ? {} : { sourceId }),
         },
       });
@@ -821,6 +996,7 @@ export class MapLibreFacade implements MapFacade {
   }
 
   private detach(): void {
+    this.cancelAllSourceRecoveries();
     const map = this.#map;
     if (map === null) {
       return;
@@ -830,6 +1006,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('idle', this.handleIdle);
     map.off('moveend', this.handleMoveEnd);
     map.off('click', this.handleMapClick);
+    map.off('sourcedata', this.handleSourceData);
     map.off('error', this.handleError);
     map.getCanvas().removeEventListener('webglcontextlost', this.handleContextLost);
     map

@@ -4,7 +4,7 @@
 
 - Active branch: `feature/map-discovery-sharing`.
 - Branch base: finalized `feature/camera-interactions`, followed by the latest
-  `origin/main` merge on 2026-07-20.
+  `origin/main` merge on 2026-07-20 after the filtered Terrarium fixes.
 - Approval boundary: all implementation remains on this feature branch until the draft
   pull request is reviewed and explicitly approved for integration into `main`.
 

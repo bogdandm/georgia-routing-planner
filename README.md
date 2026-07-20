@@ -107,7 +107,9 @@ The replaceable map-provider defaults are:
   perimeters; satellite mode retains those meanings with imagery-safe opacity and
   contrast.
 - AWS Open Data Mapzen Terrain Tiles in Terrarium encoding for relief shading,
-  client-generated contours, and optional 3D terrain.
+  client-generated contours, and optional 3D terrain. A bounded client-side filter
+  repairs only configured invalid values and isolated extreme pixels before all three
+  consumers see the tile.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
 - Public OpenStreetMap Nominatim for submit-driven place search.
 
@@ -148,12 +150,12 @@ aggregated provider failures, WebGL capabilities, and developer-only MapLibre de
 flags. Provider reachability is checked only after the user explicitly requests it;
 normal startup never waits for an optional provider probe.
 
-“Download diagnostics” exports a schema-version 2 JSON file locally. Nothing is
+“Download diagnostics” exports a schema-version 3 JSON file locally. Nothing is
 uploaded. The export pipeline allowlists fields and removes tokens, headers, local
 Windows paths, GPX filenames, route geometry, and exact coordinates. Exported camera
 longitude/latitude are rounded to `0.1` degree; the exact persisted camera remains
 local. The inspection CLI accepts current bundles and migrates supported schema-version
-1 bundles before summarizing them.
+1 and 2 bundles before summarizing them.
 
 Inspect a received bundle without evaluating its content:
 

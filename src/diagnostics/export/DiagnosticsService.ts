@@ -45,7 +45,7 @@ export class DiagnosticsService {
 
   public createBundle(reproductionNotes = ''): DiagnosticBundle {
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       exportedAt: new Date().toISOString(),
       build: this.build,
       runtime: {

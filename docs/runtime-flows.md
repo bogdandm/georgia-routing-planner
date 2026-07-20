@@ -45,12 +45,33 @@ Settings is a non-modal floating dialog without a dimming backdrop. Releasing an
 stretch slider validates and stores the new numeric values, prepares a replacement
 raster for the current scene, and swaps only after MapLibre reports it ready. A failed
 tuning attempt rolls back the controller values and keeps the prior raster visible. At
-startup, validated stretch preferences load before a saved Sentinel scene is restored.
-When restoration reaches a ready or hidden state, Satellite projects the controller's
-saved scene into a one-entry Images pane using the current viewport for coverage
-evidence. Clicking that active entry aborts any pending application, removes both raster
-slots and the footprint, clears the applied-scene preference, and returns map layer
-state to empty.
+startup, validated stretch preferences load first; saved Sentinel imagery waits for the
+MapLibre style-ready attach before creating raster sources. If a development detach
+cancels restoration, the controller resumes it after the same style-ready map
+reattaches. Late errors from a source that has already been removed are ignored. When
+restoration reaches a ready or hidden state, Satellite projects the controller's saved
+scene into a one-entry Images pane using the current viewport for coverage evidence.
+Clicking that active entry aborts any pending application, removes both raster slots and
+the footprint, clears the applied-scene preference, and returns map layer state to
+empty.
+
+The inactive slot used to prepare a newly selected scene does not fail on its first
+transient tile error. It refreshes failed canonical tile coordinates with bounded
+backoff. When only a transient tile remains unavailable, it promotes the usable partial
+raster after the retries are exhausted and keeps the failure visible. Non-retryable or
+whole-source failures preserve the previous raster and surface a safe status-specific
+explanation.
+
+After a raster is active, MapLibre tile errors flow through the facade for safe
+classification and through the layer controller for recovery. The controller ignores
+duplicate errors while a retry is scheduled, refreshes the failed raster tiles after a
+bounded exponential delay, and stops after three attempts. HTTP 4xx failures other than
+429 and unknown failures remain visible without automatic retry. A successful
+source-data event for every failed canonical tile clears the controller's pending set;
+only then can a loaded source start the two-second stability window. Another source
+error cancels that window. The facade returns to ready when no active failure remains.
+Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
+the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the
@@ -97,13 +118,17 @@ sequenceDiagram
   participant UI as TerrainModeControl
   participant Facade as MapLibreFacade
   participant Map as MapLibre
+  participant Filter as Filtered Terrarium protocol
   participant DEM as Terrain provider
 
   User->>UI: select 3D
   UI->>Facade: setTerrainMode(terrain)
   Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: set terrain and preserve camera intent
-  Map->>DEM: request configured DEM tiles
+  Map->>Filter: request shared raster-dem tile
+  Filter->>DEM: fetch center and neighboring tile context
+  Filter->>Filter: decode, reject, repair, re-encode, cache
+  Filter-->>Map: corrected Terrarium PNG
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
     Facade-->>UI: success / terrain
@@ -123,12 +148,29 @@ pitch and bearing to zero, so the flat map returns north-up.
 On style readiness, style data changes, satellite swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 generated contour source, minor/index lines, and index labels. The invariant is base
-surface fills, relief/satellite in the selected order, contours, then OSM boundaries,
-transport, and labels. This keeps terrain relief visible over grass, forest, and other
-opaque land-cover fills. Updating the contour interval calls the existing vector
-source's tile update, so the map camera and unrelated native resources remain untouched.
-MapLibre abort signals flow through the contour protocol to bounded DEM requests; source
-failures update the overlay snapshot without removing the basemap.
+surface fills, relief/satellite in the selected order, waterways, contours, water-body
+polygons, then OSM boundaries, transport, and labels. This keeps terrain relief visible
+over grass, forest, and other opaque land-cover fills while water bodies mask generated
+isolines. Updating the contour interval calls the existing vector source's tile update,
+so the map camera and unrelated native resources remain untouched. MapLibre abort
+signals flow through both the shared DEM and contour protocols to the same filtered
+provider. The provider fetches the center and eight neighbors concurrently under one
+timeout. Concurrent neighborhoods share in-flight fetch and decode work for overlapping
+source tiles; canceling one consumer aborts that source request only after its final
+consumer releases it. The provider applies the configured pure repair policy and retains
+completed PNGs and decoded neighbor context in bounded LRUs. Relief, 3D terrain, and
+generated isolines therefore cannot observe different elevation bytes. Source failures
+update the overlay snapshot without removing the basemap. Expected request cancellation
+during source replacement is ignored as lifecycle noise. Contour-generation timings are
+likewise grouped into bounded batches so visible-tile work cannot displace lifecycle and
+failure evidence from the diagnostics buffer.
+
+The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
+the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a
+bounded revision on both native tile templates. MapLibre consequently reloads relief, 3D
+terrain, and isolines together without remounting the map. Disabled mode preserves the
+same shared protocol and cancellation/timeout behavior but fetches only the original
+center PNG and bypasses decoding, neighborhood lookup, repair, and re-encoding.
 
 Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
 shared visual mode on the existing native layers. Semantic colors remain stable, while
@@ -311,11 +353,13 @@ glacier, and water-polygon layers; restricted-area, hiking, road, and place comm
 expand to their fixed native style groups. Satellite and footprint commands target only
 controller-owned layers. Adding a map data source includes adding its provider group and
 relevant logical visibility controls to Layers in the same change. Visibility is applied
-idempotently and projected into a serializable live store. Dexie persists visibility,
-imagery stretch, and the last successful scene for startup restoration. Satellite
-search/results state remains mounted while another rail section is visible, and
-returning to Satellite reattaches the existing adjacent pane without a new provider
-request.
+idempotently and projected into a serializable live store. The OpenStreetMap group
+opacity scales the existing satellite-mode paint opacity for its controlled fills,
+lines, points, and labels. Vector mode always uses the unscaled base paint. Dexie
+persists visibility, shared OpenStreetMap opacity, imagery stretch, and the last
+successful scene for startup restoration. Satellite search/results state remains mounted
+while another rail section is visible, and returning to Satellite reattaches the
+existing adjacent pane without a new provider request.
 
 ## Place search expansion
 

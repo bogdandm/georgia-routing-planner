@@ -165,6 +165,8 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
+    expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
     expect(screen.queryByText(/<a href=/u)).not.toBeInTheDocument();
@@ -210,6 +212,30 @@ describe('WorkspaceShell', () => {
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
     expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+  });
+
+  it('sends one shared OpenStreetMap opacity command from Layers', async () => {
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setOpacity = vi
+      .spyOn(mapLayers, 'setOpenStreetMapOpacity')
+      .mockReturnValue({ status: 'success' });
+    mapLayerStore.setState({
+      appliedImagery: {
+        status: 'ready',
+        sceneKey: 'test-scene-key',
+        sceneId: 'test-scene',
+        visible: true,
+      },
+    });
+    renderWorkspaceShell();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), {
+      target: { value: '60' },
+    });
+
+    expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {
@@ -754,7 +780,7 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
-  it('UI-wires accessible terrain overlay settings and persists both choices', async () => {
+  it('UI-wires accessible terrain overlay settings and persists all choices', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
@@ -769,9 +795,14 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByText(/Emphasized, labeled index contours remain every 200 m/u),
     ).toBeVisible();
+    const demFilter = screen.getByRole('switch', {
+      name: 'Repair invalid DEM elevation pixels',
+    });
+    expect(demFilter).toBeChecked();
 
     await user.click(contourDistance);
     await user.click(screen.getByRole('option', { name: '25 m' }));
+    await user.click(demFilter);
     await user.click(
       screen.getByRole('switch', {
         name: 'Show relief shading above satellite imagery',
@@ -780,12 +811,14 @@ describe('WorkspaceShell', () => {
 
     expect(services.mapLayers?.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
+      filterInvalidDemPixels: false,
       shadeAboveSatellite: true,
     });
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         terrainOverlays: {
           contourIntervalMeters: 25,
+          filterInvalidDemPixels: false,
           shadeAboveSatellite: true,
         },
       });

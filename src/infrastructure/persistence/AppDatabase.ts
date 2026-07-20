@@ -104,6 +104,7 @@ const mapLayerPreferencesSchema = z
         'places-and-pois': z.boolean(),
       })
       .strict(),
+    openStreetMapOpacity: z.number().min(0).max(1).default(1),
     appliedScene: satelliteSceneSchema.nullable(),
     renderingTuning: z
       .object({
@@ -121,6 +122,7 @@ const mapLayerPreferencesSchema = z
           z.literal(50),
           z.literal(100),
         ]),
+        filterInvalidDemPixels: z.boolean().default(true),
         shadeAboveSatellite: z.boolean(),
       })
       .default(defaultTerrainOverlayPreferences),
@@ -139,6 +141,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     roads: true,
     'places-and-pois': true,
   },
+  openStreetMapOpacity: 1,
   appliedScene: null,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,

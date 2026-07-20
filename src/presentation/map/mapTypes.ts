@@ -44,13 +44,35 @@ export interface MapDebugOptions {
 export type MapLifecycleState = 'loading' | 'ready' | 'degraded' | 'fatal';
 
 export type MapFailureCategory =
-  'base-vector' | 'glyph-sprite' | 'terrain' | 'style' | 'webgl' | 'unknown';
+  | 'base-vector'
+  | 'glyph-sprite'
+  | 'satellite-raster'
+  | 'terrain'
+  | 'style'
+  | 'webgl'
+  | 'unknown';
+
+export type MapFailureReason =
+  | 'http-client'
+  | 'http-server'
+  | 'network'
+  | 'no-response'
+  | 'rate-limit'
+  | 'timeout'
+  | 'unknown';
+
+export type MapRecoveryState =
+  'exhausted' | 'not-applicable' | 'not-retryable' | 'recovered' | 'scheduled';
 
 export interface MapSourceFailure {
   readonly category: MapFailureCategory;
   readonly sourceId: string | null;
+  readonly reason: MapFailureReason;
+  readonly httpStatus: number | null;
   readonly count: number;
   readonly lastOccurredAt: string;
+  readonly recoveryState: MapRecoveryState;
+  readonly retryAttempt: number;
 }
 
 export interface MapWebGlCapabilities {

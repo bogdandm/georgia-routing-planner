@@ -138,6 +138,8 @@ The terrain default is
 - Relief: low-contrast hillshade from the same source in both flat and 3D modes.
 - Contours: browser-generated vector tiles from zoom 11 through 15, with a 32-tile
   least-recently-used DEM cache.
+- Preprocessing: a shared filtered-Terrarium protocol repairs only rejected pixels
+  before the PNG reaches relief, 3D terrain, or contour generation.
 
 The [AWS Open Data entry](https://registry.opendata.aws/terrain-tiles/) describes global
 bare-earth elevation and anonymous bucket access. The upstream
@@ -147,6 +149,53 @@ documents the Terrarium endpoint, 256-pixel size, and zoom limit.
 A browser-origin single-range request to a Georgia-covering PNG returned status 206 and
 exactly 1,024 requested bytes in 538 ms. This verifies HTTPS, CORS, and byte-range
 behavior for the observed endpoint.
+
+### Conservative Terrarium repair
+
+The configured tile at `15/20448/12164`, covering the reported map point, contained no
+transparent pixels and no RGB `0/0/0` Terrarium sentinel. Its decoded range was −710.68
+m to 1,191.20 m. Exactly 256 pixels were below zero: the complete local row 5. The
+eastern neighbor repeated the same one-row pattern (−701.53 m minimum), while the
+western, northern, and southern neighbors remained within 830.05 m to 1,278.50 m. The
+bad scanline crosses one shared tile border and begins at another; it is not a coastline
+transition or an artifact introduced by contour rendering.
+
+The filter uses a one-pixel halo decoded from all eight neighboring tiles. It rejects
+transparent pixels, configured sentinel elevations, values outside the configured
+physical range, and isolated local extremes. The local test requires at least five
+neighbors close to their median, median absolute deviation no greater than 80 m, no more
+than one neighbor supporting the extreme center value, and a center residual of at least
+500 m upward or 300 m downward. The asymmetric limit reflects confirmed provider
+corruption while keeping upward peak detection more conservative. This preserves
+coherent ridges and cliffs, including narrow features with two supporting pixels.
+Rejected pixels are replaced with the median of valid immediate neighbors; accepted
+pixels are never resampled, blurred, or re-encoded. A tile with no repairs returns the
+original PNG bytes.
+
+The default physical range is −500 m through 9,000 m and the explicit sentinel list is
+`[-32768]`. These bounds cover global terrestrial elevations conservatively while
+rejecting the observed inland −700 m scanline. Applying the policy repairs all 256 bad
+pixels and changes the center tile range to 969.49–1,191.20 m. Thresholds and the
+48-entry processed-PNG and decoded-context LRU bounds are validated provider
+configuration, not rendering constants. Requests use the provider timeout and MapLibre
+abort signal. Diagnostics export only duration and aggregate no-data, sentinel,
+impossible-value, spike, repaired, and unrepaired counts; tile URLs, indices,
+coordinates, and pixels are excluded. Overlapping neighborhoods coalesce in-flight
+source fetch and decode work, and diagnostics are emitted in fixed-size aggregate
+batches instead of one event per rendered tile. Mixed results retain the batch's most
+severe status without creating a new event for every cancellation transition.
+
+At Lisi Lake, tiles `15/20455/12195` and `15/20456/12195` contain 63 compact downward
+spikes against a 626–635 m local surface. Their residuals range from −315.19 m to
+−1,826.25 m, with source minima of −683.80 m and −1,197.81 m. The repeated pixel-offset
+pattern crosses the shared tile boundary while surrounding tiles remain plausible. A 300
+m downward threshold rejects all 63; 400 m leaves five and 500 m leaves eighteen.
+
+Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
+and persisted locally. Disabling it bypasses decoding and repair and returns the
+original center PNG. Both modes retain one shared protocol for relief, 3D terrain, and
+contours; changing the preference invalidates their mode-dependent caches and reloads
+all three consumers together so they cannot disagree.
 
 ### Attribution, limits, and failure policy
 
@@ -183,10 +232,11 @@ MapLibre transfers protocol responses to a worker. The adapter therefore gives e
 delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
 or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
 
-The terrain configuration validates contour minimum/maximum zoom and cache size. The
-contour maximum cannot exceed the DEM provider maximum. Replacing the provider requires
-compatible HTTPS/CORS image tiles, correct Terrarium or Mapbox encoding, updated
-attribution, and a review of contour density and cache bounds.
+The terrain configuration validates filter thresholds, physical bounds, filter cache
+size, contour minimum/maximum zoom, and contour cache size. The contour maximum cannot
+exceed the DEM provider maximum. Replacing the provider requires compatible HTTPS/CORS
+image tiles, correct Terrarium or Mapbox encoding, updated attribution, and a review of
+contour density and cache bounds.
 
 ## Rejected defaults
 
@@ -264,13 +314,37 @@ size, zoom bounds, and attribution are validated public configuration so a manag
 TiTiler-compatible deployment can replace it without changing catalog, UI, or map
 commands. There is no silent renderer fallback.
 
+The renderer has its own validated 60-second request ceiling, separate from the shorter
+catalog and terrain request policy. This accommodates slow imagery delivery while still
+ending a stalled staging operation predictably; replacing, clearing, or superseding a
+scene cancels the wait immediately.
+
 The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and
 never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
 failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
+TiTiler's CloudFront distribution reflects `Access-Control-Allow-Origin` but can reuse a
+cached tile across request origins. Renderers that declare the `application-origin`
+cache-partition policy therefore receive a sanitized, stable `application_origin` value
+derived from scheme, host, and port. The default GitHub Pages deployment uses
+`https-bogdandm-github-io`, while local ports receive distinct values; renderers
+configured with `none` receive no extra parameter. This value contains no path, query,
+user data, or secret. For an already active raster, HTTP 429, HTTP 5xx, timeout, and
+network failures trigger up to three deduplicated failed-tile refreshes with exponential
+delay. Refreshing only the failed canonical tile coordinates keeps already rendered
+imagery available. The current status names the exact HTTP code when available;
+developer diagnostics also retain the stable source ID, safe failure class, aggregate
+count, recovery state, and retry attempt. URLs, queries, response bodies, and tile
+coordinates remain excluded. MapLibre status zero is reported as `no-response`, which
+accurately covers blocked CORS responses as well as connection failures without
+inventing an HTTP status.
 
 The map adapter prepares a replacement raster under a second stable source/layer slot
-and reveals it only after MapLibre reports the source loaded. Failure, timeout,
+and reveals it only after MapLibre reports the source loaded. Transient staging failures
+receive the same bounded failed-tile refreshes and stability check as active imagery. A
+remaining transient tile does not reject otherwise usable partial imagery; it is
+promoted after the bounded retries while its failure remains visible until MapLibre
+later returns successful data for that exact tile. A non-retryable failure, timeout,
 cancellation, or supersession removes only staging resources and leaves the prior scene
 and basemap usable. The validated WGS84 footprint renders independently as GeoJSON,
 making partial coverage explicit. The application never logs or stores the COG or tile

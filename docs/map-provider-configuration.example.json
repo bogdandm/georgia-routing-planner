@@ -31,6 +31,17 @@
     "maxZoom": 15,
     "attribution": "Terrain data: <a href=\"https://github.com/tilezen/joerd/blob/master/docs/attribution.md\" target=\"_blank\">Mapzen/AWS Open Data providers</a>",
     "exaggeration": 1.15,
+    "filter": {
+      "minimumElevationMeters": -500,
+      "maximumElevationMeters": 9000,
+      "sentinelElevationsMeters": [-32768],
+      "spikeThresholdMeters": 500,
+      "negativeSpikeThresholdMeters": 300,
+      "maximumNeighborMadMeters": 80,
+      "minimumConsensusNeighbors": 5,
+      "maximumSpikeSupportNeighbors": 1,
+      "cacheSize": 48
+    },
     "overlays": {
       "contourMinZoom": 11,
       "contourMaxZoom": 15,
@@ -49,10 +60,12 @@
     "maximumPages": 10,
     "renderer": {
       "id": "titiler-demo-stac-rgb",
+      "cachePartition": "application-origin",
       "tileUrlTemplate": "https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear",
       "tileSize": 256,
       "minZoom": 5,
       "maxZoom": 16,
+      "requestTimeoutMs": 60000,
       "attribution": "Copernicus Sentinel data · COG tiles rendered by TiTiler / Development Seed"
     }
   },

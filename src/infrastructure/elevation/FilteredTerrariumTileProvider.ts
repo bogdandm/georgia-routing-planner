@@ -88,8 +88,10 @@ export class FilteredTerrariumTileProvider {
   readonly #cache = new Map<string, FilteredTerrariumResponse>();
   readonly #decodedTileCache = new Map<string, LoadedTile>();
   readonly #decodedTileRequests = new Map<string, SharedLoadedTileRequest>();
+  readonly #tileRequests = new Set<AbortController>();
   #enabled = true;
   #revision = 0;
+  #disposed = false;
   #diagnosticAggregate: DemDiagnosticAggregate | null = null;
   #lastDiagnosticAt: number | null = null;
 
@@ -106,11 +108,15 @@ export class FilteredTerrariumTileProvider {
 
   /** Changes processing mode and invalidates all mode-dependent tile results. */
   public setEnabled(enabled: boolean): void {
+    this.assertActive();
     if (this.#enabled === enabled) return;
     this.#enabled = enabled;
     this.#revision += 1;
     this.#cache.clear();
     this.#decodedTileCache.clear();
+    for (const controller of this.#tileRequests) {
+      controller.abort(new DOMException('DEM filter mode changed.', 'AbortError'));
+    }
     for (const request of this.#decodedTileRequests.values()) {
       request.controller.abort(
         new DOMException('DEM filter mode changed.', 'AbortError'),
@@ -125,6 +131,7 @@ export class FilteredTerrariumTileProvider {
     y: number,
     parentAbortController: AbortController,
   ): Promise<FilteredTerrariumResponse> {
+    this.assertActive();
     const revision = this.#revision;
     const filterEnabled = this.#enabled;
     const key = `${String(revision)}/${String(zoom)}/${String(x)}/${String(y)}`;
@@ -137,6 +144,7 @@ export class FilteredTerrariumTileProvider {
 
     const startedAt = this.monotonicNow();
     const controller = new AbortController();
+    this.#tileRequests.add(controller);
     const handleAbort = () => {
       controller.abort(parentAbortController.signal.reason);
     };
@@ -211,9 +219,29 @@ export class FilteredTerrariumTileProvider {
       );
       throw error;
     } finally {
+      this.#tileRequests.delete(controller);
       clearTimeout(timeout);
       parentAbortController.signal.removeEventListener('abort', handleAbort);
     }
+  }
+
+  /** Cancels all work and clears bounded state owned by this provider. */
+  public dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    for (const controller of this.#tileRequests) {
+      controller.abort(new DOMException('Terrain compute disposed.', 'AbortError'));
+    }
+    for (const request of this.#decodedTileRequests.values()) {
+      request.controller.abort(
+        new DOMException('Terrain compute disposed.', 'AbortError'),
+      );
+    }
+    this.#tileRequests.clear();
+    this.#decodedTileRequests.clear();
+    this.#cache.clear();
+    this.#decodedTileCache.clear();
+    this.flushDiagnostics();
   }
 
   private async loadNeighborhood(
@@ -442,5 +470,9 @@ export class FilteredTerrariumTileProvider {
     });
     this.#diagnosticAggregate = null;
     this.#lastDiagnosticAt = this.monotonicNow();
+  }
+
+  private assertActive(): void {
+    if (this.#disposed) throw new Error('Filtered Terrarium provider is disposed.');
   }
 }

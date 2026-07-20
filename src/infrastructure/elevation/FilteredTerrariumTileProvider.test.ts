@@ -274,4 +274,34 @@ describe('FilteredTerrariumTileProvider', () => {
 
     expect(fetchImplementation.mock.calls.length).toBe(callsAfterNineTiles + 9);
   });
+
+  it('cancels pending requests and clears ownership on disposal', async () => {
+    const fetchImplementation = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => {
+              reject(new DOMException('Canceled', 'AbortError'));
+            },
+            { once: true },
+          );
+        }),
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      terrain(),
+      10_000,
+      logger,
+      codec,
+      fetchImplementation,
+    );
+    const pending = provider.getTile(5, 8, 9, new AbortController());
+
+    provider.dispose();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(provider.getTile(5, 8, 9, new AbortController())).rejects.toThrow(
+      /disposed/u,
+    );
+  });
 });

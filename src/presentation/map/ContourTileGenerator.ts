@@ -5,7 +5,7 @@ import maplibreContour from 'maplibre-contour';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ContourIntervalMeters } from '@/application/ports/MapLayerPreferencesRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
-import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
+import { TerrainComputeEngine } from '@/infrastructure/elevation/TerrainComputeEngine';
 import { ContourTimingDiagnostics } from '@/presentation/map/ContourTimingDiagnostics';
 
 export interface ContourTileGenerator {
@@ -43,7 +43,7 @@ function registerProtocolWithOwnedBuffers(
 /** Registers the bounded client-side contour protocol for one application runtime. */
 export class MapLibreContourTileGenerator implements ContourTileGenerator {
   readonly #source: InstanceType<typeof maplibreContour.DemSource>;
-  readonly #filteredTiles: FilteredTerrariumTileProvider | null;
+  readonly #engine: TerrainComputeEngine;
   #filterEnabled = true;
   #revision = 0;
 
@@ -52,6 +52,7 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
     requestTimeoutMs: number,
     logger: DiagnosticLogger,
   ) {
+    this.#engine = new TerrainComputeEngine(terrain, requestTimeoutMs, logger);
     this.#source = new maplibreContour.DemSource({
       id: 'georgia-terrain',
       url: terrain.tileUrl,
@@ -63,15 +64,7 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       // additional worker survives after the application runtime is released.
       worker: false,
     });
-    this.#filteredTiles =
-      terrain.encoding === 'terrarium'
-        ? new FilteredTerrariumTileProvider(terrain, requestTimeoutMs, logger)
-        : null;
-    if (this.#filteredTiles !== null) {
-      const filteredTiles = this.#filteredTiles;
-      this.#source.manager.fetchTile = (zoom, x, y, abortController) =>
-        filteredTiles.getTile(zoom, x, y, abortController);
-    }
+    this.#source.manager = this.#engine;
     this.#source.setupMaplibre({ addProtocol: registerProtocolWithOwnedBuffers });
     const timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {
@@ -98,17 +91,9 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
   }
 
   public setFilterEnabled(enabled: boolean): void {
-    if (this.#filteredTiles === null || this.#filterEnabled === enabled) return;
+    if (this.#filterEnabled === enabled) return;
     this.#filterEnabled = enabled;
-    this.#filteredTiles.setEnabled(enabled);
+    this.#engine.setFilterEnabled(enabled);
     this.#revision += 1;
-    const manager = this.#source.manager as unknown as {
-      readonly tileCache?: { clear(): void };
-      readonly parsedCache?: { clear(): void };
-      readonly contourCache?: { clear(): void };
-    };
-    manager.tileCache?.clear();
-    manager.parsedCache?.clear();
-    manager.contourCache?.clear();
   }
 }

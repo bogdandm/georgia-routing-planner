@@ -40,6 +40,15 @@ describe('mapFailureDetails', () => {
       httpStatus: null,
       retryable: true,
     });
+    expect(
+      mapFailureDetails(
+        event({ message: 'AJAXError:  (0): https://private.example/tile', status: 0 }),
+      ),
+    ).toEqual({
+      reason: 'network',
+      httpStatus: null,
+      retryable: true,
+    });
     expect(mapFailureDetails(event({ message: 'image decode failed' }))).toEqual({
       reason: 'unknown',
       httpStatus: null,

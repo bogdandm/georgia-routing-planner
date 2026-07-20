@@ -55,6 +55,8 @@ interface FailureBucket {
   readonly lastLoggedAtMs: number;
 }
 
+const sourceRecoveryStabilityMs = 2_000;
+
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   const sourceId = (event as unknown as { readonly sourceId?: unknown }).sourceId;
   return typeof sourceId === 'string' ? sourceId : null;
@@ -110,7 +112,7 @@ function recoverableMessage(
         case 'timeout':
           return `The satellite imagery request timed out${status}.${recovery}`;
         case 'network':
-          return `The satellite imagery request failed because of a network connection error.${recovery}`;
+          return `The satellite imagery tile received no HTTP response (network, CORS, or provider connection failure).${recovery}`;
         case 'http-client':
           return `The satellite imagery renderer rejected the tile request${status}.${recovery}`;
         default:
@@ -138,6 +140,7 @@ export class MapLibreFacade implements MapFacade {
   } | null = null;
   #cancelTerrainWait: (() => void) | null = null;
   readonly #failureBuckets = new Map<string, FailureBucket>();
+  readonly #sourceRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   #mountedAt = 0;
   #lastCameraDiagnosticAt = 0;
   #styleSnapshotQueued = false;
@@ -341,8 +344,18 @@ export class MapLibreFacade implements MapFacade {
   private readonly handleError = (event: MapLibreErrorEvent): void => {
     const category = categorizeMapError(event, this.#snapshot.lifecycle);
     const sourceId = getErrorSourceId(event);
+    if (
+      category === 'satellite-raster' &&
+      sourceId !== null &&
+      this.#map?.getSource(sourceId) === undefined
+    ) {
+      // Removing or superseding a raster can deliver a late error from its old tiles.
+      // It no longer represents any source the user can see or recover.
+      return;
+    }
     const details = mapFailureDetails(event);
     if (category !== 'style') {
+      if (sourceId !== null) this.cancelSourceRecovery(sourceId);
       const recovery =
         category === 'satellite-raster'
           ? (this.layerController?.handleRasterSourceFailure(event) ?? {
@@ -380,6 +393,30 @@ export class MapLibreFacade implements MapFacade {
       }
     }
     if (!loaded) return;
+    if (this.#sourceRecoveryTimers.has(sourceId)) return;
+    const hasActiveFailure = [...this.#failureBuckets.values()].some(
+      (bucket) =>
+        bucket.failure.sourceId === sourceId &&
+        bucket.failure.recoveryState !== 'recovered',
+    );
+    if (!hasActiveFailure) return;
+    this.#sourceRecoveryTimers.set(
+      sourceId,
+      setTimeout(() => {
+        this.#sourceRecoveryTimers.delete(sourceId);
+        this.confirmSourceRecovery(sourceId);
+      }, sourceRecoveryStabilityMs),
+    );
+  };
+
+  private confirmSourceRecovery(sourceId: string): void {
+    const map = this.#map;
+    if (map === null) return;
+    try {
+      if (!map.isSourceLoaded(sourceId)) return;
+    } catch {
+      return;
+    }
     let recovered = false;
     for (const [key, bucket] of this.#failureBuckets) {
       if (
@@ -412,7 +449,18 @@ export class MapLibreFacade implements MapFacade {
       name: 'map.source.recovered',
       data: { sourceId },
     });
-  };
+  }
+
+  private cancelSourceRecovery(sourceId: string): void {
+    const timer = this.#sourceRecoveryTimers.get(sourceId);
+    if (timer !== undefined) clearTimeout(timer);
+    this.#sourceRecoveryTimers.delete(sourceId);
+  }
+
+  private cancelAllSourceRecoveries(): void {
+    for (const timer of this.#sourceRecoveryTimers.values()) clearTimeout(timer);
+    this.#sourceRecoveryTimers.clear();
+  }
 
   private readonly handleContextLost = (event: Event): void => {
     event.preventDefault();
@@ -684,6 +732,7 @@ export class MapLibreFacade implements MapFacade {
   }
 
   private detach(): void {
+    this.cancelAllSourceRecoveries();
     const map = this.#map;
     if (map === null) {
       return;

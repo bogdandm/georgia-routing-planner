@@ -26,6 +26,11 @@ function statusFromError(error: unknown): number | null {
 export function mapFailureDetails(event: MapLibreErrorEvent): MapFailureDetails {
   const status = statusFromError(event.error);
   const message = event.error.message.toLowerCase();
+  // Fetch/XHR uses status 0 when no HTTP response was available (network, CORS,
+  // cancellation, or an opaque failure). It is not an HTTP client rejection.
+  if (status === 0) {
+    return { reason: 'network', httpStatus: null, retryable: true };
+  }
   if (status === 429) {
     return { reason: 'rate-limit', httpStatus: status, retryable: true };
   }

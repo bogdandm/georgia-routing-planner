@@ -236,14 +236,23 @@ The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`,
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and
 never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
 failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
-For an already active raster, HTTP 429, HTTP 5xx, timeout, and network failures trigger
-up to three deduplicated source reloads with exponential delay. The current status names
-the exact HTTP code when available; developer diagnostics also retain the stable source
-ID, safe failure class, aggregate count, recovery state, and retry attempt. URLs,
-queries, response bodies, and tile coordinates remain excluded.
+TiTiler's CloudFront distribution reflects `Access-Control-Allow-Origin` but can reuse a
+cached tile across request origins. Every renderer URL therefore includes a sanitized,
+stable `application_origin` cache partition derived from scheme, host, and port. For
+example, GitHub Pages uses `https-bogdandm-github-io`, while local ports receive
+distinct values. This parameter contains no path, query, user data, or secret. For an
+already active raster, HTTP 429, HTTP 5xx, timeout, and network failures trigger up to
+three deduplicated failed-tile refreshes with exponential delay. Refreshing only the
+failed canonical tile coordinates keeps already rendered imagery available. The current
+status names the exact HTTP code when available; developer diagnostics also retain the
+stable source ID, safe failure class, aggregate count, recovery state, and retry
+attempt. URLs, queries, response bodies, and tile coordinates remain excluded.
 
 The map adapter prepares a replacement raster under a second stable source/layer slot
-and reveals it only after MapLibre reports the source loaded. Failure, timeout,
+and reveals it only after MapLibre reports the source loaded. Transient staging failures
+receive the same bounded failed-tile refreshes and stability check as active imagery. A
+remaining transient tile does not reject otherwise usable partial imagery; it is
+promoted and targeted recovery continues. A non-retryable failure, timeout,
 cancellation, or supersession removes only staging resources and leaves the prior scene
 and basemap usable. The validated WGS84 footprint renders independently as GeoJSON,
 making partial coverage explicit. The application never logs or stores the COG or tile

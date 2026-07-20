@@ -317,9 +317,11 @@ and supports 20, 25, 40, 50, or 100 m so every choice divides the index cadence.
 DEM repair and contour calculation normally run in one dedicated terrain worker. Camera
 movement continues DEM work but defers newly requested contours until movement settles;
 existing contour tiles remain under MapLibre's normal retention rules. If the worker
-cannot recover after one restart, the same calculations continue inline and Settings >
-Rendering shows a non-blocking compatibility warning that movement may be slower. A
-successful worker session has no warning.
+channel or returned data cannot recover after one restart, the same calculations
+continue inline for that page session and Settings > Rendering shows a non-blocking
+compatibility warning that movement may be slower. Provider, decode, and calculation
+failures remain isolated to their individual requests and do not switch execution mode.
+A successful worker session has no warning; a new page session tries the worker again.
 
 While terrain work is active, the Ready status below search also shows the execution
 mode, exact number of queued contour jobs against the 32-job bound, and any currently

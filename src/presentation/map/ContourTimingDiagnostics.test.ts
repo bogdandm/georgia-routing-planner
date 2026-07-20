@@ -62,8 +62,8 @@ describe('ContourTimingDiagnostics', () => {
       1,
     );
 
-    expect(() =>
-      diagnostics.record({ durationMs: 4, tileCount: 1, failed: false }),
-    ).not.toThrow();
+    expect(() => {
+      diagnostics.record({ durationMs: 4, tileCount: 1, failed: false });
+    }).not.toThrow();
   });
 });

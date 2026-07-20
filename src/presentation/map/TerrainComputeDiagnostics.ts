@@ -21,7 +21,9 @@ export class TerrainComputeDiagnostics {
     intervalMs = 5_000,
   ) {
     this.#window = new DiagnosticBatchWindow(
-      () => this.flushAggregate(),
+      () => {
+        this.flushAggregate();
+      },
       batchSize,
       intervalMs,
     );

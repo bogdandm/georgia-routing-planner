@@ -163,11 +163,14 @@ bounded LRUs. Relief, 3D terrain, and generated isolines therefore cannot observ
 different elevation bytes.
 
 One dedicated module worker owns PNG decode/encode, repair, parsed DEM data, and contour
-generation. `movestart` marks the channel interactive: DEM requests continue while new
-contour requests enter a bounded low-priority queue. Cancellation removes a queued
-request immediately, a full queue cancels its oldest viewport request, and `moveend`
-drains current contours one at a time. An already-running synchronous contour is allowed
-to finish. Detach always clears interactive mode.
+generation. Initialization maps validated provider configuration into the strict,
+versioned compute DTO and validates that DTO at the worker boundary. Adding unrelated
+provider or presentation fields therefore cannot invalidate worker startup. `movestart`
+marks the channel interactive: DEM requests continue immediately while new contour
+requests enter the bounded contour queue. Cancellation removes a queued request
+immediately, a full queue cancels its oldest viewport request, and `moveend` drains
+current contours one at a time. An already-running synchronous contour is allowed to
+finish. Detach always clears interactive mode.
 
 The worker publishes a coordinate-free queue snapshot whenever active work or the
 contour backlog changes. The recoverable backend validates that event, the layer
@@ -176,16 +179,27 @@ current queued count against the fixed capacity only while work is pending. Rest
 inline fallback reset the snapshot so stale worker work cannot remain visible.
 
 Provider, timeout, decode, and compute errors fail only their request. A worker `error`,
-`messageerror`, or channel loss starts one fresh worker, replays validated configuration
-plus the current filter revision, and retries still-current requests. If that worker
-also fails, the page keeps terrain available through the same engine on the window
-thread and publishes a non-blocking compatibility warning. A later page session starts
-with a worker again. Queue and compute timings are aggregated before entering
-diagnostics and exclude tile coordinates, URLs, pixels, and geometry. Source failures
-update the overlay snapshot without removing the basemap. Expected request cancellation
-during source replacement is ignored as lifecycle noise. Contour-generation timings are
-likewise grouped into bounded batches so visible-tile work cannot displace lifecycle and
-failure evidence from the diagnostics buffer.
+`messageerror`, channel loss, or malformed DEM/contour result enters the same recovery
+loop: one fresh worker receives the validated DTO plus current filter revision, then the
+still-current request is retried. Cancellation remains cancellation and does not start
+recovery. If the replacement worker also fails validation or transport, the page keeps
+terrain available through the same engine on the window thread and publishes a
+non-blocking compatibility warning. A later page session starts with a worker again.
+
+The engine retains cached contour buffers. The worker server slices each cached result
+and transfers that owned copy; inline compatibility slices before returning to MapLibre.
+Protocol registration forwards those already-owned buffers directly, so no additional
+window-thread copy is made and MapLibre detachment cannot corrupt later cache hits. DEM
+protocol delivery is already owned because each response materializes a fresh buffer
+from its `Blob`.
+
+Queue/compute and end-to-end contour timings retain their separate event schemas. Each
+aggregator uses the same small count/interval window, flushes partial batches during
+runtime disposal, cancels its timer, and ignores later callbacks. Diagnostic logger
+failures are contained and cannot fail terrain delivery. Aggregates exclude tile
+coordinates, URLs, pixels, and geometry. Source failures update the overlay snapshot
+without removing the basemap, while expected cancellation during source replacement is
+ignored as lifecycle noise.
 
 The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
 the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a
@@ -428,6 +442,7 @@ effects also remove online/offline listeners and reset developer-only debug flag
 integrations must preserve this single-owner cleanup model.
 
 For final page teardown or Vite module replacement, runtime-service disposal removes the
-registered DEM/contour protocols, terminates the terrain worker, rejects pending RPC
-work, clears worker caches, detaches controller listeners, and closes local runtime
-resources. A page retained in Chrome's back-forward cache keeps its runtime intact.
+registered DEM/contour protocols, releases terrain timing subscriptions, flushes partial
+diagnostic batches, terminates the terrain worker, rejects pending RPC work, clears
+worker caches, detaches controller listeners, and closes local runtime resources. A page
+retained in Chrome's back-forward cache keeps its runtime intact.

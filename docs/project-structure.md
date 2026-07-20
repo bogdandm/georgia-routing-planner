@@ -135,12 +135,22 @@ literals.
 `TerrainComputeEngine` owns the `maplibre-contour` local manager and its bounded
 filtered-PNG, parsed-DEM, and contour caches. `FilteredTerrariumTileProvider` uses
 browser image/canvas primitives behind a typed codec, while `TerrariumDemFilter` owns
-the pure rejection and replacement policy. `WorkerTerrainComputeBackend` normally runs
-that engine in one Vite module worker through the reusable request-correlated
-`WorkerRpc` transport. A failed worker is restarted once; a second transport failure
-selects `InlineTerrainComputeBackend`, which calls the same engine and exposes only a
+the pure rejection and replacement policy. `TerrainComputeConfiguration` is the narrow,
+versioned worker DTO; one Zod schema defines its boundary and an explicit mapper strips
+provider identity, attribution, overlay presentation, and other non-compute fields from
+the validated application configuration. `WorkerTerrainComputeBackend` normally runs the
+engine in one Vite module worker through the reusable request-correlated `WorkerRpc`
+transport. A failed worker is restarted once; a second transport failure selects
+`InlineTerrainComputeBackend`, which calls the same engine and exposes only a
 serializable compatibility and bounded-queue state. Worker objects and caches never
 enter React, Zustand, or application ports.
+
+The application backend exposes only DEM and contour delivery. A private
+`TerrainComputeManagerAdapter` satisfies the larger third-party manager shape without
+advertising parsed-DEM access as an application capability. Parsed DEM data remains
+internal to the engine and its contour cache. Worker diagnostics enter the injected
+diagnostic logger directly; UI and export consumers read the diagnostics service rather
+than subscribing through a terrain-specific bypass.
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
 Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and

@@ -163,7 +163,6 @@ transition or an artifact introduced by contour rendering.
 The filter uses a one-pixel halo decoded from all eight neighboring tiles. It rejects
 transparent pixels, configured sentinel elevations, values outside the configured
 physical range, and isolated local extremes. The local test requires at least five
-neighbors close to their median, median absolute deviation no greater than 80 m, a
 neighbors close to their median, median absolute deviation no greater than 80 m, no more
 than one neighbor supporting the extreme center value, and a center residual of at least
 500 m upward or 300 m downward. The asymmetric limit reflects confirmed provider
@@ -240,9 +239,18 @@ failures remain per-request. A broken worker channel is restarted once and then 
 back to the identical inline engine for the page session, preserving terrain features
 with a possible responsiveness reduction.
 
-MapLibre transfers protocol responses to a worker. The adapter therefore gives each
-delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
-or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
+Relief and 3D are not rendered by the terrain-compute worker. Their filtered
+`raster-dem` tiles continue through MapLibre/browser workers and WebGL to the GPU. The
+worker also does not process satellite imagery: the configured TiTiler service performs
+COG reads, RGB composition, reprojection, and web-tile encoding remotely, and MapLibre
+receives ordinary raster tiles. These pipelines remain separate so the terrain worker
+has one bounded cache set and does not duplicate renderer or remote imagery work.
+
+MapLibre transfers protocol responses to a worker. Worker contour delivery transfers a
+slice that protects the engine cache; inline delivery makes the equivalent owned copy.
+The main-thread protocol forwards that buffer without another slice. The contour
+library's cached buffer is never transferred or detached, so repeated cache hits remain
+usable during rapid camera and zoom changes.
 
 The terrain configuration validates filter thresholds, physical bounds, filter cache
 size, contour minimum/maximum zoom, and contour cache size. The contour maximum cannot

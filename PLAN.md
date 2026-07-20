@@ -1,272 +1,271 @@
-# Filtered Terrarium DEM Implementation Plan
+# Responsive Terrain Compute Pipeline
 
-## 1. Branch and approval boundary
+## Summary
 
-- Active worktree: `.codex-worktrees/filtered-dem`.
-- Active branch: `feature/filtered-terrarium-dem`.
-- Branch base: merged terrain-overlay state on `main` at `90f801d`.
-- Approval boundary: all implementation remains on this feature branch until the
-  reviewed pull-request state is explicitly approved for integration into `main`.
-- The unrelated `fix/client-side-cloud-highlighting` working tree was preserved in the
-  named stash `user-wip-before-terrain-overlays` before this branch was created.
+Move DEM repair and contour generation off Chrome's UI thread using a reusable typed Web
+Worker transport. Keep one dedicated terrain worker alongside MapLibre's worker,
+prioritize terrain during camera movement, evaluate the existing repair algorithm with a
+reproducible benchmark, retain only measured optimizations, and recover transparently
+without requiring a page refresh.
 
-## 2. Required outcome
+Implementation stays in the isolated `.codex-worktrees/terrain-compute-worker` worktree
+on `feature/terrain-compute-worker`. The branch remains subject to the normal approval
+gate before integration into `main`.
 
-Add two independently controllable terrain overlays to the long-lived MapLibre map:
+## Implementation changes
 
-1. A hillshade/relief layer that is always available.
-2. An elevation-isoline layer with configurable contour spacing.
+### 0. Review the overall render pipeline
 
-Default contour spacing is 50 m for minor lines and 200 m for emphasized, labeled index
-lines. Contours appear only at a zoom level where that density remains readable and
-useful. Styling follows the supplied references and reviewed palette: low-contrast
-neutral relief, blue minor/index contours, orange roads and paths, green vegetation,
-pale-blue glaciers, red restricted areas, and a neutral-grey vector base. Satellite mode
-retains those meanings with stronger line contrast and lighter polygon coverage.
+- Review the complete visible-tile path before implementing the worker change: provider
+  request, shared caching, PNG decode, DEM filtering, PNG encode, contour generation,
+  protocol delivery, MapLibre parsing, source/layer updates, and WebGL rendering. Ensure
+  every stage has one clear owner and dependencies continue to point inward through
+  narrow capability interfaces.
+- Keep React declarative and the native MapLibre instance long-lived. Imperative map,
+  protocol, source, layer, and worker operations stay behind typed adapters; React and
+  Zustand receive only serializable snapshots and must not become owners of native
+  objects, caches, or calculation rules.
+- Verify that request cancellation, timeouts, retry responsibility, cache invalidation,
+  filter revisions, buffer ownership, and error translation are each handled in one
+  deliberate layer. Avoid duplicate fetch, decode, filter, contour, or retry work across
+  the window, terrain worker, and MapLibre worker.
+- Keep render updates surgical: preference and filter changes update only the affected
+  tile templates, caches, sources, and layers. They must not recreate the map, reset the
+  camera, rebuild unrelated layers, or publish high-frequency map events into React
+  state.
+- Review startup, worker recovery, inline fallback, map detach/reattach, protocol
+  registration, abort handling, and final disposal as one lifecycle. Every listener,
+  subscription, queued request, transferable buffer, worker, and third-party resource
+  must have explicit ownership and cleanup.
+- Preserve intentional loading, partial, failure, recovery, and compatibility states.
+  Keep diagnostics bounded and privacy-safe, and refactor adjacent render code only when
+  the review identifies a concrete ownership, correctness, lifecycle, or duplicated-work
+  problem; do not turn this feature into a speculative renderer rewrite.
 
-The normal native layer order is:
+### 1. Shared terrain compute engine and filter optimization
 
-```text
-base map
--> relief shade
--> satellite imagery
--> elevation isolines
--> OSM data layers
-```
+- Extract a shared `TerrainComputeEngine` that owns filtered-tile fetching, bounded
+  caches, PNG processing, contour generation, cancellation, and diagnostic reporting.
+  Worker and inline execution must call this same engine; the fallback must not contain
+  a second filter or contour implementation.
+- Keep the configured provider timeout, MapLibre abort propagation, current processed
+  PNG and decoded-context LRU bounds, and the single filtered source shared by relief,
+  3D terrain, and contours.
+- Add `tools/performance/benchmarkTerrariumFilter.ts`, a deterministic, non-CI timing
+  harness that compares the current reference implementation with one candidate at a
+  time. Use seeded 256 by 256 center tiles and complete 3 by 3 neighborhoods covering
+  valid varied terrain, sparse spikes, many invalid pixels, the observed corrupt
+  scanline, cross-tile edges, and a worst-case high-gradient surface. Warm both
+  implementations, alternate their execution order, run at least 30 measured samples per
+  scenario, and report median, p95, and tiles per second as machine-readable JSON plus a
+  concise table. Record runtime version, CPU model, scenario seed, iteration count, and
+  whether filtering ran in Node or Chrome; do not use noisy heap deltas as an acceptance
+  metric.
+- Freeze the current filter as a test/tool-only reference oracle before changing the
+  production algorithm. The harness must compare repair counts and output RGBA bytes
+  before timing each scenario, so an incorrect candidate cannot produce a misleading
+  speedup.
+- Profile the reference implementation in Chrome and the benchmark before selecting an
+  optimization. Evaluate these candidates incrementally rather than landing them as one
+  assumed improvement:
+  - A padded typed-array elevation and validity matrix containing the center tile and
+    its one-pixel neighbor halo, replacing repeated coordinate and tile lookups.
+  - Reused fixed-size neighbor and deviation buffers, with a measured small-sample
+    median implementation, replacing per-pixel arrays, `map`, `filter`, and general
+    sorting allocations.
+  - Reusing the first classification pass's neighbor median for rejected-pixel repair,
+    instead of scanning the same neighborhood again.
+  - Lazy output cloning when the first repair is made, returning the original decoded
+    tile when no pixel changes.
+- Benchmark after each candidate. Keep a candidate only when it remains byte-identical,
+  improves the combined scenario median by at least 25%, and makes no individual
+  scenario's p95 more than 10% slower. If the combined candidates do not meet that gate,
+  retain the readable reference algorithm and deliver the worker isolation without a
+  speculative matrix rewrite. Treat a 50% reduction from the observed baseline as a
+  stretch result, not an assumption.
+- Keep `maplibre-contour` pinned at its current version and instantiate its
+  `LocalDemManager` inside the shared engine so filtered DEM blobs, parsed elevation
+  data, and generated contours continue to use bounded shared caches.
 
-A rendering setting can move relief shade above satellite imagery:
+Planned commit: `perf(elevation): benchmark and optimize shared terrain compute`
 
-```text
-base map
--> satellite imagery
--> relief shade
--> elevation isolines
--> OSM data layers
-```
+### 2. Typed worker transport, recovery, and inline compatibility
 
-The setting changes order without remounting MapLibre, losing the selected satellite
-scene, or altering the visibility of unrelated logical layers.
+- Add a dependency-free reusable worker RPC transport with request identifiers, typed
+  discriminated messages, transferable results, abort forwarding, structured errors,
+  status events, and deterministic shutdown.
+- Create the terrain worker with Vite's module-worker form:
+  `new Worker(new URL(..., import.meta.url), { type: 'module' })`, so its asset path
+  remains correct under the GitHub Pages base path.
+- Run DEM decoding, filtering, PNG encoding, parsed DEM work, and contour generation in
+  one dedicated terrain worker. MapLibre retains its own default worker, limiting the
+  application to one additional CPU worker rather than an adaptive pool that could
+  increase contention.
+- Use this request protocol:
+  - `initialize`: validated terrain configuration, timeout, cache bounds, and current
+    filter revision.
+  - `dem` and `contour`: request ID, revision, tile coordinates, contour options when
+    applicable, and priority.
+  - `cancel`: request ID for work no longer needed by MapLibre.
+  - `set-filter`: enabled state plus monotonically increasing revision.
+  - `dispose`: cancel work, clear queues and caches, and close the worker.
+  - `result`, `failure`, `status`, and `diagnostic`: correlated responses that never
+    expose coordinates or provider URLs to exported diagnostics.
+- Treat HTTP, timeout, decoding, and calculation errors as ordinary request failures.
+  They must not restart the worker or prevent later MapLibre requests from succeeding.
+- Treat worker `error`, `messageerror`, or channel loss as transport failures:
+  - Start one fresh worker.
+  - Replay the latest validated configuration and filter revision.
+  - Retry each still-current, non-aborted request once.
+  - Reject work from an obsolete filter revision as cancellation rather than allowing
+    stale tiles to reach MapLibre.
+- If the fresh worker cannot initialize or crashes again, switch permanently for that
+  page session to an inline backend that invokes the same `TerrainComputeEngine`.
+  Preserve terrain features, emit a warning that movement can be slower, and try the
+  worker again on the next page session.
+- Dispose the worker, requests, listeners, and registered protocols through the runtime
+  service lifecycle. Worker shutdown must not depend on garbage collection or page
+  refresh.
 
-## 3. Architecture and decisions to validate
+Planned commit: `feat(map): move terrain compute off the UI thread`
 
-- Extend the existing typed map-layer controller and stable native ID registry; do not
-  expose the MapLibre instance outside the map adapter.
-- Use a replaceable elevation raster-dem provider with explicit attribution, CORS, and
-  usage-policy documentation. Reuse the same DEM source for hillshade and client-side
-  contour generation when MapLibre and the selected contour library support it.
-- Generate contours in the browser from bounded terrain tiles; do not introduce a
-  project backend or embed secrets in `VITE_*` configuration.
-- Keep rendering preferences serializable and validated. Persist them through the
-  existing map-layer preferences owner rather than adding a second authoritative store.
-- Treat hillshade as an always-available map capability: it remains usable without a
-  satellite scene and is restored after style or terrain lifecycle changes.
-- Start contours at the first zoom where default 50 m lines are legible without visual
-  clutter. The initial implementation target is zoom 11, subject to fixture tests and a
-  current-Chrome visual check against the supplied reference.
-- Apply contour-distance changes atomically and preserve the current map camera and all
-  unrelated sources/layers.
+### 3. Interaction-aware scheduling
 
-## 4. Work packages and commit sequence
+- Extend the map boundary so `movestart` marks terrain computation interactive and
+  `moveend` returns it to settled mode. Detach must always clear the interactive state.
+- Continue DEM and 3D surface requests at high priority while the camera moves.
+- Hold newly requested contour jobs at low priority until movement settles. Do not
+  explicitly hide existing contour tiles; allow MapLibre to retain or discard them
+  normally.
+- Remove aborted queued contours immediately, keep the queue bounded, and flush only
+  current requests after `moveend`. A running synchronous contour calculation does not
+  need unsafe preemption, but no new contour calculation may start while movement is
+  active.
+- Preserve current source-revision updates, camera state, layer visibility, and filter
+  preference persistence. Changing the filter still reloads relief, 3D terrain, and
+  contours atomically without remounting the map.
 
-### T1. Provider contract and terrain source — Done
+Planned commit: `perf(map): prioritize terrain while moving`
 
-- Inspect the existing base-map, terrain, satellite, visibility, diagnostics, and
-  preference flows.
-- Add validated provider configuration for the elevation tiles required by both
-  overlays, including safe public defaults or an explicit unavailable state.
-- Add stable source/layer IDs and typed overlay preferences.
-- Document endpoint policy, attribution, replacement, and failure behavior.
-- Test configuration validation, ID ownership, and source creation.
+## Interfaces and observable state
 
-Commit: `feat(map): define terrain overlay sources`
+- Introduce a capability-oriented `TerrainComputeBackend` with operations to fetch a DEM
+  tile, generate a contour tile, update the filter revision, update interaction
+  priority, and dispose resources.
+- Keep the generic RPC transport in infrastructure/runtime code and the terrain engine
+  in elevation infrastructure. Do not introduce a broad service locator or put worker
+  objects in Zustand, TanStack Query, or domain/application layers.
+- Extend the contour adapter with `setInteractionActive`, execution-status subscription,
+  and `dispose` operations.
+- Define `TerrainComputeStatus` as `worker`, `restarting`, or `inline`. Publish only the
+  serializable status through the existing terrain-overlay presentation state. Do not
+  persist it.
+- Display inline compatibility as a non-blocking warning in the terrain settings. A
+  successful worker restart should return to normal without showing an error.
+- Preserve the existing `map.dem.tiles-processed` and `map.contours.tiles-generated`
+  aggregates while adding allowlisted execution mode, queue duration, compute duration,
+  pending count, restart, and fallback evidence. Diagnostics must continue to exclude
+  tile coordinates, URLs, pixels, raw geometry, and arbitrary thrown objects.
 
-### T2. Relief shade and deterministic layer ordering — Done
+## Testing and acceptance
 
-- Render a low-contrast hillshade layer whenever the map style is ready.
-- Insert it below satellite imagery by default.
-- Add the rendering preference that moves hillshade above or below satellite imagery.
-- Reconcile order after map style reloads, satellite apply/switch/remove operations, and
-  terrain changes without duplicate sources, layers, or listeners.
-- Add typed diagnostic events/snapshots for initialization, order changes, and bounded
-  failures.
-- Test both order variants, idempotency, restoration, missing-layer recovery, and
-  satellite switching.
+### Automated tests
 
-Commit: `feat(map): add configurable relief shading`
+- Compare the optimized filter byte-for-byte and count-for-count against a test-only
+  reference implementation over seeded synthetic grids, missing neighbor tiles, coherent
+  ridges, positive and negative spikes, sentinels, the observed corrupt scanline, and
+  valid unchanged terrain.
+- Test the benchmark harness's deterministic scenario generation, correctness-first
+  comparison, warmup exclusion, alternating execution order, percentile calculation, and
+  JSON schema without asserting wall-clock thresholds in CI.
+- Test engine caching, overlapping neighborhood coalescing, filter-revision
+  invalidation, request cancellation, timeouts, network recovery, contour buffer
+  ownership, and deterministic disposal.
+- Test worker RPC correlation, transferable results, aborted requests, initialization
+  failure, crash recovery, state replay, one retry, rejection of stale results, and
+  terminal inline fallback using injected fake worker endpoints.
+- Test that DEM requests proceed while movement is active, contours remain queued,
+  canceled contours disappear, the queue remains bounded, and remaining contours resume
+  on `moveend`.
+- Add focused React coverage for the inline compatibility warning and its removal after
+  normal worker recovery.
+- Extend Chromium coverage to prove that the production worker bundle loads with the
+  configured base path and that filtered relief, 3D terrain, contours, camera input,
+  reload persistence, and teardown remain functional.
 
-### T3. Elevation isolines and interval settings — Done
+### Performance acceptance
 
-- Add client-side contour generation from the configured elevation tiles.
-- Render minor and index lines above satellite imagery and below all OSM data layers.
-- Use 50 m minor and 200 m index intervals by default; label index contours only.
-- Add rendering controls for contour distance while retaining a clear 200 m major-line
-  cadence. Validate bounds and reject combinations that cannot be represented safely.
-- Start rendering at the selected minimum zoom and clean up generated resources
-  deterministically.
-- Test interval expressions/options, minimum zoom, layer placement, preference changes,
-  cancellation/failure, and cleanup.
+- In healthy operation, Chrome Performance recordings must show DEM repair and contour
+  calculation on the terrain worker rather than the window thread.
+- Camera pan, zoom, pitch, and orbit input must remain responsive while filtered terrain
+  reloads and while contour work is pending.
+- Capture the benchmark before the first production optimization and after every
+  candidate using the same machine, runtime, seed, scenarios, warmup, and iteration
+  count. Record the command and before/after summary in this plan's verification
+  evidence and in the pull request; generated benchmark JSON remains an untracked local
+  artifact.
+- Apply the 25% combined-median improvement and maximum 10% per-scenario p95 regression
+  gate defined above. The approximately 91 ms single-scenario planning measurement is
+  context only; the new multi-scenario reference run becomes the authoritative baseline.
+- Repeat the winning candidate once in current stable Chrome inside the actual terrain
+  worker. Node results select the algorithm, while the Chrome run confirms that browser
+  typed-array, image, and worker behavior does not reverse the result.
+- Worker transport or recovery must never require F5. A failed tile request must not
+  poison subsequent requests, and failed worker recovery must leave the same features
+  available through the inline engine.
 
-Commit: `feat(map): render configurable elevation isolines`
+### Verification commands
 
-### T4. Settings, persistence, and accessibility — Done
+Run focused tests with each implementation commit, followed by:
 
-- Add compact controls to the existing Settings > Rendering surface for contour distance
-  and shade-over-satellite ordering.
-- Clearly describe index versus minor contour behavior and the visual effect of the
-  shade-order toggle.
-- Persist validated preferences and repair unsupported stored values to defaults.
-- Expose independent, durable Relief shading and Elevation isolines visibility controls
-  in the Layers tab while keeping interval and ordering controls in Settings.
-- Cover keyboard interaction, accessible names, help text, and live failure feedback.
-- Test fresh defaults, round trips, migration/repair, component interaction, and map
-  command synchronization.
-
-Commit: `feat(settings): configure terrain overlays`
-
-### T5. Documentation and workflow hardening — Done
-
-- Update stable feature, structure, runtime-flow, provider, setup, and docs-index
-  content wherever ownership or behavior changes.
-- Add a controlled-browser workflow only if source/layer ordering across the real
-  MapLibre lifecycle cannot be proven below the browser boundary.
-- Perform a current stable Chrome visual check at representative Georgia mountain zooms
-  with and without satellite imagery, comparing contrast and density to the supplied
-  reference.
-- Confirm attribution remains visible and public-network access is not required by
-  automated tests.
-
-Commit: `docs(map): describe terrain overlay behavior`
-
-### T6. Unified map palette and feature context — Done
-
-- Centralize semantic map colors and vector/satellite contrast paints.
-- Replace brown contours with the UI primary-blue family and use secondary-orange shades
-  for roads, tracks, footways, and steps.
-- Add explicit vegetation, glacier, and provider-supported restricted-area rendering.
-- Prefer English labels, then provider transliteration, before native-name fallback.
-- Preserve imagery detail by removing land-cover fills in satellite mode and retaining
-  high-contrast true line features and label halos.
-- Avoid decorative outlines on tiled surface polygons; keep only the intentional
-  restricted-area perimeter.
-- Add durable Layers controls for the combined natural-feature polygons and restricted
-  areas, under the OpenStreetMap provider heading.
-- Document the private-access data limitation and reserve bright blue for future GPX.
-
-Commit: `feat(map): unify overlay palette and labels`
-
-### T7. Filtered Terrarium source — Done
-
-- Confirm the reported native tile and eight neighbors numerically before selecting
-  thresholds. Tile `15/20448/12164` contains one full −710 m scanline at local row 5;
-  the eastern neighbor continues it while other adjacent tiles are clean.
-- Add validated physical bounds, sentinel values, robust median/MAD thresholds, and a
-  bounded processed-PNG cache.
-- Decode and re-encode with browser APIs, honor abort and timeout, use neighboring-tile
-  context, and supply one filtered source to relief, 3D terrain, and contours.
-- Add deterministic synthetic tests for unchanged terrain, no-data, positive/negative
-  spikes, coherent ridges, tile edges, the observed scanline, cancellation, and bounds.
-- Update permanent provider, runtime, feature, structure, and setup documentation.
-- Expose a locally persisted, default-enabled Settings switch that reloads the shared
-  relief, 3D, and contour sources together when invalid-pixel repair changes.
-- Verify the repaired 3D terrain and isolines around the affected lake in the opened
-  local browser, then commit in reviewable units and open a draft pull request.
-
-Planned commits:
-
-1. `fix(map): filter corrupt Terrarium elevation pixels`
-2. `docs(map): describe filtered Terrarium processing`
-
-### T8. Native camera interaction — Done
-
-- Keep MapLibre's desktop pan, wheel/double-click zoom, keyboard, touch, compass, and
-  pitch semantics, with a focused 3D-only middle-drag orbit around the pressed terrain
-  point at restrained sensitivity; leave right drag to the browser.
-- Show a small terrain-anchored pivot ring while middle drag is active, then remove it
-  on release, cancellation, teardown, or return to 2D.
-- Persist camera and terrain mode as one serializable view, restore 3D after reload, and
-  reset pitch plus bearing when switching to 2D.
-- Cover conventional camera gestures, pivot stability, compass reset, keyboard control,
-  camera persistence, and 2D/3D transitions with focused and Chromium tests.
-
-Commit: `feat(map): refine native camera interactions`
-
-## 5. Verification
-
-Run the smallest relevant checks after each work package, followed by the complete gate:
-
-```text
-pnpm typecheck
-pnpm lint
+```powershell
+pnpm repo:audit
 pnpm format:check
+pnpm lint
+pnpm typecheck
 pnpm test
 pnpm test:integration
 pnpm test:coverage
 pnpm build
-pnpm e2e                 # only when required by the final MapLibre lifecycle scope
+pnpm exec tsx tools/performance/benchmarkTerrariumFilter.ts --iterations 30 --json
+$env:CI='1'; pnpm e2e; Remove-Item Env:CI
 rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
 git diff --check
 ```
 
-## 6. Definition of done
+The coverage configuration already owns the managed-Windows ten-second per-test ceiling.
+Run canonical coverage once; investigate any remaining timeout as a new failure rather
+than rerunning with another ceiling or adding sleeps.
 
-- Relief shade is available independently of satellite imagery and defaults below it.
-- The rendering toggle reliably moves shade above satellite imagery and survives
-  refresh/style restoration.
-- Default contours use 50 m minor and 200 m major intervals, with readable labels and a
-  defensible minimum zoom.
-- User-selected contour spacing is validated, persisted, and applied without map
-  remounts or camera loss.
-- Native order is base, shade/satellite according to preference, isolines, OSM data,
-  then existing user-owned overlays where applicable.
-- Provider failures leave the base map and all unrelated controls usable and produce
-  privacy-safe diagnostics.
-- Focused tests, relevant browser evidence, documentation checks, and the production
-  build pass.
-- Intended changes are committed in reviewable units, pushed, and available in a draft
-  pull request targeting `main`.
+## Permanent documentation
 
-## 7. Verification evidence
+- Update `docs/project-structure.md` with worker, engine, transport, state ownership,
+  and lifecycle boundaries.
+- Update `docs/runtime-flows.md` with request scheduling, cancellation, revision replay,
+  worker restart, inline fallback, and teardown.
+- Update `docs/map-providers.md` with optimized filtering, shared worker-side caches,
+  and failure behavior.
+- Update `docs/features.md` with the compatibility warning and the guarantee that the
+  basemap remains usable during terrain failures.
+- Update `README.md` with the stable terrain-filter benchmark command, its
+  non-CI/non-regression-test purpose, and how to compare runs on the same environment.
+- Keep stable documentation free of work-item sequencing, branch state, estimates, or
+  approval progress; those details remain in this file.
 
-Verified on 2026-07-19:
+## Assumptions and definition of done
 
-- Formatting, lint, strict type checking, repository audit, documentation-boundary grep,
-  and diff validation pass.
-- 180 unit/component tests and 18 integration tests pass.
-- Coverage passes with 88.5% statements, 78.97% branches, 90% functions, and 90.75%
-  lines across 180 tests. The canonical run exposed only managed-workspace timing
-  contention; the documented two-worker, ten-second-ceiling rerun passed completely.
-- The production build passes. The existing large-bundle advisory remains non-blocking.
-- All 12 controlled Chromium workflows pass with two workers, including axe checks,
-  terrain failure recovery, diagnostics export, Sentinel ordering, and durable relief /
-  isoline visibility from Layers.
-- A live current-Chrome check confirmed that the combined Natural features control
-  updates immediately and restores enabled, provider attribution remains clickable on
-  the map, the Layers sidebar contains no raw attribution markup, and rapid
-  contour-producing zoom changes recover to Ready without detached-buffer errors.
-- The supplied diagnostics bundle was traced to a cached contour `ArrayBuffer` being
-  transferred more than once. The protocol adapter now clones each delivery while
-  preserving the cache-owned buffer, with a regression test for repeated cache hits.
-
-Verified on 2026-07-20 for the filtered Terrarium source:
-
-- The failing 3x3 native-tile neighborhood was decoded numerically. Tiles
-  `15/20448/12164` and `15/20449/12164` each contain exactly 256 impossible negative
-  values in local row 5, with minima of -710.68 m and -701.53 m. The scanline crosses
-  their shared tile boundary; adjacent rows and the other seven tiles remain plausible.
-- Formatting, lint, strict type checking, documentation-boundary grep, diff validation,
-  177 unit/component tests, 18 integration tests, and the production build pass.
-- Bounded-concurrency coverage passes across 195 tests with 88.08% statements, 79.37%
-  branches, 90.46% functions, and 90.19% lines. The canonical run exposed only the
-  documented managed-workspace five-second `WorkspaceShell` timeouts.
-- All twelve controlled Chromium workflows pass. Overlapping DEM neighborhoods now
-  coalesce source fetch/decode work, expected source-replacement cancellations do not
-  degrade the map, and DEM plus contour timings use bounded aggregate diagnostics so
-  lifecycle evidence remains visible.
-- CI serializes Chromium because concurrent WebGL, DEM, and contour work exceeded the
-  hosted runner's measured 30-second workflow ceiling; local runs retain two workers.
-- The opened current-Chrome build was verified in 3D around `42.0768, 44.5653`. The lake
-  and its isolines render coherently with no rectangular trench or contour collapse, and
-  diagnostics report the map ready with the shared terrain, relief, and contour sources.
-- The default-enabled invalid-pixel repair switch was disabled, persisted across reload,
-  re-enabled, and followed by a successful live 3D transition. The map remained Ready
-  while both DEM and contour tile templates reloaded together.
+- Supported stable desktop Chrome provides module workers, `OffscreenCanvas`, and
+  `createImageBitmap`.
+- No backend service, WASM toolchain, new runtime dependency, or generic shared worker
+  pool is introduced. Future GPX or elevation workloads may reuse the typed RPC
+  transport with their own capability-specific workers.
+- Inline fallback deliberately favors feature availability over responsiveness only
+  after worker recovery fails.
+- Filtered DEM bytes and contour geometry remain behaviorally compatible with the
+  current implementation for the same configuration and inputs.
+- Terrain filter optimization is conditional on the benchmark gate. Worker isolation,
+  cancellation, recovery, and scheduling remain required even if no candidate is kept.
+- The work is complete only when relevant checks and performance evidence pass, the
+  intended commits are pushed, and a draft pull request targeting `main` is available
+  for review. The feature branch remains awaiting approval until the maintainer
+  explicitly authorizes integration.

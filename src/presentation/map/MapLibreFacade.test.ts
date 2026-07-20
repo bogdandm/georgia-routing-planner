@@ -2,6 +2,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
+import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
@@ -334,7 +335,36 @@ describe('MapLibreFacade', () => {
     vi.useFakeTimers();
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
-    const facade = new MapLibreFacade(services.logger);
+    let failedTileRecovered = false;
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      handleRasterSourceFailure: vi.fn(() => ({
+        state: 'scheduled' as const,
+        retryAttempt: 1,
+        retryDelayMs: 1_000,
+      })),
+      handleRasterSourceData: vi.fn((event: unknown) => {
+        const tile = (
+          event as {
+            readonly tile?: {
+              readonly tileID?: { readonly canonical?: unknown };
+            };
+          }
+        ).tile?.tileID?.canonical;
+        if (tile !== undefined) failedTileRecovered = true;
+        return failedTileRecovered;
+      }),
+      isRasterSourceRecoveryComplete: vi.fn(() => failedTileRecovered),
+      handleRasterSourceRecovered: vi.fn(),
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
     facade.attach(nativeMap as unknown as MapLibreMap);
     nativeMap.fire('load');
     nativeMap.addSource('sentinel-raster-a', { type: 'raster' });
@@ -345,19 +375,21 @@ describe('MapLibreFacade', () => {
         status: 503,
       },
       sourceId: 'sentinel-raster-a',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
     });
 
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'degraded',
-      message: 'The satellite imagery renderer returned a server error (HTTP 503).',
+      message:
+        'The satellite imagery renderer returned a server error (HTTP 503). Retrying automatically.',
       recoverableFailures: [
         {
           category: 'satellite-raster',
           sourceId: 'sentinel-raster-a',
           reason: 'http-server',
           httpStatus: 503,
-          recoveryState: 'not-applicable',
-          retryAttempt: 0,
+          recoveryState: 'scheduled',
+          retryAttempt: 1,
         },
       ],
     });
@@ -371,12 +403,13 @@ describe('MapLibreFacade', () => {
     });
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'degraded',
-      recoverableFailures: [{ recoveryState: 'not-applicable' }],
+      recoverableFailures: [{ recoveryState: 'scheduled' }],
     });
     vi.advanceTimersByTime(1_999);
     nativeMap.fire('error', {
       error: { message: 'AJAXError: Service Unavailable', status: 503 },
       sourceId: 'sentinel-raster-a',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
     });
     vi.advanceTimersByTime(1);
     expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('degraded');
@@ -384,6 +417,8 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('sourcedata', {
       sourceId: 'sentinel-raster-a',
       isSourceLoaded: true,
+      sourceDataType: 'content',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
     });
     vi.advanceTimersByTime(2_000);
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
@@ -394,7 +429,7 @@ describe('MapLibreFacade', () => {
     expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
   });
 
-  it('shows status zero as a retryable network failure without claiming HTTP 0', () => {
+  it('shows status zero as retryable no-response evidence without claiming HTTP 0', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const facade = new MapLibreFacade(services.logger);
@@ -413,7 +448,7 @@ describe('MapLibreFacade', () => {
         'The satellite imagery tile received no HTTP response (network, CORS, or provider connection failure).',
       recoverableFailures: [
         {
-          reason: 'network',
+          reason: 'no-response',
           httpStatus: null,
         },
       ],

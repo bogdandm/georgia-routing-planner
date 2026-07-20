@@ -62,6 +62,13 @@ function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   return typeof sourceId === 'string' ? sourceId : null;
 }
 
+function isSatelliteSourceId(sourceId: string): boolean {
+  return (
+    sourceId === mapSourceIds.sentinelRasterA ||
+    sourceId === mapSourceIds.sentinelRasterB
+  );
+}
+
 function categorizeMapError(
   event: MapLibreErrorEvent,
   lifecycle: MapDiagnosticsSnapshot['lifecycle'],
@@ -112,6 +119,8 @@ function recoverableMessage(
         case 'timeout':
           return `The satellite imagery request timed out${status}.${recovery}`;
         case 'network':
+          return `The satellite imagery request failed because of a network connection error.${recovery}`;
+        case 'no-response':
           return `The satellite imagery tile received no HTTP response (network, CORS, or provider connection failure).${recovery}`;
         case 'http-client':
           return `The satellite imagery renderer rejected the tile request${status}.${recovery}`;
@@ -361,8 +370,13 @@ export class MapLibreFacade implements MapFacade {
           ? (this.layerController?.handleRasterSourceFailure(event) ?? {
               state: 'not-applicable' as const,
               retryAttempt: 0,
+              retryDelayMs: 0,
             })
-          : { state: 'not-applicable' as const, retryAttempt: 0 };
+          : {
+              state: 'not-applicable' as const,
+              retryAttempt: 0,
+              retryDelayMs: 0,
+            };
       this.recordRecoverableFailure(category, sourceId, details, recovery);
       this.updateSnapshot({
         lifecycle: 'degraded',
@@ -383,6 +397,9 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleSourceData = (event: MapSourceDataEvent): void => {
     const sourceId = event.sourceId;
+    const recoveredFailedTiles = isSatelliteSourceId(sourceId)
+      ? (this.layerController?.handleRasterSourceData(event) ?? false)
+      : true;
     let loaded = event.isSourceLoaded;
     if (!loaded && this.#map !== null) {
       try {
@@ -393,6 +410,7 @@ export class MapLibreFacade implements MapFacade {
       }
     }
     if (!loaded) return;
+    if (isSatelliteSourceId(sourceId) && !recoveredFailedTiles) return;
     if (this.#sourceRecoveryTimers.has(sourceId)) return;
     const hasActiveFailure = [...this.#failureBuckets.values()].some(
       (bucket) =>
@@ -417,6 +435,11 @@ export class MapLibreFacade implements MapFacade {
     } catch {
       return;
     }
+    if (
+      isSatelliteSourceId(sourceId) &&
+      !(this.layerController?.isRasterSourceRecoveryComplete(sourceId) ?? false)
+    )
+      return;
     let recovered = false;
     for (const [key, bucket] of this.#failureBuckets) {
       if (

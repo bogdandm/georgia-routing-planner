@@ -58,19 +58,20 @@ empty.
 The inactive slot used to prepare a newly selected scene does not fail on its first
 transient tile error. It refreshes failed canonical tile coordinates with bounded
 backoff. When only a transient tile remains unavailable, it promotes the usable partial
-raster after a stable loaded interval and continues targeted recovery on the active
-source. Non-retryable or whole-source failures preserve the previous raster and surface
-a safe status-specific explanation.
+raster after the retries are exhausted and keeps the failure visible. Non-retryable or
+whole-source failures preserve the previous raster and surface a safe status-specific
+explanation.
 
 After a raster is active, MapLibre tile errors flow through the facade for safe
 classification and through the layer controller for recovery. The controller ignores
 duplicate errors while a retry is scheduled, refreshes the failed raster tiles after a
 bounded exponential delay, and stops after three attempts. HTTP 4xx failures other than
-429 and unknown failures remain visible without automatic retry. A later loaded-source
-event starts a two-second stability window, and another source error cancels that
-window. A source that stays loaded and error-free is then marked recovered and the
-facade returns to ready when no other active failure remains. Raw tile URLs, response
-bodies, and tile coordinates never enter logs, React state, or the diagnostics bundle.
+429 and unknown failures remain visible without automatic retry. A successful
+source-data event for every failed canonical tile clears the controller's pending set;
+only then can a loaded source start the two-second stability window. Another source
+error cancels that window. The facade returns to ready when no active failure remains.
+Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
+the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the

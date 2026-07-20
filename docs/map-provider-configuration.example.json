@@ -49,6 +49,7 @@
     "maximumPages": 10,
     "renderer": {
       "id": "titiler-demo-stac-rgb",
+      "cachePartition": "application-origin",
       "tileUrlTemplate": "https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear",
       "tileSize": 256,
       "minZoom": 5,

@@ -131,6 +131,7 @@ export const mapDiagnosticSnapshotSchema = mapDiagnosticSnapshotV2Schema.extend(
           'http-client',
           'http-server',
           'network',
+          'no-response',
           'rate-limit',
           'timeout',
           'unknown',

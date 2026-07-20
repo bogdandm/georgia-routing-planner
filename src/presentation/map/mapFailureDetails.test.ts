@@ -45,7 +45,7 @@ describe('mapFailureDetails', () => {
         event({ message: 'AJAXError:  (0): https://private.example/tile', status: 0 }),
       ),
     ).toEqual({
-      reason: 'network',
+      reason: 'no-response',
       httpStatus: null,
       retryable: true,
     });

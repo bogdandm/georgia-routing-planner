@@ -21,7 +21,13 @@ export type MapFailureCategory =
   | 'unknown';
 
 export type MapFailureReason =
-  'http-client' | 'http-server' | 'network' | 'rate-limit' | 'timeout' | 'unknown';
+  | 'http-client'
+  | 'http-server'
+  | 'network'
+  | 'no-response'
+  | 'rate-limit'
+  | 'timeout'
+  | 'unknown';
 
 export type MapRecoveryState =
   'exhausted' | 'not-applicable' | 'not-retryable' | 'recovered' | 'scheduled';

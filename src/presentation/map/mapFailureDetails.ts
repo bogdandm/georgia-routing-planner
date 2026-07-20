@@ -29,7 +29,7 @@ export function mapFailureDetails(event: MapLibreErrorEvent): MapFailureDetails 
   // Fetch/XHR uses status 0 when no HTTP response was available (network, CORS,
   // cancellation, or an opaque failure). It is not an HTTP client rejection.
   if (status === 0) {
-    return { reason: 'network', httpStatus: null, retryable: true };
+    return { reason: 'no-response', httpStatus: null, retryable: true };
   }
   if (status === 429) {
     return { reason: 'rate-limit', httpStatus: status, retryable: true };

@@ -296,22 +296,22 @@ automatically. Equivalent recoverable errors are counted in capped buckets and l
 a bounded interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors
 are degraded states. The inactive slot used to prepare a newly selected scene also
 retries transient failed tiles. If a transient tile still fails after staging retries,
-the usable partial raster is promoted and recovery continues for that tile; the safe
-failure class remains visible. Non-retryable or whole-source failures preserve the
-previous raster. For active imagery, a loaded source starts the same stability window.
-Only a source that remains loaded without another error is marked recovered, restores
-the ready lifecycle when no other failure remains, and clears the user-facing error.
-This prevents the status from blinking while other tiles from the same source are still
-failing. Offline messaging promises only that already rendered areas may remain visible,
-not full offline map support. Map lifecycle and imagery errors do not create a wide map
-banner: the shared line below search is their single UI surface. Ready remains
-background-free; pending and error states use a lightly translucent surface for map
-contrast, and selecting an error reveals its complete safe detail. Hovering any
-truncated status message reveals the full text in a multiline tooltip. The non-ready
-surface transitions quickly and remains translucent enough to preserve map context.
-Pending text uses the dark primary color and a medium weight rather than the muted Ready
-treatment, preserving legibility over imagery. Status padding is invariant so state
-changes never shift the icon or text.
+the usable partial raster is promoted after the bounded retries; the safe failure class
+remains visible. Non-retryable or whole-source failures preserve the previous raster.
+For active imagery, successful source-data for each failed canonical tile must clear the
+controller's pending set before a loaded source starts the stability window. Only that
+tile-confirmed recovery restores the ready lifecycle when no other failure remains and
+clears the user-facing error. This prevents the status from blinking while other tiles
+from the same source are still failing. Offline messaging promises only that already
+rendered areas may remain visible, not full offline map support. Map lifecycle and
+imagery errors do not create a wide map banner: the shared line below search is their
+single UI surface. Ready remains background-free; pending and error states use a lightly
+translucent surface for map contrast, and selecting an error reveals its complete safe
+detail. Hovering any truncated status message reveals the full text in a multiline
+tooltip. The non-ready surface transitions quickly and remains translucent enough to
+preserve map context. Pending text uses the dark primary color and a medium weight
+rather than the muted Ready treatment, preserving legibility over imagery. Status
+padding is invariant so state changes never shift the icon or text.
 
 ## Diagnostics and developer mode
 

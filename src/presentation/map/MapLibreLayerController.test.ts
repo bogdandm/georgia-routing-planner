@@ -234,10 +234,12 @@ describe('MapLibreLayerController', () => {
     expect(controller.handleRasterSourceFailure(event)).toEqual({
       state: 'scheduled',
       retryAttempt: 1,
+      retryDelayMs: 1_000,
     });
     expect(controller.handleRasterSourceFailure(event)).toEqual({
       state: 'scheduled',
       retryAttempt: 1,
+      retryDelayMs: 1_000,
     });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(map.refreshTilesCalls).toEqual([
@@ -257,24 +259,63 @@ describe('MapLibreLayerController', () => {
     expect(controller.handleRasterSourceFailure(event)).toEqual({
       state: 'scheduled',
       retryAttempt: 2,
+      retryDelayMs: 2_000,
     });
     await vi.advanceTimersByTimeAsync(2_000);
     expect(controller.handleRasterSourceFailure(event)).toEqual({
       state: 'scheduled',
       retryAttempt: 3,
+      retryDelayMs: 4_000,
     });
     await vi.advanceTimersByTimeAsync(4_000);
     expect(map.refreshTilesCalls).toHaveLength(3);
     expect(controller.handleRasterSourceFailure(event)).toEqual({
       state: 'exhausted',
       retryAttempt: 3,
+      retryDelayMs: 0,
     });
 
     controller.handleRasterSourceRecovered('sentinel-raster-a');
     expect(controller.handleRasterSourceFailure(event)).toEqual({
       state: 'scheduled',
       retryAttempt: 1,
+      retryDelayMs: 1_000,
     });
+  });
+
+  it('requires successful data for the failed tile before declaring recovery', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(
+      scene('scene-recovery-proof'),
+      new AbortController().signal,
+    );
+
+    controller.handleRasterSourceFailure({
+      sourceId: 'sentinel-raster-a',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+      error: { message: 'AJAXError: Service Unavailable', status: 503 },
+    } as never);
+
+    expect(
+      controller.handleRasterSourceData({
+        sourceId: 'sentinel-raster-a',
+        isSourceLoaded: true,
+        sourceDataType: 'content',
+        tile: { tileID: { canonical: { x: 124, y: 456, z: 12 } } },
+      } as never),
+    ).toBe(false);
+    expect(
+      controller.handleRasterSourceData({
+        sourceId: 'sentinel-raster-a',
+        isSourceLoaded: true,
+        sourceDataType: 'content',
+        tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+      } as never),
+    ).toBe(true);
   });
 
   it('maps logical controls to allowlisted native style layers', () => {
@@ -485,6 +526,37 @@ describe('MapLibreLayerController', () => {
     expect(map.fitOptions).toMatchObject({ bearing: 17, pitch: 34, padding: 56 });
   });
 
+  it('adds the application-origin cache partition only when the renderer opts in', async () => {
+    const services = createTestServices();
+    const configuration = services.mapProviderConfiguration;
+    if (configuration.status !== 'valid') return;
+    const map = new FakeLayerMap();
+    const controller = new MapLibreLayerController(
+      {
+        ...configuration.value.satellite.renderer,
+        cachePartition: 'none',
+      },
+      configuration.value.terrain,
+      { createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}' },
+      services.logger,
+      services.idGenerator,
+      services.sentinelQueryDiagnostics,
+      100,
+      services.database,
+    );
+    controller.attach(map as unknown as MapLibreMap);
+
+    await controller.applyScene(
+      scene('scene-without-partition'),
+      new AbortController().signal,
+    );
+
+    const raster = map.sources.get('sentinel-raster-a') as {
+      readonly tiles: readonly string[];
+    };
+    expect(raster.tiles[0]).not.toContain('application_origin=');
+  });
+
   it('keeps the prior raster when a replacement source fails', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -506,7 +578,7 @@ describe('MapLibreLayerController', () => {
     await expect(replacement).resolves.toEqual({
       status: 'failed',
       message:
-        'The imagery renderer did not return a usable tile. The previous image remains visible; retry or reset the imagery stretch.',
+        'The imagery renderer did not return a usable tile. The current map remains usable; retry or reset the imagery stretch.',
     });
     expect(map.layers.has(sentinelMapLayerIds.rasterA)).toBe(true);
     expect(map.layers.has(sentinelMapLayerIds.rasterB)).toBe(false);
@@ -636,6 +708,8 @@ describe('MapLibreLayerController', () => {
     map.fire('sourcedata', {
       sourceId: 'sentinel-raster-b',
       isSourceLoaded: true,
+      sourceDataType: 'content',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
     });
     await vi.advanceTimersByTimeAsync(2_000);
 
@@ -646,7 +720,40 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('promotes partial staging imagery and keeps retrying its failed tile', async () => {
+  it('keeps the staging deadline open for the complete rate-limit backoff', async () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('scene-a'), new AbortController().signal);
+    map.sourceLoaded = false;
+
+    const replacement = controller.applyScene(
+      scene('scene-b'),
+      new AbortController().signal,
+    );
+    const event = {
+      sourceId: 'sentinel-raster-b',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+      error: { message: 'AJAXError: Too Many Requests', status: 429 },
+    };
+    map.fire('error', event);
+    await vi.advanceTimersByTimeAsync(5_000);
+    map.fire('error', event);
+    await vi.advanceTimersByTimeAsync(10_000);
+    map.fire('error', event);
+    await vi.advanceTimersByTimeAsync(20_000);
+    map.sourceLoaded = true;
+    map.fire('error', event);
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    await expect(replacement).resolves.toEqual({ status: 'success' });
+    expect(map.refreshTilesCalls).toHaveLength(3);
+  });
+
+  it('promotes partial staging imagery after bounded retries without hiding its failure', async () => {
     vi.useFakeTimers();
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -680,7 +787,8 @@ describe('MapLibreLayerController', () => {
       sceneId: 'scene-b',
     });
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(map.refreshTilesCalls).toHaveLength(4);
+    expect(map.refreshTilesCalls).toHaveLength(3);
+    expect(controller.isRasterSourceRecoveryComplete('sentinel-raster-b')).toBe(false);
   });
 
   it('restores the saved scene and visibility after a page refresh', async () => {

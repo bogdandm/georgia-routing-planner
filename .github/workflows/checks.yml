@@ -2,13 +2,11 @@ name: Checks
 
 on:
   pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
-      - 'feature/**'
-      - 'fix/**'
-      - 'chore/**'
-      - 'docs/**'
 
 permissions:
   contents: read

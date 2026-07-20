@@ -200,8 +200,19 @@ scene is restored.
 
 ## Persistent map controls
 
-- Place-or-coordinate search is overlaid on the map. The current search field is
-  disabled.
+- Place-or-coordinate search is overlaid on the map. Submitted place searches begin in
+  the visible viewport, then repeatedly double the bounded search area up to a 500 km
+  radius from the original viewport center. Results from every area are appended as they
+  arrive and deduplicated, so a nearby street name does not hide a more distant
+  settlement with the same name. Direct coordinates remain local and do not contact the
+  place provider. The result list shows each match's geodesic distance from that center.
+  It shows settlements, administrative place boundaries, mountains, and water features
+  by default. Squares, streets, businesses, and other POIs remain behind an explicit
+  **Show other results** action. A fixed-height, full-width progress bar shows outward
+  expansion against the 500 km maximum without shifting completed results. Map pan,
+  zoom, and camera controls do not dismiss results or cancel an active search.
+  Nominatim's open-ended OSM tags are shown as readable labels; only explicitly reviewed
+  geographic tags enter the default list and unknown tags stay in other results.
 - A lightweight line below search reports readiness, pending work, or safe failures;
   selecting an error opens its complete safe detail.
 - Navigation collapses with a short transition to only the clickable GR mark. The GR
@@ -213,6 +224,11 @@ scene is restored.
   above satellite imagery. Index contours remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
+- Clicking the map opens an anchored, accessible point-inspection popup with formatted
+  coordinates, terrain elevation, and the nearest validated OSM point of interest within
+  100 m. While any part of that popup intersects the map viewport, the next map click
+  only closes it; a subsequent click opens a new inspection. If camera movement puts the
+  popup entirely outside the viewport, the next click immediately replaces it.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.

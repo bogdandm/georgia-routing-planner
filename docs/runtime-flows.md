@@ -141,6 +141,8 @@ perimeter derived from provider-tagged military geometry.
 ## Provider and WebGL failures
 
 - `error` events are classified from safe source IDs and normalized messages.
+- Routine aborted, cancelled, and superseded tile requests are ignored before snapshot
+  mutation or subscriber notification; camera movement must not create a render storm.
 - Style errors during startup become fatal because no usable basemap exists.
 - Vector, glyph, and terrain errors update capped failure buckets and a degraded
   snapshot; repeated equivalent events do not create alert or log storms.
@@ -314,6 +316,40 @@ imagery stretch, and the last successful scene for startup restoration. Satellit
 search/results state remains mounted while another rail section is visible, and
 returning to Satellite reattaches the existing adjacent pane without a new provider
 request.
+
+## Place search expansion
+
+`MapSearchPlaceholder` captures an immutable viewport with an explicit text submission.
+`SearchPlaces` asks the replaceable gateway for results inside that area, accumulates
+visually unique name-and-category matches in inner-to-outer order, and emits the growing
+list after each response. This collapses OSM streets split across several ways while
+preserving same-name features whose full location labels differ. It doubles the area
+around the same center until the radius reaches 500 km even when an earlier area already
+matched. Sub-metre cap tolerance and a defensive attempt ceiling guarantee the expansion
+terminates even when floating-point bounds or a provider cache repeat an area. The
+Nominatim adapter serializes the requests at no more than one per second, caches each
+query-and-area combination, and passes cancellation through every wait and HTTP request.
+Provider failure ends the search without discarding results that were already visible in
+the component; a new submission or closing the result list cancels the obsolete query.
+Map camera interactions do not close the list and therefore do not cancel the query. The
+adapter also maps provider categories into settlements, administrative areas, mountains,
+water, and other results. Presentation prioritizes the first four groups and hides the
+other group until explicitly requested. Each displayed match includes its geodesic
+distance from the original viewport center; later camera movement does not change that
+search anchor. Only explicit settlement types are classified as settlements, so objects
+such as `place=square` remain in the optional other-results group.
+
+## Point inspection lifecycle
+
+`MapLibreFacade` owns the serializable inspection state and the native popup adapter.
+The first map click opens loading state and starts cancellable POI/elevation work. If an
+inspection is already open and intersects the map viewport, the next map click closes
+it, aborts that work, and does not inspect the new coordinate; the following click may
+start another inspection. An entirely offscreen popup is closed and replaced by the same
+click. Sequence checks prevent a late provider result from reopening a closed popup.
+Explicit popup close uses the same cancellation path. Diagnostics record only lifecycle,
+duration, outcome, and result count, never the clicked coordinate or arbitrary POI
+metadata.
 
 ## Teardown ownership
 

@@ -143,7 +143,7 @@ contours, or 3D terrain use the DEM source.
 
 `pnpm performance:terrain -- --iterations 30 --json` runs the non-CI deterministic
 Terrarium benchmark. It checks candidate output against the reference oracle before
-timing six seeded 256 x 256 scenarios and prints environment, median, p95, and
+timing seven seeded 256 x 256 scenarios and prints environment, median, p95, and
 throughput evidence. Compare runs only on the same machine and runtime; wall-clock
 values are not a unit-test contract.
 

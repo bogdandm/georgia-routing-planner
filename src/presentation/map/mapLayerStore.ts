@@ -4,6 +4,7 @@ import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
 import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import type { TerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
+import type { TerrainComputeStatus } from '@/infrastructure/elevation/TerrainComputeBackend';
 
 export interface TerrainOverlaySnapshot {
   readonly initialized: boolean;
@@ -14,6 +15,7 @@ export interface TerrainOverlaySnapshot {
 export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly errorMessage: string | null;
+  readonly terrainComputeStatus: TerrainComputeStatus;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
@@ -21,6 +23,7 @@ export interface MapLayerState {
 export const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
   errorMessage: null,
+  terrainComputeStatus: 'worker',
   visibility: {
     'satellite-imagery': true,
     'scene-footprint': true,

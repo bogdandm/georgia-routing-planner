@@ -22,6 +22,7 @@ import {
 import { useState } from 'react';
 
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
+import type { TerrainComputeStatus } from '@/infrastructure/elevation/TerrainComputeBackend';
 import {
   defaultSatelliteRenderingTuning,
   type SatelliteRenderingTuning,
@@ -46,6 +47,7 @@ interface SettingsDialogProps {
   readonly renderingTuningPending: boolean;
   readonly storageUsage: StorageUsageReader;
   readonly terrainOverlayError: string | null;
+  readonly terrainComputeStatus: TerrainComputeStatus;
   readonly terrainOverlayPreferences: TerrainOverlayPreferences;
   readonly onTerrainOverlayPreferencesChange: (
     value: TerrainOverlayPreferences,
@@ -83,6 +85,7 @@ export function SettingsDialog({
   renderingTuningError,
   renderingTuningPending,
   storageUsage,
+  terrainComputeStatus,
   terrainOverlayError,
   terrainOverlayPreferences,
   onTerrainOverlayPreferencesChange,
@@ -310,6 +313,13 @@ export function SettingsDialog({
                 contours remain every 200 m and appear from zoom 11.
               </Typography>
             </Box>
+
+            {terrainComputeStatus === 'inline' ? (
+              <Alert severity="warning">
+                Terrain processing is running in compatibility mode. Terrain features
+                remain available, but map movement may be slower.
+              </Alert>
+            ) : null}
 
             <Box>
               <FormControlLabel

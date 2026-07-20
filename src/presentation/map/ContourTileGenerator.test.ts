@@ -18,6 +18,26 @@ class FakeContourTileGenerator implements ContourTileGenerator {
   public setFilterEnabled(enabled: boolean): void {
     void enabled;
   }
+
+  public setInteractionActive(active: boolean): void {
+    void active;
+  }
+
+  public getStatus(): 'inline' {
+    return 'inline';
+  }
+
+  public subscribeStatus(): () => void {
+    return () => undefined;
+  }
+
+  public subscribeMetrics(): () => void {
+    return () => undefined;
+  }
+
+  public dispose(): void {
+    void this;
+  }
 }
 
 describe('ContourTileGenerator contract', () => {

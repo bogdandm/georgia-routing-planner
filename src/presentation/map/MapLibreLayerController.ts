@@ -192,6 +192,7 @@ export class MapLibreLayerController
   #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
+  readonly #releaseTerrainComputeStatus: () => void;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -202,7 +203,12 @@ export class MapLibreLayerController
     private readonly diagnostics: SentinelQueryDiagnostics,
     private readonly satelliteRendererTimeoutMs: number,
     private readonly preferences: MapLayerPreferencesRepository,
-  ) {}
+  ) {
+    mapLayerStore.setState({ terrainComputeStatus: contourTiles.getStatus() });
+    this.#releaseTerrainComputeStatus = contourTiles.subscribeStatus((status) => {
+      mapLayerStore.setState({ terrainComputeStatus: status });
+    });
+  }
 
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
@@ -235,6 +241,14 @@ export class MapLibreLayerController
     this.#visualModeLayerAnchors.clear();
     this.#applySequence += 1;
     this.#restoreController?.abort();
+  }
+
+  /** Releases map listeners, persistence work, protocols, and terrain compute resources. */
+  public dispose(): void {
+    const map = this.#map;
+    if (map !== null) this.detach(map);
+    this.#releaseTerrainComputeStatus();
+    this.contourTiles.dispose();
   }
 
   public setLayerVisibility(

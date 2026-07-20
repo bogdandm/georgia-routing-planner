@@ -103,6 +103,11 @@ export function createTestServices(
         demFilterEnabled = enabled;
         demFilterRevision += 1;
       },
+      setInteractionActive: () => undefined,
+      getStatus: () => 'worker',
+      subscribeStatus: () => () => undefined,
+      subscribeMetrics: () => () => undefined,
+      dispose: () => undefined,
     } satisfies ContourTileGenerator,
     logger,
     idGenerator,
@@ -121,6 +126,10 @@ export function createTestServices(
       healthChecks,
       mapDiagnostics,
     ),
+    dispose: () => {
+      mapLayers.dispose();
+      database.close();
+    },
     httpClient,
     idGenerator,
     logger,

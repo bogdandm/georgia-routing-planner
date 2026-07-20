@@ -202,6 +202,11 @@ describe('MapLibreLayerController', () => {
         setFilterEnabled: (enabled) => {
           void enabled;
         },
+        setInteractionActive: () => undefined,
+        getStatus: () => 'inline',
+        subscribeStatus: () => () => undefined,
+        subscribeMetrics: () => () => undefined,
+        dispose: () => undefined,
       },
       services.logger,
       services.idGenerator,

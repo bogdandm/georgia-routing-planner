@@ -1,6 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { userEvent } from '@testing-library/user-event';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -761,6 +761,30 @@ describe('WorkspaceShell', () => {
         },
       });
     });
+  });
+
+  it('shows compatibility mode only while terrain compute uses the inline backend', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+
+    expect(
+      screen.queryByText(/Terrain processing is running/u),
+    ).not.toBeInTheDocument();
+    act(() => {
+      mapLayerStore.setState({ terrainComputeStatus: 'inline' });
+    });
+    expect(
+      screen.getByText(/Terrain processing is running in compatibility mode/u),
+    ).toBeVisible();
+
+    act(() => {
+      mapLayerStore.setState({ terrainComputeStatus: 'worker' });
+    });
+    expect(
+      screen.queryByText(/Terrain processing is running/u),
+    ).not.toBeInTheDocument();
   });
 
   it('announces fatal map failures assertively', () => {

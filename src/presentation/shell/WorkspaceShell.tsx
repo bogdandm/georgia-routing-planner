@@ -56,6 +56,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     mapLayerStore,
     (state) => state.terrainOverlays,
   );
+  const terrainComputeStatus = useStore(
+    mapLayerStore,
+    (state) => state.terrainComputeStatus,
+  );
   const renderingTuningAbort = useRef<AbortController | null>(null);
   const developerModeChangedByUser = useRef(false);
   const navigationChangedByUser = useRef(false);
@@ -315,6 +319,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           void handleRenderingTuningChange(value);
         }}
         terrainOverlayPreferences={terrainOverlaySnapshot.preferences}
+        terrainComputeStatus={terrainComputeStatus}
         terrainOverlayError={
           terrainOverlayCommandError ?? terrainOverlaySnapshot.message
         }

@@ -1,0 +1,194 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  defaultMapProviderConfigurationInput,
+  parseMapProviderConfiguration,
+} from '@/bootstrap/configuration/MapProviderConfiguration';
+import type {
+  TerrainContourOptions,
+  TerrainContourTile,
+  TerrainDemResponse,
+} from '@/infrastructure/elevation/TerrainComputeBackend';
+import {
+  TerrainComputeWorkerServer,
+  type TerrainWorkerEngineFactory,
+} from '@/infrastructure/elevation/TerrainComputeWorkerServer';
+import type { TerrainWorkerInitializeRequest } from '@/infrastructure/elevation/TerrainComputeProtocol';
+import {
+  WorkerRpcClient,
+  type WorkerRpcEndpoint,
+} from '@/infrastructure/runtime/WorkerRpc';
+
+class MemoryEndpoint implements WorkerRpcEndpoint {
+  readonly messages = new Set<EventListener>();
+  readonly errors = new Map<'error' | 'messageerror', Set<EventListener>>();
+  peer: MemoryEndpoint | null = null;
+  closed = false;
+
+  public postMessage(message: unknown): void {
+    const peer = this.peer;
+    queueMicrotask(() => {
+      for (const listener of peer?.messages ?? []) {
+        listener(new MessageEvent('message', { data: message }));
+      }
+    });
+  }
+
+  public addEventListener(
+    type: 'message' | 'error' | 'messageerror',
+    listener: EventListener,
+  ): void {
+    if (type === 'message') this.messages.add(listener);
+    else {
+      const listeners = this.errors.get(type) ?? new Set();
+      listeners.add(listener);
+      this.errors.set(type, listeners);
+    }
+  }
+
+  public removeEventListener(
+    type: 'message' | 'error' | 'messageerror',
+    listener: EventListener,
+  ): void {
+    if (type === 'message') this.messages.delete(listener);
+    else this.errors.get(type)?.delete(listener);
+  }
+
+  public close(): void {
+    this.closed = true;
+  }
+}
+
+function pair(): readonly [MemoryEndpoint, MemoryEndpoint] {
+  const client = new MemoryEndpoint();
+  const server = new MemoryEndpoint();
+  client.peer = server;
+  server.peer = client;
+  return [client, server];
+}
+
+function initialization(): TerrainWorkerInitializeRequest {
+  return {
+    terrain: parseMapProviderConfiguration(
+      defaultMapProviderConfigurationInput,
+      'https://example.test/',
+    ).terrain,
+    requestTimeoutMs: 10_000,
+    filterEnabled: true,
+    revision: 0,
+    interactionActive: false,
+  };
+}
+
+describe('TerrainComputeWorkerServer', () => {
+  it('initializes one engine and returns owned transferable DEM and contour results', async () => {
+    const [clientEndpoint, serverEndpoint] = pair();
+    const contourBuffer = new Uint8Array([4, 5, 6]).buffer;
+    const engine = {
+      fetchTile: vi.fn((): Promise<TerrainDemResponse> =>
+        Promise.resolve({ data: new Blob([new Uint8Array([1, 2, 3])]) }),
+      ),
+      fetchContourTile: vi.fn(
+        (
+          _zoom: number,
+          _x: number,
+          _y: number,
+          _options: TerrainContourOptions,
+          _abortController: AbortController,
+        ): Promise<TerrainContourTile> =>
+          Promise.resolve({ arrayBuffer: contourBuffer }),
+      ),
+      setFilterEnabled: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const factory = vi.fn<TerrainWorkerEngineFactory>(() => engine);
+    const server = new TerrainComputeWorkerServer(serverEndpoint, factory);
+    const client = new WorkerRpcClient(clientEndpoint);
+    await client.request('initialize', initialization());
+
+    const dem = await client.request<{ readonly data: ArrayBuffer }>('dem', {
+      zoom: 5,
+      x: 8,
+      y: 9,
+      revision: 0,
+      priority: 'high',
+    });
+    const contour = await client.request<{ readonly data: ArrayBuffer }>('contour', {
+      zoom: 5,
+      x: 8,
+      y: 9,
+      revision: 0,
+      priority: 'low',
+      options: { levels: [50, 200], demFilterRevision: '0' },
+    });
+
+    expect(Array.from(new Uint8Array(dem.data))).toEqual([1, 2, 3]);
+    expect(Array.from(new Uint8Array(contour.data))).toEqual([4, 5, 6]);
+    expect(contour.data).not.toBe(contourBuffer);
+    expect(engine.fetchContourTile).toHaveBeenCalledWith(
+      5,
+      8,
+      9,
+      { levels: [50, 200] },
+      expect.any(AbortController),
+    );
+    expect(factory).toHaveBeenCalledOnce();
+    client.dispose();
+    server.dispose();
+  });
+
+  it('forwards cancellation and rejects results from an obsolete filter revision', async () => {
+    const [clientEndpoint, serverEndpoint] = pair();
+    let finish: ((value: TerrainDemResponse) => void) | undefined;
+    const fetchTile = vi.fn(
+      (_zoom: number, _x: number, _y: number, abortController: AbortController) =>
+        new Promise<TerrainDemResponse>((resolve, reject) => {
+          finish = resolve;
+          abortController.signal.addEventListener('abort', () => {
+            reject(
+              abortController.signal.reason instanceof Error
+                ? abortController.signal.reason
+                : new DOMException('Canceled', 'AbortError'),
+            );
+          });
+        }),
+    );
+    const factory: TerrainWorkerEngineFactory = () => ({
+      fetchTile,
+      fetchContourTile: () => Promise.resolve({ arrayBuffer: new ArrayBuffer(0) }),
+      setFilterEnabled: vi.fn(),
+      dispose: vi.fn(),
+    });
+    const server = new TerrainComputeWorkerServer(serverEndpoint, factory);
+    const client = new WorkerRpcClient(clientEndpoint);
+    await client.request('initialize', initialization());
+    const controller = new AbortController();
+    const canceled = client.request(
+      'dem',
+      {
+        zoom: 5,
+        x: 8,
+        y: 9,
+        revision: 0,
+        priority: 'high',
+      },
+      controller.signal,
+    );
+    controller.abort();
+    await expect(canceled).rejects.toMatchObject({ name: 'AbortError' });
+
+    const stale = client.request('dem', {
+      zoom: 5,
+      x: 8,
+      y: 9,
+      revision: 0,
+      priority: 'high',
+    });
+    await client.request('set-filter', { enabled: false, revision: 1 });
+    finish?.({ data: new Blob([new Uint8Array([1])]) });
+
+    await expect(stale).rejects.toMatchObject({ name: 'AbortError' });
+    client.dispose();
+    server.dispose();
+  });
+});

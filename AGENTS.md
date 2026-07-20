@@ -18,14 +18,16 @@ configuration, data, test, and maintenance changes must be made on a feature bra
 
 ## Parallel-agent worktrees
 
-Agents work in isolated Git worktrees by default. The maintainer may run up to four
-agents in parallel; each agent must use its own worktree and branch so its file edits,
-tests, and Git operations do not interfere with another agent's work.
+Every agent must create and use a fresh, dedicated Git worktree and purpose-specific
+branch for its task. Do not reuse the main repository checkout, another agent's
+worktree, or an old feature worktree merely because the agent started there. The
+maintainer may run up to four agents in parallel; separate worktrees keep their file
+edits, tests, and Git operations isolated.
 
-The main repository checkout may be switched to a branch when the maintainer explicitly
-requests it. Treat that checkout as maintainer-controlled: do not switch its branch,
-edit its files, or run Git operations there unless the request explicitly scopes the
-work to it.
+The only exception is when the maintainer directly instructs that agent to use the main
+repository checkout for the current task. Treat the main checkout as
+maintainer-controlled in every other case: do not switch its branch, edit its files, or
+run Git operations there.
 
 Before modifying files:
 
@@ -789,6 +791,14 @@ pnpm check          # all non-destructive CI checks
 
 If a command is not yet implemented, add it with the relevant implementation rather than
 documenting a different ad-hoc command.
+
+## Local servers and ports
+
+Before starting any local development, preview, test, or helper server, check that its
+intended TCP port has no listener. Never attempt to start a server on an unchecked or
+occupied port. If the port is occupied, do not terminate or replace the existing
+process; select an available port and pass it explicitly, unless the task requires the
+original port, in which case report the conflict before proceeding.
 
 ## Verification and definition of done
 

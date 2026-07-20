@@ -47,7 +47,7 @@ const linkSchema = z
   })
   .loose();
 
-const itemSchema = z
+export const earthSearchItemSchema = z
   .object({
     type: z.literal('Feature'),
     id: z.string().trim().min(1).max(300),
@@ -82,7 +82,7 @@ const contextSchema = z
 export const earthSearchFeatureCollectionSchema = z
   .object({
     type: z.literal('FeatureCollection'),
-    features: z.array(itemSchema),
+    features: z.array(earthSearchItemSchema),
     links: z.array(linkSchema).default([]),
     context: contextSchema.optional(),
     numberMatched: z.number().int().nonnegative().optional(),

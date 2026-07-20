@@ -19,6 +19,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  type SelectChangeEvent,
   Slider,
   Stack,
   Typography,
@@ -53,6 +54,11 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  consumeSatelliteSearchRequest,
+  mapInteractionStore,
+  setSatelliteSearchAnchor,
+} from '@/presentation/map/mapInteractionStore';
 import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import { appColors } from '@/presentation/theme/appColors';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
@@ -72,6 +78,24 @@ type SearchState =
   | { readonly status: 'loading' }
   | { readonly status: 'error'; readonly message: string }
   | { readonly status: 'success'; readonly result: SatelliteSearchResult };
+
+function SatelliteSearchRequestRunner({
+  canRun,
+  onRun,
+  requestId,
+}: {
+  readonly canRun: boolean;
+  readonly onRun: () => Promise<void>;
+  readonly requestId: number | null;
+}) {
+  useEffect(() => {
+    if (!canRun || requestId === null) return;
+    consumeSatelliteSearchRequest(requestId);
+    void onRun();
+  }, [canRun, onRun, requestId]);
+
+  return null;
+}
 
 const firstResultCount = 8;
 const resultPageSize = 8;
@@ -878,6 +902,19 @@ export function SatelliteBrowser({
     readViewport,
     readViewport,
   );
+  const satelliteSearchAnchor = useStore(
+    mapInteractionStore,
+    (state) => state.satelliteSearchAnchor,
+  );
+  const satelliteSearchRequest = useStore(
+    mapInteractionStore,
+    (state) => state.satelliteSearchRequest,
+  );
+  const searchViewport =
+    viewport === null || satelliteSearchAnchor === null
+      ? viewport
+      : { ...viewport, center: satelliteSearchAnchor };
+  const searchAreaSource = satelliteSearchAnchor === null ? 'viewport' : 'custom';
   const portalTarget = document.getElementById('satellite-results-pane');
 
   useEffect(() => {
@@ -888,9 +925,9 @@ export function SatelliteBrowser({
   }, []);
 
   const coordinates =
-    viewport === null
+    searchViewport === null
       ? fallbackCoordinates
-      : `${viewport.center.latitude.toFixed(4)}, ${viewport.center.longitude.toFixed(4)}`;
+      : `${searchViewport.center.latitude.toFixed(4)}, ${searchViewport.center.longitude.toFixed(4)}`;
   const restoredScene = useMemo(() => {
     if (
       mapLayers === null ||
@@ -941,7 +978,7 @@ export function SatelliteBrowser({
 
   const searchUnavailable = searchSatelliteScenes === null;
   const canSearch =
-    viewport !== null &&
+    searchViewport !== null &&
     !searchUnavailable &&
     searchState.status !== 'loading' &&
     !loadingMore;
@@ -1039,13 +1076,13 @@ export function SatelliteBrowser({
   };
 
   const runSearch = async () => {
-    if (viewport === null || searchSatelliteScenes === null) return;
+    if (searchViewport === null || searchSatelliteScenes === null) return;
     const range = searchMonthRange(calendarMonth, clock.now());
     const existingSearch = submittedSearch;
     if (
       existingSearch !== null &&
       searchState.status === 'success' &&
-      hasSameSubmittedCriteria(existingSearch, viewport)
+      hasSameSubmittedCriteria(existingSearch, searchViewport)
     ) {
       setResultsOpen(true);
       setLoadMoreError(null);
@@ -1061,7 +1098,7 @@ export function SatelliteBrowser({
     const controller = new AbortController();
     request.current = controller;
     setSubmittedSearch({
-      viewport,
+      viewport: searchViewport,
       productLevel: 'L2A',
       initialMonth: range.month,
     });
@@ -1075,7 +1112,7 @@ export function SatelliteBrowser({
     setAutoLoadAttempts(0);
     setSubmittedCoordinates(coordinates);
     setSubmittedTimeZone(
-      lookupTimeZone(viewport.center.latitude, viewport.center.longitude),
+      lookupTimeZone(searchViewport.center.latitude, searchViewport.center.longitude),
     );
     setResultsOpen(true);
     setSearchState({ status: 'loading' });
@@ -1083,7 +1120,7 @@ export function SatelliteBrowser({
     try {
       const result = await searchSatelliteScenes.execute(
         {
-          viewport,
+          viewport: searchViewport,
           startDate: range.startDate,
           endDate: range.endDate,
           productLevel: 'L2A',
@@ -1153,6 +1190,14 @@ export function SatelliteBrowser({
     setSearchState({ status: 'idle' });
     setResultsOpen(false);
     completeSatelliteRequest('Sentinel search cancelled');
+  };
+
+  const changeSearchAreaSource = (event: SelectChangeEvent) => {
+    if (event.target.value === 'custom') {
+      if (viewport !== null) setSatelliteSearchAnchor(viewport.center);
+      return;
+    }
+    setSatelliteSearchAnchor(null);
   };
 
   const applyMatch = (match: SatelliteSceneMatch) => {
@@ -1231,16 +1276,22 @@ export function SatelliteBrowser({
 
   return (
     <>
+      <SatelliteSearchRequestRunner
+        canRun={active && canSearch}
+        requestId={satelliteSearchRequest?.id ?? null}
+        onRun={runSearch}
+      />
       <Stack spacing={2} sx={{ p: 2 }}>
         <Select
           fullWidth
           size="small"
-          value="viewport"
+          value={searchAreaSource}
+          onChange={changeSearchAreaSource}
           inputProps={{ 'aria-label': 'Search area source' }}
           renderValue={() => (
             <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
               <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
-                Point
+                {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
               </Typography>
               <Divider orientation="vertical" flexItem />
               <Typography variant="body2" color="text.secondary" noWrap>
@@ -1250,6 +1301,7 @@ export function SatelliteBrowser({
           )}
         >
           <MenuItem value="viewport">Point</MenuItem>
+          <MenuItem value="custom">Custom</MenuItem>
           <MenuItem value="marker" disabled>
             Marker
           </MenuItem>
@@ -1335,7 +1387,7 @@ export function SatelliteBrowser({
           viewport !== null &&
           !searchUnavailable ? (
             <Typography variant="caption" color="text.secondary">
-              Point {coordinates} ·{' '}
+              {searchAreaSource === 'custom' ? 'Custom' : 'Point'} {coordinates} ·{' '}
               {monthFormatter.format(new Date(`${calendarMonth}-01T00:00:00.000Z`))} →
               older · highlight cloud ≤ {maxCloudCoverPercent}%
             </Typography>

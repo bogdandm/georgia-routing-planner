@@ -4,6 +4,7 @@ import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import {
   Box,
   ButtonBase,
@@ -26,6 +27,7 @@ interface WorkspaceRailProps {
   readonly developerMode: boolean;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
+  readonly onShare: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
   readonly onLogoClick: () => void;
 }
@@ -37,6 +39,7 @@ export function WorkspaceRail({
   developerMode,
   onToggleDeveloperTools,
   onOpenSettings,
+  onShare,
   onSectionChange,
   onLogoClick,
 }: WorkspaceRailProps) {
@@ -120,6 +123,21 @@ export function WorkspaceRail({
         <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
       </Tabs>
+
+      <Tooltip title="Share map view" placement="right">
+        <IconButton
+          aria-label="Share map view"
+          onClick={onShare}
+          sx={{
+            mx: 'auto',
+            mt: 0.5,
+            color: 'rgba(255,255,255,0.84)',
+            visibility: collapsed ? 'hidden' : 'visible',
+          }}
+        >
+          <ShareOutlinedIcon />
+        </IconButton>
+      </Tooltip>
 
       <Stack
         spacing={0.5}

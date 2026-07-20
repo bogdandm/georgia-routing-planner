@@ -1,15 +1,61 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import {
+  requestMapNavigation,
+  resetMapInteractionStore,
+} from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
 
 describe('MapWorkspace', () => {
+  beforeEach(() => {
+    resetMapInteractionStore();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('uses a valid explicit share view over local camera persistence', async () => {
+    window.history.replaceState(null, '', '/?map=1&lat=41.7&lon=44.8&z=13.25');
+    const services = createTestServices();
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace
+          facade={new FakeMapFacade()}
+          mapCanvas={(initialCamera) => (
+            <div>
+              Shared camera {initialCamera.latitude}, {initialCamera.longitude}, zoom{' '}
+              {initialCamera.zoom}
+            </div>
+          )}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(
+      await screen.findByText('Shared camera 41.7, 44.8, zoom 13.25'),
+    ).toBeVisible();
+  });
+
+  it('delivers serializable search navigation commands through the facade', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Map command canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Map command canvas');
+    act(() => {
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 14 });
+    });
+    expect(facade.navigationRequests).toEqual([
+      { latitude: 41.7, longitude: 44.8, zoom: 14 },
+    ]);
+  });
   it('publishes lifecycle state without mounting a duplicate local banner', () => {
     const facade = new FakeMapFacade();
     const services = createTestServices();

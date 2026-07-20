@@ -1,4 +1,5 @@
 import { ThemeProvider } from '@mui/material';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { userEvent } from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,9 +49,13 @@ afterEach(async () => {
 function renderWorkspaceShell() {
   return render(
     <RuntimeServicesProvider services={services}>
-      <ThemeProvider theme={createAppTheme()}>
-        <WorkspaceShell mapSurface={<div aria-label="Fake map">Local map ready</div>} />
-      </ThemeProvider>
+      <QueryClientProvider client={services.queryClient}>
+        <ThemeProvider theme={createAppTheme()}>
+          <WorkspaceShell
+            mapSurface={<div aria-label="Fake map">Local map ready</div>}
+          />
+        </ThemeProvider>
+      </QueryClientProvider>
     </RuntimeServicesProvider>,
   );
 }
@@ -104,6 +109,37 @@ function syntheticSatelliteScene(id: string, acquiredAt: string): SatelliteScene
 }
 
 describe('WorkspaceShell', () => {
+  it('creates a share link only after the explicit rail action', async () => {
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      camera: {
+        longitude: 44.80123,
+        latitude: 41.71234,
+        zoom: 12.35,
+        bearing: 18,
+        pitch: 35,
+      },
+    });
+    renderWorkspaceShell();
+
+    expect(window.location.search).toBe('');
+    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    expect(screen.getByRole('dialog', { name: 'Share this map view' })).toBeVisible();
+    const link = screen.getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Share link',
+    });
+    expect(link.value).toContain('map=1');
+    expect(link.value).toContain('lat=41.71234');
+    expect(window.location.search).toBe('');
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('z=12.35'));
+    expect(await screen.findByText('Share link copied')).toBeVisible();
+  });
+
   it('navigates the contextual feature panels without covering the map', async () => {
     const user = userEvent.setup();
     services.mapViewport.update(testViewport);

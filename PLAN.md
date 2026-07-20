@@ -1,198 +1,108 @@
-# Filtered Terrarium DEM Implementation Plan
+# Map Discovery and Sharing Implementation Plan
 
 ## 1. Branch and approval boundary
 
-- Active worktree: `.codex-worktrees/filtered-dem`.
-- Active branch: `feature/filtered-terrarium-dem`.
-- Branch base: merged terrain-overlay state on `main` at `90f801d`.
-- Approval boundary: all implementation remains on this feature branch until the
-  reviewed pull-request state is explicitly approved for integration into `main`.
-- The unrelated `fix/client-side-cloud-highlighting` working tree was preserved in the
-  named stash `user-wip-before-terrain-overlays` before this branch was created.
+- Active branch: `feature/map-discovery-sharing`.
+- Branch base: finalized `feature/camera-interactions`, followed by the latest
+  `origin/main` merge on 2026-07-20 after the filtered Terrarium fixes.
+- Approval boundary: all implementation remains on this feature branch until the draft
+  pull request is reviewed and explicitly approved for integration into `main`.
 
 ## 2. Required outcome
 
-Add two independently controllable terrain overlays to the long-lived MapLibre map:
+Complete the desktop map-discovery bundle without replacing MapLibre's native camera
+semantics:
 
-1. A hillshade/relief layer that is always available.
-2. An elevation-isoline layer with configurable contour spacing.
+1. Add native device-location navigation without writing device coordinates to the URL.
+2. Add submit-driven place search through a replaceable, policy-compliant Nominatim
+   gateway plus direct coordinate entry.
+3. Add explicit versioned share links containing center, zoom, and an optional applied
+   Sentinel scene. Normal camera movement must not mutate the browser URL.
+4. Add a Share action immediately below Layers in the workspace rail.
+5. Add a map context menu for copying coordinates, sharing the clicked point, and using
+   that point as the satellite-search anchor.
+6. Restore accessible click inspection with formatted coordinates, terrain elevation,
+   and deterministic nearby OSM POI selection.
 
-Default contour spacing is 50 m for minor lines and 200 m for emphasized, labeled index
-lines. Contours appear only at a zoom level where that density remains readable and
-useful. Styling follows the supplied references and reviewed palette: low-contrast
-neutral relief, blue minor/index contours, orange roads and paths, green vegetation,
-pale-blue glaciers, red restricted areas, and a neutral-grey vector base. Satellite mode
-retains those meanings with stronger line contrast and lighter polygon coverage.
+The isolated terrain diorama and vertical POI leader labels remain out of scope.
 
-The normal native layer order is:
+## 3. Architecture and durable decisions
 
-```text
-base map
--> relief shade
--> satellite imagery
--> elevation isolines
--> OSM data layers
-```
-
-A rendering setting can move relief shade above satellite imagery:
-
-```text
-base map
--> satellite imagery
--> relief shade
--> elevation isolines
--> OSM data layers
-```
-
-The setting changes order without remounting MapLibre, losing the selected satellite
-scene, or altering the visibility of unrelated logical layers.
-
-## 3. Architecture and decisions to validate
-
-- Extend the existing typed map-layer controller and stable native ID registry; do not
-  expose the MapLibre instance outside the map adapter.
-- Use a replaceable elevation raster-dem provider with explicit attribution, CORS, and
-  usage-policy documentation. Reuse the same DEM source for hillshade and client-side
-  contour generation when MapLibre and the selected contour library support it.
-- Generate contours in the browser from bounded terrain tiles; do not introduce a
-  project backend or embed secrets in `VITE_*` configuration.
-- Keep rendering preferences serializable and validated. Persist them through the
-  existing map-layer preferences owner rather than adding a second authoritative store.
-- Treat hillshade as an always-available map capability: it remains usable without a
-  satellite scene and is restored after style or terrain lifecycle changes.
-- Start contours at the first zoom where default 50 m lines are legible without visual
-  clutter. The initial implementation target is zoom 11, subject to fixture tests and a
-  current-Chrome visual check against the supplied reference.
-- Apply contour-distance changes atomically and preserve the current map camera and all
-  unrelated sources/layers.
+- Keep camera commands, rendered-vector queries, and native click/context events behind
+  the typed `MapFacade`; React consumes only serializable commands and inspection state.
+- Keep device geolocation in MapLibre's native `GeolocateControl`. Camera persistence
+  remains the only automatic persistence path; share parameters are created only by an
+  explicit Share or point-menu action.
+- Use a versioned query contract with bounded numeric parsing and stable defaults.
+  Unknown versions or malformed values fall back to the existing local camera.
+- Submit text search only. The public Nominatim service forbids client-side autocomplete
+  and caps application traffic at one request per second. Keep the endpoint replaceable,
+  cache identical query-and-area requests, validate JSON with Zod, and show OSM
+  attribution. Accumulate unique results while doubling the viewport-bounded search to a
+  500 km radius even after nearer matches are found.
+- A direct coordinate submission never contacts Nominatim. Accept clearly labelled
+  `lat, lon` and `lon, lat` forms; reject pairs where both orders are plausible unless
+  the user supplies a `lat`/`lon` label.
+- Nearby POI inspection uses the existing validated OpenMapTiles source layers and a 100
+  m geodesic radius. Sort first by exact distance and then by stable feature identity.
+- Reuse MapLibre terrain elevation when available and the configured raster DEM as the
+  flat-map fallback. A map click closes an onscreen popup; the following click opens the
+  next inspection. An offscreen popup is replaced immediately. Abort older samples when
+  the popup closes.
+- Diagnostics record bounded outcomes, durations, counts, and coarse status only. They
+  never include exact coordinates, search text, shared URLs, or arbitrary POI metadata.
 
 ## 4. Work packages and commit sequence
 
-### T1. Provider contract and terrain source — Done
+### T1. Versioned navigation and explicit sharing
 
-- Inspect the existing base-map, terrain, satellite, visibility, diagnostics, and
-  preference flows.
-- Add validated provider configuration for the elevation tiles required by both
-  overlays, including safe public defaults or an explicit unavailable state.
-- Add stable source/layer IDs and typed overlay preferences.
-- Document endpoint policy, attribution, replacement, and failure behavior.
-- Test configuration validation, ID ownership, and source creation.
+- Add the versioned URL codec and initial-camera override.
+- Add serializable map navigation commands and native geolocation control.
+- Add Share below Layers, copy-link dialog, satellite scene encoding/restoration, and
+  transient copy confirmations.
+- Add the accessible map context menu and satellite anchor handoff.
+- Cover parsing defaults, privacy boundaries, keyboard interaction, and copy failures.
 
-Commit: `feat(map): define terrain overlay sources`
+Commit: `feat(map): add explicit location sharing`
 
-### T2. Relief shade and deterministic layer ordering — Done
+### T2. Policy-compliant place search
 
-- Render a low-contrast hillshade layer whenever the map style is ready.
-- Insert it below satellite imagery by default.
-- Add the rendering preference that moves hillshade above or below satellite imagery.
-- Reconcile order after map style reloads, satellite apply/switch/remove operations, and
-  terrain changes without duplicate sources, layers, or listeners.
-- Add typed diagnostic events/snapshots for initialization, order changes, and bounded
-  failures.
-- Test both order variants, idempotency, restoration, missing-layer recovery, and
-  satellite switching.
+- Add the place-search gateway, use case, Nominatim adapter, schema validation, caching,
+  request pacing, cancellation, and safe diagnostics.
+- Replace the disabled search placeholder with submit-driven place/coordinate search.
+- Add loading, empty, invalid, provider-error, and result-selection behavior.
+- Stream deduplicated inner-to-outer matches into the result list while wider searches
+  remain in progress, preventing nearby same-name features from hiding settlements.
+- Normalize provider categories and prioritize settlements, administrative place
+  boundaries, mountains, and water; keep streets and other POIs behind an explicit
+  secondary-results action.
+- Document provider policy, attribution, privacy, and replacement configuration.
 
-Commit: `feat(map): add configurable relief shading`
+Commit: `feat(map): add place and coordinate search`
 
-### T3. Elevation isolines and interval settings — Done
+### T3. Accessible point inspection
 
-- Add client-side contour generation from the configured elevation tiles.
-- Render minor and index lines above satellite imagery and below all OSM data layers.
-- Use 50 m minor and 200 m index intervals by default; label index contours only.
-- Add rendering controls for contour distance while retaining a clear 200 m major-line
-  cadence. Validate bounds and reject combinations that cannot be represented safely.
-- Start rendering at the selected minimum zoom and clean up generated resources
-  deterministically.
-- Test interval expressions/options, minimum zoom, layer placement, preference changes,
-  cancellation/failure, and cleanup.
+- Restore the typed MapLibre inspection adapter and serializable state.
+- Reuse the configured DEM and vector source layers for elevation and nearby POIs.
+- Add deterministic 100 m selection, cancellation/race handling, error states, and
+  privacy-safe diagnostics.
+- Cover popup accessibility, DEM decoding, POI selection, and the click-to-close gate.
 
-Commit: `feat(map): render configurable elevation isolines`
+Commit: `feat(map): restore accessible point inspection`
 
-### T4. Settings, persistence, and accessibility — Done
+### T4. Documentation and browser verification
 
-- Add compact controls to the existing Settings > Rendering surface for contour distance
-  and shade-over-satellite ordering.
-- Clearly describe index versus minor contour behavior and the visual effect of the
-  shade-order toggle.
-- Persist validated preferences and repair unsupported stored values to defaults.
-- Expose independent, durable Relief shading and Elevation isolines visibility controls
-  in the Layers tab while keeping interval and ordering controls in Settings.
-- Cover keyboard interaction, accessible names, help text, and live failure feedback.
-- Test fresh defaults, round trips, migration/repair, component interaction, and map
-  command synchronization.
+- Update `README.md`, stable feature/structure/runtime/provider documentation, and the
+  docs index only when ownership changes require it.
+- Verify native camera behavior remains intact and visually check search, geolocation,
+  sharing, context actions, copy feedback, and point-inspection states in current
+  Chrome.
+- Run the complete proportionate verification gate and capture any documented managed
+  Windows coverage fallback.
 
-Commit: `feat(settings): configure terrain overlays`
-
-### T5. Documentation and workflow hardening — Done
-
-- Update stable feature, structure, runtime-flow, provider, setup, and docs-index
-  content wherever ownership or behavior changes.
-- Add a controlled-browser workflow only if source/layer ordering across the real
-  MapLibre lifecycle cannot be proven below the browser boundary.
-- Perform a current stable Chrome visual check at representative Georgia mountain zooms
-  with and without satellite imagery, comparing contrast and density to the supplied
-  reference.
-- Confirm attribution remains visible and public-network access is not required by
-  automated tests.
-
-Commit: `docs(map): describe terrain overlay behavior`
-
-### T6. Unified map palette and feature context — Done
-
-- Centralize semantic map colors and vector/satellite contrast paints.
-- Replace brown contours with the UI primary-blue family and use secondary-orange shades
-  for roads, tracks, footways, and steps.
-- Add explicit vegetation, glacier, and provider-supported restricted-area rendering.
-- Prefer English labels, then provider transliteration, before native-name fallback.
-- Preserve imagery detail by removing land-cover fills in satellite mode and retaining
-  high-contrast true line features and label halos.
-- Avoid decorative outlines on tiled surface polygons; keep only the intentional
-  restricted-area perimeter.
-- Add durable Layers controls for the combined natural-feature polygons and restricted
-  areas, under the OpenStreetMap provider heading.
-- Document the private-access data limitation and reserve bright blue for future GPX.
-
-Commit: `feat(map): unify overlay palette and labels`
-
-### T7. Filtered Terrarium source — Done
-
-- Confirm the reported native tile and eight neighbors numerically before selecting
-  thresholds. Tile `15/20448/12164` contains one full −710 m scanline at local row 5;
-  the eastern neighbor continues it while other adjacent tiles are clean.
-- Add validated physical bounds, sentinel values, robust median/MAD thresholds, and a
-  bounded processed-PNG cache.
-- Decode and re-encode with browser APIs, honor abort and timeout, use neighboring-tile
-  context, and supply one filtered source to relief, 3D terrain, and contours.
-- Add deterministic synthetic tests for unchanged terrain, no-data, positive/negative
-  spikes, coherent ridges, tile edges, the observed scanline, cancellation, and bounds.
-- Update permanent provider, runtime, feature, structure, and setup documentation.
-- Expose a locally persisted, default-enabled Settings switch that reloads the shared
-  relief, 3D, and contour sources together when invalid-pixel repair changes.
-- Verify the repaired 3D terrain and isolines around the affected lake in the opened
-  local browser, then commit in reviewable units and open a draft pull request.
-
-Planned commits:
-
-1. `fix(map): filter corrupt Terrarium elevation pixels`
-2. `docs(map): describe filtered Terrarium processing`
-
-### T8. Native camera interaction — Done
-
-- Keep MapLibre's desktop pan, wheel/double-click zoom, keyboard, touch, compass, and
-  pitch semantics, with a focused 3D-only middle-drag orbit around the pressed terrain
-  point at restrained sensitivity; leave right drag to the browser.
-- Show a small terrain-anchored pivot ring while middle drag is active, then remove it
-  on release, cancellation, teardown, or return to 2D.
-- Persist camera and terrain mode as one serializable view, restore 3D after reload, and
-  reset pitch plus bearing when switching to 2D.
-- Cover conventional camera gestures, pivot stability, compass reset, keyboard control,
-  camera persistence, and 2D/3D transitions with focused and Chromium tests.
-
-Commit: `feat(map): refine native camera interactions`
+Commit: `docs(map): describe discovery and sharing`
 
 ## 5. Verification
-
-Run the smallest relevant checks after each work package, followed by the complete gate:
 
 ```text
 pnpm typecheck
@@ -202,71 +112,22 @@ pnpm test
 pnpm test:integration
 pnpm test:coverage
 pnpm build
-pnpm e2e                 # only when required by the final MapLibre lifecycle scope
+pnpm e2e
 rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
 git diff --check
 ```
 
 ## 6. Definition of done
 
-- Relief shade is available independently of satellite imagery and defaults below it.
-- The rendering toggle reliably moves shade above satellite imagery and survives
-  refresh/style restoration.
-- Default contours use 50 m minor and 200 m major intervals, with readable labels and a
-  defensible minimum zoom.
-- User-selected contour spacing is validated, persisted, and applied without map
-  remounts or camera loss.
-- Native order is base, shade/satellite according to preference, isolines, OSM data,
-  then existing user-owned overlays where applicable.
-- Provider failures leave the base map and all unrelated controls usable and produce
-  privacy-safe diagnostics.
-- Focused tests, relevant browser evidence, documentation checks, and the production
-  build pass.
-- Intended changes are committed in reviewable units, pushed, and available in a draft
-  pull request targeting `main`.
-
-## 7. Verification evidence
-
-Verified on 2026-07-19:
-
-- Formatting, lint, strict type checking, repository audit, documentation-boundary grep,
-  and diff validation pass.
-- 180 unit/component tests and 18 integration tests pass.
-- Coverage passes with 88.5% statements, 78.97% branches, 90% functions, and 90.75%
-  lines across 180 tests. The canonical run exposed only managed-workspace timing
-  contention; the documented two-worker, ten-second-ceiling rerun passed completely.
-- The production build passes. The existing large-bundle advisory remains non-blocking.
-- All 12 controlled Chromium workflows pass with two workers, including axe checks,
-  terrain failure recovery, diagnostics export, Sentinel ordering, and durable relief /
-  isoline visibility from Layers.
-- A live current-Chrome check confirmed that the combined Natural features control
-  updates immediately and restores enabled, provider attribution remains clickable on
-  the map, the Layers sidebar contains no raw attribution markup, and rapid
-  contour-producing zoom changes recover to Ready without detached-buffer errors.
-- The supplied diagnostics bundle was traced to a cached contour `ArrayBuffer` being
-  transferred more than once. The protocol adapter now clones each delivery while
-  preserving the cache-owned buffer, with a regression test for repeated cache hits.
-
-Verified on 2026-07-20 for the filtered Terrarium source:
-
-- The failing 3x3 native-tile neighborhood was decoded numerically. Tiles
-  `15/20448/12164` and `15/20449/12164` each contain exactly 256 impossible negative
-  values in local row 5, with minima of -710.68 m and -701.53 m. The scanline crosses
-  their shared tile boundary; adjacent rows and the other seven tiles remain plausible.
-- Formatting, lint, strict type checking, documentation-boundary grep, diff validation,
-  177 unit/component tests, 18 integration tests, and the production build pass.
-- Bounded-concurrency coverage passes across 195 tests with 88.08% statements, 79.37%
-  branches, 90.46% functions, and 90.19% lines. The canonical run exposed only the
-  documented managed-workspace five-second `WorkspaceShell` timeouts.
-- All twelve controlled Chromium workflows pass. Overlapping DEM neighborhoods now
-  coalesce source fetch/decode work, expected source-replacement cancellations do not
-  degrade the map, and DEM plus contour timings use bounded aggregate diagnostics so
-  lifecycle evidence remains visible.
-- CI serializes Chromium because concurrent WebGL, DEM, and contour work exceeded the
-  hosted runner's measured 30-second workflow ceiling; local runs retain two workers.
-- The opened current-Chrome build was verified in 3D around `42.0768, 44.5653`. The lake
-  and its isolines render coherently with no rectangular trench or contour collapse, and
-  diagnostics report the map ready with the shared terrain, relief, and contour sources.
-- The default-enabled invalid-pixel repair switch was disabled, persisted across reload,
-  re-enabled, and followed by a successful live 3D transition. The map remained Ready
-  while both DEM and contour tile templates reloaded together.
+- Device location is opt-in, remains local, and does not appear in the URL unless the
+  user explicitly creates a share link.
+- Share links restore center and zoom, tolerate missing/older parameters, and restore a
+  valid optional Sentinel scene without accepting arbitrary provider URLs.
+- Place search respects Nominatim policy, direct coordinates remain local, and every
+  loading/empty/error state is intentional and accessible.
+- Map context actions use the exact clicked point without logging it.
+- Point inspection resolves elevation and the deterministic nearest POI within 100 m.
+  Clicking while it is open closes it without inspecting that click; stale asynchronous
+  results can never reopen a closed inspection.
+- Camera persistence and finalized native camera interactions remain passing.
+- Intended commits are pushed and available in a draft pull request targeting `main`.

@@ -24,6 +24,11 @@ worktree, or an old feature worktree merely because the agent started there. The
 maintainer may run up to four agents in parallel; separate worktrees keep their file
 edits, tests, and Git operations isolated.
 
+Each worktree must also use a distinct, explicit development-server port. Check that the
+chosen port is free before starting Vite and pass both `--port <port>` and
+`--strictPort`; do not rely on Vite's automatic port fallback, because browser review
+could otherwise open a different worktree's server.
+
 The only exception is when the maintainer directly instructs that agent to use the main
 repository checkout for the current task. Treat the main checkout as
 maintainer-controlled in every other case: do not switch its branch, edit its files, or

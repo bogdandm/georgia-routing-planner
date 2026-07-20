@@ -93,6 +93,38 @@ The base source, support endpoints, layer mapping, and attribution are parsed
 configuration. Replacing OpenFreeMap therefore requires a compatible TileJSON/schema
 configuration and style-mapping review, not changes to React workflows.
 
+## Place search: public Nominatim
+
+The replaceable default place-search endpoint is the public OpenStreetMap Nominatim
+Search API. Search is submit-only because the public usage policy forbids client-side
+autocomplete. Each request supplies a bounded `viewbox`; the application begins with the
+visible viewport and doubles the bounded area until it reaches a 500 km radius from the
+original viewport center. Matches from narrower areas remain first while wider responses
+append new displayed name-and-category combinations. This collapses one named street
+split across several OSM ways without suppressing same-name features whose full location
+labels differ, and avoids allowing a nearby road or business name to hide a more distant
+settlement. Provider categories are normalized into settlements, administrative areas,
+mountains, water, and other results. Settlement classification uses explicit OSM place
+types rather than the whole `place` category, keeping squares and similar objects out of
+the default list. The first four categories are visible by default; streets, businesses,
+and other POIs require the explicit secondary-results action.
+
+JSONv2 `category` and `type` are the result object's open-ended primary OSM tag, not a
+stable Nominatim enum. The adapter therefore allowlists reviewed tags: cities, towns,
+villages, hamlets, and isolated dwellings; administrative boundaries; peaks, ranges,
+ridges, saddles, volcanoes, and mountain passes; and named rivers, streams, canals,
+waterfalls, springs, bays, straits, and water bodies. Every other tag is
+deterministically classified as `other`. Requests select the `address`, `natural`, and
+`manmade` provider layers so POI and railway matches cannot consume the bounded result
+quota. Raw tag values are retained at the port boundary while presentation converts them
+to readable labels.
+
+The adapter enforces a minimum one-second interval between network requests, caches
+query-and-viewbox responses for five minutes, limits each provider response to the
+configured maximum, validates JSON with Zod, and exposes typed timeout, rate-limit,
+invalid-response, provider, and network failures. Queries and result metadata are not
+written to diagnostics. UI attribution links to the OpenStreetMap copyright page.
+
 ## Terrain: AWS Open Data Mapzen Terrain Tiles
 
 The terrain default is

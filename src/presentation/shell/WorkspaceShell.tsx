@@ -13,6 +13,7 @@ import {
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
+import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
@@ -44,6 +45,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [renderingTuning, setRenderingTuning] = useState<SatelliteRenderingTuning>(
     () => mapLayers?.getRenderingTuning() ?? defaultSatelliteRenderingTuning,
   );
@@ -238,6 +240,9 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           onOpenSettings={() => {
             setSettingsOpen(true);
           }}
+          onShare={() => {
+            setShareOpen(true);
+          }}
           onLogoClick={() => {
             handleNavigationCollapsedChange(!navigationCollapsed);
           }}
@@ -319,6 +324,12 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           terrainOverlayCommandError ?? terrainOverlaySnapshot.message
         }
         onTerrainOverlayPreferencesChange={handleTerrainOverlayPreferencesChange}
+      />
+      <ShareMapDialog
+        open={shareOpen}
+        onClose={() => {
+          setShareOpen(false);
+        }}
       />
       {developerMode ? (
         <DeveloperDrawer

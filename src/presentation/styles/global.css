@@ -25,6 +25,19 @@ body {
   margin: 0 0 6px;
 }
 
+/* MapLibre renders navigation and geolocation as separate native control groups.
+   Join them visually so they read as one conventional camera-control stack. */
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group:has(.maplibregl-ctrl-compass) {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) {
+  margin-top: -6px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .map-orbit-pivot {
   width: 14px;
   height: 14px;
@@ -35,4 +48,65 @@ body {
     0 0 0 2px rgb(25 118 210 / 75%),
     0 1px 5px rgb(0 0 0 / 42%);
   pointer-events: none;
+}
+
+.map-point-inspector__anchor {
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1976d2;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+}
+
+.map-point-inspector .maplibregl-popup-content {
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 28%);
+  color: #243238;
+  font:
+    400 0.875rem/1.35 Roboto,
+    Arial,
+    sans-serif;
+}
+
+.map-point-inspector__content {
+  display: grid;
+  min-width: 220px;
+  gap: 8px;
+}
+
+.map-point-inspector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.map-point-inspector__close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font:
+    400 1.35rem/1 Arial,
+    sans-serif;
+  cursor: pointer;
+}
+
+.map-point-inspector__close:hover,
+.map-point-inspector__close:focus-visible {
+  background: rgb(25 118 210 / 10%);
+  outline: 2px solid transparent;
+}
+
+.map-point-inspector__label {
+  color: #60717a;
+  font-size: 0.75rem;
+}
+
+.map-point-inspector__value {
+  overflow-wrap: anywhere;
 }

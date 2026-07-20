@@ -96,17 +96,19 @@ describe('MiddleMouseCameraControl', () => {
     expect(pivot.show).not.toHaveBeenCalled();
   });
 
-  it('blocks native right-button camera input and removes listeners on detach', () => {
+  it('leaves native right-button and context-menu events available', () => {
     const container = document.createElement('div');
-    const bubbleListener = vi.fn();
-    container.addEventListener('mousedown', bubbleListener);
+    const mouseDownListener = vi.fn();
+    const contextMenuListener = vi.fn();
+    container.addEventListener('mousedown', mouseDownListener);
+    container.addEventListener('contextmenu', contextMenuListener);
     const control = new MiddleMouseCameraControl(createPivotDouble());
     control.attach(container);
     container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
-    expect(bubbleListener).not.toHaveBeenCalled();
+    container.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
 
+    expect(mouseDownListener).toHaveBeenCalledOnce();
+    expect(contextMenuListener).toHaveBeenCalledOnce();
     control.detach();
-    container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
-    expect(bubbleListener).toHaveBeenCalledOnce();
   });
 });

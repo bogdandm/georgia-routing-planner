@@ -21,6 +21,7 @@ class FakeNativeMap {
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
   public repaintCalls = 0;
+  public terrainElevation: number | null = null;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -123,6 +124,14 @@ class FakeNativeMap {
     this.repaintCalls += 1;
   }
 
+  public queryTerrainElevation(): number | null {
+    return this.terrainElevation;
+  }
+
+  public querySourceFeatures(): [] {
+    return [];
+  }
+
   public fire(type: string, event?: unknown): void {
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
@@ -146,7 +155,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(6);
+    expect(nativeMap.listenerCount()).toBe(7);
 
     nativeMap.fire('load');
     nativeMap.addSource('late-style-source', { type: 'geojson' });
@@ -286,7 +295,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(9);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -298,7 +307,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(9);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);
@@ -502,6 +511,119 @@ describe('MapLibreFacade', () => {
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'ready',
       recoverableFailures: [],
+    });
+  });
+
+  it('ignores routine cancelled tile requests without notifying subscribers', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const subscriber = vi.fn();
+    facade.subscribe(subscriber);
+
+    nativeMap.fire('error', {
+      error: { name: 'AbortError', message: 'The tile request was aborted.' },
+      sourceId: 'basemap-vector',
+    });
+
+    expect(subscriber).not.toHaveBeenCalled();
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      recoverableFailures: [],
+    });
+    expect(
+      services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
+    ).toHaveLength(0);
+  });
+
+  it('closes an open inspection on the next map click and opens another on the following click', async () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    nativeMap.addSource('basemap-vector', { type: 'vector' });
+    const samples: ((value: { status: 'available'; meters: number }) => void)[] = [];
+    const elevationProvider = {
+      sample: () =>
+        new Promise<{ status: 'available'; meters: number }>((resolve) => {
+          samples.push(resolve);
+        }),
+    };
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      {
+        terrain: provider.value.terrain,
+        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+        sourceLayers: { pois: 'poi', peaks: 'mountain_peak' },
+        requestTimeoutMs: 100,
+        equivalentErrorWindowMs: 10_000,
+      },
+      undefined,
+      undefined,
+      elevationProvider,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('click', { lngLat: { lng: 44.801234, lat: 41.712345 } });
+    nativeMap.fire('click', { lngLat: { lng: 45.123456, lat: 42.234567 } });
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+    expect(popup.close).toHaveBeenCalledOnce();
+
+    nativeMap.fire('click', { lngLat: { lng: 45.123456, lat: 42.234567 } });
+    samples[1]?.({ status: 'available', meters: 900 });
+    await Promise.resolve();
+    samples[0]?.({ status: 'available', meters: 100 });
+    await Promise.resolve();
+
+    expect(facade.getPointInspection()).toMatchObject({
+      coordinate: { longitude: 45.123456, latitude: 42.234567 },
+      elevation: { status: 'available', meters: 900 },
+      nearbyPoi: { status: 'none' },
+    });
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain('45.123456');
+    facade.closePointInspection();
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
+  it('replaces an inspection immediately when its popup is outside the map viewport', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(false),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+
+    nativeMap.fire('click', { lngLat: { lng: 45.1, lat: 42.2 } });
+
+    expect(popup.close).toHaveBeenCalledOnce();
+    expect(facade.getPointInspection()).toMatchObject({
+      status: 'open',
+      coordinate: { longitude: 45.1, latitude: 42.2 },
     });
   });
 

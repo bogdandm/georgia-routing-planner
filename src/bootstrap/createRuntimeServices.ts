@@ -3,8 +3,10 @@ import type { KyInstance } from 'ky';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
+import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
@@ -15,12 +17,15 @@ import {
   summarizeMapProviderConfiguration,
   type MapProviderConfigurationResult,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
+import { loadGeocodingProviderConfiguration } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
 import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
+import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
+import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
@@ -40,6 +45,7 @@ export interface RuntimeServices {
   readonly httpClient: KyInstance;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
+  readonly elevationProvider: ElevationProvider | null;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
@@ -49,6 +55,7 @@ export interface RuntimeServices {
   readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
+  readonly searchPlaces: SearchPlaces | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
   readonly storageUsage: StorageUsageReader;
 }
@@ -120,6 +127,33 @@ export function createRuntimeServices(): RuntimeServices {
         )
       : null;
   const httpClient = createHttpClient(logger, clock, idGenerator);
+  const elevationProvider =
+    mapProviderConfiguration.status === 'valid'
+      ? new RasterDemElevationProvider(
+          httpClient,
+          mapProviderConfiguration.value.terrain,
+          idGenerator,
+        )
+      : null;
+  const geocodingConfiguration = loadGeocodingProviderConfiguration(
+    import.meta.env.VITE_GEOCODING_PROVIDER_CONFIGURATION,
+  );
+  const searchPlaces =
+    geocodingConfiguration.status === 'valid'
+      ? new SearchPlaces(
+          new NominatimPlaceSearchGateway(
+            httpClient,
+            geocodingConfiguration.value,
+            idGenerator,
+          ),
+          logger,
+          idGenerator,
+          clock,
+        )
+      : null;
+  if (searchPlaces === null) {
+    logger.log({ level: 'warn', name: 'place-search.configuration.invalid' });
+  }
   const satelliteCatalogGateway =
     mapProviderConfiguration.status === 'valid'
       ? new EarthSearchSatelliteCatalogGateway(
@@ -202,6 +236,7 @@ export function createRuntimeServices(): RuntimeServices {
     httpClient,
     idGenerator,
     logger,
+    elevationProvider,
     mapCameraRepository,
     mapDiagnostics,
     mapViewport,
@@ -211,6 +246,7 @@ export function createRuntimeServices(): RuntimeServices {
     loadSatelliteAvailability,
     satelliteCatalogGateway,
     searchSatelliteScenes,
+    searchPlaces,
     sentinelQueryDiagnostics,
     storageUsage,
   };

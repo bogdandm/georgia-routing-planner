@@ -32,7 +32,6 @@ export class MiddleMouseCameraControl {
     this.#container = container;
     this.#map = map ?? null;
     container.addEventListener('mousedown', this.handleMouseDown, true);
-    container.addEventListener('contextmenu', this.handleContextMenu, true);
     container.addEventListener('auxclick', this.handleAuxClick, true);
   }
 
@@ -45,7 +44,6 @@ export class MiddleMouseCameraControl {
     const container = this.#container;
     if (container !== null) {
       container.removeEventListener('mousedown', this.handleMouseDown, true);
-      container.removeEventListener('contextmenu', this.handleContextMenu, true);
       container.removeEventListener('auxclick', this.handleAuxClick, true);
     }
     this.finishGesture();
@@ -55,11 +53,6 @@ export class MiddleMouseCameraControl {
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
-    if (event.button === 2) {
-      // Right drag remains available to the browser instead of changing the camera.
-      event.stopImmediatePropagation();
-      return;
-    }
     if (event.button !== 1 || this.#container === null) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -105,10 +98,6 @@ export class MiddleMouseCameraControl {
     event.preventDefault();
     event.stopImmediatePropagation();
     this.finishGesture();
-  };
-
-  private readonly handleContextMenu = (event: MouseEvent): void => {
-    event.stopImmediatePropagation();
   };
 
   private readonly handleAuxClick = (event: MouseEvent): void => {

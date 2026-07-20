@@ -60,6 +60,23 @@ const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterB, layerId: sentinelMapLayerIds.rasterB },
 ] as const;
 
+const openStreetMapOpacityProperties = {
+  [mapLayerIds.landcover]: ['fill-opacity'],
+  [mapLayerIds.glacierAreas]: ['fill-opacity'],
+  [mapLayerIds.water]: ['fill-opacity'],
+  [mapLayerIds.restrictedAreas]: ['line-opacity'],
+  [mapLayerIds.hikingPaths]: ['line-opacity'],
+  [mapLayerIds.hikingSteps]: ['line-opacity'],
+  [mapLayerIds.roadCasings]: ['line-opacity'],
+  [mapLayerIds.roads]: ['line-opacity'],
+  [mapLayerIds.roadLabels]: ['text-opacity'],
+  [mapLayerIds.hikingPois]: ['circle-opacity', 'circle-stroke-opacity'],
+  [mapLayerIds.hikingPoiLabels]: ['text-opacity'],
+  [mapLayerIds.peaks]: ['circle-opacity', 'circle-stroke-opacity'],
+  [mapLayerIds.peakLabels]: ['text-opacity'],
+  [mapLayerIds.placeLabels]: ['text-opacity'],
+} as const satisfies Readonly<Record<string, readonly string[]>>;
+
 const maximumRasterRecoveryAttempts = 3;
 const rasterRecoveryBaseDelayMs = 1_000;
 const rasterSourceStabilityMs = 2_000;
@@ -252,6 +269,8 @@ export class MapLibreLayerController
   #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
+  #appliedOpenStreetMapOpacity: number | null = null;
+  readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
   #stagingSourceId: string | null = null;
 
@@ -296,6 +315,8 @@ export class MapLibreLayerController
     this.#map = null;
     this.#appliedVisualMode = null;
     this.#visualModeLayerAnchors.clear();
+    this.#appliedOpenStreetMapOpacity = null;
+    this.#openStreetMapOpacityLayerAnchors.clear();
     this.#applySequence += 1;
     this.#restoreController?.abort();
   }
@@ -340,6 +361,22 @@ export class MapLibreLayerController
       level: 'info',
       name: 'map.layer.visibility-changed',
       data: { category: layerId, status: visible ? 'visible' : 'hidden' },
+    });
+    return { status: 'success' };
+  }
+
+  public setOpenStreetMapOpacity(opacity: number): MapLayerVisibilityResult {
+    if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+      return this.visibilityFailure('Choose an opacity between 0 and 100 percent.');
+    }
+    if (this.#map === null) return this.visibilityFailure('The map is not ready yet.');
+    mapLayerStore.setState({ openStreetMapOpacity: opacity, errorMessage: null });
+    this.applyOpenStreetMapOpacity(true);
+    this.persistStableState();
+    this.logger.log({
+      level: 'info',
+      name: 'map.layer-group.opacity-changed',
+      data: { category: 'openstreetmap', opacityPercent: Math.round(opacity * 100) },
     });
     return { status: 'success' };
   }
@@ -460,6 +497,7 @@ export class MapLibreLayerController
       this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
       mapLayerStore.setState({
         visibility: persisted.visibility,
+        openStreetMapOpacity: persisted.openStreetMapOpacity,
         errorMessage: null,
       });
       this.applyBaseLayerVisibility();
@@ -829,11 +867,12 @@ export class MapLibreLayerController
 
   private persistStableState(): void {
     const appliedScene = this.#appliedScene;
-    const { visibility } = mapLayerStore.getState();
+    const { visibility, openStreetMapOpacity } = mapLayerStore.getState();
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
         visibility,
+        openStreetMapOpacity,
         appliedScene,
         renderingTuning,
         terrainOverlays: { ...this.#terrainOverlayPreferences },
@@ -1172,7 +1211,10 @@ export class MapLibreLayerController
       ([layerId]) =>
         map.getLayer(layerId) !== this.#visualModeLayerAnchors.get(layerId),
     );
-    if (!modeChanged && !layerChanged) return;
+    if (!modeChanged && !layerChanged) {
+      this.applyOpenStreetMapOpacity();
+      return;
+    }
     this.#appliedVisualMode = mode;
     this.#visualModeLayerAnchors.clear();
     for (const [layerId, properties] of layers) {
@@ -1181,6 +1223,41 @@ export class MapLibreLayerController
       this.#visualModeLayerAnchors.set(layerId, layer);
       for (const [property, value] of Object.entries(properties)) {
         map.setPaintProperty(layerId, property, value);
+      }
+    }
+    this.applyOpenStreetMapOpacity(true);
+  }
+
+  private applyOpenStreetMapOpacity(force = false): void {
+    const map = this.#map;
+    if (map === null) return;
+    const opacity = mapLayerStore.getState().openStreetMapOpacity;
+    const layerChanged = Object.keys(openStreetMapOpacityProperties).some(
+      (layerId) =>
+        map.getLayer(layerId) !== this.#openStreetMapOpacityLayerAnchors.get(layerId),
+    );
+    if (!force && !layerChanged && this.#appliedOpenStreetMapOpacity === opacity)
+      return;
+    this.#appliedOpenStreetMapOpacity = opacity;
+    this.#openStreetMapOpacityLayerAnchors.clear();
+    const imagery = mapLayerStore.getState().appliedImagery;
+    const mode: MapVisualMode =
+      this.#activeSlot !== null && imagery.status !== 'hidden' ? 'satellite' : 'vector';
+    const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
+    const effectiveOpacity = mode === 'satellite' ? opacity : 1;
+    for (const [layerId, properties] of Object.entries(
+      openStreetMapOpacityProperties,
+    )) {
+      const layer = map.getLayer(layerId);
+      if (layer === undefined) continue;
+      this.#openStreetMapOpacityLayerAnchors.set(layerId, layer);
+      for (const property of properties) {
+        const baseOpacity = modePaint[layerId]?.[property];
+        map.setPaintProperty(
+          layerId,
+          property,
+          effectiveOpacity * (typeof baseOpacity === 'number' ? baseOpacity : 1),
+        );
       }
     }
   }

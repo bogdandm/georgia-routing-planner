@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Worker } from '@playwright/test';
 
 import { installMapProviderFixtures } from './installMapProviderFixtures';
 
@@ -8,6 +8,16 @@ interface StoredMapView {
   readonly camera: { readonly longitude: number; readonly zoom: number };
   readonly terrainMode: 'flat' | 'terrain';
 }
+
+interface DiagnosticsBundle {
+  readonly events: readonly {
+    readonly name: string;
+    readonly data?: Readonly<Record<string, boolean | number | string | null>>;
+  }[];
+}
+
+const productionTerrainWorkerUrlPattern =
+  /\/georgia-routing-planner\/assets\/terrainCompute\.worker-[^/?]+\.js(?:\?.*)?$/u;
 
 async function readStoredMapView(page: Page) {
   return page.evaluate(
@@ -37,18 +47,37 @@ async function readStoredMapView(page: Page) {
   );
 }
 
+async function downloadDiagnosticsBundle(page: Page): Promise<DiagnosticsBundle> {
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download diagnostics' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  return JSON.parse(await readFile(downloadPath, 'utf8')) as DiagnosticsBundle;
+}
+
+function successfulWorkerComputeEvents(bundle: DiagnosticsBundle) {
+  return bundle.events.filter(
+    (event) =>
+      event.name === 'map.terrain-compute.completed' &&
+      event.data?.executionMode === 'worker' &&
+      event.data.status === 'success' &&
+      Number(event.data.count) > 0,
+  );
+}
+
 test('keeps production terrain and contours on the module worker through reload', async ({
   page,
 }) => {
   test.setTimeout(120_000);
   await installMapProviderFixtures(page);
-  const workerUrls: string[] = [];
-  let closedWorkerCount = 0;
+  const terrainWorkers: Worker[] = [];
+  const closedTerrainWorkers = new Set<Worker>();
   let terrainRequestCount = 0;
   page.on('worker', (worker) => {
-    workerUrls.push(worker.url());
+    if (!worker.url().includes('terrainCompute.worker')) return;
+    terrainWorkers.push(worker);
     worker.on('close', () => {
-      closedWorkerCount += 1;
+      closedTerrainWorkers.add(worker);
     });
   });
   page.on('request', (request) => {
@@ -64,9 +93,13 @@ test('keeps production terrain and contours on the module worker through reload'
   });
   await expect(workspace).toHaveAttribute('data-terrain-compute-status', 'worker');
   await expect.poll(() => terrainRequestCount).toBeGreaterThan(0);
-  await expect
-    .poll(() => workerUrls.find((url) => url.includes('terrainCompute.worker')) ?? '')
-    .toMatch(/\/georgia-routing-planner\/assets\/terrainCompute\.worker-/u);
+  await expect.poll(() => terrainWorkers.length).toBeGreaterThan(0);
+  const originalTerrainWorker = terrainWorkers[0];
+  expect(originalTerrainWorker).toBeDefined();
+  if (originalTerrainWorker === undefined) {
+    throw new Error('The production terrain worker was not created.');
+  }
+  expect(originalTerrainWorker.url()).toMatch(productionTerrainWorkerUrlPattern);
 
   await expect(page.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
   await expect(
@@ -87,16 +120,7 @@ test('keeps production terrain and contours on the module worker through reload'
   await expect(page.getByText('map.contours.tiles-generated').first()).toBeVisible({
     timeout: 15_000,
   });
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download diagnostics' }).click();
-  const download = await downloadPromise;
-  const downloadPath = await download.path();
-  const bundle = JSON.parse(await readFile(downloadPath, 'utf8')) as {
-    events: {
-      readonly name: string;
-      readonly data?: Readonly<Record<string, boolean | number | string | null>>;
-    }[];
-  };
+  const bundle = await downloadDiagnosticsBundle(page);
   const computeEvents = bundle.events.filter(
     (event) => event.name === 'map.terrain-compute.completed',
   );
@@ -150,14 +174,47 @@ test('keeps production terrain and contours on the module worker through reload'
     .poll(async () => (await readStoredMapView(page))?.terrainMode)
     .toBe('flat');
 
+  expect(terrainWorkers).toHaveLength(1);
+  expect(closedTerrainWorkers.has(originalTerrainWorker)).toBe(false);
+  const terrainWorkerCountBeforeReload = terrainWorkers.length;
+  const terrainRequestCountBeforeReload = terrainRequestCount;
   await page.reload();
-  await expect.poll(() => closedWorkerCount).toBeGreaterThan(0);
+  await expect.poll(() => closedTerrainWorkers.has(originalTerrainWorker)).toBe(true);
+  await expect
+    .poll(() => terrainWorkers.length)
+    .toBeGreaterThan(terrainWorkerCountBeforeReload);
+  const reloadedTerrainWorker = terrainWorkers[terrainWorkerCountBeforeReload];
+  expect(reloadedTerrainWorker).toBeDefined();
+  if (reloadedTerrainWorker === undefined) {
+    throw new Error('Reload did not create a replacement terrain worker.');
+  }
+  expect(reloadedTerrainWorker).not.toBe(originalTerrainWorker);
+  expect(reloadedTerrainWorker.url()).toMatch(productionTerrainWorkerUrlPattern);
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 20_000,
   });
-  await expect(workspace).toHaveAttribute('data-terrain-compute-status', 'worker');
+  await expect
+    .poll(() => terrainRequestCount)
+    .toBeGreaterThan(terrainRequestCountBeforeReload);
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
   await expect
     .poll(async () => (await readStoredMapView(page))?.terrainMode)
     .toBe('flat');
+
+  await page.getByRole('button', { name: 'Developer diagnostics' }).click();
+  await page.getByRole('tab', { name: /Logs/u }).click();
+  await expect(page.getByText('map.terrain-compute.completed').first()).toBeVisible({
+    timeout: 15_000,
+  });
+  const reloadedBundle = await downloadDiagnosticsBundle(page);
+  const reloadedComputeEvents = successfulWorkerComputeEvents(reloadedBundle);
+  expect(reloadedComputeEvents.length).toBeGreaterThan(0);
+  expect(
+    reloadedComputeEvents.some((event) =>
+      ['dem', 'contour', 'mixed'].includes(String(event.data?.operation)),
+    ),
+  ).toBe(true);
+  // A successful event from the replacement worker proves this is no longer the
+  // backend's optimistic initial status value.
+  await expect(workspace).toHaveAttribute('data-terrain-compute-status', 'worker');
 });

@@ -585,6 +585,24 @@ this file during the same change. Do not leave later agents to rediscover known 
 limits, and do not generalize one slow test into blanket sleeps, retries, or suite-wide
 timeout increases.
 
+### GitHub Actions Chromium concurrency
+
+GitHub's Linux runner does not reliably sustain two fully parallel WebGL/MapLibre
+workers. The contention can make the controlled terrain source miss its application
+deadline, leave tests in flat mode with a `Retry 3D` alert, and push the terrain or
+satellite workflows past Playwright's 30-second default. Keep `workers: 1` when `CI` is
+set and two workers for local runs. The terrain-transition and satellite-imagery
+workflows have focused 45-second ceilings; do not replace these with suite-wide timeout
+increases. CI retries remain disabled so a real failure is reported once instead of
+repeating the same resource contention.
+
+Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
+coverage, run the CI-shaped command on Windows PowerShell:
+
+```powershell
+$env:CI='1'; pnpm e2e; Remove-Item Env:CI
+```
+
 Use the smallest automated-test tier that proves the changed behavior. Isolated UI
 copy/style changes, local component-state fixes, and small interaction changes should
 use focused unit or React component tests plus a brief manual browser check when visual

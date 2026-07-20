@@ -10,6 +10,7 @@ test.beforeEach(async ({ page }) => {
 test('applies, hides, restores, and preserves a Sentinel scene across workspaces', async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   const rendererRequests: string[] = [];
   page.on('request', (request) => {
     if (request.url().startsWith('https://titiler.xyz/stac/tiles/')) {

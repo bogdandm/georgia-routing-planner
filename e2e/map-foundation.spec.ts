@@ -118,6 +118,7 @@ test('persists terrain overlay visibility from the Layers tab', async ({ page })
 test('switches between 2D and synthetic 3D terrain on the same map', async ({
   page,
 }) => {
+  test.setTimeout(45_000);
   const terrainRequests: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/elevation-tiles-prod/terrarium/')) {

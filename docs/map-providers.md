@@ -131,12 +131,14 @@ transition or an artifact introduced by contour rendering.
 The filter uses a one-pixel halo decoded from all eight neighboring tiles. It rejects
 transparent pixels, configured sentinel elevations, values outside the configured
 physical range, and isolated local extremes. The local test requires at least five
-neighbors close to their median, median absolute deviation no greater than 80 m, a
-center residual of at least 500 m, and no more than one neighbor supporting the extreme
-center value. This preserves coherent ridges and cliffs, including narrow features with
-two supporting pixels. Rejected pixels are replaced with the median of valid immediate
-neighbors; accepted pixels are never resampled, blurred, or re-encoded. A tile with no
-repairs returns the original PNG bytes.
+neighbors close to their median, median absolute deviation no greater than 80 m, no more
+than one neighbor supporting the extreme center value, and a center residual of at least
+500 m upward or 300 m downward. The asymmetric limit reflects confirmed provider
+corruption while keeping upward peak detection more conservative. This preserves
+coherent ridges and cliffs, including narrow features with two supporting pixels.
+Rejected pixels are replaced with the median of valid immediate neighbors; accepted
+pixels are never resampled, blurred, or re-encoded. A tile with no repairs returns the
+original PNG bytes.
 
 The default physical range is −500 m through 9,000 m and the explicit sentinel list is
 `[-32768]`. These bounds cover global terrestrial elevations conservatively while
@@ -150,6 +152,12 @@ coordinates, and pixels are excluded. Overlapping neighborhoods coalesce in-flig
 source fetch and decode work, and diagnostics are emitted in fixed-size aggregate
 batches instead of one event per rendered tile. Mixed results retain the batch's most
 severe status without creating a new event for every cancellation transition.
+
+At Lisi Lake, tiles `15/20455/12195` and `15/20456/12195` contain 63 compact downward
+spikes against a 626–635 m local surface. Their residuals range from −315.19 m to
+−1,826.25 m, with source minima of −683.80 m and −1,197.81 m. The repeated pixel-offset
+pattern crosses the shared tile boundary while surrounding tiles remain plausible. A 300
+m downward threshold rejects all 63; 400 m leaves five and 500 m leaves eighteen.
 
 Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
 and persisted locally. Disabling it bypasses decoding and repair and returns the

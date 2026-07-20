@@ -173,7 +173,10 @@ function spikeRejectionReason(
   const supportCount = neighbors.filter(
     (value) => Math.abs(value - elevation) <= policy.maximumNeighborMadMeters,
   ).length;
-  return Math.abs(elevation - neighborMedian) >= policy.spikeThresholdMeters &&
+  const residual = elevation - neighborMedian;
+  const threshold =
+    residual < 0 ? policy.negativeSpikeThresholdMeters : policy.spikeThresholdMeters;
+  return Math.abs(residual) >= threshold &&
     medianAbsoluteDeviation <= policy.maximumNeighborMadMeters &&
     consensusCount >= policy.minimumConsensusNeighbors &&
     supportCount <= policy.maximumSpikeSupportNeighbors

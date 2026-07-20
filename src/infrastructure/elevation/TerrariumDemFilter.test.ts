@@ -14,6 +14,7 @@ const policy: TerrariumFilterPolicy = {
   maximumElevationMeters: 9_000,
   sentinelElevationsMeters: [-32_768],
   spikeThresholdMeters: 500,
+  negativeSpikeThresholdMeters: 300,
   maximumNeighborMadMeters: 80,
   minimumConsensusNeighbors: 5,
   maximumSpikeSupportNeighbors: 1,
@@ -110,9 +111,36 @@ describe('filterTerrariumTile', () => {
     expect(result.counts).toMatchObject({ spikeCount: 1, repairedCount: 1 });
   });
 
+  it('repairs the observed shallow downward spike while preserving an equivalent rise', () => {
+    const downward = tile(5, 5, 635.5);
+    setPixel(downward, 2, 2, 320.25);
+    const upward = tile(5, 5, 635.5);
+    setPixel(upward, 2, 2, 950.75);
+
+    const repaired = filterTerrariumTile(grid(downward), policy);
+    const preserved = filterTerrariumTile(grid(upward), policy);
+
+    expect(elevationAt(repaired.tile, 2, 2)).toBe(635.5);
+    expect(repaired.counts).toMatchObject({ spikeCount: 1, repairedCount: 1 });
+    expect(preserved.tile.data).toEqual(upward.data);
+    expect(preserved.counts.spikeCount).toBe(0);
+  });
+
   it('preserves a coherent narrow ridge rather than globally smoothing it', () => {
     const source = tile(7, 7, 0);
     for (let x = 0; x < source.width; x += 1) setPixel(source, x, 3, 1_000);
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(result.tile.data).toEqual(source.data);
+    expect(result.counts.spikeCount).toBe(0);
+  });
+
+  it('preserves a coherent downward cliff at the new rejection threshold', () => {
+    const source = tile(7, 7, 635.5);
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 3; x < source.width; x += 1) setPixel(source, x, y, 320.25);
+    }
 
     const result = filterTerrariumTile(grid(source), policy);
 

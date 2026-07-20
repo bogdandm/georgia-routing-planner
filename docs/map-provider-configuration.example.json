@@ -36,6 +36,7 @@
       "maximumElevationMeters": 9000,
       "sentinelElevationsMeters": [-32768],
       "spikeThresholdMeters": 500,
+      "negativeSpikeThresholdMeters": 300,
       "maximumNeighborMadMeters": 80,
       "minimumConsensusNeighbors": 5,
       "maximumSpikeSupportNeighbors": 1,

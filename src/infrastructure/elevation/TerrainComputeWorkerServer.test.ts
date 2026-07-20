@@ -19,58 +19,8 @@ import {
   terrainWorkerEventNames,
   type TerrainWorkerInitializeRequest,
 } from '@/infrastructure/elevation/TerrainComputeProtocol';
-import {
-  WorkerRpcClient,
-  type WorkerRpcEndpoint,
-} from '@/infrastructure/runtime/WorkerRpc';
-
-class MemoryEndpoint implements WorkerRpcEndpoint {
-  readonly messages = new Set<EventListener>();
-  readonly errors = new Map<'error' | 'messageerror', Set<EventListener>>();
-  peer: MemoryEndpoint | null = null;
-  closed = false;
-
-  public postMessage(message: unknown): void {
-    const peer = this.peer;
-    queueMicrotask(() => {
-      for (const listener of peer?.messages ?? []) {
-        listener(new MessageEvent('message', { data: message }));
-      }
-    });
-  }
-
-  public addEventListener(
-    type: 'message' | 'error' | 'messageerror',
-    listener: EventListener,
-  ): void {
-    if (type === 'message') this.messages.add(listener);
-    else {
-      const listeners = this.errors.get(type) ?? new Set();
-      listeners.add(listener);
-      this.errors.set(type, listeners);
-    }
-  }
-
-  public removeEventListener(
-    type: 'message' | 'error' | 'messageerror',
-    listener: EventListener,
-  ): void {
-    if (type === 'message') this.messages.delete(listener);
-    else this.errors.get(type)?.delete(listener);
-  }
-
-  public close(): void {
-    this.closed = true;
-  }
-}
-
-function pair(): readonly [MemoryEndpoint, MemoryEndpoint] {
-  const client = new MemoryEndpoint();
-  const server = new MemoryEndpoint();
-  client.peer = server;
-  server.peer = client;
-  return [client, server];
-}
+import { WorkerRpcClient } from '@/infrastructure/runtime/WorkerRpc';
+import { createMemoryWorkerRpcEndpointPair } from '../../../test/helpers/MemoryWorkerRpcEndpoint';
 
 function initialization(): TerrainWorkerInitializeRequest {
   const terrain = parseMapProviderConfiguration(
@@ -87,7 +37,7 @@ function initialization(): TerrainWorkerInitializeRequest {
 
 describe('TerrainComputeWorkerServer', () => {
   it('initializes one engine and returns owned transferable DEM and contour results', async () => {
-    const [clientEndpoint, serverEndpoint] = pair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const contourBuffer = new Uint8Array([4, 5, 6]).buffer;
     const engine = {
       fetchTile: vi.fn((): Promise<TerrainDemResponse> =>
@@ -117,17 +67,32 @@ describe('TerrainComputeWorkerServer', () => {
       y: 9,
       revision: 0,
     });
-    const contour = await client.request<{ readonly data: ArrayBuffer }>('contour', {
-      zoom: 5,
-      x: 8,
-      y: 9,
-      revision: 0,
-      options: { levels: [50, 200], demFilterRevision: '0' },
-    });
+    const firstContour = await client.request<{ readonly data: ArrayBuffer }>(
+      'contour',
+      {
+        zoom: 5,
+        x: 8,
+        y: 9,
+        revision: 0,
+        options: { levels: [50, 200], demFilterRevision: '0' },
+      },
+    );
+    const secondContour = await client.request<{ readonly data: ArrayBuffer }>(
+      'contour',
+      {
+        zoom: 5,
+        x: 8,
+        y: 9,
+        revision: 0,
+        options: { levels: [50, 200], demFilterRevision: '0' },
+      },
+    );
 
     expect(Array.from(new Uint8Array(dem.data))).toEqual([1, 2, 3]);
-    expect(Array.from(new Uint8Array(contour.data))).toEqual([4, 5, 6]);
-    expect(contour.data).not.toBe(contourBuffer);
+    expect(Array.from(new Uint8Array(firstContour.data))).toEqual([4, 5, 6]);
+    expect(Array.from(new Uint8Array(secondContour.data))).toEqual([4, 5, 6]);
+    expect(firstContour.data).not.toBe(secondContour.data);
+    expect(contourBuffer.byteLength).toBe(3);
     expect(engine.fetchContourTile).toHaveBeenCalledWith(
       5,
       8,
@@ -135,13 +100,14 @@ describe('TerrainComputeWorkerServer', () => {
       { levels: [50, 200] },
       expect.any(AbortController),
     );
+    expect(engine.fetchContourTile).toHaveBeenCalledTimes(2);
     expect(factory).toHaveBeenCalledOnce();
     client.dispose();
     server.dispose();
   });
 
   it('forwards cancellation and rejects results from an obsolete filter revision', async () => {
-    const [clientEndpoint, serverEndpoint] = pair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     let finish: ((value: TerrainDemResponse) => void) | undefined;
     const fetchTile = vi.fn(
       (_zoom: number, _x: number, _y: number, abortController: AbortController) =>
@@ -194,7 +160,7 @@ describe('TerrainComputeWorkerServer', () => {
   });
 
   it('keeps DEM active while movement bounds, cancels, and sequentially drains contours', async () => {
-    const [clientEndpoint, serverEndpoint] = pair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const contourCalls: number[] = [];
     const contourFinishes = new Map<number, (value: TerrainContourTile) => void>();
     const fetchTile = vi.fn((): Promise<TerrainDemResponse> =>

@@ -2,74 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   WorkerRpcClient,
-  type WorkerRpcEndpoint,
   type WorkerRpcRemoteError,
   WorkerRpcServer,
+  type WorkerRpcTransferResult,
   WorkerRpcTransportError,
 } from '@/infrastructure/runtime/WorkerRpc';
-
-class MemoryWorkerEndpoint implements WorkerRpcEndpoint {
-  readonly #messageListeners = new Set<EventListener>();
-  readonly #errorListeners = new Map<'error' | 'messageerror', Set<EventListener>>();
-  peer: MemoryWorkerEndpoint | null = null;
-  terminated = false;
-  closed = false;
-
-  public postMessage(message: unknown): void {
-    const peer = this.peer;
-    if (peer === null) return;
-    queueMicrotask(() => {
-      for (const listener of peer.#messageListeners) {
-        listener(new MessageEvent('message', { data: message }));
-      }
-    });
-  }
-
-  public addEventListener(
-    type: 'message' | 'error' | 'messageerror',
-    listener: EventListener,
-  ): void {
-    if (type === 'message') this.#messageListeners.add(listener);
-    else {
-      const listeners = this.#errorListeners.get(type) ?? new Set();
-      listeners.add(listener);
-      this.#errorListeners.set(type, listeners);
-    }
-  }
-
-  public removeEventListener(
-    type: 'message' | 'error' | 'messageerror',
-    listener: EventListener,
-  ): void {
-    if (type === 'message') this.#messageListeners.delete(listener);
-    else this.#errorListeners.get(type)?.delete(listener);
-  }
-
-  public terminate(): void {
-    this.terminated = true;
-  }
-
-  public close(): void {
-    this.closed = true;
-  }
-
-  public fail(type: 'error' | 'messageerror' = 'error'): void {
-    for (const listener of this.#errorListeners.get(type) ?? [])
-      listener(new Event(type));
-  }
-}
-
-function endpointPair(): readonly [MemoryWorkerEndpoint, MemoryWorkerEndpoint] {
-  const client = new MemoryWorkerEndpoint();
-  const server = new MemoryWorkerEndpoint();
-  client.peer = server;
-  server.peer = client;
-  return [client, server];
-}
+import { createMemoryWorkerRpcEndpointPair } from '../../../test/helpers/MemoryWorkerRpcEndpoint';
 
 describe('WorkerRpc', () => {
   it('correlates concurrent responses and forwards structured failures', async () => {
-    const [clientEndpoint, serverEndpoint] = endpointPair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const server = new WorkerRpcServer(serverEndpoint, {
       echo: (payload) => payload,
       fail: () => {
@@ -96,7 +38,7 @@ describe('WorkerRpc', () => {
   });
 
   it('forwards cancellation to the active server handler', async () => {
-    const [clientEndpoint, serverEndpoint] = endpointPair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const canceled = vi.fn();
     const server = new WorkerRpcServer(serverEndpoint, {
       pending: (_payload, context) =>
@@ -127,10 +69,30 @@ describe('WorkerRpc', () => {
     server.dispose();
   });
 
+  it('structured-clones messages and detaches transferred buffers', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const transferred = new Uint8Array([7, 8, 9]).buffer;
+    const server = new WorkerRpcServer(serverEndpoint, {
+      bytes: () =>
+        ({
+          value: { data: transferred },
+          transfer: [transferred],
+        }) satisfies WorkerRpcTransferResult,
+    });
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    const result = await client.request<{ readonly data: ArrayBuffer }>('bytes', null);
+
+    expect(transferred.byteLength).toBe(0);
+    expect(Array.from(new Uint8Array(result.data))).toEqual([7, 8, 9]);
+    client.dispose();
+    server.dispose();
+  });
+
   it.each(['error', 'messageerror'] as const)(
     'rejects pending work after a worker %s event',
     async (failureType) => {
-      const [clientEndpoint] = endpointPair();
+      const [clientEndpoint] = createMemoryWorkerRpcEndpointPair();
       const client = new WorkerRpcClient(clientEndpoint);
       const request = client.request('pending', null);
 
@@ -142,7 +104,7 @@ describe('WorkerRpc', () => {
   );
 
   it('publishes events and deterministically closes both endpoints', async () => {
-    const [clientEndpoint, serverEndpoint] = endpointPair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const disposed = vi.fn();
     const server = new WorkerRpcServer(serverEndpoint, {}, disposed);
     const client = new WorkerRpcClient(clientEndpoint);

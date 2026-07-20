@@ -1,5 +1,4 @@
 import { addProtocol, removeProtocol } from 'maplibre-gl';
-import type { AddProtocolAction, GetResourceResponse } from 'maplibre-gl';
 import maplibreContour from 'maplibre-contour';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
@@ -69,32 +68,6 @@ export interface ContourTileGenerator {
   dispose(): void;
 }
 
-export function withOwnedProtocolBuffers(
-  protocol: AddProtocolAction,
-): AddProtocolAction {
-  return async (request, abortController) => {
-    const response = (await protocol(
-      request,
-      abortController,
-    )) as GetResourceResponse<unknown>;
-    return {
-      ...response,
-      // MapLibre transfers protocol ArrayBuffers to its worker, detaching them.
-      // maplibre-contour caches its generated buffer, so every delivery needs an
-      // owned copy or a later cache hit will attempt to transfer detached memory.
-      data:
-        response.data instanceof ArrayBuffer ? response.data.slice(0) : response.data,
-    };
-  };
-}
-
-function registerProtocolWithOwnedBuffers(
-  id: string,
-  protocol: AddProtocolAction,
-): void {
-  addProtocol(id, withOwnedProtocolBuffers(protocol));
-}
-
 /** Registers the bounded client-side contour protocol for one application runtime. */
 export class MapLibreContourTileGenerator implements ContourTileGenerator {
   readonly #source: InstanceType<typeof maplibreContour.DemSource>;
@@ -122,7 +95,7 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       worker: false,
     });
     this.#source.manager = new TerrainComputeManagerAdapter(this.#backend);
-    this.#source.setupMaplibre({ addProtocol: registerProtocolWithOwnedBuffers });
+    this.#source.setupMaplibre({ addProtocol });
     const timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {
       timingDiagnostics.record({

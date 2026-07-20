@@ -23,62 +23,11 @@ import {
   type TerrainWorkerInitializeRequest,
 } from '@/infrastructure/elevation/TerrainComputeProtocol';
 import { WorkerTerrainComputeBackend } from '@/infrastructure/elevation/WorkerTerrainComputeBackend';
+import { WorkerRpcServer } from '@/infrastructure/runtime/WorkerRpc';
 import {
-  type WorkerRpcEndpoint,
-  WorkerRpcServer,
-} from '@/infrastructure/runtime/WorkerRpc';
-
-class MemoryEndpoint implements WorkerRpcEndpoint {
-  readonly messages = new Set<EventListener>();
-  readonly errors = new Map<'error' | 'messageerror', Set<EventListener>>();
-  peer: MemoryEndpoint | null = null;
-  terminated = false;
-
-  public postMessage(message: unknown): void {
-    const peer = this.peer;
-    queueMicrotask(() => {
-      for (const listener of peer?.messages ?? []) {
-        listener(new MessageEvent('message', { data: message }));
-      }
-    });
-  }
-
-  public addEventListener(
-    type: 'message' | 'error' | 'messageerror',
-    listener: EventListener,
-  ): void {
-    if (type === 'message') this.messages.add(listener);
-    else {
-      const listeners = this.errors.get(type) ?? new Set();
-      listeners.add(listener);
-      this.errors.set(type, listeners);
-    }
-  }
-
-  public removeEventListener(
-    type: 'message' | 'error' | 'messageerror',
-    listener: EventListener,
-  ): void {
-    if (type === 'message') this.messages.delete(listener);
-    else this.errors.get(type)?.delete(listener);
-  }
-
-  public terminate(): void {
-    this.terminated = true;
-  }
-
-  public fail(): void {
-    for (const listener of this.errors.get('error') ?? []) listener(new Event('error'));
-  }
-}
-
-function pair(): readonly [MemoryEndpoint, MemoryEndpoint] {
-  const client = new MemoryEndpoint();
-  const server = new MemoryEndpoint();
-  client.peer = server;
-  server.peer = client;
-  return [client, server];
-}
+  createMemoryWorkerRpcEndpointPair,
+  type MemoryWorkerRpcEndpoint,
+} from '../../../test/helpers/MemoryWorkerRpcEndpoint';
 
 class FakeInlineBackend implements TerrainComputeBackend {
   public readonly loaded = Promise.resolve();
@@ -141,7 +90,7 @@ describe('WorkerTerrainComputeBackend', () => {
     const servers: WorkerRpcServer[] = [];
     const initializations: TerrainWorkerInitializeRequest[] = [];
     const workerFactory = vi.fn(() => {
-      const [clientEndpoint, serverEndpoint] = pair();
+      const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
       servers.push(
         new WorkerRpcServer(serverEndpoint, {
           initialize: (payload) => {
@@ -177,14 +126,14 @@ describe('WorkerTerrainComputeBackend', () => {
   });
 
   it('replays state, retries once on a fresh worker, then keeps features through inline fallback', async () => {
-    const clients: MemoryEndpoint[] = [];
+    const clients: MemoryWorkerRpcEndpoint[] = [];
     const servers: WorkerRpcServer[] = [];
     const initializations: TerrainWorkerInitializeRequest[] = [];
     const demCalls: number[] = [];
     const secondWorkerDem = vi.fn();
     const workerFactory = () => {
       const workerIndex = clients.length;
-      const [clientEndpoint, serverEndpoint] = pair();
+      const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
       clients.push(clientEndpoint);
       let calls = 0;
       const server = new WorkerRpcServer(serverEndpoint, {
@@ -254,7 +203,7 @@ describe('WorkerTerrainComputeBackend', () => {
   });
 
   it('does not restart the worker for an ordinary tile failure', async () => {
-    const [clientEndpoint, serverEndpoint] = pair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const server = new WorkerRpcServer(serverEndpoint, {
       initialize: () => ({ initialized: true }),
       dem: () => {
@@ -289,7 +238,7 @@ describe('WorkerTerrainComputeBackend', () => {
       const workerFactory = vi.fn(() => {
         const currentWorker = workerIndex;
         workerIndex += 1;
-        const [clientEndpoint, serverEndpoint] = pair();
+        const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
         servers.push(
           new WorkerRpcServer(serverEndpoint, {
             initialize: () => ({ initialized: true }),
@@ -340,7 +289,7 @@ describe('WorkerTerrainComputeBackend', () => {
   it('uses terminal inline fallback after a second malformed result', async () => {
     const servers: WorkerRpcServer[] = [];
     const workerFactory = vi.fn(() => {
-      const [clientEndpoint, serverEndpoint] = pair();
+      const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
       servers.push(
         new WorkerRpcServer(serverEndpoint, {
           initialize: () => ({ initialized: true }),
@@ -370,7 +319,7 @@ describe('WorkerTerrainComputeBackend', () => {
   });
 
   it('keeps request cancellation out of worker recovery', async () => {
-    const [clientEndpoint, serverEndpoint] = pair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const started = vi.fn();
     const canceled = vi.fn();
     const server = new WorkerRpcServer(serverEndpoint, {
@@ -413,7 +362,7 @@ describe('WorkerTerrainComputeBackend', () => {
   });
 
   it('publishes validated live contour queue state without exposing tile details', async () => {
-    const [clientEndpoint, serverEndpoint] = pair();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     const server = new WorkerRpcServer(serverEndpoint, {
       initialize: () => ({ initialized: true }),
     });

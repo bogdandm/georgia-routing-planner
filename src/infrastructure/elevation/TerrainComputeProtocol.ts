@@ -166,7 +166,7 @@ export function isTerrainWorkerDemResult(
     'kind' in value &&
     value.kind === 'dem' &&
     'data' in value &&
-    value.data instanceof ArrayBuffer
+    isArrayBuffer(value.data)
   );
 }
 
@@ -179,6 +179,11 @@ export function isTerrainWorkerContourResult(
     'kind' in value &&
     value.kind === 'contour' &&
     'data' in value &&
-    value.data instanceof ArrayBuffer
+    isArrayBuffer(value.data)
   );
+}
+
+function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  // Worker payloads can cross JavaScript realms, where instanceof is unreliable.
+  return Object.prototype.toString.call(value) === '[object ArrayBuffer]';
 }

@@ -17,14 +17,19 @@ import {
 /** Executes the shared engine on the window thread only as a compatibility fallback. */
 export class InlineTerrainComputeBackend implements TerrainComputeBackend {
   readonly loaded: Promise<void>;
-  readonly #engine: TerrainComputeEngine;
+  readonly #engine: InlineTerrainComputeEngine;
 
   public constructor(
     configuration: TerrainComputeConfiguration,
     logger: DiagnosticLogger,
     options: TerrainComputeEngineOptions = {},
+    engineFactory: InlineTerrainComputeEngineFactory = (
+      engineConfiguration,
+      engineLogger,
+      engineOptions,
+    ) => new TerrainComputeEngine(engineConfiguration, engineLogger, engineOptions),
   ) {
-    this.#engine = new TerrainComputeEngine(configuration, logger, options);
+    this.#engine = engineFactory(configuration, logger, options);
     this.loaded = this.#engine.loaded;
   }
 
@@ -37,14 +42,22 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
     return this.#engine.fetchTile(zoom, x, y, abortController);
   }
 
-  public fetchContourTile(
+  public async fetchContourTile(
     zoom: number,
     x: number,
     y: number,
     options: TerrainContourOptions,
     abortController: AbortController,
   ): Promise<TerrainContourTile> {
-    return this.#engine.fetchContourTile(zoom, x, y, options, abortController);
+    const response = await this.#engine.fetchContourTile(
+      zoom,
+      x,
+      y,
+      options,
+      abortController,
+    );
+    // MapLibre transfers delivered buffers. Keep the engine's cached copy owned here.
+    return { arrayBuffer: response.arrayBuffer.slice(0) };
   }
 
   public setFilterEnabled(enabled: boolean): void {
@@ -90,3 +103,28 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
     this.#engine.dispose();
   }
 }
+
+interface InlineTerrainComputeEngine {
+  readonly loaded: Promise<void>;
+  fetchTile(
+    zoom: number,
+    x: number,
+    y: number,
+    abortController: AbortController,
+  ): Promise<TerrainDemResponse>;
+  fetchContourTile(
+    zoom: number,
+    x: number,
+    y: number,
+    options: TerrainContourOptions,
+    abortController: AbortController,
+  ): Promise<TerrainContourTile>;
+  setFilterEnabled(enabled: boolean): void;
+  dispose(): void;
+}
+
+export type InlineTerrainComputeEngineFactory = (
+  configuration: TerrainComputeConfiguration,
+  logger: DiagnosticLogger,
+  options: TerrainComputeEngineOptions,
+) => InlineTerrainComputeEngine;

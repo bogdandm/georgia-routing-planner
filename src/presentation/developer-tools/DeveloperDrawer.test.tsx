@@ -63,6 +63,18 @@ describe('DeveloperDrawer', () => {
         maxTextureSize: 16_384,
         antialias: true,
       },
+      recoverableFailures: [
+        {
+          category: 'satellite-raster',
+          sourceId: 'sentinel-raster-a',
+          reason: 'http-server',
+          httpStatus: 503,
+          count: 2,
+          lastOccurredAt: '2026-07-20T05:54:55.186Z',
+          recoveryState: 'scheduled',
+          retryAttempt: 1,
+        },
+      ],
     });
     render(
       <RuntimeServicesProvider services={services}>
@@ -76,6 +88,11 @@ describe('DeveloperDrawer', () => {
       'basemap-vector',
     );
     expect(screen.getByText('Max texture: 16384; last idle: not yet')).toBeVisible();
+    expect(screen.getByText('satellite-raster × 2')).toBeVisible();
+    expect(
+      screen.getByText(/sentinel-raster-a · HTTP 503 · http-server/u),
+    ).toBeVisible();
+    expect(screen.getByText(/Recovery: scheduled · Retry attempt 1/u)).toBeVisible();
 
     await user.click(screen.getByRole('switch', { name: 'Show tile boundaries' }));
     expect(useUiStore.getState().mapDebugOptions.showTileBoundaries).toBe(true);

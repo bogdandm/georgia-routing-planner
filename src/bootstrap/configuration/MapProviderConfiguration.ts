@@ -155,6 +155,7 @@ const mapProviderConfigurationInputSchema = z
         renderer: z
           .object({
             id: z.string().regex(/^[a-z0-9-]+$/u),
+            cachePartition: z.enum(['none', 'application-origin']),
             tileUrlTemplate: endpointSchema.refine(
               (value) =>
                 value.includes('{z}') &&
@@ -250,6 +251,7 @@ interface MapProviderConfigurationInput {
     readonly maximumPages: number;
     readonly renderer: {
       readonly id: string;
+      readonly cachePartition: 'none' | 'application-origin';
       readonly tileUrlTemplate: string;
       readonly tileSize: 256 | 512;
       readonly minZoom: number;
@@ -347,6 +349,7 @@ export const defaultMapProviderConfigurationInput = {
     maximumPages: 10,
     renderer: {
       id: 'titiler-demo-stac-rgb',
+      cachePartition: 'application-origin',
       tileUrlTemplate:
         'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear',
       tileSize: 256,

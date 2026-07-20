@@ -564,20 +564,39 @@ normal verification rules for those files.
 ### Managed Windows coverage timing
 
 On the managed Windows workspace, parallel V8 coverage can make otherwise passing
-`WorkspaceShell` interaction tests exceed Vitest's five-second per-test default because
-several JSDOM workers compete for CPU. Always try the canonical `pnpm test:coverage`
-command first. If the only failures are timeouts and the named tests pass when focused,
-rerun the complete coverage suite with bounded concurrency and a ten-second ceiling:
+`WorkspaceShell` interaction tests exceed Vitest's five-second default because several
+JSDOM workers compete for CPU. The coverage configuration therefore owns a ten-second
+per-test ceiling. Run the canonical command once:
 
 ```powershell
-.\node_modules\.bin\vitest.cmd run --config vitest.coverage.config.ts --coverage --maxWorkers=2 --testTimeout=10000
+pnpm test:coverage
 ```
 
-If two workers still show contention, retry with `--maxWorkers=1`. Do not skip tests,
-remove assertions, add sleeps, or increase application polling delays to make the run
-green. Report both the canonical timeout and the successful bounded-concurrency result
-in the handoff so other agents can distinguish infrastructure timing from a behavioral
-failure.
+Do not first run coverage with a five-second ceiling, and do not repeat the complete
+suite merely to apply the known ten-second requirement. If a test still exceeds ten
+seconds, investigate it as a new failure; do not add sleeps, remove assertions, or
+silently increase the ceiling again.
+
+### Managed Chromium timing
+
+GitHub's software-rendered Chromium can take several times longer than a desktop run
+when MapLibre, terrain decoding, IndexedDB persistence, and diagnostics export overlap.
+Keep CI at one browser worker, a 120-second per-test ceiling, and a 20-second assertion
+ceiling. Local runs use a 90-second per-test ceiling and a 10-second assertion ceiling.
+Retries remain disabled so a real failure produces one authoritative set of artifacts.
+
+These limits cover the observed terrain-visibility reload, diagnostics export, and
+satellite reload workflows. The earlier 5-second assertion and 30-second test limits
+expired under hosted-runner contention even though the terrain and satellite workflows
+passed on their next execution. Do not replace these limits with sleeps or loosen
+application deadlines.
+
+Before pushing MapLibre, terrain, persistence, diagnostics, or satellite E2E changes,
+run the CI-shaped suite on Windows PowerShell:
+
+```powershell
+$env:CI='1'; pnpm e2e; Remove-Item Env:CI
+```
 
 The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
 and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling

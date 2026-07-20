@@ -376,12 +376,22 @@ export function DeveloperDrawer({
                   <List dense disablePadding aria-label="Recent map source failures">
                     {mapSnapshot.recoverableFailures.map((failure) => (
                       <ListItem
-                        key={`${failure.category}:${failure.sourceId ?? 'none'}`}
+                        key={`${failure.category}:${failure.sourceId ?? 'none'}:${failure.reason}:${failure.httpStatus === null ? 'none' : String(failure.httpStatus)}`}
                         disableGutters
                       >
                         <ListItemText
                           primary={`${failure.category} × ${String(failure.count)}`}
-                          secondary={failure.sourceId ?? 'No stable source ID'}
+                          secondary={[
+                            failure.sourceId ?? 'No stable source ID',
+                            failure.httpStatus === null
+                              ? failure.reason
+                              : `HTTP ${String(failure.httpStatus)} · ${failure.reason}`,
+                            `Recovery: ${failure.recoveryState}`,
+                            failure.retryAttempt === 0
+                              ? 'No automatic retry attempted'
+                              : `Retry attempt ${String(failure.retryAttempt)}`,
+                            `Last failure: ${failure.lastOccurredAt}`,
+                          ].join(' · ')}
                         />
                       </ListItem>
                     ))}

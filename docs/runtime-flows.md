@@ -45,12 +45,33 @@ Settings is a non-modal floating dialog without a dimming backdrop. Releasing an
 stretch slider validates and stores the new numeric values, prepares a replacement
 raster for the current scene, and swaps only after MapLibre reports it ready. A failed
 tuning attempt rolls back the controller values and keeps the prior raster visible. At
-startup, validated stretch preferences load before a saved Sentinel scene is restored.
-When restoration reaches a ready or hidden state, Satellite projects the controller's
-saved scene into a one-entry Images pane using the current viewport for coverage
-evidence. Clicking that active entry aborts any pending application, removes both raster
-slots and the footprint, clears the applied-scene preference, and returns map layer
-state to empty.
+startup, validated stretch preferences load first; saved Sentinel imagery waits for the
+MapLibre style-ready attach before creating raster sources. If a development detach
+cancels restoration, the controller resumes it after the same style-ready map
+reattaches. Late errors from a source that has already been removed are ignored. When
+restoration reaches a ready or hidden state, Satellite projects the controller's saved
+scene into a one-entry Images pane using the current viewport for coverage evidence.
+Clicking that active entry aborts any pending application, removes both raster slots and
+the footprint, clears the applied-scene preference, and returns map layer state to
+empty.
+
+The inactive slot used to prepare a newly selected scene does not fail on its first
+transient tile error. It refreshes failed canonical tile coordinates with bounded
+backoff. When only a transient tile remains unavailable, it promotes the usable partial
+raster after the retries are exhausted and keeps the failure visible. Non-retryable or
+whole-source failures preserve the previous raster and surface a safe status-specific
+explanation.
+
+After a raster is active, MapLibre tile errors flow through the facade for safe
+classification and through the layer controller for recovery. The controller ignores
+duplicate errors while a retry is scheduled, refreshes the failed raster tiles after a
+bounded exponential delay, and stops after three attempts. HTTP 4xx failures other than
+429 and unknown failures remain visible without automatic retry. A successful
+source-data event for every failed canonical tile clears the controller's pending set;
+only then can a loaded source start the two-second stability window. Another source
+error cancels that window. The facade returns to ready when no active failure remains.
+Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
+the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the

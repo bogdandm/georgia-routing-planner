@@ -260,6 +260,16 @@ replace them with model-specific prose or paste a commit log.
 
 Description rules:
 
+- Treat pull-request formatting as a required preflight, not a best-effort prose task.
+  Immediately before every `gh pr create` or `gh pr edit`, validate the title against
+  the required scoped form and validate that the Markdown headings appear once in the
+  required order.
+- Write multiline descriptions to a temporary Markdown file and pass it with
+  `--body-file`; do not use an inline `--body` argument for a final pull-request
+  description. Remove the temporary file after the GitHub operation succeeds.
+- After creating or editing a pull request, read the title and body back with
+  `gh pr view --json title,body,url` and correct the pull request before handoff if the
+  title, headings, table, or Markdown structure does not match this contract.
 - Describe the final branch state, not planned work or implementation chronology.
 - Keep `Outcome` to one through three bullets and do not repeat the same content under
   `Changes`.

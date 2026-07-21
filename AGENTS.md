@@ -81,7 +81,6 @@ Rules:
   result.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
-
 ### Incremental commit cadence
 
 Implementation must be committed incrementally. Do not accumulate an entire workstream

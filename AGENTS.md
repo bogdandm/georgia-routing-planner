@@ -533,13 +533,20 @@ During implementation:
 1. Run the smallest relevant test name, file, or affected package.
 2. Use focused Playwright scenarios only when browser behavior cannot be represented
    faithfully below E2E.
-3. Do not run coverage, complete Vitest, complete Playwright, `pnpm check`, or another
-   broad aggregate merely to create an intermediate commit.
-4. Record commands and outcomes concisely for the handoff.
+3. A complete Vitest unit suite is acceptable when it gives useful fast feedback, but do
+   not repeat it when its inputs are unchanged.
+4. Do not run coverage, complete Playwright, `pnpm check`, or another broad aggregate
+   merely to create an intermediate commit.
+5. Record commands and outcomes concisely for the handoff.
 
 A successful check remains valid while its inputs and configuration are unchanged. A new
 turn, commit, push, or existing CI result is not a reason to rerun it. After an edit,
 rerun only invalidated checks.
+
+When a test fails and code is changed to fix it, rerun only that failed test first. Do
+not restart its complete unit, integration, or E2E suite after every fix. Run a broader
+required check at most once after the focused test passes and all fixes that could
+invalidate the broader result are complete.
 
 ### Documentation-only verification
 
@@ -592,6 +599,19 @@ boundaries. Minor fixes covered below E2E do not require a local E2E run or new
 scenario. Use controlled fixtures and wait for observable application states. Retain
 useful failure artifacts; do not solve flakes with arbitrary sleeps or unconditional
 retries.
+
+Before running the complete local E2E suite, record concrete evidence that the branch
+changes behavior or shared runtime inputs exercised across that suite. Name the changed
+behavior or input and the E2E specs that exercise it. If the diff does not justify every
+spec, do not run the complete suite: run only the smallest relevant spec, project,
+scenario, or grep-selected subset. If no E2E scenario exercises the changed behavior,
+skip local E2E rather than using an unrelated workflow as evidence. CI may still run its
+required complete suite independently.
+
+If an E2E test fails, diagnose and fix it, then rerun only that test. Do not restart the
+complete E2E suite after each failure. A complete suite may run once later only when it
+was already justified by the branch-wide evidence and the fixes invalidate that broader
+result.
 
 Run axe for the application shell and critical workflows. Test keyboard focus, dialog
 and drawer behavior, labels, and live status where relevant. Automated accessibility
@@ -663,23 +683,26 @@ changes are complete.
    requires them. If an aggregate includes a narrower required check, run only the
    aggregate.
 5. Run Playwright only for a new or materially changed critical workflow or high-risk
-   browser boundary. Focused scenarios are sufficient unless CI-shaped evidence is
-   specifically required.
-6. For MapLibre, terrain, persistence, or satellite E2E changes, run the CI-shaped
-   Playwright suite once on Windows PowerShell:
+   browser boundary. Map each changed behavior to the specs that exercise it and run the
+   smallest relevant subset.
+6. Run the complete local Playwright suite only when recorded evidence shows the diff
+   affects behavior or shared runtime inputs exercised by every spec. When that evidence
+   exists and CI-shaped local evidence is required, run it once on Windows PowerShell:
 
    ```powershell
    $env:CI='1'; pnpm e2e; Remove-Item Env:CI
    ```
 
-7. Visually verify changed loading, empty, error, partial, focus, and responsive states
+7. If a test fails and is fixed, rerun only that test first. Do not restart a complete
+   suite after each fix.
+8. Visually verify changed loading, empty, error, partial, focus, and responsive states
    in current Chrome when presentation behavior changes.
-8. Verify diagnostics or redaction only when the change affects those responsibilities.
-9. Confirm no secret, private GPX metadata, generated debug file, or unrelated artifact
-   is included.
-10. Confirm non-obvious exported contracts and invariants have accurate compact
+9. Verify diagnostics or redaction only when the change affects those responsibilities.
+10. Confirm no secret, private GPX metadata, generated debug file, or unrelated artifact
+    is included.
+11. Confirm non-obvious exported contracts and invariants have accurate compact
     comments.
-11. Report handwritten production LOC added/removed; test LOC added/removed; production
+12. Report handwritten production LOC added/removed; test LOC added/removed; production
     and test files added/removed/moved; runtime dependencies; new abstractions and their
     current justification; significant abstractions removed; and whether the result
     could be smaller without losing behavior or clarity.

@@ -675,7 +675,9 @@ export class MapLibreLayerController
     if (sceneToRestart === null) {
       return { status: 'success' };
     }
-    const result = await this.runSceneApplication(sceneToRestart, signal, true, false);
+    // Provider modes must never share the map. Remove the current raster before the
+    // replacement starts; the vector style remains fully visible until new data arrives.
+    const result = await this.runSceneApplication(sceneToRestart, signal, true, true);
     if (result.status === 'success') {
       this.logger.log({
         level: 'info',

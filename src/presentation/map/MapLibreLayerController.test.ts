@@ -934,6 +934,43 @@ describe('MapLibreLayerController', () => {
     expect(controller.getAppliedScene()?.id).toBe('midflight-mode-change');
   });
 
+  it('removes the active provider layer before rendering the same scene in another mode', async () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(
+      scene('provider-mode-change'),
+      new AbortController().signal,
+    );
+    map.sourceLoaded = false;
+
+    const switched = controller.setRenderingMode(
+      'direct',
+      new AbortController().signal,
+    );
+
+    expect(map.layers.has(sentinelMapLayerIds.rasterA)).toBe(true);
+    expect(map.layers.has(sentinelMapLayerIds.rasterB)).toBe(false);
+    expect(map.sources.has('sentinel-raster-a')).toBe(true);
+    expect(map.sources.has('sentinel-raster-b')).toBe(false);
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
+    map.sourceLoaded = true;
+    map.fire('sourcedata', {
+      sourceId: 'sentinel-raster-a',
+      isSourceLoaded: true,
+      sourceDataType: 'content',
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    await expect(switched).resolves.toEqual({ status: 'success' });
+    expect(controller.getAppliedScene()?.id).toBe('provider-mode-change');
+  });
+
   it('marks late unscoped direct-render errors as expected after switching to auto', async () => {
     vi.useFakeTimers();
     const services = createTestServices();

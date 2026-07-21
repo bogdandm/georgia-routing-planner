@@ -146,9 +146,9 @@ A successful automatic fallback replaces Ready with a persistent, non-blocking w
 that TiTiler is unavailable and the alternative imagery provider is being activated or
 is active. Choosing Direct explicitly does not show that warning. The warning clears
 when a later server render succeeds, the user explicitly changes rendering mode, or
-imagery is removed. A mode change cancels the partial replacement and reapplies the same
-selected scene while keeping the current scene available until the replacement produces
-data. The mode choice is stored immediately, including during a pending or failed
+imagery is removed. A mode change removes both provider raster slots, restores the full
+vector basemap, and reapplies the same selected scene through only the newly selected
+provider. The mode choice is stored immediately, including during a pending or failed
 render. Marker targeting remains unavailable.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not

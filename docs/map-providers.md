@@ -376,14 +376,15 @@ Selecting a different scene removes both stable raster slots and the old footpri
 immediately, restores the complete vector style, and creates only the requested scene.
 The raster does not switch the basemap into satellite styling until its first data
 event, so a slow TiTiler request or automatic direct fallback cannot produce a blank
-map. Same-scene rendering-mode and stretch changes may use the second slot so the active
-scene remains visible until replacement data arrives. Auto-mode 429/status-zero failures
-restore the vector style while changing the pending source to the direct protocol.
-Retryable failures receive bounded failed-tile refreshes; usable partial imagery can be
-promoted after retries are exhausted. Cancellation or supersession removes pending
-resources. The validated WGS84 footprint renders independently as GeoJSON, making
-partial coverage explicit. The application never logs or stores the COG or tile URL in
-shared state or support bundles.
+map. Stretch changes may use the second slot so the active scene remains visible until
+replacement data arrives. Rendering-mode changes remove both provider slots first and
+keep the vector basemap visible until the selected provider returns data. Auto-mode
+429/status-zero failures restore the vector style while changing the pending source to
+the direct protocol. Retryable failures receive bounded failed-tile refreshes; usable
+partial imagery can be promoted after retries are exhausted. Cancellation or
+supersession removes pending resources. The validated WGS84 footprint renders
+independently as GeoJSON, making partial coverage explicit. The application never logs
+or stores the COG or tile URL in shared state or support bundles.
 
 A 2026-07-19 current-Chrome smoke searched the live Georgia viewport, applied
 `S2A_38TLM_20260709_0_L2A`, and displayed the georeferenced true-color tiles plus the

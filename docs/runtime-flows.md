@@ -73,9 +73,10 @@ those retries are exhausted.
 
 Both mirrored rendering-mode controls remain enabled while staging. A mode command
 persists the mode immediately, aborts the controller-owned application signal, removes
-partial staging resources, and immediately reapplies the same staging scene with the new
-initial template. A later completion from the canceled operation cannot remove or
-overwrite the replacement.
+both provider raster slots, restores the vector style, and immediately reapplies the
+same scene with the new initial template. Only one provider layer exists during this
+transition. A later completion from the canceled operation cannot remove or overwrite
+the replacement.
 
 After a raster is active, MapLibre tile errors flow through the facade for safe
 classification and through the layer controller for recovery. The controller ignores
@@ -414,12 +415,12 @@ sequenceDiagram
   end
 ```
 
-Two internal raster slots support same-scene rendering-mode and tuning replacement.
-Changing to a different scene removes both slots immediately, so two scene selections
-cannot remain overlaid. Provider URLs remain inside the controller and never enter
-Zustand or exported diagnostics. The footprint is updated only after the replacement
-raster is usable. `Fit footprint` derives bounds from the validated polygon while
-preserving current pitch and bearing.
+Two internal raster slots support stretch-tuning replacement. Rendering-mode and scene
+changes remove both slots immediately, so two providers or scene selections cannot
+remain overlaid. Provider URLs remain inside the controller and never enter Zustand or
+exported diagnostics. The footprint is updated only after the replacement raster is
+usable. `Fit footprint` derives bounds from the validated polygon while preserving
+current pitch and bearing.
 
 Layers commands use logical IDs. The Natural features command expands to land-cover,
 glacier, and water-polygon layers; restricted-area, hiking, road, and place commands

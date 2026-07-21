@@ -71,6 +71,8 @@ function readPersistedCamera(value: unknown): MapCamera | null {
   return { ...camera, bearing: 0, pitch: 0 };
 }
 
+const maximumCloudCoverPercentSchema = z.number().min(0).max(100);
+const defaultMaximumCloudCoverPercent = 50;
 const mapLayerPreferencesSchema = z
   .object({
     visibility: z
@@ -184,6 +186,31 @@ export class AppDatabase
     const parsed = uiPreferencesSchema.parse(value);
     await this.settings.put({
       key: 'ui.preferences',
+      value: parsed,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async loadMaximumCloudCoverPercent(): Promise<number> {
+    const record = await this.settings.get('satellite.maximum-cloud-cover');
+    if (record === undefined) return defaultMaximumCloudCoverPercent;
+
+    const parsed = maximumCloudCoverPercentSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete('satellite.maximum-cloud-cover');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.satellite-preferences.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultMaximumCloudCoverPercent;
+  }
+
+  public async saveMaximumCloudCoverPercent(value: number): Promise<void> {
+    const parsed = maximumCloudCoverPercentSchema.parse(value);
+    await this.settings.put({
+      key: 'satellite.maximum-cloud-cover',
       value: parsed,
       updatedAt: new Date().toISOString(),
     });

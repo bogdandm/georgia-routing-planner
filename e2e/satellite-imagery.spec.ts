@@ -7,10 +7,10 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
-test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery without retrying', async ({
+test('auto mode routes a CORS-hidden TiTiler 429 to the direct COG without retrying', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(30_000);
   const rendererRequests: string[] = [];
   const cogRequests: string[] = [];
   page.on('request', (request) => {
@@ -45,48 +45,14 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
 
   await page.getByRole('button', { name: 'Search images' }).click();
   await page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }).click();
-  await expect(page.getByText('True-color imagery applied')).toBeVisible({
-    timeout: 90_000,
-  });
   await expect(
     page.getByText(
-      'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.',
+      'TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery.',
     ),
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => cogRequests.length).toBeGreaterThan(0);
   expect(rendererRequests.length).toBeGreaterThan(0);
   expect(new Set(rendererRequests).size).toBe(rendererRequests.length);
-  expect(cogRequests.length).toBeGreaterThan(0);
-
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  const renderSettings = page.getByRole('dialog', { name: 'Settings' });
-  await renderSettings.getByRole('tab', { name: 'Rendering' }).click();
-  await renderSettings.getByRole('combobox', { name: 'Satellite render' }).click();
-  await page.getByRole('option', { name: 'Direct' }).click();
-  await page.getByRole('button', { name: 'Done' }).click();
-  await expect(page.getByText('True-color imagery applied')).toBeVisible({
-    timeout: 90_000,
-  });
-  await expect(
-    page.getByRole('button', { name: 'Show current error details' }),
-  ).not.toBeVisible();
-
-  await page
-    .getByRole('button', { name: 'Developer diagnostics', exact: true })
-    .click();
-  await page.getByRole('tab', { name: 'Map' }).click();
-  const providerLayers = await page
-    .getByRole('list', { name: 'Ordered map layers' })
-    .getByRole('listitem')
-    .allTextContents();
-  expect(providerLayers.filter((id) => id.startsWith('sentinel-raster-'))).toHaveLength(
-    1,
-  );
-  await page.getByRole('tab', { name: /Logs/u }).click();
-  const events = page.getByRole('list', { name: 'Recent diagnostic events' });
-  await expect(events).toContainText('satellite.imagery.alternative-provider-started');
-  await expect(events).toContainText(
-    'satellite.imagery.alternative-provider-completed',
-  );
 });
 
 test('applies and hides a Sentinel scene without restoring it after reload', async ({

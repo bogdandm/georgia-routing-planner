@@ -892,7 +892,8 @@ export function SatelliteBrowser({
   active = true,
   fallbackCoordinates,
 }: SatelliteBrowserProps) {
-  const { clock, mapLayers, mapViewport, searchSatelliteScenes } = useRuntimeServices();
+  const { clock, database, logger, mapLayers, mapViewport, searchSatelliteScenes } =
+    useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const renderingMode = useStore(
     mapLayerStore,
@@ -902,7 +903,7 @@ export function SatelliteBrowser({
   const [today] = useState(() => clock.now());
   const latestMonth = currentSearchMonth(today).month;
   const [calendarMonth, setCalendarMonth] = useState(latestMonth);
-  const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(25);
+  const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(50);
   const [searchState, setSearchState] = useState<SearchState>({ status: 'idle' });
   const [visibleCount, setVisibleCount] = useState(firstResultCount);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -924,6 +925,7 @@ export function SatelliteBrowser({
   const request = useRef<AbortController | null>(null);
   const applyRequest = useRef<AbortController | null>(null);
   const renderingModeRequest = useRef<AbortController | null>(null);
+  const cloudCoverChangedByUser = useRef(false);
   const [renderingModeError, setRenderingModeError] = useState<string | null>(null);
   const loadingMonthsRef = useRef(new Set<string>());
   const subscribeToViewport = useCallback(
@@ -961,6 +963,28 @@ export function SatelliteBrowser({
       renderingModeRequest.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadMaximumCloudCover = async () => {
+      try {
+        const value = await database.loadMaximumCloudCoverPercent();
+        if (!cancelled && !cloudCoverChangedByUser.current) {
+          setMaxCloudCoverPercent(value);
+        }
+      } catch {
+        logger.log({
+          level: 'warn',
+          name: 'storage.satellite-preferences.load-failed',
+        });
+      }
+    };
+
+    void loadMaximumCloudCover();
+    return () => {
+      cancelled = true;
+    };
+  }, [database, logger]);
 
   const coordinates =
     searchViewport === null
@@ -1386,7 +1410,20 @@ export function SatelliteBrowser({
             valueLabelDisplay="auto"
             onChange={(_event, value: number | number[]) => {
               const nextValue = Array.isArray(value) ? value[0] : value;
-              if (nextValue !== undefined) setMaxCloudCoverPercent(nextValue);
+              if (nextValue !== undefined) {
+                cloudCoverChangedByUser.current = true;
+                setMaxCloudCoverPercent(nextValue);
+              }
+            }}
+            onChangeCommitted={(_event, value: number | number[]) => {
+              const nextValue = Array.isArray(value) ? value[0] : value;
+              if (nextValue === undefined) return;
+              void database.saveMaximumCloudCoverPercent(nextValue).catch(() => {
+                logger.log({
+                  level: 'warn',
+                  name: 'storage.satellite-preferences.save-failed',
+                });
+              });
             }}
           />
         </Box>

@@ -68,7 +68,7 @@ test('keeps the full-screen map fixed while navigation changes and collapses', a
 
   await page.getByRole('tab', { name: 'Satellite' }).click();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
-  await page.getByRole('button', { name: 'Hide navigation from GR' }).click();
+  await page.getByRole('button', { name: 'Hide navigation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
 

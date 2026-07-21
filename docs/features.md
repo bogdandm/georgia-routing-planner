@@ -37,7 +37,8 @@ derived surface, border, status, and tag colors.
 
 The current shell exposes Satellite and Layers as interactive rail destinations. Tracks
 and Markers remain visible but disabled until those feature surfaces have working
-behavior. It has no full-width app bar, empty global elevation placeholder, or generic
+behavior; hovering either disabled destination explains which capability is not yet
+available. It has no full-width app bar, empty global elevation placeholder, or generic
 always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.

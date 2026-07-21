@@ -42,9 +42,12 @@ falls back to `defaultGeorgiaCamera` before the first snapshot is available.
 
 Changing sections changes floating contextual content, not the full-viewport map owner
 or its dimensions. Collapsing navigation keeps only the GR control above the map; that
-control retains its expanded-state size and coordinates while the surrounding rail and
-panes animate out. Opening Settings or Diagnostics follows the same invariant: the
-existing `MapWorkspace` and native MapLibre instance stay mounted.
+control retains the blue logo's expanded-state size and coordinates while a white
+chevron control travels with the retracting sidebar, docks at the logo's right edge, and
+rotates to indicate expansion. Opening Settings or Diagnostics follows the same
+invariant: the existing `MapWorkspace` and native MapLibre instance stay mounted. The
+expanded GR mark and standalone chevron both collapse navigation; once collapsed, the
+combined GR-and-chevron pill is one expansion target.
 
 Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
 stretch slider validates and stores the new numeric values, prepares a replacement

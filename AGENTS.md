@@ -24,9 +24,9 @@ other continuation work for that workstream must reuse its existing branch and w
 Do not create another branch or worktree for continuation work unless the maintainer
 directly instructs you to do so. When the maintainer names an existing branch or
 worktree, keep all requested work there. Never reuse the main repository checkout or
-another agent's worktree. The maintainer may run up to four agents in parallel; separate
-worktrees keep independent workstreams isolated without fragmenting one workstream
-across repeated review branches.
+another agent's worktree. The maintainer commonly runs four to six agents in parallel;
+separate worktrees keep independent workstreams isolated without fragmenting one
+workstream across repeated review branches.
 
 Each worktree must also use a distinct, explicit development-server port. Check that the
 chosen port is free before starting Vite and pass both `--port <port>` and
@@ -35,7 +35,10 @@ chosen port is free before starting Vite and pass both `--port <port>` and
 The only exception is when the maintainer directly instructs that agent to use the main
 repository checkout for the current task. Treat the main checkout as
 maintainer-controlled in every other case: do not switch its branch, edit its files, or
-run Git operations there.
+run implementation commands there. The only repository-level Git operations allowed
+against the main checkout when starting a workstream are read-only inspection, fetching
+the intended base, and `git worktree list` or `git worktree add`. Run them with
+`git -C <main-root>` so the target is explicit.
 
 Before modifying files:
 
@@ -45,6 +48,99 @@ Before modifying files:
    the first write.
 3. Use branch names such as `feature/<short-description>`, `fix/<short-description>`,
    `docs/<short-description>`, or `chore/<short-description>`.
+
+### Creating a branch and worktree on Windows
+
+First run `git worktree list` and inspect local branches. If the workstream, branch, or
+worktree already exists, reuse it for continuation work. Do not create a second one.
+
+For a genuinely new workstream, resolve the main checkout through Git's common directory
+instead of assuming the current directory is the main checkout:
+
+```powershell
+$commonGitDir = (git rev-parse --path-format=absolute --git-common-dir).Trim()
+$mainRoot = Split-Path $commonGitDir -Parent
+$workstream = 'short-workstream-slug'
+$branch = 'feature/short-workstream-slug'
+$worktreePath = Join-Path $mainRoot ".codex-worktrees\$workstream"
+
+if (Test-Path -LiteralPath $worktreePath) {
+  throw "Worktree path already exists: $worktreePath"
+}
+git -C $mainRoot show-ref --verify --quiet "refs/heads/$branch"
+if ($LASTEXITCODE -eq 0) {
+  throw "Branch already exists: $branch"
+}
+git -C $mainRoot fetch origin main
+git -C $mainRoot worktree add $worktreePath -b $branch origin/main
+Set-Location $worktreePath
+git status --short --branch
+```
+
+Choose the branch prefix that matches the work. Replace both placeholder values; do not
+copy them literally. Before `worktree add`, confirm the path does not exist and the
+branch name is unused. Do not nest a worktree under any linked worktree except the
+repository's intentionally ignored main-checkout `.codex-worktrees/<workstream>`
+directory, which is the standard location for durable local worktrees. Managed Codex
+worktrees supplied by the host are also valid; do not relocate or recreate them.
+
+Keep the local worktree directory slug at 20 characters or fewer. Windows package paths
+can exceed filesystem cleanup limits even when Git accepts a longer worktree path.
+
+The combined `worktree add -b` command creates the branch directly in its worktree
+without switching `main`. After creation, every edit, install, test, commit, and server
+command must use the new worktree as its working directory. Verify both
+`git rev-parse --show-toplevel` and `git status --short --branch` before the first
+write.
+
+Do not automatically prune, remove, or repair other worktrees. Remove a worktree and its
+branch only when it was created as a disposable validation fixture or the maintainer
+explicitly requests removal. Resolve and verify the exact absolute target before
+removing it.
+
+### Node, pnpm, PATH, and dependencies
+
+Each worktree has its own `node_modules`. Never copy, move, junction, or symlink
+`node_modules` from the main checkout or another worktree, and never invoke a binary
+from another worktree's `node_modules/.bin`. pnpm's content-addressed store already
+shares package data safely.
+
+Before running JavaScript tooling in a new worktree:
+
+1. Read `.node-version`, `package.json#engines`, and `package.json#packageManager`.
+2. Run `Get-Command node.exe`, `node.exe --version`, `Get-Command pnpm.cmd`, and
+   `pnpm.cmd --version`.
+3. Confirm Node satisfies the declared engine and pnpm matches the declared major and
+   pinned package-manager version.
+4. If the task needs dependencies, run `pnpm.cmd install --frozen-lockfile` from the
+   worktree with network permission available from the start. Even with a frozen
+   lockfile and warm pnpm store, missing package archives may require registry access.
+   Documentation-only tasks do not need an install.
+5. Prefer repository scripts through `pnpm.cmd <script>`. In managed Windows shells, do
+   not use `pnpm exec`: duplicate PATH variables can prevent it from finding the current
+   worktree's `.bin` directory. When no repository script exists, invoke the current
+   worktree binary explicitly as `.\node_modules\.bin\<tool>.CMD <arguments>`.
+
+On Windows, use `pnpm.cmd`, not the PowerShell `pnpm.ps1` shim; managed shells may block
+the latter through execution policy. Do not change machine execution policy to make the
+shim work. If `pnpm.cmd` is absent but `corepack.cmd` exists, use `corepack.cmd pnpm`
+with the repository-pinned version. If no compatible Node or package manager is
+available, report the exact command lookup and version results; do not download or
+install a machine-wide runtime during an unrelated task.
+
+If an install or executable lookup fails, verify the current directory and executable
+source before changing files:
+
+```powershell
+git rev-parse --show-toplevel
+Get-Command node.exe
+Get-Command pnpm.cmd
+pnpm.cmd config get store-dir
+```
+
+Delete and reinstall only the current worktree's ignored `node_modules` when evidence
+shows it is incomplete or stale. Do not delete the shared pnpm store, another worktree's
+dependencies, or the lockfile as a troubleshooting shortcut.
 
 Rules:
 
@@ -651,6 +747,11 @@ scenario, or grep-selected subset. If no E2E scenario exercises the changed beha
 skip local E2E rather than using an unrelated workflow as evidence. CI may still run its
 required complete suite independently.
 
+Invoke a focused subset as
+`pnpm.cmd e2e <spec-path> --grep '<exact-test-name-or-pattern>'`. The repository wrapper
+forwards arguments to Playwright. Omit `--grep` when the complete named spec is the
+smallest justified boundary; do not insert a standalone `--`.
+
 If an E2E test fails, diagnose and fix it, then rerun only that test. Do not restart the
 complete E2E suite after each failure. A complete suite may run once later only when it
 was already justified by the branch-wide evidence and the fixes invalidate that broader
@@ -710,11 +811,78 @@ installed tool:
 
 ## Local servers and ports
 
-Before starting a local development, preview, test, or helper server, check that the
-intended TCP port has no listener. Never start on an unchecked or occupied port. Do not
-terminate or replace the existing process; choose an available port and pass it
-explicitly, including Vite's `--port <port> --strictPort`, unless the task requires the
-original port.
+Every worktree owns one explicit development-server port for its lifetime. Continuation
+work reuses that port. Choose from `4173-4199` unless the task requires another range.
+Do not assume Vite's default is available.
+
+Coordinate parallel agents through ignored reservations under the main checkout at
+`.codex-worktrees/.ports/<port>/owner.txt`. Resolve the main checkout through
+`--git-common-dir`, not through the current worktree path. Before reserving a port:
+
+1. Check existing reservations and reuse the current worktree's reservation.
+2. Check listeners with `netstat -ano | Select-String -Pattern ':<port>\s'`.
+3. Choose a port with neither a reservation nor a listener.
+4. Create the port-number directory with
+   `New-Item -ItemType Directory -ErrorAction Stop`. Directory creation is the atomic
+   reservation; if it already exists, choose another port.
+5. Write the current worktree's absolute path to `owner.txt`.
+
+A new reservation can be created with:
+
+```powershell
+$port = 4173
+$commonGitDir = (git rev-parse --path-format=absolute --git-common-dir).Trim()
+$mainRoot = Split-Path $commonGitDir -Parent
+$worktreeRoot = (git rev-parse --show-toplevel).Trim()
+$reservationsRoot = Join-Path $mainRoot '.codex-worktrees\.ports'
+$reservation = Join-Path $reservationsRoot $port
+
+New-Item -ItemType Directory -Force -Path $reservationsRoot | Out-Null
+if (netstat -ano | Select-String -Pattern ":$port\s") {
+  throw "Port $port already has a listener"
+}
+New-Item -ItemType Directory -Path $reservation -ErrorAction Stop | Out-Null
+Set-Content -LiteralPath (Join-Path $reservation 'owner.txt') -Value $worktreeRoot
+```
+
+Start Vite with `pnpm.cmd dev --port <port> --strictPort`. Do not insert a standalone
+`--`: pnpm passes it to Vite as a positional argument and Vite may ignore the options
+that follow. Set `E2E_PORT` to the same reserved port for Playwright. Never rely on
+automatic port fallback, terminate an unknown listener, or reuse another worktree's
+reservation. If strict startup reports a race, release only the reservation owned by the
+current worktree, reserve another free port, and retry once.
+
+Stop the worktree's server before releasing its reservation. Remove a reservation only
+after reading `owner.txt`, resolving both paths, and confirming it belongs to the
+current worktree. A reservation whose worktree is still listed by `git worktree list` is
+not stale merely because it has no current listener.
+
+## Environment troubleshooting and self-repair
+
+Agent workflow instructions must improve when a reproducible repository-specific
+environment problem is discovered. Do not leave the next agent to rediscover a known
+PATH, worktree, dependency, port, shell, browser, or command-wrapper failure.
+
+When the documented primary path fails:
+
+1. Reproduce it with the smallest safe command and capture the exact symptom.
+2. Determine whether the cause belongs to the repository/worktree, the managed shell, or
+   the host machine. Do not hide a machine problem with a source-code change.
+3. Apply the smallest safe fix to the current worktree or invocation.
+4. Verify the fix from the affected worktree; use a disposable worktree when the problem
+   concerns worktree creation or first-time setup.
+5. Correct the root instruction in the existing relevant section of `AGENTS.md` so its
+   primary command path works without encountering the same failure. Delete the broken
+   command and superseded alternatives in the same edit.
+6. Update `README.md` instead when the solution is a stable developer setup or operator
+   workflow, and update the appropriate `docs/` file when it changes a lasting runtime
+   or architecture contract.
+
+Do not append a known-problems list, incident diary, fallback ladder, or collection of
+commands to try. Those make every agent replay failures before finding the working path.
+The authoritative section must contain one tested primary sequence and only unavoidable
+decision branches. Do not include dates, task IDs, branch names, transient logs,
+personal paths, secrets, or machine-only workarounds that other agents cannot use.
 
 ## Final verification and definition of done
 

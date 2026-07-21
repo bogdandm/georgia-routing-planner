@@ -11,6 +11,7 @@ const playwrightCli = fileURLToPath(
 const basePath = '/georgia-routing-planner/';
 const previewPort = process.env.E2E_PORT ?? '4173';
 const previewUrl = `http://127.0.0.1:${previewPort}${basePath}`;
+const playwrightArguments = process.argv.slice(2);
 
 function runCommand(command: string, arguments_: readonly string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
 
   try {
     await waitForPreview(preview);
-    await runCommand(process.execPath, [playwrightCli, 'test']);
+    await runCommand(process.execPath, [playwrightCli, 'test', ...playwrightArguments]);
   } finally {
     await stopPreview(preview);
   }

@@ -15,9 +15,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    // Parallel V8 instrumentation on managed Windows can push the benchmark and
-    // WorkspaceShell interaction cases beyond Vitest's five-second default.
-    testTimeout: 10_000,
+    // Four to six concurrent agent workstreams can make V8 instrumentation several
+    // times slower on the managed Windows workstation. Use one stable ceiling instead
+    // of forcing each agent through incremental timeout increases.
+    testTimeout: 30_000,
     include: ['src/**/*.test.{ts,tsx}', 'test/**/*.test.{ts,tsx}'],
     setupFiles: ['./test/setup/vitest.setup.ts'],
     coverage: {

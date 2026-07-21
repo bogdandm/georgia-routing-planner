@@ -32,7 +32,9 @@ import {
   type TerrainControlState,
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
+import { mapSourceIds } from '@/presentation/map/mapIds';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
+import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   consumeMapFitBoundsCommand,
@@ -208,7 +210,12 @@ export function MapWorkspace({
   );
   const getSnapshot = useCallback(() => facade.getDiagnosticsSnapshot(), [facade]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const terrainState: TerrainControlState = terrainCommandState ?? snapshot.terrainMode;
+  const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
+  const terrainState: TerrainControlState =
+    terrainCommandState ??
+    (sharedTerrainRequested && snapshot.lifecycle === 'loading'
+      ? 'terrain'
+      : snapshot.terrainMode);
 
   useEffect(() => {
     const publishViewport = () => {
@@ -238,13 +245,27 @@ export function MapWorkspace({
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
   }, [facade, fitBoundsCommand]);
-  const mapStyle = useMemo(
-    () =>
-      mapProviderConfiguration.status === 'valid'
-        ? createHikingMapStyle(mapProviderConfiguration.value)
-        : unavailableMapStyle,
-    [mapProviderConfiguration],
-  );
+  const mapStyle = useMemo(() => {
+    if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
+    const style = createHikingMapStyle(mapProviderConfiguration.value);
+    if (sharedMapView?.orientation.mode !== '3d' || mapLayers === null) {
+      return style;
+    }
+    return {
+      ...style,
+      sources: {
+        ...style.sources,
+        [mapSourceIds.terrainDem]: createTerrainDemSource(
+          mapProviderConfiguration.value.terrain,
+          mapLayers.createDemTileUrl(),
+        ),
+      },
+      terrain: {
+        source: mapSourceIds.terrainDem,
+        exaggeration: mapProviderConfiguration.value.terrain.exaggeration,
+      },
+    } satisfies StyleSpecification;
+  }, [mapLayers, mapProviderConfiguration, sharedMapView]);
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {

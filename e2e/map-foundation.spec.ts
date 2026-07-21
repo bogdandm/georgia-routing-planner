@@ -154,6 +154,31 @@ test('persists a settled 2D position and restarts flat after reload', async ({
   expect(cameraAfterReload?.zoom).toBeCloseTo(cameraBeforeReload?.zoom ?? 0, 4);
 });
 
+test('selects shared 3D mode immediately and mounts its terrain state directly', async ({
+  page,
+}) => {
+  const terrainRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/elevation-tiles-prod/terrarium/')) {
+      terrainRequests.push(request.url());
+    }
+  });
+
+  await page.goto(
+    '?map=2&lat=42.47888&lon=44.24025&z=13.31&view=3d&bearing=0.00&pitch=45.00',
+  );
+
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
+});
+
 test('persists terrain overlay visibility from the Layers tab', async ({ page }) => {
   await page.goto('#layers');
   const workspace = page.getByTestId('map-workspace');

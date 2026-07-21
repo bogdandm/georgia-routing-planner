@@ -70,7 +70,7 @@ describe('MapWorkspace', () => {
     ).toBeVisible();
   });
 
-  it('restores bearing, pitch, and terrain only from an explicit 3D share', async () => {
+  it('selects and mounts explicit shared 3D state without a delayed terrain toggle', async () => {
     window.history.replaceState(
       null,
       '',
@@ -91,13 +91,25 @@ describe('MapWorkspace', () => {
     );
 
     await screen.findByText('Shared 3D camera 18.5/35.5');
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(facade.terrainModeRequests).toEqual([]);
     act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
+      facade.setSnapshot({
+        lifecycle: 'ready',
+        terrainMode: 'terrain',
+        camera: {
+          longitude: 44.8,
+          latitude: 41.7,
+          zoom: 13.25,
+          bearing: 18.5,
+          pitch: 35.5,
+        },
+      });
     });
-    await waitFor(() => {
-      expect(facade.terrainModeRequests).toEqual(['terrain']);
-    });
+    expect(facade.terrainModeRequests).toEqual([]);
   });
 
   it('opens and selects a shared satellite scene before map rendering is ready', async () => {

@@ -403,6 +403,7 @@ export class MapLibreFacade implements MapFacade {
     }
     this.layerController?.attach(map);
     const style = map.getStyle();
+    const terrainMode = map.getTerrain() === null ? 'flat' : 'terrain';
     this.updateSnapshot({
       lifecycle:
         this.#snapshot.message === null ||
@@ -410,6 +411,7 @@ export class MapLibreFacade implements MapFacade {
           ? 'ready'
           : 'degraded',
       camera: this.readCamera(map),
+      terrainMode,
       styleId: style.name ?? initialSnapshot.styleId,
       sourceIds: Object.keys(style.sources),
       layerIds: style.layers.map((layer) => layer.id),

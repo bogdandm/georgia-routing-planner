@@ -711,6 +711,15 @@ During implementation:
    merely to create an intermediate commit.
 5. Record commands and outcomes concisely for the handoff.
 
+Run one Vitest unit or component file with `pnpm.cmd test <test-file>`, for example
+`pnpm.cmd test tests/presentation/shell/WorkspaceShell.test.tsx`. The `test` script
+already expands to `vitest run`; never append `-- --run`, `--run`, or a standalone `--`.
+Those forms can prevent Vitest from applying the file filter and accidentally run the
+complete suite. Before waiting for completion, inspect pnpm's echoed command and require
+it to have the form `vitest run "<test-file>"`. Stop the command if the file argument is
+missing. Use `-t '<exact-test-name-or-pattern>'` after the file path when one named test
+is the smallest relevant scope.
+
 A successful check remains valid while its inputs and configuration are unchanged. A new
 turn, commit, push, or existing CI result is not a reason to rerun it. After an edit,
 rerun only invalidated checks.

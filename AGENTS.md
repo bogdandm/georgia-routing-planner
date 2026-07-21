@@ -97,6 +97,9 @@ Rules:
   inspect and incorporate them rather than discarding them.
 - End each implementation handoff by reporting the active branch, commit/check status,
   and whether the branch is awaiting approval.
+- PLAN.md is per branch only. It should never appear on `main` beranch.
+  When you finish implementing it - delete this file.
+  Basically delete it before returning final PR to user. 
 
 ## Documentation ownership: system description vs planning
 

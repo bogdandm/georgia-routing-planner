@@ -25,9 +25,11 @@ import type { StorageUsageReader } from '@/application/ports/StorageUsageReader'
 import type { TerrainComputeStatus } from '@/infrastructure/elevation/TerrainComputeBackend';
 import {
   defaultSatelliteRenderingTuning,
+  type SatelliteRenderingMode,
   type SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
 import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
+import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
 import {
   supportedContourIntervals,
   type TerrainOverlayPreferences,
@@ -43,6 +45,8 @@ interface SettingsDialogProps {
   readonly onRenderingTuningDraftChange: (value: SatelliteRenderingTuning) => void;
   readonly open: boolean;
   readonly renderingTuning: SatelliteRenderingTuning;
+  readonly renderingMode: SatelliteRenderingMode;
+  readonly onRenderingModeChange: (value: SatelliteRenderingMode) => void;
   readonly renderingTuningError: string | null;
   readonly renderingTuningPending: boolean;
   readonly storageUsage: StorageUsageReader;
@@ -82,6 +86,8 @@ export function SettingsDialog({
   onRenderingTuningDraftChange,
   open,
   renderingTuning,
+  renderingMode,
+  onRenderingModeChange,
   renderingTuningError,
   renderingTuningPending,
   storageUsage,
@@ -190,6 +196,11 @@ export function SettingsDialog({
 
         {activeTab === 'rendering' ? (
           <Stack spacing={1} role="tabpanel" aria-label="Rendering settings">
+            <SatelliteRenderingModeSelect
+              mode={renderingMode}
+              onChange={onRenderingModeChange}
+            />
+
             <Box>
               <Typography component="h3" variant="subtitle2">
                 Sentinel imagery stretch

@@ -38,7 +38,7 @@ src/
   domain/satellite/        framework-free Sentinel values and geometry calculations
   application/satellite/   cancellable Sentinel search and availability orchestration
   application/ports/       framework-free catalog, viewport, diagnostics, and storage ports
-  infrastructure/          HTTP, STAC, elevation/worker, IndexedDB, clock, and ID adapters
+  infrastructure/          HTTP, STAC, elevation/satellite workers, IndexedDB, clock, and ID adapters
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
@@ -68,6 +68,12 @@ adapter through named search and availability use cases; React never receives it
 client. A serializable viewport snapshot store bridges settled map updates to Satellite
 controls without exposing MapLibre.
 
+`infrastructure/satellite/` owns browser-side COG range decoding, UTM-to-Web Mercator
+reprojection, RGB composition, and its validated worker RPC boundary.
+`SatelliteCogTileProvider` registers one opaque MapLibre protocol and maps scene keys to
+validated asset URLs in bounded memory. MapLibre source state contains only the opaque
+scene key; COG URLs stay inside the provider and worker.
+
 Satellite presentation uses the CC0-licensed `@photostructure/tz-lookup` data resolver
 to map the submitted anchor coordinates to an IANA time zone entirely in the browser. No
 location or acquisition metadata is sent to a time-zone service.
@@ -93,6 +99,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated           |
 | Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
 | Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
+| Browser COG scene registry and raster worker              | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`      | Bounded fallback state and COG URLs stay outside React |
 | DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`           | One algorithm runs in worker or inline compatibility   |
 | Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                |
 | Imagery, visibility, stretch, and overlay preferences     | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
@@ -160,11 +167,23 @@ expose caches, provider URLs, or the native map to React. The facade forwards ca
 movement state through the controller so the worker can prioritize DEM requests and
 defer new contour calculations until movement settles. It also forwards the worker's
 coordinate-free active and queued counts into the map-layer store for the operational
-status line. The controller validates persistent imagery tuning and terrain-overlay
+status line. The controller validates persistent imagery mode/tuning and terrain-overlay
 preferences, atomically updates source tiles, and reconciles native order after style or
 satellite changes. Satellite, Layers, and Settings consume its serializable Zustand
-snapshot. Search results remain local React state in a mounted-but-hidden Satellite
-browser so rail navigation does not reset the session.
+snapshot, so the duplicated render-mode control remains synchronized. Search results
+remain local React state in a mounted-but-hidden Satellite browser so rail navigation
+does not reset the session.
+
+`SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
+module worker. The provider retains at most two scene definitions, while the worker
+retains at most two corresponding GeoTIFF reader sets. `geotiff` performs bounded HTTP
+range reads and overview selection; `proj4` transforms each output pixel between WGS84
+and the validated northern-UTM scene CRS. The controller persists the Auto, Server, or
+Browser rendering mode. Auto switches an existing raster source to this opaque protocol
+when the hosted renderer reports 429 or the browser exposes the response as status zero
+because CORS hid it; Browser starts on the protocol directly, and Server does not
+switch. Browser staging layers reveal tiles progressively and use a separate two-minute
+deadline.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

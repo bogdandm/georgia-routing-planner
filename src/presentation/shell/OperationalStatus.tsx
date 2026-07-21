@@ -1,5 +1,6 @@
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import {
   Box,
   ButtonBase,
@@ -23,7 +24,7 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { satelliteRequestStatusStore } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
 
 interface DisplayStatus {
-  readonly kind: 'ready' | 'pending' | 'error';
+  readonly kind: 'ready' | 'pending' | 'warning' | 'error';
   readonly message: string;
   readonly startedAt: number | null;
   readonly announcement: 'polite' | 'assertive';
@@ -33,6 +34,10 @@ interface DisplayStatus {
 export function OperationalStatus() {
   const { mapDiagnostics, mapProviderConfiguration } = useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
+  const automaticBrowserFallbackActive = useStore(
+    mapLayerStore,
+    (state) => state.automaticBrowserFallbackActive,
+  );
   const layerError = useStore(mapLayerStore, (state) => state.errorMessage);
   const terrainQueue = useStore(mapLayerStore, (state) => state.terrainComputeQueue);
   const requestStatus = useStore(satelliteRequestStatusStore);
@@ -109,6 +114,14 @@ export function OperationalStatus() {
       startedAt: null,
       announcement: 'polite',
     };
+  } else if (automaticBrowserFallbackActive) {
+    display = {
+      kind: 'warning',
+      message:
+        'Satellite imagery switched to browser rendering because the server was unavailable.',
+      startedAt: null,
+      announcement: 'polite',
+    };
   } else {
     display = {
       kind: 'ready',
@@ -174,9 +187,11 @@ export function OperationalStatus() {
         color:
           display.kind === 'error'
             ? 'error.dark'
-            : display.kind === 'pending'
-              ? 'primary.dark'
-              : 'text.secondary',
+            : display.kind === 'warning'
+              ? 'warning.dark'
+              : display.kind === 'pending'
+                ? 'primary.dark'
+                : 'text.secondary',
         textShadow:
           display.kind === 'ready' ? '0 1px 2px rgba(255,255,255,0.9)' : 'none',
       }}
@@ -200,6 +215,8 @@ export function OperationalStatus() {
           <CircularProgress size={14} thickness={5} aria-hidden />
         ) : display.kind === 'error' ? (
           <ErrorOutlineIcon color="error" sx={{ fontSize: 17 }} aria-hidden />
+        ) : display.kind === 'warning' ? (
+          <WarningAmberOutlinedIcon color="warning" sx={{ fontSize: 17 }} aria-hidden />
         ) : (
           <CheckCircleOutlineIcon color="success" sx={{ fontSize: 17 }} aria-hidden />
         )}

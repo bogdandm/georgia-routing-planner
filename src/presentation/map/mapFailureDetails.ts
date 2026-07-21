@@ -27,12 +27,14 @@ export function mapFailureDetails(event: MapLibreErrorEvent): MapFailureDetails 
   const status = statusFromError(event.error);
   const message = event.error.message.toLowerCase();
   // Fetch/XHR uses status 0 when no HTTP response was available (network, CORS,
-  // cancellation, or an opaque failure). It is not an HTTP client rejection.
+  // cancellation, or an opaque failure). A cross-origin HTTP rejection such as 429
+  // can therefore be indistinguishable from a connection failure here. Retrying this
+  // class would amplify a provider throttle that the browser is not allowed to expose.
   if (status === 0) {
-    return { reason: 'no-response', httpStatus: null, retryable: true };
+    return { reason: 'no-response', httpStatus: null, retryable: false };
   }
   if (status === 429) {
-    return { reason: 'rate-limit', httpStatus: status, retryable: true };
+    return { reason: 'rate-limit', httpStatus: status, retryable: false };
   }
   if (status === 408 || status === 504) {
     return { reason: 'timeout', httpStatus: status, retryable: true };

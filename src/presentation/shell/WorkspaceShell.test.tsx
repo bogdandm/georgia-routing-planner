@@ -1,7 +1,14 @@
 import { ThemeProvider } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { userEvent } from '@testing-library/user-event';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -708,6 +715,20 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
     ).toBeVisible();
+    const satelliteRender = screen.getByRole('combobox', {
+      name: 'Satellite render',
+    });
+    expect(satelliteRender).toHaveTextContent('Auto');
+    await user.click(satelliteRender);
+    await user.click(screen.getByRole('option', { name: 'Browser' }));
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingMode()).toBe('browser');
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        satelliteRenderingMode: 'browser',
+      });
+    });
     expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeVisible();
@@ -825,6 +846,49 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('mirrors the persisted satellite rendering mode in Satellite and Settings', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    const satelliteTools = screen.getByRole('complementary', {
+      name: 'Satellite imagery tools',
+    });
+    const sidebarMode = within(satelliteTools).getByRole('combobox', {
+      name: 'Satellite render',
+    });
+    expect(sidebarMode).toHaveTextContent('Auto');
+    act(() => {
+      mapLayerStore.setState({
+        appliedImagery: {
+          status: 'loading',
+          sceneKey: 'sentinel-2-l2a:in-flight',
+          previousSceneKey: null,
+          stage: 'rendering',
+          message: 'Rendering in progress',
+          startedAt: Date.now(),
+        },
+      });
+    });
+    expect(sidebarMode).toBeEnabled();
+    await user.click(sidebarMode);
+    await user.click(screen.getByRole('option', { name: 'Server' }));
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingMode()).toBe('server');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Settings' });
+    await user.click(within(settings).getByRole('tab', { name: 'Rendering' }));
+    expect(
+      within(settings).getByRole('combobox', { name: 'Satellite render' }),
+    ).toHaveTextContent('Server');
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        satelliteRenderingMode: 'server',
+      });
+    });
+  });
+
   it('shows compatibility mode only while terrain compute uses the inline backend', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
@@ -879,6 +943,26 @@ describe('WorkspaceShell', () => {
     });
     expect(screen.getByLabelText('Terrain compute queue state')).toHaveTextContent(
       'Terrain worker · queue 4/32 · 1 active',
+    );
+  });
+
+  it('replaces Ready with a warning after automatic browser fallback', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    mapLayerStore.setState({ automaticBrowserFallbackActive: true });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Satellite imagery switched to browser rendering because the server was unavailable.',
     );
   });
 

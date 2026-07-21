@@ -325,19 +325,21 @@ red/green/blue assets. The default maps each channel over 0–10,000 reflectance
 display gamma. Users can persistently tune the upper reflectance bound, gamma, and up to
 five times normal saturation in Settings; a lower bound brightens midtones but can clip
 the brightest snow. TiTiler performs bounded COG reads, RGB composition, reprojection,
-and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles.
+and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles during normal
+operation.
 
 The default is anonymous and requires no browser secret, but it is a best-effort demo
 service with no project SLA. It is acceptable for the current low-traffic static MVP and
-manual review, not sustained production traffic. The renderer ID, HTTPS template, tile
-size, zoom bounds, and attribution are validated public configuration so a managed
+manual review, not sustained production traffic. The browser therefore includes a local
+COG raster fallback for renderer throttling. The renderer ID, HTTPS template, tile size,
+zoom bounds, and attribution are validated public configuration so a managed
 TiTiler-compatible deployment can replace it without changing catalog, UI, or map
-commands. There is no silent renderer fallback.
+commands.
 
-The renderer has its own validated 60-second request ceiling, separate from the shorter
-catalog and terrain request policy. This accommodates slow imagery delivery while still
-ending a stalled staging operation predictably; replacing, clearing, or superseding a
-scene cancels the wait immediately.
+The hosted renderer has its own validated 60-second request ceiling, separate from the
+shorter catalog and terrain request policy. Browser rendering has a fixed two-minute
+application deadline because local range reads, reprojection, and encoding are slower.
+Replacing, clearing, or superseding a scene cancels either wait immediately.
 
 The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and
@@ -349,21 +351,36 @@ cache-partition policy therefore receive a sanitized, stable `application_origin
 derived from scheme, host, and port. The default GitHub Pages deployment uses
 `https-bogdandm-github-io`, while local ports receive distinct values; renderers
 configured with `none` receive no extra parameter. This value contains no path, query,
-user data, or secret. For an already active raster, HTTP 429, HTTP 5xx, timeout, and
-network failures trigger up to three deduplicated failed-tile refreshes with exponential
-delay. Refreshing only the failed canonical tile coordinates keeps already rendered
-imagery available. The current status names the exact HTTP code when available;
-developer diagnostics also retain the stable source ID, safe failure class, aggregate
-count, recovery state, and retry attempt. URLs, queries, response bodies, and tile
-coordinates remain excluded. MapLibre status zero is reported as `no-response`, which
-accurately covers blocked CORS responses as well as connection failures without
-inventing an HTTP status.
+user data, or secret. The persisted Rendering control offers Auto, Server, and Browser.
+Auto starts with the hosted template and switches on explicit HTTP 429 or status-zero;
+Server stays on the hosted template and reports those failures without local fallback;
+Browser starts directly on the local protocol and sends no TiTiler tile requests. None
+of the modes retries HTTP 429 or status-zero. A renderer can omit CORS headers from its
+429 response, leaving the application with only status zero. A dedicated module worker
+range-reads the validated red, green, and blue COGs, selects appropriate overviews,
+transforms output pixels between Web Mercator and the declared northern UTM CRS, applies
+the saved reflectance/gamma/saturation tuning, and returns 256-pixel WebP tiles. The
+main thread and MapLibre source contain only a safe scene key. The provider and worker
+each retain at most two scene definitions; the GeoTIFF readers use bounded block caches.
+HTTP 5xx, timeout, and identifiable network failures trigger up to three deduplicated
+failed-tile refreshes with exponential delay. Refreshing only the failed canonical tile
+coordinates keeps already rendered imagery available. The current status names the exact
+HTTP code when available; developer diagnostics also retain the stable source ID, safe
+failure class, aggregate count, recovery state, and retry attempt. URLs, queries,
+response bodies, and tile coordinates remain excluded. MapLibre status zero is reported
+as `no-response`, which accurately covers blocked CORS responses as well as connection
+failures without inventing an HTTP status. If direct COG range access or worker
+rasterization also fails, the safe browser-rendering error remains visible and staging
+preserves the prior scene.
 
 The map adapter prepares a replacement raster under a second stable source/layer slot
-and reveals it only after MapLibre reports the source loaded. Transient staging failures
-receive the same bounded failed-tile refreshes and stability check as active imagery. A
-remaining transient tile does not reject otherwise usable partial imagery; it is
-promoted after the bounded retries while its failure remains visible until MapLibre
+and reveals it immediately in every render mode, so each completed tile appears over the
+prior raster or vector basemap. The prior source is removed only after the replacement
+settles. Auto-mode renderer 429/status-zero failures retain that progressive staging
+layer while switching its template before local tiles begin arriving. Retryable staging
+failures receive the same bounded failed-tile refreshes and stability check as active
+imagery. A remaining transient tile does not reject otherwise usable partial imagery; it
+is promoted after the bounded retries while its failure remains visible until MapLibre
 later returns successful data for that exact tile. A non-retryable failure, timeout,
 cancellation, or supersession removes only staging resources and leaves the prior scene
 and basemap usable. The validated WGS84 footprint renders independently as GeoJSON,

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { writeArrayBuffer } from 'geotiff';
 import searchResponse from '../test/fixtures/satellite/search-response.json' with { type: 'json' };
 
 const openFreeMapOrigin = 'https://tiles.openfreemap.org';
@@ -23,6 +24,31 @@ const terrainDemFixture = Buffer.from(
   ].join(''),
   'base64',
 );
+
+function createSentinelCogFixture(): Buffer {
+  const width = 256;
+  const height = 256;
+  const reflectance = new Uint16Array(width * height);
+  reflectance.fill(4_000);
+  return Buffer.from(
+    writeArrayBuffer(reflectance, {
+      width,
+      height,
+      BitsPerSample: [16],
+      SampleFormat: [1],
+      SamplesPerPixel: 1,
+      PhotometricInterpretation: 1,
+      ModelPixelScale: [1_562.5, 1_953.125, 0],
+      ModelTiepoint: [0, 0, 0, 300_000, 5_000_000, 0],
+      GTModelTypeGeoKey: 1,
+      GTRasterTypeGeoKey: 1,
+      ProjectedCSTypeGeoKey: 32_638,
+      GDAL_NODATA: '0',
+    }),
+  );
+}
+
+const sentinelCogFixture = createSentinelCogFixture();
 
 function encodeVarint(value: number): Buffer {
   const bytes: number[] = [];
@@ -207,12 +233,34 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
   );
   await page.route(
     new RegExp(`^${sentinelCogFixtureOrigin.replaceAll('.', '\\.')}`),
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'image/png',
-        body: terrainDemFixture,
-      }),
+    (route) => {
+      const range = /^bytes=(\d+)-(\d*)$/u.exec(route.request().headers().range ?? '');
+      if (range === null) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'image/tiff',
+          headers: {
+            'accept-ranges': 'bytes',
+            'access-control-allow-origin': '*',
+          },
+          body: sentinelCogFixture,
+        });
+      }
+      const start = Number(range[1]);
+      const requestedEnd =
+        range[2] === '' ? sentinelCogFixture.length - 1 : Number(range[2]);
+      const end = Math.min(requestedEnd, sentinelCogFixture.length - 1);
+      return route.fulfill({
+        status: 206,
+        contentType: 'image/tiff',
+        headers: {
+          'accept-ranges': 'bytes',
+          'access-control-allow-origin': '*',
+          'content-range': `bytes ${String(start)}-${String(end)}/${String(sentinelCogFixture.length)}`,
+        },
+        body: sentinelCogFixture.subarray(start, end + 1),
+      });
+    },
   );
   await page.route(
     new RegExp(`^${terrainOrigin.replaceAll('.', '\\.')}/elevation-tiles-prod/`),

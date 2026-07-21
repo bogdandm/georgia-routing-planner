@@ -2,8 +2,14 @@ import { createStore } from 'zustand/vanilla';
 
 import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
 import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
-import type { TerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
-import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
+import type {
+  SatelliteRenderingMode,
+  TerrainOverlayPreferences,
+} from '@/application/ports/MapLayerPreferencesRepository';
+import {
+  defaultSatelliteRenderingMode,
+  defaultTerrainOverlayPreferences,
+} from '@/application/ports/MapLayerPreferencesRepository';
 import type {
   TerrainComputeQueueState,
   TerrainComputeStatus,
@@ -18,16 +24,19 @@ export interface TerrainOverlaySnapshot {
 
 export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
+  readonly automaticBrowserFallbackActive: boolean;
   readonly errorMessage: string | null;
   readonly terrainComputeStatus: TerrainComputeStatus;
   readonly terrainComputeQueue: TerrainComputeQueueState;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly openStreetMapOpacity: number;
+  readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
 
 export const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
+  automaticBrowserFallbackActive: false,
   errorMessage: null,
   terrainComputeStatus: 'worker',
   terrainComputeQueue: {
@@ -48,6 +57,7 @@ export const initialMapLayerState: MapLayerState = {
     'places-and-pois': true,
   },
   openStreetMapOpacity: 1,
+  satelliteRenderingMode: defaultSatelliteRenderingMode,
   terrainOverlays: {
     initialized: false,
     preferences: defaultTerrainOverlayPreferences,

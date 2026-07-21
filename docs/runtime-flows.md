@@ -65,10 +65,14 @@ tile template with the opaque browser COG protocol and keeps the staging wait op
 worker-rendered tiles; Server mode fails without switching. Hosted and browser tiles are
 visible progressively as each result arrives, while readiness and removal of the prior
 source still wait for the staging source to settle. Browser rendering has a two-minute
-deadline instead of the configured hosted-renderer deadline. When only another transient
-tile remains unavailable, it promotes the usable partial raster after the retries are
-exhausted and keeps the failure visible. Other non-retryable or whole-source failures
-preserve the previous raster and surface a safe status-specific explanation.
+deadline instead of the configured hosted-renderer deadline. Once an automatically
+switched raster becomes active, transient map-layer state keeps a browser-fallback flag
+so the shell replaces Ready with a warning even after MapLibre recovers to its ready
+lifecycle. An explicit Browser selection, successful hosted render, or imagery removal
+clears the flag. When only another transient tile remains unavailable, it promotes the
+usable partial raster after the retries are exhausted and keeps the failure visible.
+Other non-retryable or whole-source failures preserve the previous raster and surface a
+safe status-specific explanation.
 
 Both mirrored rendering-mode controls remain enabled while staging. A mode command
 persists the mode immediately, aborts the controller-owned application signal, removes

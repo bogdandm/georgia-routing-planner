@@ -759,6 +759,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has('sentinel-raster-a')).toBe(false);
     expect(map.layers.has(sentinelMapLayerIds.footprint)).toBe(false);
     expect(mapLayerStore.getState().appliedImagery).toEqual({ status: 'empty' });
+    expect(mapLayerStore.getState().automaticBrowserFallbackActive).toBe(false);
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         appliedScene: null,
@@ -818,6 +819,7 @@ describe('MapLibreLayerController', () => {
       expect.stringContaining('test-satellite-cog://tiles/'),
     ]);
     expect(raster.tiles[0]).not.toContain('titiler');
+    expect(mapLayerStore.getState().automaticBrowserFallbackActive).toBe(false);
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         satelliteRenderingMode: 'browser',
@@ -1065,6 +1067,7 @@ describe('MapLibreLayerController', () => {
 
     await expect(replacement).resolves.toEqual({ status: 'success' });
     expect(controller.getAppliedScene()?.id).toBe('scene-b');
+    expect(mapLayerStore.getState().automaticBrowserFallbackActive).toBe(true);
   });
 
   it('promotes partial staging imagery after bounded retries without hiding its failure', async () => {

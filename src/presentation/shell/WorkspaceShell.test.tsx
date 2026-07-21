@@ -946,6 +946,26 @@ describe('WorkspaceShell', () => {
     );
   });
 
+  it('replaces Ready with a warning after automatic browser fallback', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    mapLayerStore.setState({ automaticBrowserFallbackActive: true });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Satellite imagery switched to browser rendering because the server was unavailable.',
+    );
+  });
+
   it('announces fatal map failures assertively', () => {
     services.mapDiagnostics.update({
       ...new FakeMapFacade().snapshot,

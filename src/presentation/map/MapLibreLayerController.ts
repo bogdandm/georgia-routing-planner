@@ -469,7 +469,11 @@ export class MapLibreLayerController
     }
     this.#activeSlot = null;
     this.#appliedScene = null;
-    mapLayerStore.setState({ appliedImagery: { status: 'empty' }, errorMessage: null });
+    mapLayerStore.setState({
+      appliedImagery: { status: 'empty' },
+      automaticBrowserFallbackActive: false,
+      errorMessage: null,
+    });
     this.applyMapVisualMode();
     this.persistStableState();
     this.logger.log({
@@ -649,7 +653,11 @@ export class MapLibreLayerController
   ): Promise<SatelliteImageryCommandResult> {
     if (mode === this.#satelliteRenderingMode) return { status: 'success' };
     this.#satelliteRenderingMode = mode;
-    mapLayerStore.setState({ satelliteRenderingMode: mode, errorMessage: null });
+    mapLayerStore.setState({
+      satelliteRenderingMode: mode,
+      ...(mode === 'auto' ? {} : { automaticBrowserFallbackActive: false }),
+      errorMessage: null,
+    });
     // Rendering mode is a durable user choice, not a property of one successful scene.
     // Save it before a potentially long local render so reload preserves the selection.
     this.persistStableState();
@@ -878,6 +886,9 @@ export class MapLibreLayerController
       this.reconcileTerrainOverlays();
       mapLayerStore.setState({
         appliedImagery: { status: 'ready', sceneKey, sceneId: scene.id, visible: true },
+        automaticBrowserFallbackActive:
+          this.#satelliteRenderingMode === 'auto' &&
+          this.#browserFallbackSources.has(slot.sourceId),
         visibility: { ...state.visibility, 'satellite-imagery': true },
         errorMessage: null,
       });
@@ -1686,6 +1697,9 @@ export class MapLibreLayerController
       // MapLibre sends one ErrorEvent to the global map listener and the temporary
       // source-readiness listener. Both must observe the same successful transition.
       this.#browserFallbackHandledEvents.add(event);
+      if (sourceId === this.#activeSlot?.sourceId) {
+        mapLayerStore.setState({ automaticBrowserFallbackActive: true });
+      }
       // The source was already progressive; keep it visible as its template switches.
       // The previous raster remains below it until the staging source settles.
       if (map !== null) this.startProgressiveRasterRendering(map, sourceId);

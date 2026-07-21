@@ -139,6 +139,10 @@ rasterization without retrying TiTiler. Server never falls back locally, and Bro
 bypasses TiTiler entirely. In every mode, tiles become visible individually as they
 finish while the prior scene or vector basemap remains below them. Browser work has a
 two-minute application deadline; the configured server deadline remains unchanged. A
+successful automatic fallback replaces the normal Ready status with a persistent,
+non-blocking warning that satellite imagery is being rendered in the browser. Choosing
+Browser explicitly does not show that warning. The warning clears when a later server
+render succeeds, the user explicitly changes rendering mode, or imagery is removed. A
 replacement or clear command cancels either wait immediately and preserves the last
 usable image. The render dropdown remains enabled during staging; changing it cancels
 the partial render, removes its staging source, and restarts the same selected scene

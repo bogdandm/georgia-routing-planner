@@ -48,6 +48,11 @@ test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without 
   await expect(page.getByText('True-color imagery applied')).toBeVisible({
     timeout: 90_000,
   });
+  await expect(
+    page.getByText(
+      'Satellite imagery switched to browser rendering because the server was unavailable.',
+    ),
+  ).toBeVisible({ timeout: 10_000 });
   expect(rendererRequests.length).toBeGreaterThan(0);
   expect(new Set(rendererRequests).size).toBe(rendererRequests.length);
   expect(cogRequests.length).toBeGreaterThan(0);

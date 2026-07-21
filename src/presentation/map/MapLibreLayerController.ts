@@ -440,8 +440,7 @@ export class MapLibreLayerController
     scene: SatelliteScene,
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult> {
-    this.#selectedScene = scene;
-    mapLayerStore.setState({ selectedScene: scene });
+    this.selectScene(scene);
     return this.runSceneApplication(scene, signal, true);
   }
 
@@ -482,6 +481,12 @@ export class MapLibreLayerController
 
   public getSelectedScene(): SatelliteScene | null {
     return this.#selectedScene;
+  }
+
+  /** Publishes an explicit scene choice before native raster work can begin. */
+  public selectScene(scene: SatelliteScene): void {
+    this.#selectedScene = scene;
+    mapLayerStore.setState({ selectedScene: scene });
   }
 
   /**

@@ -33,7 +33,10 @@ import {
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
-import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
+import {
+  satelliteSceneKey,
+  type SatelliteScene,
+} from '@/domain/satellite/SatelliteScene';
 import {
   consumeMapFitBoundsCommand,
   consumeMapNavigationCommand,
@@ -123,7 +126,10 @@ export function MapWorkspace({
   const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
   const sharedTerrainRestoreAttempted = useRef(false);
-  const sharedSceneRestoreAttempted = useRef(false);
+  const [sharedSceneToApply, setSharedSceneToApply] = useState<SatelliteScene | null>(
+    null,
+  );
+  const sharedSceneApplyController = useRef<AbortController | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
@@ -371,19 +377,19 @@ export function MapWorkspace({
     if (
       shared?.sceneKey === null ||
       shared === null ||
-      snapshot.lifecycle !== 'ready' ||
-      sharedSceneRestoreAttempted.current ||
       mapLayers === null ||
       satelliteCatalogGateway?.getScene === undefined
     ) {
       return;
     }
-    sharedSceneRestoreAttempted.current = true;
+    setActiveTab('satellite');
+    setNavigationCollapsed(false);
     const separator = shared.sceneKey.indexOf(':');
     const collection = shared.sceneKey.slice(0, separator);
     const sceneId = shared.sceneKey.slice(separator + 1);
-    const currentScene = mapLayers.getAppliedScene();
+    const currentScene = mapLayers.getSelectedScene();
     if (currentScene !== null && satelliteSceneKey(currentScene) === shared.sceneKey) {
+      setSharedSceneToApply(currentScene);
       return;
     }
     const controller = new AbortController();
@@ -392,14 +398,10 @@ export function MapWorkspace({
         operationId: idGenerator.generate(),
         signal: controller.signal,
       })
-      .then(async (scene) => {
+      .then((scene) => {
         if (scene === null || controller.signal.aborted) return;
-        const result = await mapLayers.applyScene(scene, controller.signal);
-        if (result.status === 'failed') {
-          setCameraMessage(
-            'The shared satellite image could not be restored. The shared map location is still available.',
-          );
-        }
+        mapLayers.selectScene(scene);
+        setSharedSceneToApply(scene);
       })
       .catch((error: unknown) => {
         if (
@@ -419,9 +421,38 @@ export function MapWorkspace({
     idGenerator,
     mapLayers,
     satelliteCatalogGateway,
+    setActiveTab,
+    setNavigationCollapsed,
     sharedMapView,
-    snapshot.lifecycle,
   ]);
+
+  useEffect(() => {
+    if (
+      sharedSceneToApply === null ||
+      snapshot.lifecycle !== 'ready' ||
+      mapLayers === null
+    ) {
+      return;
+    }
+    const controller = new AbortController();
+    sharedSceneApplyController.current = controller;
+    void mapLayers.applyScene(sharedSceneToApply, controller.signal).then((result) => {
+      if (sharedSceneApplyController.current !== controller) return;
+      sharedSceneApplyController.current = null;
+      setSharedSceneToApply(null);
+      if (result.status === 'failed') {
+        setCameraMessage(
+          'The shared satellite image could not be restored. The shared map location is still available.',
+        );
+      }
+    });
+    return () => {
+      if (sharedSceneApplyController.current === controller) {
+        sharedSceneApplyController.current = null;
+        controller.abort();
+      }
+    };
+  }, [mapLayers, sharedSceneToApply, snapshot.lifecycle]);
 
   useEffect(() => {
     return () => {

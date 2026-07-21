@@ -1,9 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -13,6 +14,32 @@ import {
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '../../../test/helpers/createTestServices';
 import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
+
+const sharedScene: SatelliteScene = {
+  id: 'shared-scene',
+  collection: 'sentinel-2-l2a',
+  platform: 'sentinel-2a',
+  productLevel: 'L2A',
+  acquiredAt: '2026-07-20T10:12:00.000Z',
+  cloudCoverPercent: 4,
+  footprint: {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [44, 42],
+        [45, 42],
+        [45, 43],
+        [44, 42],
+      ],
+    ],
+  },
+  tileId: '38TMN',
+  orbit: 'R036',
+  productId: 'S2A_SHARED',
+  thumbnailHref: null,
+  visualAsset: { kind: 'unavailable' },
+  attribution: 'Synthetic test data',
+};
 
 describe('MapWorkspace', () => {
   beforeEach(() => {
@@ -70,6 +97,47 @@ describe('MapWorkspace', () => {
     });
     await waitFor(() => {
       expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+  });
+
+  it('opens and selects a shared satellite scene before map rendering is ready', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=2d&scene=sentinel-2-l2a%3Ashared-scene#tracks',
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene: () => Promise.resolve(sharedScene),
+      },
+    });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const selectScene = vi.spyOn(mapLayers, 'selectScene');
+    const applyScene = vi
+      .spyOn(mapLayers, 'applyScene')
+      .mockResolvedValue({ status: 'success' });
+    const facade = new FakeMapFacade();
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shared scene map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await waitFor(() => {
+      expect(selectScene).toHaveBeenCalledWith(sharedScene);
+    });
+    expect(useUiStore.getState().activeTab).toBe('satellite');
+    expect(mapLayerStore.getState().selectedScene).toEqual(sharedScene);
+    expect(applyScene).not.toHaveBeenCalled();
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(applyScene).toHaveBeenCalledWith(sharedScene, expect.any(AbortSignal));
     });
   });
 

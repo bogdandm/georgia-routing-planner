@@ -195,6 +195,31 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('button', { name: 'Copy 3D link' })).toBeEnabled();
   });
 
+  it('shows a shared selected-scene card before the map viewport or raster is ready', async () => {
+    window.history.replaceState(null, '', '/#satellite');
+    const selectedScene = syntheticSatelliteScene(
+      'shared-before-raster',
+      '2026-07-20T10:12:00.000Z',
+    );
+    mapLayerStore.setState({
+      selectedScene,
+      appliedImagery: {
+        status: 'loading',
+        sceneKey: 'sentinel-2-l2a:shared-before-raster',
+        previousSceneKey: null,
+        stage: 'preparing',
+        message: 'Preparing the selected scene',
+        startedAt: 1,
+      },
+    });
+    useUiStore.setState({ activeTab: 'satellite' });
+
+    renderWorkspaceShell();
+
+    expect(await screen.findByText('Product S2A_shared-before-raster')).toBeVisible();
+    expect(screen.getByText(/Applying true-color imagery/)).toBeVisible();
+  });
+
   it('navigates the contextual feature panels without covering the map', async () => {
     const user = userEvent.setup();
     services.mapViewport.update(testViewport);
@@ -403,7 +428,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
   });
 
-  it('shows the restored applied scene as one removable image after refresh', async () => {
+  it('shows a selected applied scene as one removable image', async () => {
     const restoredScene = syntheticSatelliteScene(
       'restored-scene',
       '2026-06-18T10:12:00.000Z',
@@ -411,12 +436,15 @@ describe('WorkspaceShell', () => {
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
     services.mapViewport.update(testViewport);
-    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(restoredScene);
     const clearScene = vi.spyOn(mapLayers, 'clearScene').mockImplementation(() => {
-      mapLayerStore.setState({ appliedImagery: { status: 'empty' } });
+      mapLayerStore.setState({
+        appliedImagery: { status: 'empty' },
+        selectedScene: null,
+      });
       return { status: 'success' };
     });
     mapLayerStore.setState({
+      selectedScene: restoredScene,
       appliedImagery: {
         status: 'ready',
         sceneKey: 'sentinel-2-l2a:restored-scene',

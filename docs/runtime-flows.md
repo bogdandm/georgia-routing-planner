@@ -111,21 +111,30 @@ mode.
 
 ## Settled map-view write and restore
 
-1. Startup reads one versioned camera-plus-terrain-mode value before mounting the map.
-2. A saved 3D mode is applied as soon as MapLibre is ready; a saved 2D mode remains
-   flat.
+1. Startup reads one versioned center-and-zoom value before mounting the map and forces
+   bearing and pitch to zero.
+2. Only an explicit 3D share URL may restore bearing, pitch, and terrain after MapLibre
+   becomes ready; ordinary startup and regular share URLs remain flat.
 3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
    with the current terrain mode.
 4. The facade updates its snapshot, notifies React, and calls the view-settled port.
 5. `SettledCameraPersistence` keeps only the newest serializable view during its
-   debounce window. Successful terrain transitions also publish their final view
-   explicitly.
+   debounce window, then passes only its camera to the repository. The repository writes
+   center and zoom and discards orientation and terrain mode.
 6. Writes are chained so IndexedDB saves cannot overtake one another.
 7. Save failure is logged and shown as a non-blocking warning; map interaction
    continues.
 
 This flow intentionally excludes continuous `move`/render events from React, IndexedDB,
 and diagnostics.
+
+For a shared satellite URL, `MapWorkspace` opens the Satellite section and resolves the
+allowlisted collection/item identity without waiting for MapLibre readiness. The
+controller publishes the selected scene to transient `mapLayerStore` state, so
+`SatelliteBrowser` can open a one-card Images pane using footprint-derived coverage even
+before a viewport snapshot exists. Native raster application starts separately after the
+map reports ready. This separates share navigation and selection from slower tile
+rendering while keeping all scene data out of IndexedDB.
 
 ## Terrain transition
 

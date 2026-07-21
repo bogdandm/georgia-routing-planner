@@ -330,6 +330,19 @@ After final verification:
 This standing instruction authorizes feature-completion push and pull-request creation
 without another prompt. Never create a duplicate pull request for the same branch.
 
+### CI monitoring cadence
+
+The required `Checks` workflow normally needs at least five minutes to finish. After a
+push, identify the run for the latest head commit once, then wait for that run through
+one long-lived monitor such as `gh run watch <run-id> --exit-status --interval 30`. Do
+not run repeated `Start-Sleep; gh run view` commands, poll the run every minute, or send
+unchanged status updates while the expected minimum runtime has not elapsed.
+
+If a long-lived monitor is unavailable, use the product's wait or monitoring mechanism
+and make the first manual status query no earlier than five minutes after the run
+started. Inspect only the newest run for the current head SHA; do not continue
+monitoring superseded runs after another commit is pushed.
+
 ### Final handoff format
 
 Every completed-workstream report must present these fields together and in this order:

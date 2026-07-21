@@ -33,10 +33,7 @@ import {
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
-import {
-  satelliteSceneKey,
-  type SatelliteScene,
-} from '@/domain/satellite/SatelliteScene';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   consumeMapFitBoundsCommand,
   consumeMapNavigationCommand,
@@ -393,11 +390,6 @@ export function MapWorkspace({
     const separator = shared.sceneKey.indexOf(':');
     const collection = shared.sceneKey.slice(0, separator);
     const sceneId = shared.sceneKey.slice(separator + 1);
-    const currentScene = mapLayers.getSelectedScene();
-    if (currentScene !== null && satelliteSceneKey(currentScene) === shared.sceneKey) {
-      setSharedSceneToApply(currentScene);
-      return;
-    }
     const controller = new AbortController();
     void satelliteCatalogGateway
       .getScene(collection, sceneId, {

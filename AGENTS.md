@@ -793,6 +793,19 @@ Do not first run coverage with a five-second ceiling or repeat it merely to appl
 known limit. If a test still exceeds ten seconds, investigate it as a new failure; do
 not add sleeps, remove assertions, or silently increase the ceiling.
 
+The complete non-coverage suite can also make the `WorkspaceShell` interactions
+`navigates the contextual feature panels without covering the map` or
+`collapses from the GR logo and restores from the remaining logo` exceed the five-second
+default when many JSDOM workers contend on managed Windows. If either exact test passes
+under a focused run, validate the complete non-coverage suite once with:
+
+```powershell
+pnpm test --maxWorkers=1
+```
+
+Keep the five-second per-test ceiling; do not add sleeps, remove assertions, or rerun
+the same unconstrained suite.
+
 ### Managed Chromium timing
 
 Software-rendered Chromium is resource-constrained when MapLibre, terrain decoding,

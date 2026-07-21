@@ -1,5 +1,3 @@
-import type { KyInstance } from 'ky';
-
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
@@ -39,7 +37,6 @@ export interface RuntimeServices {
   readonly database: AppDatabase;
   readonly diagnostics: DiagnosticsService;
   readonly dispose: () => void;
-  readonly httpClient: KyInstance;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
@@ -214,7 +211,6 @@ export function createRuntimeServices(): RuntimeServices {
       mapLayers?.dispose();
       database.close();
     },
-    httpClient,
     idGenerator,
     logger,
     elevationProvider,

@@ -3,22 +3,21 @@ import type {
   MapDebugOptions,
   MapDiagnosticsSnapshot,
   MapPointInspection,
+  MapViewportBounds,
+  MapViewportSnapshot,
   TerrainMode,
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
-import type {
-  MapViewportBounds,
-  MapViewportProvider,
-} from '@/application/ports/MapViewportProvider';
 
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
  * object. Consumers observe serializable snapshots and never receive the native map.
  */
-export interface MapFacade extends MapViewportProvider {
+export interface MapFacade {
   subscribe(listener: () => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
+  getViewportSnapshot(): MapViewportSnapshot | null;
   getPointInspection(): MapPointInspection;
   closePointInspection(): void;
 

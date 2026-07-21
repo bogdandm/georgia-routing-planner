@@ -1,3 +1,5 @@
+import type { KyInstance } from 'ky';
+
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import {
@@ -50,7 +52,7 @@ interface CreateTestServicesOptions {
 
 export function createTestServices(
   options: CreateTestServicesOptions = {},
-): RuntimeServices {
+): RuntimeServices & { readonly httpClient: KyInstance } {
   const clock = new TestClock();
   const idGenerator = new TestIdGenerator();
   const logger = new BoundedDiagnosticLogger(clock, idGenerator);

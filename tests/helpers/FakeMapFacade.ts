@@ -1,14 +1,12 @@
 import type { MapFacade } from '@/presentation/map/MapFacade';
-import type {
-  MapViewportBounds,
-  MapViewportSnapshot,
-} from '@/application/ports/MapViewportProvider';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapPointInspection,
+  type MapViewportBounds,
+  type MapViewportSnapshot,
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';

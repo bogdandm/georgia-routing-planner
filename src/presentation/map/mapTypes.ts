@@ -9,6 +9,18 @@ export interface MapCoordinate {
   readonly latitude: number;
 }
 
+export interface MapViewportBounds {
+  readonly west: number;
+  readonly south: number;
+  readonly east: number;
+  readonly north: number;
+}
+
+export interface MapViewportSnapshot {
+  readonly bounds: MapViewportBounds;
+  readonly center: MapCoordinate;
+}
+
 export interface NearbyPoi {
   readonly name: string | null;
   readonly category: string;

@@ -1,7 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
-import type { MapCoordinate } from '@/presentation/map/mapTypes';
-import type { MapViewportBounds } from '@/application/ports/MapViewportProvider';
+import type { MapCoordinate, MapViewportBounds } from '@/presentation/map/mapTypes';
 
 interface MapNavigationTarget extends MapCoordinate {
   readonly zoom?: number;

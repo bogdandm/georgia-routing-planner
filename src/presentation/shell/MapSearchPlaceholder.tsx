@@ -24,7 +24,6 @@ import {
   type SyntheticEvent,
 } from 'react';
 
-import type { MapViewportBounds } from '@/application/ports/MapViewportProvider';
 import type {
   PlaceSearchKind,
   PlaceSearchResult,
@@ -36,6 +35,7 @@ import {
   maximumPlaceSearchSideKm,
 } from '@/application/map/expandPlaceSearchBounds';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import type { MapViewportBounds } from '@/presentation/map/mapTypes';
 import {
   requestMapFitBounds,
   requestMapNavigation,

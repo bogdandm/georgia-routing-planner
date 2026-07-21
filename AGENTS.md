@@ -647,79 +647,45 @@ normal verification rules for those files.
 
 ### Managed Windows coverage timing
 
-On the managed Windows workspace, parallel V8 coverage can make otherwise passing
-`WorkspaceShell` interaction tests exceed Vitest's five-second default because several
-JSDOM workers compete for CPU. The coverage configuration therefore owns a ten-second
-per-test ceiling. When coverage is required during final verification, run the
-canonical command once:
+Parallel V8 coverage can make `WorkspaceShell` interaction tests exceed Vitest's
+five-second default on managed Windows. The coverage configuration therefore owns a
+ten-second per-test ceiling. When coverage is required during final verification, run
+the canonical command once:
 
 ```powershell
 pnpm test:coverage
 ```
 
-Do not first run coverage with a five-second ceiling, and do not repeat the complete
-suite merely to apply the known ten-second requirement. If a test still exceeds ten
-seconds, investigate it as a new failure; do not add sleeps, remove assertions, or
-silently increase the ceiling again.
+Do not first run coverage with a five-second ceiling or repeat it merely to apply the
+known limit. If a test still exceeds ten seconds, investigate it as a new failure; do
+not add sleeps, remove assertions, or silently increase the ceiling.
 
 ### Managed Chromium timing
 
-GitHub's software-rendered Chromium can take several times longer than a desktop run
-when MapLibre, terrain decoding, IndexedDB persistence, and diagnostics export overlap.
-Keep CI at one browser worker, a 120-second per-test ceiling, and a 20-second assertion
-ceiling. Local runs use a 90-second per-test ceiling and a 10-second assertion ceiling.
-Retries remain disabled so a real failure produces one authoritative set of artifacts.
+Software-rendered Chromium is resource-constrained when MapLibre, terrain decoding,
+IndexedDB persistence, and diagnostics export overlap. Preserve these configured
+limits:
 
-These limits cover the observed terrain-visibility reload, diagnostics export, and
-satellite reload workflows. The earlier 5-second assertion and 30-second test limits
-expired under hosted-runner contention even though the terrain and satellite workflows
-passed on their next execution. Do not replace these limits with sleeps or loosen
-application deadlines.
+| Context | Workers | Per-test ceiling | Assertion ceiling | Retries |
+| ------- | ------- | ---------------- | ----------------- | ------- |
+| Local   | 2       | 90 seconds       | 10 seconds        | None    |
+| CI      | 1       | 120 seconds      | 20 seconds        | None    |
 
-The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
-and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling
-in `e2e/map-foundation.spec.ts`; preserve that local ceiling instead of raising the
-whole Playwright suite timeout. Send keyboard shortcuts through the canvas locator so
-focus and key delivery are one action, and allow ten seconds for the settled camera to
-reach IndexedDB.
+Keep the following focused exceptions and synchronization rules:
 
-When an environment-specific timeout recurs and the behavior passes under a focused,
-bounded run, record the exact test, cause, and validated command or local ceiling in
-this file during the same change. Do not leave later agents to rediscover known timing
-limits, and do not generalize one slow test into blanket sleeps, retries, or suite-wide
-timeout increases.
+- `e2e/map-foundation.spec.ts` owns a 60-second ceiling for the real-MapLibre camera
+  workflow. Send keyboard shortcuts through the canvas locator and allow ten seconds
+  for the settled camera to reach IndexedDB.
+- Terrain tests must wait for persisted `terrain` state before dependent camera input.
+  Treat `aria-pressed` as including the intermediate `enabling` state. After restoring
+  terrain, wait for the selected 3D control to become enabled. Preserve the 20-second
+  readiness assertion, 45-second workflow ceiling, and focused 10-second camera
+  persistence assertion.
+- `e2e/satellite-imagery.spec.ts` owns a focused two-minute ceiling.
 
-### GitHub Actions Chromium concurrency
-
-GitHub's Linux runner does not reliably sustain two fully parallel WebGL/MapLibre
-workers. The contention can make the controlled terrain source miss its application
-deadline, leave tests in flat mode with a `Retry 3D` alert, and push the terrain or
-satellite workflows past Playwright's 30-second default. Keep `workers: 1` when `CI` is
-set and two workers for local runs. CI retries remain disabled so a real failure is
-reported once instead of repeating the same resource contention.
-
-Even with one worker, software-rendered Chromium can need more than Playwright's
-five-second assertion default to make the synthetic DEM source ready. Terrain E2E tests
-must wait for the persisted `terrain` view state before sending dependent camera input;
-`aria-pressed` also represents the intermediate `enabling` state. After restoring an
-already-persisted terrain view, wait for the selected 3D control to become enabled
-because the stored value cannot distinguish the new map's pending transition from
-readiness. The application DEM deadline is 15 seconds, so use the focused 20-second
-readiness assertion and the existing 45-second terrain workflow ceiling. Use the focused
-10-second camera persistence assertion after restored-map keyboard input. The complete
-satellite-imagery workflow can exceed 45 seconds on GitHub even with one worker, so keep
-its focused two-minute ceiling in `e2e/satellite-imagery.spec.ts`. Do not replace these
-with arbitrary sleeps or suite-wide timeout increases.
-
-Use the smallest automated-test tier that proves the changed behavior. Isolated UI
-copy/style changes, local component-state fixes, and small interaction changes should
-use focused unit or React component tests plus a brief manual browser check when visual
-behavior changed. Do not add or run Playwright merely because a change is user-visible.
-Reserve local Playwright runs and new E2E coverage for major workflows or high-risk
-boundaries: cross-feature journeys, URL/base-path routing, reload persistence, MapLibre
-or WebGL lifecycle, provider/raster integration, file import/export, diagnostics export,
-deployment, and other behavior that cannot be represented faithfully below the browser
-boundary. CI may continue to run the existing E2E suite independently.
+Do not replace these limits with sleeps, retries, or broader timeout increases. When a
+new environment-specific timeout passes under a focused bounded run, record the exact
+test, cause, and validated command or local ceiling in this file during the same change.
 
 Use this test distribution:
 

@@ -59,24 +59,10 @@ Rules:
 - After approval, merge only the reviewed and verified feature-branch state. If
   additional material changes are requested after approval, return to a feature branch
   and obtain approval again.
-- Commits are allowed and encouraged on feature branches after relevant checks pass.
-  Keep commits focused and use clear imperative or Conventional Commit-style messages.
 - An explicit request to remove, postpone, or take a feature out of scope authorizes
   staging and committing the corresponding tracked-file deletions on the feature branch.
   Do not ask for separate confirmation merely because Git represents removal by staging
   the deleted paths.
-- Do not implement an entire workstream as one mega-commit. When a temporary `PLAN.md`
-  exists, it must split the work into smaller independently reviewable commits; each
-  implementation commit must include its relevant automated tests and leave the
-  repository in a buildable, testable state. Do not defer most of the work's tests to a
-  final test-only commit.
-- A feature is not handed off as finished until its relevant checks pass and its
-  feature-branch state is available in a GitHub pull request targeting `main`. When you
-  believe the feature is finished, commit the intended changes, push the feature branch,
-  open a ready-for-review pull request, and give the user its review link. This standing
-  instruction authorizes that feature-completion push and pull-request creation without
-  a separate prompt. If a pull request already exists for the branch, update it and
-  return the existing link instead of creating a duplicate.
 - Do not create a new remote, change branch protection, publish/deploy, or perform other
   external actions unless the user requests them.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to
@@ -95,11 +81,202 @@ Rules:
   result.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
-- End each implementation handoff by reporting the active branch, commit/check status,
-  and whether the branch is awaiting approval.
-- PLAN.md is per branch only. It should never appear on `main` beranch. When you finish
-  implementing it - delete this file. Basically delete it before returning final PR to
-  user.
+
+### Incremental commit cadence
+
+Implementation must be committed incrementally. Do not accumulate an entire workstream
+into one final commit.
+
+Before a multi-step workstream begins, create or update the branch-local `PLAN.md` with
+the intended commit sequence. A multi-step workstream includes work that spans multiple
+layers, independently useful behaviors, migrations, or infrastructure concerns. A single
+small atomic change does not require a plan.
+
+For each planned commit:
+
+1. Complete one independently reviewable behavior, layer, migration, or infrastructure
+   concern together with its directly relevant tests and permanent documentation.
+2. Run only the focused checks needed for that commit.
+3. Review the staged diff and commit it before starting the next planned scope.
+
+Do not wait for the final verification round before creating intermediate commits.
+Focused checks are sufficient for intermediate commits; broad checks belong to the final
+verification round.
+
+A commit should normally contain one of:
+
+- One domain or application capability with its tests.
+- One infrastructure adapter or persistence change with its tests.
+- One presentation behavior with its component tests.
+- One end-to-end workflow addition or modification.
+- One focused configuration, build, or documentation change.
+
+Do not combine domain, infrastructure, presentation, end-to-end, and unrelated
+documentation changes merely because they belong to the same feature. Split them at
+stable dependency boundaries while keeping each commit buildable and internally
+consistent. Use clear imperative or Conventional Commit-style messages.
+
+Treat approximately 1,000 changed handwritten lines in an uncommitted implementation
+diff as a checkpoint warning, not a target or absolute limit. Before adding more,
+inspect whether completed work can be committed independently. Generated files,
+lockfiles, tests, snapshots, fixtures, and mechanical formatting are excluded from this
+heuristic but should still be isolated when practical. Explain in the pull request when
+a large atomic commit genuinely cannot be divided without leaving broken or misleading
+intermediate states.
+
+### Complexity and code-growth budget
+
+Prefer changing, reusing, simplifying, or deleting existing code over adding parallel
+implementations. Line count is a review signal, not a quality target: do not reduce it
+through dense code, oversized files, deleted tests, weakened types, or combined
+responsibilities.
+
+Before adding a production file, abstraction, service, hook, adapter, state owner, or
+dependency:
+
+1. Search for the existing owner of that responsibility.
+2. Extend or simplify that owner when doing so preserves clear boundaries.
+3. Add a new abstraction only when it removes concrete duplication, isolates a required
+   boundary, or has an immediate demonstrated consumer. Do not add abstractions for
+   hypothetical future use.
+4. Record the reason and immediate consumer in `PLAN.md` when the workstream requires a
+   plan.
+
+When behavior is replaced, remove the superseded implementation, compatibility path,
+unused exports, obsolete tests, and stale documentation in the same workstream. Do not
+leave old and new implementations side by side unless a documented runtime migration
+requires both.
+
+Every multi-step `PLAN.md` must identify:
+
+- Existing code that will be reused.
+- Code, files, dependencies, or paths that will be removed or replaced.
+- Why each new production file, abstraction, state owner, or dependency is necessary.
+
+Before final verification, perform one simplification pass:
+
+- Remove dead branches, unused exports, redundant wrappers, duplicate helpers, and
+  temporary compatibility code.
+- Collapse abstractions with one trivial consumer when they add no meaningful boundary,
+  lifecycle, or test seam.
+- Remove tests only when stronger behavioral coverage makes them genuinely redundant.
+- Confirm temporary feature flags, fallback paths, and adapters have an explicit
+  continuing need.
+
+Report final handwritten production-code additions and deletions in the pull request.
+Exclude tests, fixtures, generated files, lockfiles, and formatting-only churn. Use net
+growth as a review trigger:
+
+- More than 500 net new handwritten production lines requires a brief justification.
+- More than 1,000 net new handwritten production lines requires explaining why the work
+  could not replace or simplify more existing code.
+- Three or more new production files requires listing the responsibility and immediate
+  consumer of each file.
+
+Test code is excluded from line-growth thresholds and production-file counts. Tests may
+be verbose when explicit setup, realistic fixtures, named scenarios, and focused
+assertions make behavior easier to understand or failures easier to diagnose. This
+exclusion does not justify duplicated scenarios, unused fixtures, giant snapshots, or
+tests that provide no additional behavioral evidence.
+
+### Feature finalization and pull request
+
+A feature is not handed off as finished until final verification passes and its branch
+is available in a GitHub pull request targeting `main`. By the start of final
+verification, implementation should already be distributed across its planned commits.
+Do not squash the workstream into one final commit.
+
+After final verification:
+
+1. Commit only cleanup caused by final verification or documentation corrections.
+2. Remove branch-local `PLAN.md` if it exists and commit its removal. `PLAN.md` must
+   never appear in the final pull-request state or on `main`.
+3. Push the feature branch and open a ready-for-review pull request, or update the
+   existing pull request for that branch.
+4. Give the user the pull-request link and report the active branch, commits, checks
+   run, checks skipped as not applicable, and whether the branch is awaiting approval.
+
+This standing instruction authorizes the feature-completion push and pull-request
+creation without a separate prompt. If a pull request already exists for the branch,
+update it instead of creating a duplicate.
+
+### Pull request title and description
+
+Pull-request titles must use this exact form:
+
+```text
+<type>(<scope>): <imperative summary>
+```
+
+Title rules:
+
+- `type` is one of `feat`, `fix`, `refactor`, `docs`, `test`, `perf`, `build`, `ci`, or
+  `chore`.
+- `scope` is a short lowercase kebab-case product area, feature, layer, or `repo`; it is
+  mandatory.
+- The summary starts with an imperative verb, describes the concrete outcome, has no
+  trailing period, and keeps the complete title at 72 characters or fewer.
+- Do not put issue numbers, task IDs, branch names, delivery status, or generic
+  summaries such as "update code" or "improve app" in the title.
+
+Examples:
+
+```text
+feat(planner): persist waypoint drafts across reloads
+fix(terrain): recover after DEM source timeout
+docs(workflow): standardize agent delivery policy
+```
+
+Every pull-request description must use the following headings in this order. Do not
+replace them with model-specific prose or paste a commit log.
+
+```markdown
+## Outcome
+
+- <one to three concrete user-visible or architectural results>
+
+## Changes
+
+- <grouped implementation change and why it exists>
+- <removed or replaced code, when applicable>
+- <handwritten production additions/deletions and required growth justification>
+
+## Verification
+
+| Check                     | Result                                       | Evidence                           |
+| ------------------------- | -------------------------------------------- | ---------------------------------- |
+| <command or manual check> | <Passed, Failed, Not run, or Not applicable> | <concise scope, result, or reason> |
+
+## Risk and rollback
+
+- Risk: <main regression or "Low - documentation-only change">
+- Rollback: <specific revert, flag, migration, or recovery action>
+
+## Review guidance
+
+- Start with: <best file, commit, or behavior for review>
+- Pay attention to: <important invariant, tradeoff, or "No special focus">
+```
+
+Description rules:
+
+- Describe the final branch state, not planned work or implementation chronology.
+- Keep `Outcome` to one through three bullets and do not repeat the same content under
+  `Changes`.
+- Group `Changes` by behavior or responsibility; do not dump a filename or commit list.
+- Report handwritten production additions and deletions. Use
+  `Not applicable - no production code changed` for documentation, test-only, or
+  configuration-only work.
+- In `Verification`, name every command and manual check required by the final
+  verification policy. Use only `Passed`, `Failed`, `Not run`, or `Not applicable` in
+  the result column. Give the reason for every item not run; do not paste full logs.
+- Add `## UI evidence` between `Verification` and `Risk and rollback` when presentation
+  behavior changes. Include before/after screenshots or recordings, viewport details,
+  and Penpot comparison notes. Do not add this section for non-visual changes.
+- State real risks and a concrete rollback path. Do not use unsupported claims such as
+  "no risk".
+- Update the title and description whenever branch scope, verification evidence, risk,
+  or reviewer focus materially changes.
 
 ## Documentation ownership: system description vs planning
 
@@ -567,6 +744,31 @@ Automated tests are required by default. Add or update tests in the same change 
 production behavior. Do not postpone the entire test suite to a subsequent change and do
 not rely on manual browser verification as the only evidence.
 
+### Verification cadence
+
+Verification has two phases: focused development feedback and one final verification
+round. Do not run the complete verification matrix after every edit, commit, review
+response, or follow-up prompt.
+
+During implementation:
+
+1. Run the smallest relevant test target: a test name, test file, or affected package
+   when possible.
+2. Use focused unit, component, or integration tests for ordinary changes. Use focused
+   Playwright scenarios only when browser behavior cannot be represented faithfully
+   below the end-to-end boundary.
+3. Do not run coverage, the complete Vitest suite, the complete Playwright suite,
+   `pnpm check`, or other broad verification merely to create an intermediate commit.
+4. Keep a concise record of commands run and their outcomes for the final handoff. Do
+   not paste complete successful logs when the command, result, and duration are enough.
+
+A successful check remains valid while neither its relevant inputs nor its configuration
+have changed. Do not rerun a successful command merely because a new agent turn or
+review round started, an intermediate commit was created, the branch is about to be
+pushed, or the same commit was already verified locally or by CI. After a follow-up
+edit, rerun only the checks invalidated by that edit. Documentation-only changes do not
+invalidate code, build, coverage, or end-to-end results.
+
 ### Documentation-only verification
 
 When a change modifies only Markdown or other non-executable documentation, do not run
@@ -576,94 +778,59 @@ documentation-boundary checks required by this file, and `git diff --check`. If 
 change also modifies executable code, configuration, schemas, or test fixtures, use the
 normal verification rules for those files.
 
+Documentation-only branches and pull requests must also skip Playwright in GitHub
+Actions. The workflow must classify the complete diff against the pull-request base, or
+the pushed range for protected-branch pushes, as documentation-only only when every
+changed path is either a Markdown file or under `docs/`. Workflow files, configuration,
+schemas, fixtures, scripts, and executable source make the change
+non-documentation-only.
+
+Keep the required GitHub Actions check conclusive for documentation-only changes: run a
+lightweight classification step, emit an explicit successful E2E-skip step, and do not
+install browsers, build an E2E target, or launch Playwright. Do not skip the entire
+required workflow through top-level path filters because branch protection may then wait
+indefinitely for a check that never reports a result.
+
 ### Managed Windows coverage timing
 
-On the managed Windows workspace, parallel V8 coverage can make otherwise passing
-`WorkspaceShell` interaction tests exceed Vitest's five-second default because several
-JSDOM workers compete for CPU. The coverage configuration therefore owns a ten-second
-per-test ceiling. Run the canonical command once:
+Parallel V8 coverage can make `WorkspaceShell` interaction tests exceed Vitest's
+five-second default on managed Windows. The coverage configuration therefore owns a
+ten-second per-test ceiling. When coverage is required during final verification, run
+the canonical command once:
 
 ```powershell
 pnpm test:coverage
 ```
 
-Do not first run coverage with a five-second ceiling, and do not repeat the complete
-suite merely to apply the known ten-second requirement. If a test still exceeds ten
-seconds, investigate it as a new failure; do not add sleeps, remove assertions, or
-silently increase the ceiling again.
+Do not first run coverage with a five-second ceiling or repeat it merely to apply the
+known limit. If a test still exceeds ten seconds, investigate it as a new failure; do
+not add sleeps, remove assertions, or silently increase the ceiling.
 
 ### Managed Chromium timing
 
-GitHub's software-rendered Chromium can take several times longer than a desktop run
-when MapLibre, terrain decoding, IndexedDB persistence, and diagnostics export overlap.
-Keep CI at one browser worker, a 120-second per-test ceiling, and a 20-second assertion
-ceiling. Local runs use a 90-second per-test ceiling and a 10-second assertion ceiling.
-Retries remain disabled so a real failure produces one authoritative set of artifacts.
+Software-rendered Chromium is resource-constrained when MapLibre, terrain decoding,
+IndexedDB persistence, and diagnostics export overlap. Preserve these configured limits:
 
-These limits cover the observed terrain-visibility reload, diagnostics export, and
-satellite reload workflows. The earlier 5-second assertion and 30-second test limits
-expired under hosted-runner contention even though the terrain and satellite workflows
-passed on their next execution. Do not replace these limits with sleeps or loosen
-application deadlines.
+| Context | Workers | Per-test ceiling | Assertion ceiling | Retries |
+| ------- | ------- | ---------------- | ----------------- | ------- |
+| Local   | 2       | 90 seconds       | 10 seconds        | None    |
+| CI      | 1       | 120 seconds      | 20 seconds        | None    |
 
-Before pushing MapLibre, terrain, persistence, diagnostics, or satellite E2E changes,
-run the CI-shaped suite on Windows PowerShell:
+Keep the following focused exceptions and synchronization rules:
 
-```powershell
-$env:CI='1'; pnpm e2e; Remove-Item Env:CI
-```
+- `e2e/map-foundation.spec.ts` owns a 60-second ceiling for the real-MapLibre camera
+  workflow. Send keyboard shortcuts through the canvas locator and allow ten seconds for
+  the settled camera to reach IndexedDB.
+- Terrain tests must wait for persisted `terrain` state before dependent camera input.
+  Treat `aria-pressed` as including the intermediate `enabling` state. After restoring
+  terrain, wait for the selected 3D control to become enabled. Preserve the 20-second
+  readiness assertion, 45-second workflow ceiling, and focused 10-second camera
+  persistence assertion.
+- `e2e/satellite-imagery.spec.ts` owns a focused two-minute ceiling.
 
-The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
-and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling
-in `e2e/map-foundation.spec.ts`; preserve that local ceiling instead of raising the
-whole Playwright suite timeout. Send keyboard shortcuts through the canvas locator so
-focus and key delivery are one action, and allow ten seconds for the settled camera to
-reach IndexedDB.
-
-When an environment-specific timeout recurs and the behavior passes under a focused,
-bounded run, record the exact test, cause, and validated command or local ceiling in
-this file during the same change. Do not leave later agents to rediscover known timing
-limits, and do not generalize one slow test into blanket sleeps, retries, or suite-wide
-timeout increases.
-
-### GitHub Actions Chromium concurrency
-
-GitHub's Linux runner does not reliably sustain two fully parallel WebGL/MapLibre
-workers. The contention can make the controlled terrain source miss its application
-deadline, leave tests in flat mode with a `Retry 3D` alert, and push the terrain or
-satellite workflows past Playwright's 30-second default. Keep `workers: 1` when `CI` is
-set and two workers for local runs. CI retries remain disabled so a real failure is
-reported once instead of repeating the same resource contention.
-
-Even with one worker, software-rendered Chromium can need more than Playwright's
-five-second assertion default to make the synthetic DEM source ready. Terrain E2E tests
-must wait for the persisted `terrain` view state before sending dependent camera input;
-`aria-pressed` also represents the intermediate `enabling` state. After restoring an
-already-persisted terrain view, wait for the selected 3D control to become enabled
-because the stored value cannot distinguish the new map's pending transition from
-readiness. The application DEM deadline is 15 seconds, so use the focused 20-second
-readiness assertion and the existing 45-second terrain workflow ceiling. Use the focused
-10-second camera persistence assertion after restored-map keyboard input. The complete
-satellite-imagery workflow can exceed 45 seconds on GitHub even with one worker, so keep
-its focused two-minute ceiling in `e2e/satellite-imagery.spec.ts`. Do not replace these
-with arbitrary sleeps or suite-wide timeout increases.
-
-Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
-coverage, run the CI-shaped command on Windows PowerShell:
-
-```powershell
-$env:CI='1'; pnpm e2e; Remove-Item Env:CI
-```
-
-Use the smallest automated-test tier that proves the changed behavior. Isolated UI
-copy/style changes, local component-state fixes, and small interaction changes should
-use focused unit or React component tests plus a brief manual browser check when visual
-behavior changed. Do not add or run Playwright merely because a change is user-visible.
-Reserve local Playwright runs and new E2E coverage for major workflows or high-risk
-boundaries: cross-feature journeys, URL/base-path routing, reload persistence, MapLibre
-or WebGL lifecycle, provider/raster integration, file import/export, diagnostics export,
-deployment, and other behavior that cannot be represented faithfully below the browser
-boundary. CI may continue to run the existing E2E suite independently.
+Do not replace these limits with sleeps, retries, or broader timeout increases. When a
+new environment-specific timeout passes under a focused bounded run, record the exact
+test, cause, and validated command or local ceiling in this file during the same change.
 
 Use this test distribution:
 
@@ -774,7 +941,9 @@ or coverage-ignore comments merely to meet a threshold.
 GitHub Actions runs on every pull request and protected-branch push. Required checks
 include frozen-lockfile installation, formatting, linting, type checking,
 unit/component/integration tests with coverage, catalog fixture tests, production build,
-and Playwright Chromium/axe tests against the built application.
+and Playwright Chromium/axe tests against the built application. Playwright is the only
+exception for documentation-only diffs: the workflow reports an explicit successful skip
+instead of installing Chromium or running E2E tests.
 
 Required checks block merging. Deployment uses the exact already-tested commit and is
 followed by a small Pages smoke test. CI uploads bounded failure artifacts so a
@@ -812,26 +981,51 @@ occupied port. If the port is occupied, do not terminate or replace the existing
 process; select an available port and pass it explicitly, unless the task requires the
 original port, in which case report the conflict before proceeding.
 
-## Verification and definition of done
+## Final verification and definition of done
 
-Before declaring a change complete:
+Run one final verification round after implementation and expected quick follow-up
+changes are complete. By this point, implementation should already be committed in the
+incremental sequence defined by `PLAN.md` when a plan was required.
 
-1. Run the narrow relevant tests while developing.
-2. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test` for code changes.
-3. Add or update automatic tests for every changed behavior and relevant failure path.
-4. Run `pnpm build` for dependency, configuration, map, worker, or deployment changes.
-5. Run relevant Playwright tests only for major workflows and high-risk browser
-   boundaries described in the end-to-end policy. Focused tests are sufficient for minor
-   isolated fixes and features.
-6. Verify new loading/error/empty states visually in current Chrome.
-7. Verify new failure paths emit useful bounded diagnostic events with no secret or
-   personal payload.
-8. Update the permanent document selected by the documentation matrix whenever behavior,
-   architecture, provider policy, operating steps, or ownership changes.
+1. Review the complete branch diff and confirm tests and permanent documentation match
+   the changed behavior.
+2. For documentation-only changes, run only the changed-document formatter, the
+   documentation-boundary checks required by this file, and `git diff --check`.
+3. For executable code, run `pnpm format:check`, `pnpm typecheck`, `pnpm lint`, and
+   `pnpm test` once.
+4. Run `pnpm test:integration`, catalog commands, diagnostics commands, coverage, or
+   `pnpm build` only when the changed scope requires them. Dependency, configuration,
+   map, worker, build, or deployment changes require `pnpm build`. When a required
+   aggregate command includes a narrower required command, run only the aggregate
+   command: for example, `pnpm test:coverage` replaces `pnpm test`, and a `pnpm build`
+   script that includes type checking replaces a separate `pnpm typecheck`. Do not run
+   both solely to produce duplicate evidence.
+5. Run Playwright only when the change creates or materially alters a major workflow or
+   high-risk browser boundary listed in the end-to-end policy. Focused scenarios are
+   sufficient unless the next step specifically requires the CI-shaped suite.
+6. For MapLibre, terrain, persistence, diagnostics, or satellite end-to-end changes, run
+   the CI-shaped Playwright suite once on Windows PowerShell:
+
+   ```powershell
+   $env:CI='1'; pnpm e2e; Remove-Item Env:CI
+   ```
+
+   Do not also run the complete local Playwright suite unless diagnosing a failure.
+
+7. Verify changed loading, empty, error, and partial states visually in current Chrome
+   when presentation behavior changed.
+8. Verify changed failure paths emit useful bounded diagnostic events without secret or
+   personal payloads.
 9. Confirm no secret, personal GPX metadata, generated debug file, or unrelated
    workspace artifact is included.
 10. Confirm exported contracts and non-obvious invariants have accurate, compact code
-    comments and that no comment contradicts current behavior.
+    comments and no comment contradicts current behavior.
 
-Do not mark work complete when required checks fail. Report an external or pre-existing
-failure precisely and keep unrelated user changes intact.
+If files change after the final round, rerun only invalidated checks. Repeat the
+complete round only when subsequent changes are broad enough to invalidate it. Removing
+`PLAN.md`, correcting documentation, or changing pull-request prose does not invalidate
+successful code or end-to-end checks.
+
+Do not mark work complete when a required check fails. Report an external or
+pre-existing failure precisely without repeatedly rerunning an unchanged failing
+command, and keep unrelated user changes intact.

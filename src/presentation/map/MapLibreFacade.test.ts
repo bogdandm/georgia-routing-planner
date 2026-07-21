@@ -21,6 +21,7 @@ class FakeNativeMap {
   public readonly terrainTileUpdates: string[][] = [];
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
+  public readonly jumpCalls: Record<string, unknown>[] = [];
   public repaintCalls = 0;
   public terrainElevation: number | null = null;
   readonly #sources = new Map<string, unknown>();
@@ -129,6 +130,13 @@ class FakeNativeMap {
     if (typeof options.zoom === 'number') this.#zoom = options.zoom;
     if (typeof options.bearing === 'number') this.#bearing = options.bearing;
     if (typeof options.pitch === 'number') this.#pitch = options.pitch;
+  }
+
+  public jumpTo(options: Record<string, unknown>): void {
+    this.jumpCalls.push(options);
+    this.easeTo(options);
+    this.fire('movestart');
+    this.fire('moveend');
   }
 
   public triggerRepaint(): void {
@@ -291,13 +299,27 @@ describe('MapLibreFacade', () => {
       source: 'terrain-dem',
       exaggeration: 1.15,
     });
+    expect(nativeMap.jumpCalls.slice(0, 2)).toEqual([
+      {
+        center: [44.8, 41.7],
+        zoom: 8,
+        bearing: 12,
+        pitch: 0,
+      },
+      {
+        center: [44.8, 41.7],
+        zoom: 8,
+        bearing: 12,
+        pitch: 35,
+      },
+    ]);
 
     await expect(facade.setTerrainMode('flat')).resolves.toEqual({
       status: 'success',
       mode: 'flat',
     });
     expect(nativeMap.terrainValues.at(-1)).toBeNull();
-    expect(nativeMap.easeCalls.at(-1)).toMatchObject({
+    expect(nativeMap.jumpCalls.at(-1)).toMatchObject({
       center: [44.8, 41.7],
       zoom: 8,
       bearing: 0,
@@ -306,6 +328,38 @@ describe('MapLibreFacade', () => {
 
     await facade.setTerrainMode('terrain');
     expect(nativeMap.addSourceCalls).toBe(1);
+    facade.destroy();
+  });
+
+  it('does not persist the temporary level camera used to enter 3D safely', async () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    const onViewSettled = vi.fn();
+    const facade = new MapLibreFacade(services.logger, onViewSettled, {
+      terrain: provider.value.terrain,
+      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+      requestTimeoutMs: 100,
+      equivalentErrorWindowMs: 10_000,
+    });
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    await facade.setTerrainMode('terrain');
+
+    expect(onViewSettled).toHaveBeenCalledOnce();
+    expect(onViewSettled).toHaveBeenCalledWith({
+      camera: {
+        longitude: 44.8,
+        latitude: 41.7,
+        zoom: 8,
+        bearing: 12,
+        pitch: 35,
+      },
+      terrainMode: 'terrain',
+    });
     facade.destroy();
   });
 

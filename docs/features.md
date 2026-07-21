@@ -349,8 +349,10 @@ roads, paths, labels, and POIs. Preferences are validated and stored locally wit
 existing map-layer record. Provider failure leaves unrelated layers and controls usable.
 
 The 2D/3D control operates on the same MapLibre instance and shared DEM source. Enabling
-3D applies terrain, restores a useful pitch, and waits for the source to become usable.
-Disabling terrain returns pitch and bearing to zero while retaining center and zoom.
+3D levels the camera before applying terrain, waits for the source to become usable, and
+then restores a useful pitch without persisting the intermediate view. Disabling terrain
+levels the camera before removing its terrain elevation reference, while retaining
+center and zoom.
 
 - Duplicate clicks share one in-flight transition.
 - Conflicting transitions fail explicitly instead of racing.

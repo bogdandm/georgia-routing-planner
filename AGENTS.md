@@ -352,12 +352,15 @@ Every completed-workstream report must present these fields together and in this
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
 - `Test path:` one directly runnable command in this form:
-  `Set-Location '<absolute-worktree-path>'; pnpm.cmd run dev --port <reserved-port> --strictPort`.
+  `cd /d "<absolute-worktree-path>" && pnpm.cmd run dev --port <reserved-port> --strictPort`.
 
-Use the worktree's reserved port and the tested Windows command form. Do not omit these
-fields, substitute the main checkout, provide a relative path, or describe startup only
-in prose. When no local server is applicable, keep `Test path:` and state
-`Not applicable` with the reason.
+The handoff command targets Windows Command Prompt because that is the maintainer's
+copy-paste prompt. Use `cd /d` so paths on another drive work, double quotes for the
+absolute path, and `&&` so Vite starts only after navigation succeeds. Do not use the
+PowerShell-only `Set-Location` or `;` in `Test path:`. Use the worktree's reserved port.
+Do not omit these fields, substitute the main checkout, provide a relative path, or
+describe startup only in prose. When no local server is applicable, keep `Test path:`
+and state `Not applicable` with the reason.
 
 ### Pull request title and description
 

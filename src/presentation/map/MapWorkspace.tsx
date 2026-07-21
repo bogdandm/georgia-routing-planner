@@ -568,7 +568,7 @@ export function MapWorkspace({
             attributionControl={{ compact: false }}
             initialViewState={restoredView.camera}
             mapStyle={mapStyle}
-            maxPitch={85}
+            maxPitch={75}
             onContextMenu={handleContextMenu}
             boxZoom
             doubleClickZoom

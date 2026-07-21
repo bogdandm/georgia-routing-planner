@@ -75,6 +75,35 @@ describe('MiddleMouseCameraControl', () => {
     control.detach();
   });
 
+  it('limits a low camera angle to 75 degrees', () => {
+    const container = document.createElement('div');
+    const { easeTo, map } = createMapDouble();
+    const control = new MiddleMouseCameraControl(createPivotDouble());
+    control.attach(container, map);
+    control.setEnabled(true);
+
+    container.dispatchEvent(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 1,
+        buttons: 4,
+      }),
+    );
+    window.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        button: 1,
+        buttons: 4,
+        clientY: -1_000,
+      }),
+    );
+
+    expect(easeTo).toHaveBeenCalledWith(expect.objectContaining({ pitch: 75 }));
+    control.detach();
+  });
+
   it('consumes middle drag without moving the camera while 2D is active', () => {
     const container = document.createElement('div');
     const { easeTo, map } = createMapDouble();

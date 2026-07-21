@@ -102,9 +102,11 @@ export function WorkspaceRail({
         overflow: 'visible',
         boxShadow: 'none',
         transition: (theme) =>
-          theme.transitions.create('background-color', {
-            duration: theme.transitions.duration.shorter,
-          }),
+          collapsed
+            ? 'none'
+            : theme.transitions.create('background-color', {
+                duration: theme.transitions.duration.shorter,
+              }),
       }}
     >
       <Box

@@ -359,7 +359,16 @@ export class MapLibreFacade implements MapFacade {
       });
     }
 
-    if (this.#snapshot.terrainMode === mode) {
+    const currentMode =
+      this.#map === null
+        ? this.#snapshot.terrainMode
+        : this.#map.getTerrain() === null
+          ? 'flat'
+          : 'terrain';
+    if (currentMode === mode) {
+      if (this.#snapshot.terrainMode !== mode) {
+        this.updateSnapshot({ terrainMode: mode });
+      }
       return Promise.resolve({ status: 'success', mode });
     }
 

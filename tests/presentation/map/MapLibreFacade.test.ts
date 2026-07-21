@@ -122,7 +122,9 @@ class FakeNativeMap {
   }
 
   public getTerrain(): unknown {
-    return this.terrainValues.at(-1) ?? this.initialTerrain;
+    return this.terrainValues.length === 0
+      ? this.initialTerrain
+      : this.terrainValues.at(-1);
   }
 
   public easeTo(options: Record<string, unknown>): void {
@@ -355,6 +357,31 @@ describe('MapLibreFacade', () => {
       mode: 'terrain',
     });
     expect(nativeMap.jumpCalls).toHaveLength(0);
+  });
+
+  it('can disable initial shared terrain before the map load event updates its snapshot', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'loading',
+      terrainMode: 'flat',
+    });
+    await expect(facade.setTerrainMode('flat')).resolves.toEqual({
+      status: 'success',
+      mode: 'flat',
+    });
+    expect(nativeMap.terrainValues.at(-1)).toBeNull();
+
+    nativeMap.fire('load');
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      terrainMode: 'flat',
+      camera: { bearing: 0, pitch: 0 },
+    });
   });
 
   it('does not persist the temporary level camera used to enter 3D safely', async () => {

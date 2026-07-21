@@ -124,7 +124,9 @@ export function MapWorkspace({
   } = useRuntimeServices();
   const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
-  const sharedTerrainRestoreAttempted = useRef(false);
+  const [sharedTerrainUrlIntentActive, setSharedTerrainUrlIntentActive] = useState(
+    () => sharedMapView?.orientation.mode === '3d',
+  );
   const [sharedSceneToApply, setSharedSceneToApply] = useState<SatelliteScene | null>(
     null,
   );
@@ -213,7 +215,9 @@ export function MapWorkspace({
   const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
   const terrainState: TerrainControlState =
     terrainCommandState ??
-    (sharedTerrainRequested && snapshot.lifecycle === 'loading'
+    (sharedTerrainRequested &&
+    sharedTerrainUrlIntentActive &&
+    snapshot.lifecycle === 'loading'
       ? 'terrain'
       : snapshot.terrainMode);
 
@@ -309,6 +313,16 @@ export function MapWorkspace({
     [facade, retryDelaysMs],
   );
 
+  const handleTerrainControlChange = useCallback(
+    (mode: 'flat' | 'terrain') => {
+      // A direct user choice supersedes the startup intent from a shared URL, including
+      // while MapLibre is still loading and its diagnostics snapshot remains stale.
+      setSharedTerrainUrlIntentActive(false);
+      void handleTerrainModeChange(mode);
+    },
+    [handleTerrainModeChange],
+  );
+
   useEffect(
     () => () => {
       terrainCommandAbort.current?.abort();
@@ -376,19 +390,6 @@ export function MapWorkspace({
       active = false;
     };
   }, [logger, mapCameraRepository, restoreTimeoutMs, sharedMapView]);
-
-  useEffect(() => {
-    if (
-      restoredView?.terrainMode !== 'terrain' ||
-      snapshot.lifecycle !== 'ready' ||
-      snapshot.terrainMode === 'terrain' ||
-      sharedTerrainRestoreAttempted.current
-    ) {
-      return;
-    }
-    sharedTerrainRestoreAttempted.current = true;
-    void handleTerrainModeChange('terrain');
-  }, [handleTerrainModeChange, restoredView, snapshot.lifecycle, snapshot.terrainMode]);
 
   useEffect(() => {
     const shared = sharedMapView;
@@ -609,9 +610,7 @@ export function MapWorkspace({
       {restoredView !== null && mapProviderConfiguration.status === 'valid' ? (
         <TerrainModeControl
           state={terrainState}
-          onModeChange={(mode) => {
-            void handleTerrainModeChange(mode);
-          }}
+          onModeChange={handleTerrainControlChange}
         />
       ) : null}
       {!online && mapProviderConfiguration.status === 'valid' ? (

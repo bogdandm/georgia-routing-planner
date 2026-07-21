@@ -112,6 +112,37 @@ describe('MapWorkspace', () => {
     expect(facade.terrainModeRequests).toEqual([]);
   });
 
+  it('keeps an early 2D choice from a shared 3D URL after map readiness', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5#satellite',
+    );
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shared 3D map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Shared 3D map');
+    const flatButton = screen.getByRole('button', { name: 'Show flat 2D map' });
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(flatButton);
+
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+    expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+  });
+
   it('opens and selects a shared satellite scene before map rendering is ready', async () => {
     window.history.replaceState(
       null,

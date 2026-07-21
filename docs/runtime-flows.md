@@ -117,7 +117,9 @@ mode.
    bearing and pitch to zero.
 2. Only an explicit 3D share URL initializes the first MapLibre style with terrain and
    its shared bearing and pitch. The 3D control reflects that URL intent immediately;
-   ordinary startup and regular share URLs remain flat.
+   ordinary startup and regular share URLs remain flat. A user selecting 2D during
+   initial loading supersedes the URL intent immediately; later readiness updates cannot
+   re-enable terrain.
 3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
    with the current terrain mode.
 4. The facade updates its snapshot, notifies React, and calls the view-settled port.

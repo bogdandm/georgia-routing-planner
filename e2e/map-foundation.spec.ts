@@ -179,6 +179,27 @@ test('selects shared 3D mode immediately and mounts its terrain state directly',
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
 });
 
+test('honors an immediate 2D choice while a shared 3D map is still loading', async ({
+  page,
+}) => {
+  await page.goto(
+    '?map=2&lat=42.47888&lon=44.24025&z=13.31&view=3d&bearing=0.00&pitch=45.00#satellite',
+  );
+
+  const flatButton = page.getByRole('button', { name: 'Show flat 2D map' });
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await flatButton.click();
+  await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('persists terrain overlay visibility from the Layers tab', async ({ page }) => {
   await page.goto('#layers');
   const workspace = page.getByTestId('map-workspace');

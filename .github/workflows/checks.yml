@@ -19,6 +19,41 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify documentation-only changes
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base_sha="$PUSH_BEFORE_SHA"
+          diff_range="$PUSH_BEFORE_SHA..$GITHUB_SHA"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base_sha="$PR_BASE_SHA"
+            diff_range="$PR_BASE_SHA...$GITHUB_SHA"
+          fi
+
+          docs_only=false
+          if [[ -n "$base_sha" && ! "$base_sha" =~ ^0+$ ]]; then
+            changed_paths="$(git diff --name-only --diff-filter=ACDMRT "$diff_range")"
+            if [[ -n "$changed_paths" ]]; then
+              docs_only=true
+              while IFS= read -r changed_path; do
+                case "$changed_path" in
+                  *.md | docs/*) ;;
+                  *)
+                    docs_only=false
+                    break
+                    ;;
+                esac
+              done <<< "$changed_paths"
+            fi
+          fi
+
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v4
         with:
           version: 11.9.0
@@ -31,8 +66,16 @@ jobs:
       - run: pnpm check
         env:
           BASE_PATH: /georgia-routing-planner/
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      - name: Install Chromium for end-to-end tests
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run end-to-end tests
+        if: steps.changes.outputs.docs_only != 'true'
+        run: pnpm e2e
+      - name: Skip end-to-end tests for documentation-only changes
+        if: steps.changes.outputs.docs_only == 'true'
+        run:
+          echo "Skipping Playwright because every changed path is documentation-only."
       - name: Build deployable Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: pnpm build:app

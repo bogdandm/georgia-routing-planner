@@ -193,6 +193,7 @@ export class MapLibreFacade implements MapFacade {
     readonly mode: TerrainMode;
     readonly promise: Promise<TerrainTransitionResult>;
   } | null = null;
+  #terrainCameraAdjustmentActive = false;
   #terrainSourceRefreshRequired = false;
   #terrainRetryRevision = 0;
   #cancelTerrainWait: (() => void) | null = null;
@@ -362,7 +363,9 @@ export class MapLibreFacade implements MapFacade {
       return Promise.resolve({ status: 'success', mode });
     }
 
+    this.#terrainCameraAdjustmentActive = true;
     const promise = this.transitionTerrain(mode).finally(() => {
+      this.#terrainCameraAdjustmentActive = false;
       this.#terrainTransition = null;
     });
     this.#terrainTransition = { mode, promise };
@@ -459,6 +462,9 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMoveEnd = (): void => {
     this.layerController?.setTerrainInteractionActive(false);
+    // Terrain mode changes deliberately issue intermediate camera commands. Persisting
+    // one of those transient views can restore a pitched flat map or a level 3D map.
+    if (this.#terrainCameraAdjustmentActive) return;
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
@@ -829,15 +835,17 @@ export class MapLibreFacade implements MapFacade {
       if (camera.pitch > 0) {
         this.#lastTerrainPitch = camera.pitch;
       }
-      map.setTerrain(null);
-      map.easeTo({
+      // Level the terrain-relative camera before removing its elevation reference.
+      // Removing terrain from a pitched camera can move its geographic target while
+      // MapLibre reconciles the camera with sea level.
+      map.jumpTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,
         bearing: 0,
         pitch: 0,
-        duration: 250,
       });
-      const flatCamera = { ...camera, bearing: 0, pitch: 0 };
+      map.setTerrain(null);
+      const flatCamera = this.readCamera(map);
       this.updateSnapshot({
         lifecycle: 'ready',
         terrainMode: 'flat',
@@ -878,42 +886,51 @@ export class MapLibreFacade implements MapFacade {
         this.#terrainSourceRefreshRequired = false;
         this.logger.log({ level: 'info', name: 'map.terrain.retry-started' });
       }
+      // A restored 3D view can mount as a pitched flat camera. Level it before the DEM
+      // changes the center elevation so a mountain cannot temporarily cover the camera
+      // and trigger MapLibre's emergency camera correction.
+      map.jumpTo({
+        center: [camera.longitude, camera.latitude],
+        zoom: camera.zoom,
+        bearing: camera.bearing,
+        pitch: 0,
+      });
       map.setTerrain({
         source: mapSourceIds.terrainDem,
         exaggeration: provider.terrain.exaggeration,
       });
-      map.easeTo({
+      await this.waitForTerrainSource(map, provider.requestTimeoutMs);
+      map.jumpTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,
         bearing: camera.bearing,
         pitch,
-        duration: 250,
       });
-      await this.waitForTerrainSource(map, provider.requestTimeoutMs);
+      const terrainCamera = this.readCamera(map);
       this.updateSnapshot({
         lifecycle: 'ready',
         terrainMode: 'terrain',
-        camera: { ...camera, pitch },
+        camera: terrainCamera,
         sourceIds: Object.keys(map.getStyle().sources),
         message: null,
       });
-      this.onViewSettled({ camera: { ...camera, pitch }, terrainMode: 'terrain' });
+      this.onViewSettled({ camera: terrainCamera, terrainMode: 'terrain' });
       this.logger.log({ level: 'info', name: 'map.terrain.enabled' });
       return { status: 'success', mode };
     } catch {
       this.#terrainSourceRefreshRequired = true;
       map.setTerrain(null);
-      map.easeTo({
+      map.jumpTo({
         center: [camera.longitude, camera.latitude],
         zoom: camera.zoom,
         bearing: camera.bearing,
         pitch: 0,
-        duration: 0,
       });
+      const fallbackCamera = this.readCamera(map);
       this.updateSnapshot({
         lifecycle: 'degraded',
         terrainMode: 'flat',
-        camera: { ...camera, pitch: 0 },
+        camera: fallbackCamera,
         sourceIds: Object.keys(map.getStyle().sources),
         message: '3D terrain is unavailable. The 2D basemap remains usable.',
       });

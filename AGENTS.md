@@ -611,6 +611,31 @@ Automated tests are required by default. Add or update tests in the same change 
 production behavior. Do not postpone the entire test suite to a subsequent change and do
 not rely on manual browser verification as the only evidence.
 
+### Verification cadence
+
+Verification has two phases: focused development feedback and one final verification
+round. Do not run the complete verification matrix after every edit, commit, review
+response, or follow-up prompt.
+
+During implementation:
+
+1. Run the smallest relevant test target: a test name, test file, or affected package
+   when possible.
+2. Use focused unit, component, or integration tests for ordinary changes. Use focused
+   Playwright scenarios only when browser behavior cannot be represented faithfully
+   below the end-to-end boundary.
+3. Do not run coverage, the complete Vitest suite, the complete Playwright suite,
+   `pnpm check`, or other broad verification merely to create an intermediate commit.
+4. Keep a concise record of commands run and their outcomes for the final handoff. Do
+   not paste complete successful logs when the command, result, and duration are enough.
+
+A successful check remains valid while neither its relevant inputs nor its
+configuration have changed. Do not rerun a successful command merely because a new
+agent turn or review round started, an intermediate commit was created, the branch is
+about to be pushed, or the same commit was already verified locally or by CI. After a
+follow-up edit, rerun only the checks invalidated by that edit. Documentation-only
+changes do not invalidate code, build, coverage, or end-to-end results.
+
 ### Documentation-only verification
 
 When a change modifies only Markdown or other non-executable documentation, do not run
@@ -625,7 +650,8 @@ normal verification rules for those files.
 On the managed Windows workspace, parallel V8 coverage can make otherwise passing
 `WorkspaceShell` interaction tests exceed Vitest's five-second default because several
 JSDOM workers compete for CPU. The coverage configuration therefore owns a ten-second
-per-test ceiling. Run the canonical command once:
+per-test ceiling. When coverage is required during final verification, run the
+canonical command once:
 
 ```powershell
 pnpm test:coverage
@@ -649,13 +675,6 @@ satellite reload workflows. The earlier 5-second assertion and 30-second test li
 expired under hosted-runner contention even though the terrain and satellite workflows
 passed on their next execution. Do not replace these limits with sleeps or loosen
 application deadlines.
-
-Before pushing MapLibre, terrain, persistence, diagnostics, or satellite E2E changes,
-run the CI-shaped suite on Windows PowerShell:
-
-```powershell
-$env:CI='1'; pnpm e2e; Remove-Item Env:CI
-```
 
 The real-MapLibre Chromium camera workflow combines WebGL startup, terrain transitions,
 and several debounced IndexedDB assertions. It has a focused 60-second per-test ceiling
@@ -691,13 +710,6 @@ readiness assertion and the existing 45-second terrain workflow ceiling. Use the
 satellite-imagery workflow can exceed 45 seconds on GitHub even with one worker, so keep
 its focused two-minute ceiling in `e2e/satellite-imagery.spec.ts`. Do not replace these
 with arbitrary sleeps or suite-wide timeout increases.
-
-Before pushing changes that affect MapLibre, terrain, persistence, or satellite E2E
-coverage, run the CI-shaped command on Windows PowerShell:
-
-```powershell
-$env:CI='1'; pnpm e2e; Remove-Item Env:CI
-```
 
 Use the smallest automated-test tier that proves the changed behavior. Isolated UI
 copy/style changes, local component-state fixes, and small interaction changes should
@@ -856,26 +868,46 @@ occupied port. If the port is occupied, do not terminate or replace the existing
 process; select an available port and pass it explicitly, unless the task requires the
 original port, in which case report the conflict before proceeding.
 
-## Verification and definition of done
+## Final verification and definition of done
 
-Before declaring a change complete:
+Run one final verification round after implementation and expected quick follow-up
+changes are complete. By this point, implementation should already be committed in the
+incremental sequence defined by `PLAN.md` when a plan was required.
 
-1. Run the narrow relevant tests while developing.
-2. Run `pnpm typecheck`, `pnpm lint`, and `pnpm test` for code changes.
-3. Add or update automatic tests for every changed behavior and relevant failure path.
-4. Run `pnpm build` for dependency, configuration, map, worker, or deployment changes.
-5. Run relevant Playwright tests only for major workflows and high-risk browser
-   boundaries described in the end-to-end policy. Focused tests are sufficient for minor
-   isolated fixes and features.
-6. Verify new loading/error/empty states visually in current Chrome.
-7. Verify new failure paths emit useful bounded diagnostic events with no secret or
-   personal payload.
-8. Update the permanent document selected by the documentation matrix whenever behavior,
-   architecture, provider policy, operating steps, or ownership changes.
+1. Review the complete branch diff and confirm tests and permanent documentation match
+   the changed behavior.
+2. For documentation-only changes, run only the changed-document formatter, the
+   documentation-boundary checks required by this file, and `git diff --check`.
+3. For executable code, run `pnpm format:check`, `pnpm typecheck`, `pnpm lint`, and
+   `pnpm test` once.
+4. Run `pnpm test:integration`, catalog commands, diagnostics commands, coverage, or
+   `pnpm build` only when the changed scope requires them. Dependency, configuration,
+   map, worker, build, or deployment changes require `pnpm build`.
+5. Run Playwright only when the change creates or materially alters a major workflow or
+   high-risk browser boundary listed in the end-to-end policy. Focused scenarios are
+   sufficient unless the next step specifically requires the CI-shaped suite.
+6. For MapLibre, terrain, persistence, diagnostics, or satellite end-to-end changes,
+   run the CI-shaped Playwright suite once on Windows PowerShell:
+
+   ```powershell
+   $env:CI='1'; pnpm e2e; Remove-Item Env:CI
+   ```
+
+   Do not also run the complete local Playwright suite unless diagnosing a failure.
+7. Verify changed loading, empty, error, and partial states visually in current Chrome
+   when presentation behavior changed.
+8. Verify changed failure paths emit useful bounded diagnostic events without secret or
+   personal payloads.
 9. Confirm no secret, personal GPX metadata, generated debug file, or unrelated
    workspace artifact is included.
 10. Confirm exported contracts and non-obvious invariants have accurate, compact code
-    comments and that no comment contradicts current behavior.
+    comments and no comment contradicts current behavior.
 
-Do not mark work complete when required checks fail. Report an external or pre-existing
-failure precisely and keep unrelated user changes intact.
+If files change after the final round, rerun only invalidated checks. Repeat the complete
+round only when subsequent changes are broad enough to invalidate it. Removing
+`PLAN.md`, correcting documentation, or changing pull-request prose does not invalidate
+successful code or end-to-end checks.
+
+Do not mark work complete when a required check fails. Report an external or
+pre-existing failure precisely without repeatedly rerunning an unchanged failing
+command, and keep unrelated user changes intact.

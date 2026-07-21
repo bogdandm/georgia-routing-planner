@@ -529,7 +529,11 @@ src/
 tools/
   catalog/              # Node-only GPX audit/index pipeline
   diagnostics/          # support-bundle validation and summary CLI
-test/
+tests/
+  application/          # application use-case tests mirroring src/application
+  domain/               # domain tests mirroring src/domain
+  infrastructure/       # adapter and external-boundary tests mirroring src/infrastructure
+  presentation/         # React and presentation behavior tests mirroring src/presentation
   fixtures/             # synthetic GPX, STAC, terrain, catalog, and error inputs
 e2e/
 ```
@@ -842,9 +846,11 @@ Use this test distribution:
 Tests should follow Arrange/Act/Assert or Given/When/Then clearly. One test should
 communicate one behavioral reason for failure. Use descriptive behavior names.
 
-Co-locate unit and component tests with their source as `*.test.ts` or `*.test.tsx`.
-Keep shared synthetic fixtures under `test/fixtures` and browser workflows under `e2e`.
-Test code follows the same readability and type-safety rules as production code.
+Keep all unit, component, and integration tests outside `src/` under `tests/`, mirroring
+the source-layer path where applicable. Do not co-locate `*.test.ts`, `*.test.tsx`,
+`*.spec.ts`, or `*.spec.tsx` files under `src/`. Keep shared synthetic fixtures under
+`tests/fixtures` and browser workflows under `e2e/`. Test code follows the same
+readability and type-safety rules as production code.
 
 ### Unit tests
 

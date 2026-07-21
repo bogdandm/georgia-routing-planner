@@ -135,8 +135,7 @@ describe('MapWorkspace', () => {
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
-        load: () =>
-          Promise.resolve({ camera: restoredCamera, terrainMode: 'flat' as const }),
+        load: () => Promise.resolve(restoredCamera),
         save: () => Promise.resolve(),
       },
     };
@@ -156,21 +155,18 @@ describe('MapWorkspace', () => {
     await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
   });
 
-  it('restores persisted 3D mode when the native map becomes ready', async () => {
+  it('always restores a persisted camera in 2D', async () => {
     const facade = new FakeMapFacade();
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
         load: () =>
           Promise.resolve({
-            camera: {
-              longitude: 45.2,
-              latitude: 42.4,
-              zoom: 10,
-              bearing: 18,
-              pitch: 25,
-            },
-            terrainMode: 'terrain' as const,
+            longitude: 45.2,
+            latitude: 42.4,
+            zoom: 10,
+            bearing: 18,
+            pitch: 25,
           }),
         save: () => Promise.resolve(),
       },
@@ -178,19 +174,25 @@ describe('MapWorkspace', () => {
 
     render(
       <RuntimeServicesProvider services={services}>
-        <MapWorkspace facade={facade} mapCanvas={<div>Restored terrain map</div>} />
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={(initialCamera) => (
+            <div>
+              Restored flat map {String(initialCamera.bearing)}/
+              {String(initialCamera.pitch)}
+            </div>
+          )}
+        />
       </RuntimeServicesProvider>,
     );
 
-    await screen.findByText('Restored terrain map');
+    await screen.findByText('Restored flat map 0/0');
     expect(facade.terrainModeRequests).toEqual([]);
     act(() => {
       facade.setSnapshot({ lifecycle: 'ready' });
     });
-    await waitFor(() => {
-      expect(facade.terrainModeRequests).toEqual(['terrain']);
-    });
-    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+    expect(facade.terrainModeRequests).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

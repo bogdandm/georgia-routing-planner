@@ -24,7 +24,7 @@ afterEach(() => {
 describe('SettledCameraPersistence', () => {
   it('coalesces settled camera events and flushes the final value', async () => {
     vi.useFakeTimers();
-    const save = vi.fn((_view: MapViewState) => Promise.resolve());
+    const save = vi.fn((_camera: MapCamera) => Promise.resolve());
     const repository: MapCameraRepository = {
       load: () => Promise.resolve(null),
       save,
@@ -43,10 +43,7 @@ describe('SettledCameraPersistence', () => {
     await persistence.flush();
 
     expect(save).toHaveBeenCalledTimes(1);
-    expect(save).toHaveBeenCalledWith({
-      camera: { ...camera, zoom: 11 },
-      terrainMode: 'terrain',
-    });
+    expect(save).toHaveBeenCalledWith({ ...camera, zoom: 11 });
   });
 
   it('keeps camera interaction usable and reports a failed write', async () => {

@@ -429,10 +429,11 @@ relevant logical visibility controls to Layers in the same change. Visibility is
 idempotently and projected into a serializable live store. The OpenStreetMap group
 opacity scales the existing satellite-mode paint opacity for its controlled fills,
 lines, points, and labels. Vector mode always uses the unscaled base paint. Dexie
-persists visibility, shared OpenStreetMap opacity, imagery stretch, and the last
-successful scene for startup restoration. Satellite search/results state remains mounted
-while another rail section is visible, and returning to Satellite reattaches the
-existing adjacent pane without a new provider request.
+persists visibility, shared OpenStreetMap opacity, rendering mode, imagery stretch, and
+terrain-overlay preferences. Scene metadata stays transient and is never written to
+Dexie. Satellite search/results state remains mounted while another rail section is
+visible, and returning to Satellite reattaches the existing adjacent pane without a new
+provider request.
 
 ## Place search expansion
 

@@ -2,37 +2,36 @@ import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import {
   normalizeMapCamera,
+  type MapCamera,
   type MapCameraRepository,
-  type MapViewState,
 } from '@/application/ports/MapCameraRepository';
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 
 const mapCameraKey = 'map.camera';
 
 interface PersistedMapView {
-  readonly schemaVersion: 2;
-  readonly camera: unknown;
-  readonly terrainMode: unknown;
+  readonly schemaVersion: 3;
+  readonly camera: Pick<MapCamera, 'longitude' | 'latitude' | 'zoom'>;
 }
 
-function readPersistedView(value: unknown): MapViewState | null {
+function readPersistedCamera(value: unknown): MapCamera | null {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
 
   const candidate = value as Record<string, unknown>;
-  const camera = normalizeMapCamera(candidate.camera);
+  const storedCamera =
+    candidate.schemaVersion === 3 &&
+    typeof candidate.camera === 'object' &&
+    candidate.camera !== null
+      ? { ...(candidate.camera as Record<string, unknown>), bearing: 0, pitch: 0 }
+      : candidate.camera;
+  const camera = normalizeMapCamera(storedCamera);
   if (camera === null) return null;
-  if (candidate.schemaVersion === 1) {
-    return { camera, terrainMode: camera.pitch > 0 ? 'terrain' : 'flat' };
-  }
-  if (
-    candidate.schemaVersion !== 2 ||
-    (candidate.terrainMode !== 'flat' && candidate.terrainMode !== 'terrain')
-  ) {
+  if (![1, 2, 3].includes(candidate.schemaVersion as number)) {
     return null;
   }
-  return { camera, terrainMode: candidate.terrainMode };
+  return { ...camera, bearing: 0, pitch: 0 };
 }
 
 /**
@@ -46,15 +45,15 @@ export class DexieMapCameraRepository implements MapCameraRepository {
     private readonly logger: DiagnosticLogger,
   ) {}
 
-  public async load(): Promise<MapViewState | null> {
+  public async load(): Promise<MapCamera | null> {
     const record = await this.database.settings.get(mapCameraKey);
     if (record === undefined) {
       return null;
     }
 
-    const view = readPersistedView(record.value);
-    if (view !== null) {
-      return view;
+    const camera = readPersistedCamera(record.value);
+    if (camera !== null) {
+      return camera;
     }
 
     await this.database.settings.delete(mapCameraKey);
@@ -66,8 +65,8 @@ export class DexieMapCameraRepository implements MapCameraRepository {
     return null;
   }
 
-  public async save(view: MapViewState): Promise<void> {
-    const normalized = normalizeMapCamera(view.camera);
+  public async save(camera: MapCamera): Promise<void> {
+    const normalized = normalizeMapCamera(camera);
     if (normalized === null) {
       throw new Error('Map camera contains non-finite values.');
     }
@@ -75,9 +74,12 @@ export class DexieMapCameraRepository implements MapCameraRepository {
     await this.database.settings.put({
       key: mapCameraKey,
       value: {
-        schemaVersion: 2,
-        camera: normalized,
-        terrainMode: view.terrainMode,
+        schemaVersion: 3,
+        camera: {
+          longitude: normalized.longitude,
+          latitude: normalized.latitude,
+          zoom: normalized.zoom,
+        },
       } satisfies PersistedMapView,
       updatedAt: this.clock.now().toISOString(),
     });

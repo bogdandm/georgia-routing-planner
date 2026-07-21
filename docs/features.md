@@ -213,9 +213,10 @@ Hiding imagery retains the applied scene and does not remove its footprint, sear
 results, or attribution contract. Relief and isoline visibility are independent of 3D
 terrain mode and satellite availability. Base land remains visible and cannot be
 disabled. Per-layer opacity, drag ordering, and custom layers are unavailable. Checkbox
-state, shared OpenStreetMap opacity, and the last successfully applied scene are stored
-locally and restored after refresh. The last successful imagery stretch is stored with
-those preferences and applied before a saved scene is restored.
+state, shared OpenStreetMap opacity, rendering mode, imagery stretch, and
+terrain-overlay preferences are stored locally and restored after refresh. Satellite
+scene metadata and assets are never persisted locally; imagery starts empty unless an
+explicit share URL requests a scene.
 
 ## Persistent map controls
 
@@ -350,6 +351,8 @@ existing map-layer record. Provider failure leaves unrelated layers and controls
 The 2D/3D control operates on the same MapLibre instance and shared DEM source. Enabling
 3D applies terrain, restores a useful pitch, and waits for the source to become usable.
 Disabling terrain returns pitch and bearing to zero while retaining center and zoom.
+Ordinary reloads also restart in 2D: durable camera state contains only center and zoom,
+never terrain mode, bearing, or pitch.
 
 - Duplicate clicks share one in-flight transition.
 - Conflicting transitions fail explicitly instead of racing.

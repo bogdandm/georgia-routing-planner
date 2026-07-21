@@ -20,7 +20,10 @@ import Map, {
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
-import type { MapViewState } from '@/application/ports/MapCameraRepository';
+import type {
+  MapCamera as PersistedMapCamera,
+  MapViewState,
+} from '@/application/ports/MapCameraRepository';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
@@ -78,9 +81,9 @@ function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
 }
 
 async function loadMapViewWithDeadline(
-  load: () => Promise<MapViewState | null>,
+  load: () => Promise<PersistedMapCamera | null>,
   timeoutMs: number,
-): Promise<MapViewState | null> {
+): Promise<PersistedMapCamera | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -118,7 +121,6 @@ export function MapWorkspace({
     idGenerator,
   } = useRuntimeServices();
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
-  const terrainRestoreAttempted = useRef(false);
   const sharedSceneRestoreAttempted = useRef(false);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
@@ -324,16 +326,13 @@ export function MapWorkspace({
     void loadMapViewWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
       .then((view) => {
         if (active) {
-          const fallback = view ?? {
-            camera: defaultGeorgiaCamera,
-            terrainMode: 'flat' as const,
-          };
+          const fallback = view ?? defaultGeorgiaCamera;
           setRestoredView({
-            ...fallback,
             camera: applySharedMapView(
-              fallback.camera,
+              { ...fallback, bearing: 0, pitch: 0 },
               parseSharedMapView(window.location.search),
             ),
+            terrainMode: 'flat',
           });
         }
       })
@@ -351,19 +350,6 @@ export function MapWorkspace({
       active = false;
     };
   }, [logger, mapCameraRepository, restoreTimeoutMs]);
-
-  useEffect(() => {
-    if (
-      restoredView?.terrainMode !== 'terrain' ||
-      snapshot.lifecycle !== 'ready' ||
-      snapshot.terrainMode === 'terrain' ||
-      terrainRestoreAttempted.current
-    ) {
-      return;
-    }
-    terrainRestoreAttempted.current = true;
-    void handleTerrainModeChange('terrain');
-  }, [handleTerrainModeChange, restoredView, snapshot.lifecycle, snapshot.terrainMode]);
 
   useEffect(() => {
     const shared = parseSharedMapView(window.location.search);

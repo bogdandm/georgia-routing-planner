@@ -31,44 +31,49 @@ afterEach(async () => {
 });
 
 describe('DexieMapCameraRepository', () => {
-  it('stores a versioned camera and clamps it to supported MapLibre ranges', async () => {
+  it('stores only a versioned 2D position and clamps it to supported ranges', async () => {
     await repository.save({
-      camera: {
-        ...camera,
-        longitude: 500,
-        latitude: -100,
-        zoom: 30,
-        bearing: -500,
-        pitch: 100,
-      },
-      terrainMode: 'terrain',
+      ...camera,
+      longitude: 500,
+      latitude: -100,
+      zoom: 30,
+      bearing: -500,
+      pitch: 100,
     });
 
     await expect(repository.load()).resolves.toEqual({
-      camera: {
-        longitude: 180,
-        latitude: -85,
-        zoom: 20,
-        bearing: -180,
-        pitch: 85,
-      },
-      terrainMode: 'terrain',
+      longitude: 180,
+      latitude: -85,
+      zoom: 20,
+      bearing: 0,
+      pitch: 0,
     });
-    await expect(services.database.settings.get('map.camera')).resolves.toMatchObject({
-      value: { schemaVersion: 2, terrainMode: 'terrain' },
-    });
+    await expect(services.database.settings.get('map.camera')).resolves.toEqual(
+      expect.objectContaining({
+        value: {
+          schemaVersion: 3,
+          camera: { longitude: 180, latitude: -85, zoom: 20 },
+        },
+      }),
+    );
   });
 
-  it('infers terrain mode when loading a legacy pitched camera', async () => {
+  it.each([
+    { schemaVersion: 1, camera },
+    { schemaVersion: 2, camera, terrainMode: 'terrain' },
+  ])('loads legacy schema $schemaVersion as a flat camera', async (value) => {
     await services.database.settings.put({
       key: 'map.camera',
-      value: { schemaVersion: 1, camera },
+      value,
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
 
     await expect(repository.load()).resolves.toEqual({
-      camera,
-      terrainMode: 'terrain',
+      longitude: camera.longitude,
+      latitude: camera.latitude,
+      zoom: camera.zoom,
+      bearing: 0,
+      pitch: 0,
     });
   });
 
@@ -105,8 +110,6 @@ describe('DexieMapCameraRepository', () => {
     vi.spyOn(services.database.settings, 'put').mockRejectedValueOnce(
       new Error('write unavailable'),
     );
-    await expect(repository.save({ camera, terrainMode: 'terrain' })).rejects.toThrow(
-      'write unavailable',
-    );
+    await expect(repository.save(camera)).rejects.toThrow('write unavailable');
   });
 });

@@ -8,16 +8,19 @@ export interface MapCamera {
 
 export type MapViewMode = 'flat' | 'terrain';
 
-/** Serializable durable map view; native MapLibre objects never cross this boundary. */
+/** Serializable runtime map view; native MapLibre objects never cross this boundary. */
 export interface MapViewState {
   readonly camera: MapCamera;
   readonly terrainMode: MapViewMode;
 }
 
-/** Persists the last settled map view without exposing the storage technology. */
+/**
+ * Persists the last settled position without durable 3D orientation. Loaded cameras
+ * always use zero bearing and pitch so an ordinary restart begins in 2D.
+ */
 export interface MapCameraRepository {
-  load(): Promise<MapViewState | null>;
-  save(view: MapViewState): Promise<void>;
+  load(): Promise<MapCamera | null>;
+  save(camera: MapCamera): Promise<void>;
 }
 
 const cameraKeys = [

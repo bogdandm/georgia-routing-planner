@@ -1,5 +1,3 @@
-import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
-
 export const logicalMapLayerIds = [
   'satellite-imagery',
   'scene-footprint',
@@ -53,7 +51,6 @@ export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
 export interface PersistedMapLayerPreferences {
   readonly visibility: MapLayerVisibilityPreferences;
   readonly openStreetMapOpacity: number;
-  readonly appliedScene: SatelliteScene | null;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;

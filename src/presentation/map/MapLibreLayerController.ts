@@ -9,7 +9,6 @@ import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type {
   MapLayerPreferencesRepository,
   MapLayerVisibilityPreferences,
-  PersistedMapLayerPreferences,
   SatelliteRenderingMode,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
@@ -277,9 +276,6 @@ export class MapLibreLayerController
   #stagingScene: SatelliteScene | null = null;
   #activeApplyController: AbortController | null = null;
   #applySequence = 0;
-  #pendingRestore: PersistedMapLayerPreferences | null = null;
-  #restoreController: AbortController | null = null;
-  #restoreInProgress = false;
   #renderingTuning: SatelliteRenderingTuning = defaultSatelliteRenderingTuning;
   #satelliteRenderingMode: SatelliteRenderingMode = defaultSatelliteRenderingMode;
   #terrainOverlayPreferences: TerrainOverlayPreferences =
@@ -332,7 +328,6 @@ export class MapLibreLayerController
       this.reconcileTerrainOverlays();
       this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
-      if (map.isStyleLoaded()) void this.restorePendingScene();
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
@@ -342,7 +337,6 @@ export class MapLibreLayerController
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
-    if (map.isStyleLoaded()) void this.restorePendingScene();
   }
 
   public createDemTileUrl(): string {
@@ -369,7 +363,6 @@ export class MapLibreLayerController
     this.#appliedOpenStreetMapOpacity = null;
     this.#openStreetMapOpacityLayerAnchors.clear();
     this.#applySequence += 1;
-    this.#restoreController?.abort();
   }
 
   /** Releases map listeners, persistence work, protocols, and terrain compute resources. */
@@ -446,9 +439,6 @@ export class MapLibreLayerController
     scene: SatelliteScene,
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult> {
-    this.#restoreController?.abort();
-    this.#restoreController = null;
-    this.#pendingRestore = null;
     return this.runSceneApplication(scene, signal, true);
   }
 
@@ -458,9 +448,6 @@ export class MapLibreLayerController
     this.#activeApplyController = null;
     this.#stagingScene = null;
     this.#applySequence += 1;
-    this.#restoreController?.abort();
-    this.#restoreController = null;
-    this.#pendingRestore = null;
     const map = this.#map;
     if (map !== null) {
       for (const slot of rasterSlots) this.removeSlot(map, slot);
@@ -621,7 +608,6 @@ export class MapLibreLayerController
       this.contourTiles.setFilterEnabled(
         persisted.terrainOverlays.filterInvalidDemPixels,
       );
-      this.#pendingRestore = persisted.appliedScene === null ? null : persisted;
       mapLayerStore.setState({
         visibility: persisted.visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
@@ -630,7 +616,6 @@ export class MapLibreLayerController
       });
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
-      await this.restorePendingScene();
     } catch {
       this.logger.log({
         level: 'warn',
@@ -1009,47 +994,6 @@ export class MapLibreLayerController
     });
   }
 
-  private async restorePendingScene(): Promise<void> {
-    const pending = this.#pendingRestore;
-    if (
-      pending === null ||
-      this.#map === null ||
-      !this.#map.isStyleLoaded() ||
-      this.#restoreInProgress
-    )
-      return;
-    const appliedScene = pending.appliedScene;
-    if (appliedScene === null) {
-      this.#pendingRestore = null;
-      return;
-    }
-    this.#restoreInProgress = true;
-    const controller = new AbortController();
-    this.#restoreController = controller;
-    let result: SatelliteImageryCommandResult | null = null;
-    try {
-      result = await this.runSceneApplication(appliedScene, controller.signal, false);
-      if (result.status === 'success') {
-        this.applyVisibility(pending.visibility);
-        this.#pendingRestore = null;
-      }
-    } finally {
-      if (this.#restoreController === controller) this.#restoreController = null;
-      this.#restoreInProgress = false;
-      if (
-        result?.status === 'cancelled' &&
-        this.#pendingRestore !== null &&
-        this.isAttachedStyleReady()
-      ) {
-        void this.restorePendingScene();
-      }
-    }
-  }
-
-  private isAttachedStyleReady(): boolean {
-    return this.#map !== null && this.#map.isStyleLoaded() === true;
-  }
-
   private applyVisibility(visibility: MapLayerVisibilityPreferences): void {
     const map = this.#map;
     if (map === null) return;
@@ -1083,14 +1027,12 @@ export class MapLibreLayerController
   }
 
   private persistStableState(): void {
-    const appliedScene = this.#appliedScene;
     const { visibility, openStreetMapOpacity } = mapLayerStore.getState();
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
         visibility,
         openStreetMapOpacity,
-        appliedScene,
         satelliteRenderingMode: this.#satelliteRenderingMode,
         renderingTuning,
         terrainOverlays: { ...this.#terrainOverlayPreferences },

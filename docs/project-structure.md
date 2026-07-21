@@ -92,22 +92,23 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 
 ## State ownership
 
-| State                                                     | Owner                                                      | Reason                                                 |
-| --------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
-| Dialogs, active rail section, developer flags             | Zustand `uiStore`                                          | Cross-component, transient, serializable UI state      |
-| Component transitions and messages                        | React component state                                      | Local rendering concern                                |
-| Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated           |
-| Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
-| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
-| Browser COG scene registry and raster worker              | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`      | Bounded fallback state and COG URLs stay outside React |
-| DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`           | One algorithm runs in worker or inline compatibility   |
-| Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                |
-| Imagery, visibility, stretch, and overlay preferences     | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
-| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port          |
-| Settled camera and terrain mode                           | Dexie through `MapCameraRepository`                        | Durable serializable map view                          |
-| Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export     |
-| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                    |
-| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                             | Disposable, not persisted                              |
+| State                                                     | Owner                                                      | Reason                                                  |
+| --------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
+| Dialogs, active rail section, developer flags             | Zustand `uiStore`                                          | Cross-component, transient, serializable UI state       |
+| Component transitions and messages                        | React component state                                      | Local rendering concern                                 |
+| Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated            |
+| Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated  |
+| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative      |
+| Browser COG scene registry and raster worker              | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`      | Bounded fallback state and COG URLs stay outside React  |
+| DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`           | One algorithm runs in worker or inline compatibility    |
+| Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                 |
+| Visibility, stretch, rendering, and overlay preferences   | Dexie plus map layer controller                            | Durable non-scene choices with a serializable live view |
+| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port           |
+| Settled 2D center and zoom                                | Dexie through `MapCameraRepository`                        | Durable camera restarts without 3D orientation          |
+| Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export      |
+| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                     |
+| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                             | Disposable, not persisted                               |
+| Selected/applied Sentinel scene                           | `MapLibreLayerController` plus `mapLayerStore`             | Transient selection/rendering state, never persisted    |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause

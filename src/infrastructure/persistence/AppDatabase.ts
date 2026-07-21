@@ -42,56 +42,6 @@ const defaultUiPreferences: UiPreferences = {
   navigationCollapsed: false,
 };
 
-const positionSchema = z.tuple([
-  z.number().min(-180).max(180),
-  z.number().min(-90).max(90),
-]);
-const ringSchema = z.array(positionSchema).min(4).max(20_000);
-const polygonCoordinatesSchema = z.array(ringSchema).min(1).max(256);
-const footprintSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('Polygon'), coordinates: polygonCoordinatesSchema }),
-  z.object({
-    type: z.literal('MultiPolygon'),
-    coordinates: z.array(polygonCoordinatesSchema).min(1).max(256),
-  }),
-]);
-const visualAssetSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('sentinel-rgb-cogs'),
-    itemHref: z.url().refine((value) => value.startsWith('https://')),
-    redHref: z.url().refine((value) => value.startsWith('https://')),
-    greenHref: z.url().refine((value) => value.startsWith('https://')),
-    blueHref: z.url().refine((value) => value.startsWith('https://')),
-    projectionEpsg: z.number().int().positive(),
-  }),
-  z.object({
-    kind: z.literal('unsupported-jp2'),
-    href: z.url().refine((value) => value.startsWith('https://')),
-    mediaType: z.string().min(1).max(160),
-    projectionEpsg: z.number().int().positive(),
-  }),
-  z.object({ kind: z.literal('unavailable') }),
-]);
-const satelliteSceneSchema = z
-  .object({
-    id: z.string().min(1).max(300),
-    collection: z.string().min(1).max(120),
-    platform: z.string().min(1).max(120),
-    productLevel: z.enum(['L1C', 'L2A']),
-    acquiredAt: z.iso.datetime({ offset: true }),
-    cloudCoverPercent: z.number().min(0).max(100),
-    footprint: footprintSchema,
-    tileId: z.string().max(120).nullable(),
-    orbit: z.string().max(120).nullable(),
-    productId: z.string().max(500).nullable(),
-    thumbnailHref: z
-      .url()
-      .refine((value) => value.startsWith('https://'))
-      .nullable(),
-    visualAsset: visualAssetSchema,
-    attribution: z.string().min(1).max(500),
-  })
-  .strict();
 const mapLayerPreferencesSchema = z
   .object({
     visibility: z
@@ -108,7 +58,6 @@ const mapLayerPreferencesSchema = z
       })
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
-    appliedScene: satelliteSceneSchema.nullable(),
     satelliteRenderingMode: z
       .enum(['auto', 'server', 'browser'])
       .default(defaultSatelliteRenderingMode),
@@ -133,7 +82,7 @@ const mapLayerPreferencesSchema = z
       })
       .default(defaultTerrainOverlayPreferences),
   })
-  .strict();
+  .strip();
 
 const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   visibility: {
@@ -148,7 +97,6 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'places-and-pois': true,
   },
   openStreetMapOpacity: 1,
-  appliedScene: null,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
@@ -201,7 +149,16 @@ export class AppDatabase extends Dexie implements MapLayerPreferencesRepository 
     if (record === undefined) return defaultMapLayerPreferences;
 
     const parsed = mapLayerPreferencesSchema.safeParse(record.value);
-    if (parsed.success) return parsed.data;
+    if (parsed.success) {
+      if (
+        typeof record.value === 'object' &&
+        record.value !== null &&
+        Object.hasOwn(record.value, 'appliedScene')
+      ) {
+        await this.saveMapLayerPreferences(parsed.data);
+      }
+      return parsed.data;
+    }
 
     await this.settings.delete('map.layers');
     this.logger.log({

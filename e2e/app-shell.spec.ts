@@ -43,10 +43,10 @@ test('loads the production map style and reloads under a repository subpath', as
     'aria-selected',
     'true',
   );
+  await expect(page.getByRole('tab', { name: 'Tracks' })).toBeDisabled();
+  await expect(page.getByRole('tab', { name: 'Markers' })).toBeDisabled();
 
   await expect(page.getByRole('tab', { name: 'Plan' })).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Markers' }).click();
-  await expect(page.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
   await page.getByRole('tab', { name: 'Layers' }).click();
   await expect(page.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
 

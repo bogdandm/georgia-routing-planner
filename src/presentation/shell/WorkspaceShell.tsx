@@ -68,37 +68,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     (state) => state.terrainComputeStatus,
   );
   const renderingTuningAbort = useRef<AbortController | null>(null);
-  const developerModeChangedByUser = useRef(false);
-  const navigationChangedByUser = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const urlEnabled =
-      new URLSearchParams(window.location.search).get('developer') === '1';
-
-    const loadPreferences = async () => {
-      try {
-        const preferences = await database.loadUiPreferences();
-        if (!cancelled && !developerModeChangedByUser.current) {
-          setDeveloperMode(urlEnabled || preferences.developerMode);
-        }
-        if (!cancelled && !navigationChangedByUser.current) {
-          setNavigationCollapsed(preferences.navigationCollapsed);
-        }
-      } catch {
-        if (!cancelled && !developerModeChangedByUser.current) {
-          setDeveloperMode(urlEnabled);
-        }
-        logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
-      }
-    };
-
-    void loadPreferences();
-    return () => {
-      cancelled = true;
-    };
-  }, [database, logger, setDeveloperMode, setNavigationCollapsed]);
-
   useEffect(() => {
     let cancelled = false;
     const restoreMapPreferences = async () => {
@@ -147,7 +116,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   };
 
   const handleDeveloperModeChange = (value: boolean) => {
-    developerModeChangedByUser.current = true;
     setDeveloperMode(value);
     if (!value) {
       setDeveloperDrawerOpen(false);
@@ -160,7 +128,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   };
 
   const handleNavigationCollapsedChange = (value: boolean) => {
-    navigationChangedByUser.current = true;
     setNavigationCollapsed(value);
     void persistUiPreferences(developerMode, value);
   };

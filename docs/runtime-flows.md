@@ -14,6 +14,8 @@ sequenceDiagram
 
   Entry->>Root: construct adapters and validate configuration
   Root-->>Entry: RuntimeServices
+  Entry->>Storage: load UI preferences
+  Storage-->>Entry: validated preferences or defaults
   Entry->>UI: render providers and error boundary
   UI->>Workspace: mount persistent map area
   Workspace->>Storage: load saved camera with deadline
@@ -24,10 +26,13 @@ sequenceDiagram
   Facade-->>Workspace: serializable ready snapshot
 ```
 
-Configuration validation occurs before MapLibre mounts. A configuration failure renders
-a fatal alert without contacting the provider. Camera failure is recoverable: the map
-uses `defaultGeorgiaCamera`. The facade registers native listeners exactly once and
-removes them during teardown.
+Configuration validation and UI preference restoration occur before React's first
+render. This prevents the navigation from briefly rendering expanded when its persisted
+state is collapsed. A storage failure logs a safe warning and uses default UI settings
+without blocking startup. A configuration failure renders a fatal alert without
+contacting the provider. Camera failure is recoverable: the map uses
+`defaultGeorgiaCamera`. The facade registers native listeners exactly once and removes
+them during teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot
 and shows the settled viewport center inside the compact `Viewport | <coordinates>`

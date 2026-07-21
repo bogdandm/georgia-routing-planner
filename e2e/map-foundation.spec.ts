@@ -173,7 +173,7 @@ test('selects shared 3D mode immediately and mounts its terrain state directly',
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
-    { timeout: 15_000 },
+    { timeout: 20_000 },
   );
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);

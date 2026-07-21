@@ -873,7 +873,7 @@ export function SatelliteBrowser({
   const [today] = useState(() => clock.now());
   const latestMonth = currentSearchMonth(today).month;
   const [calendarMonth, setCalendarMonth] = useState(latestMonth);
-  const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(25);
+  const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(50);
   const [searchState, setSearchState] = useState<SearchState>({ status: 'idle' });
   const [visibleCount, setVisibleCount] = useState(firstResultCount);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);

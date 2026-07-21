@@ -185,7 +185,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'L1C' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'L2A' })).not.toBeInTheDocument();
-    expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('25');
+    expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('50');
     expect(screen.getByLabelText('Sentinel acquisition calendar')).toBeVisible();
     const acquisitionCalendar = screen.getByRole('grid', { name: 'July 2026' });
     expect(acquisitionCalendar.children).toHaveLength(42);

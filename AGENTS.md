@@ -62,7 +62,13 @@ $commonGitDir = (git rev-parse --path-format=absolute --git-common-dir).Trim()
 $mainRoot = Split-Path $commonGitDir -Parent
 $workstream = 'short-workstream-slug'
 $branch = 'feature/short-workstream-slug'
-$worktreePath = Join-Path $mainRoot ".codex-worktrees\$workstream"
+$worktreesRoot = [IO.Path]::GetFullPath((Join-Path $mainRoot '.codex-worktrees'))
+$worktreePath = [IO.Path]::GetFullPath((Join-Path $worktreesRoot $workstream))
+$worktreeParent = [IO.Path]::GetDirectoryName($worktreePath)
+
+if (![string]::Equals($worktreeParent, $worktreesRoot, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Worktree must be a direct child of ${worktreesRoot}: $worktreePath"
+}
 
 if (Test-Path -LiteralPath $worktreePath) {
   throw "Worktree path already exists: $worktreePath"
@@ -74,6 +80,10 @@ if ($LASTEXITCODE -eq 0) {
 git -C $mainRoot fetch origin main
 git -C $mainRoot worktree add $worktreePath -b $branch origin/main
 Set-Location $worktreePath
+$actualWorktreePath = [IO.Path]::GetFullPath((git rev-parse --show-toplevel).Trim())
+if (![string]::Equals($actualWorktreePath, $worktreePath, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Git created or selected the wrong worktree: $actualWorktreePath"
+}
 git status --short --branch
 ```
 
@@ -86,8 +96,18 @@ Choose the branch prefix that matches the work. Replace both placeholder values;
 copy them literally. Before `worktree add`, confirm the path does not exist and the
 branch name is unused. Do not nest a worktree under any linked worktree except the
 repository's intentionally ignored main-checkout `.codex-worktrees/<workstream>`
-directory, which is the standard location for durable local worktrees. Managed Codex
-worktrees supplied by the host are also valid; do not relocate or recreate them.
+directory. This is the only valid location for an agent-created worktree. A writable
+directory offered by the Codex host does not override this rule. Never create the
+worktree under `.codex/visualizations`, another session-owned directory, a temporary
+directory, the repository's parent directory, or another linked worktree.
+
+Before `worktree add`, print and inspect `$worktreePath`. Its direct parent must be the
+exact absolute `$worktreesRoot` path. If it is not, stop and correct the command instead
+of trying an alternate location. After creation, require `git rev-parse --show-toplevel`
+to equal `$worktreePath`; a successful Git command at a different path is not a
+successful setup. Only reuse a non-canonical existing worktree when the maintainer
+explicitly names that exact worktree for continuation work; never choose such a path for
+a new workstream.
 
 Keep the local worktree directory slug at 20 characters or fewer. Windows package paths
 can exceed filesystem cleanup limits even when Git accepts a longer worktree path.

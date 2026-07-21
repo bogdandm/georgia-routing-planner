@@ -180,9 +180,13 @@ updates the anchor.
 
 Regular map sharing is always available and encodes a 2D center and zoom; context-menu
 point links follow the same flat-camera contract and do not include satellite imagery.
-The share dialog includes the currently selected satellite scene, even while its raster
-is still rendering, and opens such links on the Satellite section. A separate 3D link is
-enabled only while terrain mode is active and additionally encodes bearing and pitch.
+When a scene is selected, the share dialog enables its **Include selected satellite
+image** checkbox by default; clearing it omits the scene from both links. Included
+scenes use the current selection even while its raster is still rendering and open on
+the Satellite section. A separate 3D link is enabled only while terrain mode is active
+and additionally encodes bearing and pitch. Opening that link selects the 3D control
+immediately and initializes MapLibre with terrain, bearing, and pitch in its first map
+style rather than showing a delayed 2D-to-3D switch.
 
 ### Markers
 

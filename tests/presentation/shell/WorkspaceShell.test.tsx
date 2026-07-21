@@ -188,11 +188,19 @@ describe('WorkspaceShell', () => {
     const link3d = screen.getByRole<HTMLTextAreaElement>('textbox', {
       name: '3D share link',
     });
+    const includeSatellite = screen.getByRole('checkbox', {
+      name: 'Include selected satellite image',
+    });
+    expect(includeSatellite).toBeChecked();
     expect(link2d.value).toContain('scene=sentinel-2-l2a%3Aselected-while-rendering');
     expect(link2d.value).not.toContain('bearing=');
     expect(link3d.value).toContain('bearing=18.12');
     expect(link3d.value).toContain('pitch=35.56');
     expect(screen.getByRole('button', { name: 'Copy 3D link' })).toBeEnabled();
+
+    await user.click(includeSatellite);
+    expect(link2d.value).not.toContain('scene=');
+    expect(link3d.value).not.toContain('scene=');
   });
 
   it('shows a shared selected-scene card before the map viewport or raster is ready', async () => {

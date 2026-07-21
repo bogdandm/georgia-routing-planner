@@ -2,10 +2,12 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import {
   Alert,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Snackbar,
   TextField,
   Typography,
@@ -28,6 +30,7 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
   const [copyState, setCopyState] = useState<
     'idle' | 'copied-2d' | 'copied-3d' | 'failed'
   >('idle');
+  const [excludedSceneKey, setExcludedSceneKey] = useState<string | null>(null);
   const subscribe = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
     [mapDiagnostics],
@@ -37,7 +40,10 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
   const selectedScene = useStore(mapLayerStore, (state) => state.selectedScene);
   const camera = mapSnapshot?.camera;
   const scene = selectedScene ?? mapLayers?.getSelectedScene() ?? null;
-  const sceneKey = scene === null ? null : satelliteSceneKey(scene);
+  const selectedSceneKey = scene === null ? null : satelliteSceneKey(scene);
+  const includeSatellite =
+    selectedSceneKey !== null && selectedSceneKey !== excludedSceneKey;
+  const sceneKey = includeSatellite ? selectedSceneKey : null;
   const share2dUrl =
     camera === undefined
       ? ''
@@ -62,13 +68,34 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <Dialog
+        open={open}
+        onClose={() => {
+          setExcludedSceneKey(null);
+          onClose();
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>Share this map view</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            The 2D link always shares center and zoom. When a satellite scene is
-            selected, its identity is included without storing the scene locally.
+            The 2D link always shares center and zoom. A selected satellite image can be
+            included without storing the scene locally.
           </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={includeSatellite}
+                disabled={selectedSceneKey === null}
+                onChange={(_, checked) => {
+                  setExcludedSceneKey(checked ? null : selectedSceneKey);
+                }}
+              />
+            }
+            label="Include selected satellite image"
+            sx={{ mb: 1 }}
+          />
           <TextField
             fullWidth
             multiline
@@ -99,7 +126,14 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>Close</Button>
+          <Button
+            onClick={() => {
+              setExcludedSceneKey(null);
+              onClose();
+            }}
+          >
+            Close
+          </Button>
           <Button
             startIcon={<ContentCopyOutlinedIcon />}
             disabled={share3dUrl === ''}

@@ -121,34 +121,35 @@ non-matching days retain only their cloud percentage without a tile outline. Aft
 locally loaded cards are revealed, the same load-more action fetches the next missing
 preceding month and appends it, continuing back through the Sentinel-2 archive.
 Whole-card click selects, expands metadata, and applies that concrete scene through the
-shared map adapter. A validated L2A item is rendered from its separate red, green, and
-blue reflectance COGs as correctly georeferenced Web Mercator tiles below hiking
-references. Settings exposes a persistent reflectance ceiling, gamma, and saturation
-control up to five times normal so users can tune the raw-band display without relying
-on the already stretched 8-bit TCI asset. Fresh storage and the reset action use a
-reflectance ceiling of 11000, gamma 2.25, and saturation 2.50; saved user tuning
-continues to take precedence. The real polygon or multipolygon footprint is a separate
-orange outline above hiking geometry and below labels. While a replacement is loading
-the prior usable image remains present; a failed replacement reports a safe, clickable
-error and leaves that prior image available. The error detail distinguishes rejected
-values, rate limiting, renderer availability, timeout, and an unclassified unusable tile
-without exposing provider URLs. A render dropdown mirrored in Settings > Rendering and
-at the bottom of Satellite selects `Auto`, `Server`, or `Browser`. Auto switches a
-hosted-renderer 429 or CORS-opaque status-zero failure to worker-based browser COG
-rasterization without retrying TiTiler. Server never falls back locally, and Browser
-bypasses TiTiler entirely. In every mode, tiles become visible individually as they
-finish while the prior scene or vector basemap remains below them. Browser work has a
-two-minute application deadline; the configured server deadline remains unchanged. A
-successful automatic fallback replaces the normal Ready status with a persistent,
-non-blocking warning that satellite imagery is being rendered in the browser. Choosing
-Browser explicitly does not show that warning. The warning clears when a later server
-render succeeds, the user explicitly changes rendering mode, or imagery is removed. A
-replacement or clear command cancels either wait immediately and preserves the last
-usable image. The render dropdown remains enabled during staging; changing it cancels
-the partial render, removes its staging source, and restarts the same selected scene
-from scratch in the new mode. The mode choice is stored immediately, so reload preserves
-it even while a scene is still rendering or after that scene fails. Marker targeting
-remains unavailable.
+shared map adapter. TiTiler normally renders a validated L2A item's separate red, green,
+and blue reflectance COGs as georeferenced Web Mercator tiles below hiking references.
+Settings exposes persistent reflectance ceiling, gamma, and saturation controls for this
+hosted rendering path. Fresh storage and reset use a reflectance ceiling of 11000, gamma
+2.25, and saturation 2.50; saved tuning takes precedence.
+
+The real polygon or multipolygon footprint is a separate orange outline above hiking
+geometry and below labels. Selecting a different scene immediately removes the current
+scene and footprint, restores the vector basemap, and loads only the requested scene. A
+failed application reports a safe, clickable error. The detail distinguishes rejected
+values, rate limiting, renderer availability, and an unclassified unusable tile without
+exposing provider URLs.
+
+A render dropdown mirrored in Settings > Rendering and Satellite selects `Auto`,
+`Server`, or `Direct`. Auto switches a hosted-renderer 429 or CORS-opaque status-zero
+failure to direct range reads of the scene's pre-rendered 8-bit visual COG without
+retrying TiTiler. Server never falls back, and Direct bypasses TiTiler entirely. The
+visual COG is displayed as supplied; reflectance, gamma, and saturation controls are not
+applied to it. Tiles become visible individually while the vector basemap remains
+available below them, and satellite rendering has no application deadline.
+
+A successful automatic fallback replaces Ready with a persistent, non-blocking warning
+that TiTiler is unavailable and the alternative imagery provider is being activated or
+is active. Choosing Direct explicitly does not show that warning. The warning clears
+when a later server render succeeds, the user explicitly changes rendering mode, or
+imagery is removed. A mode change cancels the partial replacement and reapplies the same
+selected scene while keeping the current scene available until the replacement produces
+data. The mode choice is stored immediately, including during a pending or failed
+render. Marker targeting remains unavailable.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
 exposed through the web storage APIs, so the application neither claims their size nor
@@ -371,32 +372,32 @@ WebGL, or unknown. Satellite raster failures expose a safe transport reason and 
 HTTP status when MapLibre provides one. Rate limits and status-zero/no-response failures
 do not retry the hosted renderer because a cross-origin 429 without CORS headers is
 indistinguishable from a connection failure in application code. In Auto mode both
-switch the existing source to browser-side COG rasterization; Server mode reports the
-failure without local fallback. Server responses, timeouts, and identifiable network
-failures schedule one deduplicated exponential refresh of the failed tiles, capped at
-three attempts; other client errors and unclassified failures also do not retry
-automatically. Equivalent recoverable errors are counted in capped buckets and logged at
-a bounded interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors
-are degraded states. The inactive slot used to prepare a newly selected scene also
-retries retryable transient failed tiles. If a transient tile still fails after staging
-retries, the usable partial raster is promoted after the bounded retries; the safe
-failure class remains visible. Non-retryable or whole-source failures preserve the
-previous raster. For active imagery, successful source-data for each failed canonical
-tile must clear the controller's pending set before a loaded source starts the stability
-window. Only that tile-confirmed recovery restores the ready lifecycle when no other
-failure remains and clears the user-facing error. This prevents the status from blinking
-while other tiles from the same source are still failing. Offline messaging promises
-only that already rendered areas may remain visible, not full offline map support. Map
-lifecycle and imagery errors do not create a wide map banner: the shared line below
-search is their single UI surface. Ready remains background-free; pending and error
-states use a lightly translucent surface for map contrast, and selecting an error
-reveals its complete safe detail. Hovering any truncated status message reveals the full
-text in a multiline tooltip. The non-ready surface transitions quickly and remains
-translucent enough to preserve map context. Pending text uses the dark primary color and
-a medium weight rather than the muted Ready treatment, preserving legibility over
-imagery. Status padding is invariant so state changes never shift the icon or text. Its
-compact terrain line appears only for active work or a live contour backlog, without
-turning normal background work into an error or blocking the rest of the map.
+switch the existing source to direct pre-rendered visual-COG rasterization; Server mode
+reports the failure without fallback. Server responses and identifiable network failures
+schedule one deduplicated exponential refresh of the failed tiles, capped at three
+attempts; other client errors and unclassified failures also do not retry automatically.
+Equivalent recoverable errors are counted in capped buckets and logged at a bounded
+interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
+degraded states. A pending scene also retries retryable transient failed tiles. If a
+transient tile still fails after retries, the usable partial raster is promoted after
+the bounded retries; the safe failure class remains visible. Non-retryable or
+whole-source failures preserve the vector basemap. For active imagery, successful
+source-data for each failed canonical tile must clear the controller's pending set
+before a loaded source starts the stability window. Only that tile-confirmed recovery
+restores the ready lifecycle when no other failure remains and clears the user-facing
+error. This prevents the status from blinking while other tiles from the same source are
+still failing. Offline messaging promises only that already rendered areas may remain
+visible, not full offline map support. Map lifecycle and imagery errors do not create a
+wide map banner: the shared line below search is their single UI surface. Ready remains
+background-free; pending and error states use a lightly translucent surface for map
+contrast, and selecting an error reveals its complete safe detail. Hovering any
+truncated status message reveals the full text in a multiline tooltip. The non-ready
+surface transitions quickly and remains translucent enough to preserve map context.
+Pending text uses the dark primary color and a medium weight rather than the muted Ready
+treatment, preserving legibility over imagery. Status padding is invariant so state
+changes never shift the icon or text. Its compact terrain line appears only for active
+work or a live contour backlog, without turning normal background work into an error or
+blocking the rest of the map.
 
 ## Diagnostics and developer mode
 

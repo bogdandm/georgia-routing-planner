@@ -114,9 +114,10 @@ The replaceable map-provider defaults are:
   failed worker restarts once and then preserves features through the same inline engine
   with a visible compatibility warning.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
-- Selectable Auto, Server, and Browser Sentinel rendering. Auto uses TiTiler normally
-  and falls back to worker-based browser COG rasterization after a 429 or CORS-opaque
-  failure; Browser bypasses TiTiler entirely.
+- Selectable Auto, Server, and Direct Sentinel rendering. Auto uses TiTiler normally and
+  falls back to range-reading Earth Search's pre-rendered 8-bit visual COG after a 429
+  or CORS-opaque failure; Direct bypasses TiTiler entirely. Neither path downloads raw
+  full-scene band TIFFs.
 - Public OpenStreetMap Nominatim for submit-driven place search.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and

@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
-test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without retrying', async ({
+test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery without retrying', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -50,7 +50,7 @@ test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without 
   });
   await expect(
     page.getByText(
-      'Satellite imagery switched to browser rendering because the server was unavailable.',
+      'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.',
     ),
   ).toBeVisible({ timeout: 10_000 });
   expect(rendererRequests.length).toBeGreaterThan(0);
@@ -62,8 +62,10 @@ test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without 
     .click();
   await page.getByRole('tab', { name: /Logs/u }).click();
   const events = page.getByRole('list', { name: 'Recent diagnostic events' });
-  await expect(events).toContainText('satellite.imagery.browser-fallback-started');
-  await expect(events).toContainText('satellite.imagery.browser-fallback-completed');
+  await expect(events).toContainText('satellite.imagery.alternative-provider-started');
+  await expect(events).toContainText(
+    'satellite.imagery.alternative-provider-completed',
+  );
 });
 
 test('applies, hides, restores, and preserves a Sentinel scene across workspaces', async ({
@@ -97,7 +99,9 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
   expect(rendererRequests[0]).toContain(
     'assets=red&assets=green&assets=blue&asset_as_band=true',
   );
-  await expect(page.getByText(/COG tiles rendered by TiTiler/u)).toBeVisible();
+  await expect(
+    page.getByTestId('map-workspace').getByText(/Earth Search \/ Element 84/u),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByRole('tab', { name: 'Rendering' }).click();

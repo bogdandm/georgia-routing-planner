@@ -28,16 +28,20 @@ const terrainDemFixture = Buffer.from(
 function createSentinelCogFixture(): Buffer {
   const width = 256;
   const height = 256;
-  const reflectance = new Uint16Array(width * height);
-  reflectance.fill(4_000);
+  const visual = new Uint8Array(width * height * 3);
+  for (let offset = 0; offset < visual.length; offset += 3) {
+    visual[offset] = 96;
+    visual[offset + 1] = 128;
+    visual[offset + 2] = 160;
+  }
   return Buffer.from(
-    writeArrayBuffer(reflectance, {
+    writeArrayBuffer(visual, {
       width,
       height,
-      BitsPerSample: [16],
-      SampleFormat: [1],
-      SamplesPerPixel: 1,
-      PhotometricInterpretation: 1,
+      BitsPerSample: [8, 8, 8],
+      SampleFormat: [1, 1, 1],
+      SamplesPerPixel: 3,
+      PhotometricInterpretation: 2,
       ModelPixelScale: [1_562.5, 1_953.125, 0],
       ModelTiepoint: [0, 0, 0, 300_000, 5_000_000, 0],
       GTModelTypeGeoKey: 1,

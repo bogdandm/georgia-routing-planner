@@ -68,11 +68,11 @@ adapter through named search and availability use cases; React never receives it
 client. A serializable viewport snapshot store bridges settled map updates to Satellite
 controls without exposing MapLibre.
 
-`infrastructure/satellite/` owns browser-side COG range decoding, UTM-to-Web Mercator
-reprojection, RGB composition, and its validated worker RPC boundary.
-`SatelliteCogTileProvider` registers one opaque MapLibre protocol and maps scene keys to
-validated asset URLs in bounded memory. MapLibre source state contains only the opaque
-scene key; COG URLs stay inside the provider and worker.
+`infrastructure/satellite/` owns direct visual-COG range decoding, UTM-to-Web Mercator
+reprojection, and its validated worker RPC boundary. `SatelliteCogTileProvider`
+registers one opaque MapLibre protocol and maps scene keys to validated asset URLs in
+bounded memory. MapLibre source state contains only the opaque scene key; COG URLs stay
+inside the provider and worker.
 
 Satellite presentation uses the CC0-licensed `@photostructure/tz-lookup` data resolver
 to map the submitted anchor coordinates to an IANA time zone entirely in the browser. No
@@ -99,7 +99,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated           |
 | Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated |
 | Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative     |
-| Browser COG scene registry and raster worker              | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`      | Bounded fallback state and COG URLs stay outside React |
+| Direct visual-COG scene registry and raster worker        | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`      | Bounded fallback state and COG URLs stay outside React |
 | DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`           | One algorithm runs in worker or inline compatibility   |
 | Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                |
 | Imagery, visibility, stretch, and overlay preferences     | Dexie plus map layer controller                            | Durable choices with a serializable live view          |
@@ -176,14 +176,14 @@ does not reset the session.
 
 `SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
 module worker. The provider retains at most two scene definitions, while the worker
-retains at most two corresponding GeoTIFF reader sets. `geotiff` performs bounded HTTP
-range reads and overview selection; `proj4` transforms each output pixel between WGS84
-and the validated northern-UTM scene CRS. The controller persists the Auto, Server, or
-Browser rendering mode. Auto switches an existing raster source to this opaque protocol
-when the hosted renderer reports 429 or the browser exposes the response as status zero
-because CORS hid it; Browser starts on the protocol directly, and Server does not
-switch. Browser staging layers reveal tiles progressively and use a separate two-minute
-deadline.
+retains at most two corresponding GeoTIFF readers. `geotiff` performs bounded HTTP range
+reads and overview selection; `proj4` transforms each output pixel between WGS84 and the
+validated northern-UTM scene CRS. The controller persists the Auto, Server, or Direct
+rendering mode. Auto switches an existing raster source to this opaque protocol when the
+hosted renderer reports 429 or the browser exposes the response as status zero because
+CORS hid it; Direct starts on the protocol immediately, and Server does not switch. The
+worker preserves the provider's pre-rendered 8-bit RGB values and does not apply the
+hosted renderer's stretch controls. Raster readiness has no application deadline.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

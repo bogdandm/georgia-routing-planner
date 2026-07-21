@@ -334,7 +334,7 @@ adapter through the injected `SearchSatelliteScenes` use case:
 ```mermaid
 sequenceDiagram
   participant Command as SatelliteBrowser
-  participant UseCase as Search/availability use case
+  participant UseCase as Satellite search use case
   participant Gateway as SatelliteCatalogGateway
   participant Geometry as Satellite coverage
   participant Timeline as Sentinel diagnostics

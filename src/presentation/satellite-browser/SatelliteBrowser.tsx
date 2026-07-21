@@ -913,7 +913,9 @@ export function SatelliteBrowser({
   const [submittedCoordinates, setSubmittedCoordinates] = useState(fallbackCoordinates);
   const [submittedTimeZone, setSubmittedTimeZone] = useState('Asia/Tbilisi');
   const [submittedSearch, setSubmittedSearch] = useState<SubmittedSearch | null>(null);
-  const [loadedMonths, setLoadedMonths] = useState<readonly string[]>([]);
+  const [loadedMonths, setLoadedMonths] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
@@ -923,7 +925,6 @@ export function SatelliteBrowser({
   const applyRequest = useRef<AbortController | null>(null);
   const renderingModeRequest = useRef<AbortController | null>(null);
   const [renderingModeError, setRenderingModeError] = useState<string | null>(null);
-  const loadedMonthsRef = useRef(new Set<string>());
   const loadingMonthsRef = useRef(new Set<string>());
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
@@ -1018,11 +1019,15 @@ export function SatelliteBrowser({
   const nextArchiveMonth =
     submittedSearch === null
       ? null
-      : nextUnloadedSearchMonth(submittedSearch.initialMonth, new Set(loadedMonths));
+      : nextUnloadedSearchMonth(submittedSearch.initialMonth, loadedMonths);
 
   const markMonthLoaded = (month: string) => {
-    loadedMonthsRef.current.add(month);
-    setLoadedMonths([...loadedMonthsRef.current].toSorted());
+    setLoadedMonths((current) => {
+      if (current.has(month)) return current;
+      const next = new Set(current);
+      next.add(month);
+      return next;
+    });
   };
 
   const loadMonthIntoResults = async (
@@ -1031,7 +1036,7 @@ export function SatelliteBrowser({
     revealLoadedMonth: boolean,
   ) => {
     if (searchSatelliteScenes === null || searchState.status !== 'success') return;
-    if (loadedMonthsRef.current.has(range.month)) {
+    if (loadedMonths.has(range.month)) {
       if (revealLoadedMonth) {
         setVisibleCount(
           filterResultByCloudCover(
@@ -1118,7 +1123,7 @@ export function SatelliteBrowser({
     ) {
       setResultsOpen(true);
       setLoadMoreError(null);
-      if (loadedMonthsRef.current.has(range.month)) {
+      if (loadedMonths.has(range.month)) {
         setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
         return;
       }
@@ -1134,9 +1139,8 @@ export function SatelliteBrowser({
       productLevel: 'L2A',
       initialMonth: range.month,
     });
-    loadedMonthsRef.current = new Set<string>();
     loadingMonthsRef.current = new Set<string>([range.month]);
-    setLoadedMonths([]);
+    setLoadedMonths(new Set());
     setLoadingMonth(range.month);
     setVisibleCount(firstResultCount);
     setSelectedSceneId(null);
@@ -1202,7 +1206,7 @@ export function SatelliteBrowser({
     setCalendarMonth(month);
     setLoadMoreError(null);
     if (searchState.status !== 'success' || submittedSearch === null) return;
-    if (loadedMonthsRef.current.has(month)) {
+    if (loadedMonths.has(month)) {
       setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
       return;
     }

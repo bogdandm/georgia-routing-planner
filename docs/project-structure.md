@@ -64,9 +64,9 @@ does not import React, MapLibre, `ky`, or STAC JSON.
 builds allowlisted STAC requests, validates all returned items before mapping them,
 follows only same-origin POST pagination tokens within the configured cap, and converts
 transport/schema failures to safe catalog errors. The composition root exposes the
-adapter through named search and availability use cases; React never receives its `ky`
-client. A serializable viewport snapshot store bridges settled map updates to Satellite
-controls without exposing MapLibre.
+adapter through the satellite search use case; React never receives its `ky` client. A
+serializable viewport snapshot store bridges settled map updates to Satellite controls
+without exposing MapLibre.
 
 `infrastructure/satellite/` owns direct visual-COG range decoding, UTM-to-Web Mercator
 reprojection, and its validated worker RPC boundary. `SatelliteCogTileProvider`

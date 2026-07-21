@@ -7,7 +7,6 @@ import {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
-import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
@@ -155,13 +154,6 @@ export function createTestServices(
       status: 'valid',
       value: parsedMapProviderConfiguration,
     },
-    loadSatelliteAvailability: new LoadSatelliteAvailability(
-      satelliteCatalogGateway,
-      sentinelQueryDiagnostics,
-      logger,
-      idGenerator,
-      clock,
-    ),
     satelliteCatalogGateway,
     searchSatelliteScenes: new SearchSatelliteScenes(
       satelliteCatalogGateway,

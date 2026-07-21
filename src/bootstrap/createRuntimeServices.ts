@@ -8,7 +8,6 @@ import type { MapCameraRepository } from '@/application/ports/MapCameraRepositor
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
-import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
@@ -49,7 +48,6 @@ export interface RuntimeServices {
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly mapViewport: MapViewportSnapshotStore;
   readonly mapLayers: MapLibreLayerController | null;
-  readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
   readonly searchPlaces: SearchPlaces | null;
@@ -184,16 +182,6 @@ export function createRuntimeServices(): RuntimeServices {
           idGenerator,
           clock,
         );
-  const loadSatelliteAvailability =
-    satelliteCatalogGateway === null
-      ? null
-      : new LoadSatelliteAvailability(
-          satelliteCatalogGateway,
-          sentinelQueryDiagnostics,
-          logger,
-          idGenerator,
-          clock,
-        );
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -235,7 +223,6 @@ export function createRuntimeServices(): RuntimeServices {
     mapViewport,
     mapLayers,
     mapProviderConfiguration,
-    loadSatelliteAvailability,
     satelliteCatalogGateway,
     searchSatelliteScenes,
     searchPlaces,

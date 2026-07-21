@@ -87,11 +87,12 @@
 - Focused verification: map, terrain, layers, and developer diagnostics tests; typecheck
   and lint.
 
-### 4. `refactor(satellite): simplify orchestration and state flow`
+### 4. `refactor(satellite): remove unused availability orchestration`
 
-- Consolidate duplicated application search/availability lifecycle and error mapping.
-- Remove thin one-use classes/modules where direct functions make the request,
-  diagnostic, and cancellation path easier to trace.
+- Remove the availability use case that bootstrap constructs but no production consumer
+  reads; the calendar already loads its month ranges through the main satellite search.
+- Remove its unused domain result types, runtime wiring, isolated tests, and stale
+  documentation rather than consolidating unreachable behavior.
 - Review Satellite browser state for mirrored or repeatedly derived values; remove only
   state whose owner and behavior are unambiguous.
 - Isolate any correctness fix in focused tests and document why prior behavior violated

@@ -675,12 +675,17 @@ The maintainer commonly runs four to six agents on a medium-spec Windows worksta
 Treat CPU, memory, disk, and browser contention as normal local conditions rather than
 assuming CI-like timing.
 
-When coverage is required, run `pnpm test:coverage` once. Use a single 30-second
-per-test ceiling for local managed-Windows coverage work; the previous ten-second
-ceiling is too aggressive under expected parallel-agent load. If one coverage test
-exceeds the ceiling, rerun only that test once with the same ceiling. Do not rerun the
-aggregate or increase the ceiling in steps. A timing-only failure in unrelated work is
-not permission to edit committed timeout configuration.
+The final Vitest verification is `pnpm test:coverage` once. Its configuration includes
+the normal unit/component suite and the integration suite, so it replaces both
+`pnpm test` and `pnpm test:integration` in final verification. Do not run those three
+commands sequentially. Keep `pnpm test` and `pnpm test:integration` for focused
+development feedback before the final round.
+
+Use a single 30-second per-test ceiling for local managed-Windows coverage work; the
+previous ten-second ceiling is too aggressive under expected parallel-agent load. If one
+coverage test exceeds the ceiling, rerun only that test once with the same ceiling. Do
+not rerun the aggregate or increase the ceiling in steps. A timing-only failure in
+unrelated work is not permission to edit committed timeout configuration.
 
 ### Command-wrapper timing
 
@@ -798,9 +803,9 @@ installed tool:
 - `pnpm lint`
 - `pnpm format:check`
 - `pnpm test:watch`
-- `pnpm test`
-- `pnpm test:integration`
-- `pnpm test:coverage`
+- `pnpm test` for normal focused development feedback
+- `pnpm test:integration` for focused integration development feedback
+- `pnpm test:coverage` as the single final Vitest run covering both suites
 - `pnpm e2e`
 - `pnpm catalog:audit`
 - `pnpm catalog:build`
@@ -894,15 +899,16 @@ changes are complete.
    and defensive logic.
 2. For documentation-only changes, run only the changed-document formatter, required
    documentation-boundary checks, and `git diff --check`.
-3. For executable code, run `pnpm format:check`, `pnpm typecheck`, `pnpm lint`, and
-   `pnpm test` once.
-4. Run integration, catalog, diagnostics, coverage, or build commands only when scope
-   requires them. If an aggregate includes a narrower required check, run only the
-   aggregate.
-5. Run Playwright only for a new or materially changed critical workflow or high-risk
+3. For executable code, run `pnpm format:check`, `pnpm typecheck`, and `pnpm lint` once.
+4. Run `pnpm test:coverage` once as the final Vitest verification. It includes normal
+   and integration tests; do not also run `pnpm test` or `pnpm test:integration` in the
+   final round.
+5. Run catalog, diagnostics, or build commands only when scope requires them. If an
+   aggregate includes a narrower required check, run only the aggregate.
+6. Run Playwright only for a new or materially changed critical workflow or high-risk
    browser boundary. Map each changed behavior to the specs that exercise it and run the
    smallest relevant subset.
-6. Run the complete local Playwright suite only when recorded evidence shows the diff
+7. Run the complete local Playwright suite only when recorded evidence shows the diff
    affects behavior or shared runtime inputs exercised by every spec. When that evidence
    exists and CI-shaped local evidence is required, run it once on Windows PowerShell:
 
@@ -910,17 +916,17 @@ changes are complete.
    $env:CI='1'; pnpm e2e; Remove-Item Env:CI
    ```
 
-7. If a test fails and is fixed, rerun only that test first. Do not restart a complete
+8. If a test fails and is fixed, rerun only that test first. Do not restart a complete
    suite after each fix, including when the failure came from CI and the fix changes an
    E2E spec.
-8. Visually verify changed loading, empty, error, partial, focus, and responsive states
+9. Visually verify changed loading, empty, error, partial, focus, and responsive states
    in current Chrome when presentation behavior changes.
-9. Verify diagnostics or redaction only when the change affects those responsibilities.
-10. Confirm no secret, private GPX metadata, generated debug file, or unrelated artifact
+10. Verify diagnostics or redaction only when the change affects those responsibilities.
+11. Confirm no secret, private GPX metadata, generated debug file, or unrelated artifact
     is included.
-11. Confirm non-obvious exported contracts and invariants have accurate compact
+12. Confirm non-obvious exported contracts and invariants have accurate compact
     comments.
-12. Report handwritten production LOC added/removed; test LOC added/removed; production
+13. Report handwritten production LOC added/removed; test LOC added/removed; production
     and test files added/removed/moved; runtime dependencies; new abstractions and their
     current justification; significant abstractions removed; and whether the result
     could be smaller without losing behavior or clarity.

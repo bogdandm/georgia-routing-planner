@@ -66,6 +66,9 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
   await expect(page.getByText('True-color imagery applied')).toBeVisible({
     timeout: 90_000,
   });
+  await expect(
+    page.getByRole('button', { name: 'Show current error details' }),
+  ).not.toBeVisible();
 
   await page
     .getByRole('button', { name: 'Developer diagnostics', exact: true })

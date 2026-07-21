@@ -76,7 +76,9 @@ persists the mode immediately, aborts the controller-owned application signal, r
 both provider raster slots, restores the vector style, and immediately reapplies the
 same scene with the new initial template. Only one provider layer exists during this
 transition. A later completion from the canceled operation cannot remove or overwrite
-the replacement.
+the replacement. MapLibre's final source-data event during removal is treated as
+cancellation: it clears that source's recoverable failure and cannot leave the shared
+status widget degraded.
 
 After a raster is active, MapLibre tile errors flow through the facade for safe
 classification and through the layer controller for recovery. The controller ignores

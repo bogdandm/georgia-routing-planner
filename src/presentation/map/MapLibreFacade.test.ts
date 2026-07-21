@@ -481,6 +481,55 @@ describe('MapLibreFacade', () => {
     expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
   });
 
+  it('clears a cancelled source failure instead of leaving the map degraded', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const handleRasterSourceData = vi.fn(() => false);
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      handleRasterSourceFailure: vi.fn(() => ({
+        state: 'not-retryable' as const,
+        retryAttempt: 0,
+        retryDelayMs: 0,
+      })),
+      handleRasterSourceData,
+      isRasterSourceRecoveryComplete: vi.fn(() => false),
+      handleRasterSourceRecovered: vi.fn(),
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    nativeMap.addSource('sentinel-raster-a', { type: 'raster' });
+    nativeMap.fire('error', {
+      error: { message: 'Fixture satellite tile failed to load.' },
+      sourceId: 'sentinel-raster-a',
+    });
+    expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('degraded');
+
+    nativeMap.removeSource('sentinel-raster-a');
+    nativeMap.fire('sourcedata', {
+      sourceId: 'sentinel-raster-a',
+      isSourceLoaded: false,
+    });
+
+    expect(handleRasterSourceData).not.toHaveBeenCalled();
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      message: null,
+      recoverableFailures: [],
+    });
+    expect(services.logger.getEvents().at(-1)?.name).toBe(
+      'map.source.cancellation-cleared',
+    );
+  });
+
   it('shows status zero as terminal no-response evidence without claiming HTTP 0', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

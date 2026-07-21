@@ -28,10 +28,7 @@ const unavailableTabSx = {
   color: 'rgba(255, 255, 255, 0.42) !important',
 } as const;
 
-type UnavailableWorkspaceTabProps = Omit<
-  TabProps,
-  'component' | 'disabled'
-> & {
+type UnavailableWorkspaceTabProps = Omit<TabProps, 'component' | 'disabled'> & {
   readonly reason: string;
 };
 

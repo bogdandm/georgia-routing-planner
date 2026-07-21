@@ -747,9 +747,7 @@ describe('WorkspaceShell', () => {
       await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
     ).toBeVisible();
     await user.unhover(screen.getByTestId('collapsed-project-tooltip-target'));
-    await user.hover(
-      screen.getByTestId('collapsed-show-navigation-tooltip-target'),
-    );
+    await user.hover(screen.getByTestId('collapsed-show-navigation-tooltip-target'));
     expect(
       await screen.findByRole('tooltip', { name: 'Show navigation' }),
     ).toBeVisible();

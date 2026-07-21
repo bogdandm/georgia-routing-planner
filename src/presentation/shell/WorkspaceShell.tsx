@@ -276,10 +276,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             }}
           />
         </Box>
-        <Tooltip
-          title={navigationCollapsed ? '' : 'Hide navigation'}
-          placement="right"
-        >
+        <Tooltip title={navigationCollapsed ? '' : 'Hide navigation'} placement="right">
           <IconButton
             aria-label={navigationCollapsed ? 'Show navigation' : 'Hide navigation'}
             data-testid="navigation-collapse-toggle"
@@ -371,9 +368,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
                   placement="bottom-start"
                   slotProps={{
                     popper: {
-                      modifiers: [
-                        { name: 'offset', options: { offset: [0, 2] } },
-                      ],
+                      modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
                     },
                   }}
                 >

@@ -341,7 +341,9 @@ Disabling terrain returns pitch and bearing to zero while retaining center and z
 - Conflicting transitions fail explicitly instead of racing.
 - DEM error, cancellation, or timeout returns to 2D and preserves camera intent; the
   controller keeps ownership of the shared source so relief can recover on later tiles.
-- Retry reuses the same facade and map rather than remounting either.
+- Failed 3D enable requests retry twice with bounded backoff, reusing the same facade
+  and map rather than remounting either. Exhausted failures remain in the shared status
+  line below search; the map does not mount a separate warning or retry banner.
 
 Before the shared DEM source is decoded by MapLibre, the client repairs only transparent
 or configured-invalid values and isolated extreme local outliers. Decisions at tile

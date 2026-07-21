@@ -187,6 +187,8 @@ export class MapLibreFacade implements MapFacade {
     readonly mode: TerrainMode;
     readonly promise: Promise<TerrainTransitionResult>;
   } | null = null;
+  #terrainSourceRefreshRequired = false;
+  #terrainRetryRevision = 0;
   #cancelTerrainWait: (() => void) | null = null;
   readonly #failureBuckets = new Map<string, FailureBucket>();
   readonly #sourceRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -851,6 +853,21 @@ export class MapLibreFacade implements MapFacade {
           createTerrainDemSource(provider.terrain, provider.demTileUrl),
         );
       }
+      if (this.#terrainSourceRefreshRequired) {
+        const terrainSource = map.getSource(mapSourceIds.terrainDem) as {
+          setTiles?: (tiles: string[]) => void;
+        };
+        if (terrainSource.setTiles === undefined) {
+          throw new Error('The terrain source cannot refresh its tiles.');
+        }
+        this.#terrainRetryRevision += 1;
+        const separator = provider.demTileUrl.includes('?') ? '&' : '?';
+        terrainSource.setTiles([
+          `${provider.demTileUrl}${separator}terrainEnableRetry=${String(this.#terrainRetryRevision)}`,
+        ]);
+        this.#terrainSourceRefreshRequired = false;
+        this.logger.log({ level: 'info', name: 'map.terrain.retry-started' });
+      }
       map.setTerrain({
         source: mapSourceIds.terrainDem,
         exaggeration: provider.terrain.exaggeration,
@@ -874,6 +891,7 @@ export class MapLibreFacade implements MapFacade {
       this.logger.log({ level: 'info', name: 'map.terrain.enabled' });
       return { status: 'success', mode };
     } catch {
+      this.#terrainSourceRefreshRequired = true;
       map.setTerrain(null);
       map.easeTo({
         center: [camera.longitude, camera.latitude],

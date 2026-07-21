@@ -334,13 +334,12 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect.poll(async () => (await readStoredCamera(page))?.pitch ?? null).toBe(0);
 });
 
-test('falls back after DEM failure and enables terrain after explicit retry', async ({
+test('keeps DEM failure feedback in the shared status without a map banner', async ({
   page,
 }) => {
-  let terrainUnavailable = true;
   await page.route(
     /https:\/\/s3\.amazonaws\.com\/elevation-tiles-prod\/terrarium\/.*\.png/u,
-    (route) => (terrainUnavailable ? route.abort('failed') : route.fallback()),
+    (route) => route.abort('failed'),
   );
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
@@ -354,14 +353,7 @@ test('falls back after DEM failure and enables terrain after explicit retry', as
     page.getByRole('button', { name: 'Show current error details' }),
   ).toContainText('3D terrain is unavailable');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
-
-  terrainUnavailable = false;
-  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
-  await terrainButton.click();
-  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
-    timeout: 15_000,
-  });
+  await expect(page.getByRole('button', { name: 'Retry 3D' })).toHaveCount(0);
 });
 
 test('reports and restores a controlled WebGL context loss', async ({ page }) => {

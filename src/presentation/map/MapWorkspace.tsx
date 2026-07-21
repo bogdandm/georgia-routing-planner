@@ -1,15 +1,7 @@
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
-import {
-  Alert,
-  Box,
-  Button,
-  ListItemIcon,
-  Menu,
-  MenuItem,
-  Snackbar,
-} from '@mui/material';
+import { Alert, Box, ListItemIcon, Menu, MenuItem, Snackbar } from '@mui/material';
 import type { MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
 import {
   useCallback,
@@ -58,6 +50,7 @@ interface MapWorkspaceProps {
   readonly facade?: MapFacade;
   readonly mapCanvas?: ReactNode | ((initialCamera: MapCamera) => ReactNode);
   readonly cameraRestoreTimeoutMs?: number;
+  readonly terrainRetryDelaysMs?: readonly number[];
 }
 
 const unavailableMapStyle: StyleSpecification = {
@@ -67,6 +60,22 @@ const unavailableMapStyle: StyleSpecification = {
 };
 
 const cameraRestoreTimeoutMs = 2_000;
+const terrainRetryDelaysMs = [1_000, 3_000] as const;
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(resolve, delayMs);
+    signal.addEventListener(
+      'abort',
+      () => {
+        window.clearTimeout(timeout);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
 
 async function loadMapViewWithDeadline(
   load: () => Promise<MapViewState | null>,
@@ -95,6 +104,7 @@ export function MapWorkspace({
   facade: suppliedFacade,
   mapCanvas,
   cameraRestoreTimeoutMs: restoreTimeoutMs = cameraRestoreTimeoutMs,
+  terrainRetryDelaysMs: retryDelaysMs = terrainRetryDelaysMs,
 }: MapWorkspaceProps) {
   const {
     logger,
@@ -115,7 +125,7 @@ export function MapWorkspace({
     TerrainControlState,
     'flat' | 'terrain'
   > | null>(null);
-  const [terrainMessage, setTerrainMessage] = useState<string | null>(null);
+  const terrainCommandAbort = useRef<AbortController | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [contextMenu, setContextMenu] = useState<{
     readonly mouseX: number;
@@ -243,24 +253,40 @@ export function MapWorkspace({
 
   const handleTerrainModeChange = useCallback(
     async (mode: 'flat' | 'terrain') => {
+      terrainCommandAbort.current?.abort();
+      const commandAbort = new AbortController();
+      terrainCommandAbort.current = commandAbort;
       setTerrainCommandState(mode === 'terrain' ? 'enabling' : 'disabling');
-      setTerrainMessage(null);
-      try {
-        const result = await facade.setTerrainMode(mode);
-        if (result.status === 'success') {
-          setTerrainCommandState(null);
-          return;
+      const attemptDelays = mode === 'terrain' ? [0, ...retryDelaysMs] : [0];
+
+      for (const delayMs of attemptDelays) {
+        if (delayMs > 0) await waitForRetry(delayMs, commandAbort.signal);
+        if (terrainCommandAbort.current !== commandAbort) return;
+        try {
+          const result = await facade.setTerrainMode(mode);
+          if (terrainCommandAbort.current !== commandAbort) return;
+          if (result.status === 'success') {
+            terrainCommandAbort.current = null;
+            setTerrainCommandState(null);
+            return;
+          }
+        } catch {
+          if (terrainCommandAbort.current !== commandAbort) return;
         }
-        setTerrainCommandState('failed');
-        setTerrainMessage(result.reason);
-      } catch {
-        setTerrainCommandState('failed');
-        setTerrainMessage(
-          'Terrain could not be enabled. The flat map remains available.',
-        );
       }
+
+      terrainCommandAbort.current = null;
+      setTerrainCommandState('failed');
     },
-    [facade],
+    [facade, retryDelaysMs],
+  );
+
+  useEffect(
+    () => () => {
+      terrainCommandAbort.current?.abort();
+      terrainCommandAbort.current = null;
+    },
+    [],
   );
 
   useEffect(() => {
@@ -532,25 +558,6 @@ export function MapWorkspace({
             void handleTerrainModeChange(mode);
           }}
         />
-      ) : null}
-      {terrainMessage !== null && mapProviderConfiguration.status === 'valid' ? (
-        <Alert
-          severity="warning"
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => {
-                void handleTerrainModeChange('terrain');
-              }}
-            >
-              Retry 3D
-            </Button>
-          }
-          sx={{ position: 'absolute', top: 72, left: 12, right: 12, zIndex: 1 }}
-        >
-          {terrainMessage} The 2D basemap is still available.
-        </Alert>
       ) : null}
       {!online && mapProviderConfiguration.status === 'valid' ? (
         <Alert

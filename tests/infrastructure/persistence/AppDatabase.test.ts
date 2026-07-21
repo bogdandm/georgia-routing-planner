@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
-import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 let database: AppDatabase;
@@ -67,38 +66,7 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('persists layer visibility, imagery stretch, and the applied scene', async () => {
-    const appliedScene: SatelliteScene = {
-      id: 'saved-scene',
-      collection: 'sentinel-2-l2a',
-      platform: 'sentinel-2a',
-      productLevel: 'L2A',
-      acquiredAt: '2026-07-12T10:12:00.000Z',
-      cloudCoverPercent: 4,
-      footprint: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [44, 42],
-            [45, 42],
-            [45, 43],
-            [44, 42],
-          ],
-        ],
-      },
-      tileId: '38TMN',
-      orbit: 'R036',
-      productId: 'S2A_SAVED',
-      thumbnailHref: null,
-      visualAsset: {
-        kind: 'sentinel-l2a',
-        itemHref: 'https://earth-search.example.test/items/saved-scene',
-        visualHref: 'https://sentinel.example.test/saved-scene/TCI.tif',
-        mediaType: 'image/tiff; application=geotiff; profile=cloud-optimized',
-        projectionEpsg: 32638,
-      },
-      attribution: 'Synthetic test data',
-    };
+  it('persists layer visibility and imagery presentation choices without scene data', async () => {
     const preferences = {
       visibility: {
         'satellite-imagery': false,
@@ -112,7 +80,6 @@ describe('AppDatabase', () => {
         'places-and-pois': true,
       },
       openStreetMapOpacity: 0.65,
-      appliedScene,
       satelliteRenderingMode: 'server',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
@@ -158,6 +125,9 @@ describe('AppDatabase', () => {
         shadeAboveSatellite: false,
       },
     });
+    await expect(database.settings.get('map.layers')).resolves.not.toHaveProperty(
+      'value.appliedScene',
+    );
   });
 
   it('repairs unsupported persisted terrain overlay values to safe defaults', async () => {
@@ -171,7 +141,6 @@ describe('AppDatabase', () => {
           roads: true,
           'places-and-pois': true,
         },
-        appliedScene: null,
         renderingTuning: {
           reflectanceMax: 11_000,
           gamma: 2.25,

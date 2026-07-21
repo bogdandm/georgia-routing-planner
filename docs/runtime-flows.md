@@ -14,6 +14,8 @@ sequenceDiagram
 
   Entry->>Root: construct adapters and validate configuration
   Root-->>Entry: RuntimeServices
+  Entry->>Storage: load UI preferences
+  Storage-->>Entry: validated preferences or defaults
   Entry->>UI: render providers and error boundary
   UI->>Workspace: mount persistent map area
   Workspace->>Storage: load saved camera with deadline
@@ -24,10 +26,13 @@ sequenceDiagram
   Facade-->>Workspace: serializable ready snapshot
 ```
 
-Configuration validation occurs before MapLibre mounts. A configuration failure renders
-a fatal alert without contacting the provider. Camera failure is recoverable: the map
-uses `defaultGeorgiaCamera`. The facade registers native listeners exactly once and
-removes them during teardown.
+Configuration validation and UI preference restoration occur before React's first
+render. This prevents the navigation from briefly rendering expanded when its persisted
+state is collapsed. A storage failure logs a safe warning and uses default UI settings
+without blocking startup. A configuration failure renders a fatal alert without
+contacting the provider. Camera failure is recoverable: the map uses
+`defaultGeorgiaCamera`. The facade registers native listeners exactly once and removes
+them during teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot
 and shows the settled viewport center inside the compact `Viewport | <coordinates>`
@@ -37,23 +42,21 @@ falls back to `defaultGeorgiaCamera` before the first snapshot is available.
 
 Changing sections changes floating contextual content, not the full-viewport map owner
 or its dimensions. Collapsing navigation keeps only the GR control above the map; that
-control retains its expanded-state size and coordinates while the surrounding rail and
-panes animate out. Opening Settings or Diagnostics follows the same invariant: the
-existing `MapWorkspace` and native MapLibre instance stay mounted.
+control retains the blue logo's expanded-state size and coordinates while a white
+chevron control travels with the retracting sidebar, docks at the logo's right edge, and
+rotates to indicate expansion. Opening Settings or Diagnostics follows the same
+invariant: the existing `MapWorkspace` and native MapLibre instance stay mounted. The
+expanded GR mark and standalone chevron both collapse navigation; once collapsed, the
+combined GR-and-chevron pill is one expansion target.
 
 Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
 stretch slider validates and stores the new numeric values, prepares a replacement
 raster for the current scene, and swaps only after MapLibre reports it ready. A failed
-tuning attempt rolls back the controller values and keeps the prior raster visible. At
-startup, validated stretch preferences load first; saved Sentinel imagery waits for the
-MapLibre style-ready attach before creating raster sources. If a development detach
-cancels restoration, the controller resumes it after the same style-ready map
-reattaches. Late errors from a source that has already been removed are ignored. When
-restoration reaches a ready or hidden state, Satellite projects the controller's saved
-scene into a one-entry Images pane using the current viewport for coverage evidence.
-Clicking that active entry aborts any pending application, removes both raster slots and
-the footprint, clears the applied-scene preference, and returns map layer state to
-empty.
+tuning attempt rolls back the controller values and keeps the prior raster visible.
+Startup restores only non-scene layer preferences. Late errors from a source that has
+already been removed are ignored. Clicking the active scene aborts any pending
+application, removes both raster slots and the footprint, clears the transient scene
+selection, and returns map layer state to empty.
 
 The persisted rendering mode selects the initial template: Auto and Server use the
 hosted renderer, while Direct starts on the opaque COG protocol and never contacts
@@ -118,21 +121,33 @@ mode.
 
 ## Settled map-view write and restore
 
-1. Startup reads one versioned camera-plus-terrain-mode value before mounting the map.
-2. A saved 3D mode is applied as soon as MapLibre is ready; a saved 2D mode remains
-   flat.
+1. Startup reads one versioned center-and-zoom value before mounting the map and forces
+   bearing and pitch to zero.
+2. Only an explicit 3D share URL initializes the first MapLibre style with terrain and
+   its shared bearing and pitch. The 3D control reflects that URL intent immediately;
+   ordinary startup and regular share URLs remain flat. A user selecting 2D during
+   initial loading supersedes the URL intent immediately; later readiness updates cannot
+   re-enable terrain.
 3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
    with the current terrain mode.
 4. The facade updates its snapshot, notifies React, and calls the view-settled port.
 5. `SettledCameraPersistence` keeps only the newest serializable view during its
-   debounce window. Successful terrain transitions also publish their final view
-   explicitly.
+   debounce window, then passes only its camera to the repository. The repository writes
+   center and zoom and discards orientation and terrain mode.
 6. Writes are chained so IndexedDB saves cannot overtake one another.
 7. Save failure is logged and shown as a non-blocking warning; map interaction
    continues.
 
 This flow intentionally excludes continuous `move`/render events from React, IndexedDB,
 and diagnostics.
+
+For a shared satellite URL, `MapWorkspace` opens the Satellite section and resolves the
+allowlisted collection/item identity without waiting for MapLibre readiness. The
+controller publishes the selected scene to transient `mapLayerStore` state, so
+`SatelliteBrowser` can open a one-card Images pane using footprint-derived coverage even
+before a viewport snapshot exists. Native raster application starts separately after the
+map reports ready. This separates share navigation and selection from slower tile
+rendering while keeping all scene data out of IndexedDB.
 
 ## Terrain transition
 
@@ -437,10 +452,11 @@ relevant logical visibility controls to Layers in the same change. Visibility is
 idempotently and projected into a serializable live store. The OpenStreetMap group
 opacity scales the existing satellite-mode paint opacity for its controlled fills,
 lines, points, and labels. Vector mode always uses the unscaled base paint. Dexie
-persists visibility, shared OpenStreetMap opacity, imagery stretch, and the last
-successful scene for startup restoration. Satellite search/results state remains mounted
-while another rail section is visible, and returning to Satellite reattaches the
-existing adjacent pane without a new provider request.
+persists visibility, shared OpenStreetMap opacity, rendering mode, imagery stretch, and
+terrain-overlay preferences. Scene metadata stays transient and is never written to
+Dexie. Satellite search/results state remains mounted while another rail section is
+visible, and returning to Satellite reattaches the existing adjacent pane without a new
+provider request.
 
 ## Place search expansion
 

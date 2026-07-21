@@ -9,10 +9,25 @@ import { registerPageLifecycleDisposal } from '@/bootstrap/registerPageLifecycle
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { WorkspaceErrorBoundary } from '@/presentation/shell/WorkspaceErrorBoundary';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import { useUiStore } from '@/presentation/shell/uiStore';
 import '@/presentation/styles/global.css';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 
-runApplicationBootstrap((rootElement, services) => {
+void runApplicationBootstrap(async (rootElement, services) => {
+  const developerModeFromUrl =
+    new URLSearchParams(window.location.search).get('developer') === '1';
+  let developerMode = developerModeFromUrl;
+  let navigationCollapsed = false;
+
+  try {
+    const preferences = await services.database.loadUiPreferences();
+    developerMode = developerModeFromUrl || preferences.developerMode;
+    navigationCollapsed = preferences.navigationCollapsed;
+  } catch {
+    services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+  }
+
+  useUiStore.setState({ developerMode, navigationCollapsed });
   const root = createRoot(rootElement);
   const dispose = registerPageLifecycleDisposal(() => {
     root.unmount();

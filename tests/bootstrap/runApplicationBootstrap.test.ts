@@ -5,13 +5,13 @@ import type { BootstrapFallbackOptions } from '@/bootstrap/mountBootstrapFallbac
 import { runApplicationBootstrap } from '@/bootstrap/runApplicationBootstrap';
 
 describe('runApplicationBootstrap', () => {
-  it('mounts the independent fallback when service construction fails', () => {
+  it('mounts the independent fallback when service construction fails', async () => {
     document.body.innerHTML = '<div id="root"></div>';
     const failure = new Error('service construction failed');
     const mountFallback =
       vi.fn<(root: HTMLElement, options: BootstrapFallbackOptions) => void>();
 
-    runApplicationBootstrap(vi.fn(), {
+    await runApplicationBootstrap(vi.fn(), {
       document,
       createServices: () => {
         throw failure;
@@ -25,13 +25,13 @@ describe('runApplicationBootstrap', () => {
     });
   });
 
-  it('uses the document body when the configured root is missing', () => {
+  it('uses the document body when the configured root is missing', async () => {
     document.body.replaceChildren();
     const mountFallback =
       vi.fn<(root: HTMLElement, options: BootstrapFallbackOptions) => void>();
     const createServices = vi.fn<() => RuntimeServices>();
 
-    runApplicationBootstrap(vi.fn(), {
+    await runApplicationBootstrap(vi.fn(), {
       document,
       createServices,
       installErrorCapture: vi.fn(),
@@ -42,5 +42,38 @@ describe('runApplicationBootstrap', () => {
     const fallbackCall = mountFallback.mock.calls[0];
     expect(fallbackCall?.[0]).toBe(document.body);
     expect(fallbackCall?.[1].error).toBeInstanceOf(Error);
+  });
+
+  it('waits for initial state restoration before completing bootstrap', async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    const services = {
+      logger: { log: vi.fn() },
+    } as unknown as RuntimeServices;
+    let finishRestoration: (() => void) | undefined;
+    const renderApplication = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRestoration = resolve;
+        }),
+    );
+
+    const bootstrap = runApplicationBootstrap(renderApplication, {
+      document,
+      createServices: () => services,
+      installErrorCapture: vi.fn(),
+      mountFallback: vi.fn(),
+    });
+
+    expect(renderApplication).toHaveBeenCalledOnce();
+    let completed = false;
+    void bootstrap.then(() => {
+      completed = true;
+    });
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    finishRestoration?.();
+    await bootstrap;
+    expect(completed).toBe(true);
   });
 });

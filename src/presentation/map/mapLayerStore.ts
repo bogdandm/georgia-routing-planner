@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 
 import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
 import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type {
   SatelliteRenderingMode,
   TerrainOverlayPreferences,
@@ -31,6 +32,7 @@ export interface MapLayerState {
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly openStreetMapOpacity: number;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
+  readonly selectedScene: SatelliteScene | null;
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
 
@@ -58,6 +60,7 @@ export const initialMapLayerState: MapLayerState = {
   },
   openStreetMapOpacity: 1,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
+  selectedScene: null,
   terrainOverlays: {
     initialized: false,
     preferences: defaultTerrainOverlayPreferences,

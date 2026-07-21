@@ -27,10 +27,13 @@ const defaultDependencies: ApplicationBootstrapDependencies = {
  * Owns the pre-React failure boundary. The fallback deliberately remains usable when
  * dependency construction fails and the normal diagnostics service does not exist.
  */
-export function runApplicationBootstrap(
-  renderApplication: (root: HTMLElement, services: RuntimeServices) => void,
+export async function runApplicationBootstrap(
+  renderApplication: (
+    root: HTMLElement,
+    services: RuntimeServices,
+  ) => void | Promise<void>,
   dependencies: ApplicationBootstrapDependencies = defaultDependencies,
-): void {
+): Promise<void> {
   let services: RuntimeServices | null = null;
   const rootElement = dependencies.document.querySelector<HTMLElement>('#root');
 
@@ -40,7 +43,7 @@ export function runApplicationBootstrap(
     }
     services = dependencies.createServices();
     dependencies.installErrorCapture(services.logger);
-    renderApplication(rootElement, services);
+    await renderApplication(rootElement, services);
     services.logger.log({ level: 'info', name: 'app.bootstrap.render-requested' });
   } catch (error) {
     services?.logger.log({

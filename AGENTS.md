@@ -786,6 +786,19 @@ restart the same command through a sequence of larger wrapper limits. If the pro
 terminated by the wrapper, restart it at most once using the established limit from the
 table and record that the first result was an orchestration timeout, not a test failure.
 
+The complete non-coverage suite can also make the `WorkspaceShell` interactions
+`navigates the contextual feature panels without covering the map` or
+`collapses from the GR logo and restores from the remaining logo` exceed the five-second
+default when many JSDOM workers contend on managed Windows. If either exact test passes
+under a focused run, validate the complete non-coverage suite once with:
+
+```powershell
+pnpm test --maxWorkers=4
+```
+
+Keep the five-second per-test ceiling; do not add sleeps, remove assertions, or rerun
+the same unconstrained suite.
+
 ### Managed Chromium timing
 
 Run at most one local Chromium worker per agent whenever other agent workstreams may be

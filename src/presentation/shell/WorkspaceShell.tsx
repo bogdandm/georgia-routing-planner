@@ -23,6 +23,7 @@ import {
   workspaceHashForTab,
   workspaceTabFromHash,
 } from '@/presentation/shell/workspaceTabLocation';
+import { appColors } from '@/presentation/theme/appColors';
 
 interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
@@ -68,37 +69,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     (state) => state.terrainComputeStatus,
   );
   const renderingTuningAbort = useRef<AbortController | null>(null);
-  const developerModeChangedByUser = useRef(false);
-  const navigationChangedByUser = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const urlEnabled =
-      new URLSearchParams(window.location.search).get('developer') === '1';
-
-    const loadPreferences = async () => {
-      try {
-        const preferences = await database.loadUiPreferences();
-        if (!cancelled && !developerModeChangedByUser.current) {
-          setDeveloperMode(urlEnabled || preferences.developerMode);
-        }
-        if (!cancelled && !navigationChangedByUser.current) {
-          setNavigationCollapsed(preferences.navigationCollapsed);
-        }
-      } catch {
-        if (!cancelled && !developerModeChangedByUser.current) {
-          setDeveloperMode(urlEnabled);
-        }
-        logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
-      }
-    };
-
-    void loadPreferences();
-    return () => {
-      cancelled = true;
-    };
-  }, [database, logger, setDeveloperMode, setNavigationCollapsed]);
-
   useEffect(() => {
     let cancelled = false;
     const restoreMapPreferences = async () => {
@@ -147,7 +117,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   };
 
   const handleDeveloperModeChange = (value: boolean) => {
-    developerModeChangedByUser.current = true;
     setDeveloperMode(value);
     if (!value) {
       setDeveloperDrawerOpen(false);
@@ -160,7 +129,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   };
 
   const handleNavigationCollapsedChange = (value: boolean) => {
-    navigationChangedByUser.current = true;
     setNavigationCollapsed(value);
     void persistUiPreferences(developerMode, value);
   };
@@ -249,10 +217,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           display: 'flex',
           gap: 0,
           filter: navigationCollapsed
-            ? 'none'
+            ? 'drop-shadow(0 6px 9px rgba(0, 0, 0, 0.18))'
             : 'drop-shadow(0 8px 14px rgba(2, 48, 71, 0.2))',
           transition: (theme) =>
-            theme.transitions.create('height', {
+            theme.transitions.create(['height', 'filter'], {
               duration: theme.transitions.duration.short,
             }),
         }}
@@ -272,7 +240,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           onShare={() => {
             setShareOpen(true);
           }}
-          onLogoClick={() => {
+          onToggleNavigation={() => {
             handleNavigationCollapsedChange(!navigationCollapsed);
           }}
         />
@@ -308,29 +276,131 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             }}
           />
         </Box>
-        {navigationCollapsed ? null : (
-          <Tooltip title="Hide navigation" placement="right">
-            <IconButton
-              aria-label="Hide navigation"
-              onClick={() => {
-                handleNavigationCollapsedChange(true);
-              }}
-              size="small"
-              sx={{
+        <Tooltip title={navigationCollapsed ? '' : 'Hide navigation'} placement="right">
+          <IconButton
+            aria-label={navigationCollapsed ? 'Show navigation' : 'Hide navigation'}
+            data-testid="navigation-collapse-toggle"
+            onClick={() => {
+              handleNavigationCollapsedChange(!navigationCollapsed);
+            }}
+            size="small"
+            sx={{
+              position: 'absolute',
+              zIndex: 5,
+              top: 12,
+              right: navigationCollapsed ? -26 : -28,
+              width: navigationCollapsed ? 80 : 36,
+              height: 36,
+              bgcolor: navigationCollapsed ? 'transparent' : 'background.paper',
+              border: navigationCollapsed ? 0 : 1,
+              borderColor: 'divider',
+              borderRadius: navigationCollapsed ? '5px 8px 8px 5px' : 1,
+              boxShadow: navigationCollapsed ? 0 : 2,
+              overflow: 'hidden',
+              transition: (theme) =>
+                theme.transitions.create(
+                  ['right', 'width', 'background-color', 'border-radius', 'box-shadow'],
+                  {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                  },
+                ),
+              '&::before': {
+                content: '""',
                 position: 'absolute',
-                top: 12,
-                right: -28,
+                inset: '0 0 0 auto',
+                zIndex: 0,
+                width: 36,
                 bgcolor: 'background.paper',
-                border: 1,
-                borderColor: 'divider',
-                boxShadow: 2,
-                '&:hover': { bgcolor: 'background.paper' },
-              }}
-            >
-              <ChevronLeftOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
+                borderRadius: navigationCollapsed ? '0 8px 8px 0' : 1,
+                opacity: navigationCollapsed ? 1 : 0,
+                transition: (theme) =>
+                  theme.transitions.create(['opacity', 'border-radius'], {
+                    duration: theme.transitions.duration.short,
+                  }),
+              },
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                inset: 0,
+                zIndex: 1,
+                bgcolor: appColors.interaction.navigationHoverOverlay,
+                opacity: 0,
+                pointerEvents: 'none',
+                transition: (theme) =>
+                  theme.transitions.create('opacity', {
+                    duration: theme.transitions.duration.shorter,
+                  }),
+              },
+              '&:hover': {
+                bgcolor: navigationCollapsed ? 'transparent' : 'background.paper',
+                boxShadow: navigationCollapsed ? 0 : 3,
+                '&::after': { opacity: 1 },
+              },
+              '&.Mui-focusVisible': {
+                outline: `2px solid ${appColors.brand.amber}`,
+                outlineOffset: -2,
+              },
+              '& .MuiSvgIcon-root': {
+                position: 'absolute',
+                top: 8,
+                right: navigationCollapsed ? 8 : 5,
+                zIndex: 2,
+                transform: navigationCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: (theme) =>
+                  theme.transitions.create('transform', {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                  }),
+              },
+              '@media (prefers-reduced-motion: reduce)': {
+                transition: 'none',
+                '&::before, &::after': { transition: 'none' },
+                '& .MuiSvgIcon-root': { transition: 'none' },
+              },
+            }}
+          >
+            <ChevronLeftOutlinedIcon fontSize="small" />
+            {navigationCollapsed ? (
+              <>
+                <Tooltip
+                  title="Georgia Routing Planner"
+                  placement="bottom-start"
+                  slotProps={{
+                    popper: {
+                      modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
+                    },
+                  }}
+                >
+                  <Box
+                    aria-hidden="true"
+                    component="span"
+                    data-testid="collapsed-project-tooltip-target"
+                    sx={{
+                      position: 'absolute',
+                      zIndex: 3,
+                      inset: '0 auto 0 0',
+                      width: 44,
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip title="Show navigation" placement="right">
+                  <Box
+                    aria-hidden="true"
+                    component="span"
+                    data-testid="collapsed-show-navigation-tooltip-target"
+                    sx={{
+                      position: 'absolute',
+                      zIndex: 3,
+                      inset: '0 0 0 auto',
+                      width: 36,
+                    }}
+                  />
+                </Tooltip>
+              </>
+            ) : null}
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <SettingsDialog

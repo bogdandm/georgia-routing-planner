@@ -6,7 +6,6 @@ import { installMapProviderFixtures } from './installMapProviderFixtures';
 
 interface StoredMapView {
   readonly camera: { readonly longitude: number; readonly zoom: number };
-  readonly terrainMode: 'flat' | 'terrain';
 }
 
 interface DiagnosticsBundle {
@@ -162,25 +161,17 @@ test('keeps production terrain and contours on the module worker through reload'
     name: 'Show 3D terrain map',
   });
   await terrainButton.click();
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
-      timeout: 20_000,
-    })
-    .toBe('terrain');
+  await expect(terrainButton).toBeEnabled({ timeout: 20_000 });
   const longitudeBeforeMove = (await readStoredMapView(page))?.camera.longitude;
   await canvas.press('ArrowRight');
   await expect
     .poll(async () => (await readStoredMapView(page))?.camera.longitude)
     .not.toBe(longitudeBeforeMove);
 
-  // The foundation workflow already proves 3D restoration. Return to persisted flat
-  // mode here so this worker-focused workflow can prove teardown/recreation without
-  // starting a second redundant software-rendered terrain restore at the end of CI.
+  // Return to flat mode before the worker teardown/recreation proof.
   const flatButton = page.getByRole('button', { name: 'Show flat 2D map' });
   await flatButton.click();
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode)
-    .toBe('flat');
+  await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
 
   expect(terrainWorkers).toHaveLength(1);
   expect(closedTerrainWorkers.has(originalTerrainWorker)).toBe(false);
@@ -205,9 +196,6 @@ test('keeps production terrain and contours on the module worker through reload'
     .poll(() => terrainRequestCount)
     .toBeGreaterThan(terrainRequestCountBeforeReload);
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode)
-    .toBe('flat');
 
   await page.getByRole('button', { name: 'Developer diagnostics' }).click();
   await page.getByRole('tab', { name: /Logs/u }).click();

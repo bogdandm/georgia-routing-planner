@@ -575,22 +575,65 @@ not use top-level path filters that leave a required check pending.
 
 ### Managed Windows coverage timing
 
-When coverage is required, run `pnpm test:coverage` once. Preserve the configured
-ten-second per-test ceiling for managed Windows; investigate tests that exceed it rather
-than adding sleeps or weakening assertions.
+The maintainer commonly runs four to six agents on a medium-spec Windows workstation.
+Treat CPU, memory, disk, and browser contention as normal local conditions rather than
+assuming CI-like timing.
+
+When coverage is required, run `pnpm test:coverage` once. Use a single 30-second
+per-test ceiling for local managed-Windows coverage work; the previous ten-second
+ceiling is too aggressive under expected parallel-agent load. If one coverage test
+exceeds the ceiling, rerun only that test once with the same ceiling. Do not rerun the
+aggregate or increase the ceiling in steps. A timing-only failure in unrelated work is
+not permission to edit committed timeout configuration.
+
+### Command-wrapper timing
+
+Command-wrapper limits control how long the agent waits for a process; they are not test
+or assertion timeouts. Choose a realistic wrapper limit before launch:
+
+| Local command scope                          | Wrapper limit |
+| -------------------------------------------- | ------------- |
+| Focused unit, component, or integration test | 5 minutes     |
+| Full Vitest, coverage, integration, or build | 15 minutes    |
+| Focused Playwright subset                    | 10 minutes    |
+| Justified complete Playwright suite          | 30 minutes    |
+
+These limits do not authorize broader test scope. A command returning no incremental
+output is not evidence of a hang because some runners buffer output. If the shell tool
+yields while the process is alive, keep polling or waiting for that process and provide
+concise progress updates; do not launch a duplicate.
+
+If a wrapper expires without a runner-reported test or assertion timeout, inspect the
+existing process or terminal first. Continue waiting when it is still active. Never
+restart the same command through a sequence of larger wrapper limits. If the process was
+terminated by the wrapper, restart it at most once using the established limit from the
+table and record that the first result was an orchestration timeout, not a test failure.
 
 ### Managed Chromium timing
 
-Preserve the configured Chromium limits:
+Run at most one local Chromium worker per agent whenever other agent workstreams may be
+active. Do not increase browser workers to shorten wall-clock time. Two local workers
+are allowed only when the maintainer confirms the workstation is not shared with other
+active test runs.
+
+Preserve these Chromium limits under normal parallel-agent load:
 
 | Context | Workers | Per-test ceiling | Assertion ceiling | Retries |
 | ------- | ------- | ---------------- | ----------------- | ------- |
-| Local   | 2       | 90 seconds       | 10 seconds        | None    |
+| Local   | 1       | 120 seconds      | 20 seconds        | None    |
 | CI      | 1       | 120 seconds      | 20 seconds        | None    |
 
 Preserve focused existing exceptions in `e2e/map-foundation.spec.ts`, terrain workflows,
 and `e2e/satellite-imagery.spec.ts`. Do not replace observable synchronization with
 sleeps, retries, or broad timeout increases.
+
+An actual test timeout is not an instruction to ratchet limits upward. First determine
+whether the expected observable state occurred and rerun only the failed test once under
+the established local worker and timeout settings. During unrelated work, report a
+repeatable timeout without changing timeout configuration. During an explicitly scoped
+timeout fix, use measured runtime under expected workstation contention to choose one
+documented ceiling, change it once, and validate only the affected test. Do not try a
+series of guessed values.
 
 ### End-to-end and accessibility
 

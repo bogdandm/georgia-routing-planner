@@ -9,6 +9,7 @@ import {
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { TerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
+import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
 import {
   encodeTerrariumElevation,
@@ -58,6 +59,10 @@ function terrain() {
   ).terrain;
 }
 
+function configuration(requestTimeoutMs = 10_000) {
+  return toTerrainComputeConfiguration(terrain(), requestTimeoutMs);
+}
+
 describe('FilteredTerrariumTileProvider', () => {
   it('bypasses decoding and neighborhood requests while filtering is disabled', async () => {
     const decode = vi.fn(() => Promise.resolve(decodedTile()));
@@ -73,8 +78,7 @@ describe('FilteredTerrariumTileProvider', () => {
       return Promise.resolve(new Response(new Blob([url]), { status: 200 }));
     });
     const provider = new FilteredTerrariumTileProvider(
-      terrain(),
-      10_000,
+      configuration(),
       logger,
       testCodec,
       fetchImplementation,
@@ -116,8 +120,7 @@ describe('FilteredTerrariumTileProvider', () => {
         }),
     );
     const provider = new FilteredTerrariumTileProvider(
-      terrain(),
-      10_000,
+      configuration(),
       logger,
       codec,
       fetchImplementation,
@@ -149,8 +152,7 @@ describe('FilteredTerrariumTileProvider', () => {
         }),
     );
     const provider = new FilteredTerrariumTileProvider(
-      terrain(),
-      0,
+      configuration(0),
       timeoutLogger,
       codec,
       fetchImplementation,
@@ -171,8 +173,7 @@ describe('FilteredTerrariumTileProvider', () => {
       Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
     );
     const provider = new FilteredTerrariumTileProvider(
-      terrain(),
-      10_000,
+      configuration(),
       logger,
       codec,
       fetchImplementation,
@@ -196,8 +197,7 @@ describe('FilteredTerrariumTileProvider', () => {
       return new Response(new Blob(['tile']), { status: 200 });
     });
     const provider = new FilteredTerrariumTileProvider(
-      terrain(),
-      10_000,
+      configuration(),
       logger,
       codec,
       fetchImplementation,
@@ -224,8 +224,7 @@ describe('FilteredTerrariumTileProvider', () => {
     );
     let now = 0;
     const provider = new FilteredTerrariumTileProvider(
-      terrain(),
-      10_000,
+      configuration(),
       aggregateLogger,
       codec,
       fetchImplementation,
@@ -245,9 +244,9 @@ describe('FilteredTerrariumTileProvider', () => {
   });
 
   it('keeps the processed-tile cache within its configured LRU bound', async () => {
-    const configuredTerrain = {
-      ...terrain(),
-      filter: { ...terrain().filter, cacheSize: 8 },
+    const configuredConfiguration = {
+      ...configuration(),
+      filter: { ...configuration().filter, cacheSize: 8 },
     };
     const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
       const value =
@@ -259,8 +258,7 @@ describe('FilteredTerrariumTileProvider', () => {
       return Promise.resolve(new Response(new Blob([value]), { status: 200 }));
     });
     const provider = new FilteredTerrariumTileProvider(
-      configuredTerrain,
-      10_000,
+      configuredConfiguration,
       logger,
       codec,
       fetchImplementation,
@@ -273,5 +271,34 @@ describe('FilteredTerrariumTileProvider', () => {
     await provider.getTile(5, 2, 10, new AbortController());
 
     expect(fetchImplementation.mock.calls.length).toBe(callsAfterNineTiles + 9);
+  });
+
+  it('cancels pending requests and clears ownership on disposal', async () => {
+    const fetchImplementation = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => {
+              reject(new DOMException('Canceled', 'AbortError'));
+            },
+            { once: true },
+          );
+        }),
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      logger,
+      codec,
+      fetchImplementation,
+    );
+    const pending = provider.getTile(5, 8, 9, new AbortController());
+
+    provider.dispose();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(provider.getTile(5, 8, 9, new AbortController())).rejects.toThrow(
+      /disposed/u,
+    );
   });
 });

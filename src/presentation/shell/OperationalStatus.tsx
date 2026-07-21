@@ -34,6 +34,7 @@ export function OperationalStatus() {
   const { mapDiagnostics, mapProviderConfiguration } = useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const layerError = useStore(mapLayerStore, (state) => state.errorMessage);
+  const terrainQueue = useStore(mapLayerStore, (state) => state.terrainComputeQueue);
   const requestStatus = useStore(satelliteRequestStatusStore);
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
@@ -132,6 +133,17 @@ export function OperationalStatus() {
       ? null
       : Math.max(0, Math.floor((now - display.startedAt) / 1_000));
 
+  const terrainActivityLabel =
+    terrainQueue.executionMode === 'inline'
+      ? 'Terrain compute · compatibility mode'
+      : terrainQueue.executionMode === 'restarting'
+        ? 'Terrain worker · restarting'
+        : terrainQueue.queuedContourCount > 0
+          ? `Terrain worker · queue ${String(terrainQueue.queuedContourCount)}/${String(terrainQueue.queueCapacity)}${terrainQueue.activeCount > 0 ? ` · ${String(terrainQueue.activeCount)} active` : ''}`
+          : terrainQueue.activeCount > 0
+            ? `Terrain worker · ${String(terrainQueue.activeCount)} active`
+            : null;
+
   const handleErrorDetailsOpen = (event: MouseEvent<HTMLElement>) => {
     setErrorAnchor(event.currentTarget);
   };
@@ -218,6 +230,16 @@ export function OperationalStatus() {
       </Box>
       {display.kind === 'pending' ? (
         <LinearProgress aria-hidden sx={{ mt: 0.25, height: 2, borderRadius: 1 }} />
+      ) : null}
+      {display.kind === 'ready' && terrainActivityLabel !== null ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          aria-label="Terrain compute queue state"
+          sx={{ display: 'block', pl: 2.875, lineHeight: 1.25 }}
+        >
+          {terrainActivityLabel}
+        </Typography>
       ) : null}
       <Popover
         open={errorAnchor !== null && display.kind === 'error'}

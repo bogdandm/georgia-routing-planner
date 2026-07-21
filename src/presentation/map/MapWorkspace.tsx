@@ -44,6 +44,7 @@ import {
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
@@ -137,6 +138,10 @@ export function MapWorkspace({
   const navigationCommand = useStore(
     mapInteractionStore,
     (state) => state.navigationCommand,
+  );
+  const terrainComputeStatus = useStore(
+    mapLayerStore,
+    (state) => state.terrainComputeStatus,
   );
   const fitBoundsCommand = useStore(
     mapInteractionStore,
@@ -492,6 +497,7 @@ export function MapWorkspace({
       data-map-state={
         mapProviderConfiguration.status === 'invalid' ? 'fatal' : snapshot.lifecycle
       }
+      data-terrain-compute-status={terrainComputeStatus}
       sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 240 }}
     >
       {mapProviderConfiguration.status === 'invalid' ? (

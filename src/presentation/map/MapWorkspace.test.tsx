@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
   requestMapNavigation,
   resetMapInteractionStore,
@@ -16,6 +17,7 @@ import { FakeMapFacade } from '../../../test/helpers/FakeMapFacade';
 describe('MapWorkspace', () => {
   beforeEach(() => {
     resetMapInteractionStore();
+    resetMapLayerStore();
     window.history.replaceState(null, '', '/');
   });
 
@@ -68,6 +70,18 @@ describe('MapWorkspace', () => {
     expect(screen.getByTestId('map-workspace')).toHaveAttribute(
       'data-map-state',
       'loading',
+    );
+    expect(screen.getByTestId('map-workspace')).toHaveAttribute(
+      'data-terrain-compute-status',
+      'worker',
+    );
+
+    act(() => {
+      mapLayerStore.setState({ terrainComputeStatus: 'inline' });
+    });
+    expect(screen.getByTestId('map-workspace')).toHaveAttribute(
+      'data-terrain-compute-status',
+      'inline',
     );
 
     act(() => {

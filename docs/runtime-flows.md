@@ -14,6 +14,8 @@ sequenceDiagram
 
   Entry->>Root: construct adapters and validate configuration
   Root-->>Entry: RuntimeServices
+  Entry->>Storage: load UI preferences
+  Storage-->>Entry: validated preferences or defaults
   Entry->>UI: render providers and error boundary
   UI->>Workspace: mount persistent map area
   Workspace->>Storage: load saved camera with deadline
@@ -24,10 +26,13 @@ sequenceDiagram
   Facade-->>Workspace: serializable ready snapshot
 ```
 
-Configuration validation occurs before MapLibre mounts. A configuration failure renders
-a fatal alert without contacting the provider. Camera failure is recoverable: the map
-uses `defaultGeorgiaCamera`. The facade registers native listeners exactly once and
-removes them during teardown.
+Configuration validation and UI preference restoration occur before React's first
+render. This prevents the navigation from briefly rendering expanded when its persisted
+state is collapsed. A storage failure logs a safe warning and uses default UI settings
+without blocking startup. A configuration failure renders a fatal alert without
+contacting the provider. Camera failure is recoverable: the map uses
+`defaultGeorgiaCamera`. The facade registers native listeners exactly once and removes
+them during teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot
 and shows the settled viewport center inside the compact `Viewport | <coordinates>`
@@ -37,9 +42,12 @@ falls back to `defaultGeorgiaCamera` before the first snapshot is available.
 
 Changing sections changes floating contextual content, not the full-viewport map owner
 or its dimensions. Collapsing navigation keeps only the GR control above the map; that
-control retains its expanded-state size and coordinates while the surrounding rail and
-panes animate out. Opening Settings or Diagnostics follows the same invariant: the
-existing `MapWorkspace` and native MapLibre instance stay mounted.
+control retains the blue logo's expanded-state size and coordinates while a white
+chevron control travels with the retracting sidebar, docks at the logo's right edge, and
+rotates to indicate expansion. Opening Settings or Diagnostics follows the same
+invariant: the existing `MapWorkspace` and native MapLibre instance stay mounted. The
+expanded GR mark and standalone chevron both collapse navigation; once collapsed, the
+combined GR-and-chevron pill is one expansion target.
 
 Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
 stretch slider validates and stores the new numeric values, prepares a replacement

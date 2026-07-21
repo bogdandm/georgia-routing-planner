@@ -43,10 +43,10 @@ test('loads the production map style and reloads under a repository subpath', as
     'aria-selected',
     'true',
   );
+  await expect(page.getByRole('tab', { name: 'Tracks' })).toBeDisabled();
+  await expect(page.getByRole('tab', { name: 'Markers' })).toBeDisabled();
 
   await expect(page.getByRole('tab', { name: 'Plan' })).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Markers' }).click();
-  await expect(page.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
   await page.getByRole('tab', { name: 'Layers' }).click();
   await expect(page.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
 
@@ -68,7 +68,7 @@ test('keeps the full-screen map fixed while navigation changes and collapses', a
 
   await page.getByRole('tab', { name: 'Satellite' }).click();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
-  await page.getByRole('button', { name: 'Hide navigation from GR' }).click();
+  await page.getByRole('button', { name: 'Hide navigation', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
 

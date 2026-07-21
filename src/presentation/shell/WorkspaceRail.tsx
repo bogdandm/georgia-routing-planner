@@ -12,6 +12,7 @@ import {
   Stack,
   Tab,
   Tabs,
+  type TabProps,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -19,6 +20,34 @@ import type { SyntheticEvent } from 'react';
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
+
+const unavailableTabSx = {
+  pointerEvents: 'auto !important',
+  cursor: 'not-allowed',
+  opacity: '1 !important',
+  color: 'rgba(255, 255, 255, 0.42) !important',
+} as const;
+
+type UnavailableWorkspaceTabProps = Omit<TabProps, 'component' | 'disabled'> & {
+  readonly reason: string;
+};
+
+function UnavailableWorkspaceTab({
+  reason,
+  ...tabProps
+}: UnavailableWorkspaceTabProps) {
+  return (
+    <Tooltip describeChild title={reason} placement="right">
+      <Tab
+        {...tabProps}
+        aria-description={reason}
+        component="div"
+        disabled
+        sx={unavailableTabSx}
+      />
+    </Tooltip>
+  );
+}
 
 interface WorkspaceRailProps {
   readonly collapsed: boolean;
@@ -29,7 +58,7 @@ interface WorkspaceRailProps {
   readonly onOpenSettings: () => void;
   readonly onShare: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
-  readonly onLogoClick: () => void;
+  readonly onToggleNavigation: () => void;
 }
 
 export function WorkspaceRail({
@@ -41,7 +70,7 @@ export function WorkspaceRail({
   onOpenSettings,
   onShare,
   onSectionChange,
-  onLogoClick,
+  onToggleNavigation,
 }: WorkspaceRailProps) {
   const handleSectionChange = (_event: SyntheticEvent, value: WorkspaceTab) => {
     onSectionChange(value);
@@ -63,37 +92,72 @@ export function WorkspaceRail({
         bgcolor: collapsed ? 'transparent' : appColors.brand.deepSpace,
         color: appColors.text.inverse,
         borderRadius: collapsed ? 0 : '8px 0 0 8px',
-        overflow: collapsed ? 'visible' : 'hidden',
+        overflow: 'visible',
         boxShadow: 'none',
         transition: (theme) =>
-          theme.transitions.create('background-color', {
-            duration: theme.transitions.duration.shorter,
-          }),
+          collapsed
+            ? 'none'
+            : theme.transitions.create('background-color', {
+                duration: theme.transitions.duration.shorter,
+              }),
       }}
     >
       <Tooltip
-        title={collapsed ? 'Show navigation' : 'Hide navigation'}
-        placement="right"
+        title="Georgia Routing Planner"
+        placement="bottom-start"
+        slotProps={{
+          popper: {
+            modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
+          },
+        }}
       >
         <ButtonBase
-          aria-label={collapsed ? 'Show navigation' : 'Hide navigation from GR'}
-          onClick={onLogoClick}
+          aria-hidden={collapsed}
+          aria-label="Hide navigation from GR logo"
+          onClick={onToggleNavigation}
+          tabIndex={collapsed ? -1 : 0}
           sx={{
+            position: 'relative',
             width: 44,
             height: 36,
             flexShrink: 0,
             mt: 1.5,
-            mx: 'auto',
+            ml: 1.25,
             display: 'grid',
             placeItems: 'center',
-            borderRadius: 1.25,
+            overflow: 'hidden',
             bgcolor: appColors.brand.blueGreenDark,
             color: appColors.text.inverse,
-            boxShadow: '0 6px 18px rgba(0, 0, 0, 0.18)',
-            cursor: 'pointer',
+            borderRadius: collapsed ? '5px 0 0 5px' : 1.25,
+            pointerEvents: collapsed ? 'none' : 'auto',
+            transition: (theme) =>
+              theme.transitions.create('border-radius', {
+                duration: theme.transitions.duration.short,
+              }),
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              bgcolor: appColors.interaction.navigationHoverOverlay,
+              opacity: 0,
+              pointerEvents: 'none',
+              transition: (theme) =>
+                theme.transitions.create('opacity', {
+                  duration: theme.transitions.duration.shorter,
+                }),
+            },
+            '&:hover::after': { opacity: 1 },
+            '@media (prefers-reduced-motion: reduce)': {
+              transition: 'none',
+              '&::after': { transition: 'none' },
+            },
           }}
         >
-          <Typography variant="subtitle2" color="inherit" sx={{ fontWeight: 800 }}>
+          <Typography
+            variant="subtitle2"
+            color="inherit"
+            sx={{ position: 'relative', zIndex: 1, fontWeight: 800 }}
+          >
             GR
           </Typography>
         </ButtonBase>
@@ -118,9 +182,19 @@ export function WorkspaceRail({
           },
         }}
       >
-        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
+        <UnavailableWorkspaceTab
+          icon={<RouteOutlinedIcon />}
+          label="Tracks"
+          reason="Track tools are not available yet"
+          value="tracks"
+        />
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
-        <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
+        <UnavailableWorkspaceTab
+          icon={<PlaceOutlinedIcon />}
+          label="Markers"
+          reason="Saved markers are not available yet"
+          value="markers"
+        />
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
       </Tabs>
 

@@ -35,9 +35,11 @@ map navigation remains on the right, and the 2D/3D selector sits directly below 
 shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
 derived surface, border, status, and tag colors.
 
-The current shell implements all four rail destinations and honest empty or disabled
-states for unavailable feature behavior. It has no full-width app bar, empty global
-elevation placeholder, or generic always-visible privacy notice.
+The current shell exposes Satellite and Layers as interactive rail destinations. Tracks
+and Markers remain visible but disabled until those feature surfaces have working
+behavior; hovering either disabled destination explains which capability is not yet
+available. It has no full-width app bar, empty global elevation placeholder, or generic
+always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
@@ -65,8 +67,9 @@ elevation profile. The full original GPX is loaded only when requested. Import r
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
-The current implementation shows the Tracks structure and disabled actions but does not
-load a catalog, import GPX, manage folders, or open track details.
+The current implementation retains the Tracks structure for direct anchored URLs, but
+its rail action is disabled because it does not load a catalog, import GPX, manage
+folders, or open track details.
 
 ### Create GPX
 
@@ -190,9 +193,9 @@ A marker can become a Satellite search target or be copied into Create GPX. Copy
 transfers coordinates and supported appearance/provenance values; marker and waypoint
 identities remain separate, so subsequent marker edits do not mutate the waypoint.
 
-The current implementation provides the Markers rail destination and an empty state;
-marker creation, persistence, organization, editing, and cross-feature actions are
-unavailable.
+The current implementation retains the Markers empty state for direct anchored URLs, but
+its rail action is disabled because marker creation, persistence, organization, editing,
+and cross-feature actions are unavailable.
 
 ### Layers
 

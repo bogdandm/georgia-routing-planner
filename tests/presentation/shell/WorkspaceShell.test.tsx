@@ -157,8 +157,35 @@ describe('WorkspaceShell', () => {
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
     expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Markers' }));
-    expect(screen.getByRole('heading', { name: 'No saved markers' })).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+      'aria-description',
+      'Track tools are not available yet',
+    );
+    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
+      'aria-description',
+      'Saved markers are not available yet',
+    );
+    await user.hover(screen.getByRole('tab', { name: 'Tracks' }));
+    expect(
+      await screen.findByRole('tooltip', {
+        name: 'Track tools are not available yet',
+      }),
+    ).toBeVisible();
+    await user.unhover(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.hover(screen.getByRole('tab', { name: 'Markers' }));
+    expect(
+      await screen.findByRole('tooltip', {
+        name: 'Saved markers are not available yet',
+      }),
+    ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
     expect(
@@ -666,35 +693,66 @@ describe('WorkspaceShell', () => {
     });
   });
 
-  it('collapses from the GR logo and restores from the remaining logo', async () => {
+  it('keeps the logo fixed and restores from its attached chevron', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
     const navigation = screen.getByRole('navigation');
-    const expandedLogo = screen.getByRole('button', {
-      name: 'Hide navigation from GR',
+    const projectLogo = screen.getByRole('button', {
+      name: 'Hide navigation from GR logo',
     });
     expect(navigation).toHaveStyle({ width: '64px' });
-    expect(expandedLogo).toHaveStyle({
+    expect(projectLogo).toHaveStyle({
       width: '44px',
       height: '36px',
-      flexShrink: '0',
       marginTop: '12px',
+      marginLeft: '10px',
+      flexShrink: '0',
     });
+    await user.hover(projectLogo);
+    expect(
+      await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
+    ).toBeVisible();
+    await user.unhover(projectLogo);
 
-    await user.click(expandedLogo);
+    const collapseToggle = screen.getByTestId('navigation-collapse-toggle');
+    expect(collapseToggle).toHaveStyle({
+      width: '36px',
+      height: '36px',
+      right: '-28px',
+    });
+    await user.click(projectLogo);
 
-    const collapsedLogo = screen.getByRole('button', { name: 'Show navigation' });
+    const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '64px' });
-    expect(collapsedLogo).toHaveStyle({
+    expect(projectLogo).toHaveStyle({
       width: '44px',
       height: '36px',
-      flexShrink: '0',
       marginTop: '12px',
+      marginLeft: '10px',
+      borderRadius: '5px 0 0 5px',
     });
+    expect(showNavigation).toBe(collapseToggle);
+    expect(showNavigation).toHaveStyle({
+      width: '80px',
+      height: '36px',
+      right: '-26px',
+      borderWidth: '0px',
+      borderRadius: '5px 8px 8px 5px',
+      boxShadow: 'none',
+    });
+    await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));
+    expect(
+      await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
+    ).toBeVisible();
+    await user.unhover(screen.getByTestId('collapsed-project-tooltip-target'));
+    await user.hover(screen.getByTestId('collapsed-show-navigation-tooltip-target'));
+    expect(
+      await screen.findByRole('tooltip', { name: 'Show navigation' }),
+    ).toBeVisible();
     expect(screen.getByRole('complementary', { hidden: true })).not.toBeVisible();
-    await user.click(collapsedLogo);
+    await user.click(showNavigation);
     expect(screen.getByRole('navigation')).toBeVisible();
     expect(screen.getByRole('complementary')).toBeVisible();
 

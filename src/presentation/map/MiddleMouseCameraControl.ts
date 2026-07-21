@@ -7,7 +7,7 @@ import {
 
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
-const maximumPitchDegrees = 85;
+const maximumPitchDegrees = 75;
 
 /**
  * Provides a restrained 3D-only middle-button orbit around the terrain point beneath

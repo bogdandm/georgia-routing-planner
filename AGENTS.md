@@ -119,7 +119,7 @@ consistent. Use clear imperative or Conventional Commit-style messages.
 Treat approximately 1,000 changed handwritten lines in an uncommitted implementation
 diff as a checkpoint warning, not a target or absolute limit. Before adding more,
 inspect whether completed work can be committed independently. Generated files,
-lockfiles, snapshots, fixtures, and mechanical formatting are excluded from this
+lockfiles, tests, snapshots, fixtures, and mechanical formatting are excluded from this
 heuristic but should still be isolated when practical. Explain in the pull request when
 a large atomic commit genuinely cannot be divided without leaving broken or misleading
 intermediate states.
@@ -172,6 +172,12 @@ growth as a review trigger:
   could not replace or simplify more existing code.
 - Three or more new production files requires listing the responsibility and immediate
   consumer of each file.
+
+Test code is excluded from line-growth thresholds and production-file counts. Tests may
+be verbose when explicit setup, realistic fixtures, named scenarios, and focused
+assertions make behavior easier to understand or failures easier to diagnose. This
+exclusion does not justify duplicated scenarios, unused fixtures, giant snapshots, or
+tests that provide no additional behavioral evidence.
 
 ### Feature finalization and pull request
 

@@ -39,8 +39,9 @@ export class MiddleMouseCameraControl {
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
 
   public constructor(
-    private readonly pivotIndicator: ReturnType<typeof createOrbitPivotIndicator> =
-      createOrbitPivotIndicator(),
+    private readonly pivotIndicator: ReturnType<
+      typeof createOrbitPivotIndicator
+    > = createOrbitPivotIndicator(),
   ) {}
 
   public attach(container: HTMLElement, map?: MapLibreMap): void {

@@ -277,7 +277,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           />
         </Box>
         <Tooltip
-          title={navigationCollapsed ? 'Show navigation' : 'Hide navigation'}
+          title={navigationCollapsed ? '' : 'Hide navigation'}
           placement="right"
         >
           <IconButton
@@ -327,7 +327,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
                 position: 'absolute',
                 inset: 0,
                 zIndex: 1,
-                bgcolor: 'rgba(2, 48, 71, 0.1)',
+                bgcolor: appColors.interaction.navigationHoverOverlay,
                 opacity: 0,
                 pointerEvents: 'none',
                 transition: (theme) =>
@@ -364,6 +364,46 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             }}
           >
             <ChevronLeftOutlinedIcon fontSize="small" />
+            {navigationCollapsed ? (
+              <>
+                <Tooltip
+                  title="Georgia Routing Planner"
+                  placement="bottom-start"
+                  slotProps={{
+                    popper: {
+                      modifiers: [
+                        { name: 'offset', options: { offset: [0, 2] } },
+                      ],
+                    },
+                  }}
+                >
+                  <Box
+                    aria-hidden="true"
+                    component="span"
+                    data-testid="collapsed-project-tooltip-target"
+                    sx={{
+                      position: 'absolute',
+                      zIndex: 3,
+                      inset: '0 auto 0 0',
+                      width: 44,
+                    }}
+                  />
+                </Tooltip>
+                <Tooltip title="Show navigation" placement="right">
+                  <Box
+                    aria-hidden="true"
+                    component="span"
+                    data-testid="collapsed-show-navigation-tooltip-target"
+                    sx={{
+                      position: 'absolute',
+                      zIndex: 3,
+                      inset: '0 0 0 auto',
+                      width: 36,
+                    }}
+                  />
+                </Tooltip>
+              </>
+            ) : null}
           </IconButton>
         </Tooltip>
       </Box>

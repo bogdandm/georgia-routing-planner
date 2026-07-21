@@ -18,6 +18,9 @@ export const appColors = {
     default: '#C7DCE6',
     strong: '#8FB8C9',
   },
+  interaction: {
+    navigationHoverOverlay: 'rgba(2, 48, 71, 0.1)',
+  },
   text: {
     primary: '#062C3D',
     secondary: '#547481',

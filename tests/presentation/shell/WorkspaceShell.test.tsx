@@ -157,8 +157,14 @@ describe('WorkspaceShell', () => {
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
     expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Tracks' })).toBeDisabled();
-    expect(screen.getByRole('tab', { name: 'Markers' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
       'aria-description',
       'Track tools are not available yet',
@@ -167,6 +173,19 @@ describe('WorkspaceShell', () => {
       'aria-description',
       'Saved markers are not available yet',
     );
+    await user.hover(screen.getByRole('tab', { name: 'Tracks' }));
+    expect(
+      await screen.findByRole('tooltip', {
+        name: 'Track tools are not available yet',
+      }),
+    ).toBeVisible();
+    await user.unhover(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.hover(screen.getByRole('tab', { name: 'Markers' }));
+    expect(
+      await screen.findByRole('tooltip', {
+        name: 'Saved markers are not available yet',
+      }),
+    ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
     expect(
@@ -682,17 +701,12 @@ describe('WorkspaceShell', () => {
     const projectLogo = screen.getByRole('button', {
       name: 'Hide navigation from GR logo',
     });
-    const logoControl = screen.getByTestId('workspace-logo-control');
     expect(navigation).toHaveStyle({ width: '64px' });
-    expect(logoControl).toHaveStyle({
+    expect(projectLogo).toHaveStyle({
       width: '44px',
       height: '36px',
       marginTop: '12px',
       marginLeft: '10px',
-    });
-    expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
       flexShrink: '0',
     });
     await user.hover(projectLogo);
@@ -712,16 +726,12 @@ describe('WorkspaceShell', () => {
     const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '64px' });
-    expect(logoControl).toHaveStyle({
+    expect(projectLogo).toHaveStyle({
       width: '44px',
       height: '36px',
       marginTop: '12px',
       marginLeft: '10px',
       borderRadius: '5px 0 0 5px',
-    });
-    expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
     });
     expect(showNavigation).toBe(collapseToggle);
     expect(showNavigation).toHaveStyle({
@@ -732,7 +742,14 @@ describe('WorkspaceShell', () => {
       borderRadius: '5px 8px 8px 5px',
       boxShadow: 'none',
     });
-    await user.hover(showNavigation);
+    await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));
+    expect(
+      await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
+    ).toBeVisible();
+    await user.unhover(screen.getByTestId('collapsed-project-tooltip-target'));
+    await user.hover(
+      screen.getByTestId('collapsed-show-navigation-tooltip-target'),
+    );
     expect(
       await screen.findByRole('tooltip', { name: 'Show navigation' }),
     ).toBeVisible();

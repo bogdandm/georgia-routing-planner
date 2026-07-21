@@ -22,7 +22,6 @@ import {
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import { EmptyState } from '@/presentation/shell/EmptyState';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
@@ -36,6 +35,26 @@ interface WorkspaceSidebarProps {
 interface SidebarDefinition {
   readonly actions: ReactNode;
   readonly title: string;
+}
+
+interface EmptyStateProps {
+  readonly icon: ReactNode;
+  readonly title: string;
+  readonly description: string;
+}
+
+function EmptyState({ description, icon, title }: EmptyStateProps) {
+  return (
+    <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
+      <Box aria-hidden sx={{ mb: 1, color: 'primary.main' }}>
+        {icon}
+      </Box>
+      <Typography component="h2" variant="subtitle1" color="text.primary">
+        {title}
+      </Typography>
+      <Typography variant="body2">{description}</Typography>
+    </Box>
+  );
 }
 
 function TracksContent() {
@@ -103,15 +122,6 @@ function TracksContent() {
   );
 }
 
-interface SatelliteContentProps {
-  readonly active: boolean;
-  readonly coordinates: string;
-}
-
-function SatelliteContent({ active, coordinates }: SatelliteContentProps) {
-  return <SatelliteBrowser active={active} fallbackCoordinates={coordinates} />;
-}
-
 function MarkersContent() {
   return (
     <Box sx={{ p: 2 }}>
@@ -122,10 +132,6 @@ function MarkersContent() {
       />
     </Box>
   );
-}
-
-function LayersContent() {
-  return <LayersPanel />;
 }
 
 function disabledAction(title: string, child: ReactNode) {
@@ -242,16 +248,16 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
           <TracksContent />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
-          <SatelliteContent
+          <SatelliteBrowser
             active={activeTab === 'satellite'}
-            coordinates={searchAreaCoordinates}
+            fallbackCoordinates={searchAreaCoordinates}
           />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersContent />
         </Box>
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
-          <LayersContent />
+          <LayersPanel />
         </Box>
       </Box>
     </Box>

@@ -247,11 +247,6 @@ replace them with model-specific prose or paste a commit log.
 | ------------------------- | -------------------------------------------- | ---------------------------------- |
 | <command or manual check> | <Passed, Failed, Not run, or Not applicable> | <concise scope, result, or reason> |
 
-## Risk and rollback
-
-- Risk: <main regression or "Low - documentation-only change">
-- Rollback: <specific revert, flag, migration, or recovery action>
-
 ## Review guidance
 
 - Start with: <best file, commit, or behavior for review>
@@ -280,13 +275,11 @@ Description rules:
 - In `Verification`, name every command and manual check required by the final
   verification policy. Use only `Passed`, `Failed`, `Not run`, or `Not applicable` in
   the result column. Give the reason for every item not run; do not paste full logs.
-- Add `## UI evidence` between `Verification` and `Risk and rollback` when presentation
+- Add `## UI evidence` between `Verification` and `Review guidance` when presentation
   behavior changes. Include before/after screenshots or recordings, viewport details,
   and Penpot comparison notes. Do not add this section for non-visual changes.
-- State real risks and a concrete rollback path. Do not use unsupported claims such as
-  "no risk".
-- Update the title and description whenever branch scope, verification evidence, risk,
-  or reviewer focus materially changes.
+- Update the title and description whenever branch scope, verification evidence, or
+  reviewer focus materially changes.
 
 ## Documentation ownership: system description vs planning
 

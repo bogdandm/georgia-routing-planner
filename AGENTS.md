@@ -59,24 +59,10 @@ Rules:
 - After approval, merge only the reviewed and verified feature-branch state. If
   additional material changes are requested after approval, return to a feature branch
   and obtain approval again.
-- Commits are allowed and encouraged on feature branches after relevant checks pass.
-  Keep commits focused and use clear imperative or Conventional Commit-style messages.
 - An explicit request to remove, postpone, or take a feature out of scope authorizes
   staging and committing the corresponding tracked-file deletions on the feature branch.
   Do not ask for separate confirmation merely because Git represents removal by staging
   the deleted paths.
-- Do not implement an entire workstream as one mega-commit. When a temporary `PLAN.md`
-  exists, it must split the work into smaller independently reviewable commits; each
-  implementation commit must include its relevant automated tests and leave the
-  repository in a buildable, testable state. Do not defer most of the work's tests to a
-  final test-only commit.
-- A feature is not handed off as finished until its relevant checks pass and its
-  feature-branch state is available in a GitHub pull request targeting `main`. When you
-  believe the feature is finished, commit the intended changes, push the feature branch,
-  open a ready-for-review pull request, and give the user its review link. This standing
-  instruction authorizes that feature-completion push and pull-request creation without
-  a separate prompt. If a pull request already exists for the branch, update it and
-  return the existing link instead of creating a duplicate.
 - Do not create a new remote, change branch protection, publish/deploy, or perform other
   external actions unless the user requests them.
 - Do not force-push or rewrite shared history. Never use destructive Git commands to
@@ -95,11 +81,69 @@ Rules:
   result.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
-- End each implementation handoff by reporting the active branch, commit/check status,
-  and whether the branch is awaiting approval.
-- PLAN.md is per branch only. It should never appear on `main` beranch.
-  When you finish implementing it - delete this file.
-  Basically delete it before returning final PR to user. 
+
+### Incremental commit cadence
+
+Implementation must be committed incrementally. Do not accumulate an entire workstream
+into one final commit.
+
+Before a multi-step workstream begins, create or update the branch-local `PLAN.md` with
+the intended commit sequence. A multi-step workstream includes work that spans multiple
+layers, independently useful behaviors, migrations, or infrastructure concerns. A
+single small atomic change does not require a plan.
+
+For each planned commit:
+
+1. Complete one independently reviewable behavior, layer, migration, or infrastructure
+   concern together with its directly relevant tests and permanent documentation.
+2. Run only the focused checks needed for that commit.
+3. Review the staged diff and commit it before starting the next planned scope.
+
+Do not wait for the final verification round before creating intermediate commits.
+Focused checks are sufficient for intermediate commits; broad checks belong to the
+final verification round.
+
+A commit should normally contain one of:
+
+- One domain or application capability with its tests.
+- One infrastructure adapter or persistence change with its tests.
+- One presentation behavior with its component tests.
+- One end-to-end workflow addition or modification.
+- One focused configuration, build, or documentation change.
+
+Do not combine domain, infrastructure, presentation, end-to-end, and unrelated
+documentation changes merely because they belong to the same feature. Split them at
+stable dependency boundaries while keeping each commit buildable and internally
+consistent. Use clear imperative or Conventional Commit-style messages.
+
+Treat approximately 1,000 changed handwritten lines in an uncommitted implementation
+diff as a checkpoint warning, not a target or absolute limit. Before adding more,
+inspect whether completed work can be committed independently. Generated files,
+lockfiles, snapshots, fixtures, and mechanical formatting are excluded from this
+heuristic but should still be isolated when practical. Explain in the pull request when
+a large atomic commit genuinely cannot be divided without leaving broken or misleading
+intermediate states.
+
+### Feature finalization and pull request
+
+A feature is not handed off as finished until final verification passes and its branch
+is available in a GitHub pull request targeting `main`. By the start of final
+verification, implementation should already be distributed across its planned commits.
+Do not squash the workstream into one final commit.
+
+After final verification:
+
+1. Commit only cleanup caused by final verification or documentation corrections.
+2. Remove branch-local `PLAN.md` if it exists and commit its removal. `PLAN.md` must
+   never appear in the final pull-request state or on `main`.
+3. Push the feature branch and open a ready-for-review pull request, or update the
+   existing pull request for that branch.
+4. Give the user the pull-request link and report the active branch, commits, checks
+   run, checks skipped as not applicable, and whether the branch is awaiting approval.
+
+This standing instruction authorizes the feature-completion push and pull-request
+creation without a separate prompt. If a pull request already exists for the branch,
+update it instead of creating a duplicate.
 
 ## Documentation ownership: system description vs planning
 

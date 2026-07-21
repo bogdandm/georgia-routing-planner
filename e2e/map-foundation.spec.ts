@@ -7,13 +7,11 @@ interface StoredCamera {
   readonly longitude: number;
   readonly latitude: number;
   readonly zoom: number;
-  readonly bearing: number;
-  readonly pitch: number;
 }
 
 interface StoredMapView {
+  readonly schemaVersion: 3;
   readonly camera: StoredCamera;
-  readonly terrainMode: 'flat' | 'terrain';
 }
 
 // The application gives the controlled DEM source up to 15 seconds to become ready.
@@ -105,7 +103,7 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
-test('persists a settled camera and restores it before interaction after reload', async ({
+test('persists a settled 2D position and restarts flat after reload', async ({
   page,
 }) => {
   test.setTimeout(45_000);
@@ -124,24 +122,26 @@ test('persists a settled camera and restores it before interaction after reload'
   expect((await readStoredCamera(page))?.zoom).not.toBeCloseTo(5.8, 1);
 
   await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
-      timeout: terrainPersistenceTimeoutMs,
-    })
-    .toBe('terrain');
+  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
+    timeout: terrainPersistenceTimeoutMs,
+  });
   const cameraBeforeReload = await readStoredCamera(page);
   expect(cameraBeforeReload).not.toBeNull();
+  expect(Object.keys(cameraBeforeReload ?? {}).toSorted()).toEqual([
+    'latitude',
+    'longitude',
+    'zoom',
+  ]);
+  expect(await readStoredMapView(page)).not.toHaveProperty('terrainMode');
 
   await page.reload();
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 15_000,
   });
-  await expect(
-    page.getByRole('button', { name: 'Show 3D terrain map' }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
-    timeout: terrainPersistenceTimeoutMs,
-  });
+  await expect(page.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await canvas.focus();
   await page.keyboard.press('ArrowRight');
   await expect
@@ -152,8 +152,6 @@ test('persists a settled camera and restores it before interaction after reload'
   const cameraAfterReload = await readStoredCamera(page);
 
   expect(cameraAfterReload?.zoom).toBeCloseTo(cameraBeforeReload?.zoom ?? 0, 4);
-  expect(cameraAfterReload?.bearing).toBeCloseTo(cameraBeforeReload?.bearing ?? 0, 4);
-  expect(cameraAfterReload?.pitch).toBeCloseTo(cameraBeforeReload?.pitch ?? 0, 4);
 });
 
 test('persists terrain overlay visibility from the Layers tab', async ({ page }) => {
@@ -212,27 +210,12 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await terrainButton.click();
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
-      timeout: terrainPersistenceTimeoutMs,
-    })
-    .toBe('terrain');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
   await expect(
     page.getByRole('link', { name: 'Mapzen/AWS Open Data providers' }).first(),
   ).toBeVisible();
-  await canvas.focus();
-  await page.keyboard.press('Shift+ArrowRight');
-  await expect
-    .poll(async () => Math.abs((await readStoredCamera(page))?.bearing ?? 0))
-    .toBeGreaterThan(0);
-
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(async () => (await readStoredCamera(page))?.pitch).toBe(0);
-  await expect.poll(async () => (await readStoredCamera(page))?.bearing).toBe(0);
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode)
-    .toBe('flat');
   const cameraAfterTerrain = await readStoredCamera(page);
   expect(cameraAfterTerrain?.longitude).toBeCloseTo(
     cameraBeforeTerrain?.longitude ?? 0,
@@ -243,7 +226,11 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
     4,
   );
   expect(cameraAfterTerrain?.zoom).toBeCloseTo(cameraBeforeTerrain?.zoom ?? 0, 4);
-  expect(cameraAfterTerrain?.bearing).toBe(0);
+  expect(Object.keys(cameraAfterTerrain ?? {}).toSorted()).toEqual([
+    'latitude',
+    'longitude',
+    'zoom',
+  ]);
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
@@ -287,12 +274,9 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect(
     page.getByRole('button', { name: 'Show 3D terrain map' }),
   ).toHaveAttribute('aria-pressed', 'true');
-  await expect
-    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
-      timeout: terrainPersistenceTimeoutMs,
-    })
-    .toBe('terrain');
-  const cameraBeforeOrbit = await readStoredCamera(page);
+  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
+    timeout: terrainPersistenceTimeoutMs,
+  });
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   const pivot = page.locator('.map-orbit-pivot');
@@ -312,26 +296,12 @@ test('uses conventional native camera gestures and resets them with the compass'
   }
   await page.mouse.up({ button: 'middle' });
   await expect(pivot).toHaveCount(0);
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.bearing)
-    .not.toBe(cameraBeforeOrbit?.bearing);
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.pitch ?? 0)
-    .toBeGreaterThan(0);
-
-  const cameraBeforeKeyboard = await readStoredCamera(page);
-  await canvas.press('Shift+ArrowRight');
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.bearing, {
-      timeout: cameraPersistenceTimeoutMs,
-    })
-    .not.toBe(cameraBeforeKeyboard?.bearing);
 
   await page.locator('.maplibregl-ctrl-compass').click();
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.bearing ?? null)
-    .toBe(0);
-  await expect.poll(async () => (await readStoredCamera(page))?.pitch ?? null).toBe(0);
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+  );
 });
 
 test('keeps DEM failure feedback in the shared status without a map banner', async ({

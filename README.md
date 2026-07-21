@@ -70,7 +70,6 @@ pnpm e2e
 | `pnpm test:coverage`                        | Enforce the repository coverage thresholds.                              |
 | `pnpm e2e`                                  | Build and test the Pages-like subpath in Chromium with axe.              |
 | `pnpm diagnostics:inspect -- <bundle.json>` | Validate and summarize an exported diagnostics bundle.                   |
-| `pnpm performance:terrain`                  | Benchmark deterministic Terrarium filter candidates locally.             |
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
 | `pnpm check`                                | Run all non-browser CI checks; CI invokes `pnpm e2e` separately.         |
 
@@ -114,9 +113,10 @@ The replaceable map-provider defaults are:
   failed worker restarts once and then preserves features through the same inline engine
   with a visible compatibility warning.
 - Earth Search v1 for anonymous Sentinel-2 L1C/L2A STAC metadata queries.
-- Selectable Auto, Server, and Browser Sentinel rendering. Auto uses TiTiler normally
-  and falls back to worker-based browser COG rasterization after a 429 or CORS-opaque
-  failure; Browser bypasses TiTiler entirely.
+- Selectable Auto, Server, and Direct Sentinel rendering. Auto uses TiTiler normally and
+  falls back to range-reading Earth Search's pre-rendered 8-bit visual COG after a 429
+  or CORS-opaque failure; Direct bypasses TiTiler entirely. Neither path downloads raw
+  full-scene band TIFFs.
 - Public OpenStreetMap Nominatim for submit-driven place search.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and
@@ -143,12 +143,6 @@ mounts and presents a safe configuration message without echoing the input or it
 Provider attribution remains visible in MapLibre. The OpenFreeMap/OpenMapTiles/OSM
 credits are shown in 2D; Mapzen/AWS terrain attribution is added whenever relief,
 contours, or 3D terrain use the DEM source.
-
-`pnpm performance:terrain -- --iterations 30 --json` runs the non-CI deterministic
-Terrarium benchmark. It checks candidate output against the reference oracle before
-timing seven seeded 256 x 256 scenarios and prints environment, median, p95, and
-throughput evidence. Compare runs only on the same machine and runtime; wall-clock
-values are not a unit-test contract.
 
 ## Developer mode and diagnostics
 

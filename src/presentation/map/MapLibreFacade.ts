@@ -150,8 +150,8 @@ function recoverableMessage(
       const recovery =
         recoveryState === 'scheduled'
           ? ' Retrying automatically.'
-          : recoveryState === 'browser-fallback'
-            ? ' Switching to browser rendering without retrying the hosted renderer.'
+          : recoveryState === 'alternative-provider'
+            ? ' TiTiler is unavailable; switching to direct pre-rendered Sentinel imagery.'
             : recoveryState === 'exhausted'
               ? ' Automatic retries were exhausted; reapply the scene to try again.'
               : recoveryState === 'not-retryable'
@@ -663,13 +663,21 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleSourceData = (event: MapSourceDataEvent): void => {
     const sourceId = event.sourceId;
+    const map = this.#map;
+    if (map === null) return;
+    if (map.getSource(sourceId) === undefined) {
+      // MapLibre emits one final source-data event synchronously while removeSource is
+      // tearing down its tile manager. It is cancellation evidence, not a map failure.
+      this.discardRemovedSourceFailures(sourceId);
+      return;
+    }
     const recoveredFailedTiles = isSatelliteSourceId(sourceId)
       ? (this.layerController?.handleRasterSourceData(event) ?? false)
       : true;
     let loaded = event.isSourceLoaded;
-    if (!loaded && this.#map !== null) {
+    if (!loaded) {
       try {
-        loaded = this.#map.isSourceLoaded(sourceId);
+        loaded = map.isSourceLoaded(sourceId);
       } catch {
         // A stale source-data event can arrive after its replaceable source was removed.
         return;
@@ -692,6 +700,34 @@ export class MapLibreFacade implements MapFacade {
       }, sourceRecoveryStabilityMs),
     );
   };
+
+  private discardRemovedSourceFailures(sourceId: string): void {
+    this.cancelSourceRecovery(sourceId);
+    let discarded = false;
+    for (const [key, bucket] of this.#failureBuckets) {
+      if (bucket.failure.sourceId !== sourceId) continue;
+      discarded = true;
+      this.#failureBuckets.delete(key);
+    }
+    if (!discarded) return;
+    const recoverableFailures = [...this.#failureBuckets.values()].map(
+      (bucket) => bucket.failure,
+    );
+    const hasActiveFailure = recoverableFailures.some(
+      (failure) => failure.recoveryState !== 'recovered',
+    );
+    this.updateSnapshot({
+      recoverableFailures,
+      ...(!hasActiveFailure && this.#snapshot.lifecycle === 'degraded'
+        ? { lifecycle: 'ready' as const, message: null }
+        : {}),
+    });
+    this.logger.log({
+      level: 'info',
+      name: 'map.source.cancellation-cleared',
+      data: { sourceId },
+    });
+  }
 
   private confirmSourceRecovery(sourceId: string): void {
     const map = this.#map;

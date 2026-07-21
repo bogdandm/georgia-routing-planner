@@ -19,16 +19,15 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@test/*": ["./tests/*"]
     },
     "types": ["node", "vite/client", "vitest/globals", "@testing-library/jest-dom"]
   },
   "include": [
     "src",
-    "test",
+    "tests",
     "tools/diagnostics/summarizeDiagnostics.ts",
-    "tools/performance/referenceTerrariumFilter.ts",
-    "tools/performance/terrariumBenchmark.ts",
     "tools/repository/artifactPolicy.ts"
   ]
 }

@@ -309,10 +309,11 @@ The 2026-07-19 Georgia sample `S2A_38TMN_20250731_0_L2A` reported EPSG:32638 and
 220,705,355-byte true-color COG. A bounded request for its first 65,536 bytes again
 returned `206 Partial Content`, `Accept-Ranges: bytes`, and browser-permissive CORS.
 
-The `visual` TCI COG is an 8-bit display product whose prior stretch may clip bright
-snow to white. A later transform cannot reconstruct lost channel detail, so the
-application instead renders Earth Search's separate `red`, `green`, and `blue` L2A
-reflectance COGs.
+The `visual` TCI COG is an 8-bit display product whose provider-applied stretch may clip
+bright snow to white. It is nevertheless the direct fallback asset: the worker preserves
+its RGB values as delivered and masks only black no-data pixels. It does not apply the
+user's TiTiler reflectance, gamma, or saturation controls. This avoids fetching three
+large raw-band TIFFs while still using COG range requests for the visible map area.
 
 MapLibre GL JS does not directly render a GeoTIFF/COG as a raster source, and the
 inspected direct COG protocol accepts EPSG:3857 input but does not reproject the UTM
@@ -326,7 +327,8 @@ display gamma. Users can persistently tune the upper reflectance bound, gamma, a
 five times normal saturation in Settings; a lower bound brightens midtones but can clip
 the brightest snow. TiTiler performs bounded COG reads, RGB composition, reprojection,
 and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles during normal
-operation.
+operation. The maximum source zoom is 14, near Sentinel-2's native 10 m resolution in
+Georgia; MapLibre overzooms beyond it instead of issuing denser equivalent requests.
 
 The default is anonymous and requires no browser secret, but it is a best-effort demo
 service with no project SLA. It is acceptable for the current low-traffic static MVP and
@@ -336,10 +338,8 @@ zoom bounds, and attribution are validated public configuration so a managed
 TiTiler-compatible deployment can replace it without changing catalog, UI, or map
 commands.
 
-The hosted renderer has its own validated 60-second request ceiling, separate from the
-shorter catalog and terrain request policy. Browser rendering has a fixed two-minute
-application deadline because local range reads, reprojection, and encoding are slower.
-Replacing, clearing, or superseding a scene cancels either wait immediately.
+Satellite raster readiness has no application timeout. Replacing, clearing, or
+superseding a scene still cancels the outstanding wait and requests immediately.
 
 The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
 `{saturation}` tokens. The controller substitutes only bounded numeric preferences and
@@ -351,41 +351,40 @@ cache-partition policy therefore receive a sanitized, stable `application_origin
 derived from scheme, host, and port. The default GitHub Pages deployment uses
 `https-bogdandm-github-io`, while local ports receive distinct values; renderers
 configured with `none` receive no extra parameter. This value contains no path, query,
-user data, or secret. The persisted Rendering control offers Auto, Server, and Browser.
+user data, or secret. The persisted Rendering control offers Auto, Server, and Direct.
 Auto starts with the hosted template and switches on explicit HTTP 429 or status-zero;
 Server stays on the hosted template and reports those failures without local fallback;
-Browser starts directly on the local protocol and sends no TiTiler tile requests. None
-of the modes retries HTTP 429 or status-zero. A renderer can omit CORS headers from its
-429 response, leaving the application with only status zero. A dedicated module worker
-range-reads the validated red, green, and blue COGs, selects appropriate overviews,
-transforms output pixels between Web Mercator and the declared northern UTM CRS, applies
-the saved reflectance/gamma/saturation tuning, and returns 256-pixel WebP tiles. The
-main thread and MapLibre source contain only a safe scene key. The provider and worker
-each retain at most two scene definitions; the GeoTIFF readers use bounded block caches.
-HTTP 5xx, timeout, and identifiable network failures trigger up to three deduplicated
-failed-tile refreshes with exponential delay. Refreshing only the failed canonical tile
-coordinates keeps already rendered imagery available. The current status names the exact
-HTTP code when available; developer diagnostics also retain the stable source ID, safe
-failure class, aggregate count, recovery state, and retry attempt. URLs, queries,
-response bodies, and tile coordinates remain excluded. MapLibre status zero is reported
-as `no-response`, which accurately covers blocked CORS responses as well as connection
-failures without inventing an HTTP status. If direct COG range access or worker
-rasterization also fails, the safe browser-rendering error remains visible and staging
-preserves the prior scene.
+Direct starts on the local protocol and sends no TiTiler tile requests. None of the
+modes retries HTTP 429 or status-zero. A renderer can omit CORS headers from its 429
+response, leaving the application with only status zero. A dedicated module worker
+range-reads the validated 8-bit visual COG, selects appropriate overviews, transforms
+output pixels between Web Mercator and the declared northern UTM CRS, and returns
+256-pixel WebP tiles without additional stretching. The main thread and MapLibre source
+contain only a safe scene key. The provider and worker each retain at most two scene
+definitions; the GeoTIFF readers use bounded block caches. HTTP 5xx, timeout, and
+identifiable network failures trigger up to three deduplicated failed-tile refreshes
+with exponential delay. Refreshing only the failed canonical tile coordinates keeps
+already rendered imagery available. The current status names the exact HTTP code when
+available; developer diagnostics also retain the stable source ID, safe failure class,
+aggregate count, recovery state, and retry attempt. URLs, queries, response bodies, and
+tile coordinates remain excluded. MapLibre status zero is reported as `no-response`,
+which accurately covers blocked CORS responses as well as connection failures without
+inventing an HTTP status. If direct COG range access or worker rasterization also fails,
+a safe direct-rendering error remains visible and the vector basemap stays available.
 
-The map adapter prepares a replacement raster under a second stable source/layer slot
-and reveals it immediately in every render mode, so each completed tile appears over the
-prior raster or vector basemap. The prior source is removed only after the replacement
-settles. Auto-mode renderer 429/status-zero failures retain that progressive staging
-layer while switching its template before local tiles begin arriving. Retryable staging
-failures receive the same bounded failed-tile refreshes and stability check as active
-imagery. A remaining transient tile does not reject otherwise usable partial imagery; it
-is promoted after the bounded retries while its failure remains visible until MapLibre
-later returns successful data for that exact tile. A non-retryable failure, timeout,
-cancellation, or supersession removes only staging resources and leaves the prior scene
-and basemap usable. The validated WGS84 footprint renders independently as GeoJSON,
-making partial coverage explicit. The application never logs or stores the COG or tile
-URL in shared state or support bundles.
+Selecting a different scene removes both stable raster slots and the old footprint
+immediately, restores the complete vector style, and creates only the requested scene.
+The raster does not switch the basemap into satellite styling until its first data
+event, so a slow TiTiler request or automatic direct fallback cannot produce a blank
+map. Stretch changes may use the second slot so the active scene remains visible until
+replacement data arrives. Rendering-mode changes remove both provider slots first and
+keep the vector basemap visible until the selected provider returns data. Auto-mode
+429/status-zero failures restore the vector style while changing the pending source to
+the direct protocol. Retryable failures receive bounded failed-tile refreshes; usable
+partial imagery can be promoted after retries are exhausted. Cancellation or
+supersession removes pending resources. The validated WGS84 footprint renders
+independently as GeoJSON, making partial coverage explicit. The application never logs
+or stores the COG or tile URL in shared state or support bundles.
 
 A 2026-07-19 current-Chrome smoke searched the live Georgia viewport, applied
 `S2A_38TLM_20260709_0_L2A`, and displayed the georeferenced true-color tiles plus the

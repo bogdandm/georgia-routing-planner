@@ -282,11 +282,34 @@ After final verification:
    in the final pull-request state or on `main`.
 3. Push the branch and open a ready-for-review pull request, or update the existing pull
    request for that branch.
-4. Give the user the pull-request link and report the active branch, commits, checks
+4. Immediately after PR creation or update, and again after the final push, run
+   `gh pr view --json mergeable,mergeStateStatus,url`. Do not hand off while `mergeable`
+   is `CONFLICTING` or `mergeStateStatus` is `DIRTY`. Merge the latest `origin/main`
+   into the feature branch without rebasing, resolve every conflict, rerun only
+   invalidated checks, push, and query the PR again. If GitHub temporarily reports
+   `UNKNOWN`, wait for mergeability calculation and query the same PR once more rather
+   than assuming it is conflict-free.
+5. Give the user the pull-request link and report the active branch, commits, checks
    run, checks skipped as not applicable, and whether the branch is awaiting approval.
 
 This standing instruction authorizes feature-completion push and pull-request creation
 without another prompt. Never create a duplicate pull request for the same branch.
+
+### Final handoff format
+
+Every completed-workstream report must present these fields together and in this order:
+
+- `PR link:` the clickable pull-request URL.
+- `Branch:` the exact branch name.
+- `Worktree path:` the absolute path to the worktree that owns the branch.
+- `Commits:` every workstream commit as a short hash and subject, oldest first.
+- `Test path:` one directly runnable command in this form:
+  `Set-Location '<absolute-worktree-path>'; pnpm.cmd run dev --port <reserved-port> --strictPort`.
+
+Use the worktree's reserved port and the tested Windows command form. Do not omit these
+fields, substitute the main checkout, provide a relative path, or describe startup only
+in prose. When no local server is applicable, keep `Test path:` and state
+`Not applicable` with the reason.
 
 ### Pull request title and description
 
@@ -614,7 +637,7 @@ tests to mock application ports at a composition boundary.
 ### Test layout
 
 - Keep all tests outside the production source tree.
-- Use the existing top-level `test/` tree for unit, component, integration, fixtures,
+- Use the existing top-level `tests/` tree for unit, component, integration, fixtures,
   fakes, builders, helpers, and setup code.
 - Preserve a recognizable mapping between production paths and corresponding test paths,
   without retaining obsolete architectural layer names.

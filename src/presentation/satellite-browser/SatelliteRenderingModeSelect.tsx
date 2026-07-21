@@ -33,14 +33,14 @@ export function SatelliteRenderingModeSelect({
       >
         <MenuItem value="auto">Auto</MenuItem>
         <MenuItem value="server">Server</MenuItem>
-        <MenuItem value="browser">Browser</MenuItem>
+        <MenuItem value="direct">Direct</MenuItem>
       </Select>
       <FormHelperText>
         {mode === 'auto'
-          ? 'Uses the server first and switches to browser rendering after rate-limit or CORS-hidden failures.'
+          ? 'Uses TiTiler first and switches to direct pre-rendered Sentinel imagery when it is unavailable.'
           : mode === 'server'
-            ? 'Uses only the hosted renderer. Rate-limit failures are not retried or rendered locally.'
-            : 'Reads and renders imagery locally without contacting the hosted tile renderer.'}
+            ? 'Uses only TiTiler. Provider failures do not switch to direct imagery.'
+            : 'Reads the pre-rendered 8-bit Sentinel visual asset without contacting TiTiler.'}
       </FormHelperText>
     </FormControl>
   );

@@ -576,11 +576,23 @@ export class MapLibreLayerController
     const tracker = this.#rasterRecoveries.get(event.sourceId);
     if (tracker === undefined) return false;
     const coordinate = tileCoordinateFromEvent(event);
-    if (coordinate !== null) {
-      tracker.pendingTiles.delete(this.tileCoordinateKey(coordinate));
-    }
-    if (event.sourceDataType === 'content' && event.isSourceLoaded) {
+    if (
+      event.sourceDataType === 'content' &&
+      event.isSourceLoaded &&
+      this.#browserFallbackSources.has(event.sourceId)
+    ) {
+      // A template switch can replace the renderer's failed tile set with different
+      // browser-rendered coordinates. Source readiness proves the replacement set is
+      // complete, so obsolete renderer coordinates must not keep the apply pending.
+      tracker.pendingTiles.clear();
       tracker.hasUnscopedFailure = false;
+    } else {
+      if (coordinate !== null) {
+        tracker.pendingTiles.delete(this.tileCoordinateKey(coordinate));
+      }
+      if (event.sourceDataType === 'content' && event.isSourceLoaded) {
+        tracker.hasUnscopedFailure = false;
+      }
     }
     if (tracker.pendingTiles.size > 0 || tracker.hasUnscopedFailure) return false;
     if (tracker.timer !== null) clearTimeout(tracker.timer);
@@ -1610,36 +1622,44 @@ export class MapLibreLayerController
 
     this.#browserFallbackSources.add(sourceId);
     this.#pendingBrowserFallbacks.add(sourceId);
-    try {
-      const previousTileUrl = this.#rasterTileUrls.get(sourceId);
-      if (previousTileUrl !== undefined) {
-        this.#staleRendererTileUrls.set(sourceId, previousTileUrl);
+    const previousTileUrl = this.#rasterTileUrls.get(sourceId);
+    if (previousTileUrl !== undefined) {
+      this.#staleRendererTileUrls.set(sourceId, previousTileUrl);
+    }
+    // MapLibre sends one ErrorEvent to the global map listener and the temporary
+    // source-readiness listener. Both must observe the same accepted transition.
+    this.#browserFallbackHandledEvents.add(event);
+    queueMicrotask(() => {
+      if (
+        !this.#browserFallbackSources.has(sourceId) ||
+        this.#map?.getSource(sourceId) !== source
+      ) {
+        return;
       }
-      source.setTiles([fallbackUrl]);
-      this.#rasterTileUrls.set(sourceId, fallbackUrl);
-      // MapLibre sends one ErrorEvent to the global map listener and the temporary
-      // source-readiness listener. Both must observe the same successful transition.
-      this.#browserFallbackHandledEvents.add(event);
+      try {
+        source.setTiles?.([fallbackUrl]);
+        this.#rasterTileUrls.set(sourceId, fallbackUrl);
+      } catch {
+        this.#browserFallbackSources.delete(sourceId);
+        this.#pendingBrowserFallbacks.delete(sourceId);
+        this.cancelRasterRecovery(sourceId);
+        return;
+      }
       if (sourceId === this.#activeSlot?.sourceId) {
         mapLayerStore.setState({ automaticBrowserFallbackActive: true });
       }
-      // The source was already progressive; keep it visible as its template switches.
-      // The previous raster remains below it until the staging source settles.
+      // Mutating a raster source from inside MapLibre's native error dispatch can leave
+      // its render tile half-reloaded. Switch after that stack completes instead.
       if (map !== null) this.startProgressiveRasterRendering(map, sourceId);
-    } catch {
-      this.#browserFallbackSources.delete(sourceId);
-      this.#pendingBrowserFallbacks.delete(sourceId);
-      this.cancelRasterRecovery(sourceId);
-      return false;
-    }
-    this.logger.log({
-      level: 'warn',
-      name: 'satellite.imagery.browser-fallback-started',
-      data: {
-        reason: details.reason,
-        sourceId,
-        ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
-      },
+      this.logger.log({
+        level: 'warn',
+        name: 'satellite.imagery.browser-fallback-started',
+        data: {
+          reason: details.reason,
+          sourceId,
+          ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
+        },
+      });
     });
     return true;
   }

@@ -4,7 +4,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@test': fileURLToPath(new URL('./tests', import.meta.url)),
+    },
   },
   define: {
     __APP_VERSION__: JSON.stringify('0.0.0-test'),
@@ -14,10 +17,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: [
-      'src/**/*.integration.test.{ts,tsx}',
-      'test/**/*.integration.test.{ts,tsx}',
-    ],
-    setupFiles: ['./test/setup/vitest.setup.ts'],
+    include: ['tests/**/*.integration.test.{ts,tsx}'],
+    setupFiles: ['./tests/setup/vitest.setup.ts'],
   },
 });

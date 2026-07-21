@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { writeArrayBuffer } from 'geotiff';
-import searchResponse from '../test/fixtures/satellite/search-response.json' with { type: 'json' };
+import searchResponse from '../tests/fixtures/satellite/search-response.json' with { type: 'json' };
 
 const openFreeMapOrigin = 'https://tiles.openfreemap.org';
 const terrainOrigin = 'https://s3.amazonaws.com';

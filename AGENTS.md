@@ -210,8 +210,8 @@ Title rules:
   mandatory.
 - The summary starts with an imperative verb, describes the concrete outcome, has no
   trailing period, and keeps the complete title at 72 characters or fewer.
-- Do not put issue numbers, task IDs, branch names, delivery status, or generic summaries
-  such as "update code" or "improve app" in the title.
+- Do not put issue numbers, task IDs, branch names, delivery status, or generic
+  summaries such as "update code" or "improve app" in the title.
 
 Examples:
 
@@ -237,8 +237,8 @@ replace them with model-specific prose or paste a commit log.
 
 ## Verification
 
-| Check | Result | Evidence |
-| ----- | ------ | -------- |
+| Check                     | Result                                       | Evidence                           |
+| ------------------------- | -------------------------------------------- | ---------------------------------- |
 | <command or manual check> | <Passed, Failed, Not run, or Not applicable> | <concise scope, result, or reason> |
 
 ## Risk and rollback
@@ -258,8 +258,9 @@ Description rules:
 - Keep `Outcome` to one through three bullets and do not repeat the same content under
   `Changes`.
 - Group `Changes` by behavior or responsibility; do not dump a filename or commit list.
-- Report handwritten production additions and deletions. Use `Not applicable - no
-  production code changed` for documentation, test-only, or configuration-only work.
+- Report handwritten production additions and deletions. Use
+  `Not applicable - no production code changed` for documentation, test-only, or
+  configuration-only work.
 - In `Verification`, name every command and manual check required by the final
   verification policy. Use only `Passed`, `Failed`, `Not run`, or `Not applicable` in
   the result column. Give the reason for every item not run; do not paste full logs.

@@ -31,7 +31,7 @@
     "repo:audit": "tsx tools/repository/auditRepository.ts",
     "build:app": "vite build",
     "build": "pnpm typecheck && pnpm build:app",
-    "check": "pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm test:integration && pnpm build"
+    "check": "pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm build"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

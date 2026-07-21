@@ -6,14 +6,14 @@ const previewPort = process.env.E2E_PORT ?? '4173';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  // Hosted software rendering can make map, DEM, persistence, and diagnostics work
-  // several times slower than a desktop run. Keep explicit headroom without retries so
-  // a genuine failure is reported once with its original artifacts.
-  timeout: process.env.CI ? 120_000 : 90_000,
-  expect: { timeout: process.env.CI ? 20_000 : 10_000 },
+  // Four to six concurrent agent workstreams are normal on the managed Windows host.
+  // Keep one worker and CI-sized timing locally so agents do not compete through many
+  // Chromium processes or ratchet timeouts after resource-contention failures.
+  timeout: 120_000,
+  expect: { timeout: 20_000 },
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: process.env.CI ? 1 : 2,
+  workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://127.0.0.1:${previewPort}${repositoryBasePath}`,

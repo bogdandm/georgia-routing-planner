@@ -241,21 +241,22 @@ function singleSceneResult(
 }
 
 function sceneFootprintViewport(scene: SatelliteScene): SatelliteSearchViewport {
-  const positions: readonly (readonly [number, number])[] =
+  const positions =
     scene.footprint.type === 'Polygon'
       ? scene.footprint.coordinates.flatMap((ring) => ring)
       : scene.footprint.coordinates.flatMap((polygon) =>
           polygon.flatMap((ring) => ring),
         );
-  const bounds = positions.reduce(
-    (result, [longitude, latitude]) => ({
-      west: Math.min(result.west, longitude),
-      south: Math.min(result.south, latitude),
-      east: Math.max(result.east, longitude),
-      north: Math.max(result.north, latitude),
-    }),
-    { west: 180, south: 90, east: -180, north: -90 },
-  );
+  const bounds = { west: 180, south: 90, east: -180, north: -90 };
+  for (const position of positions) {
+    const longitude = position[0];
+    const latitude = position[1];
+    if (longitude === undefined || latitude === undefined) continue;
+    bounds.west = Math.min(bounds.west, longitude);
+    bounds.south = Math.min(bounds.south, latitude);
+    bounds.east = Math.max(bounds.east, longitude);
+    bounds.north = Math.max(bounds.north, latitude);
+  }
   return {
     bounds,
     center: {

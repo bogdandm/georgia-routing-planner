@@ -82,7 +82,20 @@ const mapLayerPreferencesSchema = z
       })
       .default(defaultTerrainOverlayPreferences),
   })
-  .strip();
+  .strict();
+
+function withoutLegacyAppliedScene(value: unknown): unknown {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !Object.hasOwn(value, 'appliedScene')
+  ) {
+    return value;
+  }
+  const sanitized = { ...(value as Record<string, unknown>) };
+  delete sanitized.appliedScene;
+  return sanitized;
+}
 
 const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   visibility: {
@@ -148,13 +161,15 @@ export class AppDatabase extends Dexie implements MapLayerPreferencesRepository 
     const record = await this.settings.get('map.layers');
     if (record === undefined) return defaultMapLayerPreferences;
 
-    const parsed = mapLayerPreferencesSchema.safeParse(record.value);
+    const hadLegacyScene =
+      typeof record.value === 'object' &&
+      record.value !== null &&
+      Object.hasOwn(record.value, 'appliedScene');
+    const parsed = mapLayerPreferencesSchema.safeParse(
+      withoutLegacyAppliedScene(record.value),
+    );
     if (parsed.success) {
-      if (
-        typeof record.value === 'object' &&
-        record.value !== null &&
-        Object.hasOwn(record.value, 'appliedScene')
-      ) {
+      if (hadLegacyScene) {
         await this.saveMapLayerPreferences(parsed.data);
       }
       return parsed.data;

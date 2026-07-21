@@ -374,6 +374,14 @@ export function MapWorkspace({
 
   useEffect(() => {
     const shared = sharedMapView;
+    if (shared?.sceneKey !== null && shared !== null) {
+      setActiveTab('satellite');
+      setNavigationCollapsed(false);
+    }
+  }, [setActiveTab, setNavigationCollapsed, sharedMapView]);
+
+  useEffect(() => {
+    const shared = sharedMapView;
     if (
       shared?.sceneKey === null ||
       shared === null ||
@@ -382,8 +390,6 @@ export function MapWorkspace({
     ) {
       return;
     }
-    setActiveTab('satellite');
-    setNavigationCollapsed(false);
     const separator = shared.sceneKey.indexOf(':');
     const collection = shared.sceneKey.slice(0, separator);
     const sceneId = shared.sceneKey.slice(separator + 1);
@@ -399,7 +405,13 @@ export function MapWorkspace({
         signal: controller.signal,
       })
       .then((scene) => {
-        if (scene === null || controller.signal.aborted) return;
+        if (controller.signal.aborted) return;
+        if (scene === null) {
+          setCameraMessage(
+            'The shared satellite image could not be restored. The shared map location is still available.',
+          );
+          return;
+        }
         mapLayers.selectScene(scene);
         setSharedSceneToApply(scene);
       })
@@ -417,14 +429,7 @@ export function MapWorkspace({
     return () => {
       controller.abort();
     };
-  }, [
-    idGenerator,
-    mapLayers,
-    satelliteCatalogGateway,
-    setActiveTab,
-    setNavigationCollapsed,
-    sharedMapView,
-  ]);
+  }, [idGenerator, mapLayers, satelliteCatalogGateway, sharedMapView]);
 
   useEffect(() => {
     if (

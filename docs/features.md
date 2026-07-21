@@ -311,17 +311,16 @@ field, so the map does not claim to identify every private or otherwise closed p
 
 ## Map-view persistence
 
-The map starts only after the last valid camera and terrain mode are read, preventing a
-visible jump from the Georgia overview to the saved position. `moveend` sends settled
-map views to a debounced persistence queue; successful 2D/3D transitions publish their
-mode explicitly. Animation-frame events are never persisted. A restored 3D view enables
-terrain as soon as the native map is ready instead of leaving a pitched flat view.
+The map starts only after the last valid center and zoom are read, preventing a visible
+jump from the Georgia overview to the saved position. `moveend` sends settled map views
+to a debounced persistence queue, but the repository deliberately discards terrain mode,
+bearing, and pitch. Animation-frame events are never persisted.
 
-- Stored value: schema-version 2 `map.camera` record containing camera and terrain mode
-  in the existing Dexie settings table. A schema-version 1 camera migrates to 3D when it
-  has a positive pitch and otherwise migrates to 2D.
-- Validation: finite values are clamped to supported longitude, latitude, zoom, bearing,
-  and pitch ranges.
+- Stored value: schema-version 3 `map.camera` record containing longitude, latitude, and
+  zoom in the existing Dexie settings table. Schema-version 1 and 2 cameras load with
+  zero bearing and pitch instead of restoring their former terrain orientation.
+- Validation: finite center and zoom values are clamped to supported ranges before a
+  flat camera is returned.
 - Corrupt value: delete it, log a repair event, and use the Georgia overview.
 - Failed or non-settling storage: show a warning and mount with the overview after a
   bounded wait.

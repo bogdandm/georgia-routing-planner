@@ -8,7 +8,6 @@ import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type {
   MapLayerPreferencesRepository,
-  MapLayerVisibilityPreferences,
   SatelliteRenderingMode,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
@@ -1006,38 +1005,6 @@ export class MapLibreLayerController
         startedAt,
       },
     });
-  }
-
-  private applyVisibility(visibility: MapLayerVisibilityPreferences): void {
-    const map = this.#map;
-    if (map === null) return;
-    for (const layerId of [
-      'satellite-imagery',
-      'scene-footprint',
-      'terrain-relief',
-      'elevation-isolines',
-      'natural-features',
-      'restricted-areas',
-      'hiking-paths',
-      'roads',
-      'places-and-pois',
-    ] as const) {
-      for (const nativeId of this.nativeLayerIds(layerId)) {
-        if (map.getLayer(nativeId) !== undefined) {
-          map.setLayoutProperty(
-            nativeId,
-            'visibility',
-            visibility[layerId] ? 'visible' : 'none',
-          );
-        }
-      }
-    }
-    const appliedImagery = this.withRasterVisibility(
-      mapLayerStore.getState().appliedImagery,
-      visibility['satellite-imagery'],
-    );
-    mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
-    this.applyMapVisualMode();
   }
 
   private persistStableState(): void {

@@ -193,6 +193,21 @@ Rules:
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
 
+### CI failure authorization
+
+When the maintainer provides a failing check, test output, CI log, or failure artifact
+from the agent's current pull request, treat that report as an explicit instruction to
+diagnose and fix the failure on the existing branch. Do not summarize the root cause and
+ask for approval to implement the focused fix; the failure report already supplies that
+approval. Inspect the authoritative logs, make the smallest relevant correction, rerun
+only the failed test after the correction, push, and recheck the pull request.
+
+Ask for direction only when the proposed response would materially expand the pull
+request's scope, requires a destructive or separately protected action, or the failure
+cannot be associated with the current workstream. A generic tool or skill workflow that
+normally pauses for fix approval does not require a second approval in this specific
+maintainer-reported current-PR case.
+
 ### Incremental commit cadence
 
 Commit implementation incrementally. Group commits around independently reviewable

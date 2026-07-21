@@ -22,11 +22,15 @@ Every agent starting a new workstream must create and use a fresh, dedicated Git
 worktree and purpose-specific branch. Follow-up prompts, review rounds, CI fixes, and
 other continuation work for that workstream must reuse its existing branch and worktree.
 Do not create another branch or worktree for continuation work unless the maintainer
-directly instructs you to do so. When the maintainer names an existing branch or
-worktree, keep all requested work there. Never reuse the main repository checkout or
-another agent's worktree. The maintainer commonly runs four to six agents in parallel;
-separate worktrees keep independent workstreams isolated without fragmenting one
-workstream across repeated review branches.
+directly instructs you to do so. Creating a pull request does not end the workstream.
+Within the same task, prompts such as “one more fix”, “also change”, “small follow-up”,
+review feedback, and reported CI failures must update the existing branch, worktree, and
+pull request. Create a new branch or worktree only after the previous pull request was
+merged or closed, or when the maintainer explicitly requests a new branch or workstream.
+When the maintainer names an existing branch or worktree, keep all requested work there.
+Never reuse the main repository checkout or another agent's worktree. The maintainer
+commonly runs four to six agents in parallel; separate worktrees keep independent
+workstreams isolated without fragmenting one workstream across repeated review branches.
 
 Each worktree must also use a distinct, explicit development-server port. Check that the
 chosen port is free before starting Vite and pass both `--port <port>` and
@@ -328,20 +332,11 @@ After final verification:
    run, checks skipped as not applicable, and whether the branch is awaiting approval.
 
 This standing instruction authorizes feature-completion push and pull-request creation
-without another prompt. Never create a duplicate pull request for the same branch.
-
-### CI monitoring cadence
-
-The required `Checks` workflow normally needs at least five minutes to finish. After a
-push, identify the run for the latest head commit once, then wait for that run through
-one long-lived monitor such as `gh run watch <run-id> --exit-status --interval 30`. Do
-not run repeated `Start-Sleep; gh run view` commands, poll the run every minute, or send
-unchanged status updates while the expected minimum runtime has not elapsed.
-
-If a long-lived monitor is unavailable, use the product's wait or monitoring mechanism
-and make the first manual status query no earlier than five minutes after the run
-started. Inspect only the newest run for the current head SHA; do not continue
-monitoring superseded runs after another commit is pushed.
+without another prompt. Never create a duplicate pull request for the same branch. After
+PR creation or update and the mergeability check, report to the maintainer immediately.
+Do not look up workflow runs, run `gh run watch`, poll checks, or wait for CI
+completion. The maintainer tracks CI status and will provide a failure when agent action
+is needed.
 
 ### Final handoff format
 
@@ -352,12 +347,15 @@ Every completed-workstream report must present these fields together and in this
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
 - `Test path:` one directly runnable command in this form:
-  `Set-Location '<absolute-worktree-path>'; pnpm.cmd run dev --port <reserved-port> --strictPort`.
+  `cd /d "<absolute-worktree-path>" && pnpm.cmd run dev --port <reserved-port> --strictPort`.
 
-Use the worktree's reserved port and the tested Windows command form. Do not omit these
-fields, substitute the main checkout, provide a relative path, or describe startup only
-in prose. When no local server is applicable, keep `Test path:` and state
-`Not applicable` with the reason.
+The handoff command targets Windows Command Prompt because that is the maintainer's
+copy-paste prompt. Use `cd /d` so paths on another drive work, double quotes for the
+absolute path, and `&&` so Vite starts only after navigation succeeds. Do not use the
+PowerShell-only `Set-Location` or `;` in `Test path:`. Use the worktree's reserved port.
+Do not omit these fields, substitute the main checkout, provide a relative path, or
+describe startup only in prose. When no local server is applicable, keep `Test path:`
+and state `Not applicable` with the reason.
 
 ### Pull request title and description
 
@@ -710,6 +708,15 @@ During implementation:
 4. Do not run coverage, complete Playwright, `pnpm check`, or another broad aggregate
    merely to create an intermediate commit.
 5. Record commands and outcomes concisely for the handoff.
+
+Run one Vitest unit or component file with `pnpm.cmd test <test-file>`, for example
+`pnpm.cmd test tests/presentation/shell/WorkspaceShell.test.tsx`. The `test` script
+already expands to `vitest run`; never append `-- --run`, `--run`, or a standalone `--`.
+Those forms can prevent Vitest from applying the file filter and accidentally run the
+complete suite. Before waiting for completion, inspect pnpm's echoed command and require
+it to have the form `vitest run "<test-file>"`. Stop the command if the file argument is
+missing. Use `-t '<exact-test-name-or-pattern>'` after the file path when one named test
+is the smallest relevant scope.
 
 A successful check remains valid while its inputs and configuration are unchanged. A new
 turn, commit, push, or existing CI result is not a reason to rerun it. After an edit,

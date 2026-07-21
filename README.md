@@ -66,6 +66,7 @@ pnpm e2e
 | `pnpm format:check`                         | Verify formatting without changing files.                                |
 | `pnpm test:watch`                           | Run Vitest in watch mode.                                                |
 | `pnpm test`                                 | Run unit and React component tests.                                      |
+| `pnpm test <test-file>`                     | Run exactly one unit or component test file.                             |
 | `pnpm test:integration`                     | Run controlled HTTP/IndexedDB adapter tests.                             |
 | `pnpm test:coverage`                        | Enforce the repository coverage thresholds.                              |
 | `pnpm e2e`                                  | Build and test the Pages-like subpath in Chromium with axe.              |

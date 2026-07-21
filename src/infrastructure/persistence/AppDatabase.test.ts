@@ -97,6 +97,7 @@ describe('AppDatabase', () => {
       },
       openStreetMapOpacity: 0.65,
       appliedScene,
+      satelliteRenderingMode: 'server',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
         contourIntervalMeters: 25,
@@ -133,6 +134,7 @@ describe('AppDatabase', () => {
         'natural-features': true,
         'restricted-areas': true,
       },
+      satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
       terrainOverlays: {
         contourIntervalMeters: 50,

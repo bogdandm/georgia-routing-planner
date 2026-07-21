@@ -548,6 +548,38 @@ describe('MapLibreFacade', () => {
     });
   });
 
+  it('ignores an unscoped late browser-raster error during a mode restart', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      isExpectedRasterCancellation: vi.fn(() => true),
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    nativeMap.fire('error', {
+      error: { message: 'Failed to load canceled custom protocol tile.' },
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      message: null,
+      recoverableFailures: [],
+    });
+    expect(
+      services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
+    ).toHaveLength(0);
+  });
+
   it('ignores routine cancelled tile requests without notifying subscribers', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

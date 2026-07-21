@@ -6,7 +6,10 @@ import type {
   MapLayerPreferencesRepository,
   PersistedMapLayerPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
-import { defaultSatelliteRenderingTuning } from '@/application/ports/MapLayerPreferencesRepository';
+import {
+  defaultSatelliteRenderingMode,
+  defaultSatelliteRenderingTuning,
+} from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 
 interface SettingRecord {
@@ -106,6 +109,9 @@ const mapLayerPreferencesSchema = z
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     appliedScene: satelliteSceneSchema.nullable(),
+    satelliteRenderingMode: z
+      .enum(['auto', 'server', 'browser'])
+      .default(defaultSatelliteRenderingMode),
     renderingTuning: z
       .object({
         reflectanceMax: z.number().min(2_000).max(15_000),
@@ -143,6 +149,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   },
   openStreetMapOpacity: 1,
   appliedScene: null,
+  satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
 };

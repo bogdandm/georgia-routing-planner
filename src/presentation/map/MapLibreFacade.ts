@@ -82,7 +82,10 @@ type MapLayerControllerLifecycle = Pick<
   | 'handleRasterSourceRecovered'
   | 'isRasterSourceRecoveryComplete'
   | 'setTerrainInteractionActive'
->;
+> &
+  Partial<
+    Pick<MapLibreLayerController, 'getRasterSourceId' | 'isExpectedRasterCancellation'>
+  >;
 
 const sourceRecoveryStabilityMs = 2_000;
 
@@ -112,8 +115,9 @@ function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
 function categorizeMapError(
   event: MapLibreErrorEvent,
   lifecycle: MapDiagnosticsSnapshot['lifecycle'],
+  resolvedSourceId: string | null = getErrorSourceId(event),
 ): MapFailureCategory {
-  const sourceId = getErrorSourceId(event);
+  const sourceId = resolvedSourceId;
   if (sourceId === mapSourceIds.terrainDem) return 'terrain';
   if (sourceId === mapSourceIds.basemapVector) return 'base-vector';
   if (
@@ -603,8 +607,12 @@ export class MapLibreFacade implements MapFacade {
     // Camera changes routinely cancel obsolete tile requests. Treating those as
     // failures creates a diagnostics/subscriber render storm during pan and zoom.
     if (isCanceledMapRequest(event)) return;
-    const category = categorizeMapError(event, this.#snapshot.lifecycle);
-    const sourceId = getErrorSourceId(event);
+    if (this.layerController?.isExpectedRasterCancellation?.(event) === true) return;
+    const sourceId =
+      getErrorSourceId(event) ??
+      this.layerController?.getRasterSourceId?.(event) ??
+      null;
+    const category = categorizeMapError(event, this.#snapshot.lifecycle, sourceId);
     if (
       category === 'satellite-raster' &&
       sourceId !== null &&

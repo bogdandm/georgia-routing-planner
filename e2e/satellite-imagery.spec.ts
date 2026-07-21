@@ -7,6 +7,60 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
+test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without retrying', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const rendererRequests: string[] = [];
+  const cogRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().startsWith('https://titiler.xyz/stac/tiles/')) {
+      rendererRequests.push(request.url());
+    }
+    if (request.url().startsWith('https://sentinel-cogs.example.test/')) {
+      cogRequests.push(request.url());
+    }
+  });
+  await page.route('https://titiler.xyz/stac/tiles/**', (route) =>
+    route.fulfill({
+      status: 429,
+      contentType: 'text/plain',
+      body: 'Too Many Requests',
+    }),
+  );
+
+  await page.goto('?developer=1#satellite');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  await page.getByRole('button', { name: 'Open settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('tab', { name: 'Rendering' }).click();
+  await expect(
+    settings.getByRole('combobox', { name: 'Satellite render' }),
+  ).toContainText('Auto');
+  await page.getByRole('button', { name: 'Done' }).click();
+
+  await page.getByRole('button', { name: 'Search images' }).click();
+  await page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }).click();
+  await expect(page.getByText('True-color imagery applied')).toBeVisible({
+    timeout: 90_000,
+  });
+  expect(rendererRequests.length).toBeGreaterThan(0);
+  expect(new Set(rendererRequests).size).toBe(rendererRequests.length);
+  expect(cogRequests.length).toBeGreaterThan(0);
+
+  await page
+    .getByRole('button', { name: 'Developer diagnostics', exact: true })
+    .click();
+  await page.getByRole('tab', { name: /Logs/u }).click();
+  const events = page.getByRole('list', { name: 'Recent diagnostic events' });
+  await expect(events).toContainText('satellite.imagery.browser-fallback-started');
+  await expect(events).toContainText('satellite.imagery.browser-fallback-completed');
+});
+
 test('applies, hides, restores, and preserves a Sentinel scene across workspaces', async ({
   page,
 }) => {

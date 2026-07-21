@@ -167,19 +167,23 @@ expose caches, provider URLs, or the native map to React. The facade forwards ca
 movement state through the controller so the worker can prioritize DEM requests and
 defer new contour calculations until movement settles. It also forwards the worker's
 coordinate-free active and queued counts into the map-layer store for the operational
-status line. The controller validates persistent imagery tuning and terrain-overlay
+status line. The controller validates persistent imagery mode/tuning and terrain-overlay
 preferences, atomically updates source tiles, and reconciles native order after style or
 satellite changes. Satellite, Layers, and Settings consume its serializable Zustand
-snapshot. Search results remain local React state in a mounted-but-hidden Satellite
-browser so rail navigation does not reset the session.
+snapshot, so the duplicated render-mode control remains synchronized. Search results
+remain local React state in a mounted-but-hidden Satellite browser so rail navigation
+does not reset the session.
 
 `SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
 module worker. The provider retains at most two scene definitions, while the worker
 retains at most two corresponding GeoTIFF reader sets. `geotiff` performs bounded HTTP
 range reads and overview selection; `proj4` transforms each output pixel between WGS84
-and the validated northern-UTM scene CRS. The controller switches an existing raster
-source to this opaque protocol only when the hosted renderer reports 429 or the browser
-exposes the response as status zero because CORS hid it.
+and the validated northern-UTM scene CRS. The controller persists the Auto, Server, or
+Browser rendering mode. Auto switches an existing raster source to this opaque protocol
+when the hosted renderer reports 429 or the browser exposes the response as status zero
+because CORS hid it; Browser starts on the protocol directly, and Server does not
+switch. Browser staging layers reveal tiles progressively and use a separate two-minute
+deadline.
 
 The same facade implements the narrow `MapViewportProvider` capability. It returns a
 copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel

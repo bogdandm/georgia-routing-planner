@@ -55,15 +55,26 @@ Clicking that active entry aborts any pending application, removes both raster s
 the footprint, clears the applied-scene preference, and returns map layer state to
 empty.
 
-The inactive slot used to prepare a newly selected scene does not fail on its first
-transient tile error. It refreshes failed canonical tile coordinates with bounded
-backoff. An explicit HTTP 429 or status-zero/no-response failure does not refresh the
-hosted renderer. Instead, the controller replaces the staging source's tile template
-with the opaque browser COG protocol and keeps the staging wait open for worker-rendered
-tiles. When only another transient tile remains unavailable, it promotes the usable
-partial raster after the retries are exhausted and keeps the failure visible. Other
-non-retryable or whole-source failures preserve the previous raster and surface a safe
-status-specific explanation.
+The persisted rendering mode selects the initial template: Auto and Server use the
+hosted renderer, while Browser starts on the opaque COG protocol and never contacts the
+hosted renderer. The inactive slot used to prepare a newly selected scene does not fail
+on its first transient tile error. It refreshes failed canonical tile coordinates with
+bounded backoff. An explicit HTTP 429 or status-zero/no-response failure does not
+refresh the hosted renderer. In Auto mode, the controller replaces the staging source's
+tile template with the opaque browser COG protocol and keeps the staging wait open for
+worker-rendered tiles; Server mode fails without switching. Hosted and browser tiles are
+visible progressively as each result arrives, while readiness and removal of the prior
+source still wait for the staging source to settle. Browser rendering has a two-minute
+deadline instead of the configured hosted-renderer deadline. When only another transient
+tile remains unavailable, it promotes the usable partial raster after the retries are
+exhausted and keeps the failure visible. Other non-retryable or whole-source failures
+preserve the previous raster and surface a safe status-specific explanation.
+
+Both mirrored rendering-mode controls remain enabled while staging. A mode command
+persists the mode immediately, aborts the controller-owned application signal, removes
+partial staging resources, and immediately reapplies the same staging scene with the new
+initial template. A later completion from the canceled operation cannot remove or
+overwrite the replacement.
 
 After a raster is active, MapLibre tile errors flow through the facade for safe
 classification and through the layer controller for recovery. The controller ignores
@@ -383,13 +394,13 @@ sequenceDiagram
   User->>Browser: click scene card or loaded calendar day
   Browser->>Controller: applyScene(scene, AbortSignal)
   Controller->>State: loading with safe scene key
-  Controller->>Map: add hidden staging raster source/layer
+  Controller->>Map: add staging raster source/layer
   Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
-  alt renderer returns 429 or CORS-opaque status zero
+  alt Auto mode and renderer returns 429 or CORS-opaque status zero
     Controller->>Map: replace hosted template with opaque browser protocol
     Map->>Worker: request tile by safe scene key
     Worker->>Worker: range-read, reproject, tune, and encode RGB COG data
-    Worker-->>Map: WebP tile
+    Worker-->>Map: reveal each completed WebP tile progressively
   end
   alt staging source becomes ready
     Controller->>Map: reveal staging raster and update footprint GeoJSON

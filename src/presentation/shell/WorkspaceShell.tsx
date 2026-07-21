@@ -8,6 +8,7 @@ import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer'
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import {
   defaultSatelliteRenderingTuning,
+  type SatelliteRenderingMode,
   type SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
@@ -48,6 +49,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   const [shareOpen, setShareOpen] = useState(false);
   const [renderingTuning, setRenderingTuning] = useState<SatelliteRenderingTuning>(
     () => mapLayers?.getRenderingTuning() ?? defaultSatelliteRenderingTuning,
+  );
+  const renderingMode = useStore(
+    mapLayerStore,
+    (state) => state.satelliteRenderingMode,
   );
   const [renderingTuningPending, setRenderingTuningPending] = useState(false);
   const [renderingTuningError, setRenderingTuningError] = useState<string | null>(null);
@@ -189,6 +194,26 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     }
   };
 
+  const handleRenderingModeChange = async (value: SatelliteRenderingMode) => {
+    if (mapLayers === null) return;
+    renderingTuningAbort.current?.abort();
+    const controller = new AbortController();
+    renderingTuningAbort.current = controller;
+    setRenderingTuningPending(true);
+    setRenderingTuningError(null);
+    try {
+      const result = await mapLayers.setRenderingMode(value, controller.signal);
+      if (result.status === 'failed') {
+        setRenderingTuningError(result.message);
+      }
+    } finally {
+      if (renderingTuningAbort.current === controller) {
+        renderingTuningAbort.current = null;
+        setRenderingTuningPending(false);
+      }
+    }
+  };
+
   const handleTerrainOverlayPreferencesChange = (
     value: typeof terrainOverlaySnapshot.preferences,
   ) => {
@@ -316,6 +341,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         }}
         onDeveloperModeChange={handleDeveloperModeChange}
         renderingTuning={renderingTuning}
+        renderingMode={renderingMode}
+        onRenderingModeChange={(value) => {
+          void handleRenderingModeChange(value);
+        }}
         renderingTuningPending={renderingTuningPending}
         renderingTuningError={renderingTuningError}
         storageUsage={storageUsage}

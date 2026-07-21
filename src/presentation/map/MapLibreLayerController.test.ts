@@ -1,9 +1,12 @@
-import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'maplibre-gl';
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
-import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import {
+  browserSatelliteRenderingTimeoutMs,
+  MapLibreLayerController,
+} from '@/presentation/map/MapLibreLayerController';
 import {
   mapLayerIds,
   sentinelMapLayerIds,
@@ -794,6 +797,168 @@ describe('MapLibreLayerController', () => {
     expect(diagnosticText).not.toContain('private-item-and-token');
   });
 
+  it('uses only browser COG tiles when browser rendering is selected', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    await expect(
+      controller.setRenderingMode('browser', new AbortController().signal),
+    ).resolves.toEqual({ status: 'success' });
+    await expect(
+      controller.applyScene(scene('browser-only'), new AbortController().signal),
+    ).resolves.toEqual({ status: 'success' });
+
+    const raster = map.sources.get('sentinel-raster-a') as {
+      readonly tiles: readonly string[];
+    };
+    expect(raster.tiles).toEqual([
+      expect.stringContaining('test-satellite-cog://tiles/'),
+    ]);
+    expect(raster.tiles[0]).not.toContain('titiler');
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        satelliteRenderingMode: 'browser',
+      });
+    });
+  });
+
+  it('allows browser rendering two minutes before timing out', async () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.setRenderingMode('browser', new AbortController().signal);
+    map.sourceLoaded = false;
+
+    const request = controller.applyScene(
+      scene('slow-browser-render'),
+      new AbortController().signal,
+    );
+    expect(
+      (
+        map.layers.get(sentinelMapLayerIds.rasterA)?.paint as
+          Record<string, unknown> | undefined
+      )?.['raster-opacity'],
+    ).toBe(1);
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+    await vi.advanceTimersByTimeAsync(browserSatelliteRenderingTimeoutMs - 1);
+    expect(mapLayerStore.getState().appliedImagery.status).toBe('loading');
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(request).resolves.toEqual({
+      status: 'failed',
+      message:
+        'Browser imagery rendering did not finish in time. The current map remains usable; try again or use Server mode.',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
+  });
+
+  it('keeps server mode on the hosted renderer without browser fallback', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.setRenderingMode('server', new AbortController().signal);
+    await controller.applyScene(scene('scene-a'), new AbortController().signal);
+    map.sourceLoaded = false;
+
+    const replacement = controller.applyScene(
+      scene('server-only'),
+      new AbortController().signal,
+    );
+    expect(
+      map.paintProperties.get(`${sentinelMapLayerIds.rasterB}.raster-opacity`),
+    ).toBe(1);
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+    map.fire('error', {
+      sourceId: 'sentinel-raster-b',
+      error: { message: 'AJAXError: Too Many Requests', status: 429 },
+    });
+
+    await expect(replacement).resolves.toEqual({
+      status: 'failed',
+      message:
+        'The imagery renderer is rate-limiting requests (HTTP 429). The current map remains usable; wait briefly, then retry.',
+    });
+    expect(map.setTilesCalls).toBe(0);
+    expect(map.refreshTilesCalls).toHaveLength(0);
+  });
+
+  it('cancels and restarts an in-flight scene when rendering mode changes', async () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const savePreferences = vi
+      .spyOn(services.database, 'saveMapLayerPreferences')
+      .mockResolvedValue(undefined);
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    map.sourceLoaded = false;
+
+    const initial = controller.applyScene(
+      scene('midflight-mode-change'),
+      new AbortController().signal,
+    );
+    const switched = controller.setRenderingMode(
+      'browser',
+      new AbortController().signal,
+    );
+
+    await expect(initial).resolves.toEqual({ status: 'cancelled' });
+    expect(savePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ satelliteRenderingMode: 'browser' }),
+    );
+    const raster = map.sources.get('sentinel-raster-a') as {
+      readonly tiles: readonly string[];
+    };
+    expect(raster.tiles).toEqual([
+      expect.stringContaining('test-satellite-cog://tiles/'),
+    ]);
+    map.sourceLoaded = true;
+    map.fire('sourcedata', {
+      sourceId: 'sentinel-raster-a',
+      isSourceLoaded: true,
+      sourceDataType: 'content',
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    await expect(switched).resolves.toEqual({ status: 'success' });
+    expect(controller.getRenderingMode()).toBe('browser');
+    expect(controller.getAppliedScene()?.id).toBe('midflight-mode-change');
+  });
+
+  it('marks late unscoped browser errors as expected after switching to auto', async () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.setRenderingMode('browser', new AbortController().signal);
+    await controller.applyScene(scene('browser-to-auto'), new AbortController().signal);
+
+    await controller.setRenderingMode('auto', new AbortController().signal);
+    const lateError = {
+      error: { message: 'Failed to load canceled custom protocol tile.' },
+    } as unknown as Parameters<typeof controller.isExpectedRasterCancellation>[0];
+    expect(controller.isExpectedRasterCancellation(lateError)).toBe(true);
+    await vi.advanceTimersByTimeAsync(5_001);
+    expect(controller.isExpectedRasterCancellation(lateError)).toBe(false);
+  });
+
   it('switches a CORS-opaque status-zero staging failure to browser rendering', async () => {
     vi.useFakeTimers();
     const services = createTestServices();
@@ -817,6 +982,12 @@ describe('MapLibreLayerController', () => {
     expect(map.refreshTilesCalls).toHaveLength(0);
     expect(map.setTilesCalls).toBe(1);
     expect(
+      map.paintProperties.get(`${sentinelMapLayerIds.rasterB}.raster-opacity`),
+    ).toBe(1);
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+    expect(
       (map.sources.get('sentinel-raster-b') as { readonly tiles: readonly string[] })
         .tiles[0],
     ).toContain('test-satellite-cog://tiles/');
@@ -837,7 +1008,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('switches an explicit HTTP 429 staging failure to browser rendering', async () => {
+  it('switches a source-less HTTP 429 staging failure to browser rendering', async () => {
     vi.useFakeTimers();
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -851,13 +1022,37 @@ describe('MapLibreLayerController', () => {
       scene('scene-b'),
       new AbortController().signal,
     );
-    map.fire('error', {
-      sourceId: 'sentinel-raster-b',
+    const failureEvent = {
       tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
       error: { message: 'AJAXError: Too Many Requests', status: 429 },
-    });
+    };
+    map.fire('error', failureEvent);
 
     expect(map.refreshTilesCalls).toHaveLength(0);
+    expect(map.setTilesCalls).toBe(1);
+    expect(
+      controller.handleRasterSourceFailure(
+        failureEvent as unknown as MapLibreErrorEvent,
+      ),
+    ).toEqual({
+      state: 'browser-fallback',
+      retryAttempt: 0,
+      retryDelayMs: 0,
+    });
+    expect(map.setTilesCalls).toBe(1);
+    expect(
+      controller.handleRasterSourceFailure({
+        error: {
+          message: 'AJAXError: Too Many Requests',
+          status: 429,
+          url: 'https://titiler.xyz/stac/tiles/WebMercatorQuad/12/123/456.webp',
+        },
+      } as unknown as MapLibreErrorEvent),
+    ).toEqual({
+      state: 'browser-fallback',
+      retryAttempt: 0,
+      retryDelayMs: 0,
+    });
     expect(map.setTilesCalls).toBe(1);
     map.sourceLoaded = true;
     map.fire('sourcedata', {
@@ -928,6 +1123,7 @@ describe('MapLibreLayerController', () => {
       },
       openStreetMapOpacity: 0.55,
       appliedScene: scene('saved-scene'),
+      satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
         contourIntervalMeters: 25,
@@ -970,6 +1166,7 @@ describe('MapLibreLayerController', () => {
       visibility: mapLayerStore.getState().visibility,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       appliedScene: scene('saved-before-style'),
+      satelliteRenderingMode: 'auto',
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
     });

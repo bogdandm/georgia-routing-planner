@@ -24,6 +24,10 @@ export interface SatelliteRenderingTuning {
   readonly saturation: number;
 }
 
+export type SatelliteRenderingMode = 'auto' | 'server' | 'browser';
+
+export const defaultSatelliteRenderingMode: SatelliteRenderingMode = 'auto';
+
 export const defaultSatelliteRenderingTuning: SatelliteRenderingTuning = {
   reflectanceMax: 11_000,
   gamma: 2.25,
@@ -50,6 +54,7 @@ export interface PersistedMapLayerPreferences {
   readonly visibility: MapLayerVisibilityPreferences;
   readonly openStreetMapOpacity: number;
   readonly appliedScene: SatelliteScene | null;
+  readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;
 }

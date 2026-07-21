@@ -120,7 +120,9 @@ export function MapWorkspace({
     satelliteCatalogGateway,
     idGenerator,
   } = useRuntimeServices();
+  const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
+  const sharedTerrainRestoreAttempted = useRef(false);
   const sharedSceneRestoreAttempted = useRef(false);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
@@ -330,9 +332,9 @@ export function MapWorkspace({
           setRestoredView({
             camera: applySharedMapView(
               { ...fallback, bearing: 0, pitch: 0 },
-              parseSharedMapView(window.location.search),
+              sharedMapView,
             ),
-            terrainMode: 'flat',
+            terrainMode: sharedMapView?.orientation.mode === '3d' ? 'terrain' : 'flat',
           });
         }
       })
@@ -349,10 +351,23 @@ export function MapWorkspace({
     return () => {
       active = false;
     };
-  }, [logger, mapCameraRepository, restoreTimeoutMs]);
+  }, [logger, mapCameraRepository, restoreTimeoutMs, sharedMapView]);
 
   useEffect(() => {
-    const shared = parseSharedMapView(window.location.search);
+    if (
+      restoredView?.terrainMode !== 'terrain' ||
+      snapshot.lifecycle !== 'ready' ||
+      snapshot.terrainMode === 'terrain' ||
+      sharedTerrainRestoreAttempted.current
+    ) {
+      return;
+    }
+    sharedTerrainRestoreAttempted.current = true;
+    void handleTerrainModeChange('terrain');
+  }, [handleTerrainModeChange, restoredView, snapshot.lifecycle, snapshot.terrainMode]);
+
+  useEffect(() => {
+    const shared = sharedMapView;
     if (
       shared?.sceneKey === null ||
       shared === null ||
@@ -400,7 +415,13 @@ export function MapWorkspace({
     return () => {
       controller.abort();
     };
-  }, [idGenerator, mapLayers, satelliteCatalogGateway, snapshot.lifecycle]);
+  }, [
+    idGenerator,
+    mapLayers,
+    satelliteCatalogGateway,
+    sharedMapView,
+    snapshot.lifecycle,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -451,7 +472,6 @@ export function MapWorkspace({
 
   const copyPointLink = () => {
     if (contextMenu === null) return;
-    const scene = mapLayers?.getAppliedScene() ?? null;
     const url = createMapShareUrl(
       window.location.href,
       {
@@ -459,7 +479,7 @@ export function MapWorkspace({
         longitude: contextMenu.longitude,
         zoom: snapshot.camera.zoom,
       },
-      scene === null ? null : satelliteSceneKey(scene),
+      null,
     );
     closeContextMenu();
     void copyText(url, 'Point link copied');

@@ -44,16 +44,11 @@ existing `MapWorkspace` and native MapLibre instance stay mounted.
 Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
 stretch slider validates and stores the new numeric values, prepares a replacement
 raster for the current scene, and swaps only after MapLibre reports it ready. A failed
-tuning attempt rolls back the controller values and keeps the prior raster visible. At
-startup, validated stretch preferences load first; saved Sentinel imagery waits for the
-MapLibre style-ready attach before creating raster sources. If a development detach
-cancels restoration, the controller resumes it after the same style-ready map
-reattaches. Late errors from a source that has already been removed are ignored. When
-restoration reaches a ready or hidden state, Satellite projects the controller's saved
-scene into a one-entry Images pane using the current viewport for coverage evidence.
-Clicking that active entry aborts any pending application, removes both raster slots and
-the footprint, clears the applied-scene preference, and returns map layer state to
-empty.
+tuning attempt rolls back the controller values and keeps the prior raster visible.
+Startup restores only non-scene layer preferences. Late errors from a source that has
+already been removed are ignored. Clicking the active scene aborts any pending
+application, removes both raster slots and the footprint, clears the transient scene
+selection, and returns map layer state to empty.
 
 The persisted rendering mode selects the initial template: Auto and Server use the
 hosted renderer, while Browser starts on the opaque COG protocol and never contacts the

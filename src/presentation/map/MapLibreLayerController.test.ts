@@ -768,6 +768,31 @@ describe('MapLibreLayerController', () => {
     ).resolves.not.toHaveProperty('value.appliedScene');
   });
 
+  it('publishes the selected scene before its replacement raster finishes', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    const selectedScene = scene('selected-while-rendering');
+
+    const application = controller.applyScene(
+      selectedScene,
+      new AbortController().signal,
+    );
+
+    expect(controller.getSelectedScene()).toEqual(selectedScene);
+    expect(mapLayerStore.getState().selectedScene).toEqual(selectedScene);
+    expect(mapLayerStore.getState().appliedImagery).toMatchObject({
+      status: 'loading',
+      sceneKey: 'sentinel-2-l2a:selected-while-rendering',
+    });
+    map.sourceLoaded = true;
+    map.fire('sourcedata', { sourceId: 'sentinel-raster-a', isSourceLoaded: true });
+    await expect(application).resolves.toEqual({ status: 'success' });
+  });
+
   it('reports a safe actionable reason when the renderer rejects a tile request', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;

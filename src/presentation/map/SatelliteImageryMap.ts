@@ -54,6 +54,7 @@ export interface SatelliteImageryMap {
   clearScene(): SatelliteImageryCommandResult;
   fitFootprint(): SatelliteImageryCommandResult;
   getAppliedScene(): SatelliteScene | null;
+  getSelectedScene(): SatelliteScene | null;
   getRenderingMode(): SatelliteRenderingMode;
   getRenderingTuning(): SatelliteRenderingTuning;
   restorePersistedState(): Promise<void>;

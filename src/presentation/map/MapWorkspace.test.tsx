@@ -43,6 +43,36 @@ describe('MapWorkspace', () => {
     ).toBeVisible();
   });
 
+  it('restores bearing, pitch, and terrain only from an explicit 3D share', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5',
+    );
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={(initialCamera) => (
+            <div>
+              Shared 3D camera {initialCamera.bearing}/{initialCamera.pitch}
+            </div>
+          )}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Shared 3D camera 18.5/35.5');
+    expect(facade.terrainModeRequests).toEqual([]);
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+  });
+
   it('delivers serializable search navigation commands through the facade', async () => {
     const facade = new FakeMapFacade();
     render(

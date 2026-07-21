@@ -273,6 +273,7 @@ export class MapLibreLayerController
   #map: MapLibreMap | null = null;
   #activeSlot: RasterSlot | null = null;
   #appliedScene: SatelliteScene | null = null;
+  #selectedScene: SatelliteScene | null = null;
   #stagingScene: SatelliteScene | null = null;
   #activeApplyController: AbortController | null = null;
   #applySequence = 0;
@@ -439,6 +440,8 @@ export class MapLibreLayerController
     scene: SatelliteScene,
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult> {
+    this.#selectedScene = scene;
+    mapLayerStore.setState({ selectedScene: scene });
     return this.runSceneApplication(scene, signal, true);
   }
 
@@ -456,8 +459,10 @@ export class MapLibreLayerController
     }
     this.#activeSlot = null;
     this.#appliedScene = null;
+    this.#selectedScene = null;
     mapLayerStore.setState({
       appliedImagery: { status: 'empty' },
+      selectedScene: null,
       automaticBrowserFallbackActive: false,
       errorMessage: null,
     });
@@ -473,6 +478,10 @@ export class MapLibreLayerController
 
   public getAppliedScene(): SatelliteScene | null {
     return this.#appliedScene;
+  }
+
+  public getSelectedScene(): SatelliteScene | null {
+    return this.#selectedScene;
   }
 
   /**

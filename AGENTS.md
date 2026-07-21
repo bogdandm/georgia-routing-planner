@@ -77,6 +77,11 @@ Set-Location $worktreePath
 git status --short --branch
 ```
 
+In managed Codex, run the fetch and `worktree add` operations with host permission from
+the start. The sandbox identity may otherwise reject the maintainer-owned main checkout
+as dubious ownership and cannot write linked-worktree metadata. Do not modify global
+`safe.directory`, ownership, or Git security configuration to bypass that boundary.
+
 Choose the branch prefix that matches the work. Replace both placeholder values; do not
 copy them literally. Before `worktree add`, confirm the path does not exist and the
 branch name is unused. Do not nest a worktree under any linked worktree except the

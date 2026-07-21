@@ -1,5 +1,4 @@
 import { ThemeProvider } from '@mui/material';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { userEvent } from '@testing-library/user-event';
 import {
   act,
@@ -50,19 +49,14 @@ beforeEach(async () => {
 afterEach(async () => {
   services.database.close();
   await services.database.delete();
-  services.queryClient.clear();
 });
 
 function renderWorkspaceShell() {
   return render(
     <RuntimeServicesProvider services={services}>
-      <QueryClientProvider client={services.queryClient}>
-        <ThemeProvider theme={createAppTheme()}>
-          <WorkspaceShell
-            mapSurface={<div aria-label="Fake map">Local map ready</div>}
-          />
-        </ThemeProvider>
-      </QueryClientProvider>
+      <ThemeProvider theme={createAppTheme()}>
+        <WorkspaceShell mapSurface={<div aria-label="Fake map">Local map ready</div>} />
+      </ThemeProvider>
     </RuntimeServicesProvider>,
   );
 }

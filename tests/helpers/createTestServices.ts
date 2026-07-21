@@ -1,5 +1,3 @@
-import { QueryClient } from '@tanstack/react-query';
-
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
@@ -158,9 +156,6 @@ export function createTestServices(
       status: 'valid',
       value: parsedMapProviderConfiguration,
     },
-    queryClient: new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    }),
     loadSatelliteAvailability: new LoadSatelliteAvailability(
       satelliteCatalogGateway,
       sentinelQueryDiagnostics,

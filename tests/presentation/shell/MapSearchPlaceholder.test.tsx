@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
-import { QueryClientProvider } from '@tanstack/react-query';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import {
   mapInteractionStore,
@@ -24,11 +23,9 @@ describe('MapSearchPlaceholder', () => {
 
   const renderSearch = (services: RuntimeServices) =>
     render(
-      <QueryClientProvider client={services.queryClient}>
-        <RuntimeServicesProvider services={services}>
-          <MapSearchPlaceholder />
-        </RuntimeServicesProvider>
-      </QueryClientProvider>,
+      <RuntimeServicesProvider services={services}>
+        <MapSearchPlaceholder />
+      </RuntimeServicesProvider>,
     );
 
   it('navigates locally for labelled coordinates without contacting a provider', async () => {
@@ -166,12 +163,10 @@ describe('MapSearchPlaceholder', () => {
     services.mapViewport.update(testViewport);
     const user = userEvent.setup();
     render(
-      <QueryClientProvider client={services.queryClient}>
-        <RuntimeServicesProvider services={services}>
-          <button type="button">Map zoom in</button>
-          <MapSearchPlaceholder />
-        </RuntimeServicesProvider>
-      </QueryClientProvider>,
+      <RuntimeServicesProvider services={services}>
+        <button type="button">Map zoom in</button>
+        <MapSearchPlaceholder />
+      </RuntimeServicesProvider>,
     );
 
     await user.type(
@@ -231,6 +226,38 @@ describe('MapSearchPlaceholder', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Wait for the map viewport to become ready',
     );
+  });
+
+  it('clears results when a replacement submission is invalid', async () => {
+    const services = createTestServices();
+    if (services.searchPlaces === null) return;
+    vi.spyOn(services.searchPlaces, 'execute').mockResolvedValue([
+      {
+        id: 'oni',
+        label: 'Oni, Georgia',
+        coordinate: { latitude: 42.58, longitude: 43.44 },
+        category: 'place:town',
+        kind: 'settlement',
+        bounds: null,
+      },
+    ]);
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderSearch(services);
+    const input = screen.getByRole('textbox', {
+      name: 'Search places or coordinates',
+    });
+
+    await user.type(input, 'Oni{Enter}');
+    expect(await screen.findByText('Oni, Georgia')).toBeVisible();
+
+    await user.clear(input);
+    await user.type(input, 'x{Enter}');
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter at least two characters',
+    );
+    expect(screen.queryByText('Oni, Georgia')).not.toBeInTheDocument();
   });
 
   it('explains ambiguous coordinate order instead of guessing', async () => {

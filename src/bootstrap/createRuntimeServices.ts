@@ -1,4 +1,3 @@
-import { QueryCache, QueryClient } from '@tanstack/react-query';
 import type { KyInstance } from 'ky';
 
 import type { Clock } from '@/application/ports/Clock';
@@ -53,7 +52,6 @@ export interface RuntimeServices {
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly mapViewport: MapViewportSnapshotStore;
   readonly mapLayers: MapLibreLayerController | null;
-  readonly queryClient: QueryClient;
   readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
@@ -210,26 +208,6 @@ export function createRuntimeServices(): RuntimeServices {
     healthChecks,
     mapDiagnostics,
   );
-  const queryClient = new QueryClient({
-    queryCache: new QueryCache({
-      onError: (error) => {
-        logger.log({
-          level: 'error',
-          name: 'query.failed',
-          message: error instanceof Error ? error.message : 'Unknown query failure',
-        });
-      },
-    }),
-    defaultOptions: {
-      queries: {
-        retry: 1,
-        staleTime: 5 * 60 * 1_000,
-        refetchOnWindowFocus: false,
-      },
-      mutations: { retry: false },
-    },
-  });
-
   logger.log({
     level: 'info',
     name: 'app.bootstrap.services-created',
@@ -247,7 +225,6 @@ export function createRuntimeServices(): RuntimeServices {
     diagnostics,
     dispose: () => {
       mapLayers?.dispose();
-      queryClient.clear();
       database.close();
     },
     httpClient,
@@ -259,7 +236,6 @@ export function createRuntimeServices(): RuntimeServices {
     mapViewport,
     mapLayers,
     mapProviderConfiguration,
-    queryClient,
     loadSatelliteAvailability,
     satelliteCatalogGateway,
     searchSatelliteScenes,

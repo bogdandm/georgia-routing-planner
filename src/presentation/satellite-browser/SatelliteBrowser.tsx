@@ -927,7 +927,6 @@ export function SatelliteBrowser({
   const renderingModeRequest = useRef<AbortController | null>(null);
   const cloudCoverChangedByUser = useRef(false);
   const [renderingModeError, setRenderingModeError] = useState<string | null>(null);
-  const loadingMonthsRef = useRef(new Set<string>());
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -1072,13 +1071,11 @@ export function SatelliteBrowser({
       }
       return;
     }
-    if (loadingMonthsRef.current.has(range.month)) return;
+    if (request.current !== null) return;
 
-    request.current?.abort();
     const controller = new AbortController();
     const baseResult = searchState.result;
     request.current = controller;
-    loadingMonthsRef.current.add(range.month);
     setLoadingMonth(range.month);
     setLoadingMore(true);
     setLoadMoreError(null);
@@ -1127,7 +1124,6 @@ export function SatelliteBrowser({
       setLoadMoreError(message);
       failSatelliteRequest(message);
     } finally {
-      loadingMonthsRef.current.delete(range.month);
       if (request.current === controller) {
         request.current = null;
         setLoadingMonth(null);
@@ -1163,7 +1159,6 @@ export function SatelliteBrowser({
       productLevel: 'L2A',
       initialMonth: range.month,
     });
-    loadingMonthsRef.current = new Set<string>([range.month]);
     setLoadedMonths(new Set());
     setLoadingMonth(range.month);
     setVisibleCount(firstResultCount);
@@ -1207,7 +1202,6 @@ export function SatelliteBrowser({
       });
       failSatelliteRequest(message);
     } finally {
-      loadingMonthsRef.current.delete(range.month);
       if (request.current === controller) {
         request.current = null;
         setLoadingMonth(null);
@@ -1244,7 +1238,6 @@ export function SatelliteBrowser({
   const cancelSearch = () => {
     request.current?.abort();
     request.current = null;
-    loadingMonthsRef.current.clear();
     setLoadingMonth(null);
     setLoadingMore(false);
     setSearchState({ status: 'idle' });

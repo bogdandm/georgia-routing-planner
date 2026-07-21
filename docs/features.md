@@ -388,7 +388,7 @@ WebGL, or unknown. Satellite raster failures expose a safe transport reason and 
 HTTP status when MapLibre provides one. Rate limits and status-zero/no-response failures
 do not retry the hosted renderer because a cross-origin 429 without CORS headers is
 indistinguishable from a connection failure in application code. In Auto mode both
-switch the existing source to direct pre-rendered visual-COG rasterization; Server mode
+replace the hosted source with direct pre-rendered visual-COG rasterization; Server mode
 reports the failure without fallback. Server responses and identifiable network failures
 schedule one deduplicated exponential refresh of the failed tiles, capped at three
 attempts; other client errors and unclassified failures also do not retry automatically.

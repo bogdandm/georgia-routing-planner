@@ -67,12 +67,14 @@ request or automatic provider switch cannot blank the map.
 
 An explicit HTTP 429 or status-zero/no-response failure does not refresh TiTiler. In
 Auto mode, the controller changes that source to the direct visual-COG protocol and
-continues waiting without an application deadline; Server mode fails without switching.
-The shell reports that TiTiler is unavailable while the alternative is switching and
-after it becomes active. An explicit Direct selection, successful hosted render, or
-imagery removal clears the automatic-fallback state. Retryable failures still use the
-bounded failed-tile refresh policy, and usable partial imagery can be promoted after
-those retries are exhausted.
+continues waiting without an application deadline. It recreates the native raster source
+and layer under the same stable IDs so MapLibre cannot retain hosted-renderer tiles or
+released textures across the provider change; Server mode fails without switching. The
+shell reports that TiTiler is unavailable while the alternative is switching and after
+it becomes active. An explicit Direct selection, successful hosted render, or imagery
+removal clears the automatic-fallback state. Retryable failures still use the bounded
+failed-tile refresh policy, and usable partial imagery can be promoted after those
+retries are exhausted.
 
 Both mirrored rendering-mode controls remain enabled while staging. A mode command
 persists the mode immediately, aborts the controller-owned application signal, removes
@@ -90,15 +92,15 @@ after a bounded exponential delay, and stops after three attempts. HTTP 4xx fail
 including 429, status-zero/no-response failures, and unknown failures remain visible
 without automatic retry. HTTP 429 and status zero open direct visual-imagery fallback
 because a 429 response without CORS headers is indistinguishable from a connection
-failure at the application boundary. The existing raster source switches to an opaque
-custom protocol; a dedicated worker performs bounded range reads of the pre-rendered
-8-bit visual COG, UTM-to-Web Mercator reprojection, and WebP encoding. It preserves the
-visual asset's channel values and never applies hosted stretch tuning. A successful
-source-data event for every failed canonical tile clears the controller's pending set;
-only then can a loaded source start the two-second stability window. Another source
-error cancels that window. The facade returns to ready when no active failure remains.
-Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
-the diagnostics bundle.
+failure at the application boundary. A fresh raster source replaces the hosted source
+under the same stable ID and uses an opaque custom protocol; a dedicated worker performs
+bounded range reads of the pre-rendered 8-bit visual COG, UTM-to-Web Mercator
+reprojection, and WebP encoding. It preserves the visual asset's channel values and
+never applies hosted stretch tuning. A successful source-data event for every failed
+canonical tile clears the controller's pending set; only then can a loaded source start
+the two-second stability window. Another source error cancels that window. The facade
+returns to ready when no active failure remains. Raw tile URLs, response bodies, and
+tile coordinates never enter logs, React state, or the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the

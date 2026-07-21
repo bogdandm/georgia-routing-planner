@@ -778,6 +778,19 @@ documentation-boundary checks required by this file, and `git diff --check`. If 
 change also modifies executable code, configuration, schemas, or test fixtures, use the
 normal verification rules for those files.
 
+Documentation-only branches and pull requests must also skip Playwright in GitHub
+Actions. The workflow must classify the complete diff against the pull-request base, or
+the pushed range for protected-branch pushes, as documentation-only only when every
+changed path is either a Markdown file or under `docs/`. Workflow files, configuration,
+schemas, fixtures, scripts, and executable source make the change
+non-documentation-only.
+
+Keep the required GitHub Actions check conclusive for documentation-only changes: run a
+lightweight classification step, emit an explicit successful E2E-skip step, and do not
+install browsers, build an E2E target, or launch Playwright. Do not skip the entire
+required workflow through top-level path filters because branch protection may then wait
+indefinitely for a check that never reports a result.
+
 ### Managed Windows coverage timing
 
 Parallel V8 coverage can make `WorkspaceShell` interaction tests exceed Vitest's
@@ -928,7 +941,9 @@ or coverage-ignore comments merely to meet a threshold.
 GitHub Actions runs on every pull request and protected-branch push. Required checks
 include frozen-lockfile installation, formatting, linting, type checking,
 unit/component/integration tests with coverage, catalog fixture tests, production build,
-and Playwright Chromium/axe tests against the built application.
+and Playwright Chromium/axe tests against the built application. Playwright is the only
+exception for documentation-only diffs: the workflow reports an explicit successful skip
+instead of installing Chromium or running E2E tests.
 
 Required checks block merging. Deployment uses the exact already-tested commit and is
 followed by a small Pages smoke test. CI uploads bounded failure artifacts so a

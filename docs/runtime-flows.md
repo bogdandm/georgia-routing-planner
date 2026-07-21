@@ -8,7 +8,7 @@ sequenceDiagram
   participant Root as createRuntimeServices
   participant UI as WorkspaceShell
   participant Workspace as MapWorkspace
-  participant Storage as MapCameraRepository
+  participant Storage as AppDatabase
   participant Facade as MapLibreFacade
   participant Map as MapLibre
 

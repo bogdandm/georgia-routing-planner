@@ -21,8 +21,8 @@ contracts when each feature is implemented.
    uploaded.
 3. STAC, imagery, OSM, and DEM providers are authoritative for online source data.
    Browser query/cache state is disposable and never becomes the source of truth.
-4. Zustand and component state hold transient interaction state only. TanStack Query
-   owns remote request/cache lifecycle only.
+4. Zustand and component state hold transient interaction and request state only.
+   Provider adapters own only policy-required caches, such as Nominatim request pacing.
 5. Derived statistics always record their algorithm and source versions. A version
    mismatch causes recalculation rather than silently mixing policies.
 6. Every persisted or external record is validated at its boundary. Database schema and
@@ -83,7 +83,7 @@ flowchart LR
 | Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                              |
 | Active selection, edit state, filters, sorting, layer instances                                     | Browser memory/Zustand/components                            | Serializable transient state plus map facade state       | Lost on reload unless a specific preference is deliberately persisted        |
 | Static catalog cache                                                                                | Optional browser IndexedDB cache                             | Catalog data plus catalog version                        | Disposable; GitHub Pages manifest remains authoritative                      |
-| Satellite search results and calendar summaries                                                     | Online STAC authority; TanStack Query cache in browser       | `SatelliteScene` and derived `SceneDaySummary`           | Cancellable and disposable; no bulk permanent mirror                         |
+| Satellite search results and calendar summaries                                                     | Online STAC authority; component state in browser            | `SatelliteScene` and derived `SceneDaySummary`           | Cancellable and disposable; no bulk permanent mirror                         |
 | Sentinel true-color imagery                                                                         | Online imagery provider                                      | Map raster source/texture                                | Requested for selected scenes; provider/browser cache policy applies         |
 | OSM tiles, glyphs, and sprites                                                                      | Online configured map provider                               | MapLibre sources                                         | Provider-owned, attributed, and replaceable                                  |
 | Terrain/elevation tiles                                                                             | Online configured DEM provider                               | MapLibre terrain and elevation adapter input             | Provider-owned; derived samples may be stored with plans/tracks/markers      |
@@ -411,7 +411,7 @@ or unavailable; unsupported L1C imagery is never replaced with an L2A scene.
 
 | Provider data             | Validated application attributes                                                                                                                       | Persistence                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| STAC item                 | Provider/item/collection IDs, L1C/L2A level, acquisition instant, footprint, bounds, cloud cover, platform/tile IDs, approved asset links, attribution | TanStack Query cache only                                         |
+| STAC item                 | Provider/item/collection IDs, L1C/L2A level, acquisition instant, footprint, bounds, cloud cover, platform/tile IDs, approved asset links, attribution | Component state only                                              |
 | Sentinel true-color asset | Scene ID, asset role/type, raster access URL/template, projection/resolution metadata needed by the adapter                                            | Runtime map source; provider/browser cache only                   |
 | OSM vector source         | Provider/source ID, TileJSON/tile template, source-layer mapping, zoom range, glyph/sprite endpoints, attribution                                      | Public validated configuration plus runtime map source            |
 | DEM source                | Provider/source ID, tile template, encoding, tile size, zoom range, attribution                                                                        | Public validated configuration plus runtime map/elevation adapter |

@@ -19,7 +19,7 @@ import Map, {
 } from 'react-map-gl/maplibre';
 import { useStore } from 'zustand';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   MapCamera as PersistedMapCamera,
   MapViewState,

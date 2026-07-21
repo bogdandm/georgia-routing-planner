@@ -26,10 +26,7 @@ import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
-import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
-import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
-import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -65,8 +62,11 @@ export interface RuntimeServices {
  * diagnostics. Feature modules consume this bundle but must not construct replacements.
  */
 export function createRuntimeServices(): RuntimeServices {
-  const clock = new BrowserClock();
-  const idGenerator = new CryptoIdGenerator();
+  const clock: Clock = {
+    now: () => new Date(),
+    monotonicNow: () => performance.now(),
+  };
+  const idGenerator: IdGenerator = { generate: () => crypto.randomUUID() };
   const developerFlag = new URLSearchParams(globalThis.location.search).get(
     'developer',
   );
@@ -78,7 +78,6 @@ export function createRuntimeServices(): RuntimeServices {
   );
   const database = new AppDatabase(logger);
   const storageUsage = new BrowserStorageUsageReader();
-  const mapCameraRepository = new DexieMapCameraRepository(database, clock, logger);
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
     new URL(import.meta.env.BASE_URL, globalThis.location.origin).toString(),
@@ -231,7 +230,7 @@ export function createRuntimeServices(): RuntimeServices {
     idGenerator,
     logger,
     elevationProvider,
-    mapCameraRepository,
+    mapCameraRepository: database,
     mapDiagnostics,
     mapViewport,
     mapLayers,

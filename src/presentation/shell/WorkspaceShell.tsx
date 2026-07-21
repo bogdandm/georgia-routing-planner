@@ -3,7 +3,7 @@ import { Box, IconButton, Tooltip } from '@mui/material';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import {

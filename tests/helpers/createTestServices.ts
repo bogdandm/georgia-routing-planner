@@ -1,6 +1,5 @@
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
@@ -148,7 +147,7 @@ export function createTestServices(
     elevationProvider: {
       sample: () => Promise.resolve({ status: 'available' as const, meters: 1_234 }),
     },
-    mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
+    mapCameraRepository: database,
     mapDiagnostics,
     mapViewport,
     mapLayers,

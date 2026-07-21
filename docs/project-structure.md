@@ -82,13 +82,12 @@ location or acquisition metadata is sent to a time-zone service.
 
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It creates the clock, ID generator, bounded
-logger, Dexie database, camera repository, validated provider configuration, map
-snapshot store, Sentinel query timeline store, HTTP client, health/diagnostics services,
-and TanStack Query client.
+logger, Dexie database, validated provider configuration, map snapshot store, Sentinel
+query timeline store, HTTP client, and health/diagnostics services.
 
 [`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
-this order: runtime services, TanStack Query, MUI theme, error boundary, workspace
-shell. Tests replace the whole `RuntimeServices` object at the context boundary.
+this order: runtime services, MUI theme, error boundary, and workspace shell. Tests
+replace the whole `RuntimeServices` object at the context boundary.
 
 ## State ownership
 
@@ -104,7 +103,7 @@ shell. Tests replace the whole `RuntimeServices` object at the context boundary.
 | Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                 |
 | Visibility, stretch, rendering, and overlay preferences   | Dexie plus map layer controller                            | Durable non-scene choices with a serializable live view |
 | Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port           |
-| Settled 2D center and zoom                                | Dexie through `MapCameraRepository`                        | Durable camera restarts without 3D orientation          |
+| Settled 2D center and zoom                                | `AppDatabase` through `MapCameraRepository`                | Durable camera restarts without 3D orientation          |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export      |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                     |
 | Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                             | Disposable, not persisted                               |

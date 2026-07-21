@@ -37,7 +37,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   SatelliteProductLevel,
   SatelliteSearchViewport,

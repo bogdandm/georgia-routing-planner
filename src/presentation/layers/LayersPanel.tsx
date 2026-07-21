@@ -10,7 +10,7 @@ import {
 } from '@mui/material';
 import { useStore } from 'zustand';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 

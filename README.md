@@ -263,7 +263,7 @@ The reviewed system concept includes:
 | Elevation chart         | MUI X Charts                                                                 | Keeps charts visually consistent with the rest of the interface.                              |
 | Map                     | MapLibre GL JS                                                               | OSM vectors, raster imagery, GeoJSON, terrain, globe/pitch support, and extensible 3D layers. |
 | React map adapter       | `react-map-gl/maplibre`                                                      | Maintained typed React wrapper around MapLibre.                                               |
-| Remote state            | TanStack Query                                                               | Request lifecycle, caching, cancellation, retry policy, and loading/error state.              |
+| Async requests          | Abortable feature-owned React flows                                          | Keeps loading, cancellation, and errors with the component that owns each request.            |
 | HTTP                    | `ky`                                                                         | Small Fetch-based client with timeouts, hooks, and consistent errors.                         |
 | Runtime validation      | Zod                                                                          | Validates STAC responses, catalog files, saved data, and configuration at boundaries.         |
 | Local UI state          | Zustand                                                                      | Small predictable store for transient selection and panel state.                              |

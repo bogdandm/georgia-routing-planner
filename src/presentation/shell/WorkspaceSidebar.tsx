@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { EmptyState } from '@/presentation/shell/EmptyState';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';

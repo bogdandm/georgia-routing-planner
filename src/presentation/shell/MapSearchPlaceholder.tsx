@@ -35,7 +35,7 @@ import {
   maximumPlaceSearchRadiusKm,
   maximumPlaceSearchSideKm,
 } from '@/application/map/expandPlaceSearchBounds';
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   requestMapFitBounds,
   requestMapNavigation,

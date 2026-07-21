@@ -45,7 +45,7 @@ interface DemDiagnosticAggregate {
   status: DemProcessingStatus;
 }
 
-export interface FilteredTerrariumResponse {
+interface FilteredTerrariumResponse {
   readonly data: Blob;
   readonly cacheControl?: string;
   readonly expires?: string;

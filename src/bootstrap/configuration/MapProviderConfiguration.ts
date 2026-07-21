@@ -274,7 +274,7 @@ export type MapProviderConfigurationResult =
   | { readonly status: 'valid'; readonly value: MapProviderConfiguration }
   | { readonly status: 'invalid'; readonly message: string };
 
-export interface MapProviderConfigurationSummary {
+interface MapProviderConfigurationSummary {
   readonly schemaVersion: 1;
   readonly vectorId: string;
   readonly vectorOrigin: string;

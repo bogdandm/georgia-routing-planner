@@ -5,7 +5,7 @@ import type {
   SatelliteSearchViewport,
 } from '@/domain/satellite/SatelliteSearchCriteria';
 
-export const maximumSatelliteSearchDays = 62;
+const maximumSatelliteSearchDays = 62;
 const millisecondsPerDay = 86_400_000;
 const utcDatePattern = /^\d{4}-\d{2}-\d{2}$/u;
 

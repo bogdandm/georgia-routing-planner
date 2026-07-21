@@ -45,13 +45,13 @@ export type AppliedSatelliteImagerySnapshot =
       readonly message: string;
     };
 
-export interface TerrainOverlaySnapshot {
+interface TerrainOverlaySnapshot {
   readonly initialized: boolean;
   readonly preferences: TerrainOverlayPreferences;
   readonly message: string | null;
 }
 
-export interface MapLayerState {
+interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly automaticAlternativeProviderState: 'inactive' | 'switching' | 'active';
   readonly errorMessage: string | null;
@@ -64,7 +64,7 @@ export interface MapLayerState {
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
 
-export const initialMapLayerState: MapLayerState = {
+const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
   automaticAlternativeProviderState: 'inactive',
   errorMessage: null,

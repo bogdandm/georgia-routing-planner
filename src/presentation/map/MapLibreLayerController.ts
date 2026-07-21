@@ -84,7 +84,7 @@ type SatelliteImageryCommandResult =
 
 type TerrainOverlayCommandResult = MapLayerVisibilityResult;
 
-export const logicalNativeLayerGroups: Readonly<
+const logicalNativeLayerGroups: Readonly<
   Record<
     Exclude<LogicalMapLayerId, 'satellite-imagery' | 'scene-footprint'>,
     readonly string[]

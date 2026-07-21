@@ -37,7 +37,7 @@ const uiPreferencesSchema = z
   })
   .strict();
 
-export interface UiPreferences {
+interface UiPreferences {
   readonly developerMode: boolean;
   readonly navigationCollapsed: boolean;
 }

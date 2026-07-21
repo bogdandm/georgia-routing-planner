@@ -2,7 +2,7 @@ import type { ErrorEvent as MapLibreErrorEvent } from 'maplibre-gl';
 
 import type { MapFailureReason } from '@/presentation/map/mapTypes';
 
-export interface MapFailureDetails {
+interface MapFailureDetails {
   readonly reason: MapFailureReason;
   readonly httpStatus: number | null;
   readonly retryable: boolean;

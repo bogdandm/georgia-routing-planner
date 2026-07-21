@@ -25,7 +25,7 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 
-export const maximumSatelliteSearchResults = 1_000;
+const maximumSatelliteSearchResults = 1_000;
 
 function sceneTimestamp(scene: SatelliteScene): number {
   const timestamp = Date.parse(scene.acquiredAt);

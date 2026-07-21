@@ -74,9 +74,6 @@ pnpm e2e
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
 | `pnpm check`                                | Run all non-browser CI checks; CI invokes `pnpm e2e` separately.         |
 
-`catalog:audit` and `catalog:build` currently return a clear, non-destructive
-not-implemented error. They do not pretend that catalog processing exists.
-
 ## Application structure
 
 The composition root in `src/bootstrap/createRuntimeServices.ts` is the only place that
@@ -260,7 +257,6 @@ The reviewed system concept includes:
 | UI                      | React                                                                        | Preferred frontend framework.                                                                 |
 | Build                   | Vite                                                                         | Fast modern build, static output, and straightforward GitHub Pages deployment.                |
 | GUI components          | Material UI and MUI Icons                                                    | Ready-to-use accessible application shell, drawers, controls, lists, dialogs, and theming.    |
-| Elevation chart         | MUI X Charts                                                                 | Keeps charts visually consistent with the rest of the interface.                              |
 | Map                     | MapLibre GL JS                                                               | OSM vectors, raster imagery, GeoJSON, terrain, globe/pitch support, and extensible 3D layers. |
 | React map adapter       | `react-map-gl/maplibre`                                                      | Maintained typed React wrapper around MapLibre.                                               |
 | Async requests          | Abortable feature-owned React flows                                          | Keeps loading, cancellation, and errors with the component that owns each request.            |

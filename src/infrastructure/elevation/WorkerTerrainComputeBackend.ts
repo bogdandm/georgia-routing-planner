@@ -33,8 +33,8 @@ import {
   WorkerRpcTransportError,
 } from '@/infrastructure/runtime/WorkerRpc';
 
-export type TerrainWorkerFactory = () => WorkerRpcEndpoint;
-export type TerrainInlineBackendFactory = () => TerrainComputeBackend;
+type TerrainWorkerFactory = () => WorkerRpcEndpoint;
+type TerrainInlineBackendFactory = () => TerrainComputeBackend;
 
 function defaultWorkerFactory(): WorkerRpcEndpoint {
   return new Worker(new URL('./terrainCompute.worker.ts', import.meta.url), {

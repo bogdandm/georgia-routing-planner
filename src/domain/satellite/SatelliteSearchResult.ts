@@ -1,6 +1,6 @@
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 
-export type SatelliteInterestPointRelation = 'inside' | 'boundary' | 'outside';
+type SatelliteInterestPointRelation = 'inside' | 'boundary' | 'outside';
 
 export interface SatelliteSceneCoverage {
   readonly viewportCoveragePercent: number;

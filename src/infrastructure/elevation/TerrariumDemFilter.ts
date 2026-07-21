@@ -44,7 +44,7 @@ export interface TerrariumRepairCounts {
   readonly unrepairedCount: number;
 }
 
-export interface FilteredTerrariumTile {
+interface FilteredTerrariumTile {
   readonly tile: DecodedTerrariumTile;
   readonly counts: TerrariumRepairCounts;
 }

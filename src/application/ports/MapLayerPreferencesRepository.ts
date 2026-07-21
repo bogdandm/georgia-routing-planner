@@ -1,20 +1,15 @@
-export const logicalMapLayerIds = [
-  'satellite-imagery',
-  'scene-footprint',
-  'terrain-relief',
-  'elevation-isolines',
-  'natural-features',
-  'restricted-areas',
-  'hiking-paths',
-  'roads',
-  'places-and-pois',
-] as const;
+export type LogicalMapLayerId =
+  | 'satellite-imagery'
+  | 'scene-footprint'
+  | 'terrain-relief'
+  | 'elevation-isolines'
+  | 'natural-features'
+  | 'restricted-areas'
+  | 'hiking-paths'
+  | 'roads'
+  | 'places-and-pois';
 
-export type LogicalMapLayerId = (typeof logicalMapLayerIds)[number];
-
-export type MapLayerVisibilityPreferences = Readonly<
-  Record<LogicalMapLayerId, boolean>
->;
+type MapLayerVisibilityPreferences = Readonly<Record<LogicalMapLayerId, boolean>>;
 
 export interface SatelliteRenderingTuning {
   readonly reflectanceMax: number;

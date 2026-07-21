@@ -14,7 +14,7 @@ const linearRingSchema = z
     return first?.[0] === last?.[0] && first?.[1] === last?.[1];
   }, 'Polygon rings must be closed.');
 
-export const earthSearchGeometrySchema = z.discriminatedUnion('type', [
+const earthSearchGeometrySchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('Polygon'),
@@ -107,7 +107,5 @@ export const earthSearchNextBodySchema = z
   // Only `next` is consumed; the gateway rebuilds every subsequent request.
   .loose();
 
-export type EarthSearchFeatureCollection = z.infer<
-  typeof earthSearchFeatureCollectionSchema
->;
+type EarthSearchFeatureCollection = z.infer<typeof earthSearchFeatureCollectionSchema>;
 export type EarthSearchItem = EarthSearchFeatureCollection['features'][number];

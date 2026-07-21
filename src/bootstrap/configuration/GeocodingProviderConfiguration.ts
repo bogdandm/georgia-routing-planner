@@ -13,7 +13,7 @@ const schema = z
   .strict();
 
 export type GeocodingProviderConfiguration = z.infer<typeof schema>;
-export type GeocodingProviderConfigurationResult =
+type GeocodingProviderConfigurationResult =
   | { readonly status: 'valid'; readonly value: GeocodingProviderConfiguration }
   | { readonly status: 'invalid' };
 

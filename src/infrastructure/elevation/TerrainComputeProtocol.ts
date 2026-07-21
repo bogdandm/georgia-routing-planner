@@ -1,11 +1,6 @@
 import { z } from 'zod';
 
-import type { DiagnosticInput } from '@/application/ports/DiagnosticLogger';
-import type {
-  TerrainComputeMetrics,
-  TerrainComputeQueueState,
-  TerrainContourOptions,
-} from '@/infrastructure/elevation/TerrainComputeBackend';
+import type { TerrainContourOptions } from '@/infrastructure/elevation/TerrainComputeBackend';
 import {
   terrainComputeConfigurationSchema,
   type TerrainComputeConfiguration,
@@ -57,7 +52,7 @@ export interface TerrainWorkerSetFilterRequest {
   readonly revision: number;
 }
 
-export interface TerrainWorkerInteractionRequest {
+interface TerrainWorkerInteractionRequest {
   readonly active: boolean;
 }
 
@@ -85,10 +80,6 @@ export const terrainWorkerEventNames = {
   metrics: 'terrain-metrics',
   queueState: 'terrain-queue-state',
 } as const;
-
-export type TerrainWorkerDiagnosticEvent = DiagnosticInput;
-export type TerrainWorkerMetricsEvent = TerrainComputeMetrics;
-export type TerrainWorkerQueueStateEvent = TerrainComputeQueueState;
 
 export function parseTerrainWorkerInitializeRequest(
   value: unknown,

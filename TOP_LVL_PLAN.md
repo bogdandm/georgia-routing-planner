@@ -51,8 +51,8 @@ static application.
 
 ### 2.6 Readable engineering
 
-Domain behavior is expressed in small TypeScript classes and use cases, not embedded in
-framework event handlers or state stores.
+Domain behavior is expressed in cohesive TypeScript modules and focused use cases, not
+embedded in framework event handlers or state stores.
 
 ### 2.7 Compact feature navigation
 
@@ -226,7 +226,7 @@ presentation
   React composition, Material UI, feature integration, MapLibre adapter
 
 application
-  use-case classes, commands/queries, orchestration, result types
+  focused use cases, commands/queries, orchestration, result types
 
 domain
   RoutePlan, Waypoint, Track, ElevationProfile, value objects, domain services
@@ -244,7 +244,7 @@ diagnostics
 ```
 
 Dependencies point inward. Domain code imports no React, Material UI, MapLibre, browser
-API, Zustand, TanStack Query, or Dexie package.
+API, Zustand, or Dexie package.
 
 ### 4.2 Example domain/application types
 
@@ -275,24 +275,25 @@ class inheritance.
 
 ### 4.3 React integration
 
-- React components are functional and declarative; class components are not used.
-- An application composition root constructs repositories and use cases with explicit
-  constructor injection.
+- React feature components are functional and declarative. A class is used only where
+  React requires one for an error boundary.
+- An application composition root constructs the concrete runtime dependencies once.
 - A typed React context exposes application services.
 - Feature hooks translate user commands into named use-case calls.
 - Zustand contains only transient session state such as selected track ID and map
   interaction mode.
-- TanStack Query contains remote/static query state and cache; it does not contain
-  domain rules.
+- Feature-owned React state contains disposable request state. Provider adapters own
+  only caches required by provider policy or transport behavior.
 - MapLibre imperative operations are isolated behind a map adapter/facade.
 
 ### 4.4 Async policy
 
 - Use `async`/`await` in application and infrastructure code.
 - Pass `AbortSignal` through remote operations.
-- TanStack Query owns request cancellation and retry policy.
+- The initiating feature owns request cancellation; retry ownership remains explicit and
+  singular.
 - Configure `ky` consistently in one HTTP client factory. Avoid retrying the same
-  request independently in both `ky` and TanStack Query.
+  request independently in the transport and feature flow.
 - Parse and validate every external response with Zod before it enters the application
   layer.
 - Do not nest promise chains or place multi-step async workflows in React event
@@ -339,8 +340,8 @@ remains the source of exported evidence.
 - Named application use cases with start/success/failure/cancel and duration.
 - `ky` request method, sanitized URL/origin, status, duration, byte size when available,
   retry/cancel state, and provider request ID.
-- TanStack Query key category, state transitions, cache freshness, failures, and
-  cancellation without dumping full response bodies.
+- Feature request category, state transitions, failures, and cancellation without
+  dumping full response bodies.
 - MapLibre lifecycle, WebGL capability/context loss, camera snapshot, active style,
   ordered layers, sources, terrain state, source/tile errors, and last idle time.
   Throttle high-frequency map events.
@@ -570,7 +571,7 @@ critical browser workflow need an automated safety net.
 #### Domain and application unit tests
 
 Run with Vitest and no React, DOM, network, IndexedDB, or MapLibre initialization. Use
-constructor-injected fakes for ports. Cover:
+structural fakes for meaningful external or imperative boundaries. Cover:
 
 - Route-plan and waypoint invariants.
 - Geodesic distance and segment calculations.

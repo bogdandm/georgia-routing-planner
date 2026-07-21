@@ -31,7 +31,7 @@ export interface SatelliteCogTileProvider {
   dispose(): void;
 }
 
-export type SatelliteCogWorkerFactory = () => WorkerRpcEndpoint;
+type SatelliteCogWorkerFactory = () => WorkerRpcEndpoint;
 
 const protocolId = 'georgia-satellite-cog';
 const maximumRegisteredScenes = 2;

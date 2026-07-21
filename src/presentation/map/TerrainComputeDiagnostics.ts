@@ -132,7 +132,7 @@ export class TerrainComputeDiagnostics {
   }
 }
 
-export interface ContourTimingSample {
+interface ContourTimingSample {
   readonly durationMs: number;
   readonly tileCount: number;
   readonly failed: boolean;

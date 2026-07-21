@@ -12,7 +12,7 @@ export interface WorkerRpcEndpoint {
   close?(): void;
 }
 
-export interface WorkerRpcFailure {
+interface WorkerRpcFailure {
   readonly name: string;
   readonly message: string;
   readonly code?: string;
@@ -70,15 +70,12 @@ export interface WorkerRpcTransferResult {
   readonly transfer: readonly Transferable[];
 }
 
-export interface WorkerRpcRequestContext {
+interface WorkerRpcRequestContext {
   readonly requestId: number;
   readonly signal: AbortSignal;
 }
 
-export type WorkerRpcHandler = (
-  payload: unknown,
-  context: WorkerRpcRequestContext,
-) => unknown;
+type WorkerRpcHandler = (payload: unknown, context: WorkerRpcRequestContext) => unknown;
 
 export class WorkerRpcRemoteError extends Error {
   public readonly code: string | undefined;

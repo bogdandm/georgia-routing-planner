@@ -123,7 +123,7 @@ interface InlineTerrainComputeEngine {
   dispose(): void;
 }
 
-export type InlineTerrainComputeEngineFactory = (
+type InlineTerrainComputeEngineFactory = (
   configuration: TerrainComputeConfiguration,
   logger: DiagnosticLogger,
   options: TerrainComputeEngineOptions,

@@ -18,7 +18,7 @@ interface HeapMemoryInfo {
   readonly usedJSHeapSize: number;
 }
 
-export interface BrowserStorageUsageEnvironment {
+interface BrowserStorageUsageEnvironment {
   readonly estimate: (() => Promise<ExtendedStorageEstimate>) | null;
   readonly heapMemory: (() => HeapMemoryInfo | null) | null;
   readonly localStorageEntries: () => readonly (readonly [string, string])[];

@@ -49,7 +49,7 @@ src/
     theme/                 shared color tokens and Material UI theme
     styles/                application-level CSS
 e2e/                       built-app Chromium workflows and provider fixtures
-test/                      shared fixtures, fakes, setup, and repository-policy tests
+tests/                     unit, component, and integration tests mirroring `src/`, plus shared test support
 tools/                     Node-only audit, diagnostics, and E2E runners
 docs/                      maintainer-facing system documentation
 ```

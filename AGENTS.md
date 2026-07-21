@@ -247,11 +247,6 @@ replace them with model-specific prose or paste a commit log.
 | ------------------------- | -------------------------------------------- | ---------------------------------- |
 | <command or manual check> | <Passed, Failed, Not run, or Not applicable> | <concise scope, result, or reason> |
 
-## Risk and rollback
-
-- Risk: <main regression or "Low - documentation-only change">
-- Rollback: <specific revert, flag, migration, or recovery action>
-
 ## Review guidance
 
 - Start with: <best file, commit, or behavior for review>
@@ -260,6 +255,16 @@ replace them with model-specific prose or paste a commit log.
 
 Description rules:
 
+- Treat pull-request formatting as a required preflight, not a best-effort prose task.
+  Immediately before every `gh pr create` or `gh pr edit`, validate the title against
+  the required scoped form and validate that the Markdown headings appear once in the
+  required order.
+- Write multiline descriptions to a temporary Markdown file and pass it with
+  `--body-file`; do not use an inline `--body` argument for a final pull-request
+  description. Remove the temporary file after the GitHub operation succeeds.
+- After creating or editing a pull request, read the title and body back with
+  `gh pr view --json title,body,url` and correct the pull request before handoff if the
+  title, headings, table, or Markdown structure does not match this contract.
 - Describe the final branch state, not planned work or implementation chronology.
 - Keep `Outcome` to one through three bullets and do not repeat the same content under
   `Changes`.
@@ -270,13 +275,11 @@ Description rules:
 - In `Verification`, name every command and manual check required by the final
   verification policy. Use only `Passed`, `Failed`, `Not run`, or `Not applicable` in
   the result column. Give the reason for every item not run; do not paste full logs.
-- Add `## UI evidence` between `Verification` and `Risk and rollback` when presentation
+- Add `## UI evidence` between `Verification` and `Review guidance` when presentation
   behavior changes. Include before/after screenshots or recordings, viewport details,
   and Penpot comparison notes. Do not add this section for non-visual changes.
-- State real risks and a concrete rollback path. Do not use unsupported claims such as
-  "no risk".
-- Update the title and description whenever branch scope, verification evidence, risk,
-  or reviewer focus materially changes.
+- Update the title and description whenever branch scope, verification evidence, or
+  reviewer focus materially changes.
 
 ## Documentation ownership: system description vs planning
 
@@ -529,7 +532,11 @@ src/
 tools/
   catalog/              # Node-only GPX audit/index pipeline
   diagnostics/          # support-bundle validation and summary CLI
-test/
+tests/
+  application/          # application use-case tests mirroring src/application
+  domain/               # domain tests mirroring src/domain
+  infrastructure/       # adapter and external-boundary tests mirroring src/infrastructure
+  presentation/         # React and presentation behavior tests mirroring src/presentation
   fixtures/             # synthetic GPX, STAC, terrain, catalog, and error inputs
 e2e/
 ```
@@ -842,9 +849,11 @@ Use this test distribution:
 Tests should follow Arrange/Act/Assert or Given/When/Then clearly. One test should
 communicate one behavioral reason for failure. Use descriptive behavior names.
 
-Co-locate unit and component tests with their source as `*.test.ts` or `*.test.tsx`.
-Keep shared synthetic fixtures under `test/fixtures` and browser workflows under `e2e`.
-Test code follows the same readability and type-safety rules as production code.
+Keep all unit, component, and integration tests outside `src/` under `tests/`, mirroring
+the source-layer path where applicable. Do not co-locate `*.test.ts`, `*.test.tsx`,
+`*.spec.ts`, or `*.spec.tsx` files under `src/`. Keep shared synthetic fixtures under
+`tests/fixtures` and browser workflows under `e2e/`. Test code follows the same
+readability and type-safety rules as production code.
 
 ### Unit tests
 

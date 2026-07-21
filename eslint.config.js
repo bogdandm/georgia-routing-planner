@@ -62,6 +62,18 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/**/*.test.{ts,tsx}', 'src/**/*.spec.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message: 'Tests must live under tests/ and mirror the relevant src/ path.',
+        },
+      ],
+    },
+  },
+  {
     files: ['src/domain/**/*.{ts,tsx}', 'src/application/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [

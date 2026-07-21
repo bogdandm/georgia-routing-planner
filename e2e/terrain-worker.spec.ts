@@ -140,12 +140,20 @@ test('keeps production terrain and contours on the module worker through reload'
   // still saturating its DEM/contour pipeline.
   await expect(page.getByText(/Terrain worker ·/u)).toHaveCount(0);
   const canvas = page.locator('.maplibregl-canvas');
-  await canvas.press('-');
-  await canvas.press('-');
-  await canvas.press('-');
-  await canvas.press('-');
-  await canvas.press('-');
-  await canvas.press('-');
+  // Wait for persistence after each input because CI can coalesce MapLibre keyboard
+  // animations when several zoom commands arrive in the same render interval.
+  let previousZoom = (await readStoredMapView(page))?.camera.zoom ?? 22;
+  for (let step = 0; step < 6; step += 1) {
+    let persistedZoom = previousZoom;
+    await canvas.press('-');
+    await expect
+      .poll(async () => {
+        persistedZoom = (await readStoredMapView(page))?.camera.zoom ?? previousZoom;
+        return persistedZoom;
+      })
+      .toBeLessThan(previousZoom);
+    previousZoom = persistedZoom;
+  }
   await expect
     .poll(async () => (await readStoredMapView(page))?.camera.zoom ?? 22)
     .toBeLessThan(7);

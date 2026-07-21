@@ -825,7 +825,9 @@ Coordinate parallel agents through ignored reservations under the main checkout 
 `--git-common-dir`, not through the current worktree path. Before reserving a port:
 
 1. Check existing reservations and reuse the current worktree's reservation.
-2. Check listeners with `netstat -ano | Select-String -Pattern ':<port>\s'`.
+2. Check listeners with
+   `netstat -ano | Select-String -Pattern '^\s*TCP\s+\S+:<port>\s+\S+\s+LISTENING\s+'`.
+   Do not treat `TIME_WAIT` connections as listeners.
 3. Choose a port with neither a reservation nor a listener.
 4. Create the port-number directory with
    `New-Item -ItemType Directory -ErrorAction Stop`. Directory creation is the atomic
@@ -843,7 +845,10 @@ $reservationsRoot = Join-Path $mainRoot '.codex-worktrees\.ports'
 $reservation = Join-Path $reservationsRoot $port
 
 New-Item -ItemType Directory -Force -Path $reservationsRoot | Out-Null
-if (netstat -ano | Select-String -Pattern ":$port\s") {
+if (
+  netstat -ano |
+    Select-String -Pattern "^\s*TCP\s+\S+:$port\s+\S+\s+LISTENING\s+"
+) {
   throw "Port $port already has a listener"
 }
 New-Item -ItemType Directory -Path $reservation -ErrorAction Stop | Out-Null

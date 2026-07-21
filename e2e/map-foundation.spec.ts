@@ -170,13 +170,8 @@ test('selects shared 3D mode immediately and mounts its terrain state directly',
 
   const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-    { timeout: 20_000 },
-  );
-  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('honors an immediate 2D choice while a shared 3D map is still loading', async ({

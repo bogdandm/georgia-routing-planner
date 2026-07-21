@@ -4,11 +4,10 @@ import type { SatelliteProductLevel } from '@/domain/satellite/SatelliteSearchCr
 
 export type SatelliteVisualAsset =
   | {
-      readonly kind: 'sentinel-rgb-cogs';
+      readonly kind: 'sentinel-l2a';
       readonly itemHref: string;
-      readonly redHref: string;
-      readonly greenHref: string;
-      readonly blueHref: string;
+      readonly visualHref: string;
+      readonly mediaType: string;
       readonly projectionEpsg: number;
     }
   | {

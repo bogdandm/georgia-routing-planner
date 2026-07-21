@@ -1,6 +1,5 @@
 import { addProtocol, removeProtocol, type AddProtocolAction } from 'maplibre-gl';
 
-import type { SatelliteRenderingTuning } from '@/application/ports/MapLayerPreferencesRepository';
 import type { SatelliteVisualAsset } from '@/domain/satellite/SatelliteScene';
 import {
   isSatelliteCogTileResult,
@@ -13,8 +12,7 @@ import {
 } from '@/infrastructure/runtime/WorkerRpc';
 
 interface RegisteredScene {
-  readonly asset: Extract<SatelliteVisualAsset, { readonly kind: 'sentinel-rgb-cogs' }>;
-  readonly tuning: SatelliteRenderingTuning;
+  readonly asset: Extract<SatelliteVisualAsset, { readonly kind: 'sentinel-l2a' }>;
 }
 
 interface ParsedTileAddress {
@@ -27,8 +25,7 @@ interface ParsedTileAddress {
 export interface SatelliteCogTileProvider {
   registerScene(
     sceneKey: string,
-    asset: Extract<SatelliteVisualAsset, { readonly kind: 'sentinel-rgb-cogs' }>,
-    tuning: SatelliteRenderingTuning,
+    asset: Extract<SatelliteVisualAsset, { readonly kind: 'sentinel-l2a' }>,
   ): void;
   createTileUrl(sceneKey: string): string;
   dispose(): void;
@@ -70,7 +67,7 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   return { sceneKey: decodeURIComponent(sceneKey), z, x, y };
 }
 
-/** Owns the opaque MapLibre protocol and the dedicated browser COG raster worker. */
+/** Owns the opaque MapLibre protocol and the dedicated direct visual-COG worker. */
 export class MapLibreSatelliteCogTileProvider implements SatelliteCogTileProvider {
   readonly #rpc: WorkerRpcClient;
   readonly #scenes = new Map<string, RegisteredScene>();
@@ -83,11 +80,10 @@ export class MapLibreSatelliteCogTileProvider implements SatelliteCogTileProvide
 
   public registerScene(
     sceneKey: string,
-    asset: Extract<SatelliteVisualAsset, { readonly kind: 'sentinel-rgb-cogs' }>,
-    tuning: SatelliteRenderingTuning,
+    asset: Extract<SatelliteVisualAsset, { readonly kind: 'sentinel-l2a' }>,
   ): void {
     this.#scenes.delete(sceneKey);
-    this.#scenes.set(sceneKey, { asset, tuning: { ...tuning } });
+    this.#scenes.set(sceneKey, { asset });
     while (this.#scenes.size > maximumRegisteredScenes) {
       const oldestKey = this.#scenes.keys().next().value;
       if (oldestKey === undefined) break;
@@ -97,7 +93,7 @@ export class MapLibreSatelliteCogTileProvider implements SatelliteCogTileProvide
 
   public createTileUrl(sceneKey: string): string {
     if (!this.#scenes.has(sceneKey)) {
-      throw new Error('The browser satellite scene is not registered.');
+      throw new Error('The direct satellite scene is not registered.');
     }
     return `${protocolId}://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`;
   }
@@ -115,16 +111,13 @@ export class MapLibreSatelliteCogTileProvider implements SatelliteCogTileProvide
     abortController,
   ) => {
     const address = parseTileAddress(parameters.url);
-    if (address === null) throw new Error('Invalid browser satellite tile address.');
+    if (address === null) throw new Error('Invalid direct satellite tile address.');
     const scene = this.#scenes.get(address.sceneKey);
-    if (scene === undefined) throw new Error('Browser satellite scene is unavailable.');
+    if (scene === undefined) throw new Error('Direct satellite scene is unavailable.');
     const request: SatelliteCogTileRequest = {
       sceneKey: address.sceneKey,
-      redHref: scene.asset.redHref,
-      greenHref: scene.asset.greenHref,
-      blueHref: scene.asset.blueHref,
+      visualHref: scene.asset.visualHref,
       projectionEpsg: scene.asset.projectionEpsg,
-      tuning: scene.tuning,
       z: address.z,
       x: address.x,
       y: address.y,

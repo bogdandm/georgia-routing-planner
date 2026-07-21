@@ -720,13 +720,13 @@ describe('WorkspaceShell', () => {
     });
     expect(satelliteRender).toHaveTextContent('Auto');
     await user.click(satelliteRender);
-    await user.click(screen.getByRole('option', { name: 'Browser' }));
+    await user.click(screen.getByRole('option', { name: 'Direct' }));
     await waitFor(() => {
-      expect(services.mapLayers?.getRenderingMode()).toBe('browser');
+      expect(services.mapLayers?.getRenderingMode()).toBe('direct');
     });
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        satelliteRenderingMode: 'browser',
+        satelliteRenderingMode: 'direct',
       });
     });
     expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
@@ -946,12 +946,12 @@ describe('WorkspaceShell', () => {
     );
   });
 
-  it('replaces Ready with a warning after automatic browser fallback', () => {
+  it('replaces Ready with a warning after automatic provider fallback', () => {
     services.mapDiagnostics.update({
       ...new FakeMapFacade().snapshot,
       lifecycle: 'ready',
     });
-    mapLayerStore.setState({ automaticBrowserFallbackActive: true });
+    mapLayerStore.setState({ automaticAlternativeProviderState: 'active' });
     render(
       <RuntimeServicesProvider services={services}>
         <ThemeProvider theme={createAppTheme()}>
@@ -962,8 +962,31 @@ describe('WorkspaceShell', () => {
 
     expect(screen.queryByText('Ready')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Satellite imagery switched to browser rendering because the server was unavailable.',
+      'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.',
     );
+  });
+
+  it('prioritizes the provider-switch warning over the transient map error', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'degraded',
+      message: 'The satellite imagery renderer is rate-limiting requests.',
+    });
+    mapLayerStore.setState({ automaticAlternativeProviderState: 'switching' });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery.',
+    );
+    expect(
+      screen.queryByText('The satellite imagery renderer is rate-limiting requests.'),
+    ).not.toBeInTheDocument();
   });
 
   it('announces fatal map failures assertively', () => {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  colorizeSatellitePixel,
   tilePixelToLongitudeLatitude,
+  visualPixel,
 } from '@/infrastructure/satellite/SatelliteCogRasterizer';
 
 describe('SatelliteCogRasterizer', () => {
@@ -13,16 +13,9 @@ describe('SatelliteCogRasterizer', () => {
     expect(northWest[1]).toBeCloseTo(85.051_128_78, 7);
   });
 
-  it('applies bounded reflectance, gamma, saturation, and transparent no-data', () => {
-    const tuning = { reflectanceMax: 10_000, gamma: 1, saturation: 1 };
-    expect(colorizeSatellitePixel(0, 0, 0, tuning)).toEqual([0, 0, 0, 0]);
-    expect(colorizeSatellitePixel(10_000, 5_000, 20_000, tuning)).toEqual([
-      255, 128, 255, 255,
-    ]);
-    const gray = colorizeSatellitePixel(5_000, 5_000, 5_000, {
-      ...tuning,
-      saturation: 5,
-    });
-    expect(gray).toEqual([128, 128, 128, 255]);
+  it('preserves pre-rendered 8-bit RGB and makes black no-data transparent', () => {
+    expect(visualPixel(0, 0, 0)).toEqual([0, 0, 0, 0]);
+    expect(visualPixel(240, 125, 12)).toEqual([240, 125, 12, 255]);
+    expect(visualPixel(300, -4, 128.4)).toEqual([255, 0, 128, 255]);
   });
 });

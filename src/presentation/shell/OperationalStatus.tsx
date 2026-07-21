@@ -34,9 +34,9 @@ interface DisplayStatus {
 export function OperationalStatus() {
   const { mapDiagnostics, mapProviderConfiguration } = useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
-  const automaticBrowserFallbackActive = useStore(
+  const automaticAlternativeProviderState = useStore(
     mapLayerStore,
-    (state) => state.automaticBrowserFallbackActive,
+    (state) => state.automaticAlternativeProviderState,
   );
   const layerError = useStore(mapLayerStore, (state) => state.errorMessage);
   const terrainQueue = useStore(mapLayerStore, (state) => state.terrainComputeQueue);
@@ -71,6 +71,14 @@ export function OperationalStatus() {
       message: mapSnapshot.message ?? 'Map data is unavailable.',
       startedAt: null,
       announcement: 'assertive',
+    };
+  } else if (automaticAlternativeProviderState === 'switching') {
+    display = {
+      kind: 'warning',
+      message:
+        'TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery.',
+      startedAt: null,
+      announcement: 'polite',
     };
   } else if (layerError !== null) {
     display = {
@@ -114,11 +122,11 @@ export function OperationalStatus() {
       startedAt: null,
       announcement: 'polite',
     };
-  } else if (automaticBrowserFallbackActive) {
+  } else if (automaticAlternativeProviderState === 'active') {
     display = {
       kind: 'warning',
       message:
-        'Satellite imagery switched to browser rendering because the server was unavailable.',
+        'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.',
       startedAt: null,
       announcement: 'polite',
     };

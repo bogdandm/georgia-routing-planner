@@ -171,7 +171,6 @@ const mapProviderConfigurationInputSchema = z
             tileSize: z.union([z.literal(256), z.literal(512)]),
             minZoom: z.number().int().min(0).max(22),
             maxZoom: z.number().int().min(0).max(22),
-            requestTimeoutMs: z.number().int().min(5_000).max(180_000),
             attribution: safeAttributionSchema,
           })
           .strict()
@@ -260,8 +259,6 @@ interface MapProviderConfigurationInput {
       readonly tileSize: 256 | 512;
       readonly minZoom: number;
       readonly maxZoom: number;
-      /** Maximum wait for visible rendered imagery tiles on slow connections. */
-      readonly requestTimeoutMs: number;
       readonly attribution: string;
     };
   };
@@ -359,10 +356,10 @@ export const defaultMapProviderConfigurationInput = {
         'https://titiler.xyz/stac/tiles/WebMercatorQuad/{z}/{x}/{y}.webp?url={itemUrl}&assets=red&assets=green&assets=blue&asset_as_band=true&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&rescale=0%2C{reflectanceMax}&color_formula=Gamma%20RGB%20{gamma}%2C%20Saturation%20{saturation}&resampling=bilinear&reproject=bilinear',
       tileSize: 256,
       minZoom: 5,
-      maxZoom: 16,
-      requestTimeoutMs: 60_000,
-      attribution:
-        'Copernicus Sentinel data · COG tiles rendered by TiTiler / Development Seed',
+      // Sentinel-2's 10 m visual resolution is already reached around z14 in Georgia.
+      // MapLibre overzooms this level instead of multiplying equivalent tile requests.
+      maxZoom: 14,
+      attribution: 'Copernicus Sentinel data · Earth Search / Element 84',
     },
   },
   policy: {

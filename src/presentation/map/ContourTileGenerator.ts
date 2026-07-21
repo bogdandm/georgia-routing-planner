@@ -10,8 +10,10 @@ import type {
   TerrainComputeStatus,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { WorkerTerrainComputeBackend } from '@/infrastructure/elevation/WorkerTerrainComputeBackend';
-import { ContourTimingDiagnostics } from '@/presentation/map/ContourTimingDiagnostics';
-import { TerrainComputeDiagnostics } from '@/presentation/map/TerrainComputeDiagnostics';
+import {
+  ContourTimingDiagnostics,
+  TerrainComputeDiagnostics,
+} from '@/presentation/map/TerrainComputeDiagnostics';
 
 type TerrainManagerContract = InstanceType<typeof maplibreContour.DemSource>['manager'];
 

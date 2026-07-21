@@ -1,13 +1,7 @@
 import { Marker, type LngLat, type Map as MapLibreMap } from 'maplibre-gl';
 
-export interface OrbitPivotIndicator {
-  show(map: MapLibreMap, coordinate: LngLat): void;
-  hide(): void;
-  destroy(): void;
-}
-
 /** Reuses one terrain-aware MapLibre marker for the active 3D orbit pivot. */
-export class MapLibreOrbitPivotIndicator implements OrbitPivotIndicator {
+export class MapLibreOrbitPivotIndicator {
   readonly #marker: Marker;
 
   public constructor() {

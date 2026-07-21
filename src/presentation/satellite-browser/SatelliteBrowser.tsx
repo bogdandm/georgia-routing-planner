@@ -53,13 +53,15 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
-import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapLayerStore,
+  type AppliedSatelliteImagerySnapshot,
+} from '@/presentation/map/mapLayerStore';
 import {
   consumeSatelliteSearchRequest,
   mapInteractionStore,
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
-import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import { appColors } from '@/presentation/theme/appColors';
 import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';

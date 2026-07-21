@@ -1,9 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 
-import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
-import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type {
+  LogicalMapLayerId,
   SatelliteRenderingMode,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
@@ -16,6 +15,35 @@ import type {
   TerrainComputeStatus,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
+
+export type AppliedSatelliteImagerySnapshot =
+  | { readonly status: 'empty' }
+  | {
+      readonly status: 'loading';
+      readonly sceneKey: string;
+      readonly previousSceneKey: string | null;
+      readonly stage: 'preparing' | 'requesting-tiles' | 'rendering' | 'finalizing';
+      readonly message: string;
+      readonly startedAt: number;
+    }
+  | {
+      readonly status: 'preview' | 'ready';
+      readonly sceneKey: string;
+      readonly sceneId: string;
+      readonly visible: true;
+    }
+  | {
+      readonly status: 'hidden';
+      readonly sceneKey: string;
+      readonly sceneId: string;
+      readonly visible: false;
+    }
+  | {
+      readonly status: 'failed';
+      readonly sceneKey: string;
+      readonly previousSceneKey: string | null;
+      readonly message: string;
+    };
 
 export interface TerrainOverlaySnapshot {
   readonly initialized: boolean;

@@ -11,7 +11,7 @@ import {
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
+import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 
 interface LayerControl {

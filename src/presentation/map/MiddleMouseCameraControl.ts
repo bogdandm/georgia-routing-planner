@@ -1,9 +1,6 @@
 import type { LngLat, Map as MapLibreMap } from 'maplibre-gl';
 
-import {
-  MapLibreOrbitPivotIndicator,
-  type OrbitPivotIndicator,
-} from '@/presentation/map/MapLibreOrbitPivotIndicator';
+import { MapLibreOrbitPivotIndicator } from '@/presentation/map/MapLibreOrbitPivotIndicator';
 
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
@@ -23,7 +20,10 @@ export class MiddleMouseCameraControl {
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
 
   public constructor(
-    private readonly pivotIndicator: OrbitPivotIndicator = new MapLibreOrbitPivotIndicator(),
+    private readonly pivotIndicator: Pick<
+      MapLibreOrbitPivotIndicator,
+      'show' | 'hide' | 'destroy'
+    > = new MapLibreOrbitPivotIndicator(),
   ) {}
 
   public attach(container: HTMLElement, map?: MapLibreMap): void {

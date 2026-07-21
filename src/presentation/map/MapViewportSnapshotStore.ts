@@ -9,7 +9,7 @@ export class MapViewportSnapshotStore implements MapViewportProvider {
   #snapshot: MapViewportSnapshot | null = null;
 
   public update(snapshot: MapViewportSnapshot | null): void {
-    this.#snapshot = snapshot === null ? null : structuredClone(snapshot);
+    this.#snapshot = snapshot;
     for (const listener of this.#listeners) listener();
   }
 

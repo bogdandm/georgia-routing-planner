@@ -7,12 +7,15 @@ import type {
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type {
+  LogicalMapLayerId,
   MapLayerPreferencesRepository,
   SatelliteRenderingMode,
+  SatelliteRenderingTuning,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import {
   defaultSatelliteRenderingMode,
+  defaultSatelliteRenderingTuning,
   defaultTerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { supportedContourIntervals } from '@/application/ports/MapLayerPreferencesRepository';
@@ -23,11 +26,6 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
-import {
-  type LogicalMapLayerId,
-  type MapLayerVisibility,
-  type MapLayerVisibilityResult,
-} from '@/presentation/map/MapLayerVisibility';
 import {
   mapInsertionPoints,
   mapLayerIds,
@@ -42,17 +40,7 @@ import {
   type MapVisualMode,
   type MapVisualModePaint,
 } from '@/presentation/map/mapVisualPalette';
-import type {
-  SatelliteImageryCommandResult,
-  SatelliteImageryMap,
-  SatelliteRenderingTuning,
-} from '@/presentation/map/SatelliteImageryMap';
-import { defaultSatelliteRenderingTuning } from '@/presentation/map/SatelliteImageryMap';
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
-import type {
-  TerrainOverlayCommandResult,
-  TerrainOverlayMap,
-} from '@/presentation/map/TerrainOverlayMap';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -84,6 +72,17 @@ const maximumRasterRecoveryAttempts = 3;
 const rasterRecoveryBaseDelayMs = 1_000;
 const rasterSourceStabilityMs = 2_000;
 const canceledDirectSourceErrorWindowMs = 5_000;
+
+type MapLayerVisibilityResult =
+  | { readonly status: 'success' }
+  | { readonly status: 'failed'; readonly message: string };
+
+type SatelliteImageryCommandResult =
+  | { readonly status: 'success' }
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'failed'; readonly message: string };
+
+type TerrainOverlayCommandResult = MapLayerVisibilityResult;
 
 export const logicalNativeLayerGroups: Readonly<
   Record<
@@ -265,9 +264,7 @@ function safeRasterFailureMessage(event: MapLibreErrorEvent): string {
  * Owns logical visibility plus the replaceable Sentinel raster/footprint sources on the
  * long-lived native map. Provider URLs stay inside this adapter and never enter state.
  */
-export class MapLibreLayerController
-  implements MapLayerVisibility, SatelliteImageryMap, TerrainOverlayMap
-{
+export class MapLibreLayerController {
   #map: MapLibreMap | null = null;
   #activeSlot: RasterSlot | null = null;
   #appliedScene: SatelliteScene | null = null;

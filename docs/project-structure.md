@@ -111,7 +111,9 @@ replace the whole `RuntimeServices` object at the context boundary.
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
-the native map instance to be recreated.
+the native map instance to be recreated. The facade creates a new readonly serializable
+snapshot for each update, so snapshot stores retain that value directly and consumers
+must not mutate it.
 
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
 `WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global

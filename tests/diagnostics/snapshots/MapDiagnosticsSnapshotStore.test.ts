@@ -4,7 +4,7 @@ import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnost
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 
 describe('MapDiagnosticsSnapshotStore', () => {
-  it('retains a serializable defensive copy and publishes updates', () => {
+  it('publishes the facade-owned readonly snapshot without cloning it', () => {
     const store = new MapDiagnosticsSnapshotStore();
     const listener = vi.fn();
     const unsubscribe = store.subscribe(listener);
@@ -12,8 +12,7 @@ describe('MapDiagnosticsSnapshotStore', () => {
 
     store.update(snapshot);
     const firstRead = store.getSnapshot();
-    expect(firstRead).toEqual(snapshot);
-    expect(firstRead).not.toBe(snapshot);
+    expect(firstRead).toBe(snapshot);
     expect(listener).toHaveBeenCalledOnce();
 
     unsubscribe();

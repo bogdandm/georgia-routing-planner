@@ -4,13 +4,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
-import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import {
   defaultSatelliteRenderingTuning,
   type SatelliteRenderingMode,
   type SatelliteRenderingTuning,
-} from '@/presentation/map/SatelliteImageryMap';
+} from '@/application/ports/MapLayerPreferencesRepository';
+import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
+import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';

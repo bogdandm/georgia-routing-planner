@@ -22,18 +22,16 @@ import {
 import { useState } from 'react';
 
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
-import type { TerrainComputeStatus } from '@/infrastructure/elevation/TerrainComputeBackend';
 import {
   defaultSatelliteRenderingTuning,
+  supportedContourIntervals,
   type SatelliteRenderingMode,
   type SatelliteRenderingTuning,
-} from '@/presentation/map/SatelliteImageryMap';
-import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
-import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
-import {
-  supportedContourIntervals,
   type TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
+import type { TerrainComputeStatus } from '@/infrastructure/elevation/TerrainComputeBackend';
+import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
+import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
 
 type SettingsTab = 'general' | 'rendering' | 'storage';
 

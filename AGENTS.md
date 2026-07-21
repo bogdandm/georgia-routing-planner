@@ -194,6 +194,83 @@ This standing instruction authorizes the feature-completion push and pull-reques
 creation without a separate prompt. If a pull request already exists for the branch,
 update it instead of creating a duplicate.
 
+### Pull request title and description
+
+Pull-request titles must use this exact form:
+
+```text
+<type>(<scope>): <imperative summary>
+```
+
+Title rules:
+
+- `type` is one of `feat`, `fix`, `refactor`, `docs`, `test`, `perf`, `build`, `ci`, or
+  `chore`.
+- `scope` is a short lowercase kebab-case product area, feature, layer, or `repo`; it is
+  mandatory.
+- The summary starts with an imperative verb, describes the concrete outcome, has no
+  trailing period, and keeps the complete title at 72 characters or fewer.
+- Do not put issue numbers, task IDs, branch names, delivery status, or generic summaries
+  such as "update code" or "improve app" in the title.
+
+Examples:
+
+```text
+feat(planner): persist waypoint drafts across reloads
+fix(terrain): recover after DEM source timeout
+docs(workflow): standardize agent delivery policy
+```
+
+Every pull-request description must use the following headings in this order. Do not
+replace them with model-specific prose or paste a commit log.
+
+```markdown
+## Outcome
+
+- <one to three concrete user-visible or architectural results>
+
+## Changes
+
+- <grouped implementation change and why it exists>
+- <removed or replaced code, when applicable>
+- <handwritten production additions/deletions and required growth justification>
+
+## Verification
+
+| Check | Result | Evidence |
+| ----- | ------ | -------- |
+| <command or manual check> | <Passed, Failed, Not run, or Not applicable> | <concise scope, result, or reason> |
+
+## Risk and rollback
+
+- Risk: <main regression or "Low - documentation-only change">
+- Rollback: <specific revert, flag, migration, or recovery action>
+
+## Review guidance
+
+- Start with: <best file, commit, or behavior for review>
+- Pay attention to: <important invariant, tradeoff, or "No special focus">
+```
+
+Description rules:
+
+- Describe the final branch state, not planned work or implementation chronology.
+- Keep `Outcome` to one through three bullets and do not repeat the same content under
+  `Changes`.
+- Group `Changes` by behavior or responsibility; do not dump a filename or commit list.
+- Report handwritten production additions and deletions. Use `Not applicable - no
+  production code changed` for documentation, test-only, or configuration-only work.
+- In `Verification`, name every command and manual check required by the final
+  verification policy. Use only `Passed`, `Failed`, `Not run`, or `Not applicable` in
+  the result column. Give the reason for every item not run; do not paste full logs.
+- Add `## UI evidence` between `Verification` and `Risk and rollback` when presentation
+  behavior changes. Include before/after screenshots or recordings, viewport details,
+  and Penpot comparison notes. Do not add this section for non-visual changes.
+- State real risks and a concrete rollback path. Do not use unsupported claims such as
+  "no risk".
+- Update the title and description whenever branch scope, verification evidence, risk,
+  or reviewer focus materially changes.
+
 ## Documentation ownership: system description vs planning
 
 Keep stable system documentation independent from work breakdown and delivery progress:

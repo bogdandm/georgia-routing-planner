@@ -1,10 +1,29 @@
-import type { LngLat, Map as MapLibreMap } from 'maplibre-gl';
-
-import { MapLibreOrbitPivotIndicator } from '@/presentation/map/MapLibreOrbitPivotIndicator';
+import { Marker, type LngLat, type Map as MapLibreMap } from 'maplibre-gl';
 
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
 const maximumPitchDegrees = 75;
+
+/** Reuses one terrain-aware MapLibre marker for the active 3D orbit pivot. */
+function createOrbitPivotIndicator() {
+  const element = document.createElement('div');
+  element.className = 'map-orbit-pivot';
+  element.setAttribute('aria-hidden', 'true');
+  const marker = new Marker({
+    element,
+    anchor: 'center',
+    opacityWhenCovered: 0,
+    subpixelPositioning: true,
+  });
+  return {
+    show: (map: MapLibreMap, coordinate: LngLat) => {
+      marker.setLngLat(coordinate).addTo(map);
+    },
+    hide: () => {
+      marker.remove();
+    },
+  };
+}
 
 /**
  * Provides a restrained 3D-only middle-button orbit around the terrain point beneath
@@ -20,10 +39,8 @@ export class MiddleMouseCameraControl {
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
 
   public constructor(
-    private readonly pivotIndicator: Pick<
-      MapLibreOrbitPivotIndicator,
-      'show' | 'hide' | 'destroy'
-    > = new MapLibreOrbitPivotIndicator(),
+    private readonly pivotIndicator: ReturnType<typeof createOrbitPivotIndicator> =
+      createOrbitPivotIndicator(),
   ) {}
 
   public attach(container: HTMLElement, map?: MapLibreMap): void {
@@ -47,7 +64,6 @@ export class MiddleMouseCameraControl {
       container.removeEventListener('auxclick', this.handleAuxClick, true);
     }
     this.finishGesture();
-    this.pivotIndicator.destroy();
     this.#container = null;
     this.#map = null;
   }

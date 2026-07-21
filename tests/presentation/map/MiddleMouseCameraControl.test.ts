@@ -26,7 +26,7 @@ function createMapDouble() {
 }
 
 function createPivotDouble() {
-  return { show: vi.fn(), hide: vi.fn(), destroy: vi.fn() };
+  return { show: vi.fn(), hide: vi.fn() };
 }
 
 describe('MiddleMouseCameraControl', () => {

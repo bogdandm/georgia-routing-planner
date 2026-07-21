@@ -347,6 +347,12 @@ describe('MapLibreLayerController', () => {
         subscribeMetrics: () => () => undefined,
         dispose: () => undefined,
       },
+      {
+        registerScene: () => undefined,
+        createTileUrl: (sceneKey) =>
+          `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`,
+        dispose: () => undefined,
+      },
       services.logger,
       services.idGenerator,
       services.sentinelQueryDiagnostics,
@@ -641,6 +647,12 @@ describe('MapLibreLayerController', () => {
         subscribeMetrics: () => () => undefined,
         dispose: () => undefined,
       },
+      {
+        registerScene: () => undefined,
+        createTileUrl: (sceneKey) =>
+          `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`,
+        dispose: () => undefined,
+      },
       services.logger,
       services.idGenerator,
       services.sentinelQueryDiagnostics,
@@ -782,7 +794,7 @@ describe('MapLibreLayerController', () => {
     expect(diagnosticText).not.toContain('private-item-and-token');
   });
 
-  it('recovers a staging raster from a status-zero tile failure before applying it', async () => {
+  it('switches a CORS-opaque status-zero staging failure to browser rendering', async () => {
     vi.useFakeTimers();
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -801,11 +813,13 @@ describe('MapLibreLayerController', () => {
       tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
       error: { message: 'AJAXError: Failed to fetch', status: 0 },
     });
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(map.refreshTilesCalls).toContainEqual({
-      sourceId: 'sentinel-raster-b',
-      tileIds: [{ x: 123, y: 456, z: 12 }],
-    });
+
+    expect(map.refreshTilesCalls).toHaveLength(0);
+    expect(map.setTilesCalls).toBe(1);
+    expect(
+      (map.sources.get('sentinel-raster-b') as { readonly tiles: readonly string[] })
+        .tiles[0],
+    ).toContain('test-satellite-cog://tiles/');
 
     map.sourceLoaded = true;
     map.fire('sourcedata', {
@@ -823,7 +837,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('keeps the staging deadline open for the complete rate-limit backoff', async () => {
+  it('switches an explicit HTTP 429 staging failure to browser rendering', async () => {
     vi.useFakeTimers();
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -837,23 +851,25 @@ describe('MapLibreLayerController', () => {
       scene('scene-b'),
       new AbortController().signal,
     );
-    const event = {
+    map.fire('error', {
       sourceId: 'sentinel-raster-b',
       tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
       error: { message: 'AJAXError: Too Many Requests', status: 429 },
-    };
-    map.fire('error', event);
-    await vi.advanceTimersByTimeAsync(5_000);
-    map.fire('error', event);
-    await vi.advanceTimersByTimeAsync(10_000);
-    map.fire('error', event);
-    await vi.advanceTimersByTimeAsync(20_000);
+    });
+
+    expect(map.refreshTilesCalls).toHaveLength(0);
+    expect(map.setTilesCalls).toBe(1);
     map.sourceLoaded = true;
-    map.fire('error', event);
+    map.fire('sourcedata', {
+      sourceId: 'sentinel-raster-b',
+      isSourceLoaded: true,
+      sourceDataType: 'content',
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+    });
     await vi.advanceTimersByTimeAsync(2_000);
 
     await expect(replacement).resolves.toEqual({ status: 'success' });
-    expect(map.refreshTilesCalls).toHaveLength(3);
+    expect(controller.getAppliedScene()?.id).toBe('scene-b');
   });
 
   it('promotes partial staging imagery after bounded retries without hiding its failure', async () => {
@@ -872,7 +888,7 @@ describe('MapLibreLayerController', () => {
     );
     const event = {
       sourceId: 'sentinel-raster-b',
-      error: { message: 'AJAXError: Failed to fetch', status: 0 },
+      error: { message: 'AJAXError: Service Unavailable', status: 503 },
     };
     map.fire('error', event);
     await vi.advanceTimersByTimeAsync(1_000);

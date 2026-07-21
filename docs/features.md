@@ -132,9 +132,11 @@ orange outline above hiking geometry and below labels. While a replacement is lo
 the prior usable image remains present; a failed replacement reports a safe, clickable
 error and leaves that prior image available. The error detail distinguishes rejected
 values, rate limiting, renderer availability, timeout, and an unclassified unusable tile
-without exposing provider URLs. Marker targeting remains unavailable. The imagery
-staging wait allows up to 60 seconds for slow renderer connections; a replacement or
-clear command cancels that wait immediately and preserves the last usable image.
+without exposing provider URLs. A hosted-renderer 429 or CORS-opaque status-zero failure
+switches the same selected scene to worker-based browser COG rasterization without
+retrying TiTiler. Marker targeting remains unavailable. The imagery staging wait allows
+up to 60 seconds for slow renderer connections; a replacement or clear command cancels
+that wait immediately and preserves the last usable image.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
 exposed through the web storage APIs, so the application neither claims their size nor
@@ -354,31 +356,35 @@ corrected PNG cache supplies relief, 3D, and elevation isolines.
 
 Map errors are classified as vector, glyph/sprite, satellite raster, terrain, style,
 WebGL, or unknown. Satellite raster failures expose a safe transport reason and exact
-HTTP status when MapLibre provides one. Rate limits, server responses, timeouts, and
-network failures schedule one deduplicated exponential refresh of the failed tiles,
-capped at three attempts; client errors and unclassified failures do not retry
-automatically. Equivalent recoverable errors are counted in capped buckets and logged at
-a bounded interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors
-are degraded states. The inactive slot used to prepare a newly selected scene also
-retries transient failed tiles. If a transient tile still fails after staging retries,
-the usable partial raster is promoted after the bounded retries; the safe failure class
-remains visible. Non-retryable or whole-source failures preserve the previous raster.
-For active imagery, successful source-data for each failed canonical tile must clear the
-controller's pending set before a loaded source starts the stability window. Only that
-tile-confirmed recovery restores the ready lifecycle when no other failure remains and
-clears the user-facing error. This prevents the status from blinking while other tiles
-from the same source are still failing. Offline messaging promises only that already
-rendered areas may remain visible, not full offline map support. Map lifecycle and
-imagery errors do not create a wide map banner: the shared line below search is their
-single UI surface. Ready remains background-free; pending and error states use a lightly
-translucent surface for map contrast, and selecting an error reveals its complete safe
-detail. Hovering any truncated status message reveals the full text in a multiline
-tooltip. The non-ready surface transitions quickly and remains translucent enough to
-preserve map context. Pending text uses the dark primary color and a medium weight
-rather than the muted Ready treatment, preserving legibility over imagery. Status
-padding is invariant so state changes never shift the icon or text. Its compact terrain
-line appears only for active work or a live contour backlog, without turning normal
-background work into an error or blocking the rest of the map.
+HTTP status when MapLibre provides one. Rate limits and status-zero/no-response failures
+do not retry the hosted renderer because a cross-origin 429 without CORS headers is
+indistinguishable from a connection failure in application code. Both switch the
+existing source to browser-side COG rasterization. Server responses, timeouts, and
+identifiable network failures schedule one deduplicated exponential refresh of the
+failed tiles, capped at three attempts; other client errors and unclassified failures
+also do not retry automatically. Equivalent recoverable errors are counted in capped
+buckets and logged at a bounded interval. Style startup and WebGL loss are fatal;
+provider-tile and DEM errors are degraded states. The inactive slot used to prepare a
+newly selected scene also retries retryable transient failed tiles. If a transient tile
+still fails after staging retries, the usable partial raster is promoted after the
+bounded retries; the safe failure class remains visible. Non-retryable or whole-source
+failures preserve the previous raster. For active imagery, successful source-data for
+each failed canonical tile must clear the controller's pending set before a loaded
+source starts the stability window. Only that tile-confirmed recovery restores the ready
+lifecycle when no other failure remains and clears the user-facing error. This prevents
+the status from blinking while other tiles from the same source are still failing.
+Offline messaging promises only that already rendered areas may remain visible, not full
+offline map support. Map lifecycle and imagery errors do not create a wide map banner:
+the shared line below search is their single UI surface. Ready remains background-free;
+pending and error states use a lightly translucent surface for map contrast, and
+selecting an error reveals its complete safe detail. Hovering any truncated status
+message reveals the full text in a multiline tooltip. The non-ready surface transitions
+quickly and remains translucent enough to preserve map context. Pending text uses the
+dark primary color and a medium weight rather than the muted Ready treatment, preserving
+legibility over imagery. Status padding is invariant so state changes never shift the
+icon or text. Its compact terrain line appears only for active work or a live contour
+backlog, without turning normal background work into an error or blocking the rest of
+the map.
 
 ## Diagnostics and developer mode
 

@@ -46,6 +46,7 @@ import type {
   SatelliteRenderingTuning,
 } from '@/presentation/map/SatelliteImageryMap';
 import { defaultSatelliteRenderingTuning } from '@/presentation/map/SatelliteImageryMap';
+import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 import type {
   TerrainOverlayCommandResult,
   TerrainOverlayMap,
@@ -274,12 +275,16 @@ export class MapLibreLayerController
   #appliedOpenStreetMapOpacity: number | null = null;
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
+  readonly #browserFallbackUrls = new Map<string, string>();
+  readonly #browserFallbackSources = new Set<string>();
+  readonly #pendingBrowserFallbacks = new Set<string>();
   #stagingSourceId: string | null = null;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
     private readonly terrain: MapProviderConfiguration['terrain'],
     private readonly contourTiles: ContourTileGenerator,
+    private readonly satelliteCogTiles: SatelliteCogTileProvider,
     private readonly logger: DiagnosticLogger,
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
@@ -346,6 +351,7 @@ export class MapLibreLayerController
     this.#releaseTerrainComputeStatus();
     this.#releaseTerrainComputeQueue();
     this.contourTiles.dispose();
+    this.satelliteCogTiles.dispose();
   }
 
   public setLayerVisibility(
@@ -459,6 +465,12 @@ export class MapLibreLayerController
     }
     const details = mapFailureDetails(event);
     if (!details.retryable) {
+      if (
+        (details.reason === 'rate-limit' || details.reason === 'no-response') &&
+        this.activateBrowserFallback(sourceId, event, details)
+      ) {
+        return { state: 'browser-fallback', retryAttempt: 0, retryDelayMs: 0 };
+      }
       return { state: 'not-retryable', retryAttempt: 0, retryDelayMs: 0 };
     }
     const tracker = this.getOrCreateRasterRecovery(sourceId, details);
@@ -510,6 +522,13 @@ export class MapLibreLayerController
   }
 
   public handleRasterSourceRecovered(sourceId: string): void {
+    if (this.#pendingBrowserFallbacks.delete(sourceId)) {
+      this.logger.log({
+        level: 'info',
+        name: 'satellite.imagery.browser-fallback-completed',
+        data: { sourceId },
+      });
+    }
     this.cancelRasterRecovery(sourceId);
   }
 
@@ -657,6 +676,12 @@ export class MapLibreLayerController
     try {
       operation.beginStep('select-visual-asset');
       const tileUrl = this.createTileUrl(scene.visualAsset.itemHref);
+      this.satelliteCogTiles.registerScene(
+        sceneKey,
+        scene.visualAsset,
+        this.#renderingTuning,
+      );
+      const browserFallbackUrl = this.satelliteCogTiles.createTileUrl(sceneKey);
       const bounds = sceneBounds(scene);
       operation.completeStep();
       operation.beginStep('decode-reproject');
@@ -677,6 +702,8 @@ export class MapLibreLayerController
         bounds,
         attribution: this.renderer.attribution,
       });
+      this.#browserFallbackUrls.set(slot.sourceId, browserFallbackUrl);
+      this.#browserFallbackSources.delete(slot.sourceId);
       map.addLayer(
         {
           id: slot.layerId,
@@ -1404,6 +1431,10 @@ export class MapLibreLayerController
           scheduleStableSuccess(true);
           return;
         }
+        if (recovery.state === 'browser-fallback') {
+          armTimeout(30_000);
+          return;
+        }
         if (recovery.state === 'scheduled') armTimeout(recovery.retryDelayMs);
       };
       signal.addEventListener('abort', handleAbort, { once: true });
@@ -1414,6 +1445,9 @@ export class MapLibreLayerController
   }
 
   private removeSlot(map: MapLibreMap, slot: RasterSlot): void {
+    this.#browserFallbackUrls.delete(slot.sourceId);
+    this.#browserFallbackSources.delete(slot.sourceId);
+    this.#pendingBrowserFallbacks.delete(slot.sourceId);
     if (map.getLayer(slot.layerId) !== undefined) map.removeLayer(slot.layerId);
     if (map.getSource(slot.sourceId) !== undefined) map.removeSource(slot.sourceId);
   }
@@ -1436,15 +1470,52 @@ export class MapLibreLayerController
     return tracker;
   }
 
+  private activateBrowserFallback(
+    sourceId: string,
+    event: MapLibreErrorEvent,
+    details: ReturnType<typeof mapFailureDetails>,
+  ): boolean {
+    if (this.#browserFallbackSources.has(sourceId)) return false;
+    const map = this.#map;
+    const fallbackUrl = this.#browserFallbackUrls.get(sourceId);
+    const source = map?.getSource(sourceId) as
+      { setTiles?: (tiles: string[]) => void } | undefined;
+    if (fallbackUrl === undefined || source?.setTiles === undefined) return false;
+
+    const tracker = this.getOrCreateRasterRecovery(sourceId, details);
+    tracker.lastDetails = details;
+    const coordinate = tileCoordinateFromEvent(event);
+    if (coordinate === null) tracker.hasUnscopedFailure = true;
+    else tracker.pendingTiles.set(this.tileCoordinateKey(coordinate), coordinate);
+
+    this.#browserFallbackSources.add(sourceId);
+    this.#pendingBrowserFallbacks.add(sourceId);
+    try {
+      source.setTiles([fallbackUrl]);
+    } catch {
+      this.#browserFallbackSources.delete(sourceId);
+      this.#pendingBrowserFallbacks.delete(sourceId);
+      this.cancelRasterRecovery(sourceId);
+      return false;
+    }
+    this.logger.log({
+      level: 'warn',
+      name: 'satellite.imagery.browser-fallback-started',
+      data: {
+        reason: details.reason,
+        sourceId,
+        ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
+      },
+    });
+    return true;
+  }
+
   private scheduleRasterRecovery(
     sourceId: string,
     tracker: RasterRecoveryTracker,
   ): RasterRecoveryRequest {
     const retryAttempt = tracker.attempts + 1;
-    const delayMs =
-      rasterRecoveryBaseDelayMs *
-      2 ** tracker.attempts *
-      (tracker.lastDetails.reason === 'rate-limit' ? 5 : 1);
+    const delayMs = rasterRecoveryBaseDelayMs * 2 ** tracker.attempts;
     tracker.scheduledDelayMs = delayMs;
     tracker.timer = setTimeout(() => {
       tracker.timer = null;

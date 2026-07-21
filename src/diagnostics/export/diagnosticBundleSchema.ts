@@ -140,6 +140,7 @@ export const mapDiagnosticSnapshotSchema = mapDiagnosticSnapshotV2Schema.extend(
         count: z.number().int().nonnegative(),
         lastOccurredAt: z.iso.datetime(),
         recoveryState: z.enum([
+          'browser-fallback',
           'exhausted',
           'not-applicable',
           'not-retryable',

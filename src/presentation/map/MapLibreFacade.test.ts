@@ -481,7 +481,7 @@ describe('MapLibreFacade', () => {
     expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
   });
 
-  it('shows status zero as retryable no-response evidence without claiming HTTP 0', () => {
+  it('shows status zero as terminal no-response evidence without claiming HTTP 0', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const facade = new MapLibreFacade(services.logger);

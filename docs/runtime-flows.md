@@ -57,21 +57,28 @@ empty.
 
 The inactive slot used to prepare a newly selected scene does not fail on its first
 transient tile error. It refreshes failed canonical tile coordinates with bounded
-backoff. When only a transient tile remains unavailable, it promotes the usable partial
-raster after the retries are exhausted and keeps the failure visible. Non-retryable or
-whole-source failures preserve the previous raster and surface a safe status-specific
-explanation.
+backoff. An explicit HTTP 429 or status-zero/no-response failure does not refresh the
+hosted renderer. Instead, the controller replaces the staging source's tile template
+with the opaque browser COG protocol and keeps the staging wait open for worker-rendered
+tiles. When only another transient tile remains unavailable, it promotes the usable
+partial raster after the retries are exhausted and keeps the failure visible. Other
+non-retryable or whole-source failures preserve the previous raster and surface a safe
+status-specific explanation.
 
 After a raster is active, MapLibre tile errors flow through the facade for safe
 classification and through the layer controller for recovery. The controller ignores
-duplicate errors while a retry is scheduled, refreshes the failed raster tiles after a
-bounded exponential delay, and stops after three attempts. HTTP 4xx failures other than
-429 and unknown failures remain visible without automatic retry. A successful
-source-data event for every failed canonical tile clears the controller's pending set;
-only then can a loaded source start the two-second stability window. Another source
-error cancels that window. The facade returns to ready when no active failure remains.
-Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
-the diagnostics bundle.
+duplicate errors while a retry is scheduled, refreshes retryable failed raster tiles
+after a bounded exponential delay, and stops after three attempts. HTTP 4xx failures,
+including 429, status-zero/no-response failures, and unknown failures remain visible
+without automatic retry. HTTP 429 and status zero open browser-rendering fallback
+because a 429 response without CORS headers is indistinguishable from a connection
+failure at the application boundary. The existing raster source switches to an opaque
+custom protocol; a dedicated worker performs bounded RGB COG range reads, UTM-to-Web
+Mercator reprojection, tuning, and WebP encoding. A successful source-data event for
+every failed canonical tile clears the controller's pending set; only then can a loaded
+source start the two-second stability window. Another source error cancels that window.
+The facade returns to ready when no active failure remains. Raw tile URLs, response
+bodies, and tile coordinates never enter logs, React state, or the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the
@@ -369,6 +376,7 @@ sequenceDiagram
   participant Browser as SatelliteBrowser
   participant Controller as MapLibreLayerController
   participant Renderer as Configured COG renderer
+  participant Worker as Browser COG worker
   participant Map as MapLibre
   participant State as Map layer store
 
@@ -376,7 +384,13 @@ sequenceDiagram
   Browser->>Controller: applyScene(scene, AbortSignal)
   Controller->>State: loading with safe scene key
   Controller->>Map: add hidden staging raster source/layer
-    Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
+  Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
+  alt renderer returns 429 or CORS-opaque status zero
+    Controller->>Map: replace hosted template with opaque browser protocol
+    Map->>Worker: request tile by safe scene key
+    Worker->>Worker: range-read, reproject, tune, and encode RGB COG data
+    Worker-->>Map: WebP tile
+  end
   alt staging source becomes ready
     Controller->>Map: reveal staging raster and update footprint GeoJSON
     Controller->>Map: remove prior raster source/layer

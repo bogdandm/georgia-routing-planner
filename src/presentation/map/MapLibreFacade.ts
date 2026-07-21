@@ -146,11 +146,13 @@ function recoverableMessage(
       const recovery =
         recoveryState === 'scheduled'
           ? ' Retrying automatically.'
-          : recoveryState === 'exhausted'
-            ? ' Automatic retries were exhausted; reapply the scene to try again.'
-            : recoveryState === 'not-retryable'
-              ? ' Reapply the scene after correcting the request or provider issue.'
-              : '';
+          : recoveryState === 'browser-fallback'
+            ? ' Switching to browser rendering without retrying the hosted renderer.'
+            : recoveryState === 'exhausted'
+              ? ' Automatic retries were exhausted; reapply the scene to try again.'
+              : recoveryState === 'not-retryable'
+                ? ' Reapply the scene after correcting the request or provider issue.'
+                : '';
       switch (details.reason) {
         case 'rate-limit':
           return `The satellite imagery renderer is rate-limiting requests${status}.${recovery}`;

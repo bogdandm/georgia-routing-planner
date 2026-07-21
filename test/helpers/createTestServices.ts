@@ -24,6 +24,7 @@ import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStora
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
+import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -117,6 +118,12 @@ export function createTestServices(
       subscribeMetrics: () => () => undefined,
       dispose: () => undefined,
     } satisfies ContourTileGenerator,
+    {
+      registerScene: () => undefined,
+      createTileUrl: (sceneKey) =>
+        `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`,
+      dispose: () => undefined,
+    } satisfies SatelliteCogTileProvider,
     logger,
     idGenerator,
     sentinelQueryDiagnostics,

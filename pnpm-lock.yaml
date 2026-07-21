@@ -46,6 +46,9 @@ importers:
       dexie:
         specifier: 4.4.4
         version: 4.4.4
+      geotiff:
+        specifier: 3.0.5
+        version: 3.0.5
       ky:
         specifier: 2.0.2
         version: 2.0.2
@@ -55,6 +58,9 @@ importers:
       maplibre-gl:
         specifier: 5.24.0
         version: 5.24.0
+      proj4:
+        specifier: 2.20.9
+        version: 2.20.9(geotiff@3.0.5)
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -1209,6 +1215,12 @@ packages:
     resolution:
       {
         integrity: sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw==,
+      }
+
+  '@petamoriken/float16@3.9.3':
+    resolution:
+      {
+        integrity: sha512-8awtpHXCx/bNpFt4mt2xdkgtgVvKqty8VbjHI/WWWQuEw+KLzFot3f4+LkQY9YmOtq7A5GdOnqoIC8Pdygjk2g==,
       }
 
   '@photostructure/tz-lookup@11.6.0':
@@ -2599,6 +2611,13 @@ packages:
       }
     engines: { node: '>=6.9.0' }
 
+  geotiff@3.0.5:
+    resolution:
+      {
+        integrity: sha512-OWcL9S9+yDZ6iAlXMt32T1iwUApJM8UiD47xbm6ZP1h33d10fqkPs14EG/ttT5EnefpZSx3G15iDFC5FxUNUwA==,
+      }
+    engines: { node: '>=10.19' }
+
   get-caller-file@2.0.5:
     resolution:
       {
@@ -2929,6 +2948,12 @@ packages:
       }
     engines: { node: '>=22' }
 
+  lerc@3.0.0:
+    resolution:
+      {
+        integrity: sha512-Rm4J/WaHhRa93nCN2mwWDZFoRVF18G1f47C+kvQWyHGEZxFpTUi73p7lMVSAndyxGt6lJ2/CFbOcf9ra5p8aww==,
+      }
+
   levn@0.4.1:
     resolution:
       {
@@ -3124,6 +3149,12 @@ packages:
         integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==,
       }
 
+  mgrs@1.0.0:
+    resolution:
+      {
+        integrity: sha512-awNbTOqCxK1DBGjalK3xqWIstBZgN6fxsMSiXLs9/spqWkF2pAhb2rrYCFSsr1/tT7PhcDGjZndG8SWYn0byYA==,
+      }
+
   min-indent@1.0.1:
     resolution:
       {
@@ -3238,12 +3269,24 @@ packages:
       }
     engines: { node: '>=10' }
 
+  pako@2.2.0:
+    resolution:
+      {
+        integrity: sha512-zJq6RP/5q+TO2OpFV3FHzlPnFjmkb7Nc99a5SNjJE+uu/PkpChs+NIZSSzbBoD+6kjiISXjfYdwj1ZRQ81dz/w==,
+      }
+
   parent-module@1.0.1:
     resolution:
       {
         integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==,
       }
     engines: { node: '>=6' }
+
+  parse-headers@2.0.6:
+    resolution:
+      {
+        integrity: sha512-Tz11t3uKztEW5FEVZnj1ox8GKblWn+PvHY9TmJV5Mll2uHEwRdR/5Li1OlXoECjLYkApdhWy44ocONwXLiKO5A==,
+      }
 
   parse-json@5.2.0:
     resolution:
@@ -3387,6 +3430,17 @@ packages:
       }
     engines: { node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0 }
 
+  proj4@2.20.9:
+    resolution:
+      {
+        integrity: sha512-GLBGqXaTcdWnppre3o1sMmy4DcMGSGq/ng+9k2MTNddarRK6SveINqlqYzi3xEXuy06ljY1TTrC6H9C4f360IQ==,
+      }
+    peerDependencies:
+      geotiff: '*'
+    peerDependenciesMeta:
+      geotiff:
+        optional: true
+
   prop-types@15.8.1:
     resolution:
       {
@@ -3405,6 +3459,13 @@ packages:
         integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==,
       }
     engines: { node: '>=6' }
+
+  quick-lru@6.1.2:
+    resolution:
+      {
+        integrity: sha512-AAFUA5O1d83pIHEhJwWCq/RQcRukCkn/NSm2QsTEMle5f2hP0ChI2+3Xb051PZCkLryI/Ir1MVKviT2FIloaTQ==,
+      }
+    engines: { node: '>=12' }
 
   quickselect@3.0.0:
     resolution:
@@ -4018,6 +4079,12 @@ packages:
       }
     engines: { node: '>=18' }
 
+  web-worker@1.5.0:
+    resolution:
+      {
+        integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==,
+      }
+
   webidl-conversions@8.0.1:
     resolution:
       {
@@ -4055,6 +4122,12 @@ packages:
     engines: { node: '>=8' }
     hasBin: true
 
+  wkt-parser@1.5.5:
+    resolution:
+      {
+        integrity: sha512-/zMYi94/7D7fxcOSlVmWn6vnOMj3Gq5d1xvVjaYOS9n6h0qOJ4I7YYVxBWYcH1vq9+suhqzXkn05Yx47zQNUIA==,
+      }
+
   word-wrap@1.2.5:
     resolution:
       {
@@ -4075,6 +4148,12 @@ packages:
         integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==,
       }
     engines: { node: '>=18' }
+
+  xml-utils@1.10.2:
+    resolution:
+      {
+        integrity: sha512-RqM+2o1RYs6T8+3DzDSoTRAUfrvaejbVHcp3+thnAtDKo8LskR+HomLajEy5UjTz24rpka7AxVBRR3g2wTUkJA==,
+      }
 
   xmlchars@2.2.0:
     resolution:
@@ -4136,6 +4215,12 @@ packages:
     resolution:
       {
         integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==,
+      }
+
+  zstddec@0.2.0:
+    resolution:
+      {
+        integrity: sha512-oyPnDa1X5c13+Y7mA/FDMNJrn4S8UNBe0KCqtDmor40Re7ALrPN6npFwyYVRRh+PqozZQdeg23QtbcamZnG5rA==,
       }
 
   zustand@5.0.14:
@@ -4843,6 +4928,8 @@ snapshots:
   '@open-draft/until@2.1.0': {}
 
   '@oxc-project/types@0.139.0': {}
+
+  '@petamoriken/float16@3.9.3': {}
 
   '@photostructure/tz-lookup@11.6.0': {}
 
@@ -5694,6 +5781,17 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
+  geotiff@3.0.5:
+    dependencies:
+      '@petamoriken/float16': 3.9.3
+      lerc: 3.0.0
+      pako: 2.2.0
+      parse-headers: 2.0.6
+      quick-lru: 6.1.2
+      web-worker: 1.5.0
+      xml-utils: 1.10.2
+      zstddec: 0.2.0
+
   get-caller-file@2.0.5: {}
 
   get-value@2.0.6: {}
@@ -5851,6 +5949,8 @@ snapshots:
 
   ky@2.0.2: {}
 
+  lerc@3.0.0: {}
+
   levn@0.4.1:
     dependencies:
       prelude-ls: 1.2.1
@@ -5963,6 +6063,8 @@ snapshots:
 
   mdn-data@2.27.1: {}
 
+  mgrs@1.0.0: {}
+
   min-indent@1.0.1: {}
 
   minimatch@10.2.5:
@@ -6031,9 +6133,13 @@ snapshots:
     dependencies:
       p-limit: 3.1.0
 
+  pako@2.2.0: {}
+
   parent-module@1.0.1:
     dependencies:
       callsites: 3.1.0
+
+  parse-headers@2.0.6: {}
 
   parse-json@5.2.0:
     dependencies:
@@ -6105,6 +6211,13 @@ snapshots:
       ansi-styles: 5.2.0
       react-is: 17.0.2
 
+  proj4@2.20.9(geotiff@3.0.5):
+    dependencies:
+      mgrs: 1.0.0
+      wkt-parser: 1.5.5
+    optionalDependencies:
+      geotiff: 3.0.5
+
   prop-types@15.8.1:
     dependencies:
       loose-envify: 1.4.0
@@ -6114,6 +6227,8 @@ snapshots:
   protocol-buffers-schema@3.6.1: {}
 
   punycode@2.3.1: {}
+
+  quick-lru@6.1.2: {}
 
   quickselect@3.0.0: {}
 
@@ -6426,6 +6541,8 @@ snapshots:
     dependencies:
       xml-name-validator: 5.0.0
 
+  web-worker@1.5.0: {}
+
   webidl-conversions@8.0.1: {}
 
   whatwg-mimetype@5.0.0: {}
@@ -6447,6 +6564,8 @@ snapshots:
       siginfo: 2.0.0
       stackback: 0.0.2
 
+  wkt-parser@1.5.5: {}
+
   word-wrap@1.2.5: {}
 
   wrap-ansi@7.0.0:
@@ -6456,6 +6575,8 @@ snapshots:
       strip-ansi: 6.0.1
 
   xml-name-validator@5.0.0: {}
+
+  xml-utils@1.10.2: {}
 
   xmlchars@2.2.0: {}
 
@@ -6484,6 +6605,8 @@ snapshots:
       zod: 4.4.3
 
   zod@4.4.3: {}
+
+  zstddec@0.2.0: {}
 
   zustand@5.0.14(@types/react@19.2.17)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7)):
     optionalDependencies:

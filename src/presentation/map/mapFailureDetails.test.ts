@@ -9,7 +9,7 @@ function event(error: { readonly message: string; readonly status?: number }) {
 
 describe('mapFailureDetails', () => {
   it.each([
-    [429, 'rate-limit', true],
+    [429, 'rate-limit', false],
     [500, 'http-server', true],
     [502, 'http-server', true],
     [503, 'http-server', true],
@@ -47,7 +47,7 @@ describe('mapFailureDetails', () => {
     ).toEqual({
       reason: 'no-response',
       httpStatus: null,
-      retryable: true,
+      retryable: false,
     });
     expect(mapFailureDetails(event({ message: 'image decode failed' }))).toEqual({
       reason: 'unknown',

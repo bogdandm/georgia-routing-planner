@@ -62,7 +62,12 @@ export type MapFailureReason =
   | 'unknown';
 
 export type MapRecoveryState =
-  'exhausted' | 'not-applicable' | 'not-retryable' | 'recovered' | 'scheduled';
+  | 'browser-fallback'
+  | 'exhausted'
+  | 'not-applicable'
+  | 'not-retryable'
+  | 'recovered'
+  | 'scheduled';
 
 export interface MapSourceFailure {
   readonly category: MapFailureCategory;

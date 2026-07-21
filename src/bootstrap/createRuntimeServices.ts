@@ -35,6 +35,7 @@ import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthS
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
+import { MapLibreSatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -118,12 +119,19 @@ export function createRuntimeServices(): RuntimeServices {
           logger,
         )
       : null;
+  const satelliteCogTiles =
+    mapProviderConfiguration.status === 'valid'
+      ? new MapLibreSatelliteCogTileProvider()
+      : null;
   const mapLayers =
-    mapProviderConfiguration.status === 'valid' && contourTiles !== null
+    mapProviderConfiguration.status === 'valid' &&
+    contourTiles !== null &&
+    satelliteCogTiles !== null
       ? new MapLibreLayerController(
           mapProviderConfiguration.value.satellite.renderer,
           mapProviderConfiguration.value.terrain,
           contourTiles,
+          satelliteCogTiles,
           logger,
           idGenerator,
           sentinelQueryDiagnostics,

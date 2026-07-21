@@ -800,7 +800,7 @@ default when many JSDOM workers contend on managed Windows. If either exact test
 under a focused run, validate the complete non-coverage suite once with:
 
 ```powershell
-pnpm test --maxWorkers=1
+pnpm test --maxWorkers=4
 ```
 
 Keep the five-second per-test ceiling; do not add sleeps, remove assertions, or rerun

@@ -613,6 +613,12 @@ complete E2E suite after each failure. A complete suite may run once later only 
 was already justified by the branch-wide evidence and the fixes invalidate that broader
 result.
 
+This also applies when CI reports one failing E2E test while the other tests pass. After
+the focused fix, run only the failed test locally; changing that spec or its exercised
+code does not by itself justify rerunning the complete suite. Treat the other passing CI
+results as valid unless the fix changes a shared runtime input that those specific tests
+exercise.
+
 Run axe for the application shell and critical workflows. Test keyboard focus, dialog
 and drawer behavior, labels, and live status where relevant. Automated accessibility
 checks supplement a brief manual keyboard pass for changed presentation behavior.
@@ -694,7 +700,8 @@ changes are complete.
    ```
 
 7. If a test fails and is fixed, rerun only that test first. Do not restart a complete
-   suite after each fix.
+   suite after each fix, including when the failure came from CI and the fix changes an
+   E2E spec.
 8. Visually verify changed loading, empty, error, partial, focus, and responsive states
    in current Chrome when presentation behavior changes.
 9. Verify diagnostics or redaction only when the change affects those responsibilities.

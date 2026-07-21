@@ -29,6 +29,7 @@
     "vitest.integration.config.ts",
     "playwright.config.ts",
     "tools/**/*.ts",
+    "src/infrastructure/elevation/TerrariumDemFilter.ts",
     "src/diagnostics/export/diagnosticBundleSchema.ts",
     "e2e/**/*.ts"
   ]

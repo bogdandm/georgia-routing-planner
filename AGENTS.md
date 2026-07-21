@@ -18,11 +18,15 @@ configuration, data, test, and maintenance changes must be made on a feature bra
 
 ## Parallel-agent worktrees
 
-Every agent must create and use a fresh, dedicated Git worktree and purpose-specific
-branch for its task. Do not reuse the main repository checkout, another agent's
-worktree, or an old feature worktree merely because the agent started there. The
-maintainer may run up to four agents in parallel; separate worktrees keep their file
-edits, tests, and Git operations isolated.
+Every agent starting a new workstream must create and use a fresh, dedicated Git
+worktree and purpose-specific branch. Follow-up prompts, review rounds, CI fixes, and
+other continuation work for that workstream must reuse its existing branch and worktree.
+Do not create another branch or worktree for continuation work unless the maintainer
+directly instructs you to do so. When the maintainer names an existing branch or
+worktree, keep all requested work there. Never reuse the main repository checkout or
+another agent's worktree. The maintainer may run up to four agents in parallel; separate
+worktrees keep independent workstreams isolated without fragmenting one workstream
+across repeated review branches.
 
 Each worktree must also use a distinct, explicit development-server port. Check that the
 chosen port is free before starting Vite and pass both `--port <port>` and

@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@mui/material';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { userEvent } from '@testing-library/user-event';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -823,6 +823,63 @@ describe('WorkspaceShell', () => {
         },
       });
     });
+  });
+
+  it('shows compatibility mode only while terrain compute uses the inline backend', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+
+    expect(
+      screen.queryByText(/Terrain processing is running/u),
+    ).not.toBeInTheDocument();
+    act(() => {
+      mapLayerStore.setState({ terrainComputeStatus: 'inline' });
+    });
+    expect(
+      screen.getByText(/Terrain processing is running in compatibility mode/u),
+    ).toBeVisible();
+
+    act(() => {
+      mapLayerStore.setState({ terrainComputeStatus: 'worker' });
+    });
+    expect(
+      screen.queryByText(/Terrain processing is running/u),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the live bounded terrain queue beneath Ready', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByText('Ready')).toBeVisible();
+    expect(
+      screen.queryByLabelText('Terrain compute queue state'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      mapLayerStore.setState({
+        terrainComputeQueue: {
+          executionMode: 'worker',
+          activeCount: 1,
+          queuedContourCount: 4,
+          queueCapacity: 32,
+        },
+      });
+    });
+    expect(screen.getByLabelText('Terrain compute queue state')).toHaveTextContent(
+      'Terrain worker · queue 4/32 · 1 active',
+    );
   });
 
   it('announces fatal map failures assertively', () => {

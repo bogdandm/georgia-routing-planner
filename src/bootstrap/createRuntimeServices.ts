@@ -42,6 +42,7 @@ export interface RuntimeServices {
   readonly clock: Clock;
   readonly database: AppDatabase;
   readonly diagnostics: DiagnosticsService;
+  readonly dispose: () => void;
   readonly httpClient: KyInstance;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
@@ -109,16 +110,20 @@ export function createRuntimeServices(): RuntimeServices {
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const mapViewport = new MapViewportSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
-  const mapLayers =
+  const contourTiles =
     mapProviderConfiguration.status === 'valid'
+      ? new MapLibreContourTileGenerator(
+          mapProviderConfiguration.value.terrain,
+          mapProviderConfiguration.value.policy.requestTimeoutMs,
+          logger,
+        )
+      : null;
+  const mapLayers =
+    mapProviderConfiguration.status === 'valid' && contourTiles !== null
       ? new MapLibreLayerController(
           mapProviderConfiguration.value.satellite.renderer,
           mapProviderConfiguration.value.terrain,
-          new MapLibreContourTileGenerator(
-            mapProviderConfiguration.value.terrain,
-            mapProviderConfiguration.value.policy.requestTimeoutMs,
-            logger,
-          ),
+          contourTiles,
           logger,
           idGenerator,
           sentinelQueryDiagnostics,
@@ -233,6 +238,11 @@ export function createRuntimeServices(): RuntimeServices {
     clock,
     database,
     diagnostics,
+    dispose: () => {
+      mapLayers?.dispose();
+      queryClient.clear();
+      database.close();
+    },
     httpClient,
     idGenerator,
     logger,

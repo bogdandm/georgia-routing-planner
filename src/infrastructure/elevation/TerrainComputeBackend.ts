@@ -1,0 +1,67 @@
+export type TerrainComputeStatus = 'worker' | 'restarting' | 'inline';
+export const defaultTerrainContourQueueCapacity = 32;
+
+export interface TerrainDemResponse {
+  readonly data: Blob;
+  readonly cacheControl?: string;
+  readonly expires?: string;
+}
+
+export interface TerrainContourTile {
+  readonly arrayBuffer: ArrayBuffer;
+}
+
+export interface TerrainContourOptions {
+  readonly levels: number[];
+  readonly multiplier?: number;
+  readonly overzoom?: number;
+  readonly elevationKey?: string;
+  readonly levelKey?: string;
+  readonly contourLayer?: string;
+  readonly extent?: number;
+  readonly buffer?: number;
+  readonly subsampleBelow?: number;
+}
+
+export interface TerrainComputeMetrics {
+  readonly executionMode: TerrainComputeStatus;
+  readonly queueDurationMs: number;
+  readonly computeDurationMs: number;
+  readonly pendingCount: number;
+  readonly operation: 'dem' | 'contour';
+  readonly status: 'success' | 'failed' | 'canceled';
+}
+
+/** Serializable live workload state; it intentionally excludes tile identity and data. */
+export interface TerrainComputeQueueState {
+  readonly executionMode: TerrainComputeStatus;
+  readonly activeCount: number;
+  readonly queuedContourCount: number;
+  readonly queueCapacity: number;
+}
+
+/** Capability boundary used by MapLibre protocols without exposing Worker or engine objects. */
+export interface TerrainComputeBackend {
+  readonly loaded: Promise<void>;
+  fetchTile(
+    zoom: number,
+    x: number,
+    y: number,
+    abortController: AbortController,
+  ): Promise<TerrainDemResponse>;
+  fetchContourTile(
+    zoom: number,
+    x: number,
+    y: number,
+    options: TerrainContourOptions,
+    abortController: AbortController,
+  ): Promise<TerrainContourTile>;
+  setFilterEnabled(enabled: boolean): void;
+  setInteractionActive(active: boolean): void;
+  getStatus(): TerrainComputeStatus;
+  getQueueState(): TerrainComputeQueueState;
+  subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void;
+  subscribeQueueState(listener: (state: TerrainComputeQueueState) => void): () => void;
+  subscribeMetrics(listener: (metrics: TerrainComputeMetrics) => void): () => void;
+  dispose(): void;
+}

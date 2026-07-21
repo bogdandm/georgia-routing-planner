@@ -314,6 +314,20 @@ Client-side contour generation reads bounded DEM tiles and renders subdued minor
 plus emphasized, labeled 200 m index lines from zoom 11. Minor spacing defaults to 50 m
 and supports 20, 25, 40, 50, or 100 m so every choice divides the index cadence.
 
+DEM repair and contour calculation normally run in one dedicated terrain worker. Camera
+movement continues DEM work but defers newly requested contours until movement settles;
+existing contour tiles remain under MapLibre's normal retention rules. If the worker
+channel or returned data cannot recover after one restart, the same calculations
+continue inline for that page session and Settings > Rendering shows a non-blocking
+compatibility warning that movement may be slower. Provider, decode, and calculation
+failures remain isolated to their individual requests and do not switch execution mode.
+A successful worker session has no warning; a new page session tries the worker again.
+
+While terrain work is active, the Ready status below search also shows the execution
+mode, exact number of queued contour jobs against the 32-job bound, and any currently
+active work. The secondary line is absent when the worker is idle. This workload summary
+is transient and contains no tile coordinates or provider URLs.
+
 Relief normally sits below satellite imagery; the Rendering setting moves it above the
 active raster without remounting MapLibre. Contours remain above both and below OSM
 roads, paths, labels, and POIs. Preferences are validated and stored locally with the
@@ -360,7 +374,9 @@ detail. Hovering any truncated status message reveals the full text in a multili
 tooltip. The non-ready surface transitions quickly and remains translucent enough to
 preserve map context. Pending text uses the dark primary color and a medium weight
 rather than the muted Ready treatment, preserving legibility over imagery. Status
-padding is invariant so state changes never shift the icon or text.
+padding is invariant so state changes never shift the icon or text. Its compact terrain
+line appears only for active work or a live contour backlog, without turning normal
+background work into an error or blocking the rest of the map.
 
 ## Diagnostics and developer mode
 

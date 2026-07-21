@@ -269,6 +269,8 @@ export class MapLibreLayerController
   #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
+  readonly #releaseTerrainComputeStatus: () => void;
+  readonly #releaseTerrainComputeQueue: () => void;
   #appliedOpenStreetMapOpacity: number | null = null;
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
@@ -283,7 +285,18 @@ export class MapLibreLayerController
     private readonly diagnostics: SentinelQueryDiagnostics,
     private readonly satelliteRendererTimeoutMs: number,
     private readonly preferences: MapLayerPreferencesRepository,
-  ) {}
+  ) {
+    mapLayerStore.setState({
+      terrainComputeStatus: contourTiles.getStatus(),
+      terrainComputeQueue: contourTiles.getQueueState(),
+    });
+    this.#releaseTerrainComputeStatus = contourTiles.subscribeStatus((status) => {
+      mapLayerStore.setState({ terrainComputeStatus: status });
+    });
+    this.#releaseTerrainComputeQueue = contourTiles.subscribeQueueState((state) => {
+      mapLayerStore.setState({ terrainComputeQueue: state });
+    });
+  }
 
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
@@ -307,8 +320,13 @@ export class MapLibreLayerController
     return this.contourTiles.createDemTileUrl();
   }
 
+  public setTerrainInteractionActive(active: boolean): void {
+    this.contourTiles.setInteractionActive(active);
+  }
+
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
+    this.contourTiles.setInteractionActive(false);
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
     this.cancelRasterRecovery();
@@ -319,6 +337,15 @@ export class MapLibreLayerController
     this.#openStreetMapOpacityLayerAnchors.clear();
     this.#applySequence += 1;
     this.#restoreController?.abort();
+  }
+
+  /** Releases map listeners, persistence work, protocols, and terrain compute resources. */
+  public dispose(): void {
+    const map = this.#map;
+    if (map !== null) this.detach(map);
+    this.#releaseTerrainComputeStatus();
+    this.#releaseTerrainComputeQueue();
+    this.contourTiles.dispose();
   }
 
   public setLayerVisibility(

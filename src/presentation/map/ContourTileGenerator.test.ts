@@ -1,10 +1,6 @@
-import type { AddProtocolAction } from 'maplibre-gl';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  type ContourTileGenerator,
-  withOwnedProtocolBuffers,
-} from '@/presentation/map/ContourTileGenerator';
+import { type ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 
 class FakeContourTileGenerator implements ContourTileGenerator {
   public createDemTileUrl(): string {
@@ -17,6 +13,39 @@ class FakeContourTileGenerator implements ContourTileGenerator {
 
   public setFilterEnabled(enabled: boolean): void {
     void enabled;
+  }
+
+  public setInteractionActive(active: boolean): void {
+    void active;
+  }
+
+  public getStatus(): 'inline' {
+    return 'inline';
+  }
+
+  public getQueueState() {
+    return {
+      executionMode: 'inline' as const,
+      activeCount: 0,
+      queuedContourCount: 0,
+      queueCapacity: 0,
+    };
+  }
+
+  public subscribeStatus(): () => void {
+    return () => undefined;
+  }
+
+  public subscribeQueueState(): () => void {
+    return () => undefined;
+  }
+
+  public subscribeMetrics(): () => void {
+    return () => undefined;
+  }
+
+  public dispose(): void {
+    void this;
   }
 }
 
@@ -33,24 +62,5 @@ describe('ContourTileGenerator contract', () => {
     expect(new FakeContourTileGenerator().createDemTileUrl()).toBe(
       'filtered-dem://tiles/{z}/{x}/{y}',
     );
-  });
-
-  it('returns a fresh buffer when a cached contour tile is requested repeatedly', async () => {
-    const cachedBuffer = new Uint8Array([1, 2, 3]).buffer;
-    const underlyingProtocol = vi
-      .fn<AddProtocolAction>()
-      .mockResolvedValue({ data: cachedBuffer });
-    const registeredProtocol = withOwnedProtocolBuffers(underlyingProtocol);
-
-    const request = { url: 'contour://fixture/11/1/1' };
-    const first = await registeredProtocol(request, new AbortController());
-    const second = await registeredProtocol(request, new AbortController());
-
-    expect(first.data).not.toBe(second.data);
-    expect(first.data).toBeInstanceOf(ArrayBuffer);
-    expect(second.data).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(first.data as ArrayBuffer))).toEqual([1, 2, 3]);
-    expect(Array.from(new Uint8Array(second.data as ArrayBuffer))).toEqual([1, 2, 3]);
-    expect(underlyingProtocol).toHaveBeenCalledTimes(2);
   });
 });

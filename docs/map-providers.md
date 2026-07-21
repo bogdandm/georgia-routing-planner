@@ -169,8 +169,11 @@ than one neighbor supporting the extreme center value, and a center residual of 
 corruption while keeping upward peak detection more conservative. This preserves
 coherent ridges and cliffs, including narrow features with two supporting pixels.
 Rejected pixels are replaced with the median of valid immediate neighbors; accepted
-pixels are never resampled, blurred, or re-encoded. A tile with no repairs returns the
-original PNG bytes.
+pixels are never resampled, blurred, or re-encoded. The production filter reuses fixed
+eight-value neighbor/deviation buffers, reuses the classification median for repair, and
+clones output bytes only at the first changed pixel. A deterministic reference oracle
+verifies identical repair counts and RGBA bytes across the benchmark scenarios. A tile
+with no repairs returns the original PNG bytes.
 
 The default physical range is −500 m through 9,000 m and the explicit sentinel list is
 `[-32768]`. These bounds cover global terrestrial elevations conservatively while
@@ -228,9 +231,26 @@ vector tiles containing `ele` and minor/index `level` properties. The applicatio
 the source tile template atomically when spacing changes. No geometry, token, backend,
 or hosted processing service is introduced.
 
-MapLibre transfers protocol responses to a worker. The adapter therefore gives each
-delivery its own `ArrayBuffer`; the contour library's cached buffer is never transferred
-or detached. Repeated cache hits remain usable during rapid camera and zoom changes.
+One application-owned module worker runs DEM decode, repair, PNG encode, parsed-DEM
+caching, and contour generation; MapLibre retains its own renderer worker. DEM requests
+remain active during camera movement, while new contour requests wait in a bounded,
+cancellation-aware queue until the camera settles. Ordinary provider and calculation
+failures remain per-request. A broken worker channel is restarted once and then falls
+back to the identical inline engine for the page session, preserving terrain features
+with a possible responsiveness reduction.
+
+Relief and 3D are not rendered by the terrain-compute worker. Their filtered
+`raster-dem` tiles continue through MapLibre/browser workers and WebGL to the GPU. The
+worker also does not process satellite imagery: the configured TiTiler service performs
+COG reads, RGB composition, reprojection, and web-tile encoding remotely, and MapLibre
+receives ordinary raster tiles. These pipelines remain separate so the terrain worker
+has one bounded cache set and does not duplicate renderer or remote imagery work.
+
+MapLibre transfers protocol responses to a worker. Worker contour delivery transfers a
+slice that protects the engine cache; inline delivery makes the equivalent owned copy.
+The main-thread protocol forwards that buffer without another slice. The contour
+library's cached buffer is never transferred or detached, so repeated cache hits remain
+usable during rapid camera and zoom changes.
 
 The terrain configuration validates filter thresholds, physical bounds, filter cache
 size, contour minimum/maximum zoom, and contour cache size. The contour maximum cannot

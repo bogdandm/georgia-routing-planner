@@ -28,6 +28,7 @@
     "catalog:audit": "tsx tools/catalog/notImplemented.ts audit",
     "catalog:build": "tsx tools/catalog/notImplemented.ts build",
     "diagnostics:inspect": "tsx tools/diagnostics/inspectDiagnostics.ts",
+    "performance:terrain": "tsx tools/performance/benchmarkTerrariumFilter.ts",
     "repo:audit": "tsx tools/repository/auditRepository.ts",
     "build:app": "vite build",
     "build": "pnpm typecheck && pnpm build:app",

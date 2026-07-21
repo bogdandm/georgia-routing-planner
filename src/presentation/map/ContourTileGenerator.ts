@@ -1,57 +1,90 @@
-import { addProtocol } from 'maplibre-gl';
-import type { AddProtocolAction, GetResourceResponse } from 'maplibre-gl';
+import { addProtocol, removeProtocol } from 'maplibre-gl';
 import maplibreContour from 'maplibre-contour';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ContourIntervalMeters } from '@/application/ports/MapLayerPreferencesRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
-import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
+import type {
+  TerrainComputeMetrics,
+  TerrainComputeQueueState,
+  TerrainComputeStatus,
+} from '@/infrastructure/elevation/TerrainComputeBackend';
+import { WorkerTerrainComputeBackend } from '@/infrastructure/elevation/WorkerTerrainComputeBackend';
 import { ContourTimingDiagnostics } from '@/presentation/map/ContourTimingDiagnostics';
+import { TerrainComputeDiagnostics } from '@/presentation/map/TerrainComputeDiagnostics';
+
+type TerrainManagerContract = InstanceType<typeof maplibreContour.DemSource>['manager'];
+
+/** Keeps the third-party manager shape private while the application backend stays truthful. */
+class TerrainComputeManagerAdapter implements TerrainManagerContract {
+  public readonly loaded: Promise<void>;
+
+  public constructor(private readonly backend: WorkerTerrainComputeBackend) {
+    this.loaded = backend.loaded;
+  }
+
+  public fetchTile(
+    ...parameters: Parameters<TerrainManagerContract['fetchTile']>
+  ): ReturnType<TerrainManagerContract['fetchTile']> {
+    return this.backend.fetchTile(
+      parameters[0],
+      parameters[1],
+      parameters[2],
+      parameters[3],
+    );
+  }
+
+  public fetchAndParseTile(
+    ..._parameters: Parameters<TerrainManagerContract['fetchAndParseTile']>
+  ): ReturnType<TerrainManagerContract['fetchAndParseTile']> {
+    return Promise.reject(
+      new Error('Parsed DEM access is internal to terrain contour computation.'),
+    );
+  }
+
+  public fetchContourTile(
+    ...parameters: Parameters<TerrainManagerContract['fetchContourTile']>
+  ): ReturnType<TerrainManagerContract['fetchContourTile']> {
+    return this.backend.fetchContourTile(
+      parameters[0],
+      parameters[1],
+      parameters[2],
+      parameters[3],
+      parameters[4],
+    );
+  }
+}
 
 export interface ContourTileGenerator {
   createDemTileUrl(): string;
   createTileUrl(intervalMeters: ContourIntervalMeters): string;
   setFilterEnabled(enabled: boolean): void;
-}
-
-export function withOwnedProtocolBuffers(
-  protocol: AddProtocolAction,
-): AddProtocolAction {
-  return async (request, abortController) => {
-    const response = (await protocol(
-      request,
-      abortController,
-    )) as GetResourceResponse<unknown>;
-    return {
-      ...response,
-      // MapLibre transfers protocol ArrayBuffers to its worker, detaching them.
-      // maplibre-contour caches its generated buffer, so every delivery needs an
-      // owned copy or a later cache hit will attempt to transfer detached memory.
-      data:
-        response.data instanceof ArrayBuffer ? response.data.slice(0) : response.data,
-    };
-  };
-}
-
-function registerProtocolWithOwnedBuffers(
-  id: string,
-  protocol: AddProtocolAction,
-): void {
-  addProtocol(id, withOwnedProtocolBuffers(protocol));
+  setInteractionActive(active: boolean): void;
+  getStatus(): TerrainComputeStatus;
+  getQueueState(): TerrainComputeQueueState;
+  subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void;
+  subscribeQueueState(listener: (state: TerrainComputeQueueState) => void): () => void;
+  subscribeMetrics(listener: (metrics: TerrainComputeMetrics) => void): () => void;
+  dispose(): void;
 }
 
 /** Registers the bounded client-side contour protocol for one application runtime. */
 export class MapLibreContourTileGenerator implements ContourTileGenerator {
   readonly #source: InstanceType<typeof maplibreContour.DemSource>;
-  readonly #filteredTiles: FilteredTerrariumTileProvider | null;
+  readonly #backend: WorkerTerrainComputeBackend;
   #filterEnabled = true;
   #revision = 0;
+  #disposed = false;
+  readonly #releaseMetrics: () => void;
+  readonly #timingDiagnostics: ContourTimingDiagnostics;
+  readonly #computeDiagnostics: TerrainComputeDiagnostics;
 
   public constructor(
     terrain: MapProviderConfiguration['terrain'],
     requestTimeoutMs: number,
     logger: DiagnosticLogger,
   ) {
+    this.#backend = new WorkerTerrainComputeBackend(terrain, requestTimeoutMs, logger);
     this.#source = new maplibreContour.DemSource({
       id: 'georgia-terrain',
       url: terrain.tileUrl,
@@ -63,23 +96,19 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       // additional worker survives after the application runtime is released.
       worker: false,
     });
-    this.#filteredTiles =
-      terrain.encoding === 'terrarium'
-        ? new FilteredTerrariumTileProvider(terrain, requestTimeoutMs, logger)
-        : null;
-    if (this.#filteredTiles !== null) {
-      const filteredTiles = this.#filteredTiles;
-      this.#source.manager.fetchTile = (zoom, x, y, abortController) =>
-        filteredTiles.getTile(zoom, x, y, abortController);
-    }
-    this.#source.setupMaplibre({ addProtocol: registerProtocolWithOwnedBuffers });
-    const timingDiagnostics = new ContourTimingDiagnostics(logger);
+    this.#source.manager = new TerrainComputeManagerAdapter(this.#backend);
+    this.#source.setupMaplibre({ addProtocol });
+    this.#timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {
-      timingDiagnostics.record({
+      this.#timingDiagnostics.record({
         durationMs: timing.duration,
         tileCount: timing.tilesUsed,
         failed: timing.error === true,
       });
+    });
+    this.#computeDiagnostics = new TerrainComputeDiagnostics(logger);
+    this.#releaseMetrics = this.#backend.subscribeMetrics((metrics) => {
+      this.#computeDiagnostics.record(metrics);
     });
   }
 
@@ -98,17 +127,48 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
   }
 
   public setFilterEnabled(enabled: boolean): void {
-    if (this.#filteredTiles === null || this.#filterEnabled === enabled) return;
+    if (this.#filterEnabled === enabled) return;
     this.#filterEnabled = enabled;
-    this.#filteredTiles.setEnabled(enabled);
+    this.#backend.setFilterEnabled(enabled);
     this.#revision += 1;
-    const manager = this.#source.manager as unknown as {
-      readonly tileCache?: { clear(): void };
-      readonly parsedCache?: { clear(): void };
-      readonly contourCache?: { clear(): void };
-    };
-    manager.tileCache?.clear();
-    manager.parsedCache?.clear();
-    manager.contourCache?.clear();
+  }
+
+  public setInteractionActive(active: boolean): void {
+    this.#backend.setInteractionActive(active);
+  }
+
+  public getStatus(): TerrainComputeStatus {
+    return this.#backend.getStatus();
+  }
+
+  public getQueueState(): TerrainComputeQueueState {
+    return this.#backend.getQueueState();
+  }
+
+  public subscribeStatus(listener: (status: TerrainComputeStatus) => void): () => void {
+    return this.#backend.subscribeStatus(listener);
+  }
+
+  public subscribeQueueState(
+    listener: (state: TerrainComputeQueueState) => void,
+  ): () => void {
+    return this.#backend.subscribeQueueState(listener);
+  }
+
+  public subscribeMetrics(
+    listener: (metrics: TerrainComputeMetrics) => void,
+  ): () => void {
+    return this.#backend.subscribeMetrics(listener);
+  }
+
+  public dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    removeProtocol(this.#source.sharedDemProtocolId);
+    removeProtocol(this.#source.contourProtocolId);
+    this.#releaseMetrics();
+    this.#timingDiagnostics.dispose();
+    this.#computeDiagnostics.dispose();
+    this.#backend.dispose();
   }
 }

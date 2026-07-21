@@ -73,6 +73,17 @@ interface FailureBucket {
   readonly lastLoggedAtMs: number;
 }
 
+type MapLayerControllerLifecycle = Pick<
+  MapLibreLayerController,
+  | 'attach'
+  | 'detach'
+  | 'handleRasterSourceData'
+  | 'handleRasterSourceFailure'
+  | 'handleRasterSourceRecovered'
+  | 'isRasterSourceRecoveryComplete'
+  | 'setTerrainInteractionActive'
+>;
+
 const sourceRecoveryStabilityMs = 2_000;
 
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
@@ -193,7 +204,7 @@ export class MapLibreFacade implements MapFacade {
     private readonly onViewSettled: (view: MapViewState) => void = () => undefined,
     private readonly provider?: MapProviderOptions,
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
-    private readonly layerController?: MapLibreLayerController,
+    private readonly layerController?: MapLayerControllerLifecycle,
     private readonly elevationProvider?: ElevationProvider,
     pointInspector?: PointInspectorPopup,
   ) {
@@ -219,6 +230,7 @@ export class MapLibreFacade implements MapFacade {
     map.on('load', this.handleLoad);
     map.on('styledata', this.handleStyleData);
     map.on('idle', this.handleIdle);
+    map.on('movestart', this.handleMoveStart);
     map.on('moveend', this.handleMoveEnd);
     map.on('click', this.handleMapClick);
     map.on('sourcedata', this.handleSourceData);
@@ -438,6 +450,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMoveEnd = (): void => {
+    this.layerController?.setTerrainInteractionActive(false);
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
@@ -452,6 +465,10 @@ export class MapLibreFacade implements MapFacade {
         });
       }
     }
+  };
+
+  private readonly handleMoveStart = (): void => {
+    this.layerController?.setTerrainInteractionActive(true);
   };
 
   private readonly handleMapClick = (event: MapMouseEvent): void => {
@@ -1004,6 +1021,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('load', this.handleLoad);
     map.off('styledata', this.handleStyleData);
     map.off('idle', this.handleIdle);
+    map.off('movestart', this.handleMoveStart);
     map.off('moveend', this.handleMoveEnd);
     map.off('click', this.handleMapClick);
     map.off('sourcedata', this.handleSourceData);

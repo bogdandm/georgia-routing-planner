@@ -41,8 +41,19 @@ export async function runApplicationBootstrap(
     if (rootElement === null) {
       throw new Error('The application root element is missing.');
     }
-    services = dependencies.createServices();
-    dependencies.installErrorCapture(services.logger);
+    const createdServices = dependencies.createServices();
+    services = createdServices;
+    const removeErrorCapture = dependencies.installErrorCapture(createdServices.logger);
+    let disposed = false;
+    services = {
+      ...createdServices,
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        removeErrorCapture();
+        createdServices.dispose();
+      },
+    };
     await renderApplication(rootElement, services);
     services.logger.log({ level: 'info', name: 'app.bootstrap.render-requested' });
   } catch (error) {
@@ -51,6 +62,7 @@ export async function runApplicationBootstrap(
       name: 'app.bootstrap.failed',
       message: error instanceof Error ? error.message : 'Unknown bootstrap failure',
     });
+    services?.dispose();
     dependencies.mountFallback(rootElement ?? dependencies.document.body, {
       error,
       ...(services === null ? {} : { diagnostics: services.diagnostics }),

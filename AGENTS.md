@@ -124,6 +124,55 @@ heuristic but should still be isolated when practical. Explain in the pull reque
 a large atomic commit genuinely cannot be divided without leaving broken or misleading
 intermediate states.
 
+### Complexity and code-growth budget
+
+Prefer changing, reusing, simplifying, or deleting existing code over adding parallel
+implementations. Line count is a review signal, not a quality target: do not reduce it
+through dense code, oversized files, deleted tests, weakened types, or combined
+responsibilities.
+
+Before adding a production file, abstraction, service, hook, adapter, state owner, or
+dependency:
+
+1. Search for the existing owner of that responsibility.
+2. Extend or simplify that owner when doing so preserves clear boundaries.
+3. Add a new abstraction only when it removes concrete duplication, isolates a required
+   boundary, or has an immediate demonstrated consumer. Do not add abstractions for
+   hypothetical future use.
+4. Record the reason and immediate consumer in `PLAN.md` when the workstream requires a
+   plan.
+
+When behavior is replaced, remove the superseded implementation, compatibility path,
+unused exports, obsolete tests, and stale documentation in the same workstream. Do not
+leave old and new implementations side by side unless a documented runtime migration
+requires both.
+
+Every multi-step `PLAN.md` must identify:
+
+- Existing code that will be reused.
+- Code, files, dependencies, or paths that will be removed or replaced.
+- Why each new production file, abstraction, state owner, or dependency is necessary.
+
+Before final verification, perform one simplification pass:
+
+- Remove dead branches, unused exports, redundant wrappers, duplicate helpers, and
+  temporary compatibility code.
+- Collapse abstractions with one trivial consumer when they add no meaningful boundary,
+  lifecycle, or test seam.
+- Remove tests only when stronger behavioral coverage makes them genuinely redundant.
+- Confirm temporary feature flags, fallback paths, and adapters have an explicit
+  continuing need.
+
+Report final handwritten production-code additions and deletions in the pull request.
+Exclude tests, fixtures, generated files, lockfiles, and formatting-only churn. Use net
+growth as a review trigger:
+
+- More than 500 net new handwritten production lines requires a brief justification.
+- More than 1,000 net new handwritten production lines requires explaining why the work
+  could not replace or simplify more existing code.
+- Three or more new production files requires listing the responsibility and immediate
+  consumer of each file.
+
 ### Feature finalization and pull request
 
 A feature is not handed off as finished until final verification passes and its branch

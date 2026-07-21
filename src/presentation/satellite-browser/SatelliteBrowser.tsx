@@ -221,7 +221,7 @@ function singleSceneResult(
   scene: SatelliteScene,
   viewport: SatelliteSearchViewport,
 ): SatelliteSearchResult {
-  // Persisted scenes do not retain search evidence, so recompute it for the live viewport.
+  // Shared scenes do not carry search evidence, so recompute it for a safe local viewport.
   return {
     groups: [
       {
@@ -237,6 +237,32 @@ function singleSceneResult(
     sceneCount: 1,
     acquisitionDateCount: 1,
     totalMatched: 1,
+  };
+}
+
+function sceneFootprintViewport(scene: SatelliteScene): SatelliteSearchViewport {
+  const positions =
+    scene.footprint.type === 'Polygon'
+      ? scene.footprint.coordinates.flatMap((ring) => ring)
+      : scene.footprint.coordinates.flatMap((polygon) =>
+          polygon.flatMap((ring) => ring),
+        );
+  const bounds = { west: 180, south: 90, east: -180, north: -90 };
+  for (const position of positions) {
+    const longitude = position[0];
+    const latitude = position[1];
+    if (longitude === undefined || latitude === undefined) continue;
+    bounds.west = Math.min(bounds.west, longitude);
+    bounds.south = Math.min(bounds.south, latitude);
+    bounds.east = Math.max(bounds.east, longitude);
+    bounds.north = Math.max(bounds.north, latitude);
+  }
+  return {
+    bounds,
+    center: {
+      longitude: (bounds.west + bounds.east) / 2,
+      latitude: (bounds.south + bounds.north) / 2,
+    },
   };
 }
 
@@ -870,6 +896,7 @@ export function SatelliteBrowser({
     mapLayerStore,
     (state) => state.satelliteRenderingMode,
   );
+  const selectedMapScene = useStore(mapLayerStore, (state) => state.selectedScene);
   const [today] = useState(() => clock.now());
   const latestMonth = currentSearchMonth(today).month;
   const [calendarMonth, setCalendarMonth] = useState(latestMonth);
@@ -937,21 +964,16 @@ export function SatelliteBrowser({
       ? fallbackCoordinates
       : `${searchViewport.center.latitude.toFixed(4)}, ${searchViewport.center.longitude.toFixed(4)}`;
   const restoredScene = useMemo(() => {
-    if (
-      mapLayers === null ||
-      (appliedImagery.status !== 'ready' &&
-        appliedImagery.status !== 'preview' &&
-        appliedImagery.status !== 'hidden')
-    ) {
-      return null;
-    }
-    return mapLayers.getAppliedScene();
-  }, [appliedImagery, mapLayers]);
+    return selectedMapScene ?? mapLayers?.getSelectedScene() ?? null;
+  }, [mapLayers, selectedMapScene]);
   const restoredResult = useMemo(
     () =>
-      restoredScene === null || viewport === null
+      restoredScene === null
         ? null
-        : singleSceneResult(restoredScene, viewport),
+        : singleSceneResult(
+            restoredScene,
+            viewport ?? sceneFootprintViewport(restoredScene),
+          ),
     [restoredScene, viewport],
   );
   const showingRestoredScene =

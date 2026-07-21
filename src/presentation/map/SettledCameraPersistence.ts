@@ -49,7 +49,7 @@ export class SettledCameraPersistence {
 
     this.#saving = this.#saving.then(async () => {
       try {
-        await this.repository.save(view);
+        await this.repository.save(view.camera);
       } catch {
         this.logger.log({ level: 'warn', name: 'storage.map-camera.save-failed' });
         this.onFailure();

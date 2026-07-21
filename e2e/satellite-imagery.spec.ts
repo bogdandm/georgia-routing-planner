@@ -89,7 +89,7 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
   );
 });
 
-test('applies, hides, restores, and preserves a Sentinel scene across workspaces', async ({
+test('applies and hides a Sentinel scene without restoring it after reload', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -204,9 +204,10 @@ test('applies, hides, restores, and preserves a Sentinel scene across workspaces
   await page.reload();
   await expect(page.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Roads' })).not.toBeChecked();
-  await expect
-    .poll(() => rendererRequests.length)
-    .toBeGreaterThan(requestsBeforeReload);
+  await expect.poll(() => rendererRequests.length).toBe(requestsBeforeReload);
+  await expect(
+    page.getByRole('checkbox', { name: 'Satellite imagery' }),
+  ).toBeDisabled();
   await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByRole('tab', { name: 'Rendering' }).click();
   await expect(

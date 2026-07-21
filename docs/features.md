@@ -169,10 +169,9 @@ The expanded applied card shows validated acquisition, tile, orbit, product,
 edge-distance, and attribution evidence. `Fit footprint` preserves pitch and bearing;
 `Hide imagery` stops the raster without discarding results, selection, or the footprint.
 Clicking the already applied scene card de-applies it, removes its raster and footprint,
-and clears the saved applied scene. After refresh, a restored scene opens the Images
-pane as one selected entry so it can be de-applied without repeating a catalog search.
-The Satellite sidebar and results stay mounted but hidden across rail changes, so a user
-can inspect Layers and return without losing the search session.
+and clears the transient selection. The Satellite sidebar and results stay mounted but
+hidden across rail changes, so a user can inspect Layers and return without losing the
+search session.
 
 If the initial cards do not occupy most of the adjacent pane, the UI automatically
 reveals another local set or fetches preceding months, with a small bounded number of
@@ -182,6 +181,16 @@ archive traversal.
 Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
 `#markers`, or `#layers`. Loading an anchored URL restores that tab, and changing tabs
 updates the anchor.
+
+Regular map sharing is always available and encodes a 2D center and zoom; context-menu
+point links follow the same flat-camera contract and do not include satellite imagery.
+When a scene is selected, the share dialog enables its **Include selected satellite
+image** checkbox by default; clearing it omits the scene from both links. Included
+scenes use the current selection even while its raster is still rendering and open on
+the Satellite section. A separate 3D link is enabled only while terrain mode is active
+and additionally encodes bearing and pitch. Opening that link selects the 3D control
+immediately and initializes MapLibre with terrain, bearing, and pitch in its first map
+style rather than showing a delayed 2D-to-3D switch.
 
 ### Markers
 
@@ -217,9 +226,10 @@ Hiding imagery retains the applied scene and does not remove its footprint, sear
 results, or attribution contract. Relief and isoline visibility are independent of 3D
 terrain mode and satellite availability. Base land remains visible and cannot be
 disabled. Per-layer opacity, drag ordering, and custom layers are unavailable. Checkbox
-state, shared OpenStreetMap opacity, and the last successfully applied scene are stored
-locally and restored after refresh. The last successful imagery stretch is stored with
-those preferences and applied before a saved scene is restored.
+state, shared OpenStreetMap opacity, rendering mode, imagery stretch, and
+terrain-overlay preferences are stored locally and restored after refresh. Satellite
+scene metadata and assets are never persisted locally; imagery starts empty unless an
+explicit share URL requests a scene.
 
 ## Persistent map controls
 
@@ -309,17 +319,16 @@ field, so the map does not claim to identify every private or otherwise closed p
 
 ## Map-view persistence
 
-The map starts only after the last valid camera and terrain mode are read, preventing a
-visible jump from the Georgia overview to the saved position. `moveend` sends settled
-map views to a debounced persistence queue; successful 2D/3D transitions publish their
-mode explicitly. Animation-frame events are never persisted. A restored 3D view enables
-terrain as soon as the native map is ready instead of leaving a pitched flat view.
+The map starts only after the last valid center and zoom are read, preventing a visible
+jump from the Georgia overview to the saved position. `moveend` sends settled map views
+to a debounced persistence queue, but the repository deliberately discards terrain mode,
+bearing, and pitch. Animation-frame events are never persisted.
 
-- Stored value: schema-version 2 `map.camera` record containing camera and terrain mode
-  in the existing Dexie settings table. A schema-version 1 camera migrates to 3D when it
-  has a positive pitch and otherwise migrates to 2D.
-- Validation: finite values are clamped to supported longitude, latitude, zoom, bearing,
-  and pitch ranges.
+- Stored value: schema-version 3 `map.camera` record containing longitude, latitude, and
+  zoom in the existing Dexie settings table. Schema-version 1 and 2 cameras load with
+  zero bearing and pitch instead of restoring their former terrain orientation.
+- Validation: finite center and zoom values are clamped to supported ranges before a
+  flat camera is returned.
 - Corrupt value: delete it, log a repair event, and use the Georgia overview.
 - Failed or non-settling storage: show a warning and mount with the overview after a
   bounded wait.
@@ -355,7 +364,8 @@ The 2D/3D control operates on the same MapLibre instance and shared DEM source. 
 3D levels the camera before applying terrain, waits for the source to become usable, and
 then restores a useful pitch without persisting the intermediate view. Disabling terrain
 levels the camera before removing its terrain elevation reference, while retaining
-center and zoom.
+center and zoom. Ordinary reloads also restart in 2D: durable camera state contains only
+center and zoom, never terrain mode, bearing, or pitch.
 
 - Duplicate clicks share one in-flight transition.
 - Conflicting transitions fail explicitly instead of racing.

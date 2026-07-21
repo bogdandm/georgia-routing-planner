@@ -137,14 +137,95 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
     expect(screen.getByRole('dialog', { name: 'Share this map view' })).toBeVisible();
     const link = screen.getByRole<HTMLTextAreaElement>('textbox', {
-      name: 'Share link',
+      name: '2D share link',
     });
-    expect(link.value).toContain('map=1');
+    expect(link.value).toContain('map=2');
     expect(link.value).toContain('lat=41.71234');
+    expect(link.value).toContain('view=2d');
+    expect(link.value).not.toContain('bearing=');
+    expect(screen.getByRole('button', { name: 'Copy 3D link' })).toBeDisabled();
     expect(window.location.search).toBe('');
-    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    await user.click(screen.getByRole('button', { name: 'Copy 2D link' }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('z=12.35'));
-    expect(await screen.findByText('Share link copied')).toBeVisible();
+    expect(await screen.findByText('2D share link copied')).toBeVisible();
+  });
+
+  it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
+    const user = userEvent.setup();
+    const selectedScene = syntheticSatelliteScene(
+      'selected-while-rendering',
+      '2026-07-20T10:12:00.000Z',
+    );
+    mapLayerStore.setState({
+      selectedScene,
+      appliedImagery: {
+        status: 'loading',
+        sceneKey: 'sentinel-2-l2a:selected-while-rendering',
+        previousSceneKey: 'sentinel-2-l2a:previously-rendered',
+        stage: 'rendering',
+        message: 'Rendering selected scene',
+        startedAt: 1,
+      },
+    });
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      terrainMode: 'terrain',
+      camera: {
+        longitude: 44.8,
+        latitude: 41.7,
+        zoom: 12.35,
+        bearing: 18.12,
+        pitch: 35.56,
+      },
+    });
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+
+    const link2d = screen.getByRole<HTMLTextAreaElement>('textbox', {
+      name: '2D share link',
+    });
+    const link3d = screen.getByRole<HTMLTextAreaElement>('textbox', {
+      name: '3D share link',
+    });
+    const includeSatellite = screen.getByRole('checkbox', {
+      name: 'Include selected satellite image',
+    });
+    expect(includeSatellite).toBeChecked();
+    expect(link2d.value).toContain('scene=sentinel-2-l2a%3Aselected-while-rendering');
+    expect(link2d.value).not.toContain('bearing=');
+    expect(link3d.value).toContain('bearing=18.12');
+    expect(link3d.value).toContain('pitch=35.56');
+    expect(screen.getByRole('button', { name: 'Copy 3D link' })).toBeEnabled();
+
+    await user.click(includeSatellite);
+    expect(link2d.value).not.toContain('scene=');
+    expect(link3d.value).not.toContain('scene=');
+  });
+
+  it('shows a shared selected-scene card before the map viewport or raster is ready', async () => {
+    window.history.replaceState(null, '', '/#satellite');
+    const selectedScene = syntheticSatelliteScene(
+      'shared-before-raster',
+      '2026-07-20T10:12:00.000Z',
+    );
+    mapLayerStore.setState({
+      selectedScene,
+      appliedImagery: {
+        status: 'loading',
+        sceneKey: 'sentinel-2-l2a:shared-before-raster',
+        previousSceneKey: null,
+        stage: 'preparing',
+        message: 'Preparing the selected scene',
+        startedAt: 1,
+      },
+    });
+    useUiStore.setState({ activeTab: 'satellite' });
+
+    renderWorkspaceShell();
+
+    expect(await screen.findByText('Product S2A_shared-before-raster')).toBeVisible();
+    expect(screen.getByText(/Applying true-color imagery/)).toBeVisible();
   });
 
   it('navigates the contextual feature panels without covering the map', async () => {
@@ -382,7 +463,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
   });
 
-  it('shows the restored applied scene as one removable image after refresh', async () => {
+  it('shows a selected applied scene as one removable image', async () => {
     const restoredScene = syntheticSatelliteScene(
       'restored-scene',
       '2026-06-18T10:12:00.000Z',
@@ -390,12 +471,15 @@ describe('WorkspaceShell', () => {
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
     services.mapViewport.update(testViewport);
-    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(restoredScene);
     const clearScene = vi.spyOn(mapLayers, 'clearScene').mockImplementation(() => {
-      mapLayerStore.setState({ appliedImagery: { status: 'empty' } });
+      mapLayerStore.setState({
+        appliedImagery: { status: 'empty' },
+        selectedScene: null,
+      });
       return { status: 'success' };
     });
     mapLayerStore.setState({
+      selectedScene: restoredScene,
       appliedImagery: {
         status: 'ready',
         sceneKey: 'sentinel-2-l2a:restored-scene',

@@ -24,6 +24,7 @@ class FakeNativeMap {
   public readonly jumpCalls: Record<string, unknown>[] = [];
   public repaintCalls = 0;
   public terrainElevation: number | null = null;
+  public initialTerrain: unknown = null;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -118,6 +119,12 @@ class FakeNativeMap {
 
   public setTerrain(value: unknown): void {
     this.terrainValues.push(value);
+  }
+
+  public getTerrain(): unknown {
+    return this.terrainValues.length === 0
+      ? this.initialTerrain
+      : this.terrainValues.at(-1);
   }
 
   public easeTo(options: Record<string, unknown>): void {
@@ -329,6 +336,52 @@ describe('MapLibreFacade', () => {
     await facade.setTerrainMode('terrain');
     expect(nativeMap.addSourceCalls).toBe(1);
     facade.destroy();
+  });
+
+  it('recognizes terrain configured in an explicit shared 3D map style', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    nativeMap.fire('load');
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      terrainMode: 'terrain',
+      camera: { bearing: 12, pitch: 35 },
+    });
+    await expect(facade.setTerrainMode('terrain')).resolves.toEqual({
+      status: 'success',
+      mode: 'terrain',
+    });
+    expect(nativeMap.jumpCalls).toHaveLength(0);
+  });
+
+  it('can disable initial shared terrain before the map load event updates its snapshot', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'loading',
+      terrainMode: 'flat',
+    });
+    await expect(facade.setTerrainMode('flat')).resolves.toEqual({
+      status: 'success',
+      mode: 'flat',
+    });
+    expect(nativeMap.terrainValues.at(-1)).toBeNull();
+
+    nativeMap.fire('load');
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      terrainMode: 'flat',
+      camera: { bearing: 0, pitch: 0 },
+    });
   });
 
   it('does not persist the temporary level camera used to enter 3D safely', async () => {

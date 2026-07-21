@@ -20,7 +20,10 @@ import Map, {
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
-import type { MapViewState } from '@/application/ports/MapCameraRepository';
+import type {
+  MapCamera as PersistedMapCamera,
+  MapViewState,
+} from '@/application/ports/MapCameraRepository';
 import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
@@ -29,8 +32,10 @@ import {
   type TerrainControlState,
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
+import { mapSourceIds } from '@/presentation/map/mapIds';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
-import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
+import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   consumeMapFitBoundsCommand,
   consumeMapNavigationCommand,
@@ -78,9 +83,9 @@ function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
 }
 
 async function loadMapViewWithDeadline(
-  load: () => Promise<MapViewState | null>,
+  load: () => Promise<PersistedMapCamera | null>,
   timeoutMs: number,
-): Promise<MapViewState | null> {
+): Promise<PersistedMapCamera | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -117,9 +122,15 @@ export function MapWorkspace({
     satelliteCatalogGateway,
     idGenerator,
   } = useRuntimeServices();
+  const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
-  const terrainRestoreAttempted = useRef(false);
-  const sharedSceneRestoreAttempted = useRef(false);
+  const [sharedTerrainUrlIntentActive, setSharedTerrainUrlIntentActive] = useState(
+    () => sharedMapView?.orientation.mode === '3d',
+  );
+  const [sharedSceneToApply, setSharedSceneToApply] = useState<SatelliteScene | null>(
+    null,
+  );
+  const sharedSceneApplyController = useRef<AbortController | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
@@ -201,7 +212,14 @@ export function MapWorkspace({
   );
   const getSnapshot = useCallback(() => facade.getDiagnosticsSnapshot(), [facade]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const terrainState: TerrainControlState = terrainCommandState ?? snapshot.terrainMode;
+  const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
+  const terrainState: TerrainControlState =
+    terrainCommandState ??
+    (sharedTerrainRequested &&
+    sharedTerrainUrlIntentActive &&
+    snapshot.lifecycle === 'loading'
+      ? 'terrain'
+      : snapshot.terrainMode);
 
   useEffect(() => {
     const publishViewport = () => {
@@ -231,13 +249,27 @@ export function MapWorkspace({
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
   }, [facade, fitBoundsCommand]);
-  const mapStyle = useMemo(
-    () =>
-      mapProviderConfiguration.status === 'valid'
-        ? createHikingMapStyle(mapProviderConfiguration.value)
-        : unavailableMapStyle,
-    [mapProviderConfiguration],
-  );
+  const mapStyle = useMemo(() => {
+    if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
+    const style = createHikingMapStyle(mapProviderConfiguration.value);
+    if (sharedMapView?.orientation.mode !== '3d' || mapLayers === null) {
+      return style;
+    }
+    return {
+      ...style,
+      sources: {
+        ...style.sources,
+        [mapSourceIds.terrainDem]: createTerrainDemSource(
+          mapProviderConfiguration.value.terrain,
+          mapLayers.createDemTileUrl(),
+        ),
+      },
+      terrain: {
+        source: mapSourceIds.terrainDem,
+        exaggeration: mapProviderConfiguration.value.terrain.exaggeration,
+      },
+    } satisfies StyleSpecification;
+  }, [mapLayers, mapProviderConfiguration, sharedMapView]);
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
@@ -279,6 +311,16 @@ export function MapWorkspace({
       setTerrainCommandState('failed');
     },
     [facade, retryDelaysMs],
+  );
+
+  const handleTerrainControlChange = useCallback(
+    (mode: 'flat' | 'terrain') => {
+      // A direct user choice supersedes the startup intent from a shared URL, including
+      // while MapLibre is still loading and its diagnostics snapshot remains stale.
+      setSharedTerrainUrlIntentActive(false);
+      void handleTerrainModeChange(mode);
+    },
+    [handleTerrainModeChange],
   );
 
   useEffect(
@@ -324,16 +366,13 @@ export function MapWorkspace({
     void loadMapViewWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
       .then((view) => {
         if (active) {
-          const fallback = view ?? {
-            camera: defaultGeorgiaCamera,
-            terrainMode: 'flat' as const,
-          };
+          const fallback = view ?? defaultGeorgiaCamera;
           setRestoredView({
-            ...fallback,
             camera: applySharedMapView(
-              fallback.camera,
-              parseSharedMapView(window.location.search),
+              { ...fallback, bearing: 0, pitch: 0 },
+              sharedMapView,
             ),
+            terrainMode: sharedMapView?.orientation.mode === '3d' ? 'terrain' : 'flat',
           });
         }
       })
@@ -350,55 +389,45 @@ export function MapWorkspace({
     return () => {
       active = false;
     };
-  }, [logger, mapCameraRepository, restoreTimeoutMs]);
+  }, [logger, mapCameraRepository, restoreTimeoutMs, sharedMapView]);
 
   useEffect(() => {
-    if (
-      restoredView?.terrainMode !== 'terrain' ||
-      snapshot.lifecycle !== 'ready' ||
-      snapshot.terrainMode === 'terrain' ||
-      terrainRestoreAttempted.current
-    ) {
-      return;
+    const shared = sharedMapView;
+    if (shared?.sceneKey !== null && shared !== null) {
+      setActiveTab('satellite');
+      setNavigationCollapsed(false);
     }
-    terrainRestoreAttempted.current = true;
-    void handleTerrainModeChange('terrain');
-  }, [handleTerrainModeChange, restoredView, snapshot.lifecycle, snapshot.terrainMode]);
+  }, [setActiveTab, setNavigationCollapsed, sharedMapView]);
 
   useEffect(() => {
-    const shared = parseSharedMapView(window.location.search);
+    const shared = sharedMapView;
     if (
       shared?.sceneKey === null ||
       shared === null ||
-      snapshot.lifecycle !== 'ready' ||
-      sharedSceneRestoreAttempted.current ||
       mapLayers === null ||
       satelliteCatalogGateway?.getScene === undefined
     ) {
       return;
     }
-    sharedSceneRestoreAttempted.current = true;
     const separator = shared.sceneKey.indexOf(':');
     const collection = shared.sceneKey.slice(0, separator);
     const sceneId = shared.sceneKey.slice(separator + 1);
-    const currentScene = mapLayers.getAppliedScene();
-    if (currentScene !== null && satelliteSceneKey(currentScene) === shared.sceneKey) {
-      return;
-    }
     const controller = new AbortController();
     void satelliteCatalogGateway
       .getScene(collection, sceneId, {
         operationId: idGenerator.generate(),
         signal: controller.signal,
       })
-      .then(async (scene) => {
-        if (scene === null || controller.signal.aborted) return;
-        const result = await mapLayers.applyScene(scene, controller.signal);
-        if (result.status === 'failed') {
+      .then((scene) => {
+        if (controller.signal.aborted) return;
+        if (scene === null) {
           setCameraMessage(
             'The shared satellite image could not be restored. The shared map location is still available.',
           );
+          return;
         }
+        mapLayers.selectScene(scene);
+        setSharedSceneToApply(scene);
       })
       .catch((error: unknown) => {
         if (
@@ -414,7 +443,35 @@ export function MapWorkspace({
     return () => {
       controller.abort();
     };
-  }, [idGenerator, mapLayers, satelliteCatalogGateway, snapshot.lifecycle]);
+  }, [idGenerator, mapLayers, satelliteCatalogGateway, sharedMapView]);
+
+  useEffect(() => {
+    if (
+      sharedSceneToApply === null ||
+      snapshot.lifecycle !== 'ready' ||
+      mapLayers === null
+    ) {
+      return;
+    }
+    const controller = new AbortController();
+    sharedSceneApplyController.current = controller;
+    void mapLayers.applyScene(sharedSceneToApply, controller.signal).then((result) => {
+      if (sharedSceneApplyController.current !== controller) return;
+      sharedSceneApplyController.current = null;
+      setSharedSceneToApply(null);
+      if (result.status === 'failed') {
+        setCameraMessage(
+          'The shared satellite image could not be restored. The shared map location is still available.',
+        );
+      }
+    });
+    return () => {
+      if (sharedSceneApplyController.current === controller) {
+        sharedSceneApplyController.current = null;
+        controller.abort();
+      }
+    };
+  }, [mapLayers, sharedSceneToApply, snapshot.lifecycle]);
 
   useEffect(() => {
     return () => {
@@ -465,7 +522,6 @@ export function MapWorkspace({
 
   const copyPointLink = () => {
     if (contextMenu === null) return;
-    const scene = mapLayers?.getAppliedScene() ?? null;
     const url = createMapShareUrl(
       window.location.href,
       {
@@ -473,7 +529,7 @@ export function MapWorkspace({
         longitude: contextMenu.longitude,
         zoom: snapshot.camera.zoom,
       },
-      scene === null ? null : satelliteSceneKey(scene),
+      null,
     );
     closeContextMenu();
     void copyText(url, 'Point link copied');
@@ -554,9 +610,7 @@ export function MapWorkspace({
       {restoredView !== null && mapProviderConfiguration.status === 'valid' ? (
         <TerrainModeControl
           state={terrainState}
-          onModeChange={(mode) => {
-            void handleTerrainModeChange(mode);
-          }}
+          onModeChange={handleTerrainControlChange}
         />
       ) : null}
       {!online && mapProviderConfiguration.status === 'valid' ? (

@@ -1,9 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -13,6 +14,32 @@ import {
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
+
+const sharedScene: SatelliteScene = {
+  id: 'shared-scene',
+  collection: 'sentinel-2-l2a',
+  platform: 'sentinel-2a',
+  productLevel: 'L2A',
+  acquiredAt: '2026-07-20T10:12:00.000Z',
+  cloudCoverPercent: 4,
+  footprint: {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [44, 42],
+        [45, 42],
+        [45, 43],
+        [44, 42],
+      ],
+    ],
+  },
+  tileId: '38TMN',
+  orbit: 'R036',
+  productId: 'S2A_SHARED',
+  thumbnailHref: null,
+  visualAsset: { kind: 'unavailable' },
+  attribution: 'Synthetic test data',
+};
 
 describe('MapWorkspace', () => {
   beforeEach(() => {
@@ -41,6 +68,120 @@ describe('MapWorkspace', () => {
     expect(
       await screen.findByText('Shared camera 41.7, 44.8, zoom 13.25'),
     ).toBeVisible();
+  });
+
+  it('selects and mounts explicit shared 3D state without a delayed terrain toggle', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5',
+    );
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={(initialCamera) => (
+            <div>
+              Shared 3D camera {initialCamera.bearing}/{initialCamera.pitch}
+            </div>
+          )}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Shared 3D camera 18.5/35.5');
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(facade.terrainModeRequests).toEqual([]);
+    act(() => {
+      facade.setSnapshot({
+        lifecycle: 'ready',
+        terrainMode: 'terrain',
+        camera: {
+          longitude: 44.8,
+          latitude: 41.7,
+          zoom: 13.25,
+          bearing: 18.5,
+          pitch: 35.5,
+        },
+      });
+    });
+    expect(facade.terrainModeRequests).toEqual([]);
+  });
+
+  it('keeps an early 2D choice from a shared 3D URL after map readiness', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5#satellite',
+    );
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shared 3D map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Shared 3D map');
+    const flatButton = screen.getByRole('button', { name: 'Show flat 2D map' });
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(flatButton);
+
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+    expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+  });
+
+  it('opens and selects a shared satellite scene before map rendering is ready', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=2d&scene=sentinel-2-l2a%3Ashared-scene#tracks',
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene: () => Promise.resolve(sharedScene),
+      },
+    });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const selectScene = vi.spyOn(mapLayers, 'selectScene');
+    const applyScene = vi
+      .spyOn(mapLayers, 'applyScene')
+      .mockResolvedValue({ status: 'success' });
+    const facade = new FakeMapFacade();
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shared scene map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await waitFor(() => {
+      expect(selectScene).toHaveBeenCalledWith(sharedScene);
+    });
+    expect(useUiStore.getState().activeTab).toBe('satellite');
+    expect(mapLayerStore.getState().selectedScene).toEqual(sharedScene);
+    expect(applyScene).not.toHaveBeenCalled();
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(applyScene).toHaveBeenCalledWith(sharedScene, expect.any(AbortSignal));
+    });
   });
 
   it('delivers serializable search navigation commands through the facade', async () => {
@@ -135,8 +276,7 @@ describe('MapWorkspace', () => {
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
-        load: () =>
-          Promise.resolve({ camera: restoredCamera, terrainMode: 'flat' as const }),
+        load: () => Promise.resolve(restoredCamera),
         save: () => Promise.resolve(),
       },
     };
@@ -156,21 +296,18 @@ describe('MapWorkspace', () => {
     await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
   });
 
-  it('restores persisted 3D mode when the native map becomes ready', async () => {
+  it('always restores a persisted camera in 2D', async () => {
     const facade = new FakeMapFacade();
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
         load: () =>
           Promise.resolve({
-            camera: {
-              longitude: 45.2,
-              latitude: 42.4,
-              zoom: 10,
-              bearing: 18,
-              pitch: 25,
-            },
-            terrainMode: 'terrain' as const,
+            longitude: 45.2,
+            latitude: 42.4,
+            zoom: 10,
+            bearing: 18,
+            pitch: 25,
           }),
         save: () => Promise.resolve(),
       },
@@ -178,19 +315,25 @@ describe('MapWorkspace', () => {
 
     render(
       <RuntimeServicesProvider services={services}>
-        <MapWorkspace facade={facade} mapCanvas={<div>Restored terrain map</div>} />
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={(initialCamera) => (
+            <div>
+              Restored flat map {String(initialCamera.bearing)}/
+              {String(initialCamera.pitch)}
+            </div>
+          )}
+        />
       </RuntimeServicesProvider>,
     );
 
-    await screen.findByText('Restored terrain map');
+    await screen.findByText('Restored flat map 0/0');
     expect(facade.terrainModeRequests).toEqual([]);
     act(() => {
       facade.setSnapshot({ lifecycle: 'ready' });
     });
-    await waitFor(() => {
-      expect(facade.terrainModeRequests).toEqual(['terrain']);
-    });
-    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+    expect(facade.terrainModeRequests).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

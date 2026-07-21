@@ -740,7 +740,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('de-applies the current scene and clears its persisted map resources', async () => {
+  it('de-applies the current scene without writing scene data to preferences', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -757,10 +757,36 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().appliedImagery).toEqual({ status: 'empty' });
     expect(mapLayerStore.getState().automaticAlternativeProviderState).toBe('inactive');
     await waitFor(async () => {
-      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        appliedScene: null,
-      });
+      await expect(services.database.settings.get('map.layers')).resolves.toBeDefined();
     });
+    await expect(
+      services.database.settings.get('map.layers'),
+    ).resolves.not.toHaveProperty('value.appliedScene');
+  });
+
+  it('publishes the selected scene before its replacement raster finishes', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    const selectedScene = scene('selected-while-rendering');
+
+    const application = controller.applyScene(
+      selectedScene,
+      new AbortController().signal,
+    );
+
+    expect(controller.getSelectedScene()).toEqual(selectedScene);
+    expect(mapLayerStore.getState().selectedScene).toEqual(selectedScene);
+    expect(mapLayerStore.getState().appliedImagery).toMatchObject({
+      status: 'loading',
+      sceneKey: 'sentinel-2-l2a:selected-while-rendering',
+    });
+    map.sourceLoaded = true;
+    map.fire('sourcedata', { sourceId: 'sentinel-raster-a', isSourceLoaded: true });
+    await expect(application).resolves.toEqual({ status: 'success' });
   });
 
   it('reports a safe actionable reason when the renderer rejects a tile request', async () => {
@@ -1009,6 +1035,7 @@ describe('MapLibreLayerController', () => {
       tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
       error: { message: 'AJAXError: Failed to fetch', status: 0 },
     });
+    await Promise.resolve();
 
     expect(map.refreshTilesCalls).toHaveLength(0);
     expect(map.setTilesCalls).toBe(1);
@@ -1028,7 +1055,8 @@ describe('MapLibreLayerController', () => {
       sourceId: 'sentinel-raster-a',
       isSourceLoaded: true,
       sourceDataType: 'content',
-      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+      // MapLibre can request a different tile set after switching templates.
+      tile: { tileID: { canonical: { x: 61, y: 92, z: 11 } } },
     });
     await vi.advanceTimersByTimeAsync(2_000);
 
@@ -1058,6 +1086,7 @@ describe('MapLibreLayerController', () => {
       error: { message: 'AJAXError: Too Many Requests', status: 429 },
     };
     map.fire('error', failureEvent);
+    await Promise.resolve();
 
     expect(map.refreshTilesCalls).toHaveLength(0);
     expect(map.setTilesCalls).toBe(1);
@@ -1090,7 +1119,8 @@ describe('MapLibreLayerController', () => {
       sourceId: 'sentinel-raster-a',
       isSourceLoaded: true,
       sourceDataType: 'content',
-      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+      // The replacement template is allowed to settle with a different tile set.
+      tile: { tileID: { canonical: { x: 61, y: 92, z: 11 } } },
     });
     await vi.advanceTimersByTimeAsync(2_000);
 
@@ -1143,7 +1173,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().automaticAlternativeProviderState).toBe('active');
   });
 
-  it('restores the saved scene and visibility after a page refresh', async () => {
+  it('restores presentation preferences without restoring satellite imagery', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -1160,7 +1190,6 @@ describe('MapLibreLayerController', () => {
         'places-and-pois': true,
       },
       openStreetMapOpacity: 0.55,
-      appliedScene: scene('saved-scene'),
       satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
@@ -1174,15 +1203,14 @@ describe('MapLibreLayerController', () => {
 
     await controller.restorePersistedState();
 
-    expect(map.sources.has('sentinel-raster-a')).toBe(true);
-    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+    expect(map.sources.has('sentinel-raster-a')).toBe(false);
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: { 'satellite-imagery': false, roads: false },
-      appliedImagery: { status: 'hidden', sceneId: 'saved-scene' },
+      appliedImagery: { status: 'empty' },
     });
     expect(controller.getRenderingTuning()).toEqual({
       reflectanceMax: 6_500,
@@ -1196,14 +1224,13 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('waits for the map style before restoring persisted imagery', async () => {
+  it('does not restore legacy persisted imagery after the map style becomes ready', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
     await services.database.saveMapLayerPreferences({
       visibility: mapLayerStore.getState().visibility,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
-      appliedScene: scene('saved-before-style'),
       satelliteRenderingMode: 'auto',
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
@@ -1223,12 +1250,7 @@ describe('MapLibreLayerController', () => {
 
     map.styleLoaded = true;
     controller.attach(map as unknown as MapLibreMap);
-    await waitFor(() => {
-      expect(mapLayerStore.getState().appliedImagery).toMatchObject({
-        status: 'ready',
-        sceneId: 'saved-before-style',
-      });
-    });
+    expect(mapLayerStore.getState().appliedImagery).toEqual({ status: 'empty' });
   });
 
   it('atomically reapplies and persists user imagery stretch values', async () => {

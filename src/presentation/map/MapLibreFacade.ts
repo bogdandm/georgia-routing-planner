@@ -359,7 +359,16 @@ export class MapLibreFacade implements MapFacade {
       });
     }
 
-    if (this.#snapshot.terrainMode === mode) {
+    const currentMode =
+      this.#map === null
+        ? this.#snapshot.terrainMode
+        : this.#map.getTerrain() === null
+          ? 'flat'
+          : 'terrain';
+    if (currentMode === mode) {
+      if (this.#snapshot.terrainMode !== mode) {
+        this.updateSnapshot({ terrainMode: mode });
+      }
       return Promise.resolve({ status: 'success', mode });
     }
 
@@ -403,6 +412,7 @@ export class MapLibreFacade implements MapFacade {
     }
     this.layerController?.attach(map);
     const style = map.getStyle();
+    const terrainMode = map.getTerrain() === null ? 'flat' : 'terrain';
     this.updateSnapshot({
       lifecycle:
         this.#snapshot.message === null ||
@@ -410,6 +420,7 @@ export class MapLibreFacade implements MapFacade {
           ? 'ready'
           : 'degraded',
       camera: this.readCamera(map),
+      terrainMode,
       styleId: style.name ?? initialSnapshot.styleId,
       sourceIds: Object.keys(style.sources),
       layerIds: style.layers.map((layer) => layer.id),

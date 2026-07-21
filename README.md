@@ -70,7 +70,6 @@ pnpm e2e
 | `pnpm test:coverage`                        | Enforce the repository coverage thresholds.                              |
 | `pnpm e2e`                                  | Build and test the Pages-like subpath in Chromium with axe.              |
 | `pnpm diagnostics:inspect -- <bundle.json>` | Validate and summarize an exported diagnostics bundle.                   |
-| `pnpm performance:terrain`                  | Benchmark deterministic Terrarium filter candidates locally.             |
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
 | `pnpm check`                                | Run all non-browser CI checks; CI invokes `pnpm e2e` separately.         |
 
@@ -144,12 +143,6 @@ mounts and presents a safe configuration message without echoing the input or it
 Provider attribution remains visible in MapLibre. The OpenFreeMap/OpenMapTiles/OSM
 credits are shown in 2D; Mapzen/AWS terrain attribution is added whenever relief,
 contours, or 3D terrain use the DEM source.
-
-`pnpm performance:terrain -- --iterations 30 --json` runs the non-CI deterministic
-Terrarium benchmark. It checks candidate output against the reference oracle before
-timing seven seeded 256 x 256 scenarios and prints environment, median, p95, and
-throughput evidence. Compare runs only on the same machine and runtime; wall-clock
-values are not a unit-test contract.
 
 ## Developer mode and diagnostics
 

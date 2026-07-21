@@ -27,8 +27,6 @@
     "src",
     "test",
     "tools/diagnostics/summarizeDiagnostics.ts",
-    "tools/performance/referenceTerrariumFilter.ts",
-    "tools/performance/terrariumBenchmark.ts",
     "tools/repository/artifactPolicy.ts"
   ]
 }

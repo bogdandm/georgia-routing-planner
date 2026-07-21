@@ -320,7 +320,8 @@ test('uses conventional native camera gestures and resets them with the compass'
     .toBeGreaterThan(0);
 
   const cameraBeforeKeyboard = await readStoredCamera(page);
-  await canvas.press('Shift+ArrowRight');
+  await canvas.focus();
+  await page.keyboard.press('Shift+ArrowRight');
   await expect
     .poll(async () => (await readStoredCamera(page))?.bearing, {
       timeout: cameraPersistenceTimeoutMs,

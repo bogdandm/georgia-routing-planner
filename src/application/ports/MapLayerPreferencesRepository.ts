@@ -22,7 +22,7 @@ export interface SatelliteRenderingTuning {
   readonly saturation: number;
 }
 
-export type SatelliteRenderingMode = 'auto' | 'server' | 'browser';
+export type SatelliteRenderingMode = 'auto' | 'server' | 'direct';
 
 export const defaultSatelliteRenderingMode: SatelliteRenderingMode = 'auto';
 

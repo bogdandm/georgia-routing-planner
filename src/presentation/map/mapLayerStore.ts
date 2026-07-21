@@ -25,7 +25,7 @@ export interface TerrainOverlaySnapshot {
 
 export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
-  readonly automaticBrowserFallbackActive: boolean;
+  readonly automaticAlternativeProviderState: 'inactive' | 'switching' | 'active';
   readonly errorMessage: string | null;
   readonly terrainComputeStatus: TerrainComputeStatus;
   readonly terrainComputeQueue: TerrainComputeQueueState;
@@ -38,7 +38,7 @@ export interface MapLayerState {
 
 export const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
-  automaticBrowserFallbackActive: false,
+  automaticAlternativeProviderState: 'inactive',
   errorMessage: null,
   terrainComputeStatus: 'worker',
   terrainComputeQueue: {

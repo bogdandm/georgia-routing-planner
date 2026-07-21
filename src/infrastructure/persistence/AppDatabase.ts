@@ -59,7 +59,7 @@ const mapLayerPreferencesSchema = z
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     satelliteRenderingMode: z
-      .enum(['auto', 'server', 'browser'])
+      .enum(['auto', 'server', 'direct'])
       .default(defaultSatelliteRenderingMode),
     renderingTuning: z
       .object({

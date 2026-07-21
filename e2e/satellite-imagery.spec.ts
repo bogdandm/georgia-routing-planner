@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
-test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without retrying', async ({
+test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery without retrying', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -50,20 +50,43 @@ test('auto mode switches a CORS-hidden TiTiler 429 to browser rendering without 
   });
   await expect(
     page.getByText(
-      'Satellite imagery switched to browser rendering because the server was unavailable.',
+      'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.',
     ),
   ).toBeVisible({ timeout: 10_000 });
   expect(rendererRequests.length).toBeGreaterThan(0);
   expect(new Set(rendererRequests).size).toBe(rendererRequests.length);
   expect(cogRequests.length).toBeGreaterThan(0);
 
+  await page.getByRole('button', { name: 'Open settings' }).click();
+  const renderSettings = page.getByRole('dialog', { name: 'Settings' });
+  await renderSettings.getByRole('tab', { name: 'Rendering' }).click();
+  await renderSettings.getByRole('combobox', { name: 'Satellite render' }).click();
+  await page.getByRole('option', { name: 'Direct' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByText('True-color imagery applied')).toBeVisible({
+    timeout: 90_000,
+  });
+  await expect(
+    page.getByRole('button', { name: 'Show current error details' }),
+  ).not.toBeVisible();
+
   await page
     .getByRole('button', { name: 'Developer diagnostics', exact: true })
     .click();
+  await page.getByRole('tab', { name: 'Map' }).click();
+  const providerLayers = await page
+    .getByRole('list', { name: 'Ordered map layers' })
+    .getByRole('listitem')
+    .allTextContents();
+  expect(providerLayers.filter((id) => id.startsWith('sentinel-raster-'))).toHaveLength(
+    1,
+  );
   await page.getByRole('tab', { name: /Logs/u }).click();
   const events = page.getByRole('list', { name: 'Recent diagnostic events' });
-  await expect(events).toContainText('satellite.imagery.browser-fallback-started');
-  await expect(events).toContainText('satellite.imagery.browser-fallback-completed');
+  await expect(events).toContainText('satellite.imagery.alternative-provider-started');
+  await expect(events).toContainText(
+    'satellite.imagery.alternative-provider-completed',
+  );
 });
 
 test('applies and hides a Sentinel scene without restoring it after reload', async ({
@@ -97,7 +120,9 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
   expect(rendererRequests[0]).toContain(
     'assets=red&assets=green&assets=blue&asset_as_band=true',
   );
-  await expect(page.getByText(/COG tiles rendered by TiTiler/u)).toBeVisible();
+  await expect(
+    page.getByTestId('map-workspace').getByText(/Earth Search \/ Element 84/u),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByRole('tab', { name: 'Rendering' }).click();

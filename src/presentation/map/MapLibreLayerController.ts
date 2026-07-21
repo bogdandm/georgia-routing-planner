@@ -83,8 +83,7 @@ const openStreetMapOpacityProperties = {
 const maximumRasterRecoveryAttempts = 3;
 const rasterRecoveryBaseDelayMs = 1_000;
 const rasterSourceStabilityMs = 2_000;
-const canceledBrowserSourceErrorWindowMs = 5_000;
-export const browserSatelliteRenderingTimeoutMs = 120_000;
+const canceledDirectSourceErrorWindowMs = 5_000;
 
 export const logicalNativeLayerGroups: Readonly<
   Record<
@@ -290,12 +289,13 @@ export class MapLibreLayerController
   #appliedOpenStreetMapOpacity: number | null = null;
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
-  readonly #browserFallbackUrls = new Map<string, string>();
+  readonly #directFallbackUrls = new Map<string, string>();
   readonly #rasterTileUrls = new Map<string, string>();
   readonly #staleRendererTileUrls = new Map<string, string>();
-  readonly #browserFallbackHandledEvents = new WeakSet<object>();
-  readonly #browserFallbackSources = new Set<string>();
-  readonly #pendingBrowserFallbacks = new Set<string>();
+  readonly #directFallbackHandledEvents = new WeakSet<object>();
+  readonly #directFallbackSources = new Set<string>();
+  readonly #pendingDirectFallbacks = new Set<string>();
+  readonly #waitingForRasterData = new Set<string>();
   #progressiveRasterSourceId: string | null = null;
   #stagingSourceId: string | null = null;
   #expectedRasterCancellationUntil = 0;
@@ -308,7 +308,6 @@ export class MapLibreLayerController
     private readonly logger: DiagnosticLogger,
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
-    private readonly satelliteRendererTimeoutMs: number,
     private readonly preferences: MapLayerPreferencesRepository,
   ) {
     mapLayerStore.setState({
@@ -440,7 +439,7 @@ export class MapLibreLayerController
     signal: AbortSignal,
   ): Promise<SatelliteImageryCommandResult> {
     this.selectScene(scene);
-    return this.runSceneApplication(scene, signal, true);
+    return this.runSceneApplication(scene, signal, true, true);
   }
 
   public clearScene(): SatelliteImageryCommandResult {
@@ -461,7 +460,7 @@ export class MapLibreLayerController
     mapLayerStore.setState({
       appliedImagery: { status: 'empty' },
       selectedScene: null,
-      automaticBrowserFallbackActive: false,
+      automaticAlternativeProviderState: 'inactive',
       errorMessage: null,
     });
     this.applyMapVisualMode();
@@ -531,18 +530,18 @@ export class MapLibreLayerController
     }
     const details = mapFailureDetails(event);
     if (!details.retryable) {
-      if (this.#browserFallbackHandledEvents.has(event)) {
-        return { state: 'browser-fallback', retryAttempt: 0, retryDelayMs: 0 };
+      if (this.#directFallbackHandledEvents.has(event)) {
+        return { state: 'alternative-provider', retryAttempt: 0, retryDelayMs: 0 };
       }
       if (this.isStaleRendererFailure(sourceId, event, details)) {
-        return { state: 'browser-fallback', retryAttempt: 0, retryDelayMs: 0 };
+        return { state: 'alternative-provider', retryAttempt: 0, retryDelayMs: 0 };
       }
       if (
         this.#satelliteRenderingMode === 'auto' &&
         (details.reason === 'rate-limit' || details.reason === 'no-response') &&
-        this.activateBrowserFallback(sourceId, event, details)
+        this.activateDirectFallback(sourceId, event, details)
       ) {
-        return { state: 'browser-fallback', retryAttempt: 0, retryDelayMs: 0 };
+        return { state: 'alternative-provider', retryAttempt: 0, retryDelayMs: 0 };
       }
       return { state: 'not-retryable', retryAttempt: 0, retryDelayMs: 0 };
     }
@@ -562,6 +561,12 @@ export class MapLibreLayerController
       };
     }
     if (tracker.attempts >= maximumRasterRecoveryAttempts) {
+      if (
+        this.#satelliteRenderingMode === 'auto' &&
+        this.activateDirectFallback(sourceId, event, details)
+      ) {
+        return { state: 'alternative-provider', retryAttempt: 0, retryDelayMs: 0 };
+      }
       return {
         state: 'exhausted',
         retryAttempt: tracker.attempts,
@@ -579,10 +584,10 @@ export class MapLibreLayerController
     if (
       event.sourceDataType === 'content' &&
       event.isSourceLoaded &&
-      this.#browserFallbackSources.has(event.sourceId)
+      this.#directFallbackSources.has(event.sourceId)
     ) {
       // A template switch can replace the renderer's failed tile set with different
-      // browser-rendered coordinates. Source readiness proves the replacement set is
+      // direct-rendered coordinates. Source readiness proves the replacement set is
       // complete, so obsolete renderer coordinates must not keep the apply pending.
       tracker.pendingTiles.clear();
       tracker.hasUnscopedFailure = false;
@@ -607,13 +612,16 @@ export class MapLibreLayerController
   }
 
   public handleRasterSourceRecovered(sourceId: string): void {
-    if (this.#pendingBrowserFallbacks.delete(sourceId)) {
+    if (this.#pendingDirectFallbacks.delete(sourceId)) {
       this.#staleRendererTileUrls.delete(sourceId);
       this.logger.log({
         level: 'info',
-        name: 'satellite.imagery.browser-fallback-completed',
+        name: 'satellite.imagery.alternative-provider-completed',
         data: { sourceId },
       });
+      if (this.#satelliteRenderingMode === 'auto') {
+        mapLayerStore.setState({ automaticAlternativeProviderState: 'active' });
+      }
     }
     this.cancelRasterRecovery(sourceId);
   }
@@ -665,7 +673,9 @@ export class MapLibreLayerController
     this.#satelliteRenderingMode = mode;
     mapLayerStore.setState({
       satelliteRenderingMode: mode,
-      ...(mode === 'auto' ? {} : { automaticBrowserFallbackActive: false }),
+      ...(mode === 'auto'
+        ? {}
+        : { automaticAlternativeProviderState: 'inactive' as const }),
       errorMessage: null,
     });
     // Rendering mode is a durable user choice, not a property of one successful scene.
@@ -675,7 +685,9 @@ export class MapLibreLayerController
     if (sceneToRestart === null) {
       return { status: 'success' };
     }
-    const result = await this.runSceneApplication(sceneToRestart, signal, true);
+    // Provider modes must never share the map. Remove the current raster before the
+    // replacement starts; the vector style remains fully visible until new data arrives.
+    const result = await this.runSceneApplication(sceneToRestart, signal, true, true);
     if (result.status === 'success') {
       this.logger.log({
         level: 'info',
@@ -754,7 +766,12 @@ export class MapLibreLayerController
       this.persistStableState();
       return { status: 'success' };
     }
-    const result = await this.applySceneInternal(this.#appliedScene, signal, false);
+    const result = await this.runSceneApplication(
+      this.#appliedScene,
+      signal,
+      false,
+      false,
+    );
     if (result.status === 'failed') this.#renderingTuning = previousTuning;
     if (result.status === 'success') this.persistStableState();
     return result;
@@ -764,22 +781,37 @@ export class MapLibreLayerController
     scene: SatelliteScene,
     signal: AbortSignal,
     persist: boolean,
+    replaceCurrentScene: boolean,
   ): Promise<SatelliteImageryCommandResult> {
     this.cancelRasterRecovery();
     const map = this.#map;
     const sceneKey = satelliteSceneKey(scene);
     if (map === null) return this.applyFailure(sceneKey, 'The map is not ready yet.');
-    if (scene.visualAsset.kind !== 'sentinel-rgb-cogs') {
+    if (scene.visualAsset.kind !== 'sentinel-l2a') {
       return this.applyFailure(
         sceneKey,
         'This scene has no supported true-color asset.',
       );
     }
 
-    const sequence = ++this.#applySequence;
-    this.#stagingScene = scene;
     const previousSceneKey =
-      this.#appliedScene === null ? null : satelliteSceneKey(this.#appliedScene);
+      replaceCurrentScene || this.#appliedScene === null
+        ? null
+        : satelliteSceneKey(this.#appliedScene);
+    const sequence = ++this.#applySequence;
+    if (replaceCurrentScene) {
+      for (const rasterSlot of rasterSlots) {
+        this.cancelRasterRecovery(rasterSlot.sourceId);
+        this.removeSlot(map, rasterSlot);
+      }
+      this.removeFootprint(map);
+      this.#activeSlot = null;
+      this.#appliedScene = null;
+      this.reconcileTerrainOverlays();
+      this.applyMapVisualMode();
+      if (persist) this.persistStableState();
+    }
+    this.#stagingScene = scene;
     const operation = new SentinelQueryOperation(
       this.idGenerator.generate(),
       this.diagnostics,
@@ -801,15 +833,11 @@ export class MapLibreLayerController
     this.#stagingSourceId = slot.sourceId;
     try {
       operation.beginStep('select-visual-asset');
-      this.satelliteCogTiles.registerScene(
-        sceneKey,
-        scene.visualAsset,
-        this.#renderingTuning,
-      );
-      const browserFallbackUrl = this.satelliteCogTiles.createTileUrl(sceneKey);
-      const forceBrowserRendering = this.#satelliteRenderingMode === 'browser';
-      const tileUrl = forceBrowserRendering
-        ? browserFallbackUrl
+      this.satelliteCogTiles.registerScene(sceneKey, scene.visualAsset);
+      const directFallbackUrl = this.satelliteCogTiles.createTileUrl(sceneKey);
+      const forceDirectRendering = this.#satelliteRenderingMode === 'direct';
+      const tileUrl = forceDirectRendering
+        ? directFallbackUrl
         : this.createTileUrl(scene.visualAsset.itemHref);
       const bounds = sceneBounds(scene);
       operation.completeStep();
@@ -818,18 +846,19 @@ export class MapLibreLayerController
         sceneKey,
         previousSceneKey,
         'requesting-tiles',
-        forceBrowserRendering
-          ? 'Rendering true-color tiles in this browser…'
+        forceDirectRendering
+          ? 'Reading pre-rendered true-color Sentinel imagery directly…'
           : 'Requesting true-color tiles from the imagery renderer…',
         startedAt,
       );
       this.removeSlot(map, slot);
       // A cached or intercepted failure can fire synchronously from addSource. Register
       // recovery state first so even that earliest 429/status-zero event can switch.
-      this.#browserFallbackUrls.set(slot.sourceId, browserFallbackUrl);
+      this.#directFallbackUrls.set(slot.sourceId, directFallbackUrl);
       this.#rasterTileUrls.set(slot.sourceId, tileUrl);
-      if (forceBrowserRendering) this.#browserFallbackSources.add(slot.sourceId);
-      else this.#browserFallbackSources.delete(slot.sourceId);
+      this.#waitingForRasterData.add(slot.sourceId);
+      if (forceDirectRendering) this.#directFallbackSources.add(slot.sourceId);
+      else this.#directFallbackSources.delete(slot.sourceId);
       map.addSource(slot.sourceId, {
         type: 'raster',
         tiles: [tileUrl],
@@ -852,7 +881,6 @@ export class MapLibreLayerController
         },
         mapInsertionPoints.satelliteBeforeLayerId,
       );
-      this.startProgressiveRasterRendering(map, slot.sourceId);
       this.updateLoadingProgress(
         sceneKey,
         previousSceneKey,
@@ -860,12 +888,7 @@ export class MapLibreLayerController
         'Downloading, reprojecting, and decoding visible map tiles…',
         startedAt,
       );
-      await this.waitForSource(
-        map,
-        slot.sourceId,
-        signal,
-        this.#browserFallbackSources.has(slot.sourceId),
-      );
+      await this.waitForSource(map, slot.sourceId, signal);
       if (sequence !== this.#applySequence || this.#map !== map) {
         throw new DOMException('Superseded imagery application.', 'AbortError');
       }
@@ -889,6 +912,7 @@ export class MapLibreLayerController
         this.removeSlot(map, this.#activeSlot);
       }
       this.#activeSlot = slot;
+      this.startProgressiveRasterRendering(map, slot.sourceId);
       this.#progressiveRasterSourceId = null;
       this.#stagingSourceId = null;
       this.#stagingScene = null;
@@ -896,9 +920,11 @@ export class MapLibreLayerController
       this.reconcileTerrainOverlays();
       mapLayerStore.setState({
         appliedImagery: { status: 'ready', sceneKey, sceneId: scene.id, visible: true },
-        automaticBrowserFallbackActive:
+        automaticAlternativeProviderState:
           this.#satelliteRenderingMode === 'auto' &&
-          this.#browserFallbackSources.has(slot.sourceId),
+          this.#directFallbackSources.has(slot.sourceId)
+            ? 'active'
+            : 'inactive',
         visibility: { ...state.visibility, 'satellite-imagery': true },
         errorMessage: null,
       });
@@ -928,7 +954,7 @@ export class MapLibreLayerController
       const message =
         error instanceof SentinelRasterLoadError
           ? error.userMessage
-          : 'The true-color image could not be rendered. The previous map remains available.';
+          : 'The true-color image could not be rendered. The vector basemap remains available.';
       return this.applyFailure(sceneKey, message, previousSceneKey);
     }
   }
@@ -937,6 +963,7 @@ export class MapLibreLayerController
     scene: SatelliteScene,
     callerSignal: AbortSignal,
     persist: boolean,
+    replaceCurrentScene: boolean,
   ): Promise<SatelliteImageryCommandResult> {
     this.#activeApplyController?.abort();
     const controller = new AbortController();
@@ -947,7 +974,12 @@ export class MapLibreLayerController
     if (callerSignal.aborted) controller.abort();
     else callerSignal.addEventListener('abort', abortFromCaller, { once: true });
     try {
-      return await this.applySceneInternal(scene, controller.signal, persist);
+      return await this.applySceneInternal(
+        scene,
+        controller.signal,
+        persist,
+        replaceCurrentScene,
+      );
     } finally {
       callerSignal.removeEventListener('abort', abortFromCaller);
       if (this.#activeApplyController === controller) {
@@ -1357,7 +1389,9 @@ export class MapLibreLayerController
     const imagery = mapLayerStore.getState().appliedImagery;
     const mode: MapVisualMode =
       this.#progressiveRasterSourceId !== null ||
-      (this.#activeSlot !== null && imagery.status !== 'hidden')
+      (this.#activeSlot !== null &&
+        !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
+        imagery.status !== 'hidden')
         ? 'satellite'
         : 'vector';
     const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
@@ -1399,7 +1433,9 @@ export class MapLibreLayerController
     const imagery = mapLayerStore.getState().appliedImagery;
     const mode: MapVisualMode =
       this.#progressiveRasterSourceId !== null ||
-      (this.#activeSlot !== null && imagery.status !== 'hidden')
+      (this.#activeSlot !== null &&
+        !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
+        imagery.status !== 'hidden')
         ? 'satellite'
         : 'vector';
     const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
@@ -1462,16 +1498,16 @@ export class MapLibreLayerController
     map: MapLibreMap,
     sourceId: string,
     signal: AbortSignal,
-    startsInBrowser: boolean,
   ): Promise<void> {
     if (signal.aborted)
       return Promise.reject(new DOMException('Aborted', 'AbortError'));
-    if (map.isSourceLoaded(sourceId)) return Promise.resolve();
+    if (map.isSourceLoaded(sourceId)) {
+      this.startProgressiveRasterRendering(map, sourceId);
+      return Promise.resolve();
+    }
     return new Promise((resolve, reject) => {
       let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
-      let timeout: ReturnType<typeof setTimeout> | null = null;
       const cleanup = () => {
-        if (timeout !== null) clearTimeout(timeout);
         if (stabilityTimer !== null) clearTimeout(stabilityTimer);
         signal.removeEventListener('abort', handleAbort);
         map.off('sourcedata', handleSourceData);
@@ -1487,23 +1523,6 @@ export class MapLibreLayerController
       };
       const handleAbort = () => {
         fail(new DOMException('Aborted', 'AbortError'));
-      };
-      const armTimeout = (browserRendering: boolean) => {
-        if (timeout !== null) clearTimeout(timeout);
-        timeout = setTimeout(
-          () => {
-            fail(
-              new SentinelRasterLoadError(
-                browserRendering
-                  ? 'Browser imagery rendering did not finish in time. The current map remains usable; try again or use Server mode.'
-                  : 'The imagery renderer did not finish in time. The current map remains usable; try again.',
-              ),
-            );
-          },
-          browserRendering
-            ? browserSatelliteRenderingTimeoutMs
-            : this.satelliteRendererTimeoutMs,
-        );
       };
       const scheduleStableSuccess = (allowPartial: boolean) => {
         if (stabilityTimer !== null) return;
@@ -1525,6 +1544,9 @@ export class MapLibreLayerController
       };
       const handleSourceData = (event: MapSourceDataEvent) => {
         if (event.sourceId !== sourceId) return;
+        if (event.sourceDataType === 'content') {
+          this.startProgressiveRasterRendering(map, sourceId);
+        }
         const recoveredFailedTiles = this.handleRasterSourceData(event);
         const loaded = event.isSourceLoaded || map.isSourceLoaded(sourceId);
         if (loaded && (!this.#rasterRecoveries.has(sourceId) || recoveredFailedTiles))
@@ -1540,37 +1562,32 @@ export class MapLibreLayerController
           return;
         }
         if (recovery.state === 'exhausted') {
-          armTimeout(false);
           scheduleStableSuccess(true);
           return;
         }
-        if (recovery.state === 'browser-fallback') {
-          armTimeout(true);
-          return;
-        }
-        if (recovery.state === 'scheduled') armTimeout(false);
+        if (recovery.state === 'alternative-provider') return;
       };
       signal.addEventListener('abort', handleAbort, { once: true });
       map.on('sourcedata', handleSourceData);
       map.on('error', handleError);
-      armTimeout(startsInBrowser);
     });
   }
 
   private removeSlot(map: MapLibreMap, slot: RasterSlot): void {
-    if (this.#browserFallbackSources.has(slot.sourceId)) {
+    if (this.#directFallbackSources.has(slot.sourceId)) {
       // MapLibre can wrap an aborted custom-protocol request as an unscoped error after
       // source removal. Keep a short, satellite-only grace window for that late event.
       this.#expectedRasterCancellationUntil =
-        Date.now() + canceledBrowserSourceErrorWindowMs;
+        Date.now() + canceledDirectSourceErrorWindowMs;
     }
     const removedProgressiveSource = this.#progressiveRasterSourceId === slot.sourceId;
     if (removedProgressiveSource) this.#progressiveRasterSourceId = null;
-    this.#browserFallbackUrls.delete(slot.sourceId);
+    this.#directFallbackUrls.delete(slot.sourceId);
     this.#rasterTileUrls.delete(slot.sourceId);
     this.#staleRendererTileUrls.delete(slot.sourceId);
-    this.#browserFallbackSources.delete(slot.sourceId);
-    this.#pendingBrowserFallbacks.delete(slot.sourceId);
+    this.#directFallbackSources.delete(slot.sourceId);
+    this.#pendingDirectFallbacks.delete(slot.sourceId);
+    this.#waitingForRasterData.delete(slot.sourceId);
     if (map.getLayer(slot.layerId) !== undefined) map.removeLayer(slot.layerId);
     if (map.getSource(slot.sourceId) !== undefined) map.removeSource(slot.sourceId);
     if (removedProgressiveSource) this.applyMapVisualMode();
@@ -1579,6 +1596,7 @@ export class MapLibreLayerController
   private startProgressiveRasterRendering(map: MapLibreMap, sourceId: string): void {
     const slot = rasterSlots.find((candidate) => candidate.sourceId === sourceId);
     if (slot === undefined || map.getLayer(slot.layerId) === undefined) return;
+    this.#waitingForRasterData.delete(sourceId);
     map.setPaintProperty(slot.layerId, 'raster-opacity', 1);
     this.#progressiveRasterSourceId = sourceId;
     this.applyMapVisualMode();
@@ -1602,14 +1620,14 @@ export class MapLibreLayerController
     return tracker;
   }
 
-  private activateBrowserFallback(
+  private activateDirectFallback(
     sourceId: string,
     event: MapLibreErrorEvent,
     details: ReturnType<typeof mapFailureDetails>,
   ): boolean {
-    if (this.#browserFallbackSources.has(sourceId)) return false;
+    if (this.#directFallbackSources.has(sourceId)) return false;
     const map = this.#map;
-    const fallbackUrl = this.#browserFallbackUrls.get(sourceId);
+    const fallbackUrl = this.#directFallbackUrls.get(sourceId);
     const source = map?.getSource(sourceId) as
       { setTiles?: (tiles: string[]) => void } | undefined;
     if (fallbackUrl === undefined || source?.setTiles === undefined) return false;
@@ -1620,46 +1638,45 @@ export class MapLibreLayerController
     if (coordinate === null) tracker.hasUnscopedFailure = true;
     else tracker.pendingTiles.set(this.tileCoordinateKey(coordinate), coordinate);
 
-    this.#browserFallbackSources.add(sourceId);
-    this.#pendingBrowserFallbacks.add(sourceId);
-    const previousTileUrl = this.#rasterTileUrls.get(sourceId);
-    if (previousTileUrl !== undefined) {
-      this.#staleRendererTileUrls.set(sourceId, previousTileUrl);
+    this.#directFallbackSources.add(sourceId);
+    this.#pendingDirectFallbacks.add(sourceId);
+    const wasProgressive = this.#progressiveRasterSourceId === sourceId;
+    this.#waitingForRasterData.add(sourceId);
+    if (wasProgressive) {
+      this.#progressiveRasterSourceId = null;
+      this.applyMapVisualMode();
     }
-    // MapLibre sends one ErrorEvent to the global map listener and the temporary
-    // source-readiness listener. Both must observe the same accepted transition.
-    this.#browserFallbackHandledEvents.add(event);
-    queueMicrotask(() => {
-      if (
-        !this.#browserFallbackSources.has(sourceId) ||
-        this.#map?.getSource(sourceId) !== source
-      ) {
-        return;
+    try {
+      const previousTileUrl = this.#rasterTileUrls.get(sourceId);
+      if (previousTileUrl !== undefined) {
+        this.#staleRendererTileUrls.set(sourceId, previousTileUrl);
       }
-      try {
-        source.setTiles?.([fallbackUrl]);
-        this.#rasterTileUrls.set(sourceId, fallbackUrl);
-      } catch {
-        this.#browserFallbackSources.delete(sourceId);
-        this.#pendingBrowserFallbacks.delete(sourceId);
-        this.cancelRasterRecovery(sourceId);
-        return;
+      source.setTiles([fallbackUrl]);
+      this.#rasterTileUrls.set(sourceId, fallbackUrl);
+      // MapLibre sends one ErrorEvent to the global map listener and the temporary
+      // source-readiness listener. Both must observe the same successful transition.
+      this.#directFallbackHandledEvents.add(event);
+      mapLayerStore.setState({ automaticAlternativeProviderState: 'switching' });
+      // Keep the same native source and layer mounted. Existing raster tiles remain
+      // above a fully restored vector basemap until direct visual-COG data arrives.
+    } catch {
+      this.#directFallbackSources.delete(sourceId);
+      this.#pendingDirectFallbacks.delete(sourceId);
+      this.#waitingForRasterData.delete(sourceId);
+      if (wasProgressive && map !== null) {
+        this.startProgressiveRasterRendering(map, sourceId);
       }
-      if (sourceId === this.#activeSlot?.sourceId) {
-        mapLayerStore.setState({ automaticBrowserFallbackActive: true });
-      }
-      // Mutating a raster source from inside MapLibre's native error dispatch can leave
-      // its render tile half-reloaded. Switch after that stack completes instead.
-      if (map !== null) this.startProgressiveRasterRendering(map, sourceId);
-      this.logger.log({
-        level: 'warn',
-        name: 'satellite.imagery.browser-fallback-started',
-        data: {
-          reason: details.reason,
-          sourceId,
-          ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
-        },
-      });
+      this.cancelRasterRecovery(sourceId);
+      return false;
+    }
+    this.logger.log({
+      level: 'warn',
+      name: 'satellite.imagery.alternative-provider-started',
+      data: {
+        reason: details.reason,
+        sourceId,
+        ...(details.httpStatus === null ? {} : { status: details.httpStatus }),
+      },
     });
     return true;
   }
@@ -1670,13 +1687,13 @@ export class MapLibreLayerController
     details: ReturnType<typeof mapFailureDetails>,
   ): boolean {
     if (
-      !this.#browserFallbackSources.has(sourceId) ||
-      !this.#pendingBrowserFallbacks.has(sourceId)
+      !this.#directFallbackSources.has(sourceId) ||
+      !this.#pendingDirectFallbacks.has(sourceId)
     ) {
       return false;
     }
     const requestUrl = requestUrlFromError(event);
-    const fallbackUrl = this.#browserFallbackUrls.get(sourceId);
+    const fallbackUrl = this.#directFallbackUrls.get(sourceId);
     if (
       requestUrl !== null &&
       fallbackUrl !== undefined &&
@@ -1688,7 +1705,7 @@ export class MapLibreLayerController
     if (requestUrl !== null && previousUrl !== undefined) {
       return requestUrl.startsWith(tileTemplatePrefix(previousUrl));
     }
-    // A browser protocol does not issue hosted-renderer HTTP responses. A source-less
+    // The direct protocol does not issue hosted-renderer HTTP responses. A source-less
     // 429 received during the transition is therefore another already-started server tile.
     return details.reason === 'rate-limit';
   }

@@ -36,7 +36,7 @@ describe('MapProviderConfiguration', () => {
       id: 'earth-search-v1',
       collections: { L1C: 'sentinel-2-l1c', L2A: 'sentinel-2-l2a' },
       maximumPages: 10,
-      renderer: { requestTimeoutMs: 60_000 },
+      renderer: { maxZoom: 14 },
     });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
       schemaVersion: 1,
@@ -170,14 +170,6 @@ describe('MapProviderConfiguration', () => {
       mutate: (input: Record<string, unknown>) => {
         const satellite = input.satellite as Record<string, unknown>;
         satellite.searchUrl = 'http://earth-search.example.test/search';
-      },
-    },
-    {
-      name: 'satellite renderer timeout below the supported floor',
-      mutate: (input: Record<string, unknown>) => {
-        const satellite = input.satellite as Record<string, unknown>;
-        const renderer = satellite.renderer as Record<string, unknown>;
-        renderer.requestTimeoutMs = 4_999;
       },
     },
   ])('rejects $name', ({ mutate }) => {

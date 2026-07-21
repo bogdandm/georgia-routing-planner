@@ -64,9 +64,6 @@ const includedFields = [
   'properties.s2:product_uri',
   'properties.sat:relative_orbit',
   'assets.visual',
-  'assets.red',
-  'assets.green',
-  'assets.blue',
   'assets.thumbnail',
   'links',
 ] as const;
@@ -198,26 +195,26 @@ function mapVisualAsset(
     };
   }
 
-  const bands = ['red', 'green', 'blue'] as const;
-  const bandAssets = bands.map((band) => item.assets[band]);
-  if (bandAssets.some((asset) => asset === undefined)) return { kind: 'unavailable' };
-  for (const asset of bandAssets) {
-    const mediaType = asset?.type?.toLowerCase() ?? '';
-    if (!mediaType.includes('image/tiff') || !mediaType.includes('cloud-optimized')) {
-      throw new SatelliteCatalogError(
-        'provider-invalid-response',
-        'Earth Search returned an unexpected L2A reflectance-band format.',
-      );
-    }
+  const visual = item.assets.visual;
+  if (visual === undefined) return { kind: 'unavailable' };
+  const mediaType = visual.type ?? '';
+  const normalizedMediaType = mediaType.toLowerCase();
+  if (
+    !normalizedMediaType.includes('image/tiff') ||
+    !normalizedMediaType.includes('cloud-optimized')
+  ) {
+    throw new SatelliteCatalogError(
+      'provider-invalid-response',
+      'Earth Search returned an unexpected L2A visual asset format.',
+    );
   }
   const itemHref = item.links.find((link) => link.rel === 'self')?.href;
   if (itemHref === undefined) return { kind: 'unavailable' };
   return {
-    kind: 'sentinel-rgb-cogs',
+    kind: 'sentinel-l2a',
     itemHref: httpsUrl(itemHref, 'L2A STAC item'),
-    redHref: httpsUrl(bandAssets[0]?.href ?? '', 'L2A red band'),
-    greenHref: httpsUrl(bandAssets[1]?.href ?? '', 'L2A green band'),
-    blueHref: httpsUrl(bandAssets[2]?.href ?? '', 'L2A blue band'),
+    visualHref: httpsUrl(visual.href, 'L2A visual asset'),
+    mediaType,
     projectionEpsg,
   };
 }

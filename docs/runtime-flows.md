@@ -51,44 +51,46 @@ application, removes both raster slots and the footprint, clears the transient s
 selection, and returns map layer state to empty.
 
 The persisted rendering mode selects the initial template: Auto and Server use the
-hosted renderer, while Browser starts on the opaque COG protocol and never contacts the
-hosted renderer. The inactive slot used to prepare a newly selected scene does not fail
-on its first transient tile error. It refreshes failed canonical tile coordinates with
-bounded backoff. An explicit HTTP 429 or status-zero/no-response failure does not
-refresh the hosted renderer. In Auto mode, the controller replaces the staging source's
-tile template with the opaque browser COG protocol and keeps the staging wait open for
-worker-rendered tiles; Server mode fails without switching. Hosted and browser tiles are
-visible progressively as each result arrives, while readiness and removal of the prior
-source still wait for the staging source to settle. Browser rendering has a two-minute
-deadline instead of the configured hosted-renderer deadline. Once an automatically
-switched raster becomes active, transient map-layer state keeps a browser-fallback flag
-so the shell replaces Ready with a warning even after MapLibre recovers to its ready
-lifecycle. An explicit Browser selection, successful hosted render, or imagery removal
-clears the flag. When only another transient tile remains unavailable, it promotes the
-usable partial raster after the retries are exhausted and keeps the failure visible.
-Other non-retryable or whole-source failures preserve the previous raster and surface a
-safe status-specific explanation.
+hosted renderer, while Direct starts on the opaque COG protocol and never contacts
+TiTiler. A newly selected scene first removes both raster slots and its predecessor's
+footprint, then restores the vector basemap before adding the new source. The source is
+not allowed to suppress the basemap until its first raster data event, so a slow hosted
+request or automatic provider switch cannot blank the map.
+
+An explicit HTTP 429 or status-zero/no-response failure does not refresh TiTiler. In
+Auto mode, the controller changes that source to the direct visual-COG protocol and
+continues waiting without an application deadline; Server mode fails without switching.
+The shell reports that TiTiler is unavailable while the alternative is switching and
+after it becomes active. An explicit Direct selection, successful hosted render, or
+imagery removal clears the automatic-fallback state. Retryable failures still use the
+bounded failed-tile refresh policy, and usable partial imagery can be promoted after
+those retries are exhausted.
 
 Both mirrored rendering-mode controls remain enabled while staging. A mode command
 persists the mode immediately, aborts the controller-owned application signal, removes
-partial staging resources, and immediately reapplies the same staging scene with the new
-initial template. A later completion from the canceled operation cannot remove or
-overwrite the replacement.
+both provider raster slots, restores the vector style, and immediately reapplies the
+same scene with the new initial template. Only one provider layer exists during this
+transition. A later completion from the canceled operation cannot remove or overwrite
+the replacement. MapLibre's final source-data event during removal is treated as
+cancellation: it clears that source's recoverable failure and cannot leave the shared
+status widget degraded.
 
 After a raster is active, MapLibre tile errors flow through the facade for safe
 classification and through the layer controller for recovery. The controller ignores
 duplicate errors while a retry is scheduled, refreshes retryable failed raster tiles
 after a bounded exponential delay, and stops after three attempts. HTTP 4xx failures,
 including 429, status-zero/no-response failures, and unknown failures remain visible
-without automatic retry. HTTP 429 and status zero open browser-rendering fallback
+without automatic retry. HTTP 429 and status zero open direct visual-imagery fallback
 because a 429 response without CORS headers is indistinguishable from a connection
 failure at the application boundary. The existing raster source switches to an opaque
-custom protocol; a dedicated worker performs bounded RGB COG range reads, UTM-to-Web
-Mercator reprojection, tuning, and WebP encoding. A successful source-data event for
-every failed canonical tile clears the controller's pending set; only then can a loaded
-source start the two-second stability window. Another source error cancels that window.
-The facade returns to ready when no active failure remains. Raw tile URLs, response
-bodies, and tile coordinates never enter logs, React state, or the diagnostics bundle.
+custom protocol; a dedicated worker performs bounded range reads of the pre-rendered
+8-bit visual COG, UTM-to-Web Mercator reprojection, and WebP encoding. It preserves the
+visual asset's channel values and never applies hosted stretch tuning. A successful
+source-data event for every failed canonical tile clears the controller's pending set;
+only then can a loaded source start the two-second stability window. Another source
+error cancels that window. The facade returns to ready when no active failure remains.
+Raw tile URLs, response bodies, and tile coordinates never enter logs, React state, or
+the diagnostics bundle.
 
 Changing a terrain-overlay setting follows the same controller boundary. The controller
 validates the supported contour interval, updates the generated vector-tile URL on the
@@ -401,7 +403,7 @@ sequenceDiagram
   participant Browser as SatelliteBrowser
   participant Controller as MapLibreLayerController
   participant Renderer as Configured COG renderer
-  participant Worker as Browser COG worker
+  participant Worker as Direct visual-COG worker
   participant Map as MapLibre
   participant State as Map layer store
 
@@ -411,25 +413,26 @@ sequenceDiagram
   Controller->>Map: add staging raster source/layer
   Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
   alt Auto mode and renderer returns 429 or CORS-opaque status zero
-    Controller->>Map: replace hosted template with opaque browser protocol
+    Controller->>Map: restore vector style and replace template with direct protocol
     Map->>Worker: request tile by safe scene key
-    Worker->>Worker: range-read, reproject, tune, and encode RGB COG data
+    Worker->>Worker: range-read, reproject, and encode the 8-bit visual COG
     Worker-->>Map: reveal each completed WebP tile progressively
   end
   alt staging source becomes ready
-    Controller->>Map: reveal staging raster and update footprint GeoJSON
-    Controller->>Map: remove prior raster source/layer
+    Controller->>Map: reveal raster and update footprint GeoJSON
     Controller->>State: ready or hidden snapshot
-  else source error, timeout, cancellation, or stale command
-    Controller->>Map: remove staging resources only
-    Controller->>State: failed/cancelled; prior raster remains usable
+  else source error, cancellation, or stale command
+    Controller->>Map: remove pending resources
+    Controller->>State: failed/cancelled; vector basemap remains usable
   end
 ```
 
-Two internal raster slots make replacement atomic from the user's perspective. Provider
-URLs remain inside the controller and never enter Zustand or exported diagnostics. The
-footprint is updated only after the replacement raster is usable. `Fit footprint`
-derives bounds from the validated polygon while preserving current pitch and bearing.
+Two internal raster slots support stretch-tuning replacement. Rendering-mode and scene
+changes remove both slots immediately, so two providers or scene selections cannot
+remain overlaid. Provider URLs remain inside the controller and never enter Zustand or
+exported diagnostics. The footprint is updated only after the replacement raster is
+usable. `Fit footprint` derives bounds from the validated polygon while preserving
+current pitch and bearing.
 
 Layers commands use logical IDs. The Natural features command expands to land-cover,
 glacier, and water-polygon layers; restricted-area, hiking, road, and place commands

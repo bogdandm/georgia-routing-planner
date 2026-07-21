@@ -42,6 +42,9 @@ const defaultUiPreferences: UiPreferences = {
   navigationCollapsed: false,
 };
 
+const maximumCloudCoverPercentSchema = z.number().min(0).max(100);
+const defaultMaximumCloudCoverPercent = 50;
+
 const positionSchema = z.tuple([
   z.number().min(-180).max(180),
   z.number().min(-90).max(90),
@@ -190,6 +193,31 @@ export class AppDatabase extends Dexie implements MapLayerPreferencesRepository 
     const parsed = uiPreferencesSchema.parse(value);
     await this.settings.put({
       key: 'ui.preferences',
+      value: parsed,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async loadMaximumCloudCoverPercent(): Promise<number> {
+    const record = await this.settings.get('satellite.maximum-cloud-cover');
+    if (record === undefined) return defaultMaximumCloudCoverPercent;
+
+    const parsed = maximumCloudCoverPercentSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete('satellite.maximum-cloud-cover');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.satellite-preferences.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultMaximumCloudCoverPercent;
+  }
+
+  public async saveMaximumCloudCoverPercent(value: number): Promise<void> {
+    const parsed = maximumCloudCoverPercentSchema.parse(value);
+    await this.settings.put({
+      key: 'satellite.maximum-cloud-cover',
       value: parsed,
       updatedAt: new Date().toISOString(),
     });

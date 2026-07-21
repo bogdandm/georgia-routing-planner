@@ -50,6 +50,23 @@ describe('AppDatabase', () => {
     await expect(database.settings.get('ui.preferences')).resolves.toBeUndefined();
   });
 
+  it('persists and repairs the satellite maximum cloud-cover preference', async () => {
+    await expect(database.loadMaximumCloudCoverPercent()).resolves.toBe(50);
+
+    await database.saveMaximumCloudCoverPercent(75);
+    await expect(database.loadMaximumCloudCoverPercent()).resolves.toBe(75);
+
+    await database.settings.put({
+      key: 'satellite.maximum-cloud-cover',
+      value: 125,
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+    await expect(database.loadMaximumCloudCoverPercent()).resolves.toBe(50);
+    await expect(
+      database.settings.get('satellite.maximum-cloud-cover'),
+    ).resolves.toBeUndefined();
+  });
+
   it('persists layer visibility, imagery stretch, and the applied scene', async () => {
     const appliedScene: SatelliteScene = {
       id: 'saved-scene',

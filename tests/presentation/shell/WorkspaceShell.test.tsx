@@ -209,6 +209,29 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('restores the persisted maximum cloud cover after remounting', async () => {
+    const user = userEvent.setup();
+    const firstRender = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    const slider = screen.getByRole('slider', { name: 'Maximum cloud' });
+    await waitFor(() => {
+      expect(slider).toHaveValue('50');
+    });
+    fireEvent.change(slider, { target: { value: '75' } });
+    fireEvent.mouseUp(slider);
+    await waitFor(async () => {
+      await expect(services.database.loadMaximumCloudCoverPercent()).resolves.toBe(75);
+    });
+
+    firstRender.unmount();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await waitFor(() => {
+      expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('75');
+    });
+  });
+
   it('restores every workspace tab from its URL anchor', async () => {
     window.history.replaceState(null, '', '/#markers');
     renderWorkspaceShell();

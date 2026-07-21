@@ -57,11 +57,10 @@ const footprintSchema = z.discriminatedUnion('type', [
 ]);
 const visualAssetSchema = z.discriminatedUnion('kind', [
   z.object({
-    kind: z.literal('sentinel-rgb-cogs'),
+    kind: z.literal('sentinel-l2a'),
     itemHref: z.url().refine((value) => value.startsWith('https://')),
-    redHref: z.url().refine((value) => value.startsWith('https://')),
-    greenHref: z.url().refine((value) => value.startsWith('https://')),
-    blueHref: z.url().refine((value) => value.startsWith('https://')),
+    visualHref: z.url().refine((value) => value.startsWith('https://')),
+    mediaType: z.string().min(1).max(160),
     projectionEpsg: z.number().int().positive(),
   }),
   z.object({
@@ -110,7 +109,7 @@ const mapLayerPreferencesSchema = z
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     appliedScene: satelliteSceneSchema.nullable(),
     satelliteRenderingMode: z
-      .enum(['auto', 'server', 'browser'])
+      .enum(['auto', 'server', 'direct'])
       .default(defaultSatelliteRenderingMode),
     renderingTuning: z
       .object({

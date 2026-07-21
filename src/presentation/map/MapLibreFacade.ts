@@ -150,8 +150,8 @@ function recoverableMessage(
       const recovery =
         recoveryState === 'scheduled'
           ? ' Retrying automatically.'
-          : recoveryState === 'browser-fallback'
-            ? ' Switching to browser rendering without retrying the hosted renderer.'
+          : recoveryState === 'alternative-provider'
+            ? ' TiTiler is unavailable; switching to direct pre-rendered Sentinel imagery.'
             : recoveryState === 'exhausted'
               ? ' Automatic retries were exhausted; reapply the scene to try again.'
               : recoveryState === 'not-retryable'

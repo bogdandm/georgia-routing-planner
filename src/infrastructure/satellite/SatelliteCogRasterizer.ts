@@ -10,7 +10,7 @@ interface ProjectedBounds {
   readonly maxY: number;
 }
 
-interface RasterBand {
+interface VisualRaster {
   readonly data: TypedArray;
   readonly width: number;
   readonly height: number;
@@ -18,9 +18,7 @@ interface RasterBand {
 
 interface CachedScene {
   readonly signature: string;
-  readonly red: Promise<GeoTIFF>;
-  readonly green: Promise<GeoTIFF>;
-  readonly blue: Promise<GeoTIFF>;
+  readonly visual: Promise<GeoTIFF>;
 }
 
 const rasterSampleSize = 258;
@@ -88,16 +86,16 @@ function isTypedRaster(value: unknown): value is TypedArray & {
   );
 }
 
-async function readBand(
+async function readVisualRaster(
   tiff: GeoTIFF,
   bounds: ProjectedBounds,
   signal: AbortSignal,
-): Promise<RasterBand> {
+): Promise<VisualRaster> {
   const result = await tiff.readRasters({
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
     width: rasterSampleSize,
     height: rasterSampleSize,
-    samples: [0],
+    samples: [0, 1, 2],
     interleave: true,
     fillValue: 0,
     resampleMethod: 'bilinear',
@@ -109,45 +107,40 @@ async function readBand(
   return { data: result, width: result.width, height: result.height };
 }
 
-function bilinearSample(band: RasterBand, sampleX: number, sampleY: number): number {
-  const x0 = clamp(Math.floor(sampleX), 0, band.width - 1);
-  const y0 = clamp(Math.floor(sampleY), 0, band.height - 1);
-  const x1 = Math.min(x0 + 1, band.width - 1);
-  const y1 = Math.min(y0 + 1, band.height - 1);
+function bilinearSample(
+  raster: VisualRaster,
+  sampleX: number,
+  sampleY: number,
+  channel: number,
+): number {
+  const x0 = clamp(Math.floor(sampleX), 0, raster.width - 1);
+  const y0 = clamp(Math.floor(sampleY), 0, raster.height - 1);
+  const x1 = Math.min(x0 + 1, raster.width - 1);
+  const y1 = Math.min(y0 + 1, raster.height - 1);
   const xWeight = clamp(sampleX - x0, 0, 1);
   const yWeight = clamp(sampleY - y0, 0, 1);
-  const topLeft = band.data[y0 * band.width + x0] ?? 0;
-  const topRight = band.data[y0 * band.width + x1] ?? 0;
-  const bottomLeft = band.data[y1 * band.width + x0] ?? 0;
-  const bottomRight = band.data[y1 * band.width + x1] ?? 0;
+  const sample = (x: number, y: number) =>
+    raster.data[(y * raster.width + x) * 3 + channel] ?? 0;
+  const topLeft = sample(x0, y0);
+  const topRight = sample(x1, y0);
+  const bottomLeft = sample(x0, y1);
+  const bottomRight = sample(x1, y1);
   const top = topLeft + (topRight - topLeft) * xWeight;
   const bottom = bottomLeft + (bottomRight - bottomLeft) * xWeight;
   return top + (bottom - top) * yWeight;
 }
 
-/** Applies the same bounded reflectance, gamma, and saturation controls as the remote renderer. */
-export function colorizeSatellitePixel(
+/** Preserves the provider-rendered 8-bit RGB values and masks its black no-data area. */
+export function visualPixel(
   red: number,
   green: number,
   blue: number,
-  tuning: SatelliteCogTileRequest['tuning'],
 ): readonly [number, number, number, number] {
   if (red <= 0 && green <= 0 && blue <= 0) return [0, 0, 0, 0];
-  const gammaExponent = 1 / tuning.gamma;
-  const normalized = [red, green, blue].map((channel) =>
-    Math.pow(clamp(channel / tuning.reflectanceMax, 0, 1), gammaExponent),
-  );
-  const normalizedRed = normalized[0] ?? 0;
-  const normalizedGreen = normalized[1] ?? 0;
-  const normalizedBlue = normalized[2] ?? 0;
-  const luminance =
-    normalizedRed * 0.2126 + normalizedGreen * 0.7152 + normalizedBlue * 0.0722;
-  const saturate = (channel: number) =>
-    clamp(luminance + (channel - luminance) * tuning.saturation, 0, 1);
   return [
-    Math.round(saturate(normalizedRed) * 255),
-    Math.round(saturate(normalizedGreen) * 255),
-    Math.round(saturate(normalizedBlue) * 255),
+    Math.round(clamp(red, 0, 255)),
+    Math.round(clamp(green, 0, 255)),
+    Math.round(clamp(blue, 0, 255)),
     255,
   ];
 }
@@ -155,9 +148,7 @@ export function colorizeSatellitePixel(
 function renderTilePixels(
   request: SatelliteCogTileRequest,
   bounds: ProjectedBounds,
-  red: RasterBand,
-  green: RasterBand,
-  blue: RasterBand,
+  visual: VisualRaster,
 ): Uint8ClampedArray<ArrayBuffer> {
   const output = new Uint8ClampedArray(
     new ArrayBuffer(request.tileSize * request.tileSize * 4),
@@ -178,13 +169,12 @@ function renderTilePixels(
       const [projectedX = 0, projectedY = 0] = transform.forward([
         ...longitudeLatitude,
       ]);
-      const sampleX = ((projectedX - bounds.minX) / width) * (red.width - 1);
-      const sampleY = ((bounds.maxY - projectedY) / height) * (red.height - 1);
-      const rgba = colorizeSatellitePixel(
-        bilinearSample(red, sampleX, sampleY),
-        bilinearSample(green, sampleX, sampleY),
-        bilinearSample(blue, sampleX, sampleY),
-        request.tuning,
+      const sampleX = ((projectedX - bounds.minX) / width) * (visual.width - 1);
+      const sampleY = ((bounds.maxY - projectedY) / height) * (visual.height - 1);
+      const rgba = visualPixel(
+        bilinearSample(visual, sampleX, sampleY, 0),
+        bilinearSample(visual, sampleX, sampleY, 1),
+        bilinearSample(visual, sampleX, sampleY, 2),
       );
       const offset = (pixelY * request.tileSize + pixelX) * 4;
       output[offset] = rgba[0];
@@ -206,12 +196,10 @@ export class SatelliteCogRasterizer {
   ): Promise<ArrayBuffer> {
     const scene = this.getScene(request);
     const bounds = projectedTileBounds(request);
-    const [red, green, blue] = await Promise.all([
-      scene.red.then((tiff) => readBand(tiff, bounds, signal)),
-      scene.green.then((tiff) => readBand(tiff, bounds, signal)),
-      scene.blue.then((tiff) => readBand(tiff, bounds, signal)),
-    ]);
-    const pixels = renderTilePixels(request, bounds, red, green, blue);
+    const visual = await scene.visual.then((tiff) =>
+      readVisualRaster(tiff, bounds, signal),
+    );
+    const pixels = renderTilePixels(request, bounds, visual);
     const canvas = new OffscreenCanvas(request.tileSize, request.tileSize);
     const context = canvas.getContext('2d');
     if (context === null) throw new Error('Browser raster canvas is unavailable.');
@@ -225,12 +213,7 @@ export class SatelliteCogRasterizer {
   }
 
   private getScene(request: SatelliteCogTileRequest): CachedScene {
-    const signature = [
-      request.redHref,
-      request.greenHref,
-      request.blueHref,
-      request.projectionEpsg,
-    ].join('|');
+    const signature = [request.visualHref, request.projectionEpsg].join('|');
     const existing = this.#scenes.get(request.sceneKey);
     if (existing?.signature === signature) {
       this.#scenes.delete(request.sceneKey);
@@ -239,9 +222,9 @@ export class SatelliteCogRasterizer {
     }
     const scene: CachedScene = {
       signature,
-      red: fromUrl(request.redHref),
-      green: fromUrl(request.greenHref),
-      blue: fromUrl(request.blueHref),
+      visual: fromUrl(request.visualHref, {
+        allowFullFile: false,
+      }),
     };
     this.#scenes.set(request.sceneKey, scene);
     while (this.#scenes.size > maximumCachedScenes) {

@@ -81,6 +81,7 @@ Rules:
   result.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
+
 ### Incremental commit cadence
 
 Implementation must be committed incrementally. Do not accumulate an entire workstream
@@ -88,8 +89,8 @@ into one final commit.
 
 Before a multi-step workstream begins, create or update the branch-local `PLAN.md` with
 the intended commit sequence. A multi-step workstream includes work that spans multiple
-layers, independently useful behaviors, migrations, or infrastructure concerns. A
-single small atomic change does not require a plan.
+layers, independently useful behaviors, migrations, or infrastructure concerns. A single
+small atomic change does not require a plan.
 
 For each planned commit:
 
@@ -99,8 +100,8 @@ For each planned commit:
 3. Review the staged diff and commit it before starting the next planned scope.
 
 Do not wait for the final verification round before creating intermediate commits.
-Focused checks are sufficient for intermediate commits; broad checks belong to the
-final verification round.
+Focused checks are sufficient for intermediate commits; broad checks belong to the final
+verification round.
 
 A commit should normally contain one of:
 
@@ -628,12 +629,12 @@ During implementation:
 4. Keep a concise record of commands run and their outcomes for the final handoff. Do
    not paste complete successful logs when the command, result, and duration are enough.
 
-A successful check remains valid while neither its relevant inputs nor its
-configuration have changed. Do not rerun a successful command merely because a new
-agent turn or review round started, an intermediate commit was created, the branch is
-about to be pushed, or the same commit was already verified locally or by CI. After a
-follow-up edit, rerun only the checks invalidated by that edit. Documentation-only
-changes do not invalidate code, build, coverage, or end-to-end results.
+A successful check remains valid while neither its relevant inputs nor its configuration
+have changed. Do not rerun a successful command merely because a new agent turn or
+review round started, an intermediate commit was created, the branch is about to be
+pushed, or the same commit was already verified locally or by CI. After a follow-up
+edit, rerun only the checks invalidated by that edit. Documentation-only changes do not
+invalidate code, build, coverage, or end-to-end results.
 
 ### Documentation-only verification
 
@@ -662,8 +663,7 @@ not add sleeps, remove assertions, or silently increase the ceiling.
 ### Managed Chromium timing
 
 Software-rendered Chromium is resource-constrained when MapLibre, terrain decoding,
-IndexedDB persistence, and diagnostics export overlap. Preserve these configured
-limits:
+IndexedDB persistence, and diagnostics export overlap. Preserve these configured limits:
 
 | Context | Workers | Per-test ceiling | Assertion ceiling | Retries |
 | ------- | ------- | ---------------- | ----------------- | ------- |
@@ -673,8 +673,8 @@ limits:
 Keep the following focused exceptions and synchronization rules:
 
 - `e2e/map-foundation.spec.ts` owns a 60-second ceiling for the real-MapLibre camera
-  workflow. Send keyboard shortcuts through the canvas locator and allow ten seconds
-  for the settled camera to reach IndexedDB.
+  workflow. Send keyboard shortcuts through the canvas locator and allow ten seconds for
+  the settled camera to reach IndexedDB.
 - Terrain tests must wait for persisted `terrain` state before dependent camera input.
   Treat `aria-pressed` as including the intermediate `enabling` state. After restoring
   terrain, wait for the selected 3D control to become enabled. Preserve the 20-second
@@ -847,18 +847,23 @@ incremental sequence defined by `PLAN.md` when a plan was required.
    `pnpm test` once.
 4. Run `pnpm test:integration`, catalog commands, diagnostics commands, coverage, or
    `pnpm build` only when the changed scope requires them. Dependency, configuration,
-   map, worker, build, or deployment changes require `pnpm build`.
+   map, worker, build, or deployment changes require `pnpm build`. When a required
+   aggregate command includes a narrower required command, run only the aggregate
+   command: for example, `pnpm test:coverage` replaces `pnpm test`, and a `pnpm build`
+   script that includes type checking replaces a separate `pnpm typecheck`. Do not run
+   both solely to produce duplicate evidence.
 5. Run Playwright only when the change creates or materially alters a major workflow or
    high-risk browser boundary listed in the end-to-end policy. Focused scenarios are
    sufficient unless the next step specifically requires the CI-shaped suite.
-6. For MapLibre, terrain, persistence, diagnostics, or satellite end-to-end changes,
-   run the CI-shaped Playwright suite once on Windows PowerShell:
+6. For MapLibre, terrain, persistence, diagnostics, or satellite end-to-end changes, run
+   the CI-shaped Playwright suite once on Windows PowerShell:
 
    ```powershell
    $env:CI='1'; pnpm e2e; Remove-Item Env:CI
    ```
 
    Do not also run the complete local Playwright suite unless diagnosing a failure.
+
 7. Verify changed loading, empty, error, and partial states visually in current Chrome
    when presentation behavior changed.
 8. Verify changed failure paths emit useful bounded diagnostic events without secret or
@@ -868,8 +873,8 @@ incremental sequence defined by `PLAN.md` when a plan was required.
 10. Confirm exported contracts and non-obvious invariants have accurate, compact code
     comments and no comment contradicts current behavior.
 
-If files change after the final round, rerun only invalidated checks. Repeat the complete
-round only when subsequent changes are broad enough to invalidate it. Removing
+If files change after the final round, rerun only invalidated checks. Repeat the
+complete round only when subsequent changes are broad enough to invalidate it. Removing
 `PLAN.md`, correcting documentation, or changing pull-request prose does not invalidate
 successful code or end-to-end checks.
 

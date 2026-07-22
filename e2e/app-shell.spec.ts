@@ -50,10 +50,19 @@ test('loads the production map style and reloads under a repository subpath', as
 
   await expect(page.getByRole('tab', { name: 'Plan' })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Layers' }).click();
-  await expect(page.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+  const layersTools = page.getByRole('complementary', { name: 'Layers tools' });
+  await expect(
+    layersTools.getByRole('heading', {
+      name: 'Copernicus Sentinel-2 via Earth Search',
+    }),
+  ).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+  await expect(
+    layersTools.getByRole('heading', {
+      name: 'Copernicus Sentinel-2 via Earth Search',
+    }),
+  ).toBeVisible();
   expect(new URL(page.url()).hash).toBe('#layers');
   expect(externalRequests).toEqual([]);
 });

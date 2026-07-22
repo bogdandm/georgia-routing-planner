@@ -54,7 +54,11 @@ const rasterSlots = [
 const openStreetMapOpacityProperties = {
   [mapLayerIds.landcover]: ['fill-opacity'],
   [mapLayerIds.glacierAreas]: ['fill-opacity'],
+  [mapLayerIds.landuse]: ['fill-opacity'],
   [mapLayerIds.water]: ['fill-opacity'],
+  [mapLayerIds.parks]: ['fill-opacity'],
+  [mapLayerIds.waterways]: ['line-opacity'],
+  [mapLayerIds.boundaries]: ['line-opacity'],
   [mapLayerIds.restrictedAreas]: ['line-opacity'],
   [mapLayerIds.hikingPaths]: ['line-opacity'],
   [mapLayerIds.hikingSteps]: ['line-opacity'],
@@ -65,7 +69,11 @@ const openStreetMapOpacityProperties = {
   [mapLayerIds.hikingPoiLabels]: ['text-opacity'],
   [mapLayerIds.peaks]: ['circle-opacity', 'circle-stroke-opacity'],
   [mapLayerIds.peakLabels]: ['text-opacity'],
+  [mapLayerIds.waterLabels]: ['text-opacity'],
   [mapLayerIds.placeLabels]: ['text-opacity'],
+  [terrainOverlayLayerIds.contourMinor]: ['line-opacity'],
+  [terrainOverlayLayerIds.contourIndex]: ['line-opacity'],
+  [terrainOverlayLayerIds.contourLabels]: ['text-opacity'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 const maximumRasterRecoveryAttempts = 3;

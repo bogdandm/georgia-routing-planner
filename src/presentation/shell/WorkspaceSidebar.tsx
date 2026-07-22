@@ -1,7 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -164,12 +163,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
   satellite: {
     title: 'Satellite imagery',
-    actions: disabledAction(
-      'More imagery actions arrive with imagery search',
-      <IconButton disabled size="small" aria-label="More satellite actions">
-        <MoreVertIcon />
-      </IconButton>,
-    ),
+    actions: null,
   },
   markers: {
     title: 'Markers',

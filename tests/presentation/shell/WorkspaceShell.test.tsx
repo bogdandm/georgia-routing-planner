@@ -231,6 +231,9 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
     ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'More satellite actions' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
@@ -270,7 +273,14 @@ describe('WorkspaceShell', () => {
       }),
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
-    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Map visibility' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Layers tools' })).getAllByRole(
+        'separator',
+      ),
+    ).toHaveLength(2);
     expect(
       screen.getByRole('heading', {
         name: 'Copernicus Sentinel-2 via Earth Search',
@@ -304,10 +314,17 @@ describe('WorkspaceShell', () => {
       screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
     ).toHaveStyle({ height: '34px' });
     const searchAreaSource = screen.getByRole('combobox', {
-      name: 'Search area source',
+      name: 'Search area',
     });
     expect(searchAreaSource).toHaveTextContent('Point');
     expect(searchAreaSource).toHaveTextContent('42.5000, 44.5000');
+    const satelliteRender = screen.getByRole('combobox', {
+      name: 'Satellite render',
+    });
+    expect(
+      searchAreaSource.compareDocumentPosition(satelliteRender) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(searchAreaSource);
     expect(screen.getByRole('option', { name: 'Point' })).toBeVisible();
     expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
@@ -352,7 +369,9 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
-    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Map visibility' }),
+    ).not.toBeInTheDocument();
   });
 
   it('sends one shared OpenStreetMap opacity command from Layers', async () => {

@@ -4,10 +4,12 @@ import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type {
   LogicalMapLayerId,
   SatelliteRenderingMode,
+  SatelliteRenderingTuning,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import {
   defaultSatelliteRenderingMode,
+  defaultSatelliteRenderingTuning,
   defaultTerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import type {
@@ -60,6 +62,7 @@ interface MapLayerState {
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly openStreetMapOpacity: number;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
+  readonly satelliteRenderingTuning: SatelliteRenderingTuning;
   readonly selectedScene: SatelliteScene | null;
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
@@ -88,6 +91,7 @@ const initialMapLayerState: MapLayerState = {
   },
   openStreetMapOpacity: 1,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
+  satelliteRenderingTuning: defaultSatelliteRenderingTuning,
   selectedScene: null,
   terrainOverlays: {
     initialized: false,

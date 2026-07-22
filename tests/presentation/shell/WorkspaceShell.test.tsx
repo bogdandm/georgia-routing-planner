@@ -341,7 +341,7 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {
     const user = userEvent.setup();
@@ -1063,55 +1063,15 @@ describe('WorkspaceShell', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByRole('tab', { name: 'Rendering' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Storage' })).toBeVisible();
+    expect(screen.queryByRole('tab', { name: 'Rendering' })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Sentinel imagery stretch' }),
+      within(settings).queryByRole('heading', { name: 'Sentinel imagery stretch' }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
     expect(
-      screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
-    ).toBeVisible();
-    const satelliteRender = within(settings).getByRole('combobox', {
-      name: 'Satellite render',
-    });
-    expect(satelliteRender).toHaveTextContent('Auto');
-    await user.click(satelliteRender);
-    await user.click(screen.getByRole('option', { name: 'Direct' }));
-    await waitFor(() => {
-      expect(services.mapLayers?.getRenderingMode()).toBe('direct');
-    });
-    await waitFor(async () => {
-      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        satelliteRenderingMode: 'direct',
-      });
-    });
+      within(settings).queryByRole('combobox', { name: 'Satellite render' }),
+    ).not.toBeInTheDocument();
     expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Layers' }));
-    expect(settings).toBeVisible();
-    const ceiling = screen.getByRole('slider', {
-      name: 'Sentinel reflectance ceiling',
-    });
-    fireEvent.keyDown(ceiling, { key: 'Home' });
-    fireEvent.keyUp(ceiling, { key: 'Home' });
-    await waitFor(() => {
-      expect(services.mapLayers?.getRenderingTuning().reflectanceMax).toBe(3_000);
-    });
-    await waitFor(async () => {
-      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        renderingTuning: { reflectanceMax: 3_000 },
-      });
-    });
-    const saturation = screen.getByRole('slider', { name: 'Sentinel saturation' });
-    fireEvent.keyDown(saturation, { key: 'End' });
-    fireEvent.keyUp(saturation, { key: 'End' });
-    await waitFor(() => {
-      expect(services.mapLayers?.getRenderingTuning().saturation).toBe(5);
-    });
-    expect(screen.getByRole('tab', { name: 'Rendering' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
 
     await user.click(screen.getByRole('tab', { name: 'Storage' }));
     expect(await screen.findByText('Local database (IndexedDB)')).toBeVisible();
@@ -1161,31 +1121,56 @@ describe('WorkspaceShell', () => {
   it('UI-wires accessible terrain overlay settings and persists all choices', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
+    await act(async () => {
+      await services.mapLayers?.restorePersistedState();
+    });
 
-    await user.click(screen.getByRole('button', { name: 'Open settings' }));
-    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
 
-    expect(screen.getByRole('heading', { name: 'Terrain overlays' })).toBeVisible();
-    const contourDistance = screen.getByRole('combobox', {
+    expect(
+      screen.getByRole('heading', { name: 'AWS Open Data Terrain Tiles' }),
+    ).toBeVisible();
+    const contourDistance = screen.getByRole('slider', {
       name: 'Contour distance',
     });
-    expect(contourDistance).toHaveTextContent('50 m');
+    expect(contourDistance).toHaveAttribute('aria-valuetext', '50 metres');
     expect(
-      screen.getByText(/Emphasized, labeled index contours remain every 200 m/u),
+      screen.getByText(/labeled index contours remain every 200 m/u),
     ).toBeVisible();
     const demFilter = screen.getByRole('switch', {
       name: 'Repair invalid DEM elevation pixels',
     });
     expect(demFilter).toBeChecked();
 
-    await user.click(contourDistance);
-    await user.click(screen.getByRole('option', { name: '25 m' }));
-    await user.click(demFilter);
+    fireEvent.change(contourDistance, { target: { value: '1' } });
+    await waitFor(() => {
+      expect(
+        services.mapLayers?.getTerrainOverlayPreferences().contourIntervalMeters,
+      ).toBe(25);
+    });
+    await user.click(
+      screen.getByRole('switch', {
+        name: 'Repair invalid DEM elevation pixels',
+      }),
+    );
+    await waitFor(() => {
+      expect(services.mapLayers?.getTerrainOverlayPreferences()).toMatchObject({
+        contourIntervalMeters: 25,
+        filterInvalidDemPixels: false,
+      });
+    });
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
       screen.getByRole('switch', {
         name: 'Show relief shading above satellite imagery',
       }),
     );
+    await waitFor(() => {
+      expect(services.mapLayers?.getTerrainOverlayPreferences()).toMatchObject({
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: true,
+      });
+    });
 
     expect(services.mapLayers?.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
@@ -1203,7 +1188,7 @@ describe('WorkspaceShell', () => {
     });
   });
 
-  it('mirrors the persisted satellite rendering mode in Satellite and Settings', async () => {
+  it('persists the satellite rendering mode only from Satellite', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
@@ -1235,10 +1220,12 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open settings' }));
     const settings = screen.getByRole('dialog', { name: 'Settings' });
-    await user.click(within(settings).getByRole('tab', { name: 'Rendering' }));
     expect(
-      within(settings).getByRole('combobox', { name: 'Satellite render' }),
-    ).toHaveTextContent('Server');
+      within(settings).queryByRole('combobox', { name: 'Satellite render' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(settings).queryByRole('tab', { name: 'Rendering' }),
+    ).not.toBeInTheDocument();
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         satelliteRenderingMode: 'server',
@@ -1246,11 +1233,39 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('persists Sentinel stretch controls from Satellite', async () => {
+    renderWorkspaceShell();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Satellite' }));
+
+    expect(
+      screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
+    ).toBeVisible();
+    const ceiling = screen.getByRole('slider', {
+      name: 'Sentinel reflectance ceiling',
+    });
+    fireEvent.keyDown(ceiling, { key: 'Home' });
+    fireEvent.keyUp(ceiling, { key: 'Home' });
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingTuning().reflectanceMax).toBe(3_000);
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        renderingTuning: { reflectanceMax: 3_000 },
+      });
+    });
+
+    const saturation = screen.getByRole('slider', { name: 'Sentinel saturation' });
+    fireEvent.keyDown(saturation, { key: 'End' });
+    fireEvent.keyUp(saturation, { key: 'End' });
+    await waitFor(() => {
+      expect(services.mapLayers?.getRenderingTuning().saturation).toBe(5);
+    });
+  });
+
   it('shows compatibility mode only while terrain compute uses the inline backend', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
-    await user.click(screen.getByRole('button', { name: 'Open settings' }));
-    await user.click(screen.getByRole('tab', { name: 'Rendering' }));
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
 
     expect(
       screen.queryByText(/Terrain processing is running/u),

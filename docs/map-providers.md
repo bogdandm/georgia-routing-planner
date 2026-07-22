@@ -194,11 +194,11 @@ spikes against a 626–635 m local surface. Their residuals range from −315.19
 pattern crosses the shared tile boundary while surrounding tiles remain plausible. A 300
 m downward threshold rejects all 63; 400 m leaves five and 500 m leaves eighteen.
 
-Settings > Rendering exposes `Repair invalid DEM elevation pixels`, enabled by default
-and persisted locally. Disabling it bypasses decoding and repair and returns the
-original center PNG. Both modes retain one shared protocol for relief, 3D terrain, and
-contours; changing the preference invalidates their mode-dependent caches and reloads
-all three consumers together so they cannot disagree.
+Layers exposes `Repair invalid DEM elevation pixels` under the AWS terrain provider,
+enabled by default and persisted locally. Disabling it bypasses decoding and repair and
+returns the original center PNG. Both modes retain one shared protocol for relief, 3D
+terrain, and contours; changing the preference invalidates their mode-dependent caches
+and reloads all three consumers together so they cannot disagree.
 
 ### Attribution, limits, and failure policy
 
@@ -324,7 +324,7 @@ The default template calls Development Seed's public
 `WebMercatorQuad`, the MapLibre tile coordinates, the validated STAC item, and ordered
 red/green/blue assets. The default maps each channel over 0–10,000 reflectance before
 display gamma. Users can persistently tune the upper reflectance bound, gamma, and up to
-five times normal saturation in Settings; a lower bound brightens midtones but can clip
+five times normal saturation in Satellite; a lower bound brightens midtones but can clip
 the brightest snow. TiTiler performs bounded COG reads, RGB composition, reprojection,
 and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles during normal
 operation. The maximum source zoom is 14, near Sentinel-2's native 10 m resolution in
@@ -351,17 +351,17 @@ cache-partition policy therefore receive a sanitized, stable `application_origin
 derived from scheme, host, and port. The default GitHub Pages deployment uses
 `https-bogdandm-github-io`, while local ports receive distinct values; renderers
 configured with `none` receive no extra parameter. This value contains no path, query,
-user data, or secret. The persisted Rendering control offers Auto, Server, and Direct.
-Auto starts with the hosted template and switches on explicit HTTP 429 or status-zero;
-Server stays on the hosted template and reports those failures without local fallback;
-Direct starts on the local protocol and sends no TiTiler tile requests. None of the
-modes retries HTTP 429 or status-zero. A renderer can omit CORS headers from its 429
-response, leaving the application with only status zero. A dedicated module worker
-range-reads the validated 8-bit visual COG, selects appropriate overviews, transforms
-output pixels between Web Mercator and the declared northern UTM CRS, and returns
-256-pixel WebP tiles without additional stretching. The main thread and MapLibre source
-contain only a safe scene key. The provider and worker each retain at most two scene
-definitions; the GeoTIFF readers use bounded block caches. HTTP 5xx, timeout, and
+user data, or secret. The persisted Satellite render control offers Auto, Server, and
+Direct. Auto starts with the hosted template and switches on explicit HTTP 429 or
+status-zero; Server stays on the hosted template and reports those failures without
+local fallback; Direct starts on the local protocol and sends no TiTiler tile requests.
+None of the modes retries HTTP 429 or status-zero. A renderer can omit CORS headers from
+its 429 response, leaving the application with only status zero. A dedicated module
+worker range-reads the validated 8-bit visual COG, selects appropriate overviews,
+transforms output pixels between Web Mercator and the declared northern UTM CRS, and
+returns 256-pixel WebP tiles without additional stretching. The main thread and MapLibre
+source contain only a safe scene key. The provider and worker each retain at most two
+scene definitions; the GeoTIFF readers use bounded block caches. HTTP 5xx, timeout, and
 identifiable network failures trigger up to three deduplicated failed-tile refreshes
 with exponential delay. Refreshing only the failed canonical tile coordinates keeps
 already rendered imagery available. The current status names the exact HTTP code when

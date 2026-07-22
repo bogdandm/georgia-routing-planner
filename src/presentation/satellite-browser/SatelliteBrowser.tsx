@@ -71,7 +71,7 @@ import {
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
-import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
+import { SatelliteRenderingControls } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
 import {
   beginSatelliteRequest,
@@ -1080,10 +1080,6 @@ export function SatelliteBrowser({
   const { clock, database, logger, mapLayers, mapViewport, searchSatelliteScenes } =
     useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
-  const renderingMode = useStore(
-    mapLayerStore,
-    (state) => state.satelliteRenderingMode,
-  );
   const selectedMapScene = useStore(mapLayerStore, (state) => state.selectedScene);
   const [today] = useState(() => clock.now());
   const latestMonth = currentSearchMonth(today).month;
@@ -1110,9 +1106,7 @@ export function SatelliteBrowser({
   const request = useRef<AbortController | null>(null);
   const calendarMonthLoadTimer = useRef<number | null>(null);
   const applyRequest = useRef<AbortController | null>(null);
-  const renderingModeRequest = useRef<AbortController | null>(null);
   const cloudCoverChangedByUser = useRef(false);
-  const [renderingModeError, setRenderingModeError] = useState<string | null>(null);
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -1139,7 +1133,20 @@ export function SatelliteBrowser({
       ? viewport
       : { ...viewport, center: satelliteSearchAnchor };
   const searchAreaSource = satelliteSearchAnchor === null ? 'viewport' : 'custom';
-  const portalTarget = document.getElementById('satellite-results-pane');
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // The sibling results pane is attached in the same commit, after this component renders.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setPortalTarget(document.getElementById('satellite-results-pane'));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1148,7 +1155,6 @@ export function SatelliteBrowser({
       }
       request.current?.abort();
       applyRequest.current?.abort();
-      renderingModeRequest.current?.abort();
     };
   }, []);
 
@@ -1666,25 +1672,7 @@ export function SatelliteBrowser({
             Uses the map center point or a custom area for imagery search.
           </FormHelperText>
         </FormControl>
-        <SatelliteRenderingModeSelect
-          mode={renderingMode}
-          onChange={(mode) => {
-            if (mapLayers === null) return;
-            renderingModeRequest.current?.abort();
-            const controller = new AbortController();
-            renderingModeRequest.current = controller;
-            setRenderingModeError(null);
-            void mapLayers.setRenderingMode(mode, controller.signal).then((result) => {
-              if (result.status === 'failed') setRenderingModeError(result.message);
-              if (renderingModeRequest.current === controller) {
-                renderingModeRequest.current = null;
-              }
-            });
-          }}
-        />
-        {renderingModeError === null ? null : (
-          <Alert severity="error">{renderingModeError}</Alert>
-        )}
+        <SatelliteRenderingControls />
       </Stack>
       {active && portalTarget !== null && paneOpen
         ? createPortal(

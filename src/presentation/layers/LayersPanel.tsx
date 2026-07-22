@@ -7,12 +7,18 @@ import {
   FormGroup,
   Slider,
   Stack,
+  Switch,
   Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
+import {
+  supportedContourIntervals,
+  type LogicalMapLayerId,
+  type TerrainOverlayPreferences,
+} from '@/application/ports/MapLayerPreferencesRepository';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 
 interface LayerControl {
@@ -96,6 +102,9 @@ const terrainControls = [
 export function LayersPanel() {
   const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
   const state = useStore(mapLayerStore);
+  const [terrainOverlayCommandError, setTerrainOverlayCommandError] = useState<
+    string | null
+  >(null);
   const provider =
     mapProviderConfiguration.status === 'valid' ? mapProviderConfiguration.value : null;
   const groups = [
@@ -139,6 +148,12 @@ export function LayersPanel() {
     if (typeof value === 'number') mapLayers?.setOpenStreetMapOpacity(value / 100);
   };
 
+  const changeTerrainOverlayPreferences = (value: TerrainOverlayPreferences) => {
+    if (mapLayers === null) return;
+    const result = mapLayers.setTerrainOverlayPreferences(value);
+    setTerrainOverlayCommandError(result.status === 'failed' ? result.message : null);
+  };
+
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
       {mapLayers === null ? (
@@ -161,6 +176,101 @@ export function LayersPanel() {
             <Typography variant="caption" color="text.secondary">
               {group.description}
             </Typography>
+            {group.id === 'terrain' ? (
+              <Stack spacing={0.75} sx={{ mt: 1 }}>
+                {state.terrainComputeStatus === 'inline' ? (
+                  <Alert severity="warning">
+                    Terrain processing is running in compatibility mode. Terrain
+                    features remain available, but map movement may be slower.
+                  </Alert>
+                ) : null}
+                <Box>
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        checked={
+                          state.terrainOverlays.preferences.filterInvalidDemPixels
+                        }
+                        disabled={mapLayers === null}
+                        onChange={(event) => {
+                          changeTerrainOverlayPreferences({
+                            ...state.terrainOverlays.preferences,
+                            filterInvalidDemPixels: event.target.checked,
+                          });
+                        }}
+                      />
+                    }
+                    label="Repair invalid DEM elevation pixels"
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block' }}
+                  >
+                    Applies the same conservative repair to relief, 3D terrain, and
+                    contours without smoothing valid terrain.
+                  </Typography>
+                </Box>
+                <Stack
+                  direction="row"
+                  spacing={1.25}
+                  sx={{ px: 0.25, alignItems: 'center' }}
+                >
+                  <Typography
+                    id="contour-distance-label"
+                    variant="body2"
+                    sx={{ minWidth: 104 }}
+                  >
+                    Contour distance
+                  </Typography>
+                  <Slider
+                    aria-labelledby="contour-distance-label"
+                    aria-valuetext={`${String(state.terrainOverlays.preferences.contourIntervalMeters)} metres`}
+                    disabled={mapLayers === null}
+                    min={0}
+                    max={supportedContourIntervals.length - 1}
+                    step={1}
+                    marks={supportedContourIntervals.map((_value, index) => ({
+                      value: index,
+                    }))}
+                    value={supportedContourIntervals.indexOf(
+                      state.terrainOverlays.preferences.contourIntervalMeters,
+                    )}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(value) =>
+                      `${String(supportedContourIntervals[value])} m`
+                    }
+                    onChange={(_event, value) => {
+                      if (typeof value !== 'number') return;
+                      const contourIntervalMeters = supportedContourIntervals[value];
+                      if (contourIntervalMeters === undefined) return;
+                      changeTerrainOverlayPreferences({
+                        ...state.terrainOverlays.preferences,
+                        contourIntervalMeters,
+                      });
+                    }}
+                    sx={{ flex: 1, mx: 0.5 }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ minWidth: 34, textAlign: 'right' }}
+                  >
+                    {state.terrainOverlays.preferences.contourIntervalMeters} m
+                  </Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary">
+                  Smaller distances show more minor lines; labeled index contours remain
+                  every 200 m.
+                </Typography>
+                {(terrainOverlayCommandError ?? state.terrainOverlays.message) ? (
+                  <Alert severity="warning" role="status">
+                    {terrainOverlayCommandError ?? state.terrainOverlays.message}
+                  </Alert>
+                ) : null}
+              </Stack>
+            ) : null}
             {group.id === 'openstreetmap' ? (
               <Stack
                 direction="row"

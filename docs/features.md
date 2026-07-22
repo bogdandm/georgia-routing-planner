@@ -43,12 +43,12 @@ always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable settings: developer mode, collapsed navigation, and Sentinel imagery render
-  mode/stretch preferences in Dexie.
-- Settings uses compact `General`, `Rendering`, and `Storage` tabs. Storage shows only
-  the measurements the browser supplies: origin usage and quota, IndexedDB, Cache
-  Storage, localStorage, residual origin data, and Chromium's optional JavaScript heap
-  estimate in megabytes.
+- Durable preferences: developer mode, collapsed navigation, Sentinel imagery rendering,
+  and terrain overlays in Dexie.
+- Settings uses compact `General` and `Storage` tabs. Storage shows only the
+  measurements the browser supplies: origin usage and quota, IndexedDB, Cache Storage,
+  localStorage, residual origin data, and Chromium's optional JavaScript heap estimate
+  in megabytes.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
 
@@ -134,9 +134,10 @@ preceding month and appends it, continuing back through the Sentinel-2 archive.
 Whole-card click selects, expands metadata, and applies that concrete scene through the
 shared map adapter. TiTiler normally renders a validated L2A item's separate red, green,
 and blue reflectance COGs as georeferenced Web Mercator tiles below hiking references.
-Settings exposes persistent reflectance ceiling, gamma, and saturation controls for this
-hosted rendering path. Fresh storage and reset use a reflectance ceiling of 11000, gamma
-2.25, and saturation 2.50; saved tuning takes precedence.
+The Satellite sidebar exposes persistent reflectance ceiling, gamma, and saturation
+controls below the render selector for this hosted rendering path. Fresh storage and
+reset use a reflectance ceiling of 11000, gamma 2.25, and saturation 2.50; saved tuning
+takes precedence.
 
 The real polygon or multipolygon footprint is a separate orange outline above hiking
 geometry and below labels. Selecting a different scene immediately removes the current
@@ -145,13 +146,13 @@ failed application reports a safe, clickable error. The detail distinguishes rej
 values, rate limiting, renderer availability, and an unclassified unusable tile without
 exposing provider URLs.
 
-A render dropdown mirrored in Settings > Rendering and Satellite selects `Auto`,
-`Server`, or `Direct`. Auto switches a hosted-renderer 429 or CORS-opaque status-zero
-failure to direct range reads of the scene's pre-rendered 8-bit visual COG without
-retrying TiTiler. Server never falls back, and Direct bypasses TiTiler entirely. The
-visual COG is displayed as supplied; reflectance, gamma, and saturation controls are not
-applied to it. Tiles become visible individually while the vector basemap remains
-available below them, and satellite rendering has no application deadline.
+A render dropdown in Satellite selects `Auto`, `Server`, or `Direct`. Auto switches a
+hosted-renderer 429 or CORS-opaque status-zero failure to direct range reads of the
+scene's pre-rendered 8-bit visual COG without retrying TiTiler. Server never falls back,
+and Direct bypasses TiTiler entirely. The visual COG is displayed as supplied;
+reflectance, gamma, and saturation controls are not applied to it. Tiles become visible
+individually while the vector basemap remains available below them, and satellite
+rendering has no application deadline.
 
 A successful automatic fallback replaces Ready with a persistent, non-blocking warning
 that TiTiler is unavailable and the alternative imagery provider is being activated or
@@ -222,15 +223,16 @@ the configured terrain provider, and OpenStreetMap. The checkboxes cover Satelli
 imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and
 Places and POIs, plus Natural features and Restricted areas. The single **Natural
 features** checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and
-their water labels. The OpenStreetMap controls remain a single flat list with one shared
-opacity slider. While satellite imagery is visible, the slider scales every
-OpenStreetMap reference layer and the elevation isolines together while preserving their
-relative visual weights and individual visibility choices. It is disabled in vector-only
-mode. Every map data source added to the application must appear under its provider
-heading in Layers; each user-visible feature family from that source receives an
-explicit control unless it is part of the required base canvas. Each logical ID maps to
-an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the UI
-boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
+their water labels. The terrain provider also owns the invalid-DEM repair switch and a
+compact contour-distance slider. The OpenStreetMap controls remain a single flat list
+with one shared opacity slider. While satellite imagery is visible, the slider scales
+every OpenStreetMap reference layer and the elevation isolines together while preserving
+their relative visual weights and individual visibility choices. It is disabled in
+vector-only mode. Every map data source added to the application must appear under its
+provider heading in Layers; each user-visible feature family from that source receives
+an explicit control unless it is part of the required base canvas. Each logical ID maps
+to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the
+UI boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
 retains the applied scene and does not remove its footprint, search results, or
 attribution contract. Relief and isoline visibility are independent of 3D terrain mode
 and satellite availability. Base land remains visible and cannot be disabled. Per-layer
@@ -260,11 +262,10 @@ scene.
 - Navigation collapses with a short transition to only the clickable GR mark. The GR
   square keeps the exact same size and viewport position in both states so the remaining
   navigation appears to retract into that fixed anchor.
-- Settings is non-modal and does not dim or block the map, allowing imagery stretch to
-  be judged while a slider is adjusted.
-- Settings > Rendering controls the default-enabled invalid DEM repair, minor contour
-  spacing, and whether relief shading sits above satellite imagery. Index contours
-  remain labeled at 200 m intervals.
+- Settings is non-modal and does not dim or block the map.
+- Layers exposes default-enabled invalid DEM repair and minor contour spacing under the
+  terrain provider. Satellite owns the imagery stretch and the switch that moves relief
+  shading above imagery. Index contours remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Clicking the map opens an anchored, accessible point-inspection popup with formatted
@@ -354,17 +355,17 @@ DEM repair and contour calculation normally run in one dedicated terrain worker.
 movement continues DEM work but defers newly requested contours until movement settles;
 existing contour tiles remain under MapLibre's normal retention rules. If the worker
 channel or returned data cannot recover after one restart, the same calculations
-continue inline for that page session and Settings > Rendering shows a non-blocking
-compatibility warning that movement may be slower. Provider, decode, and calculation
-failures remain isolated to their individual requests and do not switch execution mode.
-A successful worker session has no warning; a new page session tries the worker again.
+continue inline for that page session and Layers shows a non-blocking compatibility
+warning that movement may be slower. Provider, decode, and calculation failures remain
+isolated to their individual requests and do not switch execution mode. A successful
+worker session has no warning; a new page session tries the worker again.
 
 While terrain work is active, the Ready status below search also shows the execution
 mode, exact number of queued contour jobs against the 32-job bound, and any currently
 active work. The secondary line is absent when the worker is idle. This workload summary
 is transient and contains no tile coordinates or provider URLs.
 
-Relief normally sits below satellite imagery; the Rendering setting moves it above the
+Relief normally sits below satellite imagery; the Satellite switch moves it above the
 active raster without remounting MapLibre. Contours remain above both and below OSM
 roads, paths, labels, and POIs. Preferences are validated and stored locally with the
 existing map-layer record. Provider failure leaves unrelated layers and controls usable.

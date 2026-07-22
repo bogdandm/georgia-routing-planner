@@ -208,14 +208,14 @@ check its status, or provides a failing check, test output, CI log, or failure a
 treat that as an explicit instruction to inspect the current status and fix any failure
 on the existing branch. A status request is not a read-only reporting task when the
 current pull request is failing: continue through authoritative log inspection,
-diagnosis, the smallest relevant correction, focused verification, commit, push, and
-one final pull-request status recheck. Do not merely report the failure or ask for
-approval to implement the focused fix; the maintainer's prompt already supplies that
+diagnosis, the smallest relevant correction, focused verification, commit, push, and one
+final pull-request status recheck. Do not merely report the failure or ask for approval
+to implement the focused fix; the maintainer's prompt already supplies that
 authorization.
 
-Use discrete status and log queries needed for that repair. Do not start a watch command,
-polling loop, recurring monitor, or wait command. If the inspected current pull request
-has no failure, report its status without waiting for future changes.
+Use discrete status and log queries needed for that repair. Do not start a watch
+command, polling loop, recurring monitor, or wait command. If the inspected current pull
+request has no failure, report its status without waiting for future changes.
 
 Ask for direction only when the proposed response would materially expand the pull
 request's scope, requires a destructive or separately protected action, or the failure
@@ -741,8 +741,12 @@ invalidate the broader result are complete.
 ### Documentation-only verification
 
 When only Markdown or other non-executable documentation changes, do not run TypeScript,
-ESLint, tests, coverage, Playwright, or builds. Run only the changed-document formatter,
-documentation-boundary checks required here, and `git diff --check`.
+ESLint, tests, coverage, Playwright, or builds. Run Prettier against every changed
+Markdown file, including `AGENTS.md`, before committing and again before handoff. Use
+`.\node_modules\.bin\prettier.CMD --write <changed-markdown-files>` when formatting is
+needed, then require `.\node_modules\.bin\prettier.CMD --check <changed-markdown-files>`
+to pass. Also run the documentation-boundary checks required here and
+`git diff --check`.
 
 Documentation-only pull requests must keep required CI conclusive while skipping
 Playwright installation and execution. Classification must inspect the complete diff; do
@@ -1010,8 +1014,10 @@ changes are complete.
 1. Review the complete branch diff. Confirm behavior, tests, and permanent documentation
    agree; remove unnecessary files, branches, wrappers, adapters, interfaces, fallbacks,
    and defensive logic.
-2. For documentation-only changes, run only the changed-document formatter, required
-   documentation-boundary checks, and `git diff --check`.
+2. For documentation-only changes, run Prettier `--check` against every changed Markdown
+   file, including `AGENTS.md`, plus required documentation-boundary checks and
+   `git diff --check`. Run Prettier `--write` first when the check reports formatting
+   differences.
 3. For executable code, run `pnpm format:check`, `pnpm typecheck`, and `pnpm lint` once.
 4. Run `pnpm test:coverage` once as the final Vitest verification. It includes normal
    and integration tests; do not also run `pnpm test` or `pnpm test:integration` in the

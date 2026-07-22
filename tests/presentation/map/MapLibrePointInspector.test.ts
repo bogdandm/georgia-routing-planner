@@ -25,6 +25,10 @@ describe('renderPointInspectorContent', () => {
     );
     expect(container.textContent).toContain('44.80123, 41.71235');
     expect(container.textContent).toContain('1,234 m');
+    expect(container.textContent).toContain(
+      '<script>fixture hut</script> (alpine hut), 42 m away',
+    );
+    expect(container.textContent).not.toContain('—');
     expect(container.querySelector('script')).toBeNull();
     const links = [...container.querySelectorAll<HTMLAnchorElement>('a')];
     expect(links.map((link) => link.textContent)).toEqual([

@@ -81,7 +81,7 @@ function nearbyFeatureText(inspection: OpenMapPointInspection): string {
       const poi = inspection.nearbyPoi.poi;
       const name = poi.name ?? 'Unnamed map feature';
       const category = poi.category.replaceAll('_', ' ');
-      return `${name} — ${category}, ${measurementFormatter.format(poi.distanceMeters)} m away`;
+      return `${name} (${category}), ${measurementFormatter.format(poi.distanceMeters)} m away`;
     }
   }
 }

@@ -1,7 +1,12 @@
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import NorthEastIcon from '@mui/icons-material/NorthEast';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
+import SouthEastIcon from '@mui/icons-material/SouthEast';
+import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
+import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
+import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
   Alert,
@@ -28,6 +33,7 @@ import {
   useState,
   type DragEvent,
   type PropsWithChildren,
+  type ReactNode,
 } from 'react';
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
@@ -803,6 +809,51 @@ function formatDuration(seconds: number): string {
   return `${String(hours)}h ${String(minutes)}m`;
 }
 
+function formatElevation(meters: number): string {
+  return `${Math.round(meters).toLocaleString('en')} m`;
+}
+
+function averageSpeedKilometersPerHour(metrics: TrackMetrics): number | undefined {
+  const elapsedSeconds = metrics.elapsedSeconds;
+  if (elapsedSeconds === undefined || elapsedSeconds <= 0) return undefined;
+  return (metrics.distanceMeters / elapsedSeconds) * 3.6;
+}
+
+interface TrackStatProps {
+  readonly emphasized?: boolean;
+  readonly icon: ReactNode;
+  readonly label: string;
+  readonly value: string;
+}
+
+function TrackStat({ emphasized = false, icon, label, value }: TrackStatProps) {
+  return (
+    <Stack
+      component="span"
+      direction="row"
+      spacing={0.5}
+      aria-label={`${label}: ${value}`}
+      sx={{ minWidth: 0, alignItems: 'center' }}
+    >
+      <Box
+        component="span"
+        aria-hidden
+        sx={{ display: 'inline-flex', color: 'text.secondary' }}
+      >
+        {icon}
+      </Box>
+      <Typography
+        component="span"
+        variant={emphasized ? 'body2' : 'caption'}
+        noWrap
+        sx={{ fontWeight: emphasized ? 600 : 400 }}
+      >
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
+
 export function TracksPanel() {
   const { active, error, filteredSummaries, query, setQuery, selectSaved, summaries } =
     useTracksWorkspace();
@@ -850,6 +901,7 @@ export function TracksPanel() {
           >
             {filteredSummaries.map((summary) => {
               const elapsedSeconds = summary.metrics.elapsedSeconds;
+              const ascentMeters = summary.metrics.ascentMeters;
               return (
                 <Paper key={summary.id} variant="outlined" sx={{ overflow: 'hidden' }}>
                   <ListItemButton
@@ -860,12 +912,31 @@ export function TracksPanel() {
                     sx={{ display: 'block', px: 1.5, py: 1.25 }}
                   >
                     <Typography variant="subtitle2">{summary.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatDistance(summary.metrics.distanceMeters)}
-                      {elapsedSeconds === undefined
-                        ? null
-                        : ` · ${formatDuration(elapsedSeconds)}`}
-                    </Typography>
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
+                    >
+                      {elapsedSeconds === undefined ? null : (
+                        <TrackStat
+                          icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
+                          label="Recorded time"
+                          value={formatDuration(elapsedSeconds)}
+                        />
+                      )}
+                      <TrackStat
+                        icon={<SwapHorizOutlinedIcon sx={{ fontSize: 16 }} />}
+                        label="Distance"
+                        value={formatDistance(summary.metrics.distanceMeters)}
+                      />
+                      {ascentMeters === undefined ? null : (
+                        <TrackStat
+                          icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
+                          label="Elevation gain"
+                          value={formatElevation(ascentMeters)}
+                        />
+                      )}
+                    </Stack>
                   </ListItemButton>
                 </Paper>
               );
@@ -896,70 +967,90 @@ export function TracksPanel() {
   );
 }
 
-interface DetailsGridProps {
+interface TrackStatsProps {
   readonly metrics: TrackMetrics;
+}
+
+function TrackStats({ metrics }: TrackStatsProps) {
+  const stats: TrackStatProps[] = [];
+  const elapsedSeconds = metrics.elapsedSeconds;
+  if (elapsedSeconds !== undefined) {
+    stats.push({
+      icon: <TimerOutlinedIcon sx={{ fontSize: 18 }} />,
+      label: 'Recorded time',
+      value: formatDuration(elapsedSeconds),
+    });
+  }
+  stats.push({
+    icon: <SwapHorizOutlinedIcon sx={{ fontSize: 18 }} />,
+    label: 'Distance',
+    value: formatDistance(metrics.distanceMeters),
+  });
+  const speedKilometersPerHour = averageSpeedKilometersPerHour(metrics);
+  if (speedKilometersPerHour !== undefined) {
+    stats.push({
+      icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
+      label: 'Average speed',
+      value: `${speedKilometersPerHour.toFixed(1)} km/h`,
+    });
+  }
+  if (metrics.ascentMeters !== undefined) {
+    stats.push({
+      icon: <NorthEastIcon sx={{ fontSize: 18 }} />,
+      label: 'Elevation gain',
+      value: formatElevation(metrics.ascentMeters),
+    });
+  }
+  if (metrics.descentMeters !== undefined) {
+    stats.push({
+      icon: <SouthEastIcon sx={{ fontSize: 18 }} />,
+      label: 'Elevation loss',
+      value: formatElevation(metrics.descentMeters),
+    });
+  }
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        columnGap: 1.5,
+        rowGap: 1.5,
+      }}
+    >
+      {stats.map((stat) => (
+        <TrackStat key={stat.label} {...stat} emphasized />
+      ))}
+    </Box>
+  );
+}
+
+interface TrackMetadataProps {
   readonly pointCount: number;
   readonly savedAt: string | undefined;
   readonly segmentCount: number;
   readonly sourceFilename: string;
 }
 
-function DetailsGrid({
-  metrics,
+function TrackMetadata({
   pointCount,
   savedAt,
   segmentCount,
   sourceFilename,
-}: DetailsGridProps) {
-  const rows: [string, string][] = [
-    ['Source file', sourceFilename],
-    ['Distance', formatDistance(metrics.distanceMeters)],
-  ];
-  const elapsedSeconds = metrics.elapsedSeconds;
-  if (elapsedSeconds !== undefined) {
-    rows.push(['Recorded time', formatDuration(elapsedSeconds)]);
-  }
-  rows.push(
-    ['Points', pointCount.toLocaleString('en')],
-    ['Segments', segmentCount.toLocaleString('en')],
-    [
-      'Ascent',
-      metrics.ascentMeters === undefined
-        ? 'Unavailable'
-        : `${Math.round(metrics.ascentMeters).toLocaleString('en')} m`,
-    ],
-    [
-      'Descent',
-      metrics.descentMeters === undefined
-        ? 'Unavailable'
-        : `${Math.round(metrics.descentMeters).toLocaleString('en')} m`,
-    ],
-  );
-  if (savedAt !== undefined) {
-    rows.push(['Saved', new Date(savedAt).toLocaleString('en')]);
-  }
+}: TrackMetadataProps) {
+  const pointLabel = `${pointCount.toLocaleString('en')} ${pointCount === 1 ? 'point' : 'points'}`;
+  const segmentLabel = `${segmentCount.toLocaleString('en')} ${segmentCount === 1 ? 'segment' : 'segments'}`;
   return (
-    <Box
-      component="dl"
-      sx={{
-        m: 0,
-        px: 1,
-        display: 'grid',
-        gridTemplateColumns: '120px 1fr',
-        gap: 1,
-      }}
-    >
-      {rows.map(([label, value]) => (
-        <Box key={label} sx={{ display: 'contents' }}>
-          <Typography component="dt" variant="caption" color="text.secondary">
-            {label}
-          </Typography>
-          <Typography component="dd" variant="body2" sx={{ m: 0 }}>
-            {value}
-          </Typography>
-        </Box>
-      ))}
-    </Box>
+    <Stack spacing={0.5} sx={{ px: 1 }}>
+      <Typography variant="body2">{sourceFilename}</Typography>
+      <Typography variant="caption" color="text.secondary">
+        {pointLabel} · {segmentLabel}
+      </Typography>
+      {savedAt === undefined ? null : (
+        <Typography variant="caption" color="text.secondary">
+          Saved {new Date(savedAt).toLocaleString('en')}
+        </Typography>
+      )}
+    </Stack>
   );
 }
 
@@ -1106,8 +1197,8 @@ export function TrackDetailsPane() {
           <Typography component="h3" variant="subtitle2">
             Track details
           </Typography>
-          <DetailsGrid
-            metrics={metrics}
+          <TrackStats metrics={metrics} />
+          <TrackMetadata
             pointCount={pointCount}
             savedAt={savedAt}
             segmentCount={segmentCount}

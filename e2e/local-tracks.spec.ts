@@ -173,9 +173,9 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
     await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(
-      details.getByText(fixture.pointCount.toLocaleString('en'), { exact: true }),
-    ).toBeVisible();
+    await expect(details).toContainText(
+      `${fixture.pointCount.toLocaleString('en')} points`,
+    );
     if ('warningCode' in fixture) {
       await expect(details.getByText(fixture.warningCode)).toBeVisible();
       await expect(details).toContainText(
@@ -210,7 +210,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
     name: 'Track details',
   });
   await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
-  await expect(selectedDetails.getByText('18,078', { exact: true })).toBeVisible();
+  await expect(selectedDetails).toContainText('18,078 points');
 
   await page
     .getByRole('button', { name: 'Developer diagnostics', exact: true })

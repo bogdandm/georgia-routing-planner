@@ -124,7 +124,7 @@ function gpxFile(name = 'Fixture track.gpx'): File {
 }
 
 function gpxFileWithCompanionRoute(): File {
-  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"/><trkpt lat="42.01" lon="44.01"/></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"><time>2026-07-13T08:00:00Z</time></trkpt><trkpt lat="42.01" lon="44.01"><time>2026-07-13T08:02:00Z</time></trkpt></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
   const file = new File([xml], 'Track and route.gpx', {
     type: 'application/gpx+xml',
   });
@@ -387,6 +387,12 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('Fixture track.gpx')).toBeVisible();
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
+    const details = screen.getByRole('complementary', { name: 'Track details' });
+    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+    expect(
+      within(details).queryByLabelText(/^Average speed:/u),
+    ).not.toBeInTheDocument();
+    expect(within(details).getByText('2 points · 1 segment')).toBeVisible();
     const discard = screen.getByRole('button', { name: 'Discard' });
     const save = screen.getByRole('button', { name: 'Save' });
     expect(
@@ -404,6 +410,11 @@ describe('WorkspaceShell', () => {
       expect(screen.getByText('1 saved track')).toBeVisible();
     });
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByLabelText(
+        'Elevation gain: 120 m',
+      ),
+    ).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Selected track' })).toBeVisible();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
@@ -444,6 +455,7 @@ describe('WorkspaceShell', () => {
       ),
     ).toBeVisible();
     expect(screen.getByText('Track and route.gpx')).toBeVisible();
+    expect(screen.getByLabelText(/^Average speed:/u)).toBeVisible();
   }, 10_000);
 
   it('keeps import errors inside the drop zone and dismisses them', () => {

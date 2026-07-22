@@ -81,12 +81,16 @@ categories rather than a hard-coded feature type. Mountain passes gain a `Pass` 
 and named peaks or volcanoes gain an `Mt.` prefix when the source name does not already
 include one. Save retains the original file, independent line segments, and versioned
 metrics in this browser; unsaved previews activate the native leave-site guard. Saved
-tracks are searchable by name and support reopen, close, rename, and confirmed deletion.
-A compact local-retention notice stays pinned to the Tracks panel bottom. Catalog,
-folders, tags, filters, batch import, whole-workspace dropping, and GPX creation remain
-unavailable. A newly imported or reopened track renders as bright-blue independent lines
-and fits its complete bounds with padding for the master/detail surfaces. Closing it
-removes the active geometry without deleting a saved record or moving the camera.
+track cards show icon-led recorded duration, distance, and elevation gain when
+available. The detail pane presents duration, distance, derived average speed, elevation
+gain, and elevation loss in a wrapping stats grid, with missing measurements omitted;
+source file, point, segment, and save metadata remain below it. Saved tracks are
+searchable by name and support reopen, close, rename, and confirmed deletion. A compact
+local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
+filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
+newly imported or reopened track renders as bright-blue independent lines and fits its
+complete bounds with padding for the master/detail surfaces. Closing it removes the
+active geometry without deleting a saved record or moving the camera.
 
 ### Create GPX
 

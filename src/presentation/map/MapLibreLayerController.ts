@@ -1633,9 +1633,21 @@ export class MapLibreLayerController {
     if (this.#directFallbackSources.has(sourceId)) return false;
     const map = this.#map;
     const fallbackUrl = this.#directFallbackUrls.get(sourceId);
-    const source = map?.getSource(sourceId) as
-      { setTiles?: (tiles: string[]) => void } | undefined;
-    if (fallbackUrl === undefined || source?.setTiles === undefined) return false;
+    const slot = rasterSlots.find((candidate) => candidate.sourceId === sourceId);
+    const scene =
+      this.#stagingSourceId === sourceId
+        ? this.#stagingScene
+        : this.#activeSlot?.sourceId === sourceId
+          ? this.#appliedScene
+          : null;
+    if (
+      map === null ||
+      fallbackUrl === undefined ||
+      slot === undefined ||
+      scene === null
+    ) {
+      return false;
+    }
 
     const tracker = this.getOrCreateRasterRecovery(sourceId, details);
     tracker.lastDetails = details;
@@ -1656,19 +1668,43 @@ export class MapLibreLayerController {
       if (previousTileUrl !== undefined) {
         this.#staleRendererTileUrls.set(sourceId, previousTileUrl);
       }
-      source.setTiles([fallbackUrl]);
+      // Replacing a raster template in place can leave MapLibre's fading tile set
+      // referencing textures released by the source reload. Recreate the native
+      // source and layer so the direct provider starts with a clean tile lifecycle.
+      map.removeLayer(slot.layerId);
+      map.removeSource(slot.sourceId);
+      map.addSource(slot.sourceId, {
+        type: 'raster',
+        tiles: [fallbackUrl],
+        tileSize: this.renderer.tileSize,
+        minzoom: this.renderer.minZoom,
+        maxzoom: this.renderer.maxZoom,
+        bounds: sceneBounds(scene),
+        attribution: this.renderer.attribution,
+      });
+      map.addLayer(
+        {
+          id: slot.layerId,
+          type: 'raster',
+          source: slot.sourceId,
+          layout: { visibility: 'visible' },
+          paint: {
+            'raster-opacity': 1,
+            'raster-fade-duration': 0,
+          },
+        },
+        mapInsertionPoints.satelliteBeforeLayerId,
+      );
       this.#rasterTileUrls.set(sourceId, fallbackUrl);
       // MapLibre sends one ErrorEvent to the global map listener and the temporary
       // source-readiness listener. Both must observe the same successful transition.
       this.#directFallbackHandledEvents.add(event);
       mapLayerStore.setState({ automaticAlternativeProviderState: 'switching' });
-      // Keep the same native source and layer mounted. Existing raster tiles remain
-      // above a fully restored vector basemap until direct visual-COG data arrives.
     } catch {
       this.#directFallbackSources.delete(sourceId);
       this.#pendingDirectFallbacks.delete(sourceId);
       this.#waitingForRasterData.delete(sourceId);
-      if (wasProgressive && map !== null) {
+      if (wasProgressive) {
         this.startProgressiveRasterRendering(map, sourceId);
       }
       this.cancelRasterRecovery(sourceId);

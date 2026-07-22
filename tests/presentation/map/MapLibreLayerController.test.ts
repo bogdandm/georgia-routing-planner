@@ -27,7 +27,7 @@ class FakeLayerMap {
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
   styleLoaded = true;
-  setTilesCalls = 0;
+  directRasterSourceAdds = 0;
   readonly refreshTilesCalls: {
     readonly sourceId: string;
     readonly tileIds?: readonly {
@@ -116,13 +116,23 @@ class FakeLayerMap {
   }
 
   public addSource(id: string, source: unknown): void {
+    if (
+      typeof source === 'object' &&
+      source !== null &&
+      'tiles' in source &&
+      Array.isArray(source.tiles) &&
+      source.tiles.some(
+        (tile) => typeof tile === 'string' && tile.startsWith('test-satellite-cog:'),
+      )
+    ) {
+      this.directRasterSourceAdds += 1;
+    }
     this.sources.set(
       id,
       typeof source === 'object' && source !== null && 'tiles' in source
         ? {
             ...source,
             setTiles: (tiles: string[]) => {
-              this.setTilesCalls += 1;
               const current = this.sources.get(id);
               if (typeof current === 'object' && current !== null) {
                 this.sources.set(id, { ...current, tiles });
@@ -928,7 +938,7 @@ describe('MapLibreLayerController', () => {
       message:
         'The imagery renderer is rate-limiting requests (HTTP 429). The current map remains usable; wait briefly, then retry.',
     });
-    expect(map.setTilesCalls).toBe(0);
+    expect(map.directRasterSourceAdds).toBe(0);
     expect(map.refreshTilesCalls).toHaveLength(0);
   });
 
@@ -1054,7 +1064,7 @@ describe('MapLibreLayerController', () => {
     await Promise.resolve();
 
     expect(map.refreshTilesCalls).toHaveLength(0);
-    expect(map.setTilesCalls).toBe(1);
+    expect(map.directRasterSourceAdds).toBe(1);
     expect(
       map.paintProperties.get(`${sentinelMapLayerIds.rasterA}.raster-opacity`),
     ).toBe(1);
@@ -1105,7 +1115,7 @@ describe('MapLibreLayerController', () => {
     await Promise.resolve();
 
     expect(map.refreshTilesCalls).toHaveLength(0);
-    expect(map.setTilesCalls).toBe(1);
+    expect(map.directRasterSourceAdds).toBe(1);
     expect(
       controller.handleRasterSourceFailure(
         failureEvent as unknown as MapLibreErrorEvent,
@@ -1115,7 +1125,7 @@ describe('MapLibreLayerController', () => {
       retryAttempt: 0,
       retryDelayMs: 0,
     });
-    expect(map.setTilesCalls).toBe(1);
+    expect(map.directRasterSourceAdds).toBe(1);
     expect(
       controller.handleRasterSourceFailure({
         error: {
@@ -1129,7 +1139,7 @@ describe('MapLibreLayerController', () => {
       retryAttempt: 0,
       retryDelayMs: 0,
     });
-    expect(map.setTilesCalls).toBe(1);
+    expect(map.directRasterSourceAdds).toBe(1);
     map.sourceLoaded = true;
     map.fire('sourcedata', {
       sourceId: 'sentinel-raster-a',
@@ -1170,7 +1180,7 @@ describe('MapLibreLayerController', () => {
     map.fire('error', event);
     await vi.advanceTimersByTimeAsync(4_000);
     map.fire('error', event);
-    expect(map.setTilesCalls).toBe(1);
+    expect(map.directRasterSourceAdds).toBe(1);
     map.sourceLoaded = true;
     map.fire('sourcedata', {
       sourceId: 'sentinel-raster-a',

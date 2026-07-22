@@ -183,6 +183,7 @@ export function MapWorkspace({
               terrain: mapProviderConfiguration.value.terrain,
               sourceLayers: {
                 peaks: mapProviderConfiguration.value.vector.sourceLayers.peaks,
+                places: mapProviderConfiguration.value.vector.sourceLayers.places,
                 pois: mapProviderConfiguration.value.vector.sourceLayers.pois,
               },
               demTileUrl: mapLayers?.createDemTileUrl() ?? '',
@@ -578,7 +579,7 @@ export function MapWorkspace({
             boxZoom
             doubleClickZoom
             dragPan
-            dragRotate
+            dragRotate={false}
             keyboard
             reuseMaps={false}
             scrollZoom

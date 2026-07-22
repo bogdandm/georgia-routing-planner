@@ -59,7 +59,7 @@ function EmptyState({ description, icon, title }: EmptyStateProps) {
 function TracksContent() {
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
-      <Stack direction="row" spacing={0.75}>
+      <Stack direction="row" spacing={1}>
         <TextField
           fullWidth
           disabled
@@ -78,14 +78,14 @@ function TracksContent() {
         />
         <Tooltip title="Track filters arrive with the catalog">
           <span>
-            <IconButton disabled aria-label="Filter tracks">
+            <IconButton disabled size="small" aria-label="Filter tracks">
               <FilterAltOutlinedIcon />
             </IconButton>
           </span>
         </Tooltip>
         <Tooltip title="Track sorting arrives with the catalog">
           <span>
-            <IconButton disabled aria-label="Sort tracks">
+            <IconButton disabled size="small" aria-label="Sort tracks">
               <SortOutlinedIcon />
             </IconButton>
           </span>
@@ -145,7 +145,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   tracks: {
     title: 'Tracks',
     actions: (
-      <Stack direction="row" spacing={0.75}>
+      <Stack direction="row" spacing={1}>
         {disabledAction(
           'GPX import arrives in a later phase',
           <IconButton disabled size="small" aria-label="Import GPX">
@@ -206,7 +206,7 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
       sx={{
         position: 'relative',
         zIndex: 3,
-        width: activeTab === 'satellite' ? { xs: 420, xl: 464 } : { xs: 344, xl: 408 },
+        width: { xs: 420, xl: 464 },
         flexShrink: 0,
         minHeight: 0,
         display: 'flex',

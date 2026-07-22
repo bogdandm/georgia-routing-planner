@@ -9,6 +9,7 @@ import {
   DialogTitle,
   FormControlLabel,
   Snackbar,
+  Stack,
   TextField,
   Typography,
 } from '@mui/material';
@@ -78,55 +79,62 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
         maxWidth="sm"
       >
         <DialogTitle>Share this map view</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="body2" color="text.secondary">
             The 2D link always shares center and zoom. A selected satellite image can be
             included without storing the scene locally.
           </Typography>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeSatellite}
-                disabled={selectedSceneKey === null}
-                onChange={(_, checked) => {
-                  setExcludedSceneKey(checked ? null : selectedSceneKey);
-                }}
-              />
-            }
-            label="Include selected satellite image"
-            sx={{ mb: 1 }}
-          />
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            label="2D share link"
-            value={share2dUrl}
-            slotProps={{ htmlInput: { readOnly: true } }}
-          />
-          <TextField
-            fullWidth
-            multiline
-            minRows={2}
-            disabled={share3dUrl === ''}
-            label="3D share link"
-            value={share3dUrl}
-            helperText={
-              share3dUrl === ''
-                ? 'Enable the 3D terrain map to share bearing and pitch.'
-                : 'This link includes the current bearing and pitch.'
-            }
-            slotProps={{ htmlInput: { readOnly: true } }}
-            sx={{ mt: 2 }}
-          />
+          <Stack spacing={1.5}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+              label="2D share link"
+              value={share2dUrl}
+              slotProps={{ htmlInput: { readOnly: true } }}
+            />
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              size="small"
+              disabled={share3dUrl === ''}
+              label="3D share link"
+              value={share3dUrl}
+              helperText={
+                share3dUrl === ''
+                  ? 'Enable the 3D terrain map to share bearing and pitch.'
+                  : 'This link includes the current bearing and pitch.'
+              }
+              slotProps={{ htmlInput: { readOnly: true } }}
+            />
+            <FormControlLabel
+              sx={{ m: 0 }}
+              slotProps={{ typography: { variant: 'body2' } }}
+              control={
+                <Checkbox
+                  size="small"
+                  sx={{ p: 0, mr: 1 }}
+                  checked={includeSatellite}
+                  disabled={selectedSceneKey === null}
+                  onChange={(_, checked) => {
+                    setExcludedSceneKey(checked ? null : selectedSceneKey);
+                  }}
+                />
+              }
+              label="Include selected satellite image"
+            />
+          </Stack>
           {copyState === 'failed' ? (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert severity="error">
               The link could not be copied. Select it and copy it manually.
             </Alert>
           ) : null}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1 }}>
           <Button
+            size="small"
             onClick={() => {
               setExcludedSceneKey(null);
               onClose();
@@ -135,6 +143,7 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
             Close
           </Button>
           <Button
+            size="small"
             startIcon={<ContentCopyOutlinedIcon />}
             disabled={share3dUrl === ''}
             onClick={() => void copyLink(share3dUrl, 'copied-3d')}
@@ -142,6 +151,7 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
             Copy 3D link
           </Button>
           <Button
+            size="small"
             variant="contained"
             startIcon={<ContentCopyOutlinedIcon />}
             disabled={share2dUrl === ''}

@@ -2,7 +2,6 @@ import type { GeoJSONFeature } from 'maplibre-gl';
 
 import type { MapCoordinate, NearbyPoi } from '@/presentation/map/mapTypes';
 
-export const nearbyPoiRadiusMeters = 100;
 const earthRadiusMeters = 6_371_008.8;
 
 function radians(degrees: number): number {
@@ -44,14 +43,13 @@ function toCandidate(
   ) {
     return null;
   }
-  const distanceMeters = geodesicDistanceMeters(selected, { longitude, latitude });
-  if (distanceMeters > nearbyPoiRadiusMeters) return null;
   const properties = feature.properties as Readonly<Record<string, unknown>> | null;
   const name =
     safeProperty(properties, 'name:en') ??
     safeProperty(properties, 'name:latin') ??
     safeProperty(properties, 'name_en') ??
     safeProperty(properties, 'name');
+  if (name === null) return null;
   const category =
     safeProperty(properties, 'subclass') ??
     safeProperty(properties, 'class') ??
@@ -59,12 +57,12 @@ function toCandidate(
   return {
     name,
     category,
-    distanceMeters,
-    stableKey: `${String(feature.id ?? '')}\u0000${name ?? ''}\u0000${category}`,
+    distanceMeters: geodesicDistanceMeters(selected, { longitude, latitude }),
+    stableKey: `${String(feature.id ?? '')}\u0000${name}\u0000${category}`,
   };
 }
 
-/** Chooses the nearest POI within 100 m, with a stable lexical identity tie-break. */
+/** Chooses the nearest named loaded map feature with a stable identity tie-break. */
 export function selectNearestPoi(
   features: readonly GeoJSONFeature[],
   selected: MapCoordinate,

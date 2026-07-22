@@ -652,6 +652,7 @@ export class MapLibreLayerController {
         visibility: persisted.visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
         satelliteRenderingMode: persisted.satelliteRenderingMode,
+        satelliteRenderingTuning: { ...persisted.renderingTuning },
         errorMessage: null,
       });
       this.applyBaseLayerVisibility();
@@ -769,6 +770,10 @@ export class MapLibreLayerController {
     }
     const previousTuning = this.#renderingTuning;
     this.#renderingTuning = { ...tuning };
+    mapLayerStore.setState({
+      satelliteRenderingTuning: { ...tuning },
+      errorMessage: null,
+    });
     if (this.#appliedScene === null) {
       this.persistStableState();
       return { status: 'success' };
@@ -779,7 +784,10 @@ export class MapLibreLayerController {
       false,
       false,
     );
-    if (result.status === 'failed') this.#renderingTuning = previousTuning;
+    if (result.status === 'failed') {
+      this.#renderingTuning = previousTuning;
+      mapLayerStore.setState({ satelliteRenderingTuning: { ...previousTuning } });
+    }
     if (result.status === 'success') this.persistStableState();
     return result;
   }
@@ -1103,6 +1111,13 @@ export class MapLibreLayerController {
       return this.terrainOverlayFailure('The map is not ready yet.');
     }
     if (map.getLayer(mapLayerIds.background) === undefined) {
+      mapLayerStore.setState({
+        terrainOverlays: {
+          initialized: false,
+          preferences: { ...this.#terrainOverlayPreferences },
+          message: null,
+        },
+      });
       return { status: 'success' };
     }
     try {

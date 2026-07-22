@@ -17,9 +17,11 @@ The application provides a compact map workspace with Tracks, Satellite, Markers
 Layers sections; a validated OpenStreetMap vector basemap; resilient 2D/3D terrain; live
 Sentinel-2 L2A search and georeferenced true-color scene rendering; logical map layer
 visibility; configurable relief shading and elevation isolines; native desktop camera
-gestures; durable settled-camera restoration; provider failure feedback; settings; and
-bounded map/WebGL diagnostics. Unavailable feature actions are shown as disabled
-controls or explicit empty states instead of synthetic data.
+gestures; durable settled-camera restoration; browser-local GPX import, preview,
+retention, search, rename, and deletion; provider failure feedback; settings; and
+bounded map/WebGL diagnostics. Imported tracks render as independent bright-blue lines
+with shared visibility and opacity controls. Unavailable feature actions are shown as
+disabled controls or explicit empty states instead of synthetic data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
 [AGENTS.md](./AGENTS.md) for required engineering conventions.
@@ -83,17 +85,19 @@ replace that entire bundle at the provider boundary.
 
 State ownership is deliberate:
 
-| State or behavior                           | Owner                                             |
-| ------------------------------------------- | ------------------------------------------------- |
-| Component-local presentation state          | React `useState`/`useReducer`                     |
-| Cross-feature transient shell state         | Zustand                                           |
-| Durable camera and UI settings              | Dexie/IndexedDB                                   |
-| Business rules and workflows                | Domain/application classes and injected ports     |
-| MapLibre lifecycle and imperative map state | The map feature adapter, never a general UI store |
+| State or behavior                                  | Owner                                             |
+| -------------------------------------------------- | ------------------------------------------------- |
+| Component-local presentation state                 | React `useState`/`useReducer`                     |
+| Cross-feature transient shell state                | Zustand                                           |
+| Durable camera, UI settings, and local GPX records | Dexie/IndexedDB                                   |
+| Business rules and workflows                       | Domain functions/classes and injected ports       |
+| Active track preview and selection                 | The Tracks React feature provider                 |
+| MapLibre lifecycle and imperative map state        | The map feature adapter, never a general UI store |
 
-React components render states and translate user events into named operations. They do
-not call `fetch`, Dexie, or domain calculations directly. Application/domain code is
-protected from UI, storage, HTTP, and map imports by ESLint restrictions.
+React components render states and translate user events into named operations. Feature
+providers may orchestrate cohesive domain functions, but components do not call `fetch`
+or Dexie directly. Application/domain code is protected from UI, storage, HTTP, and map
+imports by ESLint restrictions.
 
 ## Map providers and configuration
 
@@ -115,7 +119,9 @@ The replaceable map-provider defaults are:
   falls back to range-reading Earth Search's pre-rendered 8-bit visual COG after a 429
   or CORS-opaque failure; Direct bypasses TiTiler entirely. Neither path downloads raw
   full-scene band TIFFs.
-- Public OpenStreetMap Nominatim for submit-driven place search.
+- Public OpenStreetMap Nominatim for submit-driven place search and up to three
+  sequential reverse lookups when a user explicitly imports a track and requests its
+  optional English place-name candidate through that workflow.
 
 None of these defaults uses a credential. Provider evidence, licensing, attribution, and
 replacement constraints are recorded in
@@ -186,6 +192,10 @@ After `pnpm dev`, use current stable desktop Chrome to:
    validate an exported bundle with `pnpm diagnostics:inspect -- <bundle.json>`.
 5. Use the failure fixtures in `pnpm e2e` to confirm vector, DEM, retry, offline, WebGL
    context, accessibility, and public-network isolation behavior.
+6. Open Tracks, import one `.gpx` file, confirm the full geometry fits beside the
+   master/detail panes, save it, close and reopen it, rename it, change imported-track
+   visibility/opacity in Layers, then delete it. Confirm no upload or provider request
+   is required for parsing, metrics, persistence, or rendering.
 
 Known operating limits:
 
@@ -265,7 +275,7 @@ The reviewed system concept includes:
 | Local UI state          | Zustand                                                                      | Small predictable store for transient selection and panel state.                              |
 | Persistence             | Dexie                                                                        | Typed IndexedDB access with explicit schema migrations.                                       |
 | Geospatial calculations | Turf modules                                                                 | Distance, bounding boxes, simplification, sampling, and GeoJSON utilities.                    |
-| GPX parsing             | `@tmcw/togeojson` in the browser; a Node XML parser in catalog tooling       | Mature conversion at runtime and efficient deterministic build-time indexing.                 |
+| GPX parsing             | Bounded browser `DOMParser` boundary with explicit GPX 1.0/1.1 projection    | Keeps imported files local while enforcing size, depth, point, text, and metadata limits.     |
 | Unit tests              | Vitest and React Testing Library                                             | Fast domain/application tests and focused component tests.                                    |
 | HTTP/integration tests  | Mock Service Worker and `fake-indexeddb`                                     | Tests real adapters and failure handling without contacting public services.                  |
 | Browser tests           | Playwright, Chromium project only                                            | Tests the supported browser and real map interactions.                                        |
@@ -360,11 +370,12 @@ served by the GitHub Pages deployment. Catalog tooling produces:
 
 The browser must not fetch and parse all original files at startup.
 
-Separately, a user may import GPX files into that browser. Retained imports, personal
-folders, saved markers, and Create GPX drafts live only in IndexedDB and are never added
-to GitHub or uploaded automatically. The UI combines curated and local tracks without
-erasing their different ownership. See
-[Data model and storage ownership](docs/data-model.md).
+Separately, the implemented Tracks workflow lets a user import one GPX file into that
+browser, preview it in memory, and explicitly retain its original blob, validated
+geometry, bounded metadata, and versioned metrics in IndexedDB. Saved local tracks can
+be searched, reopened, renamed, and deleted; they are never added to GitHub or uploaded
+automatically. The catalog, personal folders, saved markers, and Create GPX drafts
+remain unavailable. See [Data model and storage ownership](docs/data-model.md).
 
 ## Deployment model
 

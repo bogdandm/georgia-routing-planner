@@ -7,6 +7,7 @@ const terrainOrigin = 'https://s3.amazonaws.com';
 const earthSearchOrigin = 'https://earth-search.aws.element84.com';
 const satelliteRendererOrigin = 'https://titiler.xyz';
 const sentinelCogFixtureOrigin = 'https://sentinel-cogs.example.test';
+const nominatimOrigin = 'https://nominatim.openstreetmap.org';
 const terrainDemFixture = Buffer.from(
   [
     'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAADGklEQVR4nO3OQQ0AMBAEoZVe6ZUxjyNBAHsbnNUPINQPINQPINQP',
@@ -189,6 +190,22 @@ const tileJsonFixture = {
  * uniform 256 px PNG. Neither fixture contains real-world or user location data.
  */
 export async function installMapProviderFixtures(page: Page): Promise<void> {
+  await page.route(`${nominatimOrigin}/reverse**`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        place_id: 84,
+        lat: '42.51',
+        lon: '44.51',
+        display_name: 'Kazbegi Municipality, Georgia',
+        category: 'boundary',
+        type: 'administrative',
+        osm_type: 'relation',
+        boundingbox: ['42.40', '42.60', '44.40', '44.60'],
+      }),
+    }),
+  );
   await page.route(
     new RegExp(`^${openFreeMapOrigin.replaceAll('.', '\\.')}`),
     (route) => {
@@ -293,6 +310,7 @@ export function isConfiguredProviderRequest(url: URL): boolean {
     url.origin === terrainOrigin ||
     url.origin === earthSearchOrigin ||
     url.origin === satelliteRendererOrigin ||
-    url.origin === sentinelCogFixtureOrigin
+    url.origin === sentinelCogFixtureOrigin ||
+    url.origin === nominatimOrigin
   );
 }

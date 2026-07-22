@@ -7,8 +7,9 @@
 - Keep the existing `LocalTrackSummary.sourceFilename` IndexedDB contract; expose and
   verify it rather than adding a duplicate persisted field or database migration.
 - Keep `findDominantSummit` as the representative-point policy, verify it against the
-  supplied Shkedi-Likheti track, and request feature-level reverse-geocoding detail so
-  the already-selected highest point resolves to Kelida Pass instead of its municipality.
+  supplied Shkedi-Likheti track, and extend the existing OSM search gateway with one
+  bounded category-agnostic nearby-feature query so the already-selected highest point
+  resolves to Kelida Pass instead of its municipality.
 - Keep `GpxValidationWarning` as the parser's structured warning source and render its
   existing message and point/segment context in the details pane.
 
@@ -36,9 +37,11 @@
      filename, and render technical validation-warning details.
    - Update focused component and browser coverage for the revised interaction.
 2. `fix(tracks): resolve the highest-point place name`
-   - Reproduce the supplied Shkedi-Likheti elevation profile, prove the highest interior
-     point is selected, and use feature-level reverse geocoding so Kelida Pass is returned
-     without weakening conservative elevation-coverage and interior-geometry fallbacks.
+
+- Reproduce the supplied Shkedi-Likheti elevation profile, prove the highest interior
+  point is selected, then choose the closest validated named OSM feature across broad
+  POI categories without using the map viewport or an English keyword query.
+
 3. Final verification and cleanup
    - Merge the latest `origin/main`, resolve only invalidated UI tests, run focused and
      repository-required checks, remove this `PLAN.md`, push, and refresh the existing

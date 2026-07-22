@@ -615,14 +615,28 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
   });
 
-  it('shows a selected applied scene as one removable image', async () => {
+  it('shares and removes a selected applied scene with distinct actions', async () => {
     const restoredScene = syntheticSatelliteScene(
       'restored-scene',
       '2026-06-18T10:12:00.000Z',
     );
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
     services.mapViewport.update(testViewport);
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      camera: {
+        longitude: 44.5,
+        latitude: 42.5,
+        zoom: 10,
+        bearing: 0,
+        pitch: 0,
+      },
+    });
     const clearScene = vi.spyOn(mapLayers, 'clearScene').mockImplementation(() => {
       mapLayerStore.setState({
         appliedImagery: { status: 'empty' },
@@ -640,7 +654,6 @@ describe('WorkspaceShell', () => {
       },
     });
     window.history.replaceState(null, '', '/#satellite');
-    const user = userEvent.setup();
 
     renderWorkspaceShell();
 
@@ -649,8 +662,21 @@ describe('WorkspaceShell', () => {
       name: 'Remove 18 Jun 2026 imagery from map',
     });
     expect(restoredCard).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('button', { name: 'Hide imagery' }),
+    ).not.toBeInTheDocument();
+    const productMetadata = screen.getByText('Product S2A_restored-scene');
+    expect(productMetadata).toHaveStyle({ wordBreak: 'break-all' });
 
-    await user.click(screen.getByText('Product S2A_restored-scene'));
+    await user.click(screen.getByRole('button', { name: 'Share link' }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('scene=sentinel-2-l2a%3Arestored-scene'),
+    );
+    expect(await screen.findByText('Scene link copied')).toBeVisible();
+    expect(clearScene).not.toHaveBeenCalled();
+
+    await user.click(productMetadata);
 
     expect(clearScene).toHaveBeenCalledOnce();
     expect(

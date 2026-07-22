@@ -241,7 +241,7 @@ export function MapWorkspace({
     }
   }, [facade, navigationCommand]);
   useEffect(() => {
-    if (fitBoundsCommand === null) return;
+    if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
     try {
       if (fitBoundsCommand.padding === undefined) {
         facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
@@ -255,7 +255,7 @@ export function MapWorkspace({
     } finally {
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
-  }, [facade, fitBoundsCommand]);
+  }, [facade, fitBoundsCommand, snapshot.lifecycle]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
     return createHikingMapStyle(mapProviderConfiguration.value);

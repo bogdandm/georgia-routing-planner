@@ -8,6 +8,8 @@ import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
+  mapInteractionStore,
+  requestMapFitBounds,
   requestMapNavigation,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
@@ -206,6 +208,39 @@ describe('MapWorkspace', () => {
     expect(facade.navigationRequests).toEqual([
       { latitude: 41.7, longitude: 44.8, zoom: 14 },
     ]);
+  });
+  it('holds fit-to-track commands until the map is ready', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Fit command canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Fit command canvas');
+
+    act(() => {
+      requestMapFitBounds(
+        { west: 43.1, south: 41.6, east: 44.2, north: 42.4 },
+        15,
+        { top: 56, right: 56, bottom: 56, left: 840 },
+      );
+    });
+    expect(facade.fitBoundsRequests).toEqual([]);
+    expect(mapInteractionStore.getState().fitBoundsCommand).not.toBeNull();
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests).toEqual([
+        {
+          bounds: { west: 43.1, south: 41.6, east: 44.2, north: 42.4 },
+          maxZoom: 15,
+          padding: { top: 56, right: 56, bottom: 56, left: 840 },
+        },
+      ]);
+    });
+    expect(mapInteractionStore.getState().fitBoundsCommand).toBeNull();
   });
   it('publishes lifecycle state without mounting a duplicate local banner', () => {
     const facade = new FakeMapFacade();

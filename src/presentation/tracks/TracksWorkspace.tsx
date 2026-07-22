@@ -674,26 +674,35 @@ export function TracksPanel() {
   );
 }
 
-function DetailsGrid({ summary }: { readonly summary: LocalTrackSummary }) {
-  const rows = [
-    ['Distance', formatDistance(summary.metrics.distanceMeters)],
-    ['Recorded time', formatDuration(summary.metrics.elapsedSeconds)],
-    ['Points', summary.pointCount.toLocaleString('en')],
-    ['Segments', summary.segmentCount.toLocaleString('en')],
+interface DetailsGridProps {
+  readonly metrics: TrackMetrics;
+  readonly pointCount: number;
+  readonly savedAt: string | undefined;
+  readonly segmentCount: number;
+}
+
+function DetailsGrid({ metrics, pointCount, savedAt, segmentCount }: DetailsGridProps) {
+  const rows: [string, string][] = [
+    ['Distance', formatDistance(metrics.distanceMeters)],
+    ['Recorded time', formatDuration(metrics.elapsedSeconds)],
+    ['Points', pointCount.toLocaleString('en')],
+    ['Segments', segmentCount.toLocaleString('en')],
     [
       'Ascent',
-      summary.metrics.ascentMeters === undefined
+      metrics.ascentMeters === undefined
         ? 'Unavailable'
-        : `${Math.round(summary.metrics.ascentMeters).toLocaleString('en')} m`,
+        : `${Math.round(metrics.ascentMeters).toLocaleString('en')} m`,
     ],
     [
       'Descent',
-      summary.metrics.descentMeters === undefined
+      metrics.descentMeters === undefined
         ? 'Unavailable'
-        : `${Math.round(summary.metrics.descentMeters).toLocaleString('en')} m`,
+        : `${Math.round(metrics.descentMeters).toLocaleString('en')} m`,
     ],
-    ['Saved', new Date(summary.savedAt).toLocaleString('en')],
-  ] as const;
+  ];
+  if (savedAt !== undefined) {
+    rows.push(['Saved', new Date(savedAt).toLocaleString('en')]);
+  }
   return (
     <Box
       component="dl"
@@ -725,23 +734,18 @@ export function TrackDetailsPane() {
     setActiveName,
   } = useTracksWorkspace();
   if (active === null) return null;
-  const summary =
+  const metrics = active.kind === 'saved' ? active.summary.metrics : active.metrics;
+  const pointCount =
+    active.kind === 'saved' ? active.summary.pointCount : active.parsed.pointCount;
+  const savedAt = active.kind === 'saved' ? active.summary.savedAt : undefined;
+  const segmentCount =
     active.kind === 'saved'
-      ? active.summary
-      : ({
-          schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-          id: active.id,
-          name: active.name,
-          normalizedName: active.name.toLocaleLowerCase('en'),
-          savedAt: new Date().toISOString(),
-          sourceFilename: active.file.name,
-          geometryKind: active.parsed.geometryKind,
-          pointCount: active.parsed.pointCount,
-          segmentCount: active.parsed.segments.length,
-          metrics: active.metrics,
-          metadata: active.parsed.metadata,
-          warnings: active.parsed.warnings,
-        } satisfies LocalTrackSummary);
+      ? active.summary.segmentCount
+      : active.parsed.segments.length;
+  const warningCount =
+    active.kind === 'saved'
+      ? active.summary.warnings.length
+      : active.parsed.warnings.length;
   return (
     <Box
       component="aside"
@@ -837,16 +841,21 @@ export function TrackDetailsPane() {
         <Typography component="h3" variant="subtitle2">
           Track details
         </Typography>
-        <DetailsGrid summary={summary} />
-        {summary.segmentCount > 1 ? (
+        <DetailsGrid
+          metrics={metrics}
+          pointCount={pointCount}
+          savedAt={savedAt}
+          segmentCount={segmentCount}
+        />
+        {segmentCount > 1 ? (
           <Alert severity="info">
             Independent segments are not joined; totals exclude gaps.
           </Alert>
         ) : null}
-        {summary.warnings.length > 0 ? (
+        {warningCount > 0 ? (
           <Alert severity="warning">
-            Imported with {summary.warnings.length} validation{' '}
-            {summary.warnings.length === 1 ? 'warning' : 'warnings'}.
+            Imported with {warningCount} validation{' '}
+            {warningCount === 1 ? 'warning' : 'warnings'}.
           </Alert>
         ) : null}
       </Stack>

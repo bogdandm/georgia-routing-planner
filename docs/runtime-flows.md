@@ -506,10 +506,15 @@ A picker selection or drop inside the contained Tracks import zone parses one `.
 file in memory. A file drag anywhere inside the application expands that target; a drop
 outside it is prevented from navigating the browser but does not import. Another import,
 selecting a saved track, or closing the preview first requires an explicit discard
-decision. A valid preview starts a cancellable optional English-name lookup without
-blocking editing or save. Switching rail sections retains the preview. `beforeunload` is
-registered only while that preview remains unsaved and is removed after save or
-confirmed discard.
+decision. File-selection and GPX-parse failures remain scoped to the import zone and
+clear after five seconds; storage and selected-track failures use the persistent panel
+error. A valid preview starts a cancellable optional English-name lookup without
+blocking editing or save. Start and end anchors use locality-level reverse geocoding. A
+dominant interior summit requests bounded named OSM features from the configured nearby
+endpoint and selects the closest returned coordinate independent of feature category;
+reverse geocoding remains the fallback when that request is empty or unavailable.
+Switching rail sections retains the preview. `beforeunload` is registered only while
+that preview remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display name, original

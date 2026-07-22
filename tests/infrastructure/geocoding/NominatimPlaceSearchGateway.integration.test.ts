@@ -114,6 +114,80 @@ describe('NominatimPlaceSearchGateway', () => {
     expect(requestedUrl.searchParams.get('lon')).toBe('42.719200');
   });
 
+  it('loads and validates nearby named OSM features across POI categories', async () => {
+    const services = createTestServices();
+    const submittedQuery = vi.fn<(query: string | null) => void>();
+    const nearbyUrl = defaultGeocodingProviderConfiguration.nearbyUrl;
+    mswServer.use(
+      http.post(nearbyUrl, async ({ request }) => {
+        const body = new URLSearchParams(await request.text());
+        submittedQuery(body.get('data'));
+        return HttpResponse.json({
+          elements: [
+            {
+              type: 'node',
+              id: 5_873_637_780,
+              lat: 42.711212,
+              lon: 43.1638654,
+              tags: {
+                name: 'ყელიდა',
+                'name:en': 'Kelida',
+                natural: 'saddle',
+                mountain_pass: 'yes',
+              },
+            },
+            {
+              type: 'way',
+              id: 6_217_647_19,
+              center: { lat: 42.711078, lon: 43.1533538 },
+              tags: { name: 'Chutkharo Lakes', natural: 'water' },
+            },
+            {
+              type: 'relation',
+              id: 21_052_018,
+              center: { lat: 42.8151579, lon: 42.8457099 },
+              tags: { name: 'Lower Svaneti', place: 'region' },
+            },
+          ],
+        });
+      }),
+    );
+    const gateway = new NominatimPlaceSearchGateway(
+      services.httpClient,
+      defaultGeocodingProviderConfiguration,
+      services.idGenerator,
+      () => 2_000,
+    );
+
+    await expect(
+      gateway.nearby(
+        { longitude: 43.163426, latitude: 42.71163 },
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual([
+      {
+        id: 'osm:node/5873637780',
+        label: 'Kelida',
+        coordinate: { latitude: 42.711212, longitude: 43.1638654 },
+        category: 'mountain_pass:yes',
+        kind: 'mountain',
+        bounds: null,
+      },
+      {
+        id: 'osm:way/621764719',
+        label: 'Chutkharo Lakes',
+        coordinate: { latitude: 42.711078, longitude: 43.1533538 },
+        category: 'natural:water',
+        kind: 'water',
+        bounds: null,
+      },
+    ]);
+
+    const query = submittedQuery.mock.calls[0]?.[0];
+    expect(query).toContain('around:2000,42.711630,43.163426');
+    expect(query).toContain('mountain_pass|natural|amenity|tourism');
+  });
+
   it('rejects malformed provider data with a safe error', async () => {
     const services = createTestServices();
     mswServer.use(

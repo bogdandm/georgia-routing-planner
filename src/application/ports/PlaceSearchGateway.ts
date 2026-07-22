@@ -46,4 +46,8 @@ export interface PlaceSearchGateway {
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null>;
+  nearby?(
+    coordinate: { readonly longitude: number; readonly latitude: number },
+    signal: AbortSignal,
+  ): Promise<readonly PlaceSearchResult[]>;
 }

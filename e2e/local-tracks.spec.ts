@@ -56,6 +56,28 @@ const realWorldTrackFixtures = [
     pointCount: 18_078,
     byteSize: 1_048_617,
   },
+  {
+    path: fileURLToPath(
+      new URL(
+        '../tests/fixtures/tracks/real-world/osmand-track-with-route.gpx',
+        import.meta.url,
+      ),
+    ),
+    pointCount: 258,
+    byteSize: 58_757,
+    warningCode: 'track-preferred-over-route',
+  },
+  {
+    path: fileURLToPath(
+      new URL(
+        '../tests/fixtures/tracks/real-world/shkedi-likheti.gpx',
+        import.meta.url,
+      ),
+    ),
+    pointCount: 877,
+    byteSize: 121_526,
+    generatedName: 'Kelida Pass',
+  },
 ] as const;
 
 interface StoredTrackState {
@@ -154,24 +176,35 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
     await expect(
       details.getByText(fixture.pointCount.toLocaleString('en'), { exact: true }),
     ).toBeVisible();
+    if ('warningCode' in fixture) {
+      await expect(details.getByText(fixture.warningCode)).toBeVisible();
+      await expect(details).toContainText(
+        'Detailed track geometry was used instead of companion route geometry.',
+      );
+    }
+    if ('generatedName' in fixture) {
+      await expect(page.getByLabel('Generated name')).toHaveValue(
+        new RegExp(fixture.generatedName, 'u'),
+      );
+    }
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
     await page.getByRole('button', { name: 'Close track' }).click();
   }
 
-  await expect(page.getByText('5 saved tracks')).toBeVisible();
+  await expect(page.getByText('7 saved tracks')).toBeVisible();
   const expectedStoredBytes = realWorldTrackFixtures.reduce(
     (total, fixture) => total + fixture.byteSize,
     0,
   );
   expect(await readStoredTrackState(page)).toEqual({
-    contentCount: 5,
-    summaryCount: 5,
+    contentCount: 7,
+    summaryCount: 7,
     totalOriginalGpxBytes: expectedStoredBytes,
   });
 
   await page.reload();
-  await expect(page.getByText('5 saved tracks')).toBeVisible();
+  await expect(page.getByText('7 saved tracks')).toBeVisible();
   await page.getByRole('button', { name: /sample-1mb/u }).click();
   const selectedDetails = page.getByRole('complementary', {
     name: 'Track details',

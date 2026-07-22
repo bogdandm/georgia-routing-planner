@@ -438,6 +438,33 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('Track and route.gpx')).toBeVisible();
   }, 10_000);
 
+  it('keeps import errors inside the drop zone and dismisses them', () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = renderWorkspaceShell();
+      fireEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
+      const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+      expect(input).not.toBeNull();
+      if (input === null) return;
+
+      fireEvent.change(input, {
+        target: { files: [new File(['not gpx'], 'notes.txt')] },
+      });
+
+      const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+      expect(within(importZone).getByRole('alert')).toHaveTextContent(
+        'Choose a file with the .gpx extension.',
+      );
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+      expect(within(importZone).queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('accepts a GPX drop only inside the import zone and exposes discard confirmation', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { container } = renderWorkspaceShell();

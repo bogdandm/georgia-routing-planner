@@ -2,6 +2,7 @@ import { HTTPError, TimeoutError, type KyInstance } from 'ky';
 import { z } from 'zod';
 
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
 import {
   PlaceSearchFailure,
   type PlaceSearchBounds,
@@ -41,6 +42,25 @@ const reverseResultSchema = z
   })
   .loose();
 
+const nearbyResultSchema = z
+  .object({
+    elements: z
+      .array(
+        z
+          .object({
+            type: z.enum(['node', 'way', 'relation']),
+            id: z.number().int().nonnegative(),
+            lat: z.number().optional(),
+            lon: z.number().optional(),
+            center: z.object({ lat: z.number(), lon: z.number() }).strict().optional(),
+            tags: z.record(z.string(), z.string()).optional(),
+          })
+          .loose(),
+      )
+      .max(50),
+  })
+  .loose();
+
 interface CacheEntry {
   readonly expiresAt: number;
   readonly results: readonly PlaceSearchResult[];
@@ -77,6 +97,41 @@ const waterTypes = new Set([
   'waterfall',
   'water',
 ]);
+const nearbyTagKeys = [
+  'mountain_pass',
+  'natural',
+  'amenity',
+  'tourism',
+  'historic',
+  'man_made',
+  'place',
+  'leisure',
+  'shop',
+  'waterway',
+] as const;
+const nearbyRadiusMeters = 2_000;
+
+function nearbyQuery(latitude: number, longitude: number): string {
+  return `[out:json][timeout:10];nwr(around:${String(nearbyRadiusMeters)},${latitude.toFixed(6)},${longitude.toFixed(6)})["name"][~"^(${nearbyTagKeys.join('|')})$"~"."];out center 50;`;
+}
+
+function nearbyName(tags: Readonly<Record<string, string>>): string | null {
+  for (const key of ['name:en', 'name:latin', 'int_name', 'name'] as const) {
+    const value = tags[key]?.trim();
+    if (value !== undefined && value.length > 0) return value.slice(0, 2_000);
+  }
+  return null;
+}
+
+function nearbyCategory(
+  tags: Readonly<Record<string, string>>,
+): { readonly category: string; readonly type: string } | null {
+  for (const category of nearbyTagKeys) {
+    const type = tags[category]?.trim();
+    if (type !== undefined && type.length > 0) return { category, type };
+  }
+  return null;
+}
 
 function classifyResult(category: string, type: string): PlaceSearchKind {
   if (category === 'place' && settlementTypes.has(type)) return 'settlement';
@@ -110,7 +165,7 @@ function waitFor(milliseconds: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-/** Submit-only public Nominatim adapter with application-wide pacing and bounded cache. */
+/** Public OSM place adapter with application-wide pacing and a bounded cache. */
 export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
   readonly #cache = new Map<string, CacheEntry>();
   #lastRequestStartedAt = 0;
@@ -205,6 +260,51 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
     }
   }
 
+  public async nearby(
+    coordinate: { readonly longitude: number; readonly latitude: number },
+    signal: AbortSignal,
+  ): Promise<readonly PlaceSearchResult[]> {
+    const nearbyUrl = this.configuration.nearbyUrl;
+    if (nearbyUrl === undefined) return [];
+    const cacheKey = `nearby|${coordinate.longitude.toFixed(5)}|${coordinate.latitude.toFixed(5)}`;
+    const cached = this.#cache.get(cacheKey);
+    if (cached !== undefined && cached.expiresAt > this.now()) return cached.results;
+
+    await this.waitForRequestSlot(signal);
+    try {
+      const raw = await this.httpClient
+        .post(nearbyUrl, {
+          context: { operationId: this.idGenerator.generate() },
+          body: new URLSearchParams({
+            data: nearbyQuery(coordinate.latitude, coordinate.longitude),
+          }),
+          signal,
+          timeout: this.configuration.requestTimeoutMs,
+        })
+        .json<unknown>();
+      const parsed = nearbyResultSchema.parse(raw);
+      const results = parsed.elements
+        .flatMap<PlaceSearchResult>((element) => {
+          const result = this.toNearbyPlaceSearchResult(element);
+          return result === null ? [] : [result];
+        })
+        .filter(
+          (result) =>
+            geodesicDistanceKm(
+              coordinate.latitude,
+              coordinate.longitude,
+              result.coordinate.latitude,
+              result.coordinate.longitude,
+            ) <=
+            nearbyRadiusMeters / 1_000,
+        );
+      this.remember(cacheKey, results);
+      return results;
+    } catch (error) {
+      return this.translateFailure(error, signal);
+    }
+  }
+
   private async waitForRequestSlot(signal: AbortSignal): Promise<void> {
     const delay = Math.max(
       0,
@@ -267,6 +367,38 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
       category: `${candidate.category}:${candidate.type}`,
       kind: classifyResult(candidate.category, candidate.type),
       bounds,
+    };
+  }
+
+  private toNearbyPlaceSearchResult(
+    element: z.infer<typeof nearbyResultSchema>['elements'][number],
+  ): PlaceSearchResult | null {
+    const latitude = element.lat ?? element.center?.lat;
+    const longitude = element.lon ?? element.center?.lon;
+    const tags = element.tags;
+    if (
+      latitude === undefined ||
+      longitude === undefined ||
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180 ||
+      tags === undefined
+    ) {
+      return null;
+    }
+    const label = nearbyName(tags);
+    const classification = nearbyCategory(tags);
+    if (label === null || classification === null) return null;
+    return {
+      id: `osm:${element.type}/${String(element.id)}`,
+      label,
+      coordinate: { longitude, latitude },
+      category: `${classification.category}:${classification.type}`,
+      kind: classifyResult(classification.category, classification.type),
+      bounds: null,
     };
   }
 

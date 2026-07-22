@@ -20,6 +20,21 @@ function expectParseFailure(xml: string, code: GpxParseError['code']): void {
 }
 
 describe('parseGpx', () => {
+  it('explains the companion route in the supplied OsmAnd export', async () => {
+    const xml = await readFile(
+      `${fixtures}/real-world/osmand-track-with-route.gpx`,
+      'utf8',
+    );
+    const result = parseGpx(xml);
+
+    expect(result.geometryKind).toBe('track');
+    expect(result.pointCount).toBe(258);
+    expect(result.warnings).toContainEqual({
+      code: 'track-preferred-over-route',
+      message: 'Detailed track geometry was used instead of companion route geometry.',
+    });
+  });
+
   it('prefers detailed track geometry over an OsmAnd companion route', async () => {
     const xml = await readFile(`${fixtures}/osmand-detailed-track.gpx`, 'utf8');
     const result = parseGpx(xml);

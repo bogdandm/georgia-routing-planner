@@ -1,9 +1,13 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import type { TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
+import { parseGpx, type TrackPoint, type TrackSegment } from '@/domain/tracks/gpx';
 import {
   calculateTrackMetrics,
   findDominantSummit,
+  formatGeneratedPoiLabel,
   generateEnglishTrackName,
   isLoop,
   pointNearestFraction,
@@ -26,6 +30,38 @@ function point(
 }
 
 describe('track calculations', () => {
+  it('qualifies pass and mountain names without duplicating existing wording', () => {
+    expect(formatGeneratedPoiLabel('Kelida', 'mountain_pass:yes')).toBe('Kelida Pass');
+    expect(formatGeneratedPoiLabel('Atsunta Pass', 'mountain_pass:yes')).toBe(
+      'Atsunta Pass',
+    );
+    expect(formatGeneratedPoiLabel('Chutkharo', 'natural:peak')).toBe('Mt. Chutkharo');
+    expect(formatGeneratedPoiLabel('Mount Kazbek', 'natural:peak')).toBe(
+      'Mount Kazbek',
+    );
+    expect(formatGeneratedPoiLabel('Koruldi Lakes', 'natural:water')).toBe(
+      'Koruldi Lakes',
+    );
+  });
+
+  it('finds the supplied Shkedi-Likheti summit beside Kelida', async () => {
+    const fixture = join(
+      process.cwd(),
+      'tests',
+      'fixtures',
+      'tracks',
+      'real-world',
+      'shkedi-likheti.gpx',
+    );
+    const parsed = parseGpx(await readFile(fixture, 'utf8'));
+    const summit = findDominantSummit(parsed.segments[0]?.points ?? []);
+
+    expect(summit).not.toBeNull();
+    expect(summit?.elevationMeters).toBeCloseTo(3_003.517624, 5);
+    expect(summit?.coordinate[0]).toBeCloseTo(43.163426, 6);
+    expect(summit?.coordinate[1]).toBeCloseTo(42.71163, 6);
+  });
+
   it('aggregates independent segments without bridging their gap', () => {
     const segments: readonly TrackSegment[] = [
       { points: [point(0, 0, 10), point(0.01, 0, 20)] },

@@ -8,6 +8,7 @@ import type {
 } from '@/application/ports/PlaceSearchGateway';
 import {
   expandPlaceSearchBounds,
+  geodesicDistanceKm,
   largerPlaceSearchSideKm,
   limitPlaceSearchBounds,
 } from '@/application/map/expandPlaceSearchBounds';
@@ -59,6 +60,30 @@ export class SearchPlaces {
   ): Promise<PlaceSearchResult | null> {
     if (this.gateway.reverse === undefined) return null;
     return this.gateway.reverse(coordinate, signal);
+  }
+
+  public async nearest(
+    coordinate: { readonly longitude: number; readonly latitude: number },
+    signal: AbortSignal,
+  ): Promise<PlaceSearchResult | null> {
+    if (this.gateway.nearby === undefined) return null;
+    const results = await this.gateway.nearby(coordinate, signal);
+    const ranked = results
+      .map((result) => ({
+        result,
+        distanceKm: geodesicDistanceKm(
+          coordinate.latitude,
+          coordinate.longitude,
+          result.coordinate.latitude,
+          result.coordinate.longitude,
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          left.distanceKm - right.distanceKm ||
+          left.result.id.localeCompare(right.result.id, 'en'),
+      );
+    return ranked[0]?.result ?? null;
   }
 
   public async execute(

@@ -71,18 +71,23 @@ row or that row's browse button. A file drag anywhere inside the application exp
 row as an opaque elevated overlay without moving the search and library below; only a
 drop inside that target imports the file. Import validates and previews the file's
 metadata and opens a fixed adjacent detail pane. The editable embedded or
-filename-derived name is never replaced automatically. The stored source filename
-remains visible after rename, and structured validation warnings show their parser code,
-explanation, and available point/segment context. An optional English place candidate
-appears separately and requires an explicit apply action. Save retains the original
-file, independent line segments, and versioned metrics in this browser; unsaved previews
-activate the native leave-site guard. Saved tracks are searchable by name and support
-reopen, close, rename, and confirmed deletion. A compact local-retention notice stays
-pinned to the Tracks panel bottom. Catalog, folders, tags, filters, batch import,
-whole-workspace dropping, and GPX creation remain unavailable. A newly imported or
-reopened track renders as bright-blue independent lines and fits its complete bounds
-with padding for the master/detail surfaces. Closing it removes the active geometry
-without deleting a saved record or moving the camera.
+filename-derived name is never replaced automatically. File-selection and parsing errors
+appear inside the import zone and dismiss after five seconds; persistent track/storage
+errors remain in the panel. The stored source filename remains visible after rename, and
+structured validation warnings show their parser code, explanation, and available
+point/segment context. An optional English place candidate appears separately and
+requires an explicit apply action. For a track with a dominant interior summit, that
+candidate uses the nearest named OSM feature across supported POI, natural, and place
+categories rather than a hard-coded feature type. Mountain passes gain a `Pass` suffix
+and named peaks or volcanoes gain an `Mt.` prefix when the source name does not already
+include one. Save retains the original file, independent line segments, and versioned
+metrics in this browser; unsaved previews activate the native leave-site guard. Saved
+tracks are searchable by name and support reopen, close, rename, and confirmed deletion.
+A compact local-retention notice stays pinned to the Tracks panel bottom. Catalog,
+folders, tags, filters, batch import, whole-workspace dropping, and GPX creation remain
+unavailable. A newly imported or reopened track renders as bright-blue independent lines
+and fits its complete bounds with padding for the master/detail surfaces. Closing it
+removes the active geometry without deleting a saved record or moving the camera.
 
 ### Create GPX
 

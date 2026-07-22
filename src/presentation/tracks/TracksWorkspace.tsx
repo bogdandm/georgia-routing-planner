@@ -42,6 +42,7 @@ import {
 import {
   calculateTrackMetrics,
   findDominantSummit,
+  formatGeneratedPoiLabel,
   generateEnglishTrackName,
   isLoop,
   pointNearestFraction,
@@ -80,6 +81,7 @@ interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
+  readonly importError: string | null;
   readonly importFiles: (files: FileList | readonly File[]) => Promise<void>;
   readonly query: string;
   readonly summaries: readonly LocalTrackSummary[];
@@ -104,6 +106,11 @@ interface GeneratedNameInput {
 }
 
 const TracksWorkspaceContext = createContext<TracksWorkspaceValue | null>(null);
+
+interface ImportErrorNotice {
+  readonly message: string;
+  readonly occurrence: number;
+}
 
 type PreviewTrackBuilder = { -readonly [Key in keyof PreviewTrack]: PreviewTrack[Key] };
 type LocalTrackSummaryBuilder = {
@@ -133,8 +140,9 @@ function toPoiCandidate(
   if (result === null) return undefined;
   const shortLabel = result.label.split(',')[0]?.trim();
   if (shortLabel === undefined || shortLabel.length === 0) return undefined;
+  const label = formatGeneratedPoiLabel(shortLabel, result.category);
   return {
-    label: shortLabel,
+    label,
     kind: result.kind,
     matchedCoordinate: coordinate,
     lookedUpAt,
@@ -166,6 +174,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<ImportErrorNotice | null>(null);
   const namingAbort = useRef<AbortController | null>(null);
   const renderedTrackId = useRef<string | null>(null);
 
@@ -197,6 +206,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       window.removeEventListener('beforeunload', preventUnload);
     };
   }, [active?.kind]);
+
+  useEffect(() => {
+    if (importError === null) return undefined;
+    const timeout = window.setTimeout(() => {
+      setImportError(null);
+    }, 5_000);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [importError]);
 
   useEffect(() => {
     if (active === null) {
@@ -286,27 +305,50 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 'coordinate'
               >);
         const loop = isLoop(segments, preview.metrics.distanceMeters);
-        const anchors = loop
-          ? [middlePoint.coordinate]
-          : [
-              segment.points[0]?.coordinate,
-              middlePoint.coordinate,
-              segment.points[segment.points.length - 1]?.coordinate,
-            ].filter(
-              (coordinate): coordinate is readonly [number, number] =>
-                coordinate !== undefined,
-            );
-        const candidates: (PoiCandidate | undefined)[] = [];
-        for (const coordinate of anchors) {
+        const reverseCandidate = async (
+          coordinate: readonly [number, number],
+        ): Promise<PoiCandidate | undefined> => {
           const result = await searchPlaces.reverse(
             { longitude: coordinate[0], latitude: coordinate[1] },
             controller.signal,
           );
-          candidates.push(toPoiCandidate(result, coordinate, lookedUpAt));
+          return toPoiCandidate(result, coordinate, lookedUpAt);
+        };
+        let middlePoi: PoiCandidate | undefined;
+        if (summit !== null) {
+          try {
+            const result = await searchPlaces.nearest(
+              {
+                longitude: summit.coordinate[0],
+                latitude: summit.coordinate[1],
+              },
+              controller.signal,
+            );
+            if (result !== null) {
+              const matchedCoordinate = [
+                result.coordinate.longitude,
+                result.coordinate.latitude,
+              ] as const;
+              middlePoi = toPoiCandidate(result, matchedCoordinate, lookedUpAt);
+            }
+          } catch (nearestError) {
+            if (controller.signal.aborted) throw nearestError;
+            logger.log({ level: 'warn', name: 'local-track.nearby-poi.failed' });
+          }
         }
-        const [startPoi, middlePoi, endPoi] = loop
-          ? [undefined, candidates[0], undefined]
-          : candidates;
+        middlePoi ??= await reverseCandidate(middlePoint.coordinate);
+        let startPoi: PoiCandidate | undefined;
+        let endPoi: PoiCandidate | undefined;
+        if (!loop) {
+          const firstPoint = segment.points[0];
+          const lastPoint = segment.points[segment.points.length - 1];
+          if (firstPoint !== undefined) {
+            startPoi = await reverseCandidate(firstPoint.coordinate);
+          }
+          if (lastPoint !== undefined) {
+            endPoi = await reverseCandidate(lastPoint.coordinate);
+          }
+        }
         const fallbackPoi = loop ? middlePoi : undefined;
         const generatedNameInput: GeneratedNameInput = {
           loop,
@@ -346,14 +388,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const importFiles = useCallback(
     async (files: FileList | readonly File[]) => {
+      const reportImportError = (message: string) => {
+        setImportError((current) => ({
+          message,
+          occurrence: (current?.occurrence ?? 0) + 1,
+        }));
+      };
       const selected = Array.from(files);
       if (selected.length !== 1) {
-        setError('Choose exactly one GPX file.');
+        reportImportError('Choose exactly one GPX file.');
         return;
       }
       const file = selected[0];
       if (!file?.name.toLocaleLowerCase('en').endsWith('.gpx')) {
-        setError('Choose a file with the .gpx extension.');
+        reportImportError('Choose a file with the .gpx extension.');
         return;
       }
       if (
@@ -363,6 +411,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return;
       }
       namingAbort.current?.abort();
+      setImportError(null);
       setError(null);
       try {
         const parsed = parseGpx(await file.text());
@@ -382,7 +431,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         void generateName(preview, controller);
       } catch (importError) {
         logger.log({ level: 'warn', name: 'local-track.import.failed' });
-        setError(
+        reportImportError(
           importError instanceof Error
             ? importError.message
             : 'The GPX file could not be imported.',
@@ -534,6 +583,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       active,
       error,
       filteredSummaries,
+      importError: importError?.message ?? null,
       importFiles,
       query,
       summaries,
@@ -555,6 +605,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       discardPreview,
       error,
       filteredSummaries,
+      importError,
       importFiles,
       query,
       renameActive,
@@ -569,7 +620,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 }
 
 function TrackImportZone() {
-  const { importFiles } = useTracksWorkspace();
+  const { importError, importFiles } = useTracksWorkspace();
   const inputRef = useRef<HTMLInputElement>(null);
   const zoneRef = useRef<HTMLElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -639,7 +690,13 @@ function TrackImportZone() {
   };
 
   return (
-    <Box sx={{ position: 'relative', zIndex: dragActive ? 2 : 1, height: 52 }}>
+    <Box
+      sx={{
+        position: 'relative',
+        zIndex: dragActive ? 2 : 1,
+        minHeight: importError === null ? 52 : 106,
+      }}
+    >
       <Paper
         ref={zoneRef}
         component="section"
@@ -649,11 +706,13 @@ function TrackImportZone() {
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         sx={{
-          position: 'absolute',
+          position: dragActive ? 'absolute' : 'relative',
           inset: '0 0 auto',
-          height: dragActive ? 132 : 52,
-          display: 'grid',
-          placeItems: 'center',
+          height: dragActive ? 138 : 'auto',
+          minHeight: 52,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
           borderStyle: 'dashed',
           borderWidth: 2,
           borderColor: dragActive ? 'primary.main' : 'divider',
@@ -673,6 +732,7 @@ function TrackImportZone() {
           direction={dragActive ? 'column' : 'row'}
           spacing={dragActive ? 0.75 : 1}
           sx={{
+            minHeight: 48,
             width: '100%',
             alignItems: 'center',
             justifyContent: 'center',
@@ -712,6 +772,22 @@ function TrackImportZone() {
             event.target.value = '';
           }}
         />
+        {dragActive || importError === null ? null : (
+          <Alert
+            severity="warning"
+            sx={{
+              mx: 0.75,
+              mb: 0.75,
+              py: 0,
+              minHeight: 44,
+              alignItems: 'center',
+              borderRadius: 1,
+              '& .MuiAlert-message': { py: 0.5 },
+            }}
+          >
+            {importError}
+          </Alert>
+        )}
       </Paper>
     </Box>
   );
@@ -953,7 +1029,7 @@ export function TrackDetailsPane() {
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <CircularProgress size={18} />
                 <Typography variant="body2">
-                  Looking up up to three representative places…
+                  Looking up representative places…
                 </Typography>
               </Stack>
             ) : active.generatedName === undefined ? (

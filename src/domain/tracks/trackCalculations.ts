@@ -52,6 +52,19 @@ export interface PoiCandidate {
   readonly lookedUpAt: string;
 }
 
+export function formatGeneratedPoiLabel(label: string, category: string): string {
+  if (category === 'mountain_pass:yes' && !/\bpass\b/iu.test(label)) {
+    return `${label} Pass`;
+  }
+  if (
+    (category === 'natural:peak' || category === 'natural:volcano') &&
+    !/^(?:mt\.?|mount)\s/iu.test(label)
+  ) {
+    return `Mt. ${label}`;
+  }
+  return label;
+}
+
 function radians(value: number): number {
   return (value * Math.PI) / 180;
 }

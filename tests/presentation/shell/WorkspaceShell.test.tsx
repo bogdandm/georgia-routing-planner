@@ -37,7 +37,7 @@ beforeEach(async () => {
   await services.database.delete();
   services = createTestServices();
   useUiStore.setState({
-    activeTab: 'tracks',
+    activeTab: 'satellite',
     developerDrawerOpen: false,
     developerMode: false,
     mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
@@ -227,11 +227,18 @@ describe('WorkspaceShell', () => {
     services.mapViewport.update(testViewport);
     renderWorkspaceShell();
 
-    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'No tracks loaded' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
     expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('tab')
+        .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
+    ).toEqual(['Satellite', 'Layers', 'Markers', 'Tracks']);
     expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
       'aria-disabled',
       'true',
@@ -858,6 +865,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('complementary')).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Settings' });
     expect(
       screen.queryByRole('switch', { name: 'Collapse left navigation' }),
     ).not.toBeInTheDocument();
@@ -874,7 +882,7 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
     ).toBeVisible();
-    const satelliteRender = screen.getByRole('combobox', {
+    const satelliteRender = within(settings).getByRole('combobox', {
       name: 'Satellite render',
     });
     expect(satelliteRender).toHaveTextContent('Auto');
@@ -890,7 +898,7 @@ describe('WorkspaceShell', () => {
     });
     expect(document.querySelector('.MuiBackdrop-root')).not.toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
-    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+    expect(settings).toBeVisible();
     const ceiling = screen.getByRole('slider', {
       name: 'Sentinel reflectance ceiling',
     });

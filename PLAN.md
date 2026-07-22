@@ -265,6 +265,12 @@ changing opacity must not recalculate them.
 - Store ascent, descent, minimum, and maximum metres only when supported by the available
   samples, together with `elevationSource: "gpx"` and
   `elevationAlgorithmVersion`.
+- During the same one-time pass, conservatively detect whether a single continuous track
+  has one clearly dominant interior summit for naming. The initial version requires
+  elevation coverage across at least 80% of cumulative distance, the highest point to
+  fall between 20% and 80% of total distance, the peak to stand at least 100 metres above
+  the higher endpoint, and every point outside a 10%-of-distance neighbourhood around
+  that peak to be at least 50 metres lower. Otherwise there is no dominant summit.
 - Keep the calculation as a small versioned pure function with focused fixtures. Any
   later smoothing/noise policy requires a version bump and explicit migration or
   reprocessing decision; it is not silently introduced here.
@@ -287,11 +293,18 @@ changing opacity must not recalculate them.
 
 - For one continuous non-loop segment, query:
   - `startPoi` at the first coordinate;
-  - `middlePoi` at the coordinate nearest 50% of cumulative segment distance;
+  - `middlePoi` at the dominant interior summit when the versioned elevation policy
+    identifies exactly one; otherwise at the coordinate nearest 50% of cumulative
+    segment distance;
   - `endPoi` at the last coordinate.
 - Define a loop through a versioned pure policy: start-to-end distance is at most the
-  greater of 100 metres or 1% of total distance. A loop uses the most relevant single
-  candidate rather than pretending it has different endpoints.
+  greater of 100 metres or 1% of total distance. A loop uses the dominant summit as its
+  single lookup anchor when one exists; otherwise it uses the most relevant single
+  representative candidate rather than pretending it has different endpoints.
+- Missing/sparse elevation, a ridge or plateau, several comparable peaks, a peak near an
+  endpoint, or a peak that does not clear every conservative threshold keeps the normal
+  cumulative-distance midpoint behavior. POI results never influence whether a summit
+  is detected.
 - For multiple independent segments, choose up to three representative points spread
   over rendered cumulative distance, retain the best result as `fallbackPoi`, and
   generate one place name. Do not imply continuity with an arrow-form name.
@@ -306,8 +319,9 @@ changing opacity must not recalculate them.
 Persist `startPoi`, `middlePoi`, `endPoi`, and `fallbackPoi` as separate optional summary
 fields. Each stored candidate contains the English display label, category/kind,
 matched coordinate, distance when the provider supplies it, and lookup timestamp. Also
-persist the generated candidate text even when the user keeps the original name so
-details can explain or reapply the result without another network request.
+persist whether the middle lookup anchor was `distance-midpoint` or `dominant-summit`,
+plus the generated candidate text even when the user keeps the original name, so details
+can explain or reapply the result without another network request.
 
 ## Persistence model and ownership
 
@@ -405,8 +419,8 @@ its focused tests, and update durable documentation alongside the behavior it ad
 
 - Add the bounded GPX parsing boundary, normalized independent-segment model, metadata
   projection, geometry precedence, and stable failures/warnings.
-- Add pure distance, bounds/start/end, recorded-duration, integral elevation, loop,
-  representative-point, and generated-name policies.
+- Add pure distance, bounds/start/end, recorded-duration, integral elevation, dominant
+  summit, loop, representative-point, and generated-name policies.
 - Add compact synthetic fixtures plus sanitized structures derived from both supplied
   OsmAnd samples, including detailed-track-plus-sparse-route precedence and Unicode.
 - Document durable model contracts in `docs/data-model.md`.
@@ -496,8 +510,11 @@ required verification suite once.
    Generated English text appears separately and changes the primary field only after
    `Apply generated name`.
 7. A non-loop single segment can generate `Middle: Start -> End` from three useful
-   candidates; loops and multi-segment geometry use one best-place fallback. Missing or
-   failed POI lookup never blocks Save.
+   candidates. Its middle lookup uses one clearly dominant interior summit when the
+   conservative versioned elevation policy finds one and otherwise uses the 50%
+   cumulative-distance point. Loops prefer that summit as their single anchor;
+   multi-segment geometry uses one best-place fallback. Missing or failed POI lookup
+   never blocks Save.
 8. Save creates summary and content atomically. Saved tracks survive reload and can be
    selected, closed, renamed, searched during typing, sorted by name, and deleted with
    confirmation.
@@ -519,8 +536,8 @@ required verification suite once.
 | Area | Required evidence |
 | --- | --- |
 | Parser boundary | GPX 1.0/1.1 namespaces, Unicode, detailed-track precedence over sparse route, route-only fallback, multiple tracks/segments, invalid coordinates, entity/size/count limits, cancellation, and bounded warnings |
-| Metrics | Multi-segment geodesic sum without gaps, integral ascent/descent, missing elevation, min/max, timestamp absence/inconsistency, antimeridian bounds, loop threshold, and algorithm versions |
-| Naming | Source-name priority, no automatic overwrite, non-loop three-place format, duplicate/degraded results, loop fallback, multi-segment fallback, English request, three-request cap, pacing, abort, offline/rate-limit behavior, and saved separate POI fields |
+| Metrics | Multi-segment geodesic sum without gaps, integral ascent/descent, missing elevation, min/max, timestamp absence/inconsistency, antimeridian bounds, loop threshold, dominant-summit coverage/location/prominence thresholds, ambiguous ridge/multiple-peak fallback, and algorithm versions |
+| Naming | Source-name priority, no automatic overwrite, non-loop three-place format, midpoint versus dominant-summit middle anchor, summit-aware loop fallback, duplicate/degraded results, multi-segment fallback, English request, three-request cap, pacing, abort, offline/rate-limit behavior, and saved separate POI fields/anchor kind |
 | Persistence | New-schema upgrade, atomic save/delete, reload, rename, duplicate names, Unicode, corrupted summary/content handling, quota/transaction failure, and no partial rows |
 | UI | Whole-workspace drag overlay, one-file rejection, replacement confirmation, preview state, Save/Discard, one-active-track selection, Close track cancel/confirm behavior, search during typing, name-only stable sort, rename/delete, details fields/warnings, and accessible keyboard/focus behavior |
 | Map/Layers | Bright-blue independent lines, stable layer band, panel-aware full-track fitting after import and saved selection, close-driven geometry clearing without stored deletion, preview/saved updates, cleanup, global visibility/opacity, persistence, and coexistence with OSM/Sentinel/terrain |

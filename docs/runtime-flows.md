@@ -500,6 +500,16 @@ Explicit popup close uses the same cancellation path. Diagnostics record only li
 duration, outcome, and result count, never the clicked coordinate or arbitrary POI
 metadata.
 
+## Local track retention
+
+Saving a validated import writes its lightweight summary and full content row in one
+Dexie read-write transaction. The summary contains the stable display and derived
+metrics used by list views; the content row contains normalized independent segments and
+the retained original GPX blob. A transaction failure leaves neither row listable.
+Rename validates and changes only the summary. Delete removes both rows in one
+transaction. Opening a saved track validates its content independently and reports a
+bounded integrity error when the row is missing or corrupt.
+
 ## Teardown ownership
 
 `MapWorkspace` flushes camera persistence and releases the native map through its ref

@@ -104,6 +104,7 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Visibility, stretch, rendering, and overlay preferences   | Dexie plus map layer controller                       | Durable non-scene choices with a serializable live view |
 | Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                           | Read-only platform metrics behind an app port           |
 | Settled 2D center and zoom                                | `AppDatabase` through `MapCameraRepository`           | Durable camera restarts without 3D orientation          |
+| Saved local track summaries and content                   | `AppDatabase` through `LocalTrackRepository`          | Atomic IndexedDB ownership with validated reads         |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export      |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                     |
 | Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                        | Disposable, not persisted                               |
@@ -114,6 +115,10 @@ serializable snapshot through `useSyncExternalStore`; unrelated UI state must no
 the native map instance to be recreated. The facade creates a new readonly serializable
 snapshot for each update, so snapshot stores retain that value directly and consumers
 must not mutate it.
+
+The GPX parser and calculation policies stay under `domain/tracks`; they have no React,
+Dexie, MapLibre, or provider dependency. `AppDatabase` implements the narrow local-track
+repository contract because it already owns schema migration and transaction lifetime.
 
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
 `WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global

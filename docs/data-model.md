@@ -77,7 +77,7 @@ flowchart LR
 | Curated catalog manifest, track summaries, categories, memberships, previews, and validation report | Generated GitHub Pages assets under `public/catalog/`        | Validated static queries and an in-memory viewport index | Versioned, read-only, fetched from the application origin                    |
 | Curated full GPX                                                                                    | Generated GitHub Pages assets under `public/tracks/`         | Parsed only for an opened/downloaded track               | Loaded on demand; never all fetched at startup                               |
 | Local GPX before retention                                                                          | Browser memory from a file picker or drop                    | Validated import preview                                 | Discarded unless the user explicitly retains it                              |
-| Retained local track summary and content                                                            | Browser IndexedDB                                            | `LocalTrackRecord` and `LocalTrackContentRecord`         | Private to the browser; never uploaded automatically                         |
+| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; private to this browser                        |
 | Personal folders and track placement                                                                | Browser IndexedDB                                            | Folder tree and one personal placement per track         | May reference curated or local track IDs; cannot modify static catalog files |
 | Route plans and saved markers                                                                       | Browser IndexedDB                                            | Aggregate records mapped to domain objects               | Private until explicit GPX/file export                                       |
 | Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                              |
@@ -220,6 +220,12 @@ MVP field because it requires a separate speed/stoppage policy. Curated curation
 omit sensitive timestamps while retaining a non-identifying duration. For curated
 tracks, `addedAt` comes from reviewed curation metadata rather than the build clock; for
 local tracks, it is the completed retention/import time.
+
+The executable local-track schema keeps listable summaries separate from large geometry
+and original GPX blobs. Both rows share the opaque local track ID. Saving and deleting
+use one IndexedDB transaction, while rename updates only the validated summary. A
+missing or invalid content row is surfaced as a bounded storage-integrity error; it
+never becomes an empty geometry or a partially successful save.
 
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not

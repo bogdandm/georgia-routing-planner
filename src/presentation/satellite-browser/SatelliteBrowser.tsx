@@ -22,6 +22,7 @@ import {
   FormHelperText,
   IconButton,
   InputLabel,
+  ListItemButton,
   MenuItem,
   Paper,
   Popper,
@@ -668,6 +669,7 @@ function SceneCard({
   appliedImagery,
   match,
   selected,
+  showBottomDivider,
   timeZone,
   onFitFootprint,
   onSelect,
@@ -676,6 +678,7 @@ function SceneCard({
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly match: SatelliteSceneMatch;
   readonly selected: boolean;
+  readonly showBottomDivider: boolean;
   readonly timeZone: string;
   readonly onFitFootprint: () => void;
   readonly onSelect: () => void;
@@ -702,26 +705,25 @@ function SceneCard({
     if (!clickedSecondaryAction) onSelect();
   };
   return (
-    <Paper
+    <Box
       id={`satellite-scene-${encodeURIComponent(scene.id)}`}
-      variant="outlined"
       onClick={handleCardClick}
       sx={{
         overflow: 'hidden',
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? 'primary.main' : 'divider',
-        bgcolor: selected ? appColors.surface.selected : 'background.paper',
-        cursor: 'pointer',
+        borderBottom: showBottomDivider ? 1 : 0,
+        borderColor: 'divider',
+        bgcolor: selected ? appColors.surface.selected : 'transparent',
       }}
     >
-      <ButtonBase
+      <ListItemButton
         aria-label={
           applied ? `Remove ${title} imagery from map` : `Apply ${title} imagery`
         }
         aria-pressed={selected}
-        sx={{ display: 'block', width: '100%', textAlign: 'left' }}
+        selected={selected}
+        sx={{ display: 'block', p: 0, textAlign: 'left' }}
       >
-        <Stack direction="row" spacing={1.5} sx={{ p: 1.5 }}>
+        <Stack direction="row" spacing={1.5} sx={{ p: 1 }}>
           {scene.thumbnailHref === null ? (
             <Box
               sx={{
@@ -833,7 +835,7 @@ function SceneCard({
             </Typography>
           </Box>
         ) : null}
-      </ButtonBase>
+      </ListItemButton>
       {selected ? (
         <Stack
           spacing={0.75}
@@ -877,7 +879,7 @@ function SceneCard({
           ) : null}
         </Stack>
       ) : null}
-    </Paper>
+    </Box>
   );
 }
 
@@ -1023,24 +1025,38 @@ function SatelliteResultsPane({
             No matching images. Increase the cloud limit or move the map.
           </Alert>
         ) : null}
-        <Stack spacing={1.5}>
+        <Stack spacing={0} sx={{ mx: -2 }}>
           {groups.map((group, index) => (
-            <Stack key={group.date} spacing={1}>
+            <Stack key={group.date} spacing={0}>
               {index === 0 ||
               groups[index - 1]?.date.slice(0, 7) !== group.date.slice(0, 7) ? (
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Typography variant="overline">
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    alignItems: 'center',
+                    pt: index === 0 ? 0 : 2,
+                    pb: 1,
+                  }}
+                >
+                  <Divider sx={{ width: 24 }} />
+                  <Typography variant="caption" color="text.secondary" noWrap>
                     {monthFormatter.format(new Date(`${group.date}T00:00:00.000Z`))}
                   </Typography>
                   <Divider sx={{ flex: 1 }} />
                 </Stack>
               ) : null}
-              {group.scenes.map((match) => (
+              {group.scenes.map((match, sceneIndex) => (
                 <SceneCard
                   appliedImagery={appliedImagery}
                   key={`${match.scene.collection}:${match.scene.id}`}
                   match={match}
                   selected={match.scene.id === selectedSceneId}
+                  showBottomDivider={
+                    sceneIndex < group.scenes.length - 1 ||
+                    groups[index + 1] === undefined ||
+                    groups[index + 1]?.date.slice(0, 7) === group.date.slice(0, 7)
+                  }
                   timeZone={timeZone}
                   onSelect={() => {
                     onSelect(match);

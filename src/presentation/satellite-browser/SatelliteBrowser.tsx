@@ -811,7 +811,7 @@ function SceneCard({
           </Alert>
         ) : null}
         {selected ? (
-          <Box sx={{ px: 2, pb: 2 }}>
+          <Box sx={{ px: 2, pb: applied ? 1 : 2 }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
               {applying
                 ? 'Applying true-color imagery…'
@@ -861,7 +861,7 @@ function SceneCard({
         ) : null}
       </ListItemButton>
       {selected && applied ? (
-        <Stack direction="row" spacing={1} sx={{ px: 2, pb: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ px: 2, pb: 1 }}>
           <Button
             size="small"
             startIcon={<CenterFocusStrongIcon />}

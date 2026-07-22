@@ -818,6 +818,10 @@ describe('WorkspaceShell', () => {
       marginLeft: '10px',
       flexShrink: '0',
     });
+    expect(screen.getByTestId('project-logo-image')).toHaveAttribute(
+      'src',
+      '/favicon.png',
+    );
     await user.hover(projectLogo);
     expect(
       await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),

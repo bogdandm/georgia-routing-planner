@@ -14,7 +14,6 @@ import {
   Tabs,
   type TabProps,
   Tooltip,
-  Typography,
 } from '@mui/material';
 import type { SyntheticEvent } from 'react';
 
@@ -126,7 +125,7 @@ export function WorkspaceRail({
             display: 'grid',
             placeItems: 'center',
             overflow: 'hidden',
-            bgcolor: appColors.brand.blueGreenDark,
+            bgcolor: 'transparent',
             color: appColors.text.inverse,
             borderRadius: collapsed ? '5px 0 0 5px' : 1.25,
             pointerEvents: collapsed ? 'none' : 'auto',
@@ -153,13 +152,15 @@ export function WorkspaceRail({
             },
           }}
         >
-          <Typography
-            variant="subtitle2"
-            color="inherit"
-            sx={{ position: 'relative', zIndex: 1, fontWeight: 800 }}
-          >
-            GR
-          </Typography>
+          <Box
+            alt=""
+            aria-hidden="true"
+            component="img"
+            data-testid="project-logo-image"
+            draggable={false}
+            src={`${import.meta.env.BASE_URL}favicon.png`}
+            sx={{ position: 'relative', zIndex: 1, width: 36, height: 36 }}
+          />
         </ButtonBase>
       </Tooltip>
 

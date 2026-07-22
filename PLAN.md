@@ -8,6 +8,7 @@ organization features:
 - import one GPX file through a file picker or by dropping it anywhere over the
   application workspace;
 - preview its geometry immediately as a bright-blue track and inspect parsed metadata;
+- fit every newly imported or selected saved track into the visible map area;
 - choose an editable name, optionally generate an English place-based alternative, and
   explicitly save the track to browser-local IndexedDB;
 - reopen, rename, search, sort, and delete saved tracks from a simple Tracks list;
@@ -109,8 +110,9 @@ The sample originals stay outside the repository and must never be committed.
 - Open the Tracks workspace and adjacent details pane as soon as import begins. The pane
   title is `New track`; parsing has explicit loading, success-with-warnings, and failure
   states.
-- After parsing, fit the map to validated bounds once and render the preview. Subsequent
-  user camera movement is respected.
+- After parsing, fit the map to validated bounds once and render the preview. Use padding
+  for the open sidebar/details surfaces so the complete track is visible in the
+  unobscured map area. Subsequent user camera movement is respected.
 - Prefill the editable name using the first non-empty value in this order:
   1. selected detailed track `<name>`;
   2. GPX metadata `<name>`;
@@ -134,8 +136,9 @@ The sample originals stay outside the repository and must never be committed.
   case-insensitive name comparison and use stable ID as the final tie-break.
 - Filter during typing against the display name without a submit button. An empty query
   restores the complete name-sorted list.
-- Selecting a result renders it and opens its details. The list item shows name plus
-  compact distance and recorded duration when available.
+- Selecting a result renders it, opens its details, and fits its complete validated
+  bounds into the unobscured map area. The list item shows name plus compact distance
+  and recorded duration when available.
 - Rename updates the stored summary immediately after validation. Delete uses a focused
   confirmation naming the track; after deletion, remove its map geometry and clear the
   selection if it was active.
@@ -427,8 +430,9 @@ accessibility assertions, typecheck, and lint for touched files.
 
 - Extend the existing map controller/facade with one local-track GeoJSON source and
   stable bright-blue line layers in the reserved track band.
-- Render independent segments without gap lines, support selection/preview updates,
-  fit once after import, and clean up sources/listeners deterministically.
+- Render independent segments without gap lines, support selection/preview updates, fit
+  the complete track after import or saved-track selection with panel-aware padding, and
+  clean up sources/listeners deterministically.
 - Add persistent imported-track visibility and one global opacity slider to Layers with
   compatible map-preference migration.
 - Update map structure, runtime flow, visual palette, and feature documentation.
@@ -457,8 +461,9 @@ required verification suite once.
 ## Acceptance criteria
 
 1. Dropping one valid GPX anywhere over the application opens `New track`, renders a
-   bright-blue preview, fits it once, and shows details regardless of the previously open
-   rail section.
+   bright-blue preview, and fits its complete bounds into the unobscured map area with
+   sidebar/details padding regardless of the previously open rail section. Selecting a
+   saved track performs the same fit.
 2. The two supplied OsmAnd structures parse without double-counting their sparse route;
    the Cyrillic track name survives unchanged and neither file invents recorded time.
 3. Track geometry with multiple independent segments renders without connecting gaps,
@@ -495,7 +500,7 @@ required verification suite once.
 | Naming | Source-name priority, no automatic overwrite, non-loop three-place format, duplicate/degraded results, loop fallback, multi-segment fallback, English request, three-request cap, pacing, abort, offline/rate-limit behavior, and saved separate POI fields |
 | Persistence | New-schema upgrade, atomic save/delete, reload, rename, duplicate names, Unicode, corrupted summary/content handling, quota/transaction failure, and no partial rows |
 | UI | Whole-workspace drag overlay, one-file rejection, replacement confirmation, preview state, Save/Discard, search during typing, name-only stable sort, rename/delete, details fields/warnings, and accessible keyboard/focus behavior |
-| Map/Layers | Bright-blue independent lines, stable layer band, fit-once behavior, preview/saved updates, cleanup, global visibility/opacity, persistence, and coexistence with OSM/Sentinel/terrain |
+| Map/Layers | Bright-blue independent lines, stable layer band, panel-aware full-track fitting after import and saved selection, preview/saved updates, cleanup, global visibility/opacity, persistence, and coexistence with OSM/Sentinel/terrain |
 | Leave guard | Active only for a non-retained preview and cleared after successful Save or explicit Discard |
 | Privacy/diagnostics | No personal GPX fields in logs; only bounded counts, codes, versions, durations, and outcomes |
 | Final checks | Repository format check, lint, typecheck, unit/integration tests, production build, targeted Playwright Chromium flow, axe scan, and documentation forbidden-roadmap-term check for `README.md`/`docs/` |

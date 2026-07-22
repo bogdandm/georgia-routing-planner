@@ -102,6 +102,7 @@ function SatelliteSearchRequestRunner({
 
 const firstResultCount = 8;
 const resultPageSize = 8;
+const calendarMonthLoadDelayMs = 300;
 const catalogCloudCoverCeilingPercent = 100;
 const sentinelArchiveFirstMonth = '2015-06';
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
@@ -386,12 +387,18 @@ function AcquisitionCalendar({
           <Typography variant="subtitle2">
             {monthFormatter.format(displayMonthDate)}
           </Typography>
-          {loadingMonth === displayMonth ? (
+          <Box sx={{ display: 'flex', width: 14, height: 14 }}>
             <CircularProgress
               size={14}
-              aria-label={`Loading ${monthFormatter.format(displayMonthDate)} imagery`}
+              aria-label={
+                loadingMonth === displayMonth
+                  ? `Loading ${monthFormatter.format(displayMonthDate)} imagery`
+                  : undefined
+              }
+              aria-hidden={loadingMonth === displayMonth ? undefined : true}
+              sx={{ visibility: loadingMonth === displayMonth ? 'visible' : 'hidden' }}
             />
-          ) : null}
+          </Box>
         </Stack>
         <IconButton
           size="small"
@@ -948,6 +955,7 @@ export function SatelliteBrowser({
   const [autoLoadAttempts, setAutoLoadAttempts] = useState(0);
   const [scrollRequestId, setScrollRequestId] = useState(0);
   const request = useRef<AbortController | null>(null);
+  const calendarMonthLoadTimer = useRef<number | null>(null);
   const applyRequest = useRef<AbortController | null>(null);
   const renderingModeRequest = useRef<AbortController | null>(null);
   const cloudCoverChangedByUser = useRef(false);
@@ -982,6 +990,9 @@ export function SatelliteBrowser({
 
   useEffect(() => {
     return () => {
+      if (calendarMonthLoadTimer.current !== null) {
+        window.clearTimeout(calendarMonthLoadTimer.current);
+      }
       request.current?.abort();
       applyRequest.current?.abort();
       renderingModeRequest.current?.abort();
@@ -1248,19 +1259,36 @@ export function SatelliteBrowser({
   const changeCalendarMonth = (month: string) => {
     setCalendarMonth(month);
     setLoadMoreError(null);
+    if (calendarMonthLoadTimer.current !== null) {
+      window.clearTimeout(calendarMonthLoadTimer.current);
+      calendarMonthLoadTimer.current = null;
+    }
     if (searchState.status !== 'success' || submittedSearch === null) return;
+    if (loadingMonth !== null) {
+      request.current?.abort();
+      request.current = null;
+      setLoadingMonth(null);
+      setLoadingMore(false);
+    }
     if (loadedMonths.has(month)) {
       setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
       return;
     }
-    void loadMonthIntoResults(
-      searchMonthRange(month, clock.now()),
-      submittedSearch,
-      true,
-    );
+    calendarMonthLoadTimer.current = window.setTimeout(() => {
+      calendarMonthLoadTimer.current = null;
+      void loadMonthIntoResults(
+        searchMonthRange(month, clock.now()),
+        submittedSearch,
+        true,
+      );
+    }, calendarMonthLoadDelayMs);
   };
 
   const cancelSearch = () => {
+    if (calendarMonthLoadTimer.current !== null) {
+      window.clearTimeout(calendarMonthLoadTimer.current);
+      calendarMonthLoadTimer.current = null;
+    }
     request.current?.abort();
     request.current = null;
     setLoadingMonth(null);
@@ -1394,7 +1422,7 @@ export function SatelliteBrowser({
           loadingMonth={loadingMonth}
           maxCloudCoverPercent={maxCloudCoverPercent}
           maximumMonth={latestMonth}
-          navigationDisabled={searchState.status === 'loading' || loadingMore}
+          navigationDisabled={searchState.status === 'loading'}
           onMonthChange={changeCalendarMonth}
           onSelectDate={selectCalendarDate}
           result={calendarResult}

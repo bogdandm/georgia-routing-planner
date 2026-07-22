@@ -598,6 +598,58 @@ describe('WorkspaceShell', () => {
     expect(requests).toHaveLength(3);
   });
 
+  it('keeps calendar navigation responsive and skips superseded month loads', async () => {
+    const requestedMonths: string[] = [];
+    let resolveJune!: (result: SatelliteCatalogResult) => void;
+    services.database.close();
+    await services.database.delete();
+    services = createTestServices({
+      satelliteCatalogGateway: {
+        search: ({ criteria }) => {
+          const month = criteria.startDate.slice(0, 7);
+          requestedMonths.push(month);
+          if (month === '2026-06') {
+            return new Promise<SatelliteCatalogResult>((resolve) => {
+              resolveJune = resolve;
+            });
+          }
+          return Promise.resolve({ totalMatched: 0, scenes: [] });
+        },
+      },
+    });
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05', '2026-06']);
+    });
+    expect(screen.getByLabelText('Loading June 2026 imagery')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Next acquisition month' }),
+    ).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+    resolveJune({ totalMatched: 0, scenes: [] });
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05', '2026-06', '2026-07']);
+    });
+  });
+
   it('uses a calendar date as a best-coverage card shortcut without reopening the pane', async () => {
     const lowCoverageScene = syntheticSatelliteScene(
       'later-low-coverage',

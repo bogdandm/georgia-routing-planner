@@ -1,19 +1,43 @@
 # TODO list
 
-## Satellite imagery
+## Features
 
-- Improve the browser-render fallback:
-  - Evaluate a more reliable alternative imagery source.
-  - Remove the fallback timeout.
-  - Make fallback errors actionable.
-  - Show render queue/progress.
-  - Prevent fallback failures from blanking the map.
-  - Unload the previous image immediately when changing scenes.
-- Polish the acquisition calendar:
-  - Prevent spinner-induced text shifts.
-  - Allow month changes while results load.
-  - Debounce metadata loading after a month change.
-- Add saved-marker search once markers are available.
+- General map
+  - ~~Switch to 3D cause camera to be underground and then jump to random location. Move
+    camera to required height before mode map mode switch~~
+
+- Improve browser satellite render fallback
+  - Try to find alternative/better datasource to avoid browser render
+  - Remove timeout completly
+  - Improve error message
+  - Add progress/queue bar
+  - Sometimes it makes whole map blank
+  - Satelite image change should unload current image right away even after render swap
+
+- URL sharing & state saving
+  - ~~Disable persistent 3D mode~~
+  - ~~Share only 2D as regular link~~
+  - ~~For 3D mode share give another option in right click menu with camera position as
+    url param~~
+  - ~~Satellite iamge sharing shares wrong image~~
+  - ~~Do not persist satellite in localstorage, only as url sharing param~~
+  - ~~Shared satellite should open datallite pane with scene card right away~~
+
+- GPX upload
+  - Attach GPX track names to search
+
+- Simple markers
+  - Attach markers to search
+
+- Calendar
+  - Spinner causes text shift
+  - Allow month switch during load
+  - Add small pause after month switch before loading ssatellites meta data
+
+## Other
+
+- ~~Run full code review~~
+- ~~Try to run agent to compact code and reduce slop~~
 
 ## Track catalog and GPX import
 
@@ -22,7 +46,6 @@
 - Add track search, visible-area filters, sorting, folders, tags, and compact metrics.
 - Add track selection, map preview, details, elevation profile, and original download.
 - Import GPX files with validation and preview before optional local retention.
-- Include imported GPX track names in global search.
 
 ## Create GPX
 
@@ -35,7 +58,6 @@
 
 - Create, edit, delete, search, sort, and group saved markers.
 - Store marker icon, color, coordinates, elevation, and preferred map scale.
-- Include marker names in global search.
 - Use markers as Satellite targets or copy them into Create GPX.
 
 ## Layers

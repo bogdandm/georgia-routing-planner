@@ -566,8 +566,9 @@ export class MapLibreFacade implements MapFacade {
             sourceLayer: sourceLayers.places,
           }),
         ];
-        const poi = selectNearestPoi(features, coordinate);
-        nearbyPoi = poi === null ? { status: 'none' } : { status: 'found', poi };
+        const feature = selectNearestPoi(features, coordinate);
+        nearbyPoi =
+          feature === null ? { status: 'none' } : { status: 'found', poi: feature };
       }
     } catch {
       nearbyPoi = { status: 'error' };

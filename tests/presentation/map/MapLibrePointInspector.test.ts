@@ -69,6 +69,6 @@ describe('renderPointInspectorContent', () => {
       () => undefined,
     );
     expect(container.textContent).toContain('Elevation could not be loaded.');
-    expect(container.textContent).toContain('No named map feature within 100 m.');
+    expect(container.textContent).toContain('No named map feature found.');
   });
 });

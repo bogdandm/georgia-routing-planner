@@ -74,7 +74,7 @@ function nearbyFeatureText(inspection: OpenMapPointInspection): string {
     case 'loading':
       return 'Checking nearby map data…';
     case 'none':
-      return 'No named map feature within 100 m.';
+      return 'No named map feature found.';
     case 'error':
       return 'Nearby map data could not be inspected.';
     case 'found': {

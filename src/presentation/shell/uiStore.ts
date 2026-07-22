@@ -20,7 +20,7 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>()((set) => ({
-  activeTab: 'tracks',
+  activeTab: 'satellite',
   developerDrawerOpen: false,
   developerMode: false,
   mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },

@@ -182,20 +182,20 @@ export function WorkspaceRail({
           },
         }}
       >
-        <UnavailableWorkspaceTab
-          icon={<RouteOutlinedIcon />}
-          label="Tracks"
-          reason="Track tools are not available yet"
-          value="tracks"
-        />
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
+        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
         <UnavailableWorkspaceTab
           icon={<PlaceOutlinedIcon />}
           label="Markers"
           reason="Saved markers are not available yet"
           value="markers"
         />
-        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
+        <UnavailableWorkspaceTab
+          icon={<RouteOutlinedIcon />}
+          label="Tracks"
+          reason="Track tools are not available yet"
+          value="tracks"
+        />
       </Tabs>
 
       <Tooltip title="Share map view" placement="right">

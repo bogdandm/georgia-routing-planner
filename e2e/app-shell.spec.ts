@@ -27,7 +27,9 @@ test('loads the production map style and reloads under a repository subpath', as
 
   await page.goto('?developer=1');
 
-  await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+  ).toBeVisible();
   await expect(page.getByTestId('map-workspace')).toBeVisible();
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -39,7 +41,7 @@ test('loads the production map style and reloads under a repository subpath', as
   await attributionLink.focus();
   await expect(attributionLink).toBeFocused();
   await expect(attributionLink).toHaveAttribute('href', 'https://openfreemap.org');
-  await expect(page.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+  await expect(page.getByRole('tab', { name: 'Satellite' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -85,7 +87,9 @@ test('has no serious accessibility violations in the shell and settings', async 
   page,
 }) => {
   await page.goto('?developer=1');
-  await expect(page.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+  ).toBeVisible();
 
   const shellResults = await new AxeBuilder({ page }).analyze();
   expect(

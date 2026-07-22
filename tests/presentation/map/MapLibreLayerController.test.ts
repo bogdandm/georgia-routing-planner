@@ -398,13 +398,13 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(mapLayerIds.landcover)).toBe('none');
     expect(map.visibility.get(mapLayerIds.glacierAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.waterways)).toBe('none');
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
-    expect(map.visibility.get(mapLayerIds.waterways)).not.toBe('none');
-    expect(map.visibility.get(mapLayerIds.waterLabels)).not.toBe('none');
+    expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
   });
 
-  it('applies one opacity preference to OpenStreetMap overlays only over satellite imagery', async () => {
+  it('applies one opacity preference to every map reference layer over satellite imagery', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -420,13 +420,29 @@ describe('MapLibreLayerController', () => {
     expect(map.paintProperties.get(`${mapLayerIds.restrictedAreas}.line-opacity`)).toBe(
       0.4,
     );
+    expect(map.paintProperties.get(`${mapLayerIds.waterways}.line-opacity`)).toBe(0.5);
+    expect(map.paintProperties.get(`${mapLayerIds.boundaries}.line-opacity`)).toBe(
+      0.35,
+    );
     expect(map.paintProperties.get(`${mapLayerIds.roads}.line-opacity`)).toBe(0.48);
     expect(map.paintProperties.get(`${mapLayerIds.hikingPois}.circle-opacity`)).toBe(
+      0.38,
+    );
+    expect(map.paintProperties.get(`${mapLayerIds.waterLabels}.text-opacity`)).toBe(
       0.5,
     );
     expect(map.paintProperties.get(`${mapLayerIds.placeLabels}.text-opacity`)).toBe(
       0.5,
     );
+    expect(
+      map.paintProperties.get(`${terrainOverlayLayerIds.contourMinor}.line-opacity`),
+    ).toBe(0.36);
+    expect(
+      map.paintProperties.get(`${terrainOverlayLayerIds.contourIndex}.line-opacity`),
+    ).toBe(0.45);
+    expect(
+      map.paintProperties.get(`${terrainOverlayLayerIds.contourLabels}.text-opacity`),
+    ).toBe(0.5);
     expect(mapLayerStore.getState().openStreetMapOpacity).toBe(0.5);
     await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
       openStreetMapOpacity: 0.5,

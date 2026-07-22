@@ -325,6 +325,80 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    const previousMonth = screen.getByRole('button', {
+      name: 'Previous acquisition month',
+    });
+    const nextMonth = screen.getByRole('button', { name: 'Next acquisition month' });
+    const currentMonth = screen.getByRole('button', {
+      name: 'Return to current acquisition month',
+    });
+    expect(currentMonth).toBeDisabled();
+
+    await user.click(previousMonth);
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
+    expect(currentMonth).toBeEnabled();
+
+    for (const [control, tooltip] of [
+      [previousMonth, 'Previous month'],
+      [nextMonth, 'Next month'],
+      [currentMonth, 'Return to current month'],
+    ] as const) {
+      await user.hover(control);
+      expect(await screen.findByRole('tooltip', { name: tooltip })).toBeVisible();
+      await user.unhover(control);
+    }
+
+    await user.click(currentMonth);
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    const monthYearTrigger = screen.getByRole('button', {
+      name: 'Choose acquisition month and year, July 2026',
+    });
+    expect(within(monthYearTrigger).getByTestId('KeyboardArrowDownIcon')).toBeVisible();
+    await user.hover(monthYearTrigger);
+    expect(
+      await screen.findByRole('tooltip', { name: 'Choose month and year' }),
+    ).toBeVisible();
+    await user.unhover(monthYearTrigger);
+    await user.click(monthYearTrigger);
+
+    const acquisitionCalendar = screen.getByLabelText('Sentinel acquisition calendar');
+    expect(
+      within(acquisitionCalendar).queryByRole('group', {
+        name: 'Choose acquisition month and year',
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Choose acquisition month and year' }),
+    ).toBeVisible();
+    const yearSelect = screen.getByRole('combobox', { name: 'Acquisition year' });
+    await user.click(yearSelect);
+    await user.click(screen.getByRole('option', { name: '2025' }));
+    expect(
+      screen.getByRole('button', { name: 'Choose Jul 2025', pressed: true }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Choose Dec 2025' }));
+    expect(screen.getByRole('grid', { name: 'December 2025' })).toBeVisible();
+
+    await user.click(currentMonth);
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    await user.click(monthYearTrigger);
+    expect(
+      screen.getByRole('group', { name: 'Choose acquisition month and year' }),
+    ).toBeVisible();
+    await user.click(previousMonth);
+    expect(
+      screen.queryByRole('group', { name: 'Choose acquisition month and year' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
+  });
+
   it('keeps a context-menu search custom until the user selects Point', async () => {
     const user = userEvent.setup();
     setSatelliteSearchAnchor({ latitude: 42.1, longitude: 43.4 });
@@ -624,6 +698,58 @@ describe('WorkspaceShell', () => {
     );
     expect(screen.getByRole('grid', { name: 'May 2026' })).toBeVisible();
     expect(requests).toHaveLength(3);
+  });
+
+  it('keeps calendar navigation responsive and skips superseded month loads', async () => {
+    const requestedMonths: string[] = [];
+    let resolveJune!: (result: SatelliteCatalogResult) => void;
+    services.database.close();
+    await services.database.delete();
+    services = createTestServices({
+      satelliteCatalogGateway: {
+        search: ({ criteria }) => {
+          const month = criteria.startDate.slice(0, 7);
+          requestedMonths.push(month);
+          if (month === '2026-06') {
+            return new Promise<SatelliteCatalogResult>((resolve) => {
+              resolveJune = resolve;
+            });
+          }
+          return Promise.resolve({ totalMatched: 0, scenes: [] });
+        },
+      },
+    });
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05', '2026-06']);
+    });
+    expect(screen.getByLabelText('Loading June 2026 imagery')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Next acquisition month' }),
+    ).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+    resolveJune({ totalMatched: 0, scenes: [] });
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05', '2026-06', '2026-07']);
+    });
   });
 
   it('uses a calendar date as a best-coverage card shortcut without reopening the pane', async () => {

@@ -1699,7 +1699,7 @@ export class MapLibreLayerController
       this.#directFallbackSources.delete(sourceId);
       this.#pendingDirectFallbacks.delete(sourceId);
       this.#waitingForRasterData.delete(sourceId);
-      if (wasProgressive && map !== null) {
+      if (wasProgressive) {
         this.startProgressiveRasterRendering(map, sourceId);
       }
       this.cancelRasterRecovery(sourceId);

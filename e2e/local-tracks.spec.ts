@@ -143,7 +143,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 
   for (const fixture of realWorldTrackFixtures) {
     const chooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Import GPX' }).click();
+    await page.getByRole('button', { name: 'Browse GPX file' }).click();
     const chooser = await chooserPromise;
     await chooser.setFiles(fixture.path);
 
@@ -199,7 +199,7 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   );
 
   const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import GPX' }).click();
+  await page.getByRole('button', { name: 'Browse GPX file' }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles(trackFixturePath);
 

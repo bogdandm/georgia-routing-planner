@@ -9,7 +9,7 @@ import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrow
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
-import { TrackImportAction, TracksPanel } from '@/presentation/tracks/TracksWorkspace';
+import { TracksPanel } from '@/presentation/tracks/TracksWorkspace';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
@@ -63,17 +63,7 @@ function disabledAction(title: string, child: ReactNode) {
 const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   tracks: {
     title: 'Tracks',
-    actions: (
-      <Stack direction="row" spacing={0.75}>
-        <TrackImportAction />
-        {disabledAction(
-          'Manual planning starts here in a later phase',
-          <Button disabled size="small" variant="contained" startIcon={<AddIcon />}>
-            Create GPX
-          </Button>,
-        )}
-      </Stack>
-    ),
+    actions: null,
   },
   satellite: {
     title: 'Satellite imagery',
@@ -151,8 +141,20 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         </Box>
         {definition.actions}
       </Stack>
-      <Box sx={{ minHeight: 0, flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
-        <Box sx={{ display: activeTab === 'tracks' ? 'block' : 'none' }}>
+      <Box
+        sx={{
+          minHeight: 0,
+          flex: 1,
+          overflowX: 'hidden',
+          overflowY: activeTab === 'tracks' ? 'hidden' : 'auto',
+        }}
+      >
+        <Box
+          sx={{
+            display: activeTab === 'tracks' ? 'block' : 'none',
+            height: '100%',
+          }}
+        >
           <TracksPanel />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>

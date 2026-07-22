@@ -16,7 +16,6 @@ import {
   Paper,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -27,6 +26,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type PropsWithChildren,
 } from 'react';
 
@@ -568,31 +568,152 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   return <TracksWorkspaceContext value={value}>{children}</TracksWorkspaceContext>;
 }
 
-export function TrackImportAction() {
+function TrackImportZone() {
   const { importFiles } = useTracksWorkspace();
   const inputRef = useRef<HTMLInputElement>(null);
+  const zoneRef = useRef<HTMLElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  useEffect(() => {
+    const appRoot = document.querySelector('[data-testid="workspace-shell"]');
+    if (!(appRoot instanceof HTMLElement)) return undefined;
+
+    const containsTarget = (event: globalThis.DragEvent) =>
+      event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget);
+    const hasFiles = (event: globalThis.DragEvent) =>
+      event.dataTransfer?.types.includes('Files') ?? false;
+    const handleAppDragEnter = (event: globalThis.DragEvent) => {
+      if (hasFiles(event)) setDragActive(true);
+    };
+    const handleAppDragOver = (event: globalThis.DragEvent) => {
+      if (!hasFiles(event) || event.dataTransfer === null) return;
+      event.preventDefault();
+      const target = event.target;
+      const insideZone = target instanceof Node && zoneRef.current?.contains(target);
+      event.dataTransfer.dropEffect = insideZone === true ? 'copy' : 'none';
+    };
+    const handleAppDragLeave = (event: globalThis.DragEvent) => {
+      if (!hasFiles(event) || containsTarget(event)) return;
+      setDragActive(false);
+    };
+    const handleAppDrop = (event: globalThis.DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      setDragActive(false);
+    };
+    const handleAppDragEnd = () => {
+      setDragActive(false);
+    };
+
+    appRoot.addEventListener('dragenter', handleAppDragEnter);
+    appRoot.addEventListener('dragover', handleAppDragOver);
+    appRoot.addEventListener('dragleave', handleAppDragLeave);
+    appRoot.addEventListener('drop', handleAppDrop);
+    appRoot.addEventListener('dragend', handleAppDragEnd);
+    return () => {
+      appRoot.removeEventListener('dragenter', handleAppDragEnter);
+      appRoot.removeEventListener('dragover', handleAppDragOver);
+      appRoot.removeEventListener('dragleave', handleAppDragLeave);
+      appRoot.removeEventListener('drop', handleAppDrop);
+      appRoot.removeEventListener('dragend', handleAppDragEnd);
+    };
+  }, []);
+
+  const handleDragEnter = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    void importFiles(event.dataTransfer.files);
+  };
+
   return (
-    <>
-      <Tooltip title="Import one GPX file">
-        <IconButton
-          aria-label="Import GPX"
-          size="small"
-          onClick={() => inputRef.current?.click()}
-        >
-          <UploadFileOutlinedIcon />
-        </IconButton>
-      </Tooltip>
-      <input
-        ref={inputRef}
-        hidden
-        type="file"
-        accept=".gpx,application/gpx+xml"
-        onChange={(event) => {
-          if (event.target.files !== null) void importFiles(event.target.files);
-          event.target.value = '';
+    <Box sx={{ position: 'relative', zIndex: dragActive ? 2 : 1, height: 52 }}>
+      <Paper
+        ref={zoneRef}
+        component="section"
+        aria-label="Import GPX file"
+        variant="outlined"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        sx={{
+          position: 'absolute',
+          inset: '0 0 auto',
+          height: dragActive ? 132 : 52,
+          display: 'grid',
+          placeItems: 'center',
+          borderStyle: 'dashed',
+          borderWidth: 2,
+          borderColor: dragActive ? 'primary.main' : 'divider',
+          bgcolor: dragActive ? appColors.surface.selected : appColors.surface.subtle,
+          boxShadow: dragActive ? '0 12px 28px rgba(2, 48, 71, 0.28)' : 0,
+          borderRadius: 1.5,
+          transition: (theme) =>
+            theme.transitions.create([
+              'height',
+              'background-color',
+              'border-color',
+              'box-shadow',
+            ]),
         }}
-      />
-    </>
+      >
+        <Stack
+          direction={dragActive ? 'column' : 'row'}
+          spacing={dragActive ? 0.75 : 1}
+          sx={{
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            px: 1.25,
+            py: dragActive ? 2 : 0.5,
+            textAlign: 'center',
+          }}
+        >
+          <UploadFileOutlinedIcon
+            color="primary"
+            sx={{ fontSize: dragActive ? 36 : 24 }}
+          />
+          <Typography variant="subtitle2" sx={{ flex: dragActive ? 0 : 1 }}>
+            {dragActive ? 'Drop one GPX file to import' : 'Drop GPX here'}
+          </Typography>
+          {dragActive ? (
+            <Typography variant="caption" color="text.secondary">
+              Release the file inside this zone
+            </Typography>
+          ) : (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => inputRef.current?.click()}
+            >
+              Browse GPX file
+            </Button>
+          )}
+        </Stack>
+        <input
+          ref={inputRef}
+          hidden
+          type="file"
+          accept=".gpx,application/gpx+xml"
+          onChange={(event) => {
+            if (event.target.files !== null) void importFiles(event.target.files);
+            event.target.value = '';
+          }}
+        />
+      </Paper>
+    </Box>
   );
 }
 
@@ -611,66 +732,87 @@ export function TracksPanel() {
   const { active, error, filteredSummaries, query, setQuery, selectSaved, summaries } =
     useTracksWorkspace();
   return (
-    <Stack spacing={1.5} sx={{ p: 2 }}>
-      <TextField
-        fullWidth
-        size="small"
-        aria-label="Search saved tracks"
-        placeholder={`Search ${String(summaries.length)} saved tracks`}
-        value={query}
-        onChange={(event) => {
-          setQuery(event.target.value);
-        }}
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          },
-        }}
-      />
-      {error === null ? null : <Alert severity="warning">{error}</Alert>}
-      <Typography component="h2" variant="subtitle2">
-        {filteredSummaries.length} saved{' '}
-        {filteredSummaries.length === 1 ? 'track' : 'tracks'}
-      </Typography>
-      {filteredSummaries.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
-          <Typography variant="body2" color="text.secondary">
-            {summaries.length === 0
-              ? 'Import a GPX file to preview it, then save it in this browser.'
-              : 'No saved track matches this name.'}
-          </Typography>
-        </Paper>
-      ) : (
-        <List disablePadding aria-label="Saved tracks">
-          {filteredSummaries.map((summary) => (
-            <Paper
-              key={summary.id}
-              variant="outlined"
-              sx={{ mb: 1, overflow: 'hidden' }}
-            >
-              <ListItemButton
-                selected={active?.kind === 'saved' && active.summary.id === summary.id}
-                onClick={() => void selectSaved(summary)}
-                sx={{ display: 'block', px: 1.5, py: 1.25 }}
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Stack spacing={1.5} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
+        <TrackImportZone />
+        <TextField
+          fullWidth
+          size="small"
+          aria-label="Search saved tracks"
+          placeholder={`Search ${String(summaries.length)} saved tracks`}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        {error === null ? null : <Alert severity="warning">{error}</Alert>}
+        <Typography component="h2" variant="subtitle2">
+          {filteredSummaries.length} saved{' '}
+          {filteredSummaries.length === 1 ? 'track' : 'tracks'}
+        </Typography>
+        {filteredSummaries.length === 0 ? (
+          <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
+            <Typography variant="body2" color="text.secondary">
+              {summaries.length === 0
+                ? 'Import a GPX file to preview it, then save it in this browser.'
+                : 'No saved track matches this name.'}
+            </Typography>
+          </Paper>
+        ) : (
+          <List disablePadding aria-label="Saved tracks">
+            {filteredSummaries.map((summary) => (
+              <Paper
+                key={summary.id}
+                variant="outlined"
+                sx={{ mb: 1, overflow: 'hidden' }}
               >
-                <Typography variant="subtitle2">{summary.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {formatDistance(summary.metrics.distanceMeters)} ·{' '}
-                  {formatDuration(summary.metrics.elapsedSeconds)}
-                </Typography>
-              </ListItemButton>
-            </Paper>
-          ))}
-        </List>
-      )}
-      <Alert severity="info" icon={<SaveOutlinedIcon />}>
-        Saved local tracks stay in this browser.
+                <ListItemButton
+                  selected={
+                    active?.kind === 'saved' && active.summary.id === summary.id
+                  }
+                  onClick={() => void selectSaved(summary)}
+                  sx={{ display: 'block', px: 1.5, py: 1.25 }}
+                >
+                  <Typography variant="subtitle2">{summary.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDistance(summary.metrics.distanceMeters)} ·{' '}
+                    {formatDuration(summary.metrics.elapsedSeconds)}
+                  </Typography>
+                </ListItemButton>
+              </Paper>
+            ))}
+          </List>
+        )}
+      </Stack>
+      <Alert
+        severity="info"
+        icon={<SaveOutlinedIcon fontSize="small" />}
+        sx={{
+          flexShrink: 0,
+          m: 0,
+          px: 1,
+          py: 0,
+          minHeight: 32,
+          alignItems: 'center',
+          borderRadius: 0,
+          borderTop: 1,
+          borderColor: 'divider',
+          '& .MuiAlert-icon': { mr: 0.75, py: 0.25 },
+          '& .MuiAlert-message': { py: 0.25 },
+        }}
+      >
+        <Typography variant="caption">Saved tracks stay in this browser.</Typography>
       </Alert>
-    </Stack>
+    </Box>
   );
 }
 
@@ -679,10 +821,18 @@ interface DetailsGridProps {
   readonly pointCount: number;
   readonly savedAt: string | undefined;
   readonly segmentCount: number;
+  readonly sourceFilename: string;
 }
 
-function DetailsGrid({ metrics, pointCount, savedAt, segmentCount }: DetailsGridProps) {
+function DetailsGrid({
+  metrics,
+  pointCount,
+  savedAt,
+  segmentCount,
+  sourceFilename,
+}: DetailsGridProps) {
   const rows: [string, string][] = [
+    ['Source file', sourceFilename],
     ['Distance', formatDistance(metrics.distanceMeters)],
     ['Recorded time', formatDuration(metrics.elapsedSeconds)],
     ['Points', pointCount.toLocaleString('en')],
@@ -742,10 +892,10 @@ export function TrackDetailsPane() {
     active.kind === 'saved'
       ? active.summary.segmentCount
       : active.parsed.segments.length;
-  const warningCount =
-    active.kind === 'saved'
-      ? active.summary.warnings.length
-      : active.parsed.warnings.length;
+  const sourceFilename =
+    active.kind === 'saved' ? active.summary.sourceFilename : active.file.name;
+  const warnings =
+    active.kind === 'saved' ? active.summary.warnings : active.parsed.warnings;
   return (
     <Box
       component="aside"
@@ -787,12 +937,12 @@ export function TrackDetailsPane() {
         />
         {active.kind === 'preview' ? (
           <>
-            <Stack direction="row" spacing={1}>
-              <Button variant="contained" onClick={() => void savePreview()}>
-                Save
-              </Button>
+            <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
               <Button color="inherit" onClick={discardPreview}>
                 Discard
+              </Button>
+              <Button variant="contained" onClick={() => void savePreview()}>
+                Save
               </Button>
             </Stack>
             <Divider />
@@ -846,44 +996,48 @@ export function TrackDetailsPane() {
           pointCount={pointCount}
           savedAt={savedAt}
           segmentCount={segmentCount}
+          sourceFilename={sourceFilename}
         />
         {segmentCount > 1 ? (
           <Alert severity="info">
             Independent segments are not joined; totals exclude gaps.
           </Alert>
         ) : null}
-        {warningCount > 0 ? (
+        {warnings.length > 0 ? (
           <Alert severity="warning">
-            Imported with {warningCount} validation{' '}
-            {warningCount === 1 ? 'warning' : 'warnings'}.
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Imported with {warnings.length} validation{' '}
+              {warnings.length === 1 ? 'warning' : 'warnings'}
+            </Typography>
+            <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.25 }}>
+              {warnings.map((warning, index) => {
+                const context: string[] = [];
+                if (warning.segmentIndex !== undefined) {
+                  context.push(`segment ${String(warning.segmentIndex + 1)}`);
+                }
+                if (warning.pointIndex !== undefined) {
+                  context.push(`point ${String(warning.pointIndex + 1)}`);
+                }
+                const contextLabel =
+                  context.length === 0 ? '' : ` (${context.join(', ')})`;
+                return (
+                  <Typography
+                    component="li"
+                    key={`${warning.code}-${String(index)}`}
+                    variant="caption"
+                    sx={{ mb: 0.25 }}
+                  >
+                    <Box component="code" sx={{ fontSize: 'inherit' }}>
+                      {warning.code}
+                    </Box>{' '}
+                    — {warning.message}
+                    {contextLabel}
+                  </Typography>
+                );
+              })}
+            </Box>
           </Alert>
         ) : null}
-      </Stack>
-    </Box>
-  );
-}
-
-export function TrackDropOverlay() {
-  return (
-    <Box
-      role="status"
-      aria-live="polite"
-      sx={{
-        position: 'absolute',
-        inset: 12,
-        zIndex: 20,
-        display: 'grid',
-        placeItems: 'center',
-        bgcolor: 'rgba(2, 48, 71, 0.82)',
-        border: `3px dashed ${appColors.brand.sky}`,
-        borderRadius: 2,
-        color: 'white',
-        pointerEvents: 'none',
-      }}
-    >
-      <Stack spacing={1} sx={{ alignItems: 'center' }}>
-        <UploadFileOutlinedIcon sx={{ fontSize: 56 }} />
-        <Typography variant="h5">Drop one GPX file to import</Typography>
       </Stack>
     </Box>
   );

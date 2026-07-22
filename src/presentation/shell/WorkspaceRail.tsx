@@ -183,7 +183,6 @@ export function WorkspaceRail({
           },
         }}
       >
-        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
         <UnavailableWorkspaceTab
@@ -192,6 +191,7 @@ export function WorkspaceRail({
           reason="Saved markers are not available yet"
           value="markers"
         />
+        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
       </Tabs>
 
       <Tooltip title="Share map view" placement="right">

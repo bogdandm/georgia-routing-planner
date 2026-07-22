@@ -123,6 +123,15 @@ function gpxFile(name = 'Fixture track.gpx'): File {
   return file;
 }
 
+function gpxFileWithCompanionRoute(): File {
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"/><trkpt lat="42.01" lon="44.01"/></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
+  const file = new File([xml], 'Track and route.gpx', {
+    type: 'application/gpx+xml',
+  });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
+}
+
 describe('WorkspaceShell', () => {
   it('creates a share link only after the explicit rail action', async () => {
     const user = userEvent.setup();
@@ -255,7 +264,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Tracks', 'Satellite', 'Layers', 'Markers']);
+    ).toEqual(['Satellite', 'Layers', 'Markers', 'Tracks']);
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );
@@ -269,7 +278,11 @@ describe('WorkspaceShell', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Import GPX' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Browse GPX file' })).toBeEnabled();
+    expect(screen.getByText('Drop GPX here')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Create GPX' }),
+    ).not.toBeInTheDocument();
     await user.hover(screen.getByRole('tab', { name: 'Markers' }));
     expect(
       await screen.findByRole('tooltip', {
@@ -366,6 +379,12 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('textbox', { name: 'Track name' })).toHaveValue(
       'Fixture trail',
     );
+    expect(screen.getByText('Fixture track.gpx')).toBeVisible();
+    const discard = screen.getByRole('button', { name: 'Discard' });
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(
+      discard.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
       bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
       padding: { top: 56, right: 56, bottom: 56, left: 840 },
@@ -400,7 +419,26 @@ describe('WorkspaceShell', () => {
     });
   }, 10_000);
 
-  it('accepts a GPX drop over the full workspace and exposes discard confirmation', async () => {
+  it('explains GPX validation warnings with their parser code and message', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFileWithCompanionRoute());
+
+    expect(await screen.findByText('track-preferred-over-route')).toBeVisible();
+    expect(
+      screen.getByText(
+        /Detailed track geometry was used instead of companion route geometry\./u,
+      ),
+    ).toBeVisible();
+    expect(screen.getByText('Track and route.gpx')).toBeVisible();
+  }, 10_000);
+
+  it('accepts a GPX drop only inside the import zone and exposes discard confirmation', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { container } = renderWorkspaceShell();
     const workspace = container.firstElementChild;
@@ -408,11 +446,35 @@ describe('WorkspaceShell', () => {
     if (workspace === null) return;
     const file = gpxFile('Dropped.gpx');
 
+    fireEvent.drop(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const importZone = screen.getByRole('region', { name: 'Import GPX file' });
     fireEvent.dragEnter(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
     expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
     fireEvent.drop(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Drop GPX here')).toBeVisible();
+
+    fireEvent.dragEnter(importZone, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    fireEvent.drop(importZone, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();

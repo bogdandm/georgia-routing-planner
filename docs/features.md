@@ -66,17 +66,23 @@ elevation profile. The full original GPX is loaded only when requested. Import r
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
-The implemented local workflow imports one `.gpx` file from the picker or a
-workspace-wide drop target, validates and previews its metadata, and opens a fixed
-adjacent detail pane. The editable embedded or filename-derived name is never replaced
-automatically. An optional English place candidate appears separately and requires an
-explicit apply action. Save retains the original file, independent line segments, and
-versioned metrics in this browser; unsaved previews activate the native leave-site
-guard. Saved tracks are searchable by name and support reopen, close, rename, and
-confirmed deletion. Catalog, folders, tags, filters, and batch import remain
-unavailable. A newly imported or reopened track renders as bright-blue independent lines
-and fits its complete bounds with padding for the master/detail surfaces. Closing it
-removes the active geometry without deleting a saved record or moving the camera.
+The implemented local workflow imports one `.gpx` file from a contained drag-and-drop
+row or that row's browse button. A file drag anywhere inside the application expands the
+row as an opaque elevated overlay without moving the search and library below; only a
+drop inside that target imports the file. Import validates and previews the file's
+metadata and opens a fixed adjacent detail pane. The editable embedded or
+filename-derived name is never replaced automatically. The stored source filename
+remains visible after rename, and structured validation warnings show their parser code,
+explanation, and available point/segment context. An optional English place candidate
+appears separately and requires an explicit apply action. Save retains the original
+file, independent line segments, and versioned metrics in this browser; unsaved previews
+activate the native leave-site guard. Saved tracks are searchable by name and support
+reopen, close, rename, and confirmed deletion. A compact local-retention notice stays
+pinned to the Tracks panel bottom. Catalog, folders, tags, filters, batch import,
+whole-workspace dropping, and GPX creation remain unavailable. A newly imported or
+reopened track renders as bright-blue independent lines and fits its complete bounds
+with padding for the master/detail surfaces. Closing it removes the active geometry
+without deleting a saved record or moving the camera.
 
 ### Create GPX
 
@@ -86,7 +92,7 @@ waypoint names, notes, appearance, distance/elevation metrics, local draft savin
 GPX export. Its elevation chart uses the same calculation and provenance vocabulary as
 selected-track details.
 
-The current implementation exposes a disabled `Create GPX` action; waypoint editing,
+The current implementation does not expose a `Create GPX` action; waypoint editing,
 calculation, persistence, and export are unavailable.
 
 ### Satellite

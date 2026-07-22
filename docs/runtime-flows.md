@@ -502,20 +502,23 @@ clicked coordinate or arbitrary POI metadata.
 
 ## Local track retention
 
-A picker selection or full-workspace drop switches to Tracks and parses one `.gpx` file
-in memory. Another import, selecting a saved track, or closing the preview first
-requires an explicit discard decision. A valid preview starts a cancellable optional
-English-name lookup without blocking editing or save. Switching rail sections retains
-the preview. `beforeunload` is registered only while that preview remains unsaved and is
-removed after save or confirmed discard.
+A picker selection or drop inside the contained Tracks import zone parses one `.gpx`
+file in memory. A file drag anywhere inside the application expands that target; a drop
+outside it is prevented from navigating the browser but does not import. Another import,
+selecting a saved track, or closing the preview first requires an explicit discard
+decision. A valid preview starts a cancellable optional English-name lookup without
+blocking editing or save. Switching rail sections retains the preview. `beforeunload` is
+registered only while that preview remains unsaved and is removed after save or
+confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
-Dexie read-write transaction. The summary contains the stable display and derived
-metrics used by list views; the content row contains normalized independent segments and
-the retained original GPX blob. A transaction failure leaves neither row listable.
-Rename validates and changes only the summary. Delete removes both rows in one
-transaction. Opening a saved track validates its content independently and reports a
-bounded integrity error when the row is missing or corrupt.
+Dexie read-write transaction. The summary contains the stable display name, original
+source filename, and derived metrics used by list and detail views; the content row
+contains normalized independent segments and the retained original GPX blob. A
+transaction failure leaves neither row listable. Rename validates and changes only the
+summary. Delete removes both rows in one transaction. Opening a saved track validates
+its content independently and reports a bounded integrity error when the row is missing
+or corrupt.
 
 The Tracks provider sends only validated independent segments to the existing map layer
 controller. That controller retains one GeoJSON `MultiLineString`, reconciles its casing

@@ -1,6 +1,6 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import { Box, IconButton, Tooltip } from '@mui/material';
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -26,9 +26,7 @@ import {
 import { appColors } from '@/presentation/theme/appColors';
 import {
   TrackDetailsPane,
-  TrackDropOverlay,
   TracksWorkspaceProvider,
-  useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
 
 interface WorkspaceShellProps {
@@ -75,9 +73,6 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     (state) => state.terrainComputeStatus,
   );
   const renderingTuningAbort = useRef<AbortController | null>(null);
-  const dragDepth = useRef(0);
-  const [trackDragActive, setTrackDragActive] = useState(false);
-  const { importFiles } = useTracksWorkspace();
   useEffect(() => {
     let cancelled = false;
     const restoreMapPreferences = async () => {
@@ -149,34 +144,6 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
-  const handleTrackDragEnter = (event: DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes('Files')) return;
-    event.preventDefault();
-    dragDepth.current += 1;
-    setTrackDragActive(true);
-  };
-
-  const handleTrackDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!event.dataTransfer.types.includes('Files')) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-  };
-
-  const handleTrackDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    dragDepth.current = Math.max(0, dragDepth.current - 1);
-    if (dragDepth.current === 0) setTrackDragActive(false);
-  };
-
-  const handleTrackDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    dragDepth.current = 0;
-    setTrackDragActive(false);
-    handleSectionChange('tracks');
-    if (navigationCollapsed) handleNavigationCollapsedChange(false);
-    void importFiles(event.dataTransfer.files);
-  };
-
   const handleRenderingTuningChange = async (value: SatelliteRenderingTuning) => {
     setRenderingTuning(value);
     if (mapLayers === null) return;
@@ -229,10 +196,7 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
 
   return (
     <Box
-      onDragEnter={handleTrackDragEnter}
-      onDragOver={handleTrackDragOver}
-      onDragLeave={handleTrackDragLeave}
-      onDrop={handleTrackDrop}
+      data-testid="workspace-shell"
       sx={{
         height: '100dvh',
         position: 'relative',
@@ -498,7 +462,6 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           }}
         />
       ) : null}
-      {trackDragActive ? <TrackDropOverlay /> : null}
     </Box>
   );
 }

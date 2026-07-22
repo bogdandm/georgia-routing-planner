@@ -867,7 +867,11 @@ function SceneCard({
             color="inherit"
             startIcon={<CenterFocusStrongIcon />}
             onClick={onFitFootprint}
-            sx={{ minHeight: 40, px: 1.5, '&:hover': { bgcolor: 'action.selected' } }}
+            sx={{
+              minHeight: 40,
+              px: 1.5,
+              '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
+            }}
           >
             Fit footprint
           </Button>
@@ -875,7 +879,11 @@ function SceneCard({
             color="inherit"
             startIcon={<ShareOutlinedIcon />}
             onClick={onCopyLink}
-            sx={{ minHeight: 40, px: 1.5, '&:hover': { bgcolor: 'action.selected' } }}
+            sx={{
+              minHeight: 40,
+              px: 1.5,
+              '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
+            }}
           >
             Share link
           </Button>

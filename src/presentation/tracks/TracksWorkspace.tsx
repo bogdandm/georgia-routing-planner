@@ -808,7 +808,7 @@ export function TracksPanel() {
     useTracksWorkspace();
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Stack spacing={1.5} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
+      <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
         <TrackImportZone />
         <TextField
           fullWidth
@@ -843,15 +843,15 @@ export function TracksPanel() {
             </Typography>
           </Paper>
         ) : (
-          <List disablePadding aria-label="Saved tracks">
+          <List
+            disablePadding
+            aria-label="Saved tracks"
+            sx={{ display: 'grid', gap: 1.5 }}
+          >
             {filteredSummaries.map((summary) => {
               const elapsedSeconds = summary.metrics.elapsedSeconds;
               return (
-                <Paper
-                  key={summary.id}
-                  variant="outlined"
-                  sx={{ mb: 1, overflow: 'hidden' }}
-                >
+                <Paper key={summary.id} variant="outlined" sx={{ overflow: 'hidden' }}>
                   <ListItemButton
                     selected={
                       active?.kind === 'saved' && active.summary.id === summary.id
@@ -941,7 +941,13 @@ function DetailsGrid({
   return (
     <Box
       component="dl"
-      sx={{ m: 0, display: 'grid', gridTemplateColumns: '120px 1fr', gap: 1 }}
+      sx={{
+        m: 0,
+        px: 1,
+        display: 'grid',
+        gridTemplateColumns: '120px 1fr',
+        gap: 1,
+      }}
     >
       {rows.map(([label, value]) => (
         <Box key={label} sx={{ display: 'contents' }}>
@@ -986,12 +992,15 @@ export function TrackDetailsPane() {
       component="aside"
       aria-label="Track details"
       sx={{
-        width: { xs: 360, xl: 408 },
+        width: { xs: 404, xl: 440 },
+        height: '100%',
+        minHeight: 0,
         flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
         bgcolor: 'background.paper',
         borderRight: 1,
         borderColor: 'divider',
-        overflowY: 'auto',
       }}
     >
       <Stack
@@ -1004,126 +1013,146 @@ export function TrackDetailsPane() {
           borderColor: 'divider',
         }}
       >
-        <Typography component="h2" variant="h6" sx={{ flex: 1 }}>
-          {active.kind === 'preview' ? 'New track' : 'Selected track'}
-        </Typography>
-        <IconButton aria-label="Close track" onClick={closeActive}>
-          <CloseIcon />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            component="h2"
+            variant="subtitle1"
+            noWrap
+            sx={{ fontWeight: 700 }}
+          >
+            {active.kind === 'preview' ? 'New track' : 'Selected track'}
+          </Typography>
+        </Box>
+        <IconButton size="small" aria-label="Close track" onClick={closeActive}>
+          <CloseIcon fontSize="small" />
         </IconButton>
       </Stack>
-      <Stack spacing={2} sx={{ p: 2 }}>
-        <TextField
-          label="Track name"
-          value={active.kind === 'preview' ? active.name : active.draftName}
-          onChange={(event) => {
-            setActiveName(event.target.value);
-          }}
-          slotProps={{ htmlInput: { maxLength: 200 } }}
-        />
-        {active.kind === 'preview' ? (
-          <>
-            <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-              <Button color="inherit" onClick={discardPreview}>
-                Discard
-              </Button>
-              <Button variant="contained" onClick={() => void savePreview()}>
-                Save
-              </Button>
-            </Stack>
-            <Divider />
-            <Typography component="h3" variant="subtitle2">
-              English place name
-            </Typography>
-            {active.namingStatus === 'loading' ? (
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <CircularProgress size={18} />
-                <Typography variant="body2">
-                  Looking up representative places…
-                </Typography>
-              </Stack>
-            ) : active.generatedName === undefined ? (
-              <Typography variant="body2" color="text.secondary">
-                No generated name is available. Saving is unaffected.
-              </Typography>
-            ) : (
-              <Stack spacing={1}>
-                <TextField
-                  label="Generated name"
-                  value={active.generatedName}
-                  slotProps={{ input: { readOnly: true } }}
-                />
-                <Button variant="outlined" onClick={applyGeneratedName}>
-                  Apply generated name
+      <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
+        <Stack spacing={2}>
+          <TextField
+            size="small"
+            label="Track name"
+            value={active.kind === 'preview' ? active.name : active.draftName}
+            onChange={(event) => {
+              setActiveName(event.target.value);
+            }}
+            slotProps={{ htmlInput: { maxLength: 200 } }}
+          />
+          {active.kind === 'preview' ? (
+            <>
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                <Button size="small" color="inherit" onClick={discardPreview}>
+                  Discard
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => void savePreview()}
+                >
+                  Save
                 </Button>
               </Stack>
-            )}
-          </>
-        ) : (
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={() => void renameActive()}>
-              Rename
-            </Button>
-            <Button
-              color="error"
-              startIcon={<DeleteOutlineOutlinedIcon />}
-              onClick={() => void deleteActive()}
-            >
-              Delete
-            </Button>
-          </Stack>
-        )}
-        <Divider />
-        <Typography component="h3" variant="subtitle2">
-          Track details
-        </Typography>
-        <DetailsGrid
-          metrics={metrics}
-          pointCount={pointCount}
-          savedAt={savedAt}
-          segmentCount={segmentCount}
-          sourceFilename={sourceFilename}
-        />
-        {segmentCount > 1 ? (
-          <Alert severity="info">
-            Independent segments are not joined; totals exclude gaps.
-          </Alert>
-        ) : null}
-        {warnings.length > 0 ? (
-          <Alert severity="warning">
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              Imported with {warnings.length} validation{' '}
-              {warnings.length === 1 ? 'warning' : 'warnings'}
-            </Typography>
-            <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.25 }}>
-              {warnings.map((warning, index) => {
-                const context: string[] = [];
-                if (warning.segmentIndex !== undefined) {
-                  context.push(`segment ${String(warning.segmentIndex + 1)}`);
-                }
-                if (warning.pointIndex !== undefined) {
-                  context.push(`point ${String(warning.pointIndex + 1)}`);
-                }
-                const contextLabel =
-                  context.length === 0 ? '' : ` (${context.join(', ')})`;
-                return (
-                  <Typography
-                    component="li"
-                    key={`${warning.code}-${String(index)}`}
-                    variant="caption"
-                    sx={{ mb: 0.25 }}
-                  >
-                    <Box component="code" sx={{ fontSize: 'inherit' }}>
-                      {warning.code}
-                    </Box>{' '}
-                    — {warning.message}
-                    {contextLabel}
+              <Divider />
+              <Typography component="h3" variant="subtitle2">
+                English place name
+              </Typography>
+              {active.namingStatus === 'loading' ? (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">
+                    Looking up representative places…
                   </Typography>
-                );
-              })}
-            </Box>
-          </Alert>
-        ) : null}
-      </Stack>
+                </Stack>
+              ) : active.generatedName === undefined ? (
+                <Typography variant="body2" color="text.secondary">
+                  No generated name is available. Saving is unaffected.
+                </Typography>
+              ) : (
+                <Stack spacing={1}>
+                  <TextField
+                    size="small"
+                    label="Generated name"
+                    value={active.generatedName}
+                    slotProps={{ input: { readOnly: true } }}
+                  />
+                  <Button size="small" variant="outlined" onClick={applyGeneratedName}>
+                    Apply generated name
+                  </Button>
+                </Stack>
+              )}
+            </>
+          ) : (
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => void renameActive()}
+              >
+                Rename
+              </Button>
+              <Button
+                size="small"
+                color="error"
+                startIcon={<DeleteOutlineOutlinedIcon />}
+                onClick={() => void deleteActive()}
+              >
+                Delete
+              </Button>
+            </Stack>
+          )}
+          <Divider />
+          <Typography component="h3" variant="subtitle2">
+            Track details
+          </Typography>
+          <DetailsGrid
+            metrics={metrics}
+            pointCount={pointCount}
+            savedAt={savedAt}
+            segmentCount={segmentCount}
+            sourceFilename={sourceFilename}
+          />
+          {segmentCount > 1 ? (
+            <Alert severity="info">
+              Independent segments are not joined; totals exclude gaps.
+            </Alert>
+          ) : null}
+          {warnings.length > 0 ? (
+            <Alert severity="warning">
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Imported with {warnings.length} validation{' '}
+                {warnings.length === 1 ? 'warning' : 'warnings'}
+              </Typography>
+              <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.25 }}>
+                {warnings.map((warning, index) => {
+                  const context: string[] = [];
+                  if (warning.segmentIndex !== undefined) {
+                    context.push(`segment ${String(warning.segmentIndex + 1)}`);
+                  }
+                  if (warning.pointIndex !== undefined) {
+                    context.push(`point ${String(warning.pointIndex + 1)}`);
+                  }
+                  const contextLabel =
+                    context.length === 0 ? '' : ` (${context.join(', ')})`;
+                  return (
+                    <Typography
+                      component="li"
+                      key={`${warning.code}-${String(index)}`}
+                      variant="caption"
+                      sx={{ mb: 0.25 }}
+                    >
+                      <Box component="code" sx={{ fontSize: 'inherit' }}>
+                        {warning.code}
+                      </Box>{' '}
+                      — {warning.message}
+                      {contextLabel}
+                    </Typography>
+                  );
+                })}
+              </Box>
+            </Alert>
+          ) : null}
+        </Stack>
+      </Box>
     </Box>
   );
 }

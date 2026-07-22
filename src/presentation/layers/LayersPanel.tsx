@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Checkbox,
+  Divider,
   FormControlLabel,
   FormGroup,
   Slider,
@@ -140,99 +141,90 @@ export function LayersPanel() {
 
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
-      <Box>
-        <Typography component="h2" variant="subtitle2">
-          Map visibility
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Changes apply immediately and are saved locally.
-        </Typography>
-      </Box>
       {mapLayers === null ? (
         <Alert severity="error">Map layer controls are unavailable.</Alert>
       ) : null}
-      {groups.map((group) => (
-        <Box
-          component="section"
-          key={group.id}
-          aria-labelledby={`${group.id}-layer-source`}
-        >
-          <Typography
-            id={`${group.id}-layer-source`}
-            component="h3"
-            variant="subtitle2"
+      <Stack spacing={1.5} divider={<Divider flexItem />}>
+        {groups.map((group) => (
+          <Box
+            component="section"
+            key={group.id}
+            aria-labelledby={`${group.id}-layer-source`}
           >
-            {group.title}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {group.description}
-          </Typography>
-          {group.id === 'openstreetmap' ? (
-            <Stack
-              direction="row"
-              spacing={1.25}
-              sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
+            <Typography
+              id={`${group.id}-layer-source`}
+              component="h3"
+              variant="subtitle2"
             >
-              <Typography id="openstreetmap-opacity-label" variant="body2">
-                Opacity
-              </Typography>
-              <Slider
-                aria-labelledby="openstreetmap-opacity-label"
-                disabled={mapLayers === null || !satelliteImageryVisible}
-                min={0}
-                max={100}
-                step={5}
-                value={Math.round(state.openStreetMapOpacity * 100)}
-                valueLabelDisplay="auto"
-                valueLabelFormat={(value) => `${String(value)}%`}
-                onChange={changeOpenStreetMapOpacity}
-                sx={{ flex: 1, mx: 0.5 }}
-              />
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+              {group.title}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {group.description}
+            </Typography>
+            {group.id === 'openstreetmap' ? (
+              <Stack
+                direction="row"
+                spacing={1.25}
+                sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
               >
-                {Math.round(state.openStreetMapOpacity * 100)}%
-              </Typography>
-            </Stack>
-          ) : null}
-          <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
-            {group.controls.map((control) => {
-              const disabled =
-                mapLayers === null || (control.requiresScene && !sceneAvailable);
-              return (
-                <Box
-                  key={control.id}
-                  sx={{ py: 0.75, borderBottom: 1, borderColor: 'divider' }}
+                <Typography id="openstreetmap-opacity-label" variant="body2">
+                  Opacity
+                </Typography>
+                <Slider
+                  aria-labelledby="openstreetmap-opacity-label"
+                  disabled={mapLayers === null || !satelliteImageryVisible}
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round(state.openStreetMapOpacity * 100)}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(value) => `${String(value)}%`}
+                  onChange={changeOpenStreetMapOpacity}
+                  sx={{ flex: 1, mx: 0.5 }}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
                 >
-                  <FormControlLabel
-                    disabled={disabled}
-                    control={
-                      <Checkbox
-                        checked={state.visibility[control.id]}
-                        onChange={(event) => {
-                          changeVisibility(control.id, event.target.checked);
-                        }}
-                      />
-                    }
-                    label={control.label}
-                  />
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', pl: 4.75, mt: -0.75 }}
-                  >
-                    {control.requiresScene && !sceneAvailable
-                      ? 'Apply a Sentinel scene to enable this layer.'
-                      : control.description}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </FormGroup>
-        </Box>
-      ))}
+                  {Math.round(state.openStreetMapOpacity * 100)}%
+                </Typography>
+              </Stack>
+            ) : null}
+            <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
+              {group.controls.map((control) => {
+                const disabled =
+                  mapLayers === null || (control.requiresScene && !sceneAvailable);
+                return (
+                  <Box key={control.id} sx={{ py: 0.75 }}>
+                    <FormControlLabel
+                      disabled={disabled}
+                      control={
+                        <Checkbox
+                          checked={state.visibility[control.id]}
+                          onChange={(event) => {
+                            changeVisibility(control.id, event.target.checked);
+                          }}
+                        />
+                      }
+                      label={control.label}
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', pl: 4.75, mt: -0.75 }}
+                    >
+                      {control.requiresScene && !sceneAvailable
+                        ? 'Apply a Sentinel scene to enable this layer.'
+                        : control.description}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </FormGroup>
+          </Box>
+        ))}
+      </Stack>
       <Box aria-live="polite">
         {state.errorMessage === null ? null : (
           <Alert severity="warning">{state.errorMessage}</Alert>

@@ -27,6 +27,7 @@ import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/sa
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import { appColors } from '@/presentation/theme/appColors';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -235,6 +236,9 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
     ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'More satellite actions' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
@@ -274,7 +278,14 @@ describe('WorkspaceShell', () => {
       }),
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
-    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Map visibility' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Layers tools' })).getAllByRole(
+        'separator',
+      ),
+    ).toHaveLength(2);
     expect(
       screen.getByRole('heading', {
         name: 'Copernicus Sentinel-2 via Earth Search',
@@ -312,6 +323,13 @@ describe('WorkspaceShell', () => {
     });
     expect(searchAreaSource).toHaveTextContent('Point');
     expect(searchAreaSource).toHaveTextContent('42.5000, 44.5000');
+    const satelliteRender = screen.getByRole('combobox', {
+      name: 'Satellite render',
+    });
+    expect(
+      searchAreaSource.compareDocumentPosition(satelliteRender) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(searchAreaSource);
     expect(screen.getByRole('option', { name: 'Point' })).toBeVisible();
     expect(screen.queryByRole('option', { name: 'Custom' })).not.toBeInTheDocument();
@@ -453,7 +471,9 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
-    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Map visibility' }),
+    ).not.toBeInTheDocument();
   });
 
   it('sends one shared OpenStreetMap opacity command from Layers', async () => {
@@ -966,11 +986,19 @@ describe('WorkspaceShell', () => {
     });
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
-      marginTop: '12px',
-      marginLeft: '10px',
+      width: '52px',
+      height: '52px',
+      marginTop: '6px',
+      marginLeft: '6px',
       flexShrink: '0',
+    });
+    expect(screen.getByTestId('project-logo-image')).toHaveAttribute(
+      'src',
+      '/favicon.png',
+    );
+    expect(screen.getByTestId('project-logo-image')).toHaveStyle({
+      width: '52px',
+      height: '52px',
     });
     await user.hover(projectLogo);
     expect(
@@ -981,8 +1009,13 @@ describe('WorkspaceShell', () => {
     const collapseToggle = screen.getByTestId('navigation-collapse-toggle');
     expect(collapseToggle).toHaveStyle({
       width: '36px',
-      height: '36px',
-      right: '-28px',
+      height: '64px',
+      top: '0px',
+      right: '-35px',
+      borderLeftWidth: '0px',
+      borderBottomWidth: '1px',
+      borderRadius: '0 8px 8px 0',
+      backgroundColor: appColors.surface.subtle,
     });
     await user.click(projectLogo);
 
@@ -990,19 +1023,21 @@ describe('WorkspaceShell', () => {
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
-      marginTop: '12px',
-      marginLeft: '10px',
-      borderRadius: '5px 0 0 5px',
+      width: '52px',
+      height: '52px',
+      marginTop: '6px',
+      marginLeft: '6px',
+      borderRadius: '10px 0 0 10px',
+      backgroundColor: appColors.brand.deepSpace,
     });
     expect(showNavigation).toBe(collapseToggle);
     expect(showNavigation).toHaveStyle({
-      width: '80px',
-      height: '36px',
-      right: '-26px',
+      width: '88px',
+      height: '52px',
+      top: '6px',
+      right: '-30px',
       borderWidth: '0px',
-      borderRadius: '5px 8px 8px 5px',
+      borderRadius: '10px',
       boxShadow: 'none',
     });
     await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));

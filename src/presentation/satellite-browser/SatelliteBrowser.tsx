@@ -18,7 +18,10 @@ import {
   CircularProgress,
   ClickAwayListener,
   Divider,
+  FormControl,
+  FormHelperText,
   IconButton,
+  InputLabel,
   MenuItem,
   Paper,
   Popper,
@@ -1534,32 +1537,6 @@ export function SatelliteBrowser({
         onRun={runSearch}
       />
       <Stack spacing={2} sx={{ p: 2 }}>
-        <Select
-          fullWidth
-          size="small"
-          displayEmpty
-          value={searchAreaSource === 'custom' ? '' : searchAreaSource}
-          onChange={changeSearchAreaSource}
-          inputProps={{ 'aria-label': 'Search area source' }}
-          renderValue={() => (
-            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-              <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
-                {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
-              </Typography>
-              <Divider orientation="vertical" flexItem />
-              <Typography variant="body2" color="text.secondary" noWrap>
-                {coordinates}
-              </Typography>
-            </Stack>
-          )}
-        >
-          <MenuItem value="viewport">Point</MenuItem>
-          <MenuItem value="marker" disabled>
-            Marker
-          </MenuItem>
-        </Select>
-
-        <Divider />
         <Typography component="h3" variant="subtitle2">
           Acquisition calendar
         </Typography>
@@ -1660,6 +1637,35 @@ export function SatelliteBrowser({
         </Box>
 
         <Divider />
+        <FormControl size="small" fullWidth>
+          <InputLabel id="satellite-search-area-label">Search area source</InputLabel>
+          <Select
+            labelId="satellite-search-area-label"
+            label="Search area source"
+            displayEmpty
+            value={searchAreaSource === 'custom' ? '' : searchAreaSource}
+            onChange={changeSearchAreaSource}
+            renderValue={() => (
+              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
+                  {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
+                </Typography>
+                <Divider orientation="vertical" flexItem />
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  {coordinates}
+                </Typography>
+              </Stack>
+            )}
+          >
+            <MenuItem value="viewport">Point</MenuItem>
+            <MenuItem value="marker" disabled>
+              Marker
+            </MenuItem>
+          </Select>
+          <FormHelperText>
+            Uses the map center point or a custom area for imagery search.
+          </FormHelperText>
+        </FormControl>
         <SatelliteRenderingModeSelect
           mode={renderingMode}
           onChange={(mode) => {

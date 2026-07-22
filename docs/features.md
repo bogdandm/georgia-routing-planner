@@ -195,11 +195,13 @@ point links follow the same flat-camera contract and do not include satellite im
 When a scene is selected, the share dialog enables its **Include selected satellite
 image** checkbox by default; clearing it omits the scene from both links. Included
 scenes use the current selection even while its raster is still rendering and open on
-the Satellite section. A separate 3D link is enabled only while terrain mode is active
-and additionally encodes bearing and pitch. Opening that link selects the 3D control
-immediately, but starts terrain only after the base style can safely accept new sources.
-Shared terrain and satellite tiles then load alongside basemap and relief tiles, so one
-source cannot hold the others behind the map's loading state.
+the Satellite section. The selected scene row also provides **Share link** for the same
+2D map-and-scene URL; clicking the rest of an applied row removes that imagery. A
+separate 3D link is enabled only while terrain mode is active and additionally encodes
+bearing and pitch. Opening that link selects the 3D control immediately, but starts
+terrain only after the base style can safely accept new sources. Shared terrain and
+satellite tiles then load alongside basemap and relief tiles, so one source cannot hold
+the others behind the map's loading state.
 
 ### Markers
 

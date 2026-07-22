@@ -127,7 +127,20 @@ class FakeLayerMap {
     ) {
       this.directRasterSourceAdds += 1;
     }
-    this.sources.set(id, source);
+    this.sources.set(
+      id,
+      typeof source === 'object' && source !== null && 'tiles' in source
+        ? {
+            ...source,
+            setTiles: (tiles: string[]) => {
+              const current = this.sources.get(id);
+              if (typeof current === 'object' && current !== null) {
+                this.sources.set(id, { ...current, tiles });
+              }
+            },
+          }
+        : source,
+    );
   }
 
   public removeSource(id: string): void {

@@ -797,8 +797,7 @@ function formatDistance(meters: number): string {
   return `${(meters / 1_000).toFixed(meters < 10_000 ? 1 : 0)} km`;
 }
 
-function formatDuration(seconds: number | undefined): string {
-  if (seconds === undefined) return 'Unavailable';
+function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.round((seconds % 3_600) / 60);
   return `${String(hours)}h ${String(minutes)}m`;
@@ -845,27 +844,32 @@ export function TracksPanel() {
           </Paper>
         ) : (
           <List disablePadding aria-label="Saved tracks">
-            {filteredSummaries.map((summary) => (
-              <Paper
-                key={summary.id}
-                variant="outlined"
-                sx={{ mb: 1, overflow: 'hidden' }}
-              >
-                <ListItemButton
-                  selected={
-                    active?.kind === 'saved' && active.summary.id === summary.id
-                  }
-                  onClick={() => void selectSaved(summary)}
-                  sx={{ display: 'block', px: 1.5, py: 1.25 }}
+            {filteredSummaries.map((summary) => {
+              const elapsedSeconds = summary.metrics.elapsedSeconds;
+              return (
+                <Paper
+                  key={summary.id}
+                  variant="outlined"
+                  sx={{ mb: 1, overflow: 'hidden' }}
                 >
-                  <Typography variant="subtitle2">{summary.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {formatDistance(summary.metrics.distanceMeters)} ·{' '}
-                    {formatDuration(summary.metrics.elapsedSeconds)}
-                  </Typography>
-                </ListItemButton>
-              </Paper>
-            ))}
+                  <ListItemButton
+                    selected={
+                      active?.kind === 'saved' && active.summary.id === summary.id
+                    }
+                    onClick={() => void selectSaved(summary)}
+                    sx={{ display: 'block', px: 1.5, py: 1.25 }}
+                  >
+                    <Typography variant="subtitle2">{summary.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDistance(summary.metrics.distanceMeters)}
+                      {elapsedSeconds === undefined
+                        ? null
+                        : ` · ${formatDuration(elapsedSeconds)}`}
+                    </Typography>
+                  </ListItemButton>
+                </Paper>
+              );
+            })}
           </List>
         )}
       </Stack>
@@ -910,7 +914,12 @@ function DetailsGrid({
   const rows: [string, string][] = [
     ['Source file', sourceFilename],
     ['Distance', formatDistance(metrics.distanceMeters)],
-    ['Recorded time', formatDuration(metrics.elapsedSeconds)],
+  ];
+  const elapsedSeconds = metrics.elapsedSeconds;
+  if (elapsedSeconds !== undefined) {
+    rows.push(['Recorded time', formatDuration(elapsedSeconds)]);
+  }
+  rows.push(
     ['Points', pointCount.toLocaleString('en')],
     ['Segments', segmentCount.toLocaleString('en')],
     [
@@ -925,7 +934,7 @@ function DetailsGrid({
         ? 'Unavailable'
         : `${Math.round(metrics.descentMeters).toLocaleString('en')} m`,
     ],
-  ];
+  );
   if (savedAt !== undefined) {
     rows.push(['Saved', new Date(savedAt).toLocaleString('en')]);
   }

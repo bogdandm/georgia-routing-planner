@@ -385,6 +385,8 @@ describe('WorkspaceShell', () => {
       'Fixture trail',
     );
     expect(screen.getByText('Fixture track.gpx')).toBeVisible();
+    expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     const discard = screen.getByRole('button', { name: 'Discard' });
     const save = screen.getByRole('button', { name: 'Save' });
     expect(
@@ -401,6 +403,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(screen.getByText('1 saved track')).toBeVisible();
     });
+    expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Selected track' })).toBeVisible();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,

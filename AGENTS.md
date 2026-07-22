@@ -150,6 +150,10 @@ Before running JavaScript tooling in a new worktree:
    worktree's `.bin` directory. When no repository script exists, invoke the current
    worktree binary explicitly as `.\node_modules\.bin\<tool>.CMD <arguments>`.
 
+The development server is the deliberate exception to the repository-script preference:
+use the direct Vite command specified under Local servers and ports. Do not try pnpm
+script variants first.
+
 On Windows, use `pnpm.cmd`, not the PowerShell `pnpm.ps1` shim; managed shells may block
 the latter through execution policy. Do not change machine execution policy to make the
 shim work. If `pnpm.cmd` is absent but `corepack.cmd` exists, use `corepack.cmd pnpm`
@@ -347,7 +351,7 @@ Every completed-workstream report must present these fields together and in this
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
 - `Test path:` one directly runnable command in this form:
-  `cd /d "<absolute-worktree-path>" && pnpm.cmd run dev --port <reserved-port> --strictPort`.
+  `cd /d "<absolute-worktree-path>" && .\node_modules\.bin\vite.CMD --port <reserved-port> --strictPort`.
 
 The handoff command targets Windows Command Prompt because that is the maintainer's
 copy-paste prompt. Use `cd /d` so paths on another drive work, double quotes for the
@@ -877,11 +881,11 @@ Required checks block merging.
 
 ## Commands
 
-Maintain the existing package scripts as the stable developer interface. Use only the
-commands relevant to the changed scope and do not require a feature to exercise every
-installed tool:
+Maintain these stable developer commands. Server startup deliberately uses the direct
+Vite binary; the remaining entries use repository scripts. Run only commands relevant to
+the changed scope and do not require a feature to exercise every installed tool:
 
-- `pnpm dev`
+- `.\node_modules\.bin\vite.CMD --port <reserved-port> --strictPort`
 - `pnpm typecheck`
 - `pnpm lint`
 - `pnpm format:check`
@@ -938,12 +942,13 @@ New-Item -ItemType Directory -Path $reservation -ErrorAction Stop | Out-Null
 Set-Content -LiteralPath (Join-Path $reservation 'owner.txt') -Value $worktreeRoot
 ```
 
-Start Vite with `pnpm.cmd dev --port <port> --strictPort`. Do not insert a standalone
-`--`: pnpm passes it to Vite as a positional argument and Vite may ignore the options
-that follow. Set `E2E_PORT` to the same reserved port for Playwright. Never rely on
-automatic port fallback, terminate an unknown listener, or reuse another worktree's
-reservation. If strict startup reports a race, release only the reservation owned by the
-current worktree, reserve another free port, and retry once.
+Start Vite with exactly `.\node_modules\.bin\vite.CMD --port <port> --strictPort` from
+the worktree root. This is the single canonical agent command; do not try `pnpm dev`,
+`pnpm.cmd dev`, `pnpm run dev`, or other launch variants first. Set `E2E_PORT` to the
+same reserved port for Playwright. Never rely on automatic port fallback, terminate an
+unknown listener, or reuse another worktree's reservation. If strict startup reports a
+race, release only the reservation owned by the current worktree, reserve another free
+port, and retry once.
 
 Stop the worktree's server before releasing its reservation. Remove a reservation only
 after reading `owner.txt`, resolving both paths, and confirming it belongs to the

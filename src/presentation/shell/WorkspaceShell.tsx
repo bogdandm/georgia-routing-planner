@@ -1,21 +1,14 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import { Box, IconButton, Tooltip } from '@mui/material';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useStore } from 'zustand';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import {
-  defaultSatelliteRenderingTuning,
-  type SatelliteRenderingMode,
-  type SatelliteRenderingTuning,
-} from '@/application/ports/MapLayerPreferencesRepository';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
-import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
 import { WorkspaceSidebar } from '@/presentation/shell/WorkspaceSidebar';
@@ -48,40 +41,8 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [renderingTuning, setRenderingTuning] = useState<SatelliteRenderingTuning>(
-    () => mapLayers?.getRenderingTuning() ?? defaultSatelliteRenderingTuning,
-  );
-  const renderingMode = useStore(
-    mapLayerStore,
-    (state) => state.satelliteRenderingMode,
-  );
-  const [renderingTuningPending, setRenderingTuningPending] = useState(false);
-  const [renderingTuningError, setRenderingTuningError] = useState<string | null>(null);
-  const [terrainOverlayCommandError, setTerrainOverlayCommandError] = useState<
-    string | null
-  >(null);
-  const terrainOverlaySnapshot = useStore(
-    mapLayerStore,
-    (state) => state.terrainOverlays,
-  );
-  const terrainComputeStatus = useStore(
-    mapLayerStore,
-    (state) => state.terrainComputeStatus,
-  );
-  const renderingTuningAbort = useRef<AbortController | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    const restoreMapPreferences = async () => {
-      await mapLayers?.restorePersistedState();
-      if (!cancelled && mapLayers !== null) {
-        setRenderingTuning(mapLayers.getRenderingTuning());
-      }
-    };
-    void restoreMapPreferences();
-    return () => {
-      cancelled = true;
-      renderingTuningAbort.current?.abort();
-    };
+    void mapLayers?.restorePersistedState();
   }, [mapLayers]);
 
   useEffect(() => {
@@ -138,56 +99,6 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     const nextUrl = new URL(window.location.href);
     nextUrl.hash = workspaceHashForTab(section);
     window.history.pushState(window.history.state, '', nextUrl);
-  };
-
-  const handleRenderingTuningChange = async (value: SatelliteRenderingTuning) => {
-    setRenderingTuning(value);
-    if (mapLayers === null) return;
-    renderingTuningAbort.current?.abort();
-    const controller = new AbortController();
-    renderingTuningAbort.current = controller;
-    setRenderingTuningPending(true);
-    setRenderingTuningError(null);
-    try {
-      const result = await mapLayers.setRenderingTuning(value, controller.signal);
-      if (result.status === 'failed') {
-        setRenderingTuning(mapLayers.getRenderingTuning());
-        setRenderingTuningError(result.message);
-      }
-    } finally {
-      if (renderingTuningAbort.current === controller) {
-        renderingTuningAbort.current = null;
-        setRenderingTuningPending(false);
-      }
-    }
-  };
-
-  const handleRenderingModeChange = async (value: SatelliteRenderingMode) => {
-    if (mapLayers === null) return;
-    renderingTuningAbort.current?.abort();
-    const controller = new AbortController();
-    renderingTuningAbort.current = controller;
-    setRenderingTuningPending(true);
-    setRenderingTuningError(null);
-    try {
-      const result = await mapLayers.setRenderingMode(value, controller.signal);
-      if (result.status === 'failed') {
-        setRenderingTuningError(result.message);
-      }
-    } finally {
-      if (renderingTuningAbort.current === controller) {
-        renderingTuningAbort.current = null;
-        setRenderingTuningPending(false);
-      }
-    }
-  };
-
-  const handleTerrainOverlayPreferencesChange = (
-    value: typeof terrainOverlaySnapshot.preferences,
-  ) => {
-    if (mapLayers === null) return;
-    const result = mapLayers.setTerrainOverlayPreferences(value);
-    setTerrainOverlayCommandError(result.status === 'failed' ? result.message : null);
   };
 
   return (
@@ -420,24 +331,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           setSettingsOpen(false);
         }}
         onDeveloperModeChange={handleDeveloperModeChange}
-        renderingTuning={renderingTuning}
-        renderingMode={renderingMode}
-        onRenderingModeChange={(value) => {
-          void handleRenderingModeChange(value);
-        }}
-        renderingTuningPending={renderingTuningPending}
-        renderingTuningError={renderingTuningError}
         storageUsage={storageUsage}
-        onRenderingTuningDraftChange={setRenderingTuning}
-        onRenderingTuningChange={(value) => {
-          void handleRenderingTuningChange(value);
-        }}
-        terrainOverlayPreferences={terrainOverlaySnapshot.preferences}
-        terrainComputeStatus={terrainComputeStatus}
-        terrainOverlayError={
-          terrainOverlayCommandError ?? terrainOverlaySnapshot.message
-        }
-        onTerrainOverlayPreferencesChange={handleTerrainOverlayPreferencesChange}
       />
       <ShareMapDialog
         open={shareOpen}

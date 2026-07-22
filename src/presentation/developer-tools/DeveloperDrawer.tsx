@@ -6,6 +6,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Divider,
   Drawer,
@@ -15,7 +16,6 @@ import {
   ListItem,
   ListItemText,
   Stack,
-  Switch,
   Tab,
   Tabs,
   TextField,
@@ -247,6 +247,7 @@ export function DeveloperDrawer({
               <Typography variant="body2">Mode: {buildInfo.mode}</Typography>
             </Box>
             <Button
+              size="small"
               startIcon={<HealthAndSafetyOutlinedIcon />}
               variant="outlined"
               disabled={running}
@@ -255,6 +256,7 @@ export function DeveloperDrawer({
               {running ? 'Running checks…' : 'Run local health checks'}
             </Button>
             <Button
+              size="small"
               variant="outlined"
               disabled={providerRunning || mapProviderConfiguration.status !== 'valid'}
               onClick={() => void runProviderChecks()}
@@ -266,7 +268,12 @@ export function DeveloperDrawer({
             {mapProviderConfiguration.status === 'invalid' ? (
               <Alert severity="error">{mapProviderConfiguration.message}</Alert>
             ) : null}
-            <Button color="error" variant="outlined" onClick={onTriggerFailure}>
+            <Button
+              color="error"
+              size="small"
+              variant="outlined"
+              onClick={onTriggerFailure}
+            >
               Trigger controlled component failure
             </Button>
           </Stack>
@@ -313,11 +320,15 @@ export function DeveloperDrawer({
                   idle: {mapSnapshot.lastIdleAt ?? 'not yet'}
                 </Typography>
               </Box>
-              <Box>
+              <Stack spacing={0.5}>
                 <Typography variant="overline">MapLibre debug rendering</Typography>
                 <FormControlLabel
+                  sx={{ m: 0 }}
+                  slotProps={{ typography: { variant: 'body2' } }}
                   control={
-                    <Switch
+                    <Checkbox
+                      size="small"
+                      sx={{ p: 0, mr: 1 }}
                       checked={mapDebugOptions.showTileBoundaries}
                       onChange={(event) => {
                         setMapDebugOptions({
@@ -330,8 +341,12 @@ export function DeveloperDrawer({
                   label="Show tile boundaries"
                 />
                 <FormControlLabel
+                  sx={{ m: 0 }}
+                  slotProps={{ typography: { variant: 'body2' } }}
                   control={
-                    <Switch
+                    <Checkbox
+                      size="small"
+                      sx={{ p: 0, mr: 1 }}
                       checked={mapDebugOptions.showCollisionBoxes}
                       onChange={(event) => {
                         setMapDebugOptions({
@@ -343,7 +358,7 @@ export function DeveloperDrawer({
                   }
                   label="Show collision boxes"
                 />
-              </Box>
+              </Stack>
               <Box>
                 <Typography variant="overline">
                   Ordered sources ({String(mapSnapshot.sourceIds.length)})
@@ -468,6 +483,7 @@ export function DeveloperDrawer({
       <Divider />
       <Stack spacing={1.5} sx={{ p: 2 }}>
         <TextField
+          size="small"
           label="Reproduction notes"
           multiline
           minRows={2}
@@ -477,6 +493,7 @@ export function DeveloperDrawer({
           }}
         />
         <Button
+          size="small"
           startIcon={<DownloadOutlinedIcon />}
           variant="contained"
           onClick={handleDownload}

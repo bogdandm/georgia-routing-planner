@@ -59,7 +59,7 @@ export function SettingsDialog({
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <DialogTitle id="settings-panel-title" sx={{ px: 2, py: 1.25 }}>
+      <DialogTitle id="settings-panel-title" sx={{ px: 2, py: 1.5 }}>
         Settings
       </DialogTitle>
       <Tabs
@@ -74,14 +74,14 @@ export function SettingsDialog({
           borderTop: 1,
           borderBottom: 1,
           borderColor: 'divider',
-          '& .MuiTabs-flexContainer': { gap: 0.25 },
+          '& .MuiTabs-flexContainer': { gap: 0.5 },
           '& .MuiTab-root': {
             flex: '0 0 auto',
             minWidth: 0,
             minHeight: 42,
             mx: 0,
             mb: 0,
-            px: 1.25,
+            px: 1.5,
             py: 1,
             borderRadius: 0,
             bgcolor: 'transparent',
@@ -130,7 +130,7 @@ export function SettingsDialog({
             <Typography
               variant="caption"
               color="text.secondary"
-              sx={{ pl: 3.5, mt: -0.25 }}
+              sx={{ pl: 3.5, mt: 0.5 }}
             >
               Exposes local logs, health checks, and diagnostics export. Nothing is
               uploaded automatically.
@@ -145,7 +145,7 @@ export function SettingsDialog({
         ) : null}
       </DialogContent>
 
-      <DialogActions sx={{ px: 1.5, py: 0.75 }}>
+      <DialogActions sx={{ px: 1.5, py: 1 }}>
         <Button size="small" onClick={onClose}>
           Done
         </Button>

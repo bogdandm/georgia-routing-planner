@@ -673,9 +673,13 @@ spacing rhythm, disclosures, helper copy, and presentation review.
   descriptions.
 - Use checkboxes for independent boolean options throughout the application. Do not mix
   switches and checkboxes for equivalent choices.
-- Build spacing from the theme's 8 px unit. Use 16 px between major groups, 12 px
-  between repeated control rows, and 8 px between a parent control and its dependent
-  row.
+- Keep section headings and source descriptions on the panel edge, then place ordinary
+  section content in an explicit, balanced 8 px horizontal inset. Do not simulate
+  section indentation with checkbox padding; exempt full-width spatial controls such as
+  calendars when an inset would reduce clarity or usable width.
+- Build spacing on a 4 px grid, using half steps of the theme's 8 px unit when needed.
+  Use 16 px between major groups, 12 px between repeated control rows, and 8 px between
+  a parent control and its dependent row.
 - Do not leave empty `Stack`, `Box`, status, or conditional wrappers that still
   contribute spacing when they contain no visible content.
 - Keep adjacent contextual panels at a shared width unless the reviewed workflow

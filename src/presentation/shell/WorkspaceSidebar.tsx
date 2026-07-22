@@ -59,7 +59,7 @@ function EmptyState({ description, icon, title }: EmptyStateProps) {
 function TracksContent() {
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
-      <Stack direction="row" spacing={0.75}>
+      <Stack direction="row" spacing={1}>
         <TextField
           fullWidth
           disabled
@@ -145,7 +145,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   tracks: {
     title: 'Tracks',
     actions: (
-      <Stack direction="row" spacing={0.75}>
+      <Stack direction="row" spacing={1}>
         {disabledAction(
           'GPX import arrives in a later phase',
           <IconButton disabled size="small" aria-label="Import GPX">

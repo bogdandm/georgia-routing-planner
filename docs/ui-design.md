@@ -36,13 +36,20 @@ Compact checkboxes use a small glyph with no root padding and an 8 px gap before
 label. The glyph aligns with the section content edge; any description aligns with the
 label text.
 
+Keep a section's heading and source description on the panel content edge. Put the
+section's interactive content in a deliberate, balanced 8 px horizontal inset; checkbox
+padding must not create that indentation accidentally. Full-width spatial controls such
+as the acquisition calendar are explicit exceptions when an inset would reduce clarity
+or usable width.
+
 Use checkboxes for independent boolean options throughout the application, including
 layer visibility, rendering options, corrective processing, and developer controls. Do
 not mix switches and checkboxes when they represent the same kind of choice.
 
-## Use an 8 px spacing rhythm
+## Use a 4 px spacing grid
 
-Prefer MUI `Stack` spacing and theme units over unrelated one-off margins.
+Prefer MUI `Stack` spacing and theme units over unrelated one-off margins. Use half
+steps of the theme's 8 px unit when 4 px precision is necessary.
 
 - Separate major sections by 16 px and a divider when the source or responsibility
   changes.
@@ -54,6 +61,8 @@ Prefer MUI `Stack` spacing and theme units over unrelated one-off margins.
   conditional with their content.
 - Check spacing at the actual panel width. A mathematically consistent gap can still be
   visually excessive when a slider or MUI control contributes internal height.
+- Dense spatial grids such as the acquisition calendar may use a tighter internal gap,
+  but their surrounding section spacing still follows the 4 px grid.
 
 ## Keep contextual panels stable
 

@@ -567,7 +567,7 @@ function AcquisitionCalendar({
       <Box
         role="grid"
         aria-label={monthFormatter.format(displayMonthDate)}
-        sx={{ display: 'grid', gap: 0.25 }}
+        sx={{ display: 'grid', rowGap: 0.5 }}
       >
         <Box role="row" sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {weekDays.map((day) => (
@@ -586,7 +586,11 @@ function AcquisitionCalendar({
           <Box
             key={`week-${String(rowIndex)}`}
             role="row"
-            sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25 }}
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(7, 1fr)',
+              columnGap: 0.25,
+            }}
           >
             {calendarRow.map((day, columnIndex) => {
               if (day === null) {
@@ -617,7 +621,7 @@ function AcquisitionCalendar({
                       : `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
                   }
                   sx={{
-                    height: 34,
+                    height: 40,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -1561,7 +1565,7 @@ export function SatelliteBrowser({
           <Alert severity="error">{loadMoreError}</Alert>
         )}
         <Stack spacing={1}>
-          <Box>
+          <Box sx={{ px: 1 }}>
             <Stack direction="row" sx={{ alignItems: 'center' }}>
               <Typography
                 id="cloud-cover-slider-label"
@@ -1634,45 +1638,52 @@ export function SatelliteBrowser({
               Satellite provider configuration is unavailable.
             </Alert>
           ) : null}
-          {searchState.status === 'loading' ? (
-            <Typography variant="body2">Loading the latest matching images…</Typography>
-          ) : null}
         </Box>
 
         <Divider />
-        <Typography component="h3" variant="subtitle2">
-          Settings
-        </Typography>
-        <FormControl size="small" fullWidth>
-          <InputLabel id="satellite-search-area-label">Search area source</InputLabel>
-          <Select
-            labelId="satellite-search-area-label"
-            label="Search area source"
-            displayEmpty
-            value={searchAreaSource === 'custom' ? '' : searchAreaSource}
-            onChange={changeSearchAreaSource}
-            renderValue={() => (
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
-                  {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
-                </Typography>
-                <Divider orientation="vertical" flexItem />
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  {coordinates}
-                </Typography>
-              </Stack>
-            )}
+        <Box component="section" aria-labelledby="satellite-settings-heading">
+          <Typography
+            id="satellite-settings-heading"
+            component="h3"
+            variant="subtitle2"
           >
-            <MenuItem value="viewport">Point</MenuItem>
-            <MenuItem value="marker" disabled>
-              Marker
-            </MenuItem>
-          </Select>
-          <FormHelperText>
-            Uses the map center point or a custom area for imagery search.
-          </FormHelperText>
-        </FormControl>
-        <SatelliteRenderingControls />
+            Settings
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2, px: 1 }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="satellite-search-area-label">
+                Search area source
+              </InputLabel>
+              <Select
+                labelId="satellite-search-area-label"
+                label="Search area source"
+                displayEmpty
+                value={searchAreaSource === 'custom' ? '' : searchAreaSource}
+                onChange={changeSearchAreaSource}
+                renderValue={() => (
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
+                      {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
+                    </Typography>
+                    <Divider orientation="vertical" flexItem />
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {coordinates}
+                    </Typography>
+                  </Stack>
+                )}
+              >
+                <MenuItem value="viewport">Point</MenuItem>
+                <MenuItem value="marker" disabled>
+                  Marker
+                </MenuItem>
+              </Select>
+              <FormHelperText>
+                Uses the map center point or a custom area for imagery search.
+              </FormHelperText>
+            </FormControl>
+            <SatelliteRenderingControls />
+          </Stack>
+        </Box>
       </Stack>
       {active && portalTarget !== null && paneOpen
         ? createPortal(

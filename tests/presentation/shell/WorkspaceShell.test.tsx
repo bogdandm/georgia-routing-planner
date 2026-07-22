@@ -322,7 +322,7 @@ describe('WorkspaceShell', () => {
     expect(within(acquisitionCalendar).getAllByRole('gridcell')).toHaveLength(31);
     expect(
       screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
-    ).toHaveStyle({ height: '34px' });
+    ).toHaveStyle({ height: '40px' });
     const searchAreaSource = screen.getByRole('combobox', {
       name: 'Search area source',
     });

@@ -203,12 +203,19 @@ Rules:
 
 ### CI failure authorization
 
-When the maintainer provides a failing check, test output, CI log, or failure artifact
-from the agent's current pull request, treat that report as an explicit instruction to
-diagnose and fix the failure on the existing branch. Do not summarize the root cause and
-ask for approval to implement the focused fix; the failure report already supplies that
-approval. Inspect the authoritative logs, make the smallest relevant correction, rerun
-only the failed test after the correction, push, and recheck the pull request.
+When the maintainer points to a red or failing current pull request, asks the agent to
+check its status, or provides a failing check, test output, CI log, or failure artifact,
+treat that as an explicit instruction to inspect the current status and fix any failure
+on the existing branch. A status request is not a read-only reporting task when the
+current pull request is failing: continue through authoritative log inspection,
+diagnosis, the smallest relevant correction, focused verification, commit, push, and
+one final pull-request status recheck. Do not merely report the failure or ask for
+approval to implement the focused fix; the maintainer's prompt already supplies that
+authorization.
+
+Use discrete status and log queries needed for that repair. Do not start a watch command,
+polling loop, recurring monitor, or wait command. If the inspected current pull request
+has no failure, report its status without waiting for future changes.
 
 Ask for direction only when the proposed response would materially expand the pull
 request's scope, requires a destructive or separately protected action, or the failure

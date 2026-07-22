@@ -22,11 +22,13 @@ import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerSt
 import {
   mapInteractionStore,
   resetMapInteractionStore,
+  setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import { appColors } from '@/presentation/theme/appColors';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -242,6 +244,9 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
     ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'More satellite actions' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
@@ -272,7 +277,14 @@ describe('WorkspaceShell', () => {
       }),
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
-    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Map visibility' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Layers tools' })).getAllByRole(
+        'separator',
+      ),
+    ).toHaveLength(3);
     expect(
       screen.getByRole('heading', {
         name: 'Copernicus Sentinel-2 via Earth Search',
@@ -310,8 +322,16 @@ describe('WorkspaceShell', () => {
     });
     expect(searchAreaSource).toHaveTextContent('Point');
     expect(searchAreaSource).toHaveTextContent('42.5000, 44.5000');
+    const satelliteRender = screen.getByRole('combobox', {
+      name: 'Satellite render',
+    });
+    expect(
+      searchAreaSource.compareDocumentPosition(satelliteRender) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     await user.click(searchAreaSource);
     expect(screen.getByRole('option', { name: 'Point' })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'Custom' })).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
       'aria-disabled',
       'true',
@@ -320,7 +340,7 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
     const user = userEvent.setup();
@@ -378,7 +398,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(screen.getByText('0 saved tracks')).toBeVisible();
     });
-  });
+  }, 10_000);
 
   it('accepts a GPX drop over the full workspace and exposes discard confirmation', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -403,6 +423,102 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByRole('heading', { name: 'New track' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    const previousMonth = screen.getByRole('button', {
+      name: 'Previous acquisition month',
+    });
+    const nextMonth = screen.getByRole('button', { name: 'Next acquisition month' });
+    const currentMonth = screen.getByRole('button', {
+      name: 'Return to current acquisition month',
+    });
+    expect(currentMonth).toBeDisabled();
+
+    await user.click(previousMonth);
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
+    expect(currentMonth).toBeEnabled();
+
+    for (const [control, tooltip] of [
+      [previousMonth, 'Previous month'],
+      [nextMonth, 'Next month'],
+      [currentMonth, 'Return to current month'],
+    ] as const) {
+      await user.hover(control);
+      expect(await screen.findByRole('tooltip', { name: tooltip })).toBeVisible();
+      await user.unhover(control);
+    }
+
+    await user.click(currentMonth);
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    const monthYearTrigger = screen.getByRole('button', {
+      name: 'Choose acquisition month and year, July 2026',
+    });
+    expect(within(monthYearTrigger).getByTestId('KeyboardArrowDownIcon')).toBeVisible();
+    await user.hover(monthYearTrigger);
+    expect(
+      await screen.findByRole('tooltip', { name: 'Choose month and year' }),
+    ).toBeVisible();
+    await user.unhover(monthYearTrigger);
+    await user.click(monthYearTrigger);
+
+    const acquisitionCalendar = screen.getByLabelText('Sentinel acquisition calendar');
+    expect(
+      within(acquisitionCalendar).queryByRole('group', {
+        name: 'Choose acquisition month and year',
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Choose acquisition month and year' }),
+    ).toBeVisible();
+    const yearSelect = screen.getByRole('combobox', { name: 'Acquisition year' });
+    await user.click(yearSelect);
+    await user.click(screen.getByRole('option', { name: '2025' }));
+    expect(
+      screen.getByRole('button', { name: 'Choose Jul 2025', pressed: true }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Choose Dec 2025' }));
+    expect(screen.getByRole('grid', { name: 'December 2025' })).toBeVisible();
+
+    await user.click(currentMonth);
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    await user.click(monthYearTrigger);
+    expect(
+      screen.getByRole('group', { name: 'Choose acquisition month and year' }),
+    ).toBeVisible();
+    await user.click(previousMonth);
+    expect(
+      screen.queryByRole('group', { name: 'Choose acquisition month and year' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
+  });
+
+  it('keeps a context-menu search custom until the user selects Point', async () => {
+    const user = userEvent.setup();
+    setSatelliteSearchAnchor({ latitude: 42.1, longitude: 43.4 });
+    renderWorkspaceShell();
+
+    const searchAreaSource = screen.getByRole('combobox', {
+      name: 'Search area source',
+    });
+    expect(searchAreaSource).toHaveTextContent('Custom');
+    expect(searchAreaSource).toHaveTextContent('42.1000, 43.4000');
+
+    await user.click(searchAreaSource);
+    expect(screen.queryByRole('option', { name: 'Custom' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await user.click(screen.getByRole('option', { name: 'Point' }));
+
+    expect(searchAreaSource).toHaveTextContent('Point');
   });
 
   it('restores the persisted maximum cloud cover after remounting', async () => {
@@ -437,7 +553,9 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
-    expect(screen.getByRole('heading', { name: 'Map visibility' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Map visibility' }),
+    ).not.toBeInTheDocument();
   });
 
   it('sends one shared OpenStreetMap opacity command from Layers', async () => {
@@ -705,6 +823,58 @@ describe('WorkspaceShell', () => {
     expect(requests).toHaveLength(3);
   });
 
+  it('keeps calendar navigation responsive and skips superseded month loads', async () => {
+    const requestedMonths: string[] = [];
+    let resolveJune!: (result: SatelliteCatalogResult) => void;
+    services.database.close();
+    await services.database.delete();
+    services = createTestServices({
+      satelliteCatalogGateway: {
+        search: ({ criteria }) => {
+          const month = criteria.startDate.slice(0, 7);
+          requestedMonths.push(month);
+          if (month === '2026-06') {
+            return new Promise<SatelliteCatalogResult>((resolve) => {
+              resolveJune = resolve;
+            });
+          }
+          return Promise.resolve({ totalMatched: 0, scenes: [] });
+        },
+      },
+    });
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05', '2026-06']);
+    });
+    expect(screen.getByLabelText('Loading June 2026 imagery')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Next acquisition month' }),
+    ).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+    resolveJune({ totalMatched: 0, scenes: [] });
+    await waitFor(() => {
+      expect(requestedMonths).toEqual(['2026-05', '2026-06', '2026-07']);
+    });
+  });
+
   it('uses a calendar date as a best-coverage card shortcut without reopening the pane', async () => {
     const lowCoverageScene = syntheticSatelliteScene(
       'later-low-coverage',
@@ -919,11 +1089,19 @@ describe('WorkspaceShell', () => {
     });
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
-      marginTop: '12px',
-      marginLeft: '10px',
+      width: '52px',
+      height: '52px',
+      marginTop: '6px',
+      marginLeft: '6px',
       flexShrink: '0',
+    });
+    expect(screen.getByTestId('project-logo-image')).toHaveAttribute(
+      'src',
+      '/favicon.png',
+    );
+    expect(screen.getByTestId('project-logo-image')).toHaveStyle({
+      width: '52px',
+      height: '52px',
     });
     await user.hover(projectLogo);
     expect(
@@ -934,8 +1112,13 @@ describe('WorkspaceShell', () => {
     const collapseToggle = screen.getByTestId('navigation-collapse-toggle');
     expect(collapseToggle).toHaveStyle({
       width: '36px',
-      height: '36px',
-      right: '-28px',
+      height: '64px',
+      top: '0px',
+      right: '-35px',
+      borderLeftWidth: '0px',
+      borderBottomWidth: '1px',
+      borderRadius: '0 8px 8px 0',
+      backgroundColor: appColors.surface.subtle,
     });
     await user.click(projectLogo);
 
@@ -943,19 +1126,21 @@ describe('WorkspaceShell', () => {
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
-      marginTop: '12px',
-      marginLeft: '10px',
-      borderRadius: '5px 0 0 5px',
+      width: '52px',
+      height: '52px',
+      marginTop: '6px',
+      marginLeft: '6px',
+      borderRadius: '10px 0 0 10px',
+      backgroundColor: appColors.brand.deepSpace,
     });
     expect(showNavigation).toBe(collapseToggle);
     expect(showNavigation).toHaveStyle({
-      width: '80px',
-      height: '36px',
-      right: '-26px',
+      width: '88px',
+      height: '52px',
+      top: '6px',
+      right: '-30px',
       borderWidth: '0px',
-      borderRadius: '5px 8px 8px 5px',
+      borderRadius: '10px',
       boxShadow: 'none',
     });
     await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));

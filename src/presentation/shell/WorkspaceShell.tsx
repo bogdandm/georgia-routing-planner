@@ -253,7 +253,7 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           position: 'absolute',
           top: 6,
           left: 6,
-          height: navigationCollapsed ? 48 : 'calc(100dvh - 12px)',
+          height: navigationCollapsed ? 64 : 'calc(100dvh - 12px)',
           zIndex: 4,
           display: 'flex',
           gap: 0,
@@ -298,7 +298,7 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             pointerEvents: navigationCollapsed ? 'none' : 'auto',
             visibility: navigationCollapsed ? 'hidden' : 'visible',
             overflow: 'hidden',
-            borderRadius: '0 8px 8px 0',
+            borderRadius: '0 0 8px 0',
             transition: (theme) =>
               `${theme.transitions.create(['opacity', 'transform', 'max-width'], {
                 duration: theme.transitions.duration.short,
@@ -329,19 +329,29 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
             sx={{
               position: 'absolute',
               zIndex: 5,
-              top: 12,
-              right: navigationCollapsed ? -26 : -28,
-              width: navigationCollapsed ? 80 : 36,
-              height: 36,
-              bgcolor: navigationCollapsed ? 'transparent' : 'background.paper',
-              border: navigationCollapsed ? 0 : 1,
-              borderColor: 'divider',
-              borderRadius: navigationCollapsed ? '5px 8px 8px 5px' : 1,
-              boxShadow: navigationCollapsed ? 0 : 2,
+              top: navigationCollapsed ? 6 : 0,
+              right: navigationCollapsed ? -30 : -35,
+              width: navigationCollapsed ? 88 : 36,
+              height: navigationCollapsed ? 52 : 64,
+              bgcolor: navigationCollapsed ? 'transparent' : appColors.surface.subtle,
+              borderStyle: 'solid',
+              borderWidth: 0,
+              borderBottomWidth: navigationCollapsed ? 0 : 1,
+              borderBottomColor: appColors.brand.sky,
+              borderRadius: navigationCollapsed ? '10px' : '0 8px 8px 0',
+              boxShadow: 0,
               overflow: 'hidden',
               transition: (theme) =>
                 theme.transitions.create(
-                  ['right', 'width', 'background-color', 'border-radius', 'box-shadow'],
+                  [
+                    'top',
+                    'right',
+                    'width',
+                    'height',
+                    'background-color',
+                    'border-radius',
+                    'box-shadow',
+                  ],
                   {
                     duration: theme.transitions.duration.short,
                     easing: theme.transitions.easing.easeInOut,
@@ -353,8 +363,8 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
                 inset: '0 0 0 auto',
                 zIndex: 0,
                 width: 36,
-                bgcolor: 'background.paper',
-                borderRadius: navigationCollapsed ? '0 8px 8px 0' : 1,
+                bgcolor: appColors.surface.subtle,
+                borderRadius: '0 8px 8px 0',
                 opacity: navigationCollapsed ? 1 : 0,
                 transition: (theme) =>
                   theme.transitions.create(['opacity', 'border-radius'], {
@@ -375,8 +385,8 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
                   }),
               },
               '&:hover': {
-                bgcolor: navigationCollapsed ? 'transparent' : 'background.paper',
-                boxShadow: navigationCollapsed ? 0 : 3,
+                bgcolor: navigationCollapsed ? 'transparent' : appColors.surface.subtle,
+                boxShadow: 0,
                 '&::after': { opacity: 1 },
               },
               '&.Mui-focusVisible': {
@@ -385,8 +395,8 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
               },
               '& .MuiSvgIcon-root': {
                 position: 'absolute',
-                top: 8,
-                right: navigationCollapsed ? 8 : 5,
+                top: navigationCollapsed ? 16 : 22,
+                right: 8,
                 zIndex: 2,
                 transform: navigationCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
                 transition: (theme) =>

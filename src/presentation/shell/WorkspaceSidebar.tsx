@@ -1,7 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
-import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -78,12 +77,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
   satellite: {
     title: 'Satellite imagery',
-    actions: disabledAction(
-      'More imagery actions arrive with imagery search',
-      <IconButton disabled size="small" aria-label="More satellite actions">
-        <MoreVertIcon />
-      </IconButton>,
-    ),
+    actions: null,
   },
   markers: {
     title: 'Markers',

@@ -7,7 +7,6 @@ import {
   FormGroup,
   Slider,
   Stack,
-  Switch,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -318,7 +317,7 @@ export function LayersPanel() {
                   sx={{ m: 0 }}
                   slotProps={{ typography: { variant: 'body2' } }}
                   control={
-                    <Switch
+                    <Checkbox
                       checked={state.terrainOverlays.preferences.filterInvalidDemPixels}
                       disabled={mapLayers === null}
                       onChange={(event) => {
@@ -334,7 +333,7 @@ export function LayersPanel() {
                 <Typography
                   variant="caption"
                   color="text.secondary"
-                  sx={{ display: 'block', pl: 7.25, mt: -0.5 }}
+                  sx={{ display: 'block', pl: 4.75, mt: -0.5 }}
                 >
                   Applies the same conservative repair to relief, 3D terrain, and
                   contours without smoothing valid terrain.

@@ -32,6 +32,14 @@ Control labels must not be larger or visually stronger than their section headin
 Descriptions align with the text of the control they explain, not with the checkbox or
 switch edge.
 
+Compact checkboxes use a small glyph with no root padding and an 8 px gap before their
+label. The glyph aligns with the section content edge; any description aligns with the
+label text.
+
+Use checkboxes for independent boolean options throughout the application, including
+layer visibility, rendering options, corrective processing, and developer controls. Do
+not mix switches and checkboxes when they represent the same kind of choice.
+
 ## Use an 8 px spacing rhythm
 
 Prefer MUI `Stack` spacing and theme units over unrelated one-off margins.

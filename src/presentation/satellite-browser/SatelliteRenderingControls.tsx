@@ -5,6 +5,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   FormControl,
   FormControlLabel,
   FormHelperText,
@@ -13,7 +14,6 @@ import {
   Select,
   Slider,
   Stack,
-  Switch,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -147,8 +147,11 @@ export function SatelliteRenderingControls() {
       <Box>
         <FormControlLabel
           sx={{ m: 0 }}
+          slotProps={{ typography: { variant: 'body2' } }}
           control={
-            <Switch
+            <Checkbox
+              size="small"
+              sx={{ p: 0, mr: 1 }}
               checked={terrainOverlayPreferences.shadeAboveSatellite}
               disabled={mapLayers === null}
               onChange={(event) => {

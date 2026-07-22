@@ -671,6 +671,8 @@ spacing rhythm, disclosures, helper copy, and presentation review.
 - Use section headings stronger than control labels: `subtitle2` bold for source/group
   headings, `body2` regular for control titles, and secondary `caption` text for
   descriptions.
+- Use checkboxes for independent boolean options throughout the application. Do not mix
+  switches and checkboxes for equivalent choices.
 - Build spacing from the theme's 8 px unit. Use 16 px between major groups, 12 px
   between repeated control rows, and 8 px between a parent control and its dependent
   row.

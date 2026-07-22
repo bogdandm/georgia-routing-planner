@@ -191,6 +191,10 @@ describe('WorkspaceShell', () => {
     const includeSatellite = screen.getByRole('checkbox', {
       name: 'Include selected satellite image',
     });
+    expect(
+      link3d.compareDocumentPosition(includeSatellite) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(includeSatellite).toBeChecked();
     expect(link2d.value).toContain('scene=sentinel-2-l2a%3Aselected-while-rendering');
     expect(link2d.value).not.toContain('bearing=');
@@ -952,7 +956,7 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open settings' }));
     await user.click(
-      screen.getByRole('switch', { name: 'Enable developer diagnostics' }),
+      screen.getByRole('checkbox', { name: 'Enable developer diagnostics' }),
     );
     await user.click(screen.getByRole('button', { name: 'Done' }));
 
@@ -1139,7 +1143,7 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/labeled index contours remain every 200 m/u),
     ).not.toBeInTheDocument();
-    const demFilter = screen.getByRole('switch', {
+    const demFilter = screen.getByRole('checkbox', {
       name: 'Repair invalid DEM elevation pixels',
     });
     expect(demFilter).toBeChecked();
@@ -1159,7 +1163,7 @@ describe('WorkspaceShell', () => {
       ).toBe(25);
     });
     await user.click(
-      screen.getByRole('switch', {
+      screen.getByRole('checkbox', {
         name: 'Repair invalid DEM elevation pixels',
       }),
     );
@@ -1171,7 +1175,7 @@ describe('WorkspaceShell', () => {
     });
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
-      screen.getByRole('switch', {
+      screen.getByRole('checkbox', {
         name: 'Show relief shading above satellite imagery',
       }),
     );

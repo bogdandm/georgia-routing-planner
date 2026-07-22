@@ -1,13 +1,13 @@
 import {
   Box,
   Button,
+  Checkbox,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
   Paper,
   Stack,
-  Switch,
   Tab,
   Tabs,
   Typography,
@@ -111,11 +111,14 @@ export function SettingsDialog({
 
       <DialogContent sx={{ minHeight: 120, px: 2, py: 1.5 }}>
         {activeTab === 'general' ? (
-          <Stack spacing={0.75} role="tabpanel" aria-label="General settings">
+          <Stack spacing={0} role="tabpanel" aria-label="General settings">
             <FormControlLabel
               sx={{ m: 0 }}
+              slotProps={{ typography: { variant: 'body2' } }}
               control={
-                <Switch
+                <Checkbox
+                  size="small"
+                  sx={{ p: 0, mr: 1 }}
                   checked={developerMode}
                   onChange={(event) => {
                     onDeveloperModeChange(event.target.checked);
@@ -124,7 +127,11 @@ export function SettingsDialog({
               }
               label="Enable developer diagnostics"
             />
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ pl: 3.5, mt: -0.25 }}
+            >
               Exposes local logs, health checks, and diagnostics export. Nothing is
               uploaded automatically.
             </Typography>

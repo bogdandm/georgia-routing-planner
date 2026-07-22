@@ -78,14 +78,14 @@ function TracksContent() {
         />
         <Tooltip title="Track filters arrive with the catalog">
           <span>
-            <IconButton disabled aria-label="Filter tracks">
+            <IconButton disabled size="small" aria-label="Filter tracks">
               <FilterAltOutlinedIcon />
             </IconButton>
           </span>
         </Tooltip>
         <Tooltip title="Track sorting arrives with the catalog">
           <span>
-            <IconButton disabled aria-label="Sort tracks">
+            <IconButton disabled size="small" aria-label="Sort tracks">
               <SortOutlinedIcon />
             </IconButton>
           </span>

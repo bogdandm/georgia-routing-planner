@@ -40,7 +40,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
@@ -698,16 +697,9 @@ function SceneCard({
   const hidden = appliedImagery.status === 'hidden' && applied;
   const acquiredAt = new Date(scene.acquiredAt);
   const title = dayFormatter.format(acquiredAt);
-  const handleCardClick = (event: MouseEvent<HTMLElement>) => {
-    const clickedSecondaryAction =
-      event.target instanceof Element &&
-      event.target.closest('[data-scene-card-secondary-action]') !== null;
-    if (!clickedSecondaryAction) onSelect();
-  };
   return (
     <Box
       id={`satellite-scene-${encodeURIComponent(scene.id)}`}
-      onClick={handleCardClick}
       sx={{
         overflow: 'hidden',
         borderBottom: showBottomDivider ? 1 : 0,
@@ -721,7 +713,19 @@ function SceneCard({
         }
         aria-pressed={selected}
         selected={selected}
-        sx={{ display: 'block', p: 0, textAlign: 'left' }}
+        onClick={onSelect}
+        sx={{
+          display: 'block',
+          p: 0,
+          textAlign: 'left',
+          '&.Mui-selected': {
+            bgcolor: 'transparent',
+          },
+          '&:hover': { bgcolor: 'action.hover' },
+          '&.Mui-selected:hover': {
+            bgcolor: `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`,
+          },
+        }}
       >
         <Stack direction="row" spacing={1.5} sx={{ p: 2 }}>
           {scene.thumbnailHref === null ? (
@@ -807,7 +811,7 @@ function SceneCard({
           </Alert>
         ) : null}
         {selected ? (
-          <Box sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider' }}>
+          <Box sx={{ px: 2, pb: 2 }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
               {applying
                 ? 'Applying true-color imagery…'
@@ -833,50 +837,47 @@ function SceneCard({
             >
               {scene.attribution}
             </Typography>
+            {failed ? <Alert severity="error">{appliedImagery.message}</Alert> : null}
+            <Typography variant="caption" color="text.secondary">
+              Tile {scene.tileId ?? 'Unavailable'} · Orbit{' '}
+              {scene.orbit ?? 'Unavailable'}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', overflowWrap: 'anywhere' }}
+            >
+              Product {scene.productId ?? 'Unavailable'}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block' }}
+            >
+              Scene edge {coverage.distanceToSceneEdgeKm.toFixed(1)} km from search
+              point
+            </Typography>
           </Box>
         ) : null}
       </ListItemButton>
-      {selected ? (
-        <Stack
-          spacing={0.75}
-          sx={{ px: 1.5, py: 1.25, borderTop: 1, borderColor: 'divider' }}
-        >
-          {failed ? <Alert severity="error">{appliedImagery.message}</Alert> : null}
-          <Typography variant="caption" color="text.secondary">
-            Tile {scene.tileId ?? 'Unavailable'} · Orbit {scene.orbit ?? 'Unavailable'}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ overflowWrap: 'anywhere' }}
+      {selected && applied ? (
+        <Stack direction="row" spacing={1} sx={{ px: 2, pb: 2 }}>
+          <Button
+            size="small"
+            startIcon={<CenterFocusStrongIcon />}
+            onClick={onFitFootprint}
           >
-            Product {scene.productId ?? 'Unavailable'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Scene edge {coverage.distanceToSceneEdgeKm.toFixed(1)} km from search point
-          </Typography>
-          {applied ? (
-            <Stack direction="row" spacing={1}>
-              <Button
-                size="small"
-                data-scene-card-secondary-action
-                startIcon={<CenterFocusStrongIcon />}
-                onClick={onFitFootprint}
-              >
-                Fit footprint
-              </Button>
-              <Button
-                size="small"
-                data-scene-card-secondary-action
-                startIcon={hidden ? <VisibilityIcon /> : <VisibilityOffIcon />}
-                onClick={() => {
-                  onToggleImagery(hidden);
-                }}
-              >
-                {hidden ? 'Show imagery' : 'Hide imagery'}
-              </Button>
-            </Stack>
-          ) : null}
+            Fit footprint
+          </Button>
+          <Button
+            size="small"
+            startIcon={hidden ? <VisibilityIcon /> : <VisibilityOffIcon />}
+            onClick={() => {
+              onToggleImagery(hidden);
+            }}
+          >
+            {hidden ? 'Show imagery' : 'Hide imagery'}
+          </Button>
         </Stack>
       ) : null}
     </Box>

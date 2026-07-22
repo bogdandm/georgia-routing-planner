@@ -517,6 +517,13 @@ Rename validates and changes only the summary. Delete removes both rows in one
 transaction. Opening a saved track validates its content independently and reports a
 bounded integrity error when the row is missing or corrupt.
 
+The Tracks provider sends only validated independent segments to the existing map layer
+controller. That controller retains one GeoJSON `MultiLineString`, reconciles its casing
+and bright-blue line after map/style attachment, and applies one persistent
+visibility/opacity pair. Import and saved-track selection issue one fit command with
+left padding for both Tracks panes. Close replaces the source data with empty geometry;
+it does not alter the stored row or camera.
+
 ## Teardown ownership
 
 `MapWorkspace` flushes camera persistence and releases the native map through its ref

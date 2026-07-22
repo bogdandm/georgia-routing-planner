@@ -19,6 +19,10 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapInteractionStore,
+  resetMapInteractionStore,
+} from '@/presentation/map/mapInteractionStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -32,6 +36,7 @@ let services: RuntimeServices;
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
   resetMapLayerStore();
+  resetMapInteractionStore();
   resetSatelliteRequestStatus();
   services = createTestServices();
   await services.database.delete();
@@ -341,6 +346,10 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('textbox', { name: 'Track name' })).toHaveValue(
       'Fixture trail',
     );
+    expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
+      bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
+      padding: { top: 56, right: 56, bottom: 56, left: 840 },
+    });
     const leaveEvent = new Event('beforeunload', { cancelable: true });
     expect(window.dispatchEvent(leaveEvent)).toBe(false);
 
@@ -453,6 +462,27 @@ describe('WorkspaceShell', () => {
     });
 
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
+  });
+
+  it('controls all imported tracks through one Layers visibility and opacity pair', async () => {
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setVisibility = vi
+      .spyOn(mapLayers, 'setLayerVisibility')
+      .mockReturnValue({ status: 'success' });
+    const setOpacity = vi
+      .spyOn(mapLayers, 'setImportedTrackOpacity')
+      .mockReturnValue({ status: 'success' });
+    renderWorkspaceShell();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Imported tracks' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Track opacity' }), {
+      target: { value: '35' },
+    });
+
+    expect(setVisibility).toHaveBeenLastCalledWith('imported-tracks', false);
+    expect(setOpacity).toHaveBeenLastCalledWith(0.35);
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {

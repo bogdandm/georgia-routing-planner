@@ -1,8 +1,11 @@
 import type {
   ErrorEvent as MapLibreErrorEvent,
+  GeoJSONSource,
   Map as MapLibreMap,
   MapSourceDataEvent,
+  Source,
 } from 'maplibre-gl';
+import type { Feature, MultiLineString } from 'geojson';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
@@ -28,6 +31,7 @@ import {
 } from '@/domain/satellite/SatelliteScene';
 import {
   mapInsertionPoints,
+  importedTrackLayerIds,
   mapLayerIds,
   mapSourceIds,
   sentinelMapLayerIds,
@@ -121,6 +125,7 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.peakLabels,
     mapLayerIds.placeLabels,
   ],
+  'imported-tracks': [importedTrackLayerIds.casing, importedTrackLayerIds.line],
 };
 
 type RasterSlot = (typeof rasterSlots)[number];
@@ -171,6 +176,10 @@ function sceneBounds(scene: SatelliteScene): [number, number, number, number] {
     throw new Error('The scene footprint does not contain usable coordinates.');
   }
   return [west, south, east, north];
+}
+
+function isGeoJsonSource(source: Source): source is GeoJSONSource {
+  return 'setData' in source && typeof source.setData === 'function';
 }
 
 function sourceIdFromError(event: MapLibreErrorEvent): string | null {
@@ -294,6 +303,12 @@ export class MapLibreLayerController {
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
   #appliedOpenStreetMapOpacity: number | null = null;
+  #importedTrackGeometry: MultiLineString = {
+    type: 'MultiLineString',
+    coordinates: [],
+  };
+  #appliedImportedTrackOpacity: number | null = null;
+  readonly #importedTrackLayerAnchors = new Map<string, unknown>();
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
   readonly #directFallbackUrls = new Map<string, string>();
@@ -334,6 +349,7 @@ export class MapLibreLayerController {
       this.reconcileTerrainOverlays();
       this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
+      this.reconcileImportedTrack();
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
@@ -343,6 +359,7 @@ export class MapLibreLayerController {
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
+    this.reconcileImportedTrack();
   }
 
   public createDemTileUrl(): string {
@@ -368,6 +385,8 @@ export class MapLibreLayerController {
     this.#visualModeLayerAnchors.clear();
     this.#appliedOpenStreetMapOpacity = null;
     this.#openStreetMapOpacityLayerAnchors.clear();
+    this.#appliedImportedTrackOpacity = null;
+    this.#importedTrackLayerAnchors.clear();
     this.#applySequence += 1;
   }
 
@@ -439,6 +458,55 @@ export class MapLibreLayerController {
       data: { category: 'openstreetmap', opacityPercent: Math.round(opacity * 100) },
     });
     return { status: 'success' };
+  }
+
+  public setImportedTrackOpacity(opacity: number): MapLayerVisibilityResult {
+    if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+      return this.visibilityFailure('Choose an opacity between 0 and 100 percent.');
+    }
+    if (this.#map === null) return this.visibilityFailure('The map is not ready yet.');
+    mapLayerStore.setState({ importedTrackOpacity: opacity, errorMessage: null });
+    this.applyImportedTrackPaint();
+    this.persistStableState();
+    this.logger.log({
+      level: 'info',
+      name: 'map.layer-group.opacity-changed',
+      data: { category: 'imported-tracks', opacityPercent: Math.round(opacity * 100) },
+    });
+    return { status: 'success' };
+  }
+
+  public setImportedTrackGeometry(
+    segments: readonly (readonly (readonly [number, number])[])[],
+  ): MapLayerVisibilityResult {
+    const valid = segments.every(
+      (segment) =>
+        segment.length >= 2 &&
+        segment.every(
+          ([longitude, latitude]) =>
+            Number.isFinite(longitude) &&
+            Number.isFinite(latitude) &&
+            longitude >= -180 &&
+            longitude <= 180 &&
+            latitude >= -90 &&
+            latitude <= 90,
+        ),
+    );
+    if (!valid || segments.length === 0) {
+      return this.visibilityFailure('The imported track geometry is invalid.');
+    }
+    this.#importedTrackGeometry = {
+      type: 'MultiLineString',
+      coordinates: segments.map((segment) =>
+        segment.map(([longitude, latitude]) => [longitude, latitude]),
+      ),
+    };
+    return this.reconcileImportedTrack();
+  }
+
+  public clearImportedTrackGeometry(): void {
+    this.#importedTrackGeometry = { type: 'MultiLineString', coordinates: [] };
+    this.reconcileImportedTrack();
   }
 
   public async applyScene(
@@ -651,11 +719,13 @@ export class MapLibreLayerController {
       mapLayerStore.setState({
         visibility: persisted.visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
+        importedTrackOpacity: persisted.importedTrackOpacity,
         satelliteRenderingMode: persisted.satelliteRenderingMode,
         errorMessage: null,
       });
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
+      this.reconcileImportedTrack();
     } catch {
       this.logger.log({
         level: 'warn',
@@ -1059,12 +1129,14 @@ export class MapLibreLayerController {
   }
 
   private persistStableState(): void {
-    const { visibility, openStreetMapOpacity } = mapLayerStore.getState();
+    const { visibility, openStreetMapOpacity, importedTrackOpacity } =
+      mapLayerStore.getState();
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
         visibility,
         openStreetMapOpacity,
+        importedTrackOpacity,
         satelliteRenderingMode: this.#satelliteRenderingMode,
         renderingTuning,
         terrainOverlays: { ...this.#terrainOverlayPreferences },
@@ -1081,6 +1153,7 @@ export class MapLibreLayerController {
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
+    this.reconcileImportedTrack();
   };
 
   private readonly handleTerrainOverlayError = (event: MapLibreErrorEvent): void => {
@@ -1377,6 +1450,7 @@ export class MapLibreLayerController {
       'hiking-paths',
       'roads',
       'places-and-pois',
+      'imported-tracks',
     ] as const) {
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
@@ -1388,6 +1462,83 @@ export class MapLibreLayerController {
         }
       }
     }
+  }
+
+  private reconcileImportedTrack(): MapLayerVisibilityResult {
+    const map = this.#map;
+    if (map === null) return { status: 'success' };
+    if (map.getLayer(mapLayerIds.background) === undefined) {
+      return { status: 'success' };
+    }
+    try {
+      const feature: Feature<MultiLineString> = {
+        type: 'Feature',
+        properties: {},
+        geometry: this.#importedTrackGeometry,
+      };
+      const source = map.getSource(mapSourceIds.importedTrack);
+      if (source === undefined) {
+        map.addSource(mapSourceIds.importedTrack, { type: 'geojson', data: feature });
+      } else {
+        if (!isGeoJsonSource(source)) {
+          throw new Error('The imported track source cannot update its data.');
+        }
+        source.setData(feature);
+      }
+      const { visibility, importedTrackOpacity } = mapLayerStore.getState();
+      const layout = {
+        visibility: visibility['imported-tracks'] ? 'visible' : 'none',
+      } as const;
+      if (map.getLayer(importedTrackLayerIds.casing) === undefined) {
+        map.addLayer({
+          id: importedTrackLayerIds.casing,
+          type: 'line',
+          source: mapSourceIds.importedTrack,
+          layout: { ...layout, 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
+            'line-width': 7,
+            'line-opacity': importedTrackOpacity,
+          },
+        });
+      }
+      if (map.getLayer(importedTrackLayerIds.line) === undefined) {
+        map.addLayer({
+          id: importedTrackLayerIds.line,
+          type: 'line',
+          source: mapSourceIds.importedTrack,
+          layout: { ...layout, 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': mapVisualPalette.userGeometry.gpxTrack,
+            'line-width': 4,
+            'line-opacity': importedTrackOpacity,
+          },
+        });
+      }
+      this.applyImportedTrackPaint();
+      return { status: 'success' };
+    } catch {
+      return this.visibilityFailure('The imported track could not be rendered.');
+    }
+  }
+
+  private applyImportedTrackPaint(): void {
+    const map = this.#map;
+    if (map === null) return;
+    const opacity = mapLayerStore.getState().importedTrackOpacity;
+    const layerIds = [importedTrackLayerIds.casing, importedTrackLayerIds.line];
+    const layerChanged = layerIds.some(
+      (layerId) =>
+        map.getLayer(layerId) !== this.#importedTrackLayerAnchors.get(layerId),
+    );
+    if (opacity === this.#appliedImportedTrackOpacity && !layerChanged) return;
+    for (const layerId of layerIds) {
+      if (map.getLayer(layerId) !== undefined) {
+        map.setPaintProperty(layerId, 'line-opacity', opacity);
+        this.#importedTrackLayerAnchors.set(layerId, map.getLayer(layerId));
+      }
+    }
+    this.#appliedImportedTrackOpacity = opacity;
   }
 
   private applyMapVisualMode(): void {

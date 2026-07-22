@@ -27,6 +27,7 @@ import {
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapFailureCategory,
+  type MapFitPadding,
   type MapPointInspection,
   type MapSourceFailure,
   type MapViewportBounds,
@@ -328,7 +329,11 @@ export class MapLibreFacade implements MapFacade {
     });
   }
 
-  public fitBounds(bounds: MapViewportBounds, maxZoom: number): void {
+  public fitBounds(
+    bounds: MapViewportBounds,
+    maxZoom: number,
+    padding?: MapFitPadding,
+  ): void {
     const map = this.#map;
     if (map === null) return;
     map.fitBounds(
@@ -337,7 +342,7 @@ export class MapLibreFacade implements MapFacade {
         [bounds.east, bounds.north],
       ],
       {
-        padding: 56,
+        padding: padding ?? 56,
         maxZoom,
         duration: 650,
         bearing: map.getBearing(),

@@ -7,7 +7,8 @@ export type LogicalMapLayerId =
   | 'restricted-areas'
   | 'hiking-paths'
   | 'roads'
-  | 'places-and-pois';
+  | 'places-and-pois'
+  | 'imported-tracks';
 
 type MapLayerVisibilityPreferences = Readonly<Record<LogicalMapLayerId, boolean>>;
 
@@ -46,6 +47,7 @@ export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
 export interface PersistedMapLayerPreferences {
   readonly visibility: MapLayerVisibilityPreferences;
   readonly openStreetMapOpacity: number;
+  readonly importedTrackOpacity: number;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;

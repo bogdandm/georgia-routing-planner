@@ -103,9 +103,11 @@ const mapLayerPreferencesSchema = z
         'hiking-paths': z.boolean(),
         roads: z.boolean(),
         'places-and-pois': z.boolean(),
+        'imported-tracks': z.boolean().default(true),
       })
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
+    importedTrackOpacity: z.number().min(0).max(1).default(1),
     satelliteRenderingMode: z
       .enum(['auto', 'server', 'direct'])
       .default(defaultSatelliteRenderingMode),
@@ -156,8 +158,10 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,
+    'imported-tracks': true,
   },
   openStreetMapOpacity: 1,
+  importedTrackOpacity: 1,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,

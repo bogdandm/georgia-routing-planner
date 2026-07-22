@@ -48,6 +48,7 @@ import {
   type PoiCandidate,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
+import { requestMapFitBounds } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
 
 interface PreviewTrack {
@@ -159,12 +160,14 @@ function bestCandidate(
 }
 
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
-  const { clock, database, idGenerator, logger, searchPlaces } = useRuntimeServices();
+  const { clock, database, idGenerator, logger, mapLayers, searchPlaces } =
+    useRuntimeServices();
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
   const namingAbort = useRef<AbortController | null>(null);
+  const renderedTrackId = useRef<string | null>(null);
 
   const reloadSummaries = useCallback(async () => {
     try {
@@ -194,6 +197,38 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       window.removeEventListener('beforeunload', preventUnload);
     };
   }, [active?.kind]);
+
+  useEffect(() => {
+    if (active === null) {
+      renderedTrackId.current = null;
+      mapLayers?.clearImportedTrackGeometry();
+      return;
+    }
+    const trackId = active.kind === 'preview' ? active.id : active.summary.id;
+    if (renderedTrackId.current === trackId) return;
+    const segments =
+      active.kind === 'preview'
+        ? active.parsed.segments.map((segment) =>
+            segment.points.map((point) => point.coordinate),
+          )
+        : active.content.segments;
+    const metrics = active.kind === 'preview' ? active.metrics : active.summary.metrics;
+    const result = mapLayers?.setImportedTrackGeometry(segments);
+    if (result?.status === 'failed') return;
+    renderedTrackId.current = trackId;
+    requestMapFitBounds(
+      {
+        west: metrics.bounds.west,
+        south: metrics.bounds.south,
+        east: metrics.bounds.crossesAntimeridian
+          ? metrics.bounds.east + 360
+          : metrics.bounds.east,
+        north: metrics.bounds.north,
+      },
+      15,
+      { top: 56, right: 56, bottom: 56, left: 840 },
+    );
+  }, [active, mapLayers]);
 
   const generateName = useCallback(
     async (preview: PreviewTrack, controller: AbortController) => {

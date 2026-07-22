@@ -74,7 +74,9 @@ explicit apply action. Save retains the original file, independent line segments
 versioned metrics in this browser; unsaved previews activate the native leave-site
 guard. Saved tracks are searchable by name and support reopen, close, rename, and
 confirmed deletion. Catalog, folders, tags, filters, and batch import remain
-unavailable.
+unavailable. A newly imported or reopened track renders as bright-blue independent lines
+and fits its complete bounds with padding for the master/detail surfaces. Closing it
+removes the active geometry without deleting a saved record or moving the camera.
 
 ### Create GPX
 
@@ -215,28 +217,30 @@ and cross-feature actions are unavailable.
 
 ### Layers
 
-Layers groups durable controls under explicit source headings: Copernicus Sentinel-2,
-the configured terrain provider, and OpenStreetMap. The checkboxes cover Satellite
-imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and
-Places and POIs, plus Natural features and Restricted areas. The single **Natural
-features** checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and
-their water labels. The OpenStreetMap controls remain a single flat list with one shared
-opacity slider. While satellite imagery is visible, the slider scales every
-OpenStreetMap reference layer and the elevation isolines together while preserving their
-relative visual weights and individual visibility choices. It is disabled in vector-only
-mode. Every map data source added to the application must appear under its provider
-heading in Layers; each user-visible feature family from that source receives an
-explicit control unless it is part of the required base canvas. Each logical ID maps to
-an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the UI
-boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
-retains the applied scene and does not remove its footprint, search results, or
-attribution contract. Relief and isoline visibility are independent of 3D terrain mode
-and satellite availability. Base land remains visible and cannot be disabled. Per-layer
-opacity, drag ordering, and custom layers are unavailable. Checkbox state, shared
-OpenStreetMap opacity, rendering mode, imagery stretch, and terrain-overlay preferences
-are stored locally and restored after refresh. Satellite scene metadata and assets are
-never persisted locally; imagery starts empty unless an explicit share URL requests a
-scene.
+Layers groups durable controls under explicit source headings: Local GPX, Copernicus
+Sentinel-2, the configured terrain provider, and OpenStreetMap. The checkboxes cover
+Imported tracks, Satellite imagery, Scene footprint, Relief shading, Elevation isolines,
+Hiking paths, Roads, and Places and POIs, plus Natural features and Restricted areas.
+The single **Natural features** checkbox controls vegetation, glaciers, wetlands,
+rivers, water bodies, and their water labels. The OpenStreetMap controls remain a single
+flat list with one shared opacity slider. While satellite imagery is visible, the slider
+scales every OpenStreetMap reference layer and the elevation isolines together while
+preserving their relative visual weights and individual visibility choices. It is
+disabled in vector-only mode. Every map data source added to the application must appear
+under its provider heading in Layers; each user-visible feature family from that source
+receives an explicit control unless it is part of the required base canvas. Each logical
+ID maps to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never
+cross the UI boundary. Satellite controls remain disabled until a scene is applied.
+Hiding imagery retains the applied scene and does not remove its footprint, search
+results, or attribution contract. Relief and isoline visibility are independent of 3D
+terrain mode and satellite availability. Base land remains visible and cannot be
+disabled. Per-layer opacity, drag ordering, and custom layers are unavailable. Checkbox
+state, shared OpenStreetMap opacity, the shared imported-track opacity, rendering mode,
+imagery stretch, and terrain-overlay preferences are stored locally and restored after
+refresh. Imported-track visibility and opacity affect the active preview and saved
+selection together; they do not create per-track presentation records. Satellite scene
+metadata and assets are never persisted locally; imagery starts empty unless an explicit
+share URL requests a scene.
 
 ## Persistent map controls
 

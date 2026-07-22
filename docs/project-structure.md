@@ -97,7 +97,7 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Component transitions and messages                        | React component state                                 | Local rendering concern                                 |
 | Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                      | Imperative MapLibre lifecycle stays isolated            |
 | Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl`                            | Camera input and native marker placement stay isolated  |
-| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                             | Provider URLs and native resources stay imperative      |
+| Sentinel, terrain, and active-track source/layer commands | `MapLibreLayerController`                             | Native resources and ordering stay imperative           |
 | Direct visual-COG scene registry and raster worker        | `SatelliteCogTileProvider` / `SatelliteCogRasterizer` | Bounded fallback state and COG URLs stay outside React  |
 | DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`      | One algorithm runs in worker or inline compatibility    |
 | Terrain worker execution status                           | `mapLayerStore`                                       | Transient serializable UI warning state                 |
@@ -105,6 +105,7 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                           | Read-only platform metrics behind an app port           |
 | Settled 2D center and zoom                                | `AppDatabase` through `MapCameraRepository`           | Durable camera restarts without 3D orientation          |
 | Saved local track summaries and content                   | `AppDatabase` through `LocalTrackRepository`          | Atomic IndexedDB ownership with validated reads         |
+| Unsaved preview, active selection, and list query         | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store      |
 | Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export      |
 | Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                     |
 | Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                        | Disposable, not persisted                               |

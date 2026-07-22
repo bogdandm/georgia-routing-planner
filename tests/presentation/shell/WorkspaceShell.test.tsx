@@ -353,6 +353,7 @@ describe('WorkspaceShell', () => {
     const monthYearTrigger = screen.getByRole('button', {
       name: 'Choose acquisition month and year, July 2026',
     });
+    expect(within(monthYearTrigger).getByTestId('KeyboardArrowDownIcon')).toBeVisible();
     await user.hover(monthYearTrigger);
     expect(
       await screen.findByRole('tooltip', { name: 'Choose month and year' }),
@@ -360,15 +361,36 @@ describe('WorkspaceShell', () => {
     await user.unhover(monthYearTrigger);
     await user.click(monthYearTrigger);
 
+    const acquisitionCalendar = screen.getByLabelText('Sentinel acquisition calendar');
+    expect(
+      within(acquisitionCalendar).queryByRole('group', {
+        name: 'Choose acquisition month and year',
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Choose acquisition month and year' }),
+    ).toBeVisible();
     const yearSelect = screen.getByRole('combobox', { name: 'Acquisition year' });
     await user.click(yearSelect);
     await user.click(screen.getByRole('option', { name: '2025' }));
-    expect(screen.getByRole('grid', { name: 'July 2025' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Choose Jul 2025', pressed: true }),
+    ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Choose Dec 2025' }));
     expect(screen.getByRole('grid', { name: 'December 2025' })).toBeVisible();
 
     await user.click(currentMonth);
     expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    await user.click(monthYearTrigger);
+    expect(
+      screen.getByRole('group', { name: 'Choose acquisition month and year' }),
+    ).toBeVisible();
+    await user.click(previousMonth);
+    expect(
+      screen.queryByRole('group', { name: 'Choose acquisition month and year' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
   });
 
   it('restores the persisted maximum cloud cover after remounting', async () => {

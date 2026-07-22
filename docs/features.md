@@ -120,8 +120,10 @@ displayed calendar month. Month navigation remains available during these loads;
 pause before each request lets users move across several months without fetching every
 intermediate month, and a newer selection cancels a superseded month request. Calendar
 controls provide tooltips, a double-chevron shortcut returns directly to the current
-month, and the month-year heading opens a year selector with a 12-month grid for direct
-navigation. Months outside the Sentinel archive or after the current month are disabled.
+month, and the visibly marked month-year dropdown opens a floating year selector with a
+12-month grid for direct navigation without shifting the calendar. Months outside the
+Sentinel archive or after the current month are disabled. The picker is non-modal:
+clicking another calendar or sidebar control closes it and performs that action.
 
 Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport

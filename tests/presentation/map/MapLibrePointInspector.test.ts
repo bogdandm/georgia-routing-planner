@@ -32,7 +32,7 @@ describe('renderPointInspectorContent', () => {
       'Google Search',
     ]);
     expect(links.map((link) => link.href)).toEqual([
-      'https://en.wikipedia.org/wiki/Special:Search?search=%3Cscript%3Efixture%20hut%3C%2Fscript%3E%20Georgia',
+      'https://en.wikipedia.org/wiki/%3Cscript%3Efixture_hut%3C%2Fscript%3E',
       'https://www.google.com/search?q=%3Cscript%3Efixture%20hut%3C%2Fscript%3E%20Georgia',
     ]);
     expect(links.every((link) => link.target === '_blank')).toBe(true);

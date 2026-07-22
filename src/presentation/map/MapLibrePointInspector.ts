@@ -39,10 +39,11 @@ function appendLabelValue(
 
 function appendFeatureLinks(container: HTMLElement, name: string): void {
   const query = encodeURIComponent(`${name} Georgia`);
+  const wikipediaTitle = encodeURIComponent(name.replaceAll(' ', '_'));
   const links = document.createElement('div');
   links.className = 'map-point-inspector__links';
   for (const [label, href] of [
-    ['Wikipedia', `https://en.wikipedia.org/wiki/Special:Search?search=${query}`],
+    ['Wikipedia', `https://en.wikipedia.org/wiki/${wikipediaTitle}`],
     ['Google Search', `https://www.google.com/search?q=${query}`],
   ] as const) {
     const link = document.createElement('a');

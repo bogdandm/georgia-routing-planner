@@ -270,10 +270,11 @@ scene.
 - Clicking the map opens an anchored, accessible point-inspection popup with formatted
   coordinates, terrain elevation, and the nearest supported named OSM map feature within
   100 m. The supported feature sources include places, peaks, and points of interest;
-  named results include Wikipedia and Google Search links that open in a new tab. While
-  any part of that popup intersects the map viewport, the next map click only closes it;
-  a subsequent click opens a new inspection. If camera movement puts the popup entirely
-  outside the viewport, the next click immediately replaces it.
+  named results include direct English Wikipedia article and Google Search links that
+  open in a new tab. While any part of that popup intersects the map viewport, the next
+  map click only closes it; a subsequent click opens a new inspection. If camera
+  movement puts the popup entirely outside the viewport, the next click immediately
+  replaces it.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.

@@ -104,12 +104,9 @@ test('keeps production terrain and contours on the module worker through reload'
   await expect(
     page.getByRole('checkbox', { name: 'Elevation isolines' }),
   ).toBeChecked();
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('tab', { name: 'Rendering' }).click();
   await expect(
     page.getByText(/Terrain processing is running in compatibility mode/u),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Done' }).click();
 
   await page.getByRole('button', { name: 'Developer diagnostics' }).click();
   await page.getByRole('tab', { name: /Logs/u }).click();

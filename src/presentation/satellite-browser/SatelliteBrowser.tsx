@@ -1032,7 +1032,7 @@ function SatelliteResultsPane({
               groups[index - 1]?.date.slice(0, 7) !== group.date.slice(0, 7) ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Divider sx={{ width: 24 }} />
-                  <Typography variant="caption" color="text.secondary" noWrap>
+                  <Typography variant="body2" color="text.secondary" noWrap>
                     {monthFormatter.format(new Date(`${group.date}T00:00:00.000Z`))}
                   </Typography>
                   <Divider sx={{ flex: 1 }} />

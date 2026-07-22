@@ -660,12 +660,31 @@ boundaries, add focused tests proving private data is excluded.
 
 ## GUI and CSS
 
-Material UI is the default for application chrome and controls.
+Material UI is the default for application chrome and controls. Follow
+[`docs/ui-design.md`](docs/ui-design.md) for control placement, visual hierarchy,
+spacing rhythm, disclosures, helper copy, and presentation review.
 
 - Use the shared theme for palette, typography, spacing, shape, breakpoints, and
   component defaults.
 - Prefer MUI layout primitives and components over handwritten widgets.
 - Use `sx` for small one-off details and CSS modules for map sizing or complex layout.
+- Keep feature-specific controls in their contextual panel and application-wide
+  preferences in Settings; never duplicate a control across both surfaces.
+- Use section headings stronger than control labels: `subtitle2` bold for source/group
+  headings, `body2` regular for control titles, and secondary `caption` text for
+  descriptions.
+- Build spacing from the theme's 8 px unit. Use 16 px between major groups, 12 px
+  between repeated control rows, and 8 px between a parent control and its dependent
+  row.
+- Do not leave empty `Stack`, `Box`, status, or conditional wrappers that still
+  contribute spacing when they contain no visible content.
+- Keep adjacent contextual panels at a shared width unless the reviewed workflow
+  demonstrates a concrete need for a different width.
+- Put secondary tuning controls in a collapsed, accessible disclosure at the end of
+  their section; do not hide primary actions or required recovery controls.
+- Remove helper text that repeats visible values, labels, order, or obvious behavior.
+  Keep concise help only when it prevents a likely mistake or explains a non-obvious
+  consequence.
 - Do not add Tailwind, Bootstrap, another design system, or another CSS-in-JS library.
 - Maintain visible focus, keyboard access, labels, tooltips, contrast, and minimum hit
   areas.

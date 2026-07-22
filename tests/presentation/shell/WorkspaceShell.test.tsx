@@ -297,7 +297,8 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('50');
     expect(screen.getByLabelText('Sentinel acquisition calendar')).toBeVisible();
     const acquisitionCalendar = screen.getByRole('grid', { name: 'July 2026' });
-    expect(acquisitionCalendar.children).toHaveLength(42);
+    expect(within(acquisitionCalendar).getAllByRole('columnheader')).toHaveLength(7);
+    expect(within(acquisitionCalendar).getAllByRole('gridcell')).toHaveLength(31);
     expect(
       screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
     ).toHaveStyle({ height: '34px' });

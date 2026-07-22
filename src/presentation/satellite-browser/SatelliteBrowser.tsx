@@ -355,6 +355,10 @@ function AcquisitionCalendar({
     const day = index - firstWeekday + 1;
     return day >= 1 && day <= daysInMonth ? day : null;
   });
+  const calendarRows = Array.from(
+    { length: calendarCellCount / 7 },
+    (_value, rowIndex) => cells.slice(rowIndex * 7, rowIndex * 7 + 7),
+  );
 
   const changeMonth = (offset: number) => {
     const nextMonth = new Date(Date.UTC(year, month + offset, 1));
@@ -403,77 +407,98 @@ function AcquisitionCalendar({
       <Box
         role="grid"
         aria-label={monthFormatter.format(displayMonthDate)}
-        sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25 }}
+        sx={{ display: 'grid', gap: 0.25 }}
       >
-        {weekDays.map((day) => (
-          <Typography
-            key={day}
-            role="columnheader"
-            variant="caption"
-            color="text.secondary"
-            sx={{ textAlign: 'center' }}
-          >
-            {day}
-          </Typography>
-        ))}
-        {cells.map((day, index) => {
-          if (day === null) return <Box key={`empty-${String(index)}`} />;
-          const date = `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const cloud = availability.get(date);
-          const isLatest = date === latestDate && cloud !== undefined;
-          const matchesCloudFilter =
-            cloud !== undefined && cloud <= maxCloudCoverPercent;
-          return (
-            <ButtonBase
-              key={date}
-              role="gridcell"
-              disabled={cloud === undefined}
-              onClick={() => {
-                onSelectDate(date);
-              }}
-              aria-label={
-                cloud === undefined
-                  ? `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, no loaded imagery`
-                  : `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
-              }
-              sx={{
-                height: 34,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: 1.25,
-                border: 1,
-                borderColor:
-                  cloud === undefined
-                    ? 'transparent'
-                    : matchesCloudFilter
-                      ? appColors.brand.tigerOrange
-                      : 'transparent',
-                bgcolor:
-                  cloud === undefined
-                    ? 'transparent'
-                    : matchesCloudFilter
-                      ? appColors.tag.orange.background
-                      : 'transparent',
-                color: matchesCloudFilter
-                  ? appColors.tag.orange.foreground
-                  : 'text.primary',
-                fontWeight: isLatest ? 700 : 400,
-                '&.Mui-disabled': { color: 'text.primary' },
-              }}
+        <Box role="row" sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {weekDays.map((day) => (
+            <Typography
+              key={day}
+              role="columnheader"
+              variant="caption"
+              color="text.secondary"
+              sx={{ textAlign: 'center' }}
             >
-              <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
-                {day}
-              </Typography>
-              {cloud === undefined ? null : (
-                <Typography variant="caption" sx={{ color: 'inherit', lineHeight: 1 }}>
-                  {cloud.toFixed(0)}%
-                </Typography>
-              )}
-            </ButtonBase>
-          );
-        })}
+              {day}
+            </Typography>
+          ))}
+        </Box>
+        {calendarRows.map((calendarRow, rowIndex) => (
+          <Box
+            key={`week-${String(rowIndex)}`}
+            role="row"
+            sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25 }}
+          >
+            {calendarRow.map((day, columnIndex) => {
+              if (day === null) {
+                return (
+                  <Box
+                    key={`empty-${String(rowIndex * 7 + columnIndex)}`}
+                    role="gridcell"
+                    aria-hidden="true"
+                  />
+                );
+              }
+              const date = `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const cloud = availability.get(date);
+              const isLatest = date === latestDate && cloud !== undefined;
+              const matchesCloudFilter =
+                cloud !== undefined && cloud <= maxCloudCoverPercent;
+              return (
+                <ButtonBase
+                  key={date}
+                  role="gridcell"
+                  disabled={cloud === undefined}
+                  onClick={() => {
+                    onSelectDate(date);
+                  }}
+                  aria-label={
+                    cloud === undefined
+                      ? `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, no loaded imagery`
+                      : `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
+                  }
+                  sx={{
+                    height: 34,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 1.25,
+                    border: 1,
+                    borderColor:
+                      cloud === undefined
+                        ? 'transparent'
+                        : matchesCloudFilter
+                          ? appColors.brand.tigerOrange
+                          : 'transparent',
+                    bgcolor:
+                      cloud === undefined
+                        ? 'transparent'
+                        : matchesCloudFilter
+                          ? appColors.tag.orange.background
+                          : 'transparent',
+                    color: matchesCloudFilter
+                      ? appColors.tag.orange.foreground
+                      : 'text.primary',
+                    fontWeight: isLatest ? 700 : 400,
+                    '&.Mui-disabled': { color: 'text.primary' },
+                  }}
+                >
+                  <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                    {day}
+                  </Typography>
+                  {cloud === undefined ? null : (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'inherit', lineHeight: 1 }}
+                    >
+                      {cloud.toFixed(0)}%
+                    </Typography>
+                  )}
+                </ButtonBase>
+              );
+            })}
+          </Box>
+        ))}
       </Box>
     </Box>
   );

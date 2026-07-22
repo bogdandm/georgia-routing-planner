@@ -17,6 +17,7 @@ class FakeNativeMap {
   public showTileBoundaries = false;
   public showCollisionBoxes = false;
   public sourceLoaded = true;
+  public styleReady = false;
   public addSourceCalls = 0;
   public readonly terrainTileUpdates: string[][] = [];
   public readonly terrainValues: unknown[] = [];
@@ -94,6 +95,12 @@ class FakeNativeMap {
     return this.#sources.get(id);
   }
 
+  public getLayer(id: string): unknown {
+    return this.styleReady && id === 'basemap-background'
+      ? { id, type: 'background' }
+      : undefined;
+  }
+
   public addSource(id: string, source: unknown): void {
     this.addSourceCalls += 1;
     this.#sources.set(
@@ -159,6 +166,7 @@ class FakeNativeMap {
   }
 
   public fire(type: string, event?: unknown): void {
+    if (type === 'style.load') this.styleReady = true;
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
     }
@@ -197,8 +205,10 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(8);
+    expect(nativeMap.listenerCount()).toBe(9);
 
+    nativeMap.fire('style.load');
+    expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
     nativeMap.fire('load');
     nativeMap.addSource('late-style-source', { type: 'geojson' });
     nativeMap.fire('styledata');
@@ -276,6 +286,26 @@ describe('MapLibreFacade', () => {
     expect(subscriber.mock.calls.length).toBeGreaterThan(notificationsBeforeDetach);
     expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
     unsubscribe();
+    facade.destroy();
+  });
+
+  it('publishes ready when the map ref arrives after style load but before full load', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.styleReady = true;
+    const facade = new MapLibreFacade(services.logger);
+
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
+    expect(
+      services.logger.getEvents().filter((event) => event.name === 'map.style.ready'),
+    ).toHaveLength(1);
+    expect(
+      services.logger
+        .getEvents()
+        .filter((event) => event.name === 'map.lifecycle.loaded'),
+    ).toHaveLength(0);
     facade.destroy();
   });
 
@@ -433,7 +463,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(10);
+    expect(nativeMap.listenerCount()).toBe(11);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -445,7 +475,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(10);
+    expect(nativeMap.listenerCount()).toBe(11);
     expect(nativeMap.terrainTileUpdates).toEqual([
       ['test-dem://tiles/{z}/{x}/{y}?terrainEnableRetry=1'],
     ]);

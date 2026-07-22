@@ -1,5 +1,6 @@
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import CloseIcon from '@mui/icons-material/Close';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
@@ -22,6 +23,7 @@ import {
   type SelectChangeEvent,
   Slider,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -106,6 +108,11 @@ const calendarMonthLoadDelayMs = 300;
 const catalogCloudCoverCeilingPercent = 100;
 const sentinelArchiveFirstMonth = '2015-06';
 const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
+const calendarMonthNames = Array.from({ length: 12 }, (_value, month) =>
+  new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2020, month, 1)),
+  ),
+);
 const monthFormatter = new Intl.DateTimeFormat('en-GB', {
   month: 'long',
   year: 'numeric',
@@ -336,8 +343,11 @@ function AcquisitionCalendar({
   readonly result: SatelliteSearchResult | null;
   readonly today: Date;
 }) {
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const latestDate = result?.groups[0]?.date ?? toDateInputValue(today);
   const displayMonthDate = new Date(`${displayMonth}-01T00:00:00.000Z`);
+  const minimumMonthDate = new Date(`${sentinelArchiveFirstMonth}-01T00:00:00.000Z`);
+  const maximumMonthDate = new Date(`${maximumMonth}-01T00:00:00.000Z`);
 
   const availability = useMemo(() => {
     const byDate = new Map<string, number>();
@@ -349,6 +359,12 @@ function AcquisitionCalendar({
   }, [result]);
   const year = displayMonthDate.getUTCFullYear();
   const month = displayMonthDate.getUTCMonth();
+  const minimumYear = minimumMonthDate.getUTCFullYear();
+  const maximumYear = maximumMonthDate.getUTCFullYear();
+  const availableYears = Array.from(
+    { length: maximumYear - minimumYear + 1 },
+    (_value, index) => maximumYear - index,
+  );
   const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const calendarCellCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
@@ -366,27 +382,63 @@ function AcquisitionCalendar({
     onMonthChange(toDateInputValue(nextMonth).slice(0, 7));
   };
 
+  const selectYear = (nextYear: number) => {
+    const earliestMonth = nextYear === minimumYear ? minimumMonthDate.getUTCMonth() : 0;
+    const latestMonth = nextYear === maximumYear ? maximumMonthDate.getUTCMonth() : 11;
+    const nextMonth = Math.min(Math.max(month, earliestMonth), latestMonth);
+    onMonthChange(
+      toDateInputValue(new Date(Date.UTC(nextYear, nextMonth, 1))).slice(0, 7),
+    );
+  };
+
+  const selectMonth = (nextMonth: number) => {
+    onMonthChange(toDateInputValue(new Date(Date.UTC(year, nextMonth, 1))).slice(0, 7));
+    setMonthPickerOpen(false);
+  };
+
   return (
     <Box aria-label="Sentinel acquisition calendar">
-      <Stack direction="row" sx={{ alignItems: 'center', mb: 0.5 }}>
-        <IconButton
-          size="small"
-          aria-label="Previous acquisition month"
-          disabled={navigationDisabled || displayMonth <= sentinelArchiveFirstMonth}
-          onClick={() => {
-            changeMonth(-1);
-          }}
-        >
-          <ChevronLeftIcon fontSize="small" />
-        </IconButton>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '80px minmax(0, 1fr) 80px',
+          alignItems: 'center',
+          mb: 0.5,
+        }}
+      >
+        <Tooltip title="Previous month">
+          <span style={{ display: 'flex', width: 'fit-content' }}>
+            <IconButton
+              size="small"
+              aria-label="Previous acquisition month"
+              disabled={navigationDisabled || displayMonth <= sentinelArchiveFirstMonth}
+              onClick={() => {
+                changeMonth(-1);
+              }}
+            >
+              <ChevronLeftIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
         <Stack
           direction="row"
           spacing={1}
-          sx={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+          sx={{ minWidth: 0, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Typography variant="subtitle2">
-            {monthFormatter.format(displayMonthDate)}
-          </Typography>
+          <Tooltip title="Choose month and year">
+            <ButtonBase
+              aria-label={`Choose acquisition month and year, ${monthFormatter.format(displayMonthDate)}`}
+              aria-expanded={monthPickerOpen}
+              onClick={() => {
+                setMonthPickerOpen((open) => !open);
+              }}
+              sx={{ borderRadius: 1, px: 0.5 }}
+            >
+              <Typography variant="subtitle2">
+                {monthFormatter.format(displayMonthDate)}
+              </Typography>
+            </ButtonBase>
+          </Tooltip>
           <Box sx={{ display: 'flex', width: 14, height: 14 }}>
             <CircularProgress
               size={14}
@@ -400,17 +452,91 @@ function AcquisitionCalendar({
             />
           </Box>
         </Stack>
-        <IconButton
-          size="small"
-          aria-label="Next acquisition month"
-          disabled={navigationDisabled || displayMonth >= maximumMonth}
-          onClick={() => {
-            changeMonth(1);
-          }}
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          <Tooltip title="Next month">
+            <span style={{ display: 'flex' }}>
+              <IconButton
+                size="small"
+                aria-label="Next acquisition month"
+                disabled={navigationDisabled || displayMonth >= maximumMonth}
+                onClick={() => {
+                  changeMonth(1);
+                }}
+              >
+                <ChevronRightIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Return to current month">
+            <span style={{ display: 'flex' }}>
+              <IconButton
+                size="small"
+                aria-label="Return to current acquisition month"
+                disabled={navigationDisabled || displayMonth >= maximumMonth}
+                onClick={() => {
+                  onMonthChange(maximumMonth);
+                }}
+              >
+                <KeyboardDoubleArrowRightIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      </Box>
+      {monthPickerOpen ? (
+        <Box
+          role="group"
+          aria-label="Choose acquisition month and year"
+          sx={{ mb: 1, p: 1, border: 1, borderColor: 'divider', borderRadius: 1.5 }}
         >
-          <ChevronRightIcon fontSize="small" />
-        </IconButton>
-      </Stack>
+          <Select
+            fullWidth
+            size="small"
+            value={year}
+            inputProps={{ 'aria-label': 'Acquisition year' }}
+            onChange={(event) => {
+              selectYear(event.target.value);
+            }}
+            sx={{ mb: 1 }}
+          >
+            {availableYears.map((availableYear) => (
+              <MenuItem key={availableYear} value={availableYear}>
+                {availableYear}
+              </MenuItem>
+            ))}
+          </Select>
+          <Box
+            sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.5 }}
+          >
+            {calendarMonthNames.map((monthName, monthIndex) => {
+              const candidate = `${String(year).padStart(4, '0')}-${String(monthIndex + 1).padStart(2, '0')}`;
+              const unavailable =
+                candidate < sentinelArchiveFirstMonth || candidate > maximumMonth;
+              return (
+                <ButtonBase
+                  key={monthName}
+                  aria-label={`Choose ${monthName} ${String(year)}`}
+                  aria-pressed={monthIndex === month}
+                  disabled={unavailable}
+                  onClick={() => {
+                    selectMonth(monthIndex);
+                  }}
+                  sx={{
+                    minHeight: 32,
+                    borderRadius: 1,
+                    bgcolor: monthIndex === month ? 'action.selected' : 'transparent',
+                    color: unavailable ? 'text.disabled' : 'text.primary',
+                    fontSize: '0.75rem',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  {monthName}
+                </ButtonBase>
+              );
+            })}
+          </Box>
+        </Box>
+      ) : null}
       <Box
         role="grid"
         aria-label={monthFormatter.format(displayMonthDate)}

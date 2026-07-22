@@ -118,7 +118,10 @@ including empty ones, are reused when navigating back. Newly loaded scene groups
 appended to the right results pane without replacing other months or resetting the
 displayed calendar month. Month navigation remains available during these loads; a short
 pause before each request lets users move across several months without fetching every
-intermediate month, and a newer selection cancels a superseded month request.
+intermediate month, and a newer selection cancels a superseded month request. Calendar
+controls provide tooltips, a double-chevron shortcut returns directly to the current
+month, and the month-year heading opens a year selector with a 12-month grid for direct
+navigation. Months outside the Sentinel archive or after the current month are disabled.
 
 Scenes sort by acquisition time and cards group by month in the right pane. The calendar
 annotates each loaded day with the scene-cloud average weighted by each scene's viewport

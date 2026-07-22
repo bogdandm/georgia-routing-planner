@@ -319,6 +319,58 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    const previousMonth = screen.getByRole('button', {
+      name: 'Previous acquisition month',
+    });
+    const nextMonth = screen.getByRole('button', { name: 'Next acquisition month' });
+    const currentMonth = screen.getByRole('button', {
+      name: 'Return to current acquisition month',
+    });
+    expect(currentMonth).toBeDisabled();
+
+    await user.click(previousMonth);
+    expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
+    expect(currentMonth).toBeEnabled();
+
+    for (const [control, tooltip] of [
+      [previousMonth, 'Previous month'],
+      [nextMonth, 'Next month'],
+      [currentMonth, 'Return to current month'],
+    ] as const) {
+      await user.hover(control);
+      expect(await screen.findByRole('tooltip', { name: tooltip })).toBeVisible();
+      await user.unhover(control);
+    }
+
+    await user.click(currentMonth);
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+
+    const monthYearTrigger = screen.getByRole('button', {
+      name: 'Choose acquisition month and year, July 2026',
+    });
+    await user.hover(monthYearTrigger);
+    expect(
+      await screen.findByRole('tooltip', { name: 'Choose month and year' }),
+    ).toBeVisible();
+    await user.unhover(monthYearTrigger);
+    await user.click(monthYearTrigger);
+
+    const yearSelect = screen.getByRole('combobox', { name: 'Acquisition year' });
+    await user.click(yearSelect);
+    await user.click(screen.getByRole('option', { name: '2025' }));
+    expect(screen.getByRole('grid', { name: 'July 2025' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Choose Dec 2025' }));
+    expect(screen.getByRole('grid', { name: 'December 2025' })).toBeVisible();
+
+    await user.click(currentMonth);
+    expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
+  });
+
   it('restores the persisted maximum cloud cover after remounting', async () => {
     const user = userEvent.setup();
     const firstRender = renderWorkspaceShell();

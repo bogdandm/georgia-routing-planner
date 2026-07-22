@@ -32,9 +32,7 @@ import {
   type TerrainControlState,
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
-import { mapSourceIds } from '@/presentation/map/mapIds';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
-import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   consumeMapFitBoundsCommand,
@@ -130,6 +128,7 @@ export function MapWorkspace({
   const [sharedSceneToApply, setSharedSceneToApply] = useState<SatelliteScene | null>(
     null,
   );
+  const sharedTerrainStartRequested = useRef(false);
   const sharedSceneApplyController = useRef<AbortController | null>(null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
@@ -251,25 +250,8 @@ export function MapWorkspace({
   }, [facade, fitBoundsCommand]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
-    const style = createHikingMapStyle(mapProviderConfiguration.value);
-    if (sharedMapView?.orientation.mode !== '3d' || mapLayers === null) {
-      return style;
-    }
-    return {
-      ...style,
-      sources: {
-        ...style.sources,
-        [mapSourceIds.terrainDem]: createTerrainDemSource(
-          mapProviderConfiguration.value.terrain,
-          mapLayers.createDemTileUrl(),
-        ),
-      },
-      terrain: {
-        source: mapSourceIds.terrainDem,
-        exaggeration: mapProviderConfiguration.value.terrain.exaggeration,
-      },
-    } satisfies StyleSpecification;
-  }, [mapLayers, mapProviderConfiguration, sharedMapView]);
+    return createHikingMapStyle(mapProviderConfiguration.value);
+  }, [mapProviderConfiguration]);
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
@@ -322,6 +304,29 @@ export function MapWorkspace({
     },
     [handleTerrainModeChange],
   );
+
+  useEffect(() => {
+    if (
+      !sharedTerrainRequested ||
+      !sharedTerrainUrlIntentActive ||
+      sharedTerrainStartRequested.current ||
+      snapshot.lifecycle !== 'ready' ||
+      snapshot.terrainMode === 'terrain'
+    ) {
+      return;
+    }
+    // Keep optional DEM tiles out of MapLibre's initial load gate. Once the base map is
+    // usable, consume the shared URL intent through the normal terrain transition so
+    // its timeout, retries, cancellation, and flat-map fallback remain authoritative.
+    sharedTerrainStartRequested.current = true;
+    void handleTerrainModeChange('terrain');
+  }, [
+    handleTerrainModeChange,
+    sharedTerrainRequested,
+    sharedTerrainUrlIntentActive,
+    snapshot.lifecycle,
+    snapshot.terrainMode,
+  ]);
 
   useEffect(
     () => () => {

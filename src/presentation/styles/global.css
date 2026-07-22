@@ -110,3 +110,10 @@ body {
 .map-point-inspector__value {
   overflow-wrap: anywhere;
 }
+
+.map-point-inspector__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 3px;
+}

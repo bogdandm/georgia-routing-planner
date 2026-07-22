@@ -59,7 +59,7 @@ interface MapProviderOptions {
   readonly terrain: MapProviderConfiguration['terrain'];
   readonly sourceLayers?: Pick<
     MapProviderConfiguration['vector']['sourceLayers'],
-    'peaks' | 'pois'
+    'peaks' | 'places' | 'pois'
   >;
   readonly demTileUrl: string;
   readonly requestTimeoutMs: number;
@@ -561,6 +561,9 @@ export class MapLibreFacade implements MapFacade {
           }),
           ...map.querySourceFeatures(mapSourceIds.basemapVector, {
             sourceLayer: sourceLayers.peaks,
+          }),
+          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
+            sourceLayer: sourceLayers.places,
           }),
         ];
         const poi = selectNearestPoi(features, coordinate);

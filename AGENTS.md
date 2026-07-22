@@ -16,6 +16,29 @@ provide the link again.
 `main` is the protected approval branch. All implementation, documentation,
 configuration, data, test, and maintenance changes must be made on a feature branch.
 
+### Absolute main-integration prohibition for agents
+
+Agents must never merge a pull request or any branch into `main`. Only the maintainer
+may perform the final merge through GitHub or another maintainer-controlled interface.
+This prohibition applies even when the maintainer has approved the branch, asks to
+"update main", says to "integrate" or "go ahead", or uses other wording that could be
+interpreted as merge authorization. Agents may prepare, verify, push, and update the
+feature branch and pull request, then must stop and leave the final merge to the
+maintainer.
+
+Agents must never use `--admin` with any command. They must not bypass, override,
+disable, weaken, or work around branch protection, required reviews, required status
+checks, merge queues, or repository rules through a CLI, API, connector, web interface,
+or other mechanism. If GitHub reports that a pull request is blocked by policy, report
+the blocked state and stop; do not enable auto-merge or attempt a privileged merge.
+
+Agents must not push directly to `main` or merge, cherry-pick, rebase, or fast-forward
+feature work into a local or remote `main` branch. Fetching `origin/main`, reading it,
+and creating or updating a feature branch from it remain allowed. A local `main`
+checkout may be fast-forwarded to an already maintainer-merged `origin/main` only when
+the maintainer explicitly asks to refresh that checkout; this never authorizes merging
+or pushing feature work.
+
 ## Parallel-agent worktrees
 
 Every agent starting a new workstream must create and use a fresh, dedicated Git
@@ -180,13 +203,11 @@ Rules:
 - Never commit directly to `main`.
 - When asked directly for code review, review code only. Do not run tests, E2E tests, or
   other pnpm automatic checks.
-- Never merge, fast-forward, rebase, or cherry-pick work into `main` until the user
-  explicitly approves the current feature-branch state for integration.
-- Do not interpret silence, a request for more work, or approval of an individual design
-  detail as approval to update `main`.
-- After approval, merge only the reviewed and verified feature-branch state. If
-  additional material changes are requested after approval, return to a feature branch
-  and obtain approval again.
+- Never merge, fast-forward, rebase, cherry-pick, or push feature work into `main`; the
+  absolute main-integration prohibition above has no agent-executable approval path.
+- Do not interpret any user wording as permission for an agent to merge a pull request
+  or bypass repository policy. Hand off the verified pull request for the maintainer to
+  merge.
 - An explicit request to remove, postpone, or take a feature out of scope authorizes
   staging and committing the corresponding tracked-file deletions on the feature branch.
 - Do not create a new remote, change branch protection, publish, or deploy unless the

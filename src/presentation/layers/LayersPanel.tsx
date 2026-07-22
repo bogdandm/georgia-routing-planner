@@ -40,7 +40,7 @@ const naturalFeatureControls = [
   {
     id: 'natural-features',
     label: 'Natural features',
-    description: 'Vegetation, glaciers, wetlands, and water-body polygons.',
+    description: 'Vegetation, glaciers, wetlands, rivers, and water bodies.',
     requiresScene: false,
   },
 ] as const satisfies readonly LayerControl[];

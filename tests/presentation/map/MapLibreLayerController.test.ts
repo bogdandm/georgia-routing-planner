@@ -398,9 +398,9 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(mapLayerIds.landcover)).toBe('none');
     expect(map.visibility.get(mapLayerIds.glacierAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.waterways)).toBe('none');
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
-    expect(map.visibility.get(mapLayerIds.waterways)).not.toBe('none');
-    expect(map.visibility.get(mapLayerIds.waterLabels)).not.toBe('none');
+    expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
   });
 

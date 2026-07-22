@@ -107,7 +107,9 @@ const logicalNativeLayerGroups: Readonly<
   'natural-features': [
     mapLayerIds.landcover,
     mapLayerIds.glacierAreas,
+    mapLayerIds.waterways,
     mapLayerIds.water,
+    mapLayerIds.waterLabels,
   ],
   'restricted-areas': [mapLayerIds.restrictedAreas],
   'hiking-paths': [mapLayerIds.hikingPaths, mapLayerIds.hikingSteps],

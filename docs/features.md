@@ -213,24 +213,24 @@ Layers groups durable controls under explicit source headings: Copernicus Sentin
 the configured terrain provider, and OpenStreetMap. The checkboxes cover Satellite
 imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and
 Places and POIs, plus Natural features and Restricted areas. The single **Natural
-features** checkbox controls vegetation, glacier, wetland, and water-body polygons;
-waterway lines and labels remain navigation context. The OpenStreetMap controls remain a
-single flat list with one shared opacity slider. While satellite imagery is visible, the
-slider scales every OpenStreetMap reference layer and the elevation isolines together
-while preserving their relative visual weights and individual visibility choices. It is
-disabled in vector-only mode. Every map data source added to the application must appear
-under its provider heading in Layers; each user-visible feature family from that source
-receives an explicit control unless it is part of the required base canvas. Each logical
-ID maps to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never
-cross the UI boundary. Satellite controls remain disabled until a scene is applied.
-Hiding imagery retains the applied scene and does not remove its footprint, search
-results, or attribution contract. Relief and isoline visibility are independent of 3D
-terrain mode and satellite availability. Base land remains visible and cannot be
-disabled. Per-layer opacity, drag ordering, and custom layers are unavailable. Checkbox
-state, shared OpenStreetMap opacity, rendering mode, imagery stretch, and
-terrain-overlay preferences are stored locally and restored after refresh. Satellite
-scene metadata and assets are never persisted locally; imagery starts empty unless an
-explicit share URL requests a scene.
+features** checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and
+their water labels. The OpenStreetMap controls remain a single flat list with one shared
+opacity slider. While satellite imagery is visible, the slider scales every
+OpenStreetMap reference layer and the elevation isolines together while preserving their
+relative visual weights and individual visibility choices. It is disabled in vector-only
+mode. Every map data source added to the application must appear under its provider
+heading in Layers; each user-visible feature family from that source receives an
+explicit control unless it is part of the required base canvas. Each logical ID maps to
+an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the UI
+boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
+retains the applied scene and does not remove its footprint, search results, or
+attribution contract. Relief and isoline visibility are independent of 3D terrain mode
+and satellite availability. Base land remains visible and cannot be disabled. Per-layer
+opacity, drag ordering, and custom layers are unavailable. Checkbox state, shared
+OpenStreetMap opacity, rendering mode, imagery stretch, and terrain-overlay preferences
+are stored locally and restored after refresh. Satellite scene metadata and assets are
+never persisted locally; imagery starts empty unless an explicit share URL requests a
+scene.
 
 ## Persistent map controls
 

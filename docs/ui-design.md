@@ -1,8 +1,9 @@
 # UI design guidelines
 
-The reviewed Penpot workspace is authoritative for layout, feature placement, and
-interaction hierarchy. These guidelines define the default treatment when Penpot does
-not specify a detail and keep adjacent feature surfaces visually coherent.
+The workspace contract in [Features and workspace UX](./features.md) is authoritative
+for layout, feature placement, and interaction hierarchy. These guidelines define the
+default treatment for presentation details and keep adjacent feature surfaces visually
+coherent.
 
 ## Place controls with their feature
 

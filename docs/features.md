@@ -6,12 +6,11 @@ working functionality.
 
 ## Design authority and vocabulary
 
-The reviewed
-[Penpot workspace concepts](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334)
-are authoritative for layout, feature placement, control grouping, and interaction
-hierarchy. Repository documentation and code remain authoritative for data, privacy,
-architecture, and failure contracts. When those sources disagree about UI/UX, the
-reviewed design wins and this document must be corrected.
+This document is authoritative for layout, feature placement, control grouping, and
+interaction hierarchy. [UI design guidelines](./ui-design.md) define reusable
+presentation conventions. Repository documentation and code remain authoritative for
+data, privacy, architecture, and failure contracts. Correct this document whenever it no
+longer describes the reviewed interface.
 
 - **Feature rail:** `Tracks`, `Satellite`, `Markers`, and `Layers` are the primary
   top-level feature sections.

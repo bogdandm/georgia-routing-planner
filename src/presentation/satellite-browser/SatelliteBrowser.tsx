@@ -723,7 +723,7 @@ function SceneCard({
         selected={selected}
         sx={{ display: 'block', p: 0, textAlign: 'left' }}
       >
-        <Stack direction="row" spacing={1.5} sx={{ p: 1.5 }}>
+        <Stack direction="row" spacing={1.5} sx={{ p: 2 }}>
           {scene.thumbnailHref === null ? (
             <Box
               sx={{

@@ -123,11 +123,12 @@ mode.
 
 1. Startup reads one versioned center-and-zoom value before mounting the map and forces
    bearing and pitch to zero.
-2. Only an explicit 3D share URL initializes the first MapLibre style with terrain and
-   its shared bearing and pitch. The 3D control reflects that URL intent immediately;
-   ordinary startup and regular share URLs remain flat. A user selecting 2D during
-   initial loading supersedes the URL intent immediately; later readiness updates cannot
-   re-enable terrain.
+2. An explicit 3D share URL restores its shared bearing and pitch and selects the 3D
+   control immediately, but the first MapLibre style remains flat so optional DEM tiles
+   cannot delay base-map readiness. Once the base map reports ready, terrain starts
+   through the normal timeout and retry path. A user selecting 2D during initial loading
+   supersedes the URL intent immediately; later readiness updates cannot re-enable
+   terrain.
 3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
    with the current terrain mode.
 4. The facade updates its snapshot, notifies React, and calls the view-settled port.
@@ -145,9 +146,10 @@ For a shared satellite URL, `MapWorkspace` opens the Satellite section and resol
 allowlisted collection/item identity without waiting for MapLibre readiness. The
 controller publishes the selected scene to transient `mapLayerStore` state, so
 `SatelliteBrowser` can open a one-card Images pane using footprint-derived coverage even
-before a viewport snapshot exists. Native raster application starts separately after the
-map reports ready. This separates share navigation and selection from slower tile
-rendering while keeping all scene data out of IndexedDB.
+before a viewport snapshot exists. Native raster application and any shared 3D terrain
+transition start separately after the map reports ready. Satellite and terrain tile
+loading can then proceed concurrently, separating share navigation and selection from
+slower tile rendering while keeping all scene data out of IndexedDB.
 
 ## Terrain transition
 

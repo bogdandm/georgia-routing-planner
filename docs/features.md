@@ -190,8 +190,9 @@ image** checkbox by default; clearing it omits the scene from both links. Includ
 scenes use the current selection even while its raster is still rendering and open on
 the Satellite section. A separate 3D link is enabled only while terrain mode is active
 and additionally encodes bearing and pitch. Opening that link selects the 3D control
-immediately and initializes MapLibre with terrain, bearing, and pitch in its first map
-style rather than showing a delayed 2D-to-3D switch.
+immediately, but starts terrain only after the flat basemap is ready. Shared terrain and
+satellite tiles then load independently so either optional source cannot hold the map in
+its loading state.
 
 ### Markers
 

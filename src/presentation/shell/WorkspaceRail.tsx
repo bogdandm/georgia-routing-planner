@@ -117,17 +117,17 @@ export function WorkspaceRail({
           tabIndex={collapsed ? -1 : 0}
           sx={{
             position: 'relative',
-            width: 44,
-            height: 36,
+            width: 52,
+            height: 52,
             flexShrink: 0,
-            mt: 1.5,
-            ml: 1.25,
+            mt: 0.75,
+            ml: 0.75,
             display: 'grid',
             placeItems: 'center',
             overflow: 'hidden',
-            bgcolor: 'transparent',
+            bgcolor: appColors.brand.deepSpace,
             color: appColors.text.inverse,
-            borderRadius: collapsed ? '5px 0 0 5px' : 1.25,
+            borderRadius: collapsed ? '10px 0 0 10px' : 1.25,
             pointerEvents: collapsed ? 'none' : 'auto',
             transition: (theme) =>
               theme.transitions.create('border-radius', {
@@ -159,7 +159,7 @@ export function WorkspaceRail({
             data-testid="project-logo-image"
             draggable={false}
             src={`${import.meta.env.BASE_URL}favicon.png`}
-            sx={{ position: 'relative', zIndex: 1, width: 36, height: 36 }}
+            sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
           />
         </ButtonBase>
       </Tooltip>

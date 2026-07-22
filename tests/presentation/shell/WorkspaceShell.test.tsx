@@ -23,6 +23,7 @@ import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/sa
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import { appColors } from '@/presentation/theme/appColors';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -812,16 +813,20 @@ describe('WorkspaceShell', () => {
     });
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
-      marginTop: '12px',
-      marginLeft: '10px',
+      width: '52px',
+      height: '52px',
+      marginTop: '6px',
+      marginLeft: '6px',
       flexShrink: '0',
     });
     expect(screen.getByTestId('project-logo-image')).toHaveAttribute(
       'src',
       '/favicon.png',
     );
+    expect(screen.getByTestId('project-logo-image')).toHaveStyle({
+      width: '52px',
+      height: '52px',
+    });
     await user.hover(projectLogo);
     expect(
       await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
@@ -831,8 +836,13 @@ describe('WorkspaceShell', () => {
     const collapseToggle = screen.getByTestId('navigation-collapse-toggle');
     expect(collapseToggle).toHaveStyle({
       width: '36px',
-      height: '36px',
-      right: '-28px',
+      height: '64px',
+      top: '0px',
+      right: '-35px',
+      borderLeftWidth: '0px',
+      borderBottomWidth: '1px',
+      borderRadius: '0 8px 8px 0',
+      backgroundColor: appColors.surface.subtle,
     });
     await user.click(projectLogo);
 
@@ -840,19 +850,21 @@ describe('WorkspaceShell', () => {
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
-      width: '44px',
-      height: '36px',
-      marginTop: '12px',
-      marginLeft: '10px',
-      borderRadius: '5px 0 0 5px',
+      width: '52px',
+      height: '52px',
+      marginTop: '6px',
+      marginLeft: '6px',
+      borderRadius: '10px 0 0 10px',
+      backgroundColor: appColors.brand.deepSpace,
     });
     expect(showNavigation).toBe(collapseToggle);
     expect(showNavigation).toHaveStyle({
-      width: '80px',
-      height: '36px',
-      right: '-26px',
+      width: '88px',
+      height: '52px',
+      top: '6px',
+      right: '-30px',
       borderWidth: '0px',
-      borderRadius: '5px 8px 8px 5px',
+      borderRadius: '10px',
       boxShadow: 'none',
     });
     await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));

@@ -177,10 +177,10 @@ defer new contour calculations until movement settles. It also forwards the work
 coordinate-free active and queued counts into the map-layer store for the operational
 status line. The controller validates persistent imagery mode/tuning and terrain-overlay
 preferences, atomically updates source tiles, and reconciles native order after style or
-satellite changes. Satellite, Layers, and Settings consume its serializable Zustand
-snapshot, so the duplicated render-mode control remains synchronized. Search results
-remain local React state in a mounted-but-hidden Satellite browser so rail navigation
-does not reset the session.
+satellite changes. Satellite and Layers consume its serializable Zustand snapshot, so
+relocated controls stay synchronized with restored preferences. Search results remain
+local React state in a mounted-but-hidden Satellite browser so rail navigation does not
+reset the session.
 
 `SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
 module worker. The provider retains at most two scene definitions, while the worker

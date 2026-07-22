@@ -9,10 +9,15 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
+import {
+  supportedContourIntervals,
+  type LogicalMapLayerId,
+  type TerrainOverlayPreferences,
+} from '@/application/ports/MapLayerPreferencesRepository';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 
 interface LayerControl {
@@ -105,6 +110,9 @@ const importedTrackControls = [
 export function LayersPanel() {
   const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
   const state = useStore(mapLayerStore);
+  const [terrainOverlayCommandError, setTerrainOverlayCommandError] = useState<
+    string | null
+  >(null);
   const provider =
     mapProviderConfiguration.status === 'valid' ? mapProviderConfiguration.value : null;
   const groups = [
@@ -158,12 +166,18 @@ export function LayersPanel() {
     if (typeof value === 'number') mapLayers?.setImportedTrackOpacity(value / 100);
   };
 
+  const changeTerrainOverlayPreferences = (value: TerrainOverlayPreferences) => {
+    if (mapLayers === null) return;
+    const result = mapLayers.setTerrainOverlayPreferences(value);
+    setTerrainOverlayCommandError(result.status === 'failed' ? result.message : null);
+  };
+
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
       {mapLayers === null ? (
         <Alert severity="error">Map layer controls are unavailable.</Alert>
       ) : null}
-      <Stack spacing={1.5} divider={<Divider flexItem />}>
+      <Stack spacing={2} divider={<Divider flexItem />}>
         {groups.map((group) => (
           <Box
             component="section"
@@ -177,100 +191,212 @@ export function LayersPanel() {
             >
               {group.title}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.5 }}
+            >
               {group.description}
             </Typography>
-            {group.id === 'openstreetmap' ? (
-              <Stack
-                direction="row"
-                spacing={1.25}
-                sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
-              >
-                <Typography id="openstreetmap-opacity-label" variant="body2">
-                  Opacity
-                </Typography>
-                <Slider
-                  aria-labelledby="openstreetmap-opacity-label"
-                  disabled={mapLayers === null || !satelliteImageryVisible}
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={Math.round(state.openStreetMapOpacity * 100)}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={(value) => `${String(value)}%`}
-                  onChange={changeOpenStreetMapOpacity}
-                  sx={{ flex: 1, mx: 0.5 }}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+            <Box sx={{ px: 1 }}>
+              {group.id === 'terrain' &&
+              (state.terrainComputeStatus === 'inline' ||
+                terrainOverlayCommandError !== null ||
+                state.terrainOverlays.message !== null) ? (
+                <Stack spacing={1} sx={{ mt: 1 }}>
+                  {state.terrainComputeStatus === 'inline' ? (
+                    <Alert severity="warning">
+                      Terrain processing is running in compatibility mode. Terrain
+                      features remain available, but map movement may be slower.
+                    </Alert>
+                  ) : null}
+                  {(terrainOverlayCommandError ?? state.terrainOverlays.message) ? (
+                    <Alert severity="warning" role="status">
+                      {terrainOverlayCommandError ?? state.terrainOverlays.message}
+                    </Alert>
+                  ) : null}
+                </Stack>
+              ) : null}
+              {group.id === 'openstreetmap' ? (
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ mt: 1, alignItems: 'center' }}
                 >
-                  {Math.round(state.openStreetMapOpacity * 100)}%
-                </Typography>
-              </Stack>
-            ) : null}
-            {group.id === 'imported-tracks' ? (
-              <Stack
-                direction="row"
-                spacing={1.25}
-                sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
-              >
-                <Typography id="imported-tracks-opacity-label" variant="body2">
-                  Track opacity
-                </Typography>
-                <Slider
-                  aria-labelledby="imported-tracks-opacity-label"
-                  disabled={mapLayers === null}
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={Math.round(state.importedTrackOpacity * 100)}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={(value) => `${String(value)}%`}
-                  onChange={changeImportedTrackOpacity}
-                  sx={{ flex: 1, mx: 0.5 }}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+                  <Typography id="openstreetmap-opacity-label" variant="body2">
+                    Opacity
+                  </Typography>
+                  <Slider
+                    aria-labelledby="openstreetmap-opacity-label"
+                    disabled={mapLayers === null || !satelliteImageryVisible}
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round(state.openStreetMapOpacity * 100)}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(value) => `${String(value)}%`}
+                    onChange={changeOpenStreetMapOpacity}
+                    sx={{ flex: 1, mx: 0.5 }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ minWidth: 4, pl: 0.5, textAlign: 'right' }}
+                  >
+                    {Math.round(state.openStreetMapOpacity * 100)}%
+                  </Typography>
+                </Stack>
+              ) : null}
+              {group.id === 'imported-tracks' ? (
+                <Stack
+                  direction="row"
+                  spacing={1.25}
+                  sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
                 >
-                  {Math.round(state.importedTrackOpacity * 100)}%
-                </Typography>
-              </Stack>
-            ) : null}
-            <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
-              {group.controls.map((control) => {
-                const disabled =
-                  mapLayers === null || (control.requiresScene && !sceneAvailable);
-                return (
-                  <Box key={control.id} sx={{ py: 0.75 }}>
-                    <FormControlLabel
-                      disabled={disabled}
-                      control={
-                        <Checkbox
-                          checked={state.visibility[control.id]}
-                          onChange={(event) => {
-                            changeVisibility(control.id, event.target.checked);
-                          }}
-                        />
-                      }
-                      label={control.label}
-                    />
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block', pl: 4.75, mt: -0.75 }}
-                    >
-                      {control.requiresScene && !sceneAvailable
-                        ? 'Apply a Sentinel scene to enable this layer.'
-                        : control.description}
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </FormGroup>
+                  <Typography id="imported-tracks-opacity-label" variant="body2">
+                    Track opacity
+                  </Typography>
+                  <Slider
+                    aria-labelledby="imported-tracks-opacity-label"
+                    disabled={mapLayers === null}
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round(state.importedTrackOpacity * 100)}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(value) => `${String(value)}%`}
+                    onChange={changeImportedTrackOpacity}
+                    sx={{ flex: 1, mx: 0.5 }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+                  >
+                    {Math.round(state.importedTrackOpacity * 100)}%
+                  </Typography>
+                </Stack>
+              ) : null}
+              <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 1, gap: 1.5 }}>
+                {group.controls.map((control) => {
+                  const disabled =
+                    mapLayers === null || (control.requiresScene && !sceneAvailable);
+                  return (
+                    <Box key={control.id}>
+                      <FormControlLabel
+                        sx={{ m: 0 }}
+                        slotProps={{ typography: { variant: 'body2' } }}
+                        disabled={disabled}
+                        control={
+                          <Checkbox
+                            size="small"
+                            sx={{ p: 0, mr: 1 }}
+                            checked={state.visibility[control.id]}
+                            onChange={(event) => {
+                              changeVisibility(control.id, event.target.checked);
+                            }}
+                          />
+                        }
+                        label={control.label}
+                      />
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
+                      >
+                        {control.requiresScene && !sceneAvailable
+                          ? 'Apply a Sentinel scene to enable this layer.'
+                          : control.description}
+                      </Typography>
+                      {control.id === 'elevation-isolines' ? (
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          sx={{ mt: 1, pl: 3.5, alignItems: 'center' }}
+                        >
+                          <Typography
+                            id="contour-distance-label"
+                            variant="body2"
+                            sx={{ minWidth: 104 }}
+                          >
+                            Isolines distance
+                          </Typography>
+                          <Slider
+                            aria-labelledby="contour-distance-label"
+                            aria-valuetext={`${String(state.terrainOverlays.preferences.contourIntervalMeters)} metres`}
+                            disabled={mapLayers === null}
+                            min={0}
+                            max={supportedContourIntervals.length - 1}
+                            step={1}
+                            marks={supportedContourIntervals.map((_value, index) => ({
+                              value: index,
+                            }))}
+                            value={supportedContourIntervals.indexOf(
+                              state.terrainOverlays.preferences.contourIntervalMeters,
+                            )}
+                            valueLabelDisplay="auto"
+                            valueLabelFormat={(value) =>
+                              `${String(supportedContourIntervals[value])} m`
+                            }
+                            onChange={(_event, value) => {
+                              if (typeof value !== 'number') return;
+                              const contourIntervalMeters =
+                                supportedContourIntervals[value];
+                              if (contourIntervalMeters === undefined) return;
+                              changeTerrainOverlayPreferences({
+                                ...state.terrainOverlays.preferences,
+                                contourIntervalMeters,
+                              });
+                            }}
+                            sx={{ flex: 1, mx: 0.5 }}
+                          />
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ minWidth: 34, textAlign: 'right' }}
+                          >
+                            {state.terrainOverlays.preferences.contourIntervalMeters} m
+                          </Typography>
+                        </Stack>
+                      ) : null}
+                    </Box>
+                  );
+                })}
+              </FormGroup>
+              {group.id === 'terrain' ? (
+                <Box sx={{ mt: 1.5 }}>
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    slotProps={{ typography: { variant: 'body2' } }}
+                    control={
+                      <Checkbox
+                        size="small"
+                        sx={{ p: 0, mr: 1 }}
+                        checked={
+                          state.terrainOverlays.preferences.filterInvalidDemPixels
+                        }
+                        disabled={mapLayers === null}
+                        onChange={(event) => {
+                          changeTerrainOverlayPreferences({
+                            ...state.terrainOverlays.preferences,
+                            filterInvalidDemPixels: event.target.checked,
+                          });
+                        }}
+                      />
+                    }
+                    label="Repair invalid DEM elevation pixels"
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
+                  >
+                    Applies the same conservative repair to relief, 3D terrain, and
+                    contours without smoothing valid terrain.
+                  </Typography>
+                </Box>
+              ) : null}
+            </Box>
           </Box>
         ))}
       </Stack>

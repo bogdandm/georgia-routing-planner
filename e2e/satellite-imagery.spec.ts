@@ -35,13 +35,8 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
     'ready',
     { timeout: 15_000 },
   );
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  const settings = page.getByRole('dialog', { name: 'Settings' });
-  await settings.getByRole('tab', { name: 'Rendering' }).click();
-  await expect(
-    settings.getByRole('combobox', { name: 'Satellite render' }),
-  ).toContainText('Auto');
-  await page.getByRole('button', { name: 'Done' }).click();
+  const renderingMode = page.getByRole('combobox', { name: 'Satellite render' });
+  await expect(renderingMode).toContainText('Auto');
 
   await page.getByRole('button', { name: 'Search images' }).click();
   await page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }).click();
@@ -57,12 +52,8 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
   expect(new Set(rendererRequests).size).toBe(rendererRequests.length);
   expect(cogRequests.length).toBeGreaterThan(0);
 
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  const renderSettings = page.getByRole('dialog', { name: 'Settings' });
-  await renderSettings.getByRole('tab', { name: 'Rendering' }).click();
-  await renderSettings.getByRole('combobox', { name: 'Satellite render' }).click();
+  await renderingMode.click();
   await page.getByRole('option', { name: 'Direct' }).click();
-  await page.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByText('True-color imagery applied')).toBeVisible({
     timeout: 15_000,
   });
@@ -124,20 +115,18 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
     page.getByTestId('map-workspace').getByText(/Earth Search \/ Element 84/u),
   ).toBeVisible();
 
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('tab', { name: 'Rendering' }).click();
+  await page.getByRole('button', { name: 'Sentinel imagery stretch' }).click();
   const reflectanceCeiling = page.getByRole('slider', {
     name: 'Sentinel reflectance ceiling',
   });
   await reflectanceCeiling.fill('6250');
-  await page.getByRole('combobox', { name: 'Contour distance' }).click();
-  await page.getByRole('option', { name: '25 m' }).click();
   await page
-    .getByRole('switch', {
+    .getByRole('checkbox', {
       name: 'Show relief shading above satellite imagery',
     })
     .check();
-  await page.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await page.getByRole('slider', { name: 'Isolines distance' }).fill('1');
   await expect
     .poll(() => rendererRequests.some((url) => url.includes('rescale=0%2C6250')))
     .toBe(true);
@@ -208,16 +197,20 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
   await expect(
     page.getByRole('checkbox', { name: 'Satellite imagery' }),
   ).toBeDisabled();
-  await page.getByRole('button', { name: 'Open settings' }).click();
-  await page.getByRole('tab', { name: 'Rendering' }).click();
+  await expect(page.getByRole('slider', { name: 'Isolines distance' })).toHaveValue(
+    '1',
+  );
+  await expect(page.getByRole('slider', { name: 'Isolines distance' })).toHaveAttribute(
+    'aria-valuetext',
+    '25 metres',
+  );
+  await page.getByRole('tab', { name: 'Satellite' }).click();
+  await page.getByRole('button', { name: 'Sentinel imagery stretch' }).click();
   await expect(
     page.getByRole('slider', { name: 'Sentinel reflectance ceiling' }),
   ).toHaveValue('6250');
-  await expect(page.getByRole('combobox', { name: 'Contour distance' })).toContainText(
-    '25 m',
-  );
   await expect(
-    page.getByRole('switch', {
+    page.getByRole('checkbox', {
       name: 'Show relief shading above satellite imagery',
     }),
   ).toBeChecked();

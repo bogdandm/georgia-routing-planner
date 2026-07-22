@@ -4,12 +4,11 @@
 
 These instructions apply to the entire Georgia Routing Planner repository.
 
-## Canonical UI prototype
+## Canonical UI guidance
 
-The canonical Penpot workspace is
-[Georgia Routing Planner prototype](https://design.penpot.app/#/workspace?team-id=e53c2c6b-a0fc-80ee-8008-585e71ddb1af&project-id=e53c2c6b-a0fc-80ee-8008-586356e1ef5a&file-id=dd49d952-2105-80b2-8008-587f93c8a333&page-id=dd49d952-2105-80b2-8008-587f93c8a334).
-Use it as the standing visual and interaction reference without asking the maintainer to
-provide the link again.
+[`docs/features.md`](docs/features.md) owns the durable workspace and interaction
+contract. [`docs/ui-design.md`](docs/ui-design.md) owns reusable placement, hierarchy,
+spacing, disclosure, and copy conventions.
 
 ## Git workflow and approval gate
 
@@ -422,7 +421,7 @@ Description rules:
   are `Passed`, `Failed`, `Not run`, or `Not applicable`, with concise evidence or a
   reason.
 - UI evidence includes before/after screenshots or recordings, viewport details, and
-  Penpot comparison notes.
+  comparison notes against the documented UI contracts.
 - State a real risk and concrete rollback path.
 - Tell reviewers where to start and what invariant or tradeoff deserves attention.
 - Update the title and description whenever scope, evidence, risk, or reviewer focus
@@ -450,9 +449,8 @@ Rules:
   implementation split to explain a lasting contract.
 - Move durable facts discovered during implementation into `README.md`, `docs/`, code
   contracts, or tests in the same change.
-- When reviewed Penpot UI/UX conflicts with repository prose, Penpot wins for layout,
-  feature placement, and interaction hierarchy. Update stable feature documentation and
-  relevant planning files.
+- When reviewed UI direction conflicts with stale repository prose, update the stable
+  feature documentation and relevant planning files.
 - Before a documentation handoff, verify this command returns no matches:
 
   ```powershell
@@ -714,12 +712,37 @@ boundaries, add focused tests proving private data is excluded.
 
 ## GUI and CSS
 
-Material UI is the default for application chrome and controls.
+Material UI is the default for application chrome and controls. Follow
+[`docs/ui-design.md`](docs/ui-design.md) for control placement, visual hierarchy,
+spacing rhythm, disclosures, helper copy, and presentation review.
 
 - Use the shared theme for palette, typography, spacing, shape, breakpoints, and
   component defaults.
 - Prefer MUI layout primitives and components over handwritten widgets.
 - Use `sx` for small one-off details and CSS modules for map sizing or complex layout.
+- Keep feature-specific controls in their contextual panel and application-wide
+  preferences in Settings; never duplicate a control across both surfaces.
+- Use section headings stronger than control labels: `subtitle2` bold for source/group
+  headings, `body2` regular for control titles, and secondary `caption` text for
+  descriptions.
+- Use checkboxes for independent boolean options throughout the application. Do not mix
+  switches and checkboxes for equivalent choices.
+- Keep section headings and source descriptions on the panel edge, then place ordinary
+  section content in an explicit, balanced 8 px horizontal inset. Do not simulate
+  section indentation with checkbox padding; exempt full-width spatial controls such as
+  calendars when an inset would reduce clarity or usable width.
+- Build spacing on a 4 px grid, using half steps of the theme's 8 px unit when needed.
+  Use 16 px between major groups, 12 px between repeated control rows, and 8 px between
+  a parent control and its dependent row.
+- Do not leave empty `Stack`, `Box`, status, or conditional wrappers that still
+  contribute spacing when they contain no visible content.
+- Keep adjacent contextual panels at a shared width unless the reviewed workflow
+  demonstrates a concrete need for a different width.
+- Put secondary tuning controls in a collapsed, accessible disclosure at the end of
+  their section; do not hide primary actions or required recovery controls.
+- Remove helper text that repeats visible values, labels, order, or obvious behavior.
+  Keep concise help only when it prevents a likely mistake or explains a non-obvious
+  consequence.
 - Do not add Tailwind, Bootstrap, another design system, or another CSS-in-JS library.
 - Maintain visible focus, keyboard access, labels, tooltips, contrast, and minimum hit
   areas.

@@ -94,7 +94,7 @@ describe('DeveloperDrawer', () => {
     ).toBeVisible();
     expect(screen.getByText(/Recovery: scheduled · Retry attempt 1/u)).toBeVisible();
 
-    await user.click(screen.getByRole('switch', { name: 'Show tile boundaries' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Show tile boundaries' }));
     expect(useUiStore.getState().mapDebugOptions.showTileBoundaries).toBe(true);
   });
 

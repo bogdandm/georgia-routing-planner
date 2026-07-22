@@ -290,10 +290,10 @@ and explicitly denies MSW's optional script.
 
 ## GUI direction
 
-The approved Penpot concepts are the visual and interaction source of truth. The durable
-workspace contract is recorded in [Features and workspace UX](./docs/features.md); when
-repository prose conflicts with the reviewed Penpot layout, update the prose rather than
-reinterpreting the design.
+The durable visual and interaction contract is recorded in
+[Features and workspace UX](./docs/features.md), with reusable presentation conventions
+in [UI design guidelines](./docs/ui-design.md). Update stale prose when it conflicts
+with the reviewed interface.
 
 The interface uses a desktop map-workbench layout:
 

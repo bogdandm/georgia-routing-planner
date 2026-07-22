@@ -5,9 +5,8 @@ import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArro
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import CloseIcon from '@mui/icons-material/Close';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import SearchIcon from '@mui/icons-material/Search';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import lookupTimeZone from '@photostructure/tz-lookup';
 import {
   Alert,
@@ -22,12 +21,14 @@ import {
   FormHelperText,
   IconButton,
   InputLabel,
+  ListItemButton,
   MenuItem,
   Paper,
   Popper,
   Select,
   type SelectChangeEvent,
   Slider,
+  Snackbar,
   Stack,
   Tooltip,
   Typography,
@@ -39,7 +40,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
@@ -65,13 +65,14 @@ import {
   mapLayerStore,
   type AppliedSatelliteImagerySnapshot,
 } from '@/presentation/map/mapLayerStore';
+import { createMapShareUrl } from '@/presentation/map/mapShareUrl';
 import {
   consumeSatelliteSearchRequest,
   mapInteractionStore,
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
-import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
+import { SatelliteRenderingControls } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
 import {
   beginSatelliteRequest,
@@ -567,7 +568,7 @@ function AcquisitionCalendar({
       <Box
         role="grid"
         aria-label={monthFormatter.format(displayMonthDate)}
-        sx={{ display: 'grid', gap: 0.25 }}
+        sx={{ display: 'grid', rowGap: 0.5 }}
       >
         <Box role="row" sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
           {weekDays.map((day) => (
@@ -586,7 +587,11 @@ function AcquisitionCalendar({
           <Box
             key={`week-${String(rowIndex)}`}
             role="row"
-            sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.25 }}
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(7, 1fr)',
+              columnGap: 0.25,
+            }}
           >
             {calendarRow.map((day, columnIndex) => {
               if (day === null) {
@@ -617,7 +622,7 @@ function AcquisitionCalendar({
                       : `${dayFormatter.format(new Date(`${date}T00:00:00.000Z`))}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
                   }
                   sx={{
-                    height: 34,
+                    height: 40,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -668,18 +673,20 @@ function SceneCard({
   appliedImagery,
   match,
   selected,
+  showBottomDivider,
   timeZone,
+  onCopyLink,
   onFitFootprint,
   onSelect,
-  onToggleImagery,
 }: {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly match: SatelliteSceneMatch;
   readonly selected: boolean;
+  readonly showBottomDivider: boolean;
   readonly timeZone: string;
+  readonly onCopyLink: () => void;
   readonly onFitFootprint: () => void;
   readonly onSelect: () => void;
-  readonly onToggleImagery: (visible: boolean) => void;
 }) {
   const { scene, coverage } = match;
   const sceneKey = satelliteSceneKey(scene);
@@ -695,33 +702,37 @@ function SceneCard({
   const hidden = appliedImagery.status === 'hidden' && applied;
   const acquiredAt = new Date(scene.acquiredAt);
   const title = dayFormatter.format(acquiredAt);
-  const handleCardClick = (event: MouseEvent<HTMLElement>) => {
-    const clickedSecondaryAction =
-      event.target instanceof Element &&
-      event.target.closest('[data-scene-card-secondary-action]') !== null;
-    if (!clickedSecondaryAction) onSelect();
-  };
   return (
-    <Paper
+    <Box
       id={`satellite-scene-${encodeURIComponent(scene.id)}`}
-      variant="outlined"
-      onClick={handleCardClick}
       sx={{
         overflow: 'hidden',
-        borderWidth: selected ? 2 : 1,
-        borderColor: selected ? 'primary.main' : 'divider',
-        bgcolor: selected ? appColors.surface.selected : 'background.paper',
-        cursor: 'pointer',
+        borderBottom: showBottomDivider ? 1 : 0,
+        borderColor: 'divider',
+        bgcolor: selected ? appColors.surface.selected : 'transparent',
       }}
     >
-      <ButtonBase
+      <ListItemButton
         aria-label={
           applied ? `Remove ${title} imagery from map` : `Apply ${title} imagery`
         }
         aria-pressed={selected}
-        sx={{ display: 'block', width: '100%', textAlign: 'left' }}
+        selected={selected}
+        onClick={onSelect}
+        sx={{
+          display: 'block',
+          p: 0,
+          textAlign: 'left',
+          '&.Mui-selected': {
+            bgcolor: 'transparent',
+          },
+          '&:hover': { bgcolor: 'action.hover' },
+          '&.Mui-selected:hover': {
+            bgcolor: `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`,
+          },
+        }}
       >
-        <Stack direction="row" spacing={1.5} sx={{ p: 1.5 }}>
+        <Stack direction="row" spacing={1.5} sx={{ p: 2 }}>
           {scene.thumbnailHref === null ? (
             <Box
               sx={{
@@ -805,7 +816,7 @@ function SceneCard({
           </Alert>
         ) : null}
         {selected ? (
-          <Box sx={{ px: 1.5, py: 1, borderTop: 1, borderColor: 'divider' }}>
+          <Box sx={{ px: 2, pb: applied ? 0 : 2 }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
               {applying
                 ? 'Applying true-color imagery…'
@@ -831,53 +842,58 @@ function SceneCard({
             >
               {scene.attribution}
             </Typography>
+            {failed ? <Alert severity="error">{appliedImagery.message}</Alert> : null}
+            <Typography variant="caption" color="text.secondary">
+              Tile {scene.tileId ?? 'Unavailable'} · Orbit{' '}
+              {scene.orbit ?? 'Unavailable'}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', wordBreak: 'break-all' }}
+            >
+              Product {scene.productId ?? 'Unavailable'}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block' }}
+            >
+              Scene edge {coverage.distanceToSceneEdgeKm.toFixed(1)} km from search
+              point
+            </Typography>
           </Box>
         ) : null}
-      </ButtonBase>
-      {selected ? (
-        <Stack
-          spacing={0.75}
-          sx={{ px: 1.5, py: 1.25, borderTop: 1, borderColor: 'divider' }}
-        >
-          {failed ? <Alert severity="error">{appliedImagery.message}</Alert> : null}
-          <Typography variant="caption" color="text.secondary">
-            Tile {scene.tileId ?? 'Unavailable'} · Orbit {scene.orbit ?? 'Unavailable'}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ overflowWrap: 'anywhere' }}
+      </ListItemButton>
+      {selected && applied ? (
+        <Stack direction="row" spacing={0.5} sx={{ p: 0.5 }}>
+          <Button
+            color="inherit"
+            startIcon={<CenterFocusStrongIcon />}
+            onClick={onFitFootprint}
+            sx={{
+              minHeight: 40,
+              px: 1.5,
+              '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
+            }}
           >
-            Product {scene.productId ?? 'Unavailable'}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Scene edge {coverage.distanceToSceneEdgeKm.toFixed(1)} km from search point
-          </Typography>
-          {applied ? (
-            <Stack direction="row" spacing={1}>
-              <Button
-                size="small"
-                data-scene-card-secondary-action
-                startIcon={<CenterFocusStrongIcon />}
-                onClick={onFitFootprint}
-              >
-                Fit footprint
-              </Button>
-              <Button
-                size="small"
-                data-scene-card-secondary-action
-                startIcon={hidden ? <VisibilityIcon /> : <VisibilityOffIcon />}
-                onClick={() => {
-                  onToggleImagery(hidden);
-                }}
-              >
-                {hidden ? 'Show imagery' : 'Hide imagery'}
-              </Button>
-            </Stack>
-          ) : null}
+            Fit footprint
+          </Button>
+          <Button
+            color="inherit"
+            startIcon={<ShareOutlinedIcon />}
+            onClick={onCopyLink}
+            sx={{
+              minHeight: 40,
+              px: 1.5,
+              '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
+            }}
+          >
+            Share link
+          </Button>
         </Stack>
       ) : null}
-    </Paper>
+    </Box>
   );
 }
 
@@ -889,10 +905,10 @@ function SatelliteResultsPane({
   loadingMore,
   onAutoLoadMore,
   onClose,
+  onCopyLink,
   onFitFootprint,
   onLoadMore,
   onSelect,
-  onToggleImagery,
   searchState,
   scrollRequestId,
   selectedSceneId,
@@ -906,10 +922,10 @@ function SatelliteResultsPane({
   readonly loadingMore: boolean;
   readonly onAutoLoadMore: () => void;
   readonly onClose: () => void;
+  readonly onCopyLink: (sceneKey: string) => void;
   readonly onFitFootprint: () => void;
   readonly onLoadMore: () => void;
   readonly onSelect: (match: SatelliteSceneMatch) => void;
-  readonly onToggleImagery: (visible: boolean) => void;
   readonly searchState: SearchState;
   readonly scrollRequestId: number;
   readonly selectedSceneId: string | null;
@@ -1023,30 +1039,38 @@ function SatelliteResultsPane({
             No matching images. Increase the cloud limit or move the map.
           </Alert>
         ) : null}
-        <Stack spacing={1.5}>
+        <Stack spacing={0} sx={{ mx: -2 }}>
           {groups.map((group, index) => (
-            <Stack key={group.date} spacing={1}>
+            <Stack key={group.date} spacing={0}>
               {index === 0 ||
               groups[index - 1]?.date.slice(0, 7) !== group.date.slice(0, 7) ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <Typography variant="overline">
+                  <Divider sx={{ width: 24 }} />
+                  <Typography variant="body2" color="text.secondary" noWrap>
                     {monthFormatter.format(new Date(`${group.date}T00:00:00.000Z`))}
                   </Typography>
                   <Divider sx={{ flex: 1 }} />
                 </Stack>
               ) : null}
-              {group.scenes.map((match) => (
+              {group.scenes.map((match, sceneIndex) => (
                 <SceneCard
                   appliedImagery={appliedImagery}
                   key={`${match.scene.collection}:${match.scene.id}`}
                   match={match}
                   selected={match.scene.id === selectedSceneId}
+                  showBottomDivider={
+                    sceneIndex < group.scenes.length - 1 ||
+                    groups[index + 1] === undefined ||
+                    groups[index + 1]?.date.slice(0, 7) === group.date.slice(0, 7)
+                  }
                   timeZone={timeZone}
                   onSelect={() => {
                     onSelect(match);
                   }}
+                  onCopyLink={() => {
+                    onCopyLink(satelliteSceneKey(match.scene));
+                  }}
                   onFitFootprint={onFitFootprint}
-                  onToggleImagery={onToggleImagery}
                 />
               ))}
             </Stack>
@@ -1077,13 +1101,16 @@ export function SatelliteBrowser({
   active = true,
   fallbackCoordinates,
 }: SatelliteBrowserProps) {
-  const { clock, database, logger, mapLayers, mapViewport, searchSatelliteScenes } =
-    useRuntimeServices();
+  const {
+    clock,
+    database,
+    logger,
+    mapDiagnostics,
+    mapLayers,
+    mapViewport,
+    searchSatelliteScenes,
+  } = useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
-  const renderingMode = useStore(
-    mapLayerStore,
-    (state) => state.satelliteRenderingMode,
-  );
   const selectedMapScene = useStore(mapLayerStore, (state) => state.selectedScene);
   const [today] = useState(() => clock.now());
   const latestMonth = currentSearchMonth(today).month;
@@ -1110,9 +1137,10 @@ export function SatelliteBrowser({
   const request = useRef<AbortController | null>(null);
   const calendarMonthLoadTimer = useRef<number | null>(null);
   const applyRequest = useRef<AbortController | null>(null);
-  const renderingModeRequest = useRef<AbortController | null>(null);
   const cloudCoverChangedByUser = useRef(false);
-  const [renderingModeError, setRenderingModeError] = useState<string | null>(null);
+  const [copyLinkStatus, setCopyLinkStatus] = useState<'idle' | 'copied' | 'failed'>(
+    'idle',
+  );
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -1139,7 +1167,20 @@ export function SatelliteBrowser({
       ? viewport
       : { ...viewport, center: satelliteSearchAnchor };
   const searchAreaSource = satelliteSearchAnchor === null ? 'viewport' : 'custom';
-  const portalTarget = document.getElementById('satellite-results-pane');
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // The sibling results pane is attached in the same commit, after this component renders.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setPortalTarget(document.getElementById('satellite-results-pane'));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1148,7 +1189,6 @@ export function SatelliteBrowser({
       }
       request.current?.abort();
       applyRequest.current?.abort();
-      renderingModeRequest.current?.abort();
     };
   }, []);
 
@@ -1503,6 +1543,22 @@ export function SatelliteBrowser({
     });
   };
 
+  const copySceneLink = async (sceneKey: string) => {
+    const camera = mapDiagnostics.getSnapshot()?.camera;
+    if (camera === undefined) {
+      setCopyLinkStatus('failed');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(
+        createMapShareUrl(window.location.href, camera, sceneKey),
+      );
+      setCopyLinkStatus('copied');
+    } catch {
+      setCopyLinkStatus('failed');
+    }
+  };
+
   const selectCalendarDate = (date: string) => {
     if (searchState.status !== 'success') return;
     const group = searchState.result.groups.find(
@@ -1554,64 +1610,70 @@ export function SatelliteBrowser({
         {loadMoreError === null || resultsOpen ? null : (
           <Alert severity="error">{loadMoreError}</Alert>
         )}
-        <Box>
-          <Stack direction="row" sx={{ alignItems: 'center' }}>
-            <Typography id="cloud-cover-slider-label" variant="body2" sx={{ flex: 1 }}>
-              Maximum cloud
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              ≤ {maxCloudCoverPercent}%
-            </Typography>
-          </Stack>
-          <Slider
-            aria-labelledby="cloud-cover-slider-label"
-            min={0}
-            max={100}
-            step={5}
-            marks={[
-              { value: 0 },
-              { value: 25 },
-              { value: 50 },
-              { value: 75 },
-              { value: 100 },
-            ]}
-            value={maxCloudCoverPercent}
-            valueLabelDisplay="auto"
-            onChange={(_event, value: number | number[]) => {
-              const nextValue = Array.isArray(value) ? value[0] : value;
-              if (nextValue !== undefined) {
-                cloudCoverChangedByUser.current = true;
-                setMaxCloudCoverPercent(nextValue);
-              }
-            }}
-            onChangeCommitted={(_event, value: number | number[]) => {
-              const nextValue = Array.isArray(value) ? value[0] : value;
-              if (nextValue === undefined) return;
-              void database.saveMaximumCloudCoverPercent(nextValue).catch(() => {
-                logger.log({
-                  level: 'warn',
-                  name: 'storage.satellite-preferences.save-failed',
+        <Stack spacing={1}>
+          <Box sx={{ px: 1 }}>
+            <Stack direction="row" sx={{ alignItems: 'center' }}>
+              <Typography
+                id="cloud-cover-slider-label"
+                variant="body2"
+                sx={{ flex: 1 }}
+              >
+                Maximum cloud
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                ≤ {maxCloudCoverPercent}%
+              </Typography>
+            </Stack>
+            <Slider
+              aria-labelledby="cloud-cover-slider-label"
+              min={0}
+              max={100}
+              step={5}
+              marks={[
+                { value: 0 },
+                { value: 25 },
+                { value: 50 },
+                { value: 75 },
+                { value: 100 },
+              ]}
+              value={maxCloudCoverPercent}
+              valueLabelDisplay="auto"
+              onChange={(_event, value: number | number[]) => {
+                const nextValue = Array.isArray(value) ? value[0] : value;
+                if (nextValue !== undefined) {
+                  cloudCoverChangedByUser.current = true;
+                  setMaxCloudCoverPercent(nextValue);
+                }
+              }}
+              onChangeCommitted={(_event, value: number | number[]) => {
+                const nextValue = Array.isArray(value) ? value[0] : value;
+                if (nextValue === undefined) return;
+                void database.saveMaximumCloudCoverPercent(nextValue).catch(() => {
+                  logger.log({
+                    level: 'warn',
+                    name: 'storage.satellite-preferences.save-failed',
+                  });
                 });
-              });
-            }}
-          />
-        </Box>
+              }}
+            />
+          </Box>
 
-        {searchState.status === 'loading' ? (
-          <Button fullWidth color="inherit" variant="outlined" onClick={cancelSearch}>
-            Cancel search
-          </Button>
-        ) : (
-          <Button
-            fullWidth
-            variant="contained"
-            startIcon={<SearchIcon />}
-            disabled={!canSearch}
-            onClick={() => void runSearch()}
-          >
-            Search images
-          </Button>
-        )}
+          {searchState.status === 'loading' ? (
+            <Button fullWidth color="inherit" variant="outlined" onClick={cancelSearch}>
+              Cancel search
+            </Button>
+          ) : (
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<SearchIcon />}
+              disabled={!canSearch}
+              onClick={() => void runSearch()}
+            >
+              Search images
+            </Button>
+          )}
+        </Stack>
 
         <Box aria-live="polite">
           {viewport === null ? (
@@ -1622,69 +1684,52 @@ export function SatelliteBrowser({
               Satellite provider configuration is unavailable.
             </Alert>
           ) : null}
-          {searchState.status === 'loading' ? (
-            <Typography variant="body2">Loading the latest matching images…</Typography>
-          ) : null}
-          {searchState.status !== 'loading' &&
-          viewport !== null &&
-          !searchUnavailable ? (
-            <Typography variant="caption" color="text.secondary">
-              {searchAreaSource === 'custom' ? 'Custom' : 'Point'} {coordinates} ·{' '}
-              {monthFormatter.format(new Date(`${calendarMonth}-01T00:00:00.000Z`))} →
-              older · highlight cloud ≤ {maxCloudCoverPercent}%
-            </Typography>
-          ) : null}
         </Box>
 
         <Divider />
-        <FormControl size="small" fullWidth>
-          <InputLabel id="satellite-search-area-label">Search area source</InputLabel>
-          <Select
-            labelId="satellite-search-area-label"
-            label="Search area source"
-            displayEmpty
-            value={searchAreaSource === 'custom' ? '' : searchAreaSource}
-            onChange={changeSearchAreaSource}
-            renderValue={() => (
-              <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
-                  {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
-                </Typography>
-                <Divider orientation="vertical" flexItem />
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  {coordinates}
-                </Typography>
-              </Stack>
-            )}
+        <Box component="section" aria-labelledby="satellite-settings-heading">
+          <Typography
+            id="satellite-settings-heading"
+            component="h3"
+            variant="subtitle2"
           >
-            <MenuItem value="viewport">Point</MenuItem>
-            <MenuItem value="marker" disabled>
-              Marker
-            </MenuItem>
-          </Select>
-          <FormHelperText>
-            Uses the map center point or a custom area for imagery search.
-          </FormHelperText>
-        </FormControl>
-        <SatelliteRenderingModeSelect
-          mode={renderingMode}
-          onChange={(mode) => {
-            if (mapLayers === null) return;
-            renderingModeRequest.current?.abort();
-            const controller = new AbortController();
-            renderingModeRequest.current = controller;
-            setRenderingModeError(null);
-            void mapLayers.setRenderingMode(mode, controller.signal).then((result) => {
-              if (result.status === 'failed') setRenderingModeError(result.message);
-              if (renderingModeRequest.current === controller) {
-                renderingModeRequest.current = null;
-              }
-            });
-          }}
-        />
-        {renderingModeError === null ? null : (
-          <Alert severity="error">{renderingModeError}</Alert>
-        )}
+            Settings
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2, px: 1 }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="satellite-search-area-label">
+                Search area source
+              </InputLabel>
+              <Select
+                labelId="satellite-search-area-label"
+                label="Search area source"
+                displayEmpty
+                value={searchAreaSource === 'custom' ? '' : searchAreaSource}
+                onChange={changeSearchAreaSource}
+                renderValue={() => (
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
+                      {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
+                    </Typography>
+                    <Divider orientation="vertical" flexItem />
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {coordinates}
+                    </Typography>
+                  </Stack>
+                )}
+              >
+                <MenuItem value="viewport">Point</MenuItem>
+                <MenuItem value="marker" disabled>
+                  Marker
+                </MenuItem>
+              </Select>
+              <FormHelperText>
+                Uses the map center point or a custom area for imagery search.
+              </FormHelperText>
+            </FormControl>
+            <SatelliteRenderingControls />
+          </Stack>
+        </Box>
       </Stack>
       {active && portalTarget !== null && paneOpen
         ? createPortal(
@@ -1712,16 +1757,26 @@ export function SatelliteBrowser({
               }}
               onLoadMore={() => void loadMoreImages()}
               onSelect={applyMatch}
+              onCopyLink={(sceneKey) => void copySceneLink(sceneKey)}
               onFitFootprint={() => {
                 mapLayers?.fitFootprint();
-              }}
-              onToggleImagery={(visible) => {
-                mapLayers?.setLayerVisibility('satellite-imagery', visible);
               }}
             />,
             portalTarget,
           )
         : null}
+      <Snackbar
+        open={copyLinkStatus !== 'idle'}
+        autoHideDuration={copyLinkStatus === 'copied' ? 2_500 : 4_000}
+        message={
+          copyLinkStatus === 'copied'
+            ? 'Scene link copied'
+            : 'Clipboard access failed. Try again.'
+        }
+        onClose={() => {
+          setCopyLinkStatus('idle');
+        }}
+      />
     </>
   );
 }

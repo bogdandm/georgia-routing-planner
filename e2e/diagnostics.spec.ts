@@ -68,7 +68,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     'basemap-vector',
     { timeout: 15_000 },
   );
-  await page.getByRole('switch', { name: 'Show tile boundaries' }).click();
+  await page.getByRole('checkbox', { name: 'Show tile boundaries' }).click();
   const mapDrawerAccessibility = await new AxeBuilder({ page })
     .include('.MuiDrawer-paper')
     .analyze();

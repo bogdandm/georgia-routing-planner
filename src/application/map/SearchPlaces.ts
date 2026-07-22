@@ -53,6 +53,14 @@ export class SearchPlaces {
     private readonly clock: Clock,
   ) {}
 
+  public async reverse(
+    coordinate: { readonly longitude: number; readonly latitude: number },
+    signal: AbortSignal,
+  ): Promise<PlaceSearchResult | null> {
+    if (this.gateway.reverse === undefined) return null;
+    return this.gateway.reverse(coordinate, signal);
+  }
+
   public async execute(
     rawQuery: string,
     bounds: PlaceSearchBounds,

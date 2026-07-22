@@ -35,11 +35,10 @@ map navigation remains on the right, and the 2D/3D selector sits directly below 
 shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
 derived surface, border, status, and tag colors.
 
-The current shell exposes Satellite and Layers as interactive rail destinations. Tracks
-and Markers remain visible but disabled until those feature surfaces have working
-behavior; hovering either disabled destination explains which capability is not yet
-available. It has no full-width app bar, empty global elevation placeholder, or generic
-always-visible privacy notice.
+The current shell exposes Tracks, Satellite, and Layers as interactive rail
+destinations. Markers remains visible but disabled until that feature surface has
+working behavior. It has no full-width app bar, empty global elevation placeholder, or
+generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
@@ -67,9 +66,15 @@ elevation profile. The full original GPX is loaded only when requested. Import r
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
-The current implementation retains the Tracks structure for direct anchored URLs, but
-its rail action is disabled because it does not load a catalog, import GPX, manage
-folders, or open track details.
+The implemented local workflow imports one `.gpx` file from the picker or a
+workspace-wide drop target, validates and previews its metadata, and opens a fixed
+adjacent detail pane. The editable embedded or filename-derived name is never replaced
+automatically. An optional English place candidate appears separately and requires an
+explicit apply action. Save retains the original file, independent line segments, and
+versioned metrics in this browser; unsaved previews activate the native leave-site
+guard. Saved tracks are searchable by name and support reopen, close, rename, and
+confirmed deletion. Catalog, folders, tags, filters, and batch import remain
+unavailable.
 
 ### Create GPX
 
@@ -463,11 +468,11 @@ configuration must never contain secrets.
 
 ## Current capability boundary
 
-The application does not currently provide GPX catalog loading, GPX import, Create GPX
-editing/export, track elevation charts, saved-marker management, interactive layer
-management, offline-region downloads, accounts, or cloud synchronization. Satellite
-provides live viewport search for L2A scenes with a scene-cloud control. Successful
-results are grouped by UTC acquisition day and show a thumbnail, local acquisition time,
-processing level, cloud, viewport coverage, and sub-5-km edge warning. Selecting a card
-renders one georeferenced true-color scene and its footprint; Layers can hide or restore
-the raster and related logical map groups.
+The application does not currently provide GPX catalog loading, Create GPX
+editing/export, track elevation charts, saved-marker management, offline-region
+downloads, accounts, or cloud synchronization. Satellite provides live viewport search
+for L2A scenes with a scene-cloud control. Successful results are grouped by UTC
+acquisition day and show a thumbnail, local acquisition time, processing level, cloud,
+viewport coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
+true-color scene and its footprint; Layers can hide or restore the raster and related
+logical map groups.

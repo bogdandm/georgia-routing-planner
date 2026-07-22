@@ -1,6 +1,6 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import { Box, IconButton, Tooltip } from '@mui/material';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -24,6 +24,12 @@ import {
   workspaceTabFromHash,
 } from '@/presentation/shell/workspaceTabLocation';
 import { appColors } from '@/presentation/theme/appColors';
+import {
+  TrackDetailsPane,
+  TrackDropOverlay,
+  TracksWorkspaceProvider,
+  useTracksWorkspace,
+} from '@/presentation/tracks/TracksWorkspace';
 
 interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
@@ -33,7 +39,7 @@ function ControlledFailure(): never {
   throw new Error('Controlled Phase 0 component failure.');
 }
 
-export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
+function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
   const { database, logger, mapLayers, storageUsage } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
@@ -69,6 +75,9 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     (state) => state.terrainComputeStatus,
   );
   const renderingTuningAbort = useRef<AbortController | null>(null);
+  const dragDepth = useRef(0);
+  const [trackDragActive, setTrackDragActive] = useState(false);
+  const { importFiles } = useTracksWorkspace();
   useEffect(() => {
     let cancelled = false;
     const restoreMapPreferences = async () => {
@@ -140,6 +149,34 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
+  const handleTrackDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setTrackDragActive(true);
+  };
+
+  const handleTrackDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleTrackDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setTrackDragActive(false);
+  };
+
+  const handleTrackDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setTrackDragActive(false);
+    handleSectionChange('tracks');
+    if (navigationCollapsed) handleNavigationCollapsedChange(false);
+    void importFiles(event.dataTransfer.files);
+  };
+
   const handleRenderingTuningChange = async (value: SatelliteRenderingTuning) => {
     setRenderingTuning(value);
     if (mapLayers === null) return;
@@ -192,6 +229,10 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
 
   return (
     <Box
+      onDragEnter={handleTrackDragEnter}
+      onDragOver={handleTrackDragOver}
+      onDragLeave={handleTrackDragLeave}
+      onDrop={handleTrackDrop}
       sx={{
         height: '100dvh',
         position: 'relative',
@@ -265,6 +306,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           }}
         >
           <WorkspaceSidebar activeTab={activeTab} />
+          {activeTab === 'tracks' ? <TrackDetailsPane /> : null}
           <Box
             id="satellite-results-pane"
             sx={{
@@ -446,6 +488,15 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           }}
         />
       ) : null}
+      {trackDragActive ? <TrackDropOverlay /> : null}
     </Box>
+  );
+}
+
+export function WorkspaceShell(props: WorkspaceShellProps) {
+  return (
+    <TracksWorkspaceProvider>
+      <WorkspaceShellContent {...props} />
+    </TracksWorkspaceProvider>
   );
 }

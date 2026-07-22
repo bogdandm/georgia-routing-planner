@@ -63,6 +63,57 @@ describe('NominatimPlaceSearchGateway', () => {
     expect(requestedUrl.searchParams.get('layer')).toBe('address,natural,manmade');
   });
 
+  it('performs a cached English reverse lookup for a representative point', async () => {
+    const services = createTestServices();
+    const request = vi.fn<(url: URL, language: string | null) => void>();
+    mswServer.use(
+      http.get(
+        defaultGeocodingProviderConfiguration.reverseUrl,
+        ({ request: input }) => {
+          request(new URL(input.url), input.headers.get('Accept-Language'));
+          return HttpResponse.json({
+            place_id: 84,
+            lat: '43.0411',
+            lon: '42.7192',
+            display_name: 'Koruldi Lakes, Mestia Municipality, Georgia',
+            category: 'natural',
+            type: 'lake',
+            osm_type: 'way',
+            boundingbox: ['43.03', '43.05', '42.70', '42.73'],
+          });
+        },
+      ),
+    );
+    const gateway = new NominatimPlaceSearchGateway(
+      services.httpClient,
+      defaultGeocodingProviderConfiguration,
+      services.idGenerator,
+      () => 2_000,
+    );
+
+    await expect(
+      gateway.reverse(
+        { longitude: 42.7192, latitude: 43.0411 },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      label: 'Koruldi Lakes, Mestia Municipality, Georgia',
+      kind: 'water',
+    });
+    await gateway.reverse(
+      { longitude: 42.7192, latitude: 43.0411 },
+      new AbortController().signal,
+    );
+
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[1]).toBe('en');
+    const requestedUrl = request.mock.calls[0]?.[0];
+    expect(requestedUrl).toBeInstanceOf(URL);
+    if (!(requestedUrl instanceof URL)) return;
+    expect(requestedUrl.searchParams.get('lat')).toBe('43.041100');
+    expect(requestedUrl.searchParams.get('lon')).toBe('42.719200');
+  });
+
   it('rejects malformed provider data with a safe error', async () => {
     const services = createTestServices();
     mswServer.use(

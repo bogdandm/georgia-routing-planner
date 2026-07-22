@@ -125,6 +125,14 @@ configured maximum, validates JSON with Zod, and exposes typed timeout, rate-lim
 invalid-response, provider, and network failures. Queries and result metadata are not
 written to diagnostics. UI attribution links to the OpenStreetMap copyright page.
 
+An explicitly imported local track may also request up to three sequential reverse
+lookups for representative coordinates. Those requests use the same pacing, cache,
+timeout, cancellation, validation, English-language header, and safe failure mapping as
+map search. The editable source name remains authoritative; a returned short English
+candidate changes it only after the user chooses `Apply generated name`. A lookup
+failure never blocks preview or save, and coordinates or returned labels are not added
+to diagnostics.
+
 ## Terrain: AWS Open Data Mapzen Terrain Tiles
 
 The terrain default is

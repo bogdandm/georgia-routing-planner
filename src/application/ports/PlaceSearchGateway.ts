@@ -42,4 +42,8 @@ export interface PlaceSearchGateway {
     bounds: PlaceSearchBounds,
     signal: AbortSignal,
   ): Promise<readonly PlaceSearchResult[]>;
+  reverse?(
+    coordinate: { readonly longitude: number; readonly latitude: number },
+    signal: AbortSignal,
+  ): Promise<PlaceSearchResult | null>;
 }

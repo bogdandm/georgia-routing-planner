@@ -502,6 +502,13 @@ metadata.
 
 ## Local track retention
 
+A picker selection or full-workspace drop switches to Tracks and parses one `.gpx` file
+in memory. Another import, selecting a saved track, or closing the preview first
+requires an explicit discard decision. A valid preview starts a cancellable optional
+English-name lookup without blocking editing or save. Switching rail sections retains
+the preview. `beforeunload` is registered only while that preview remains unsaved and is
+removed after save or confirmed discard.
+
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display and derived
 metrics used by list views; the content row contains normalized independent segments and

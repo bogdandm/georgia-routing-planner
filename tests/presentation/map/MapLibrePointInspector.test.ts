@@ -25,7 +25,22 @@ describe('renderPointInspectorContent', () => {
     );
     expect(container.textContent).toContain('44.80123, 41.71235');
     expect(container.textContent).toContain('1,234 m');
+    expect(container.textContent).toContain(
+      '<script>fixture hut</script> (alpine hut), 42 m away',
+    );
+    expect(container.textContent).not.toContain('—');
     expect(container.querySelector('script')).toBeNull();
+    const links = [...container.querySelectorAll<HTMLAnchorElement>('a')];
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Wikipedia',
+      'Google Search',
+    ]);
+    expect(links.map((link) => link.href)).toEqual([
+      'https://en.wikipedia.org/wiki/%3Cscript%3Efixture_hut%3C%2Fscript%3E',
+      'https://www.google.com/search?q=%3Cscript%3Efixture%20hut%3C%2Fscript%3E%20Georgia',
+    ]);
+    expect(links.every((link) => link.target === '_blank')).toBe(true);
+    expect(links.every((link) => link.rel === 'noopener noreferrer')).toBe(true);
     const close = container.querySelector<HTMLButtonElement>(
       '[aria-label="Close map point details"]',
     );
@@ -58,6 +73,6 @@ describe('renderPointInspectorContent', () => {
       () => undefined,
     );
     expect(container.textContent).toContain('Elevation could not be loaded.');
-    expect(container.textContent).toContain('No point of interest within 100 m.');
+    expect(container.textContent).toContain('No named map feature found.');
   });
 });

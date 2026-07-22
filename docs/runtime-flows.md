@@ -491,14 +491,14 @@ such as `place=square` remain in the optional other-results group.
 ## Point inspection lifecycle
 
 `MapLibreFacade` owns the serializable inspection state and the native popup adapter.
-The first map click opens loading state and starts cancellable POI/elevation work. If an
-inspection is already open and intersects the map viewport, the next map click closes
-it, aborts that work, and does not inspect the new coordinate; the following click may
-start another inspection. An entirely offscreen popup is closed and replaced by the same
-click. Sequence checks prevent a late provider result from reopening a closed popup.
-Explicit popup close uses the same cancellation path. Diagnostics record only lifecycle,
-duration, outcome, and result count, never the clicked coordinate or arbitrary POI
-metadata.
+The first map click opens loading state and starts cancellable nearby-map-feature and
+elevation work. If an inspection is already open and intersects the map viewport, the
+next map click closes it, aborts that work, and does not inspect the new coordinate; the
+following click may start another inspection. An entirely offscreen popup is closed and
+replaced by the same click. Sequence checks prevent a late provider result from
+reopening a closed popup. Explicit popup close uses the same cancellation path.
+Diagnostics record only lifecycle, duration, outcome, and result count, never the
+clicked coordinate or arbitrary POI metadata.
 
 ## Teardown ownership
 

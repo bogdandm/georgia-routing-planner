@@ -1,4 +1,4 @@
-import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { GeoJSONFeature, Map as MapLibreMap } from 'maplibre-gl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
@@ -23,6 +23,8 @@ class FakeNativeMap {
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
   public readonly jumpCalls: Record<string, unknown>[] = [];
+  public readonly queriedSourceLayers: string[] = [];
+  public readonly sourceFeatures = new Map<string, readonly GeoJSONFeature[]>();
   public repaintCalls = 0;
   public terrainElevation: number | null = null;
   public initialTerrain: unknown = null;
@@ -161,8 +163,14 @@ class FakeNativeMap {
     return this.terrainElevation;
   }
 
-  public querySourceFeatures(): [] {
-    return [];
+  public querySourceFeatures(
+    _sourceId: string,
+    options?: { readonly sourceLayer?: string },
+  ): GeoJSONFeature[] {
+    const sourceLayer = options?.sourceLayer;
+    if (sourceLayer === undefined) return [];
+    this.queriedSourceLayers.push(sourceLayer);
+    return [...(this.sourceFeatures.get(sourceLayer) ?? [])];
   }
 
   public fire(type: string, event?: unknown): void {
@@ -817,7 +825,7 @@ describe('MapLibreFacade', () => {
       {
         terrain: provider.value.terrain,
         demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
-        sourceLayers: { pois: 'poi', peaks: 'mountain_peak' },
+        sourceLayers: { pois: 'poi', peaks: 'mountain_peak', places: 'place' },
         requestTimeoutMs: 100,
         equivalentErrorWindowMs: 10_000,
       },
@@ -846,6 +854,64 @@ describe('MapLibreFacade', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('45.123456');
     facade.closePointInspection();
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
+  it('includes named settlements when inspecting nearby map features', () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    nativeMap.addSource('basemap-vector', { type: 'vector' });
+    nativeMap.sourceFeatures.set('place', [
+      {
+        type: 'Feature',
+        id: 'shovi',
+        geometry: { type: 'Point', coordinates: [43.6759, 42.7023] },
+        properties: { 'name:en': 'Shovi', class: 'village' },
+        source: 'basemap-vector',
+        sourceLayer: 'place',
+        state: {},
+        layer: { id: 'basemap-place-labels', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      {
+        terrain: provider.value.terrain,
+        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+        sourceLayers: {
+          pois: provider.value.vector.sourceLayers.pois,
+          peaks: provider.value.vector.sourceLayers.peaks,
+          places: provider.value.vector.sourceLayers.places,
+        },
+        requestTimeoutMs: 100,
+        equivalentErrorWindowMs: 10_000,
+      },
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    nativeMap.fire('click', { lngLat: { lng: 43.67592, lat: 42.70227 } });
+
+    expect(nativeMap.queriedSourceLayers).toEqual(['poi', 'mountain_peak', 'place']);
+    expect(facade.getPointInspection()).toMatchObject({
+      nearbyPoi: {
+        status: 'found',
+        poi: { name: 'Shovi', category: 'village' },
+      },
+    });
   });
 
   it('replaces an inspection immediately when its popup is outside the map viewport', () => {

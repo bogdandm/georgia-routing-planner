@@ -20,7 +20,11 @@ export interface PointInspectorPopup {
   destroy(): void;
 }
 
-function appendLabelValue(container: HTMLElement, label: string, value: string): void {
+function appendLabelValue(
+  container: HTMLElement,
+  label: string,
+  value: string,
+): HTMLElement {
   const group = document.createElement('div');
   const labelElement = document.createElement('div');
   labelElement.className = 'map-point-inspector__label';
@@ -30,6 +34,26 @@ function appendLabelValue(container: HTMLElement, label: string, value: string):
   valueElement.textContent = value;
   group.append(labelElement, valueElement);
   container.append(group);
+  return group;
+}
+
+function appendFeatureLinks(container: HTMLElement, name: string): void {
+  const query = encodeURIComponent(`${name} Georgia`);
+  const wikipediaTitle = encodeURIComponent(name.replaceAll(' ', '_'));
+  const links = document.createElement('div');
+  links.className = 'map-point-inspector__links';
+  for (const [label, href] of [
+    ['Wikipedia', `https://en.wikipedia.org/wiki/${wikipediaTitle}`],
+    ['Google Search', `https://www.google.com/search?q=${query}`],
+  ] as const) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = label;
+    links.append(link);
+  }
+  container.append(links);
 }
 
 function elevationText(inspection: OpenMapPointInspection): string {
@@ -45,19 +69,19 @@ function elevationText(inspection: OpenMapPointInspection): string {
   }
 }
 
-function poiText(inspection: OpenMapPointInspection): string {
+function nearbyFeatureText(inspection: OpenMapPointInspection): string {
   switch (inspection.nearbyPoi.status) {
     case 'loading':
       return 'Checking nearby map data…';
     case 'none':
-      return 'No point of interest within 100 m.';
+      return 'No named map feature found.';
     case 'error':
       return 'Nearby map data could not be inspected.';
     case 'found': {
       const poi = inspection.nearbyPoi.poi;
-      const name = poi.name ?? 'Unnamed point of interest';
+      const name = poi.name ?? 'Unnamed map feature';
       const category = poi.category.replaceAll('_', ' ');
-      return `${name} — ${category}, ${measurementFormatter.format(poi.distanceMeters)} m away`;
+      return `${name} (${category}), ${measurementFormatter.format(poi.distanceMeters)} m away`;
     }
   }
 }
@@ -88,7 +112,17 @@ export function renderPointInspectorContent(
     `${coordinateFormatter.format(inspection.coordinate.longitude)}, ${coordinateFormatter.format(inspection.coordinate.latitude)}`,
   );
   appendLabelValue(container, 'Terrain elevation', elevationText(inspection));
-  appendLabelValue(container, 'Nearby point of interest', poiText(inspection));
+  const nearbyFeature = appendLabelValue(
+    container,
+    'Nearby map feature',
+    nearbyFeatureText(inspection),
+  );
+  if (
+    inspection.nearbyPoi.status === 'found' &&
+    inspection.nearbyPoi.poi.name !== null
+  ) {
+    appendFeatureLinks(nearbyFeature, inspection.nearbyPoi.poi.name);
+  }
   if (restoreCloseFocus) closeButton.focus();
 }
 

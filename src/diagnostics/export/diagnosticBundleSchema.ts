@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
-export const diagnosticFieldValueSchema = z.union([
+const diagnosticFieldValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.null(),
 ]);
 
-export const diagnosticEventSchema = z
+const diagnosticEventSchema = z
   .object({
     id: z.string(),
     timestamp: z.iso.datetime(),
@@ -18,7 +18,7 @@ export const diagnosticEventSchema = z
   })
   .strict();
 
-export const healthCheckSchema = z
+const healthCheckSchema = z
   .object({
     name: z.string(),
     status: z.enum(['pass', 'warn', 'fail']),
@@ -113,7 +113,7 @@ export const diagnosticBundleV2Schema = z
   })
   .strict();
 
-export const mapDiagnosticSnapshotSchema = mapDiagnosticSnapshotV2Schema.extend({
+const mapDiagnosticSnapshotSchema = mapDiagnosticSnapshotV2Schema.extend({
   recoverableFailures: z.array(
     z
       .object({
@@ -161,7 +161,5 @@ export const diagnosticBundleSchema = z
   })
   .strict();
 
-export type DiagnosticBundleV1 = z.infer<typeof diagnosticBundleV1Schema>;
-export type DiagnosticBundleV2 = z.infer<typeof diagnosticBundleV2Schema>;
 export type DiagnosticBundle = z.infer<typeof diagnosticBundleSchema>;
 export type HealthCheckResult = z.infer<typeof healthCheckSchema>;

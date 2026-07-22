@@ -76,4 +76,60 @@ describe('runApplicationBootstrap', () => {
     await bootstrap;
     expect(completed).toBe(true);
   });
+
+  it('releases error capture and runtime resources when rendering fails', async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    const failure = new Error('render failed');
+    const disposeRuntime = vi.fn();
+    const removeErrorCapture = vi.fn();
+    const services = {
+      dispose: disposeRuntime,
+      diagnostics: {},
+      logger: { log: vi.fn() },
+    } as unknown as RuntimeServices;
+    const mountFallback =
+      vi.fn<(root: HTMLElement, options: BootstrapFallbackOptions) => void>();
+
+    await runApplicationBootstrap(() => Promise.reject(failure), {
+      document,
+      createServices: () => services,
+      installErrorCapture: () => removeErrorCapture,
+      mountFallback,
+    });
+
+    expect(removeErrorCapture).toHaveBeenCalledOnce();
+    expect(disposeRuntime).toHaveBeenCalledOnce();
+    expect(mountFallback).toHaveBeenCalledWith(document.querySelector('#root'), {
+      error: failure,
+      diagnostics: services.diagnostics,
+    });
+  });
+
+  it('mounts the fallback and disposes runtime resources when capture cleanup fails', async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    const failure = new Error('render failed');
+    const disposeRuntime = vi.fn();
+    const services = {
+      dispose: disposeRuntime,
+      diagnostics: {},
+      logger: { log: vi.fn() },
+    } as unknown as RuntimeServices;
+    const mountFallback =
+      vi.fn<(root: HTMLElement, options: BootstrapFallbackOptions) => void>();
+
+    await runApplicationBootstrap(() => Promise.reject(failure), {
+      document,
+      createServices: () => services,
+      installErrorCapture: () => () => {
+        throw new Error('listener cleanup failed');
+      },
+      mountFallback,
+    });
+
+    expect(disposeRuntime).toHaveBeenCalledOnce();
+    expect(mountFallback).toHaveBeenCalledWith(document.querySelector('#root'), {
+      error: failure,
+      diagnostics: services.diagnostics,
+    });
+  });
 });

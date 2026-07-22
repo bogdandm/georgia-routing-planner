@@ -1,9 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 
-import type { LogicalMapLayerId } from '@/presentation/map/MapLayerVisibility';
-import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type {
+  LogicalMapLayerId,
   SatelliteRenderingMode,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
@@ -17,13 +16,42 @@ import type {
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 
-export interface TerrainOverlaySnapshot {
+export type AppliedSatelliteImagerySnapshot =
+  | { readonly status: 'empty' }
+  | {
+      readonly status: 'loading';
+      readonly sceneKey: string;
+      readonly previousSceneKey: string | null;
+      readonly stage: 'preparing' | 'requesting-tiles' | 'rendering' | 'finalizing';
+      readonly message: string;
+      readonly startedAt: number;
+    }
+  | {
+      readonly status: 'preview' | 'ready';
+      readonly sceneKey: string;
+      readonly sceneId: string;
+      readonly visible: true;
+    }
+  | {
+      readonly status: 'hidden';
+      readonly sceneKey: string;
+      readonly sceneId: string;
+      readonly visible: false;
+    }
+  | {
+      readonly status: 'failed';
+      readonly sceneKey: string;
+      readonly previousSceneKey: string | null;
+      readonly message: string;
+    };
+
+interface TerrainOverlaySnapshot {
   readonly initialized: boolean;
   readonly preferences: TerrainOverlayPreferences;
   readonly message: string | null;
 }
 
-export interface MapLayerState {
+interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly automaticAlternativeProviderState: 'inactive' | 'switching' | 'active';
   readonly errorMessage: string | null;
@@ -36,7 +64,7 @@ export interface MapLayerState {
   readonly terrainOverlays: TerrainOverlaySnapshot;
 }
 
-export const initialMapLayerState: MapLayerState = {
+const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
   automaticAlternativeProviderState: 'inactive',
   errorMessage: null,

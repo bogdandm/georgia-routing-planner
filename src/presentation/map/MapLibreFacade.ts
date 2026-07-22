@@ -8,10 +8,6 @@ import type {
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
-import type {
-  MapViewportBounds,
-  MapViewportSnapshot,
-} from '@/application/ports/MapViewportProvider';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
@@ -33,6 +29,8 @@ import {
   type MapFailureCategory,
   type MapPointInspection,
   type MapSourceFailure,
+  type MapViewportBounds,
+  type MapViewportSnapshot,
   type MapWebGlCapabilities,
   type TerrainMode,
   type TerrainTransitionResult,

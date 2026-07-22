@@ -1,8 +1,7 @@
-import { QueryClient } from '@tanstack/react-query';
+import type { KyInstance } from 'ky';
 
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
@@ -10,7 +9,6 @@ import {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
-import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
@@ -54,7 +52,7 @@ interface CreateTestServicesOptions {
 
 export function createTestServices(
   options: CreateTestServicesOptions = {},
-): RuntimeServices {
+): RuntimeServices & { readonly httpClient: KyInstance } {
   const clock = new TestClock();
   const idGenerator = new TestIdGenerator();
   const logger = new BoundedDiagnosticLogger(clock, idGenerator);
@@ -150,7 +148,7 @@ export function createTestServices(
     elevationProvider: {
       sample: () => Promise.resolve({ status: 'available' as const, meters: 1_234 }),
     },
-    mapCameraRepository: new DexieMapCameraRepository(database, clock, logger),
+    mapCameraRepository: database,
     mapDiagnostics,
     mapViewport,
     mapLayers,
@@ -158,16 +156,6 @@ export function createTestServices(
       status: 'valid',
       value: parsedMapProviderConfiguration,
     },
-    queryClient: new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    }),
-    loadSatelliteAvailability: new LoadSatelliteAvailability(
-      satelliteCatalogGateway,
-      sentinelQueryDiagnostics,
-      logger,
-      idGenerator,
-      clock,
-    ),
     satelliteCatalogGateway,
     searchSatelliteScenes: new SearchSatelliteScenes(
       satelliteCatalogGateway,

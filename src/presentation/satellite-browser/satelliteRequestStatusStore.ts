@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
-export type SatelliteRequestStatus =
+type SatelliteRequestStatus =
   | { readonly status: 'ready'; readonly message: string }
   | {
       readonly status: 'pending';

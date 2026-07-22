@@ -1,6 +1,6 @@
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 
-export type SatelliteInterestPointRelation = 'inside' | 'boundary' | 'outside';
+type SatelliteInterestPointRelation = 'inside' | 'boundary' | 'outside';
 
 export interface SatelliteSceneCoverage {
   readonly viewportCoveragePercent: number;
@@ -23,17 +23,5 @@ export interface SatelliteSearchResult {
   readonly groups: readonly SatelliteAcquisitionGroup[];
   readonly sceneCount: number;
   readonly acquisitionDateCount: number;
-  readonly totalMatched: number;
-}
-
-export interface SatelliteAvailabilityDate {
-  readonly date: string;
-  readonly sceneCount: number;
-  readonly cloudSummaryPercent: number;
-}
-
-export interface SatelliteAvailabilityResult {
-  readonly month: string;
-  readonly dates: readonly SatelliteAvailabilityDate[];
   readonly totalMatched: number;
 }

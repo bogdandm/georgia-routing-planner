@@ -30,7 +30,7 @@ import {
   type SyntheticEvent,
 } from 'react';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
 import { SentinelQueryTimeline } from '@/presentation/developer-tools/SentinelQueryTimeline';
 import { useUiStore } from '@/presentation/shell/uiStore';

@@ -9,19 +9,31 @@ export interface MapCoordinate {
   readonly latitude: number;
 }
 
+export interface MapViewportBounds {
+  readonly west: number;
+  readonly south: number;
+  readonly east: number;
+  readonly north: number;
+}
+
+export interface MapViewportSnapshot {
+  readonly bounds: MapViewportBounds;
+  readonly center: MapCoordinate;
+}
+
 export interface NearbyPoi {
   readonly name: string | null;
   readonly category: string;
   readonly distanceMeters: number;
 }
 
-export type PointElevationState =
+type PointElevationState =
   | { readonly status: 'loading' }
   | { readonly status: 'available'; readonly meters: number }
   | { readonly status: 'unavailable' }
   | { readonly status: 'error' };
 
-export type NearbyPoiState =
+type NearbyPoiState =
   | { readonly status: 'loading' }
   | { readonly status: 'found'; readonly poi: NearbyPoi }
   | { readonly status: 'none' }
@@ -41,7 +53,7 @@ export interface MapDebugOptions {
   readonly showTileBoundaries: boolean;
 }
 
-export type MapLifecycleState = 'loading' | 'ready' | 'degraded' | 'fatal';
+type MapLifecycleState = 'loading' | 'ready' | 'degraded' | 'fatal';
 
 export type MapFailureCategory =
   | 'base-vector'

@@ -2,6 +2,11 @@ import Dexie, { type EntityTable } from 'dexie';
 import { z } from 'zod';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import {
+  normalizeMapCamera,
+  type MapCamera,
+  type MapCameraRepository,
+} from '@/application/ports/MapCameraRepository';
 import type {
   MapLayerPreferencesRepository,
   PersistedMapLayerPreferences,
@@ -32,7 +37,7 @@ const uiPreferencesSchema = z
   })
   .strict();
 
-export interface UiPreferences {
+interface UiPreferences {
   readonly developerMode: boolean;
   readonly navigationCollapsed: boolean;
 }
@@ -41,6 +46,30 @@ const defaultUiPreferences: UiPreferences = {
   developerMode: false,
   navigationCollapsed: false,
 };
+
+const mapCameraKey = 'map.camera';
+
+interface PersistedMapView {
+  readonly schemaVersion: 3;
+  readonly camera: Pick<MapCamera, 'longitude' | 'latitude' | 'zoom'>;
+}
+
+function readPersistedCamera(value: unknown): MapCamera | null {
+  if (typeof value !== 'object' || value === null) return null;
+
+  const candidate = value as Record<string, unknown>;
+  const storedCamera =
+    candidate.schemaVersion === 3 &&
+    typeof candidate.camera === 'object' &&
+    candidate.camera !== null
+      ? { ...(candidate.camera as Record<string, unknown>), bearing: 0, pitch: 0 }
+      : candidate.camera;
+  const camera = normalizeMapCamera(storedCamera);
+  if (camera === null || ![1, 2, 3].includes(candidate.schemaVersion as number)) {
+    return null;
+  }
+  return { ...camera, bearing: 0, pitch: 0 };
+}
 
 const maximumCloudCoverPercentSchema = z.number().min(0).max(100);
 const defaultMaximumCloudCoverPercent = 50;
@@ -118,7 +147,10 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
 };
 
 /** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */
-export class AppDatabase extends Dexie implements MapLayerPreferencesRepository {
+export class AppDatabase
+  extends Dexie
+  implements MapLayerPreferencesRepository, MapCameraRepository
+{
   public readonly settings!: EntityTable<SettingRecord, 'key'>;
   public readonly diagnostics!: EntityTable<PersistedDiagnosticRecord, 'id'>;
 
@@ -218,6 +250,44 @@ export class AppDatabase extends Dexie implements MapLayerPreferencesRepository 
     await this.settings.put({
       key: 'map.layers',
       value: parsed,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /** Loads the last 2D camera while accepting the two previous local record versions. */
+  public async load(): Promise<MapCamera | null> {
+    const record = await this.settings.get(mapCameraKey);
+    if (record === undefined) return null;
+
+    const camera = readPersistedCamera(record.value);
+    if (camera !== null) return camera;
+
+    await this.settings.delete(mapCameraKey);
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.map-camera.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return null;
+  }
+
+  /** Stores only the settled 2D position; 3D orientation remains session-only. */
+  public async save(camera: MapCamera): Promise<void> {
+    const normalized = normalizeMapCamera(camera);
+    if (normalized === null) {
+      throw new Error('Map camera contains non-finite values.');
+    }
+
+    await this.settings.put({
+      key: mapCameraKey,
+      value: {
+        schemaVersion: 3,
+        camera: {
+          longitude: normalized.longitude,
+          latitude: normalized.latitude,
+          zoom: normalized.zoom,
+        },
+      } satisfies PersistedMapView,
       updatedAt: new Date().toISOString(),
     });
   }

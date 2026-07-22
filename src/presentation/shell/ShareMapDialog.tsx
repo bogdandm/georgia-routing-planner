@@ -15,7 +15,7 @@ import {
 import { useCallback, useState, useSyncExternalStore } from 'react';
 import { useStore } from 'zustand';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
 import { createMapShareUrl } from '@/presentation/map/mapShareUrl';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';

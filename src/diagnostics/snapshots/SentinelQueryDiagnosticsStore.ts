@@ -4,7 +4,7 @@ import type {
   SentinelQueryStepId,
 } from '@/application/ports/SentinelQueryDiagnostics';
 
-export const sentinelQueryStepDefinitions = [
+const sentinelQueryStepDefinitions = [
   {
     id: 'capture-viewport',
     label: 'Capture viewport',
@@ -66,7 +66,7 @@ export type SentinelQueryStepStatus =
 export type SentinelQueryStatus =
   'idle' | 'running' | 'success' | 'error' | 'cancelled';
 
-export interface SentinelQueryStepSnapshot {
+interface SentinelQueryStepSnapshot {
   readonly id: SentinelQueryStepId;
   readonly label: string;
   readonly detail: string;

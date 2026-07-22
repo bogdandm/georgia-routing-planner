@@ -1,15 +1,12 @@
-import type {
-  MapViewportProvider,
-  MapViewportSnapshot,
-} from '@/application/ports/MapViewportProvider';
+import type { MapViewportSnapshot } from '@/presentation/map/mapTypes';
 
 /** Shares the current visible map area with React without exposing MapLibre. */
-export class MapViewportSnapshotStore implements MapViewportProvider {
+export class MapViewportSnapshotStore {
   readonly #listeners = new Set<() => void>();
   #snapshot: MapViewportSnapshot | null = null;
 
   public update(snapshot: MapViewportSnapshot | null): void {
-    this.#snapshot = snapshot === null ? null : structuredClone(snapshot);
+    this.#snapshot = snapshot;
     for (const listener of this.#listeners) listener();
   }
 

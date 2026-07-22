@@ -16,23 +16,26 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
 import {
   useCallback,
+  useEffect,
   useState,
   useSyncExternalStore,
   type SyntheticEvent,
 } from 'react';
 
-import type { MapViewportBounds } from '@/application/ports/MapViewportProvider';
-import type { PlaceSearchKind } from '@/application/ports/PlaceSearchGateway';
+import type {
+  PlaceSearchKind,
+  PlaceSearchResult,
+} from '@/application/ports/PlaceSearchGateway';
 import type { PlaceSearchProgress } from '@/application/map/SearchPlaces';
 import {
   geodesicDistanceKm,
   maximumPlaceSearchRadiusKm,
   maximumPlaceSearchSideKm,
 } from '@/application/map/expandPlaceSearchBounds';
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import type { MapViewportBounds } from '@/presentation/map/mapTypes';
 import {
   requestMapFitBounds,
   requestMapNavigation,
@@ -72,6 +75,11 @@ function formatDistance(distanceKm: number): string {
   return `${String(Math.round(distanceKm))} km away`;
 }
 
+type SearchRequestState =
+  | { readonly status: 'idle' | 'loading' }
+  | { readonly status: 'success'; readonly results: readonly PlaceSearchResult[] }
+  | { readonly status: 'error'; readonly error: unknown };
+
 export function MapSearchPlaceholder() {
   const { mapViewport, searchPlaces } = useRuntimeServices();
   const [value, setValue] = useState('');
@@ -83,6 +91,9 @@ export function MapSearchPlaceholder() {
   const [searchProgress, setSearchProgress] = useState<PlaceSearchProgress | null>(
     null,
   );
+  const [searchRequest, setSearchRequest] = useState<SearchRequestState>({
+    status: 'idle',
+  });
   const [showOtherResults, setShowOtherResults] = useState(false);
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
@@ -97,31 +108,39 @@ export function MapSearchPlaceholder() {
     readViewport,
     readViewport,
   );
-  const search = useQuery({
-    queryKey: [
-      'place-search',
-      submittedSearch?.query,
-      submittedSearch?.bounds.west,
-      submittedSearch?.bounds.south,
-      submittedSearch?.bounds.east,
-      submittedSearch?.bounds.north,
-    ],
-    queryFn: ({ signal }) => {
-      if (searchPlaces === null || submittedSearch === null) return Promise.resolve([]);
-      return searchPlaces.execute(
+  useEffect(() => {
+    if (searchPlaces === null || submittedSearch === null) return;
+
+    const controller = new AbortController();
+    void searchPlaces
+      .execute(
         submittedSearch.query,
         submittedSearch.bounds,
-        signal,
-        setSearchProgress,
-      );
-    },
-    enabled: submittedSearch !== null && searchPlaces !== null,
-  });
+        controller.signal,
+        (progress) => {
+          if (!controller.signal.aborted) setSearchProgress(progress);
+        },
+      )
+      .then((results) => {
+        if (!controller.signal.aborted) {
+          setSearchRequest({ status: 'success', results });
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setSearchRequest({ status: 'error', error });
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [searchPlaces, submittedSearch]);
+
+  const isFetching = searchRequest.status === 'loading';
   const visibleResults =
     submittedSearch === null
       ? []
-      : search.isSuccess
-        ? search.data
+      : searchRequest.status === 'success'
+        ? searchRequest.results
         : (searchProgress?.results ?? []);
   const preferredResults = visibleResults
     .filter((result) => result.kind !== 'other')
@@ -137,16 +156,16 @@ export function MapSearchPlaceholder() {
   const submit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     const coordinateResult = parseCoordinateQuery(value);
+    setSubmittedSearch(null);
+    setSearchRequest({ status: 'idle' });
     setSearchProgress(null);
     setShowOtherResults(false);
     if (coordinateResult.status === 'valid') {
-      setSubmittedSearch(null);
       setValidationMessage(null);
       requestMapNavigation({ ...coordinateResult.coordinate, zoom: 13 });
       return;
     }
     if (coordinateResult.status === 'invalid') {
-      setSubmittedSearch(null);
       setValidationMessage(coordinateResult.message);
       return;
     }
@@ -163,15 +182,18 @@ export function MapSearchPlaceholder() {
     }
     setValidationMessage(null);
     setSubmittedSearch({ query: normalized, bounds: viewport.bounds });
+    if (searchPlaces !== null) setSearchRequest({ status: 'loading' });
   };
 
   const closeResults = () => {
     setSubmittedSearch(null);
+    setSearchRequest({ status: 'idle' });
   };
 
   const clearSearch = () => {
     setValue('');
     setSubmittedSearch(null);
+    setSearchRequest({ status: 'idle' });
     setValidationMessage(null);
     setSearchProgress(null);
     setShowOtherResults(false);
@@ -216,7 +238,7 @@ export function MapSearchPlaceholder() {
                     type="submit"
                     size="small"
                     aria-label="Search map"
-                    disabled={search.isFetching}
+                    disabled={isFetching}
                   >
                     <SearchIcon fontSize="small" />
                   </IconButton>
@@ -225,7 +247,7 @@ export function MapSearchPlaceholder() {
               endAdornment:
                 value.length > 0 ? (
                   <InputAdornment position="end" sx={{ gap: 0.25 }}>
-                    {search.isFetching ? (
+                    {isFetching ? (
                       <CircularProgress size={18} aria-label="Searching places" />
                     ) : null}
                     <IconButton
@@ -264,16 +286,16 @@ export function MapSearchPlaceholder() {
           works.
         </Alert>
       ) : null}
-      {search.isError ? (
+      {searchRequest.status === 'error' ? (
         <Alert severity="error" sx={{ borderRadius: 0 }}>
-          {search.error instanceof Error
-            ? search.error.message
+          {searchRequest.error instanceof Error
+            ? searchRequest.error.message
             : 'Place search is unavailable. Try again.'}
         </Alert>
       ) : null}
       {submittedSearch !== null ? (
         <Box sx={{ height: 4 }}>
-          {search.isFetching && searchProgress?.status === 'expanding' ? (
+          {isFetching && searchProgress?.status === 'expanding' ? (
             <LinearProgress
               variant="determinate"
               value={Math.min(
@@ -287,14 +309,14 @@ export function MapSearchPlaceholder() {
           ) : null}
         </Box>
       ) : null}
-      {search.isSuccess && visibleResults.length === 0 ? (
+      {searchRequest.status === 'success' && visibleResults.length === 0 ? (
         <Alert severity="info" sx={{ borderRadius: 0 }}>
           {searchProgress?.status === 'exhausted'
             ? `No matching places were found within approximately ${String(Math.round(searchProgress.largerSideKm))} km.`
             : 'No matching places were found.'}
         </Alert>
       ) : null}
-      {search.isSuccess &&
+      {searchRequest.status === 'success' &&
       visibleResults.length > 0 &&
       preferredResults.length === 0 &&
       !showOtherResults ? (

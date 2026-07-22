@@ -19,7 +19,7 @@ import {
 } from 'react';
 import { useStore } from 'zustand';
 
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { satelliteRequestStatusStore } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
 

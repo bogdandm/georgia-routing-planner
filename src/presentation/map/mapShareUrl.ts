@@ -1,12 +1,12 @@
 import type { MapCamera } from '@/presentation/map/mapTypes';
 
-export const mapShareSchemaVersion = 2;
+const mapShareSchemaVersion = 2;
 
 const coordinatePrecision = 5;
 const zoomPrecision = 2;
 const sceneKeyPattern = /^[a-z0-9._-]{1,100}:[a-z0-9._-]{1,300}$/iu;
 
-export interface SharedMapView {
+interface SharedMapView {
   readonly center: {
     readonly longitude: number;
     readonly latitude: number;

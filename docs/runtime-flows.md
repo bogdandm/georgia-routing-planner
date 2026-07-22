@@ -8,7 +8,7 @@ sequenceDiagram
   participant Root as createRuntimeServices
   participant UI as WorkspaceShell
   participant Workspace as MapWorkspace
-  participant Storage as MapCameraRepository
+  participant Storage as AppDatabase
   participant Facade as MapLibreFacade
   participant Map as MapLibre
 
@@ -334,7 +334,7 @@ adapter through the injected `SearchSatelliteScenes` use case:
 ```mermaid
 sequenceDiagram
   participant Command as SatelliteBrowser
-  participant UseCase as Search/availability use case
+  participant UseCase as Satellite search use case
   participant Gateway as SatelliteCatalogGateway
   participant Geometry as Satellite coverage
   participant Timeline as Sentinel diagnostics

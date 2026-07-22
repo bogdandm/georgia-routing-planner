@@ -1,6 +1,3 @@
-import { QueryCache, QueryClient } from '@tanstack/react-query';
-import type { KyInstance } from 'ky';
-
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
@@ -9,7 +6,6 @@ import type { MapCameraRepository } from '@/application/ports/MapCameraRepositor
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
-import { LoadSatelliteAvailability } from '@/application/satellite/LoadSatelliteAvailability';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
@@ -27,10 +23,7 @@ import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
-import { DexieMapCameraRepository } from '@/infrastructure/persistence/DexieMapCameraRepository';
-import { BrowserClock } from '@/infrastructure/runtime/BrowserClock';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
-import { CryptoIdGenerator } from '@/infrastructure/runtime/CryptoIdGenerator';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -44,7 +37,6 @@ export interface RuntimeServices {
   readonly database: AppDatabase;
   readonly diagnostics: DiagnosticsService;
   readonly dispose: () => void;
-  readonly httpClient: KyInstance;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
@@ -53,8 +45,6 @@ export interface RuntimeServices {
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly mapViewport: MapViewportSnapshotStore;
   readonly mapLayers: MapLibreLayerController | null;
-  readonly queryClient: QueryClient;
-  readonly loadSatelliteAvailability: LoadSatelliteAvailability | null;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
   readonly searchPlaces: SearchPlaces | null;
@@ -67,8 +57,11 @@ export interface RuntimeServices {
  * diagnostics. Feature modules consume this bundle but must not construct replacements.
  */
 export function createRuntimeServices(): RuntimeServices {
-  const clock = new BrowserClock();
-  const idGenerator = new CryptoIdGenerator();
+  const clock: Clock = {
+    now: () => new Date(),
+    monotonicNow: () => performance.now(),
+  };
+  const idGenerator: IdGenerator = { generate: () => crypto.randomUUID() };
   const developerFlag = new URLSearchParams(globalThis.location.search).get(
     'developer',
   );
@@ -80,7 +73,6 @@ export function createRuntimeServices(): RuntimeServices {
   );
   const database = new AppDatabase(logger);
   const storageUsage = new BrowserStorageUsageReader();
-  const mapCameraRepository = new DexieMapCameraRepository(database, clock, logger);
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
     new URL(import.meta.env.BASE_URL, globalThis.location.origin).toString(),
@@ -187,16 +179,6 @@ export function createRuntimeServices(): RuntimeServices {
           idGenerator,
           clock,
         );
-  const loadSatelliteAvailability =
-    satelliteCatalogGateway === null
-      ? null
-      : new LoadSatelliteAvailability(
-          satelliteCatalogGateway,
-          sentinelQueryDiagnostics,
-          logger,
-          idGenerator,
-          clock,
-        );
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -210,26 +192,6 @@ export function createRuntimeServices(): RuntimeServices {
     healthChecks,
     mapDiagnostics,
   );
-  const queryClient = new QueryClient({
-    queryCache: new QueryCache({
-      onError: (error) => {
-        logger.log({
-          level: 'error',
-          name: 'query.failed',
-          message: error instanceof Error ? error.message : 'Unknown query failure',
-        });
-      },
-    }),
-    defaultOptions: {
-      queries: {
-        retry: 1,
-        staleTime: 5 * 60 * 1_000,
-        refetchOnWindowFocus: false,
-      },
-      mutations: { retry: false },
-    },
-  });
-
   logger.log({
     level: 'info',
     name: 'app.bootstrap.services-created',
@@ -247,20 +209,16 @@ export function createRuntimeServices(): RuntimeServices {
     diagnostics,
     dispose: () => {
       mapLayers?.dispose();
-      queryClient.clear();
       database.close();
     },
-    httpClient,
     idGenerator,
     logger,
     elevationProvider,
-    mapCameraRepository,
+    mapCameraRepository: database,
     mapDiagnostics,
     mapViewport,
     mapLayers,
     mapProviderConfiguration,
-    queryClient,
-    loadSatelliteAvailability,
     satelliteCatalogGateway,
     searchSatelliteScenes,
     searchPlaces,

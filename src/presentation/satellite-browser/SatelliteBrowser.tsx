@@ -37,7 +37,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
-import { useRuntimeServices } from '@/bootstrap/useRuntimeServices';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   SatelliteProductLevel,
   SatelliteSearchViewport,
@@ -53,13 +53,15 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
-import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapLayerStore,
+  type AppliedSatelliteImagerySnapshot,
+} from '@/presentation/map/mapLayerStore';
 import {
   consumeSatelliteSearchRequest,
   mapInteractionStore,
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
-import type { AppliedSatelliteImagerySnapshot } from '@/presentation/map/SatelliteImageryMap';
 import { appColors } from '@/presentation/theme/appColors';
 import { SatelliteRenderingModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingModeSelect';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
@@ -912,7 +914,9 @@ export function SatelliteBrowser({
   const [submittedCoordinates, setSubmittedCoordinates] = useState(fallbackCoordinates);
   const [submittedTimeZone, setSubmittedTimeZone] = useState('Asia/Tbilisi');
   const [submittedSearch, setSubmittedSearch] = useState<SubmittedSearch | null>(null);
-  const [loadedMonths, setLoadedMonths] = useState<readonly string[]>([]);
+  const [loadedMonths, setLoadedMonths] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
@@ -923,8 +927,6 @@ export function SatelliteBrowser({
   const renderingModeRequest = useRef<AbortController | null>(null);
   const cloudCoverChangedByUser = useRef(false);
   const [renderingModeError, setRenderingModeError] = useState<string | null>(null);
-  const loadedMonthsRef = useRef(new Set<string>());
-  const loadingMonthsRef = useRef(new Set<string>());
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -1040,11 +1042,15 @@ export function SatelliteBrowser({
   const nextArchiveMonth =
     submittedSearch === null
       ? null
-      : nextUnloadedSearchMonth(submittedSearch.initialMonth, new Set(loadedMonths));
+      : nextUnloadedSearchMonth(submittedSearch.initialMonth, loadedMonths);
 
   const markMonthLoaded = (month: string) => {
-    loadedMonthsRef.current.add(month);
-    setLoadedMonths([...loadedMonthsRef.current].toSorted());
+    setLoadedMonths((current) => {
+      if (current.has(month)) return current;
+      const next = new Set(current);
+      next.add(month);
+      return next;
+    });
   };
 
   const loadMonthIntoResults = async (
@@ -1053,7 +1059,7 @@ export function SatelliteBrowser({
     revealLoadedMonth: boolean,
   ) => {
     if (searchSatelliteScenes === null || searchState.status !== 'success') return;
-    if (loadedMonthsRef.current.has(range.month)) {
+    if (loadedMonths.has(range.month)) {
       if (revealLoadedMonth) {
         setVisibleCount(
           filterResultByCloudCover(
@@ -1065,13 +1071,11 @@ export function SatelliteBrowser({
       }
       return;
     }
-    if (loadingMonthsRef.current.has(range.month)) return;
+    if (request.current !== null) return;
 
-    request.current?.abort();
     const controller = new AbortController();
     const baseResult = searchState.result;
     request.current = controller;
-    loadingMonthsRef.current.add(range.month);
     setLoadingMonth(range.month);
     setLoadingMore(true);
     setLoadMoreError(null);
@@ -1120,7 +1124,6 @@ export function SatelliteBrowser({
       setLoadMoreError(message);
       failSatelliteRequest(message);
     } finally {
-      loadingMonthsRef.current.delete(range.month);
       if (request.current === controller) {
         request.current = null;
         setLoadingMonth(null);
@@ -1140,7 +1143,7 @@ export function SatelliteBrowser({
     ) {
       setResultsOpen(true);
       setLoadMoreError(null);
-      if (loadedMonthsRef.current.has(range.month)) {
+      if (loadedMonths.has(range.month)) {
         setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
         return;
       }
@@ -1156,9 +1159,7 @@ export function SatelliteBrowser({
       productLevel: 'L2A',
       initialMonth: range.month,
     });
-    loadedMonthsRef.current = new Set<string>();
-    loadingMonthsRef.current = new Set<string>([range.month]);
-    setLoadedMonths([]);
+    setLoadedMonths(new Set());
     setLoadingMonth(range.month);
     setVisibleCount(firstResultCount);
     setSelectedSceneId(null);
@@ -1201,7 +1202,6 @@ export function SatelliteBrowser({
       });
       failSatelliteRequest(message);
     } finally {
-      loadingMonthsRef.current.delete(range.month);
       if (request.current === controller) {
         request.current = null;
         setLoadingMonth(null);
@@ -1224,7 +1224,7 @@ export function SatelliteBrowser({
     setCalendarMonth(month);
     setLoadMoreError(null);
     if (searchState.status !== 'success' || submittedSearch === null) return;
-    if (loadedMonthsRef.current.has(month)) {
+    if (loadedMonths.has(month)) {
       setVisibleCount(cloudFilteredResult?.sceneCount ?? 0);
       return;
     }
@@ -1238,7 +1238,6 @@ export function SatelliteBrowser({
   const cancelSearch = () => {
     request.current?.abort();
     request.current = null;
-    loadingMonthsRef.current.clear();
     setLoadingMonth(null);
     setLoadingMore(false);
     setSearchState({ status: 'idle' });

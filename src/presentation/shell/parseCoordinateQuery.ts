@@ -1,6 +1,6 @@
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 
-export type CoordinateQueryResult =
+type CoordinateQueryResult =
   | { readonly status: 'not-coordinate' }
   | { readonly status: 'valid'; readonly coordinate: MapCoordinate }
   | { readonly status: 'invalid'; readonly message: string };

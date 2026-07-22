@@ -9,7 +9,7 @@ export class MapDiagnosticsSnapshotStore {
   #snapshot: MapDiagnosticsSnapshot | null = null;
 
   public update(snapshot: MapDiagnosticsSnapshot): void {
-    this.#snapshot = structuredClone(snapshot);
+    this.#snapshot = snapshot;
     for (const listener of this.#listeners) listener();
   }
 

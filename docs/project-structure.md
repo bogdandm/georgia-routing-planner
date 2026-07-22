@@ -36,8 +36,8 @@ src/
   main.tsx                 browser entry and provider nesting
   bootstrap/               one-time dependency construction and React service context
   domain/satellite/        framework-free Sentinel values and geometry calculations
-  application/satellite/   cancellable Sentinel search and availability orchestration
-  application/ports/       framework-free catalog, viewport, diagnostics, and storage ports
+  application/satellite/   cancellable Sentinel search and result orchestration
+  application/ports/       framework-free catalog, diagnostics, storage, and runtime ports
   infrastructure/          HTTP, STAC, elevation/satellite workers, IndexedDB, clock, and ID adapters
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
@@ -64,9 +64,9 @@ does not import React, MapLibre, `ky`, or STAC JSON.
 builds allowlisted STAC requests, validates all returned items before mapping them,
 follows only same-origin POST pagination tokens within the configured cap, and converts
 transport/schema failures to safe catalog errors. The composition root exposes the
-adapter through named search and availability use cases; React never receives its `ky`
-client. A serializable viewport snapshot store bridges settled map updates to Satellite
-controls without exposing MapLibre.
+adapter through the satellite search use case; React never receives its `ky` client. A
+serializable viewport snapshot store bridges settled map updates to Satellite controls
+without exposing MapLibre.
 
 `infrastructure/satellite/` owns direct visual-COG range decoding, UTM-to-Web Mercator
 reprojection, and its validated worker RPC boundary. `SatelliteCogTileProvider`
@@ -82,37 +82,38 @@ location or acquisition metadata is sent to a time-zone service.
 
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It creates the clock, ID generator, bounded
-logger, Dexie database, camera repository, validated provider configuration, map
-snapshot store, Sentinel query timeline store, HTTP client, health/diagnostics services,
-and TanStack Query client.
+logger, Dexie database, validated provider configuration, map snapshot store, Sentinel
+query timeline store, HTTP client, and health/diagnostics services.
 
 [`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
-this order: runtime services, TanStack Query, MUI theme, error boundary, workspace
-shell. Tests replace the whole `RuntimeServices` object at the context boundary.
+this order: runtime services, MUI theme, error boundary, and workspace shell. Tests
+replace the whole `RuntimeServices` object at the context boundary.
 
 ## State ownership
 
-| State                                                     | Owner                                                      | Reason                                                  |
-| --------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
-| Dialogs, active rail section, developer flags             | Zustand `uiStore`                                          | Cross-component, transient, serializable UI state       |
-| Component transitions and messages                        | React component state                                      | Local rendering concern                                 |
-| Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                           | Imperative MapLibre lifecycle stays isolated            |
-| Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl` / `MapLibreOrbitPivotIndicator` | Camera input and native marker placement stay isolated  |
-| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                                  | Provider URLs and native resources stay imperative      |
-| Direct visual-COG scene registry and raster worker        | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`      | Bounded fallback state and COG URLs stay outside React  |
-| DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`           | One algorithm runs in worker or inline compatibility    |
-| Terrain worker execution status                           | `mapLayerStore`                                            | Transient serializable UI warning state                 |
-| Visibility, stretch, rendering, and overlay preferences   | Dexie plus map layer controller                            | Durable non-scene choices with a serializable live view |
-| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                                | Read-only platform metrics behind an app port           |
-| Settled 2D center and zoom                                | Dexie through `MapCameraRepository`                        | Durable camera restarts without 3D orientation          |
-| Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                              | Serializable view shared by UI, health, and export      |
-| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                            | Memory-only live developer timeline                     |
-| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                             | Disposable, not persisted                               |
-| Selected/applied Sentinel scene                           | `MapLibreLayerController` plus `mapLayerStore`             | Transient selection/rendering state, never persisted    |
+| State                                                     | Owner                                                 | Reason                                                  |
+| --------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| Dialogs, active rail section, developer flags             | Zustand `uiStore`                                     | Cross-component, transient, serializable UI state       |
+| Component transitions and messages                        | React component state                                 | Local rendering concern                                 |
+| Native map, listeners, camera snapshot, terrain operation | `MapLibreFacade`                                      | Imperative MapLibre lifecycle stays isolated            |
+| Middle-drag orbit and terrain pivot marker                | `MiddleMouseCameraControl`                            | Camera input and native marker placement stay isolated  |
+| Sentinel and terrain-overlay sources/layer commands       | `MapLibreLayerController`                             | Provider URLs and native resources stay imperative      |
+| Direct visual-COG scene registry and raster worker        | `SatelliteCogTileProvider` / `SatelliteCogRasterizer` | Bounded fallback state and COG URLs stay outside React  |
+| DEM fetch, repair, parse, contour caches, worker fallback | `TerrainComputeEngine` / `TerrainComputeBackend`      | One algorithm runs in worker or inline compatibility    |
+| Terrain worker execution status                           | `mapLayerStore`                                       | Transient serializable UI warning state                 |
+| Visibility, stretch, rendering, and overlay preferences   | Dexie plus map layer controller                       | Durable non-scene choices with a serializable live view |
+| Browser storage and optional heap measurements            | `BrowserStorageUsageReader`                           | Read-only platform metrics behind an app port           |
+| Settled 2D center and zoom                                | `AppDatabase` through `MapCameraRepository`           | Durable camera restarts without 3D orientation          |
+| Map diagnostic snapshot                                   | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export      |
+| Current/last Sentinel step status and duration            | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                     |
+| Submitted Sentinel criteria and derived grouped results   | `SatelliteBrowser` React state                        | Disposable, not persisted                               |
+| Selected/applied Sentinel scene                           | `MapLibreLayerController` plus `mapLayerStore`        | Transient selection/rendering state, never persisted    |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
-the native map instance to be recreated.
+the native map instance to be recreated. The facade creates a new readonly serializable
+snapshot for each update, so snapshot stores retain that value directly and consumers
+must not mutate it.
 
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
 `WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global
@@ -186,7 +187,8 @@ CORS hid it; Direct starts on the protocol immediately, and Server does not swit
 worker preserves the provider's pre-rendered 8-bit RGB values and does not apply the
 hosted renderer's stretch controls. Raster readiness has no application deadline.
 
-The same facade implements the narrow `MapViewportProvider` capability. It returns a
-copy of current WGS84 bounds and center or `null` before a native map exists. Sentinel
-validation rejects non-finite, inverted, antimeridian-crossing, or center-mismatched
-snapshots; exact bounds never enter the default diagnostics bundle.
+The facade returns a serializable snapshot of current WGS84 bounds and center, or `null`
+before a native map exists. `MapViewportSnapshotStore` publishes that value to search
+controls without exposing MapLibre. Sentinel validation rejects non-finite, inverted,
+antimeridian-crossing, or center-mismatched snapshots; exact bounds never enter the
+default diagnostics bundle.

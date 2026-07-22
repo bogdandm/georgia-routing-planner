@@ -50,6 +50,10 @@ export interface GpxMetadataProjection {
   readonly selectedNumber?: number;
 }
 
+type GpxMetadataBuilder = {
+  -readonly [Key in keyof GpxMetadataProjection]: GpxMetadataProjection[Key];
+};
+
 export interface ParsedGpx {
   readonly parserVersion: typeof GPX_PARSER_VERSION;
   readonly geometryKind: 'track' | 'route';
@@ -161,7 +165,9 @@ function parseLinks(parent: Element | undefined): readonly GpxLink[] {
         const url = new URL(href);
         if (url.protocol !== 'http:' && url.protocol !== 'https:') return [];
         const text = boundedText(firstChild(link, 'text'));
-        return [{ href: url.toString(), ...(text === undefined ? {} : { text }) }];
+        const result: { href: string; text?: string } = { href: url.toString() };
+        if (text !== undefined) result.text = text;
+        return [result];
       } catch {
         return [];
       }
@@ -222,11 +228,14 @@ function parsePoint(
       pointIndex,
     });
   }
-  return {
-    coordinate: [longitude, latitude],
-    ...(elevationMeters === undefined ? {} : { elevationMeters }),
-    ...(recordedAt === undefined ? {} : { recordedAt }),
-  };
+  const point: {
+    coordinate: TrackCoordinate;
+    elevationMeters?: number;
+    recordedAt?: string;
+  } = { coordinate: [longitude, latitude] };
+  if (elevationMeters !== undefined) point.elevationMeters = elevationMeters;
+  if (recordedAt !== undefined) point.recordedAt = recordedAt;
+  return point;
 }
 
 function parseSegments(
@@ -265,7 +274,11 @@ function parseSegments(
   return segments;
 }
 
-function readMetadata(root: Element, selected: Element): GpxMetadataProjection {
+function readMetadata(
+  root: Element,
+  selected: Element,
+  version: '1.0' | '1.1',
+): GpxMetadataProjection {
   const metadata = firstChild(root, 'metadata');
   const author = metadata === undefined ? undefined : firstChild(metadata, 'author');
   const copyright =
@@ -305,26 +318,25 @@ function readMetadata(root: Element, selected: Element): GpxMetadataProjection {
   const selectedComment = boundedText(firstChild(selected, 'cmt'));
   const selectedSource = boundedText(firstChild(selected, 'src'));
   const selectedType = boundedText(firstChild(selected, 'type'));
-  return {
-    version: root.getAttribute('version') as '1.0' | '1.1',
-    ...(creator === undefined || creator.length === 0 ? {} : { creator }),
-    ...(metadataName === undefined ? {} : { name: metadataName }),
-    ...(metadataDescription === undefined ? {} : { description: metadataDescription }),
-    ...(metadataTime === undefined ? {} : { time: metadataTime }),
-    ...(metadataKeywords === undefined ? {} : { keywords: metadataKeywords }),
-    ...(authorName === undefined ? {} : { authorName }),
-    ...(copyrightLabel === undefined || copyrightLabel.length === 0
-      ? {}
-      : { copyrightLabel }),
-    ...(copyrightYear === undefined ? {} : { copyrightYear }),
-    links: parseLinks(metadata),
-    ...(selectedName === undefined ? {} : { selectedName }),
-    ...(selectedDescription === undefined ? {} : { selectedDescription }),
-    ...(selectedComment === undefined ? {} : { selectedComment }),
-    ...(selectedSource === undefined ? {} : { selectedSource }),
-    ...(selectedType === undefined ? {} : { selectedType }),
-    ...(selectedNumber === undefined ? {} : { selectedNumber }),
-  };
+  const result: GpxMetadataBuilder = { version, links: parseLinks(metadata) };
+  if (creator !== undefined && creator.length > 0) result.creator = creator;
+  if (metadataName !== undefined) result.name = metadataName;
+  if (metadataDescription !== undefined) result.description = metadataDescription;
+  if (metadataTime !== undefined) result.time = metadataTime;
+  if (metadataKeywords !== undefined) result.keywords = metadataKeywords;
+  if (authorName !== undefined) result.authorName = authorName;
+  if (copyrightLabel !== undefined && copyrightLabel.length > 0) {
+    result.copyrightLabel = copyrightLabel;
+  }
+  if (copyrightYear !== undefined) result.copyrightYear = copyrightYear;
+  if (selectedName !== undefined) result.selectedName = selectedName;
+  if (selectedDescription !== undefined)
+    result.selectedDescription = selectedDescription;
+  if (selectedComment !== undefined) result.selectedComment = selectedComment;
+  if (selectedSource !== undefined) result.selectedSource = selectedSource;
+  if (selectedType !== undefined) result.selectedType = selectedType;
+  if (selectedNumber !== undefined) result.selectedNumber = selectedNumber;
+  return result;
 }
 
 /** Parses untrusted GPX XML into bounded, independent line segments. */
@@ -414,7 +426,7 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
     geometryKind,
     segments,
     pointCount: segments.reduce((sum, segment) => sum + segment.points.length, 0),
-    metadata: readMetadata(root, selected),
+    metadata: readMetadata(root, selected, version),
     warnings,
   };
 }

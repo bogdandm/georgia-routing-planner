@@ -33,6 +33,10 @@ export interface TrackMetrics {
   readonly elevationAlgorithmVersion?: typeof ELEVATION_ALGORITHM_VERSION;
 }
 
+type TrackMetricsBuilder = {
+  -readonly [Key in keyof TrackMetrics]: TrackMetrics[Key];
+};
+
 export interface DominantSummit {
   readonly coordinate: TrackCoordinate;
   readonly distanceAlongMeters: number;
@@ -165,30 +169,30 @@ export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackM
     recordedStart !== undefined &&
     recordedEnd !== undefined &&
     recordedEnd >= recordedStart;
-  return {
+  const result: TrackMetricsBuilder = {
     distanceMeters,
     distanceAlgorithmVersion: DISTANCE_ALGORITHM_VERSION,
     startCoordinate: startPoint.coordinate,
     endCoordinate: endPoint.coordinate,
     bounds,
     center,
-    ...(hasRecordedDuration
-      ? {
-          recordedStartAt: new Date(recordedStart).toISOString(),
-          recordedEndAt: new Date(recordedEnd).toISOString(),
-          elapsedSeconds: (recordedEnd - recordedStart) / 1_000,
-        }
-      : {}),
-    ...(elevationValues.length > 0
-      ? {
-          minimumElevationMeters: Math.min(...elevationValues),
-          maximumElevationMeters: Math.max(...elevationValues),
-          elevationSource: 'gpx' as const,
-          elevationAlgorithmVersion: ELEVATION_ALGORITHM_VERSION,
-        }
-      : {}),
-    ...(elevationPairCount > 0 ? { ascentMeters, descentMeters } : {}),
   };
+  if (hasRecordedDuration) {
+    result.recordedStartAt = new Date(recordedStart).toISOString();
+    result.recordedEndAt = new Date(recordedEnd).toISOString();
+    result.elapsedSeconds = (recordedEnd - recordedStart) / 1_000;
+  }
+  if (elevationValues.length > 0) {
+    result.minimumElevationMeters = Math.min(...elevationValues);
+    result.maximumElevationMeters = Math.max(...elevationValues);
+    result.elevationSource = 'gpx';
+    result.elevationAlgorithmVersion = ELEVATION_ALGORITHM_VERSION;
+  }
+  if (elevationPairCount > 0) {
+    result.ascentMeters = ascentMeters;
+    result.descentMeters = descentMeters;
+  }
+  return result;
 }
 
 function cumulativeDistances(points: readonly TrackPoint[]): readonly number[] {

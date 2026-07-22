@@ -15,11 +15,14 @@ function point(
   elevationMeters?: number,
   recordedAt?: string,
 ): TrackPoint {
-  return {
-    coordinate: [longitude, latitude],
-    ...(elevationMeters === undefined ? {} : { elevationMeters }),
-    ...(recordedAt === undefined ? {} : { recordedAt }),
-  };
+  const result: {
+    coordinate: readonly [number, number];
+    elevationMeters?: number;
+    recordedAt?: string;
+  } = { coordinate: [longitude, latitude] };
+  if (elevationMeters !== undefined) result.elevationMeters = elevationMeters;
+  if (recordedAt !== undefined) result.recordedAt = recordedAt;
+  return result;
 }
 
 describe('track calculations', () => {

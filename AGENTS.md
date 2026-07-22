@@ -594,6 +594,60 @@ direction, or cycles.
 - Name ambiguous primitives, especially GeoJSON `[longitude, latitude]` coordinates.
 - Prefer exhaustive handling, type-only imports, and consistent descriptive file names.
 
+## TypeScript object construction
+
+Avoid building objects with long chains of conditional spreads.
+
+Do not write patterns like:
+
+```ts
+return {
+  requiredField,
+  ...(value === undefined ? {} : { optionalField: value }),
+  ...(getValue() === undefined ? {} : { anotherField: getValue() as string }),
+};
+```
+
+Rules:
+
+- Do not use `...(condition ? { key: value } : {})` repeatedly to populate optional
+  properties.
+- When an object has more than two conditional properties, create the base object first
+  and assign optional properties with explicit `if` statements.
+- Compute derived values once. Do not repeat parsing, DOM lookup, trimming, validation,
+  or function calls for the same property.
+- Do not use type assertions to compensate for repeated expressions or missing type
+  narrowing.
+- Prefer natural TypeScript narrowing after assigning a value to a local variable.
+- Validate untrusted strings before treating them as string-literal unions.
+- Preserve semantic differences between `undefined`, `null`, empty strings, and other
+  falsy values.
+- Prefer readable, debuggable code over compact object-expression tricks.
+
+Preferred:
+
+```ts
+const name = boundedText(firstChild(metadata, 'name'));
+
+const result: ParsedMetadata = {
+  version,
+  links: parseLinks(metadata),
+};
+
+if (creator !== undefined && creator.length > 0) {
+  result.creator = creator;
+}
+
+if (name !== undefined) {
+  result.name = name;
+}
+
+return result;
+```
+
+Conditional spreads are acceptable for one or two simple properties when each value has
+already been computed and the result remains easier to read than explicit assignment.
+
 ## Control flow, external data, and errors
 
 - Prefer `async`/`await` and explicit control flow over nested callback workflows.

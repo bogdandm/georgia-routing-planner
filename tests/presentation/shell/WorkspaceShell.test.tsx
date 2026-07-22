@@ -19,6 +19,10 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  resetMapInteractionStore,
+  setSatelliteSearchAnchor,
+} from '@/presentation/map/mapInteractionStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -32,6 +36,7 @@ let services: RuntimeServices;
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
   resetMapLayerStore();
+  resetMapInteractionStore();
   resetSatelliteRequestStatus();
   services = createTestServices();
   await services.database.delete();
@@ -309,6 +314,7 @@ describe('WorkspaceShell', () => {
     expect(searchAreaSource).toHaveTextContent('42.5000, 44.5000');
     await user.click(searchAreaSource);
     expect(screen.getByRole('option', { name: 'Point' })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'Custom' })).not.toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
       'aria-disabled',
       'true',
@@ -317,6 +323,28 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps a context-menu search custom until the user selects Point', async () => {
+    const user = userEvent.setup();
+    setSatelliteSearchAnchor({ latitude: 42.1, longitude: 43.4 });
+    renderWorkspaceShell();
+
+    const searchAreaSource = screen.getByRole('combobox', {
+      name: 'Search area source',
+    });
+    expect(searchAreaSource).toHaveTextContent('Custom');
+    expect(searchAreaSource).toHaveTextContent('42.1000, 43.4000');
+
+    await user.click(searchAreaSource);
+    expect(screen.queryByRole('option', { name: 'Custom' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await user.click(screen.getByRole('option', { name: 'Point' }));
+
+    expect(searchAreaSource).toHaveTextContent('Point');
   });
 
   it('restores the persisted maximum cloud cover after remounting', async () => {

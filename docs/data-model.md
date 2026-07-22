@@ -240,7 +240,16 @@ without validation and resource limits.
 
 Input limits cover XML size, nesting/entity behavior, coordinate ranges, segment and
 point counts, non-finite values, and cancellation. Parsing never mutates a curated
-source file or uploads a local file.
+source file or uploads a local file. The executable parser prefers renderable track
+segments over companion route geometry, preserves independent segment boundaries, and
+uses routes only when no renderable track segment exists.
+
+Local import metrics are calculated once from normalized geometry. Distance uses
+geodesic consecutive-point pairs within each segment; elevation gain and loss use only
+adjacent pairs that both contain GPX elevation. Bounds retain an explicit antimeridian
+crossing flag. Recorded duration is absent unless all rendered points have ordered,
+valid timestamps. Each calculation stores its policy version so later policy changes
+cannot silently reinterpret retained results.
 
 ## Plans, waypoints, and saved markers
 

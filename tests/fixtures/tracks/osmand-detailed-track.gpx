@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="OsmAnd" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>Mon 13 Jul 2026</name></metadata>
+  <trk><name>Mon 13 Jul 2026</name><trkseg>
+    <trkpt lat="42.50" lon="44.50"><ele>1000</ele></trkpt>
+    <trkpt lat="42.51" lon="44.51"><ele>1100</ele></trkpt>
+    <trkpt lat="42.52" lon="44.52"><ele>1050</ele></trkpt>
+  </trkseg></trk>
+  <rte><name>Sparse companion</name><rtept lat="42.50" lon="44.50"/><rtept lat="42.52" lon="44.52"/></rte>
+</gpx>

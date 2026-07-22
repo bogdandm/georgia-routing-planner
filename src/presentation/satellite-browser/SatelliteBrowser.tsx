@@ -1560,64 +1560,70 @@ export function SatelliteBrowser({
         {loadMoreError === null || resultsOpen ? null : (
           <Alert severity="error">{loadMoreError}</Alert>
         )}
-        <Box>
-          <Stack direction="row" sx={{ alignItems: 'center' }}>
-            <Typography id="cloud-cover-slider-label" variant="body2" sx={{ flex: 1 }}>
-              Maximum cloud
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              ≤ {maxCloudCoverPercent}%
-            </Typography>
-          </Stack>
-          <Slider
-            aria-labelledby="cloud-cover-slider-label"
-            min={0}
-            max={100}
-            step={5}
-            marks={[
-              { value: 0 },
-              { value: 25 },
-              { value: 50 },
-              { value: 75 },
-              { value: 100 },
-            ]}
-            value={maxCloudCoverPercent}
-            valueLabelDisplay="auto"
-            onChange={(_event, value: number | number[]) => {
-              const nextValue = Array.isArray(value) ? value[0] : value;
-              if (nextValue !== undefined) {
-                cloudCoverChangedByUser.current = true;
-                setMaxCloudCoverPercent(nextValue);
-              }
-            }}
-            onChangeCommitted={(_event, value: number | number[]) => {
-              const nextValue = Array.isArray(value) ? value[0] : value;
-              if (nextValue === undefined) return;
-              void database.saveMaximumCloudCoverPercent(nextValue).catch(() => {
-                logger.log({
-                  level: 'warn',
-                  name: 'storage.satellite-preferences.save-failed',
+        <Stack spacing={1}>
+          <Box>
+            <Stack direction="row" sx={{ alignItems: 'center' }}>
+              <Typography
+                id="cloud-cover-slider-label"
+                variant="body2"
+                sx={{ flex: 1 }}
+              >
+                Maximum cloud
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                ≤ {maxCloudCoverPercent}%
+              </Typography>
+            </Stack>
+            <Slider
+              aria-labelledby="cloud-cover-slider-label"
+              min={0}
+              max={100}
+              step={5}
+              marks={[
+                { value: 0 },
+                { value: 25 },
+                { value: 50 },
+                { value: 75 },
+                { value: 100 },
+              ]}
+              value={maxCloudCoverPercent}
+              valueLabelDisplay="auto"
+              onChange={(_event, value: number | number[]) => {
+                const nextValue = Array.isArray(value) ? value[0] : value;
+                if (nextValue !== undefined) {
+                  cloudCoverChangedByUser.current = true;
+                  setMaxCloudCoverPercent(nextValue);
+                }
+              }}
+              onChangeCommitted={(_event, value: number | number[]) => {
+                const nextValue = Array.isArray(value) ? value[0] : value;
+                if (nextValue === undefined) return;
+                void database.saveMaximumCloudCoverPercent(nextValue).catch(() => {
+                  logger.log({
+                    level: 'warn',
+                    name: 'storage.satellite-preferences.save-failed',
+                  });
                 });
-              });
-            }}
-          />
-        </Box>
+              }}
+            />
+          </Box>
 
-        {searchState.status === 'loading' ? (
-          <Button fullWidth color="inherit" variant="outlined" onClick={cancelSearch}>
-            Cancel search
-          </Button>
-        ) : (
-          <Button
-            fullWidth
-            variant="contained"
-            startIcon={<SearchIcon />}
-            disabled={!canSearch}
-            onClick={() => void runSearch()}
-          >
-            Search images
-          </Button>
-        )}
+          {searchState.status === 'loading' ? (
+            <Button fullWidth color="inherit" variant="outlined" onClick={cancelSearch}>
+              Cancel search
+            </Button>
+          ) : (
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<SearchIcon />}
+              disabled={!canSearch}
+              onClick={() => void runSearch()}
+            >
+              Search images
+            </Button>
+          )}
+        </Stack>
 
         <Box aria-live="polite">
           {viewport === null ? (
@@ -1631,18 +1637,12 @@ export function SatelliteBrowser({
           {searchState.status === 'loading' ? (
             <Typography variant="body2">Loading the latest matching images…</Typography>
           ) : null}
-          {searchState.status !== 'loading' &&
-          viewport !== null &&
-          !searchUnavailable ? (
-            <Typography variant="caption" color="text.secondary">
-              {searchAreaSource === 'custom' ? 'Custom' : 'Point'} {coordinates} ·{' '}
-              {monthFormatter.format(new Date(`${calendarMonth}-01T00:00:00.000Z`))} →
-              older · highlight cloud ≤ {maxCloudCoverPercent}%
-            </Typography>
-          ) : null}
         </Box>
 
         <Divider />
+        <Typography component="h3" variant="subtitle2">
+          Settings
+        </Typography>
         <FormControl size="small" fullWidth>
           <InputLabel id="satellite-search-area-label">Search area source</InputLabel>
           <Select

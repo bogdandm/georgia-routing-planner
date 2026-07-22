@@ -1,4 +1,7 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -13,6 +16,7 @@ import {
   Switch,
   Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
@@ -112,7 +116,7 @@ export function SatelliteRenderingControls() {
   };
 
   return (
-    <Stack spacing={1}>
+    <Stack spacing={1.5}>
       <FormControl size="small" fullWidth disabled={mapLayers === null}>
         <InputLabel id={labelId}>Satellite render</InputLabel>
         <Select
@@ -136,110 +140,11 @@ export function SatelliteRenderingControls() {
         </FormHelperText>
       </FormControl>
 
-      <Box sx={{ pt: 0.5 }}>
-        <Typography component="h3" variant="subtitle2">
-          Sentinel imagery stretch
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          Stored locally. Release a slider to replace the active raster; lower ceilings
-          brighten terrain but can clip bright snow.
-        </Typography>
-      </Box>
-
-      <Box>
-        <SliderLabel
-          label="Reflectance ceiling"
-          value={String(renderingTuning.reflectanceMax)}
-        />
-        <Slider
-          aria-label="Sentinel reflectance ceiling"
-          min={3_000}
-          max={12_000}
-          step={250}
-          value={renderingTuning.reflectanceMax}
-          valueLabelDisplay="auto"
-          disabled={mapLayers === null || renderingPending}
-          onChange={(_event, value) => {
-            if (typeof value === 'number') {
-              setRenderingTuningDraft({
-                ...renderingTuning,
-                reflectanceMax: value,
-              });
-            }
-          }}
-          onChangeCommitted={(_event, value) => {
-            if (typeof value === 'number') {
-              commitRenderingTuning({ ...renderingTuning, reflectanceMax: value });
-            }
-          }}
-        />
-      </Box>
-
-      <Box>
-        <SliderLabel label="Gamma" value={renderingTuning.gamma.toFixed(2)} />
-        <Slider
-          aria-label="Sentinel gamma"
-          min={0.5}
-          max={3}
-          step={0.05}
-          value={renderingTuning.gamma}
-          valueLabelDisplay="auto"
-          disabled={mapLayers === null || renderingPending}
-          onChange={(_event, value) => {
-            if (typeof value === 'number') {
-              setRenderingTuningDraft({ ...renderingTuning, gamma: value });
-            }
-          }}
-          onChangeCommitted={(_event, value) => {
-            if (typeof value === 'number') {
-              commitRenderingTuning({ ...renderingTuning, gamma: value });
-            }
-          }}
-        />
-      </Box>
-
-      <Box>
-        <SliderLabel label="Saturation" value={renderingTuning.saturation.toFixed(2)} />
-        <Slider
-          aria-label="Sentinel saturation"
-          min={0}
-          max={5}
-          step={0.05}
-          value={renderingTuning.saturation}
-          valueLabelDisplay="auto"
-          disabled={mapLayers === null || renderingPending}
-          onChange={(_event, value) => {
-            if (typeof value === 'number') {
-              setRenderingTuningDraft({ ...renderingTuning, saturation: value });
-            }
-          }}
-          onChangeCommitted={(_event, value) => {
-            if (typeof value === 'number') {
-              commitRenderingTuning({ ...renderingTuning, saturation: value });
-            }
-          }}
-        />
-      </Box>
-
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={mapLayers === null || renderingPending}
-          onClick={() => {
-            setRenderingTuningDraft(defaultSatelliteRenderingTuning);
-            commitRenderingTuning(defaultSatelliteRenderingTuning);
-          }}
-        >
-          Reset stretch
-        </Button>
-        {renderingPending ? <Typography variant="caption">Applying…</Typography> : null}
-      </Stack>
       {renderingError === null ? null : (
         <Alert severity="error">{renderingError}</Alert>
       )}
 
-      <Box sx={{ pt: 0.5 }}>
+      <Box>
         <FormControlLabel
           sx={{ m: 0 }}
           control={
@@ -260,16 +165,137 @@ export function SatelliteRenderingControls() {
           }
           label="Show relief shading above satellite imagery"
         />
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          Keeps low-contrast terrain shadows visible over the selected satellite scene.
-          Contours always stay above both.
-        </Typography>
       </Box>
       {terrainOverlayError === null ? null : (
         <Alert severity="warning" role="status">
           {terrainOverlayError}
         </Alert>
       )}
+
+      <Accordion
+        disableGutters
+        elevation={0}
+        sx={{
+          borderBlock: 1,
+          borderColor: 'divider',
+          '&::before': { display: 'none' },
+        }}
+      >
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{ px: 0, minHeight: 44, '& .MuiAccordionSummary-content': { my: 1 } }}
+        >
+          <Typography component="h3" variant="subtitle2">
+            Sentinel imagery stretch
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails sx={{ px: 0, pt: 0 }}>
+          <Stack spacing={1}>
+            <Typography variant="caption" color="text.secondary">
+              Stored locally. Release a slider to replace the active raster; lower
+              ceilings brighten terrain but can clip bright snow.
+            </Typography>
+
+            <Box>
+              <SliderLabel
+                label="Reflectance ceiling"
+                value={String(renderingTuning.reflectanceMax)}
+              />
+              <Slider
+                aria-label="Sentinel reflectance ceiling"
+                min={3_000}
+                max={12_000}
+                step={250}
+                value={renderingTuning.reflectanceMax}
+                valueLabelDisplay="auto"
+                disabled={mapLayers === null || renderingPending}
+                onChange={(_event, value) => {
+                  if (typeof value === 'number') {
+                    setRenderingTuningDraft({
+                      ...renderingTuning,
+                      reflectanceMax: value,
+                    });
+                  }
+                }}
+                onChangeCommitted={(_event, value) => {
+                  if (typeof value === 'number') {
+                    commitRenderingTuning({
+                      ...renderingTuning,
+                      reflectanceMax: value,
+                    });
+                  }
+                }}
+              />
+            </Box>
+
+            <Box>
+              <SliderLabel label="Gamma" value={renderingTuning.gamma.toFixed(2)} />
+              <Slider
+                aria-label="Sentinel gamma"
+                min={0.5}
+                max={3}
+                step={0.05}
+                value={renderingTuning.gamma}
+                valueLabelDisplay="auto"
+                disabled={mapLayers === null || renderingPending}
+                onChange={(_event, value) => {
+                  if (typeof value === 'number') {
+                    setRenderingTuningDraft({ ...renderingTuning, gamma: value });
+                  }
+                }}
+                onChangeCommitted={(_event, value) => {
+                  if (typeof value === 'number') {
+                    commitRenderingTuning({ ...renderingTuning, gamma: value });
+                  }
+                }}
+              />
+            </Box>
+
+            <Box>
+              <SliderLabel
+                label="Saturation"
+                value={renderingTuning.saturation.toFixed(2)}
+              />
+              <Slider
+                aria-label="Sentinel saturation"
+                min={0}
+                max={5}
+                step={0.05}
+                value={renderingTuning.saturation}
+                valueLabelDisplay="auto"
+                disabled={mapLayers === null || renderingPending}
+                onChange={(_event, value) => {
+                  if (typeof value === 'number') {
+                    setRenderingTuningDraft({ ...renderingTuning, saturation: value });
+                  }
+                }}
+                onChangeCommitted={(_event, value) => {
+                  if (typeof value === 'number') {
+                    commitRenderingTuning({ ...renderingTuning, saturation: value });
+                  }
+                }}
+              />
+            </Box>
+
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={mapLayers === null || renderingPending}
+                onClick={() => {
+                  setRenderingTuningDraft(defaultSatelliteRenderingTuning);
+                  commitRenderingTuning(defaultSatelliteRenderingTuning);
+                }}
+              >
+                Reset stretch
+              </Button>
+              {renderingPending ? (
+                <Typography variant="caption">Applying…</Typography>
+              ) : null}
+            </Stack>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
     </Stack>
   );
 }

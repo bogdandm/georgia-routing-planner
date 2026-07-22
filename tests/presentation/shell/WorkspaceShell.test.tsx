@@ -240,6 +240,7 @@ describe('WorkspaceShell', () => {
       screen.queryByRole('button', { name: 'More satellite actions' }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
+    expect(screen.getByRole('heading', { name: 'Settings', level: 3 })).toBeVisible();
     expect(screen.getByLabelText('Fake map')).toHaveTextContent('Local map ready');
 
     expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
@@ -1130,17 +1131,26 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'AWS Open Data Terrain Tiles' }),
     ).toBeVisible();
+    const isolines = screen.getByRole('checkbox', { name: 'Elevation isolines' });
     const contourDistance = screen.getByRole('slider', {
-      name: 'Contour distance',
+      name: 'Isolines distance',
     });
     expect(contourDistance).toHaveAttribute('aria-valuetext', '50 metres');
     expect(
-      screen.getByText(/labeled index contours remain every 200 m/u),
-    ).toBeVisible();
+      screen.queryByText(/labeled index contours remain every 200 m/u),
+    ).not.toBeInTheDocument();
     const demFilter = screen.getByRole('switch', {
       name: 'Repair invalid DEM elevation pixels',
     });
     expect(demFilter).toBeChecked();
+    expect(
+      isolines.compareDocumentPosition(contourDistance) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      contourDistance.compareDocumentPosition(demFilter) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     fireEvent.change(contourDistance, { target: { value: '1' } });
     await waitFor(() => {
@@ -1234,15 +1244,23 @@ describe('WorkspaceShell', () => {
   });
 
   it('persists Sentinel stretch controls from Satellite', async () => {
+    const user = userEvent.setup();
     renderWorkspaceShell();
-    await userEvent.setup().click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
 
+    const stretchDisclosure = screen.getByRole('button', {
+      name: 'Sentinel imagery stretch',
+    });
+    expect(stretchDisclosure).toHaveAttribute('aria-expanded', 'false');
     expect(
-      screen.getByRole('heading', { name: 'Sentinel imagery stretch' }),
-    ).toBeVisible();
+      screen.queryByRole('slider', { name: 'Sentinel reflectance ceiling' }),
+    ).not.toBeInTheDocument();
+    await user.click(stretchDisclosure);
+    expect(stretchDisclosure).toHaveAttribute('aria-expanded', 'true');
     const ceiling = screen.getByRole('slider', {
       name: 'Sentinel reflectance ceiling',
     });
+    expect(ceiling).toBeVisible();
     fireEvent.keyDown(ceiling, { key: 'Home' });
     fireEvent.keyUp(ceiling, { key: 'Home' });
     await waitFor(() => {

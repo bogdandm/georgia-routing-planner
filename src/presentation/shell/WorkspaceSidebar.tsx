@@ -206,7 +206,7 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
       sx={{
         position: 'relative',
         zIndex: 3,
-        width: activeTab === 'satellite' ? { xs: 420, xl: 464 } : { xs: 344, xl: 408 },
+        width: { xs: 420, xl: 464 },
         flexShrink: 0,
         minHeight: 0,
         display: 'flex',

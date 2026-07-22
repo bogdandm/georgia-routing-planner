@@ -159,7 +159,7 @@ export function LayersPanel() {
       {mapLayers === null ? (
         <Alert severity="error">Map layer controls are unavailable.</Alert>
       ) : null}
-      <Stack spacing={1.5} divider={<Divider flexItem />}>
+      <Stack spacing={2} divider={<Divider flexItem />}>
         {groups.map((group) => (
           <Box
             component="section"
@@ -173,10 +173,17 @@ export function LayersPanel() {
             >
               {group.title}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.25 }}
+            >
               {group.description}
             </Typography>
-            {group.id === 'terrain' ? (
+            {group.id === 'terrain' &&
+            (state.terrainComputeStatus === 'inline' ||
+              terrainOverlayCommandError !== null ||
+              state.terrainOverlays.message !== null) ? (
               <Stack spacing={0.75} sx={{ mt: 1 }}>
                 {state.terrainComputeStatus === 'inline' ? (
                   <Alert severity="warning">
@@ -184,86 +191,6 @@ export function LayersPanel() {
                     features remain available, but map movement may be slower.
                   </Alert>
                 ) : null}
-                <Box>
-                  <FormControlLabel
-                    sx={{ m: 0 }}
-                    control={
-                      <Switch
-                        checked={
-                          state.terrainOverlays.preferences.filterInvalidDemPixels
-                        }
-                        disabled={mapLayers === null}
-                        onChange={(event) => {
-                          changeTerrainOverlayPreferences({
-                            ...state.terrainOverlays.preferences,
-                            filterInvalidDemPixels: event.target.checked,
-                          });
-                        }}
-                      />
-                    }
-                    label="Repair invalid DEM elevation pixels"
-                  />
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block' }}
-                  >
-                    Applies the same conservative repair to relief, 3D terrain, and
-                    contours without smoothing valid terrain.
-                  </Typography>
-                </Box>
-                <Stack
-                  direction="row"
-                  spacing={1.25}
-                  sx={{ px: 0.25, alignItems: 'center' }}
-                >
-                  <Typography
-                    id="contour-distance-label"
-                    variant="body2"
-                    sx={{ minWidth: 104 }}
-                  >
-                    Contour distance
-                  </Typography>
-                  <Slider
-                    aria-labelledby="contour-distance-label"
-                    aria-valuetext={`${String(state.terrainOverlays.preferences.contourIntervalMeters)} metres`}
-                    disabled={mapLayers === null}
-                    min={0}
-                    max={supportedContourIntervals.length - 1}
-                    step={1}
-                    marks={supportedContourIntervals.map((_value, index) => ({
-                      value: index,
-                    }))}
-                    value={supportedContourIntervals.indexOf(
-                      state.terrainOverlays.preferences.contourIntervalMeters,
-                    )}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={(value) =>
-                      `${String(supportedContourIntervals[value])} m`
-                    }
-                    onChange={(_event, value) => {
-                      if (typeof value !== 'number') return;
-                      const contourIntervalMeters = supportedContourIntervals[value];
-                      if (contourIntervalMeters === undefined) return;
-                      changeTerrainOverlayPreferences({
-                        ...state.terrainOverlays.preferences,
-                        contourIntervalMeters,
-                      });
-                    }}
-                    sx={{ flex: 1, mx: 0.5 }}
-                  />
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ minWidth: 34, textAlign: 'right' }}
-                  >
-                    {state.terrainOverlays.preferences.contourIntervalMeters} m
-                  </Typography>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">
-                  Smaller distances show more minor lines; labeled index contours remain
-                  every 200 m.
-                </Typography>
                 {(terrainOverlayCommandError ?? state.terrainOverlays.message) ? (
                   <Alert severity="warning" role="status">
                     {terrainOverlayCommandError ?? state.terrainOverlays.message}
@@ -301,13 +228,15 @@ export function LayersPanel() {
                 </Typography>
               </Stack>
             ) : null}
-            <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 0.5 }}>
+            <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 1, gap: 1.5 }}>
               {group.controls.map((control) => {
                 const disabled =
                   mapLayers === null || (control.requiresScene && !sceneAvailable);
                 return (
-                  <Box key={control.id} sx={{ py: 0.75 }}>
+                  <Box key={control.id}>
                     <FormControlLabel
+                      sx={{ m: 0 }}
+                      slotProps={{ typography: { variant: 'body2' } }}
                       disabled={disabled}
                       control={
                         <Checkbox
@@ -322,16 +251,96 @@ export function LayersPanel() {
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ display: 'block', pl: 4.75, mt: -0.75 }}
+                      sx={{ display: 'block', pl: 4.75, mt: -0.5 }}
                     >
                       {control.requiresScene && !sceneAvailable
                         ? 'Apply a Sentinel scene to enable this layer.'
                         : control.description}
                     </Typography>
+                    {control.id === 'elevation-isolines' ? (
+                      <Stack
+                        direction="row"
+                        spacing={1.25}
+                        sx={{ mt: 1, pl: 4.75, alignItems: 'center' }}
+                      >
+                        <Typography
+                          id="contour-distance-label"
+                          variant="body2"
+                          sx={{ minWidth: 104 }}
+                        >
+                          Isolines distance
+                        </Typography>
+                        <Slider
+                          aria-labelledby="contour-distance-label"
+                          aria-valuetext={`${String(state.terrainOverlays.preferences.contourIntervalMeters)} metres`}
+                          disabled={mapLayers === null}
+                          min={0}
+                          max={supportedContourIntervals.length - 1}
+                          step={1}
+                          marks={supportedContourIntervals.map((_value, index) => ({
+                            value: index,
+                          }))}
+                          value={supportedContourIntervals.indexOf(
+                            state.terrainOverlays.preferences.contourIntervalMeters,
+                          )}
+                          valueLabelDisplay="auto"
+                          valueLabelFormat={(value) =>
+                            `${String(supportedContourIntervals[value])} m`
+                          }
+                          onChange={(_event, value) => {
+                            if (typeof value !== 'number') return;
+                            const contourIntervalMeters =
+                              supportedContourIntervals[value];
+                            if (contourIntervalMeters === undefined) return;
+                            changeTerrainOverlayPreferences({
+                              ...state.terrainOverlays.preferences,
+                              contourIntervalMeters,
+                            });
+                          }}
+                          sx={{ flex: 1, mx: 0.5 }}
+                        />
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ minWidth: 34, textAlign: 'right' }}
+                        >
+                          {state.terrainOverlays.preferences.contourIntervalMeters} m
+                        </Typography>
+                      </Stack>
+                    ) : null}
                   </Box>
                 );
               })}
             </FormGroup>
+            {group.id === 'terrain' ? (
+              <Box sx={{ mt: 1.5 }}>
+                <FormControlLabel
+                  sx={{ m: 0 }}
+                  slotProps={{ typography: { variant: 'body2' } }}
+                  control={
+                    <Switch
+                      checked={state.terrainOverlays.preferences.filterInvalidDemPixels}
+                      disabled={mapLayers === null}
+                      onChange={(event) => {
+                        changeTerrainOverlayPreferences({
+                          ...state.terrainOverlays.preferences,
+                          filterInvalidDemPixels: event.target.checked,
+                        });
+                      }}
+                    />
+                  }
+                  label="Repair invalid DEM elevation pixels"
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', pl: 7.25, mt: -0.5 }}
+                >
+                  Applies the same conservative repair to relief, 3D terrain, and
+                  contours without smoothing valid terrain.
+                </Typography>
+              </Box>
+            ) : null}
           </Box>
         ))}
       </Stack>

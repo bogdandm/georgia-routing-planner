@@ -1449,11 +1449,7 @@ export function SatelliteBrowser({
   };
 
   const changeSearchAreaSource = (event: SelectChangeEvent) => {
-    if (event.target.value === 'custom') {
-      if (viewport !== null) setSatelliteSearchAnchor(viewport.center);
-      return;
-    }
-    setSatelliteSearchAnchor(null);
+    if (event.target.value === 'viewport') setSatelliteSearchAnchor(null);
   };
 
   const applyMatch = (match: SatelliteSceneMatch) => {
@@ -1541,7 +1537,8 @@ export function SatelliteBrowser({
         <Select
           fullWidth
           size="small"
-          value={searchAreaSource}
+          displayEmpty
+          value={searchAreaSource === 'custom' ? '' : searchAreaSource}
           onChange={changeSearchAreaSource}
           inputProps={{ 'aria-label': 'Search area source' }}
           renderValue={() => (
@@ -1557,7 +1554,6 @@ export function SatelliteBrowser({
           )}
         >
           <MenuItem value="viewport">Point</MenuItem>
-          <MenuItem value="custom">Custom</MenuItem>
           <MenuItem value="marker" disabled>
             Marker
           </MenuItem>

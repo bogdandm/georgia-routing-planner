@@ -1071,9 +1071,11 @@ export function TrackDetailsPane() {
                 <Stack spacing={1}>
                   <TextField
                     size="small"
-                    label="Generated name"
                     value={active.generatedName}
-                    slotProps={{ input: { readOnly: true } }}
+                    slotProps={{
+                      htmlInput: { 'aria-label': 'Generated name' },
+                      input: { readOnly: true },
+                    }}
                   />
                   <Button size="small" variant="outlined" onClick={applyGeneratedName}>
                     Apply generated name

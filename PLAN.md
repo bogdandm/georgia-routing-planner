@@ -11,7 +11,7 @@ organization features:
 - fit every newly imported or selected saved track into the visible map area;
 - choose an editable name, optionally generate an English place-based alternative, and
   explicitly save the track to browser-local IndexedDB;
-- reopen, rename, search, sort, and delete saved tracks from a simple Tracks list;
+- reopen, close, rename, search, sort, and delete saved tracks from a simple Tracks list;
 - control all imported-track visibility and opacity through one persistent Layers entry;
 - warn before browser unload while an imported preview has not been saved or discarded.
 
@@ -32,6 +32,8 @@ not implementation requirements for this workstream.
 - Simple local track list sorted by English-locale name, with case-insensitive
   search-as-you-type over the saved display name.
 - Bright-blue rendering for the active imported preview and saved local tracks.
+- One active displayed track at a time, with an explicit `Close track` action that is
+  separate from deleting a saved track.
 - One `Imported tracks` Layers checkbox and one global opacity slider. The values are
   shared by every local track and saved locally, never stored per track.
 - A `New track` import/details state, editable name, optional generated English name,
@@ -75,6 +77,8 @@ not implementation requirements for this workstream.
    compact warning when the rendered geometry has multiple independent segments.
 6. Files with multiple independent segments use a single closest/relevant POI candidate
    instead of the `Middle: Start -> End` pattern.
+7. `Close track` clears the active geometry, selection, and details without deleting a
+   saved track. Closing an unsaved `New track` requires explicit discard confirmation.
 
 ## Evidence from the supplied GPX samples
 
@@ -139,6 +143,19 @@ The sample originals stay outside the repository and must never be committed.
 - Selecting a result renders it, opens its details, and fits its complete validated
   bounds into the unobscured map area. The list item shows name plus compact distance
   and recorded duration when available.
+- Only one track is active on the map in this workflow. Selecting another saved track
+  replaces the previous saved selection. Starting or selecting another track while an
+  unsaved preview is active first requires the existing keep-or-discard decision.
+- The details pane exposes `Close track`. For a saved track, it removes the active map
+  geometry, clears selection, and closes details immediately while leaving the stored
+  track and list entry unchanged. It does not ask for deletion confirmation.
+- For an unsaved `New track`, `Close track` asks whether to discard the import. Cancel
+  leaves the preview, details, pending naming, and leave-site guard unchanged. Confirming
+  aborts pending naming, discards the in-memory import, removes its geometry, closes
+  details, and clears the leave-site guard.
+- Closing a track does not move the map camera or automatically select another list
+  entry. Hiding Imported tracks in Layers changes visibility but does not close the
+  active track.
 - Rename updates the stored summary immediately after validation. Delete uses a focused
   confirmation naming the track; after deletion, remove its map geometry and clear the
   selection if it was active.
@@ -413,11 +430,13 @@ Focused checks: persistence integration tests, typecheck, and lint for touched f
 ### Commit 3: Import, name, list, and guard the unsaved preview
 
 - Replace the disabled Tracks placeholder with local summaries, name search-as-you-type,
-  stable name sorting, selection, adjacent details, rename, and confirmed deletion.
+  stable name sorting, single active selection, adjacent details, `Close track`, rename,
+  and confirmed deletion.
 - Add the file picker and shell-level full-workspace drag overlay with replacement
   confirmation and one-file validation.
 - Implement the `New track` preview lifecycle, explicit Save/Discard, editable primary
-  name, secondary generated-name field/button, and native `beforeunload` guard.
+  name, secondary generated-name field/button, close/discard confirmation, and native
+  `beforeunload` guard.
 - Extend the existing Nominatim owner for at-most-three cancellable English reverse
   lookups and store separate POI fields plus the generated candidate.
 - Update `docs/features.md`, `docs/runtime-flows.md`, and `docs/map-providers.md` with the
@@ -432,7 +451,8 @@ accessibility assertions, typecheck, and lint for touched files.
   stable bright-blue line layers in the reserved track band.
 - Render independent segments without gap lines, support selection/preview updates, fit
   the complete track after import or saved-track selection with panel-aware padding, and
-  clean up sources/listeners deterministically.
+  clear geometry on `Close track` while retaining saved data, and clean up
+  sources/listeners deterministically.
 - Add persistent imported-track visibility and one global opacity slider to Layers with
   compatible map-preference migration.
 - Update map structure, runtime flow, visual palette, and feature documentation.
@@ -479,16 +499,19 @@ required verification suite once.
    candidates; loops and multi-segment geometry use one best-place fallback. Missing or
    failed POI lookup never blocks Save.
 8. Save creates summary and content atomically. Saved tracks survive reload and can be
-   selected, renamed, searched during typing, sorted by name, and deleted with
+   selected, closed, renamed, searched during typing, sorted by name, and deleted with
    confirmation.
-9. Leaving/reloading/closing the page while a valid preview is unsaved invokes the
+9. `Close track` clears saved-track geometry/details without deleting storage or moving
+   the camera. Closing an unsaved preview requires discard confirmation; cancelling
+   preserves it, while confirming aborts naming and clears the leave-site guard.
+10. Leaving/reloading/closing the page while a valid preview is unsaved invokes the
    browser's native confirmation. Saving or explicitly discarding removes the guard.
-10. Layers exposes one Imported tracks visibility value and one global opacity value;
+11. Layers exposes one Imported tracks visibility value and one global opacity value;
     both affect preview and saved tracks, persist across reload, and never create
     per-track settings.
-11. Invalid, oversized, empty, multi-file, or unsupported input produces bounded helpful
+12. Invalid, oversized, empty, multi-file, or unsupported input produces bounded helpful
     feedback, writes no track rows, and leaves existing tracks/map features usable.
-12. No raw GPX, filename, track name, coordinate, bounds, geometry, or generated POI text
+13. No raw GPX, filename, track name, coordinate, bounds, geometry, or generated POI text
     appears in diagnostics.
 
 ## Verification matrix
@@ -499,9 +522,9 @@ required verification suite once.
 | Metrics | Multi-segment geodesic sum without gaps, integral ascent/descent, missing elevation, min/max, timestamp absence/inconsistency, antimeridian bounds, loop threshold, and algorithm versions |
 | Naming | Source-name priority, no automatic overwrite, non-loop three-place format, duplicate/degraded results, loop fallback, multi-segment fallback, English request, three-request cap, pacing, abort, offline/rate-limit behavior, and saved separate POI fields |
 | Persistence | New-schema upgrade, atomic save/delete, reload, rename, duplicate names, Unicode, corrupted summary/content handling, quota/transaction failure, and no partial rows |
-| UI | Whole-workspace drag overlay, one-file rejection, replacement confirmation, preview state, Save/Discard, search during typing, name-only stable sort, rename/delete, details fields/warnings, and accessible keyboard/focus behavior |
-| Map/Layers | Bright-blue independent lines, stable layer band, panel-aware full-track fitting after import and saved selection, preview/saved updates, cleanup, global visibility/opacity, persistence, and coexistence with OSM/Sentinel/terrain |
-| Leave guard | Active only for a non-retained preview and cleared after successful Save or explicit Discard |
+| UI | Whole-workspace drag overlay, one-file rejection, replacement confirmation, preview state, Save/Discard, one-active-track selection, Close track cancel/confirm behavior, search during typing, name-only stable sort, rename/delete, details fields/warnings, and accessible keyboard/focus behavior |
+| Map/Layers | Bright-blue independent lines, stable layer band, panel-aware full-track fitting after import and saved selection, close-driven geometry clearing without stored deletion, preview/saved updates, cleanup, global visibility/opacity, persistence, and coexistence with OSM/Sentinel/terrain |
+| Leave guard | Active only for a non-retained preview and cleared after successful Save, explicit Discard, or confirmed unsaved Close track; cancelled close preserves it |
 | Privacy/diagnostics | No personal GPX fields in logs; only bounded counts, codes, versions, durations, and outcomes |
 | Final checks | Repository format check, lint, typecheck, unit/integration tests, production build, targeted Playwright Chromium flow, axe scan, and documentation forbidden-roadmap-term check for `README.md`/`docs/` |
 

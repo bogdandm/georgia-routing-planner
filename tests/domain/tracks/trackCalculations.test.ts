@@ -53,8 +53,26 @@ describe('track calculations', () => {
     const partial = calculateTrackMetrics([
       { points: [point(0, 0, undefined, '2026-01-01T00:00:00Z'), point(0.01, 0)] },
     ]);
+    const reversed = calculateTrackMetrics([
+      {
+        points: [
+          point(0, 0, undefined, '2026-01-01T00:02:00Z'),
+          point(0.01, 0, undefined, '2026-01-01T00:00:00Z'),
+        ],
+      },
+    ]);
     expect(complete.elapsedSeconds).toBe(120);
     expect(partial.elapsedSeconds).toBeUndefined();
+    expect(reversed.elapsedSeconds).toBeUndefined();
+  });
+
+  it('rejects missing geometry for metrics and representative points', () => {
+    expect(() => calculateTrackMetrics([])).toThrow(
+      'Track metrics require at least one non-empty segment.',
+    );
+    expect(() => pointNearestFraction([], 0.5)).toThrow(
+      'Representative point requires geometry.',
+    );
   });
 
   it('produces antimeridian-aware bounds', () => {
@@ -84,6 +102,14 @@ describe('track calculations', () => {
       findDominantSummit(
         summitTrack.map((item) => ({ ...item, elevationMeters: 1_000 })),
       ),
+    ).toBeNull();
+    expect(
+      findDominantSummit([
+        point(0, 0, 1_000),
+        point(0.01, 0, 1_180),
+        point(0.02, 0, 1_170),
+        point(0.03, 0, 1_000),
+      ]),
     ).toBeNull();
   });
 
@@ -118,5 +144,24 @@ describe('track calculations', () => {
         fallbackPoi: candidate('Svaneti'),
       }),
     ).toBe('Svaneti');
+    expect(
+      generateEnglishTrackName({
+        loop: false,
+        multipleSegments: false,
+        startPoi: candidate('Mestia'),
+        middlePoi: candidate('mestia'),
+        endPoi: candidate('Ushguli'),
+      }),
+    ).toBe('Mestia → Ushguli');
+    expect(
+      generateEnglishTrackName({
+        loop: true,
+        multipleSegments: false,
+        middlePoi: candidate('  Koruldi Lakes  '),
+      }),
+    ).toBe('Koruldi Lakes');
+    expect(
+      generateEnglishTrackName({ loop: false, multipleSegments: false }),
+    ).toBeNull();
   });
 });

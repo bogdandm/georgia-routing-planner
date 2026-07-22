@@ -578,7 +578,7 @@ export function MapWorkspace({
             boxZoom
             doubleClickZoom
             dragPan
-            dragRotate
+            dragRotate={false}
             keyboard
             reuseMaps={false}
             scrollZoom

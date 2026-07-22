@@ -17,6 +17,14 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 
+vi.mock('react-map-gl/maplibre', () => ({
+  default: ({ dragRotate }: { readonly dragRotate?: boolean }) => (
+    <div data-drag-rotate={String(dragRotate)} data-testid="native-map" />
+  ),
+  GeolocateControl: () => null,
+  NavigationControl: () => null,
+}));
+
 const sharedScene: SatelliteScene = {
   id: 'shared-scene',
   collection: 'sentinel-2-l2a',
@@ -381,6 +389,23 @@ describe('MapWorkspace', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('disables right-button camera drag in both map modes', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+
+    const map = await screen.findByTestId('native-map');
+    expect(map).toHaveAttribute('data-drag-rotate', 'false');
+
+    act(() => {
+      facade.setSnapshot({ terrainMode: 'terrain' });
+    });
+    expect(map).toHaveAttribute('data-drag-rotate', 'false');
   });
 
   it('falls back to the Georgia overview when camera storage never settles', async () => {

@@ -277,10 +277,14 @@ share URL requests a scene.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Clicking the map opens an anchored, accessible point-inspection popup with formatted
-  coordinates, terrain elevation, and the nearest validated OSM point of interest within
-  100 m. While any part of that popup intersects the map viewport, the next map click
-  only closes it; a subsequent click opens a new inspection. If camera movement puts the
-  popup entirely outside the viewport, the next click immediately replaces it.
+  coordinates, terrain elevation, and the nearest supported named OSM map feature in the
+  currently loaded vector data. Selection has no fixed distance cutoff; the geodesic
+  distance remains visible so the user can judge relevance. Supported feature sources
+  include places, peaks, and points of interest. Named results include direct English
+  Wikipedia article and Google Search links that open in a new tab. While any part of
+  that popup intersects the map viewport, the next map click only closes it; a
+  subsequent click opens a new inspection. If camera movement puts the popup entirely
+  outside the viewport, the next click immediately replaces it.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.
@@ -293,11 +297,12 @@ restrained sensitivity around the terrain point beneath the initial press; each 
 update is one zero-duration MapLibre camera command with that geographic `around`
 anchor. A small blue-ring MapLibre marker identifies that pivot only while the middle
 button remains pressed; it follows terrain and disappears when covered, released, or
-returned to 2D. The 3D camera can pitch down to 75 degrees. Right drag is left to the
-browser and does not move the camera. MapLibre retains projection, terrain anchoring,
-camera limits, movement events, and the native compass reset. The explicit 2D command
-returns pitch to zero and bearing to north, while 3D restores the last useful terrain
-pitch. Settled results continue through the existing map-view persistence queue.
+returned to 2D. The 3D camera can pitch down to 75 degrees. Right drag is disabled in
+both modes, while right click continues to open the map's contextual actions. MapLibre
+retains projection, terrain anchoring, camera limits, movement events, and the native
+compass reset. The explicit 2D command returns pitch to zero and bearing to north, while
+3D restores the last useful terrain pitch. Settled results continue through the existing
+map-view persistence queue.
 
 ## Hiking basemap
 

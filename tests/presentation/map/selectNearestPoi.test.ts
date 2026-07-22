@@ -1,11 +1,7 @@
 import type { GeoJSONFeature } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 
-import {
-  geodesicDistanceMeters,
-  nearbyPoiRadiusMeters,
-  selectNearestPoi,
-} from '@/presentation/map/selectNearestPoi';
+import { selectNearestPoi } from '@/presentation/map/selectNearestPoi';
 
 function pointFeature(
   id: string,
@@ -26,23 +22,24 @@ function pointFeature(
 }
 
 describe('selectNearestPoi', () => {
-  it('selects only candidates within the 100 metre geodesic radius', () => {
+  it('selects the nearest named feature without a fixed distance cutoff', () => {
     const selected = { longitude: 44.8, latitude: 41.7 };
-    expect(
-      geodesicDistanceMeters(selected, { ...selected, latitude: 41.7004 }),
-    ).toBeLessThan(nearbyPoiRadiusMeters);
-    expect(
-      selectNearestPoi(
-        [
-          pointFeature('far', 44.8, 41.702, { name: 'Far hut' }),
-          pointFeature('near', 44.8, 41.7004, {
-            name: 'Near hut',
-            subclass: 'alpine_hut',
-          }),
-        ],
-        selected,
-      ),
-    ).toMatchObject({ name: 'Near hut', category: 'alpine_hut' });
+    const result = selectNearestPoi(
+      [
+        pointFeature('unnamed-nearby', 44.8, 41.7001, {
+          subclass: 'alpine_hut',
+        }),
+        pointFeature('named-farther', 44.8, 41.73, { name: 'Farther village' }),
+        pointFeature('named-nearest', 44.8, 41.72, {
+          name: 'Glola',
+          class: 'village',
+        }),
+      ],
+      selected,
+    );
+
+    expect(result).toMatchObject({ name: 'Glola', category: 'village' });
+    expect(result?.distanceMeters).toBeGreaterThan(100);
   });
 
   it('uses stable identity ordering and preferred English names for ties', () => {

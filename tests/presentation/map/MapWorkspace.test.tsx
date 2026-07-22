@@ -70,7 +70,7 @@ describe('MapWorkspace', () => {
     ).toBeVisible();
   });
 
-  it('selects and mounts explicit shared 3D state without a delayed terrain toggle', async () => {
+  it('starts shared 3D terrain after the base map becomes ready', async () => {
     window.history.replaceState(
       null,
       '',
@@ -99,7 +99,7 @@ describe('MapWorkspace', () => {
     act(() => {
       facade.setSnapshot({
         lifecycle: 'ready',
-        terrainMode: 'terrain',
+        terrainMode: 'flat',
         camera: {
           longitude: 44.8,
           latitude: 41.7,
@@ -109,7 +109,13 @@ describe('MapWorkspace', () => {
         },
       });
     });
-    expect(facade.terrainModeRequests).toEqual([]);
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('keeps an early 2D choice from a shared 3D URL after map readiness', async () => {
@@ -143,11 +149,11 @@ describe('MapWorkspace', () => {
     expect(facade.terrainModeRequests).toEqual(['flat']);
   });
 
-  it('opens and selects a shared satellite scene before map rendering is ready', async () => {
+  it('starts shared satellite and terrain restoration from the same ready state', async () => {
     window.history.replaceState(
       null,
       '',
-      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=2d&scene=sentinel-2-l2a%3Ashared-scene#tracks',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18&pitch=35&scene=sentinel-2-l2a%3Ashared-scene#tracks',
     );
     const services = createTestServices({
       satelliteCatalogGateway: {
@@ -175,12 +181,14 @@ describe('MapWorkspace', () => {
     expect(useUiStore.getState().activeTab).toBe('satellite');
     expect(mapLayerStore.getState().selectedScene).toEqual(sharedScene);
     expect(applyScene).not.toHaveBeenCalled();
+    expect(facade.terrainModeRequests).toEqual([]);
 
     act(() => {
       facade.setSnapshot({ lifecycle: 'ready' });
     });
     await waitFor(() => {
       expect(applyScene).toHaveBeenCalledWith(sharedScene, expect.any(AbortSignal));
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
     });
   });
 

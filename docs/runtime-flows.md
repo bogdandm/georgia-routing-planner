@@ -22,7 +22,7 @@ sequenceDiagram
   Storage-->>Workspace: valid camera, null, or failure
   Workspace->>Map: mount once with initial camera and pure style
   Workspace->>Facade: attach native map
-  Map-->>Facade: load and idle events
+  Map-->>Facade: style.load, load, and idle events
   Facade-->>Workspace: serializable ready snapshot
 ```
 
@@ -31,8 +31,11 @@ render. This prevents the navigation from briefly rendering expanded when its pe
 state is collapsed. A storage failure logs a safe warning and uses default UI settings
 without blocking startup. A configuration failure renders a fatal alert without
 contacting the provider. Camera failure is recoverable: the map uses
-`defaultGeorgiaCamera`. The facade registers native listeners exactly once and removes
-them during teardown.
+`defaultGeorgiaCamera`. The facade publishes Ready on `style.load`, when MapLibre can
+safely accept satellite and terrain sources, rather than waiting for every visible
+basemap and relief tile. The later full `load` and `idle` events remain diagnostic
+signals. The facade registers native listeners exactly once and removes them during
+teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot
 and shows the settled viewport center inside the compact `Viewport | <coordinates>`
@@ -125,11 +128,12 @@ mode.
 
 1. Startup reads one versioned center-and-zoom value before mounting the map and forces
    bearing and pitch to zero.
-2. Only an explicit 3D share URL initializes the first MapLibre style with terrain and
-   its shared bearing and pitch. The 3D control reflects that URL intent immediately;
-   ordinary startup and regular share URLs remain flat. A user selecting 2D during
-   initial loading supersedes the URL intent immediately; later readiness updates cannot
-   re-enable terrain.
+2. An explicit 3D share URL restores its shared bearing and pitch and selects the 3D
+   control immediately, but the first MapLibre style remains flat so optional DEM tiles
+   cannot delay base-map readiness. Once the base map reports ready, terrain starts
+   through the normal timeout and retry path. A user selecting 2D during initial loading
+   supersedes the URL intent immediately; later readiness updates cannot re-enable
+   terrain.
 3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
    with the current terrain mode.
 4. The facade updates its snapshot, notifies React, and calls the view-settled port.
@@ -147,9 +151,11 @@ For a shared satellite URL, `MapWorkspace` opens the Satellite section and resol
 allowlisted collection/item identity without waiting for MapLibre readiness. The
 controller publishes the selected scene to transient `mapLayerStore` state, so
 `SatelliteBrowser` can open a one-card Images pane using footprint-derived coverage even
-before a viewport snapshot exists. Native raster application starts separately after the
-map reports ready. This separates share navigation and selection from slower tile
-rendering while keeping all scene data out of IndexedDB.
+before a viewport snapshot exists. Native raster application and any shared 3D terrain
+transition start separately as soon as the base style is ready for new sources.
+Satellite, terrain, relief, and basemap tile loading can then proceed concurrently,
+separating share navigation and selection from slower tile rendering while keeping all
+scene data out of IndexedDB.
 
 ## Terrain transition
 

@@ -11,7 +11,7 @@ import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
-import { mapSourceIds } from '@/presentation/map/mapIds';
+import { mapLayerIds, mapSourceIds } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -233,7 +233,7 @@ export class MapLibreFacade implements MapFacade {
     this.#middleMouseCamera.attach(map.getCanvasContainer(), map);
     this.#middleMouseCamera.setEnabled(this.#snapshot.terrainMode === 'terrain');
     this.#pointInspector.attach(map);
-    this.layerController?.attach(map);
+    map.on('style.load', this.handleStyleLoad);
     map.on('load', this.handleLoad);
     map.on('styledata', this.handleStyleData);
     map.on('idle', this.handleIdle);
@@ -246,11 +246,18 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .addEventListener('webglcontextrestored', this.handleContextRestored);
+    this.layerController?.attach(map);
     this.#mountedAt = performance.now();
     this.logger.log({ level: 'info', name: 'map.lifecycle.mounted' });
 
     if (map.loaded()) {
+      this.handleStyleLoad();
       this.handleLoad();
+    } else if (map.getLayer(mapLayerIds.background) !== undefined) {
+      // react-map-gl can expose its ref just after style.load fired. The canonical
+      // background layer proves the parsed application style is already mutable even
+      // while its tile-backed sources are still loading.
+      this.handleStyleLoad();
     }
   }
 
@@ -408,7 +415,32 @@ export class MapLibreFacade implements MapFacade {
     if (map === null) {
       return;
     }
+    this.publishReadySnapshot(map);
+    const durationMs = Math.max(0, performance.now() - this.#mountedAt);
+    this.logger.log({
+      level: 'info',
+      name: 'map.lifecycle.loaded',
+      data: { durationMs },
+    });
+  };
+
+  private readonly handleStyleLoad = (): void => {
+    const map = this.#map;
+    if (map === null) return;
     this.layerController?.attach(map);
+    this.publishReadySnapshot(map);
+    const style = map.getStyle();
+    this.logger.log({
+      level: 'info',
+      name: 'map.style.ready',
+      data: {
+        count: style.layers.length,
+        status: style.name ?? initialSnapshot.styleId,
+      },
+    });
+  };
+
+  private publishReadySnapshot(map: MapLibreMap): void {
     const style = map.getStyle();
     const terrainMode = map.getTerrain() === null ? 'flat' : 'terrain';
     this.updateSnapshot({
@@ -426,21 +458,7 @@ export class MapLibreFacade implements MapFacade {
       webGlCapabilities: this.readWebGlCapabilities(map),
       message: this.#snapshot.message,
     });
-    const durationMs = Math.max(0, performance.now() - this.#mountedAt);
-    this.logger.log({
-      level: 'info',
-      name: 'map.lifecycle.loaded',
-      data: { durationMs },
-    });
-    this.logger.log({
-      level: 'info',
-      name: 'map.style.ready',
-      data: {
-        count: style.layers.length,
-        status: style.name ?? initialSnapshot.styleId,
-      },
-    });
-  };
+  }
 
   private readonly handleStyleData = (): void => {
     const map = this.#map;
@@ -1108,6 +1126,7 @@ export class MapLibreFacade implements MapFacade {
     if (map === null) {
       return;
     }
+    map.off('style.load', this.handleStyleLoad);
     map.off('load', this.handleLoad);
     map.off('styledata', this.handleStyleData);
     map.off('idle', this.handleIdle);

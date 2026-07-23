@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeLocalTrackName } from '@/domain/tracks/localTrack';
+import {
+  normalizeLocalTrackDescription,
+  normalizeLocalTrackName,
+} from '@/domain/tracks/localTrack';
 
 describe('normalizeLocalTrackName', () => {
   it('trims display text and derives an English-locale search value', () => {
@@ -14,6 +17,17 @@ describe('normalizeLocalTrackName', () => {
     expect(() => normalizeLocalTrackName('   ')).toThrow('Track name is required.');
     expect(() => normalizeLocalTrackName('x'.repeat(201))).toThrow(
       'Track name must be 200 characters or fewer.',
+    );
+  });
+});
+
+describe('normalizeLocalTrackDescription', () => {
+  it('keeps plain text unchanged and rejects content above the storage limit', () => {
+    expect(normalizeLocalTrackDescription('  plain <b>text</b>  ')).toBe(
+      '  plain <b>text</b>  ',
+    );
+    expect(() => normalizeLocalTrackDescription('x'.repeat(10_001))).toThrow(
+      '10,000 characters',
     );
   });
 });

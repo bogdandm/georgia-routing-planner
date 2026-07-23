@@ -25,8 +25,8 @@ unchanged.
 - The import region accepts `.gpx`, `.fit`, and `.kml` files and names all supported
   formats in its browse and drop guidance.
 - File-extension matching is case-insensitive.
-- Every supported format uses the same preview, automatic naming, save, search, favorite,
-  description, restoration, deletion, map, elevation, filtering, and
+- Every supported format uses the same preview, automatic naming, save, search,
+  favorite, description, restoration, deletion, map, elevation, filtering, and
   relief-recalculation behavior after import.
 - The track details keep the original filename and make its source format visible.
 - Missing optional data does not prevent import when usable track geometry exists.
@@ -113,8 +113,8 @@ unchanged.
   does not delete immediately and does not open the track.
 - Confirmation shows two clearly separated icon actions: a red delete icon on the left
   confirms deletion, and a grey cross on the right cancels.
-- Both confirmation actions have accessible names and remain visible until one is chosen,
-  focus leaves the confirmation safely, or another track begins confirmation.
+- Both confirmation actions have accessible names and remain visible until one is
+  chosen, focus leaves the confirmation safely, or another track begins confirmation.
 - Confirming uses the existing complete track-deletion behavior and removes the row only
   after deletion succeeds.
 - Cancelling restores the normal row without changing selection, ordering, or scroll
@@ -141,8 +141,8 @@ unchanged.
   pane to the right of the track list.
 - The Tracks workspace keeps its existing single-column width so more horizontal space
   remains available for the map.
-- The GPX/FIT/KML upload region remains visible at the top while either the list or track
-  details are shown below it.
+- The GPX/FIT/KML upload region remains visible at the top while either the list or
+  track details are shown below it.
 - Opening a saved track replaces the search, result count, and track list with that
   track's details in the same content area.
 - The details view provides an obvious Back to tracks action that restores the previous
@@ -151,8 +151,8 @@ unchanged.
 - Returning to the list preserves its search text, ordering, and scroll position.
 - Importing a new GPX remains available while details are open and follows the existing
   confirmation rules when replacing unfinished work.
-- On viewports wider than 1920 CSS pixels, the list and selected-track details may remain
-  visible side by side.
+- On viewports wider than 1920 CSS pixels, the list and selected-track details may
+  remain visible side by side.
 - Resizing across the breakpoint keeps the selected track and current list state instead
   of closing or reopening content.
 
@@ -217,8 +217,8 @@ unchanged.
 - The elevation view provides a filter button that reveals a slider measured in metres.
 - The default threshold is 3 metres.
 - The threshold controls elevation-noise filtering: elevation changes smaller than the
-  selected value do not independently count toward gradient, ascent, descent, high-point,
-  or climb calculations.
+  selected value do not independently count toward gradient, ascent, descent,
+  high-point, or climb calculations.
 - Filtering does not remove geographic track points or alter the original GPX, FIT, or
   KML file.
 - Changing the threshold updates all affected elevation statistics and climb results
@@ -251,8 +251,8 @@ unchanged.
   KML file.
 - The user can return to the original recorded elevation when usable source elevation
   exists.
-- Provider gaps and partial failures are reported clearly and do not replace a previously
-  usable profile with an unusable result.
+- Provider gaps and partial failures are reported clearly and do not replace a
+  previously usable profile with an unusable result.
 - Recalculated results survive page refreshes and browser restarts.
 
 ## Gradients and climbs
@@ -296,32 +296,38 @@ unchanged.
 
 ## Delivery sequence
 
-1. `feat(tracks): add metadata and persistent track state`
-   - Add FIT and KML import, descriptions, favorites, favorite-first ordering,
-     GPX/KML downloads, latest-opened restoration, inline list deletion, and the
-     responsive list/details layout.
-2. `feat(search): include local tracks in global search`
+1. `feat(tracks): persist favorites and descriptions`
+   - Add source-format identity, descriptions, favorites, favorite-first ordering, and
+     latest-opened restoration using the existing local-track repository.
+2. `feat(tracks): import FIT and KML track geometry`
+   - Add FIT and KML validation and parsing while preserving the original source file.
+3. `feat(tracks): export saved tracks as GPX and KML`
+   - Generate both interchange formats locally from the shared stored track model.
+4. `feat(tracks): refine saved-track navigation and deletion`
+   - Add inline list deletion and the responsive list/details layout.
+5. `feat(search): include local tracks in global search`
    - Add the two newest matching results and transfer the query into Tracks.
-3. `feat(elevation): add filtered track elevation profiles`
+6. `feat(elevation): add filtered track elevation profiles`
    - Add the graph, 3-metre default filter, gradients, statistics, high points, and loop
      handling.
-4. `feat(elevation): recalculate profiles from relief data`
+7. `feat(elevation): recalculate profiles from relief data`
    - Add explicit recalculation, progress, cancellation, provenance, persistence, and
      restoration of original GPX elevation.
-5. `feat(tracks): identify and present categorized climbs`
+8. `feat(tracks): identify and present categorized climbs`
    - Add sustained-climb detection and Garmin-documented difficulty presentation.
-6. `test(tracks): evaluate automatic naming against local corpus`
+9. `test(tracks): evaluate automatic naming against local corpus`
    - Add the private batch evaluation workflow and selected sanitized regression cases.
-7. Final verification and documentation
-   - Verify the complete behavior, update stable feature and runtime documentation,
-     remove this planning file, and prepare the reviewed branch for integration.
+10. Final verification and documentation
+
+- Verify the complete behavior, update stable feature and runtime documentation, remove
+  this planning file, and prepare the reviewed branch for integration.
 
 ## Reuse and complexity constraints
 
 - Extend the existing track import, Tracks workspace, local-track persistence, search,
   elevation provider, map interaction, and chart system.
-- Replace the current alphabetical-only list ordering with favorite-first,
-  newest-first ordering.
+- Replace the current alphabetical-only list ordering with favorite-first, newest-first
+  ordering.
 - Replace raw adjacent-point elevation totals with the single selected filtered-profile
   policy wherever the new elevation view is used.
 - Do not add another state framework, chart library, map engine, persistence system, or
@@ -344,8 +350,8 @@ unchanged.
 - At 1920 CSS pixels and below, opening details replaces the list beneath the persistent
   upload region and returning restores the prior list state.
 - Above 1920 CSS pixels, the wider side-by-side presentation remains available.
-- Global search shows at most two newest matching tracks and can continue the same search
-  in Tracks.
+- Global search shows at most two newest matching tracks and can continue the same
+  search in Tracks.
 - Description links are clickable only outside edit mode and pasted HTML is inert.
 - Loop tracks receive the same high-point and climb analysis as other tracks.
 - The default 3-metre elevation filter changes calculations without changing geometry.

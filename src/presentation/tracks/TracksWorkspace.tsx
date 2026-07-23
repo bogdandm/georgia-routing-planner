@@ -1,6 +1,8 @@
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
@@ -101,6 +103,8 @@ interface TracksWorkspaceValue {
   readonly setActiveName: (name: string) => void;
   readonly setQuery: (query: string) => void;
   readonly renameActive: () => Promise<void>;
+  readonly toggleFavorite: (summary: LocalTrackSummary) => Promise<void>;
+  readonly updateActiveDescription: (description: string) => Promise<void>;
 }
 
 interface GeneratedNameInput {
@@ -184,10 +188,32 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [importError, setImportError] = useState<ImportErrorNotice | null>(null);
   const namingAbort = useRef<AbortController | null>(null);
   const renderedTrackId = useRef<string | null>(null);
+  const restorationAttempted = useRef(false);
 
   const reloadSummaries = useCallback(async () => {
     try {
-      setSummaries(await database.listLocalTracks());
+      const loaded = await database.listLocalTracks();
+      setSummaries(loaded);
+      if (!restorationAttempted.current) {
+        restorationAttempted.current = true;
+        const latestTrackId = await database.loadLatestOpenedTrackId();
+        const latestSummary = loaded.find((summary) => summary.id === latestTrackId);
+        if (latestSummary !== undefined) {
+          try {
+            const content = await database.loadLocalTrackContent(latestSummary.id);
+            setActive({
+              kind: 'saved',
+              summary: latestSummary,
+              content,
+              draftName: latestSummary.name,
+            });
+          } catch {
+            await database.saveLatestOpenedTrackId(null);
+          }
+        } else if (latestTrackId !== null) {
+          await database.saveLatestOpenedTrackId(null);
+        }
+      }
     } catch {
       setError('Saved tracks could not be loaded from this browser.');
     }
@@ -458,6 +484,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ...normalizedName,
         savedAt: clock.now().toISOString(),
         sourceFilename: active.file.name,
+        sourceFormat: 'gpx',
+        description: '',
+        favorite: false,
         geometryKind: active.parsed.geometryKind,
         pointCount: active.parsed.pointCount,
         segmentCount: active.parsed.segments.length,
@@ -483,6 +512,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ),
       };
       await database.saveLocalTrack(summary, content);
+      await database.saveLatestOpenedTrackId(summary.id);
       namingAbort.current?.abort();
       await reloadSummaries();
       setActive({ kind: 'saved', summary, content, draftName: summary.name });
@@ -522,6 +552,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       try {
         const content = await database.loadLocalTrackContent(summary.id);
         setActive({ kind: 'saved', summary, content, draftName: summary.name });
+        await database.saveLatestOpenedTrackId(summary.id);
         setError(null);
       } catch (loadError) {
         setError(
@@ -562,6 +593,48 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, database, reloadSummaries]);
 
+  const toggleFavorite = useCallback(
+    async (summary: LocalTrackSummary) => {
+      try {
+        const updated = await database.updateLocalTrackMetadata(summary.id, {
+          favorite: !summary.favorite,
+        });
+        setActive((current) =>
+          current?.kind === 'saved' && current.summary.id === updated.id
+            ? { ...current, summary: updated }
+            : current,
+        );
+        await reloadSummaries();
+        setError(null);
+      } catch {
+        setError('The favorite could not be updated.');
+      }
+    },
+    [database, reloadSummaries],
+  );
+
+  const updateActiveDescription = useCallback(
+    async (description: string) => {
+      if (active?.kind !== 'saved') return;
+      try {
+        const summary = await database.updateLocalTrackMetadata(active.summary.id, {
+          description,
+        });
+        setActive({ ...active, summary });
+        await reloadSummaries();
+        setError(null);
+      } catch (descriptionError) {
+        setError(
+          descriptionError instanceof Error
+            ? descriptionError.message
+            : 'The description could not be updated.',
+        );
+        throw descriptionError;
+      }
+    },
+    [active, database, reloadSummaries],
+  );
+
   const deleteActive = useCallback(async () => {
     if (active?.kind !== 'saved') return;
     if (!window.confirm(`Delete “${active.summary.name}” from this browser?`)) return;
@@ -582,7 +655,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const normalizedQuery = query.trim().toLocaleLowerCase('en');
     return normalizedQuery.length === 0
       ? summaries
-      : summaries.filter((summary) => summary.normalizedName.includes(normalizedQuery));
+      : summaries.filter(
+          (summary) =>
+            summary.normalizedName.includes(normalizedQuery) ||
+            summary.description.toLocaleLowerCase('en').includes(normalizedQuery),
+        );
   }, [query, summaries]);
 
   const value = useMemo<TracksWorkspaceValue>(
@@ -603,6 +680,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       selectSaved,
       setActiveName,
       setQuery,
+      toggleFavorite,
+      updateActiveDescription,
     }),
     [
       active,
@@ -619,7 +698,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       savePreview,
       selectSaved,
       setActiveName,
+      setQuery,
       summaries,
+      toggleFavorite,
+      updateActiveDescription,
     ],
   );
 
@@ -858,8 +940,16 @@ function TrackStat({ emphasized = false, icon, label, value }: TrackStatProps) {
 }
 
 export function TracksPanel() {
-  const { active, error, filteredSummaries, query, setQuery, selectSaved, summaries } =
-    useTracksWorkspace();
+  const {
+    active,
+    error,
+    filteredSummaries,
+    query,
+    setQuery,
+    selectSaved,
+    summaries,
+    toggleFavorite,
+  } = useTracksWorkspace();
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
@@ -906,13 +996,17 @@ export function TracksPanel() {
               const elapsedSeconds = summary.metrics.elapsedSeconds;
               const ascentMeters = summary.metrics.ascentMeters;
               return (
-                <Paper key={summary.id} variant="outlined" sx={{ overflow: 'hidden' }}>
+                <Paper
+                  key={summary.id}
+                  variant="outlined"
+                  sx={{ display: 'flex', overflow: 'hidden' }}
+                >
                   <ListItemButton
                     selected={
                       active?.kind === 'saved' && active.summary.id === summary.id
                     }
                     onClick={() => void selectSaved(summary)}
-                    sx={{ display: 'block', px: 1.5, py: 1.25 }}
+                    sx={{ display: 'block', minWidth: 0, px: 1.5, py: 1.25 }}
                   >
                     <Typography variant="subtitle2">{summary.name}</Typography>
                     <Stack
@@ -941,6 +1035,22 @@ export function TracksPanel() {
                       )}
                     </Stack>
                   </ListItemButton>
+                  <Tooltip
+                    title={
+                      summary.favorite ? 'Remove from favorites' : 'Add to favorites'
+                    }
+                  >
+                    <IconButton
+                      aria-label={
+                        summary.favorite ? 'Remove from favorites' : 'Add to favorites'
+                      }
+                      color={summary.favorite ? 'warning' : 'default'}
+                      onClick={() => void toggleFavorite(summary)}
+                      sx={{ alignSelf: 'center', mr: 0.5 }}
+                    >
+                      {summary.favorite ? <StarIcon /> : <StarBorderIcon />}
+                    </IconButton>
+                  </Tooltip>
                 </Paper>
               );
             })}
@@ -967,6 +1077,102 @@ export function TracksPanel() {
         <Typography variant="caption">Saved tracks stay in this browser.</Typography>
       </Alert>
     </Box>
+  );
+}
+
+function SavedTrackDescription() {
+  const { active, updateActiveDescription } = useTracksWorkspace();
+  const savedDescription = active?.kind === 'saved' ? active.summary.description : '';
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(savedDescription);
+
+  if (active?.kind !== 'saved') return null;
+
+  if (editing) {
+    return (
+      <Stack spacing={1}>
+        <TextField
+          multiline
+          minRows={3}
+          label="Description"
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+          slotProps={{ htmlInput: { maxLength: 10_000 } }}
+        />
+        <Stack direction="row" spacing={1}>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => {
+              void updateActiveDescription(draft)
+                .then(() => {
+                  setEditing(false);
+                })
+                .catch(() => undefined);
+            }}
+          >
+            Apply edit
+          </Button>
+          <Button
+            size="small"
+            color="inherit"
+            onClick={() => {
+              setDraft(savedDescription);
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </Button>
+        </Stack>
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack spacing={1}>
+      <Typography component="h3" variant="subtitle2">
+        Description
+      </Typography>
+      {savedDescription.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+          No description has been added.
+        </Typography>
+      ) : (
+        <Typography
+          component="div"
+          variant="body2"
+          sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+        >
+          {savedDescription.split(/(https?:\/\/[^\s]+)/giu).map((part, index) =>
+            /^https?:\/\//iu.test(part) ? (
+              <Box
+                component="a"
+                key={`${part}-${String(index)}`}
+                href={part}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {part}
+              </Box>
+            ) : (
+              part
+            ),
+          )}
+        </Typography>
+      )}
+      <Button
+        size="small"
+        variant="text"
+        onClick={() => {
+          setEditing(true);
+        }}
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        Edit
+      </Button>
+    </Stack>
   );
 }
 
@@ -1067,6 +1273,7 @@ export function TrackDetailsPane() {
     renameActive,
     savePreview,
     setActiveName,
+    toggleFavorite,
   } = useTracksWorkspace();
   if (active === null) return null;
   const metrics = active.kind === 'saved' ? active.summary.metrics : active.metrics;
@@ -1182,13 +1389,22 @@ export function TrackDetailsPane() {
               </Stack>
             </>
           ) : (
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
               <Button
                 size="small"
                 variant="outlined"
                 onClick={() => void renameActive()}
               >
                 Rename
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color={active.summary.favorite ? 'warning' : 'inherit'}
+                startIcon={active.summary.favorite ? <StarIcon /> : <StarBorderIcon />}
+                onClick={() => void toggleFavorite(active.summary)}
+              >
+                {active.summary.favorite ? 'Favorited' : 'Favorite'}
               </Button>
               <Button
                 size="small"
@@ -1211,6 +1427,9 @@ export function TrackDetailsPane() {
             segmentCount={segmentCount}
             sourceFilename={sourceFilename}
           />
+          {active.kind === 'saved' ? (
+            <SavedTrackDescription key={active.summary.id} />
+          ) : null}
           {segmentCount > 1 ? (
             <Alert severity="info">
               Independent segments are not joined; totals exclude gaps.

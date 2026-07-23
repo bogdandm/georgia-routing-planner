@@ -222,8 +222,11 @@ tracks, `addedAt` comes from reviewed curation metadata rather than the build cl
 local tracks, it is the completed retention/import time.
 
 The executable local-track schema keeps listable summaries separate from large geometry
-and original GPX blobs. Both rows share the opaque local track ID. Saving and deleting
-use one IndexedDB transaction, while rename updates only the validated summary. A
+and original source blobs. Both rows share the opaque local track ID. The summary owns
+source-format identity, the bounded plain-text description, favorite state, and import
+time; content remains on demand. Saving and deleting use one IndexedDB transaction,
+while rename and metadata edits update only the validated summary. A setting stores the
+latest opened local-track ID and is cleared atomically when that track is deleted. A
 missing or invalid content row is surfaced as a bounded storage-integrity error; it
 never becomes an empty geometry or a partially successful save.
 

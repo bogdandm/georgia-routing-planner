@@ -14,6 +14,9 @@ export interface LocalTrackSummary {
   readonly normalizedName: string;
   readonly savedAt: string;
   readonly sourceFilename: string;
+  readonly sourceFormat: 'gpx' | 'fit' | 'kml';
+  readonly description: string;
+  readonly favorite: boolean;
   readonly geometryKind: 'track' | 'route';
   readonly pointCount: number;
   readonly segmentCount: number;
@@ -55,4 +58,11 @@ export function normalizeLocalTrackName(name: string): {
     name: trimmed,
     normalizedName: trimmed.toLocaleLowerCase('en'),
   };
+}
+
+export function normalizeLocalTrackDescription(description: string): string {
+  if (description.length > 10_000) {
+    throw new Error('Track description must be 10,000 characters or fewer.');
+  }
+  return description;
 }

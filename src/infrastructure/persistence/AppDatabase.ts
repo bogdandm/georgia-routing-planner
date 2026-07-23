@@ -27,6 +27,7 @@ import type {
 } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  normalizeLocalTrackDescription,
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
@@ -364,6 +365,9 @@ const localTrackSummarySchema = z
     normalizedName: z.string().min(1).max(200),
     savedAt: z.iso.datetime(),
     sourceFilename: z.string().min(1).max(500),
+    sourceFormat: z.enum(['gpx', 'fit', 'kml']).default('gpx'),
+    description: z.string().max(10_000).default(''),
+    favorite: z.boolean().default(false),
     geometryKind: z.enum(['track', 'route']),
     pointCount: z.number().int().min(2).max(100_000),
     segmentCount: z.number().int().min(1).max(512),
@@ -386,6 +390,9 @@ const localTrackSummarySchema = z
       normalizedName: value.normalizedName,
       savedAt: value.savedAt,
       sourceFilename: value.sourceFilename,
+      sourceFormat: value.sourceFormat,
+      description: value.description,
+      favorite: value.favorite,
       geometryKind: value.geometryKind,
       pointCount: value.pointCount,
       segmentCount: value.segmentCount,
@@ -508,10 +515,9 @@ export class AppDatabase
       });
     }
     return valid.sort((left, right) => {
-      const byName = left.name.localeCompare(right.name, 'en', {
-        sensitivity: 'base',
-      });
-      return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+      if (left.favorite !== right.favorite) return left.favorite ? -1 : 1;
+      const bySavedAt = right.savedAt.localeCompare(left.savedAt, 'en');
+      return bySavedAt === 0 ? left.id.localeCompare(right.id, 'en') : bySavedAt;
     });
   }
 
@@ -548,14 +554,71 @@ export class AppDatabase
     return updated;
   }
 
+  public async updateLocalTrackMetadata(
+    trackId: string,
+    changes: {
+      readonly description?: string;
+      readonly favorite?: boolean;
+    },
+  ): Promise<LocalTrackSummary> {
+    const existing = await this.localTracks.get(trackId);
+    const parsed = parseLocalTrackSummary(existing);
+    if (parsed === null) {
+      throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
+    }
+    const updated: LocalTrackSummary = {
+      ...parsed,
+      description:
+        changes.description === undefined
+          ? parsed.description
+          : normalizeLocalTrackDescription(changes.description),
+      favorite: changes.favorite ?? parsed.favorite,
+    };
+    await this.localTracks.put(updated);
+    return updated;
+  }
+
+  public async loadLatestOpenedTrackId(): Promise<string | null> {
+    const record = await this.settings.get('local-tracks.latest-opened');
+    if (record === undefined) return null;
+    if (typeof record.value === 'string' && record.value.length <= 200) {
+      return record.value;
+    }
+    await this.settings.delete('local-tracks.latest-opened');
+    return null;
+  }
+
+  public async saveLatestOpenedTrackId(trackId: string | null): Promise<void> {
+    if (trackId === null) {
+      await this.settings.delete('local-tracks.latest-opened');
+      return;
+    }
+    if (trackId.length === 0 || trackId.length > 200) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The latest opened track identifier is invalid.',
+      );
+    }
+    await this.settings.put({
+      key: 'local-tracks.latest-opened',
+      value: trackId,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   public async deleteLocalTrack(trackId: string): Promise<void> {
     await this.transaction(
       'rw',
+      this.settings,
       this.localTracks,
       this.localTrackContents,
       async () => {
         await this.localTrackContents.delete(trackId);
         await this.localTracks.delete(trackId);
+        const latest = await this.settings.get('local-tracks.latest-opened');
+        if (latest?.value === trackId) {
+          await this.settings.delete('local-tracks.latest-opened');
+        }
       },
     );
   }

@@ -426,6 +426,15 @@ describe('WorkspaceShell', () => {
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
     );
+    await user.click(screen.getByRole('button', { name: 'Favorite' }));
+    expect(await screen.findByRole('button', { name: 'Favorited' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const descriptionInput = screen.getByRole('textbox', { name: 'Description' });
+    await user.type(descriptionInput, 'Guide: https://example.test/trail');
+    await user.click(screen.getByRole('button', { name: 'Apply edit' }));
+    expect(
+      await screen.findByRole('link', { name: 'https://example.test/trail' }),
+    ).toHaveAttribute('rel', 'noopener noreferrer');
 
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(

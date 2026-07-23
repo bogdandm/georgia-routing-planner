@@ -22,6 +22,9 @@ function summary(id: string, name: string): LocalTrackSummary {
     normalizedName: name.toLocaleLowerCase('en'),
     savedAt: '2026-07-22T10:00:00.000Z',
     sourceFilename: 'fixture.gpx',
+    sourceFormat: 'gpx',
+    description: '',
+    favorite: false,
     geometryKind: 'track',
     pointCount: 2,
     segmentCount: 1,
@@ -92,16 +95,53 @@ describe('local track persistence', () => {
     });
   });
 
-  it('sorts duplicate and mixed-case names by English name then stable ID', async () => {
-    await database.saveLocalTrack(summary('local:3', 'beta'), content('local:3'));
-    await database.saveLocalTrack(summary('local:2', 'Alpha'), content('local:2'));
-    await database.saveLocalTrack(summary('local:1', 'alpha'), content('local:1'));
+  it('sorts favorites first, then newest first with a stable ID tie-breaker', async () => {
+    await database.saveLocalTrack(
+      { ...summary('local:3', 'Older'), savedAt: '2026-07-20T10:00:00.000Z' },
+      content('local:3'),
+    );
+    await database.saveLocalTrack(summary('local:2', 'Newest'), content('local:2'));
+    await database.saveLocalTrack(
+      { ...summary('local:1', 'Favorite'), favorite: true },
+      content('local:1'),
+    );
 
     await expect(database.listLocalTracks()).resolves.toMatchObject([
       { id: 'local:1' },
       { id: 'local:2' },
       { id: 'local:3' },
     ]);
+  });
+
+  it('updates descriptions and favorites without changing the import date', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
+
+    await expect(
+      database.updateLocalTrackMetadata('local:1', {
+        description: 'A useful link: https://example.test/track',
+        favorite: true,
+      }),
+    ).resolves.toMatchObject({
+      description: 'A useful link: https://example.test/track',
+      favorite: true,
+      savedAt: '2026-07-22T10:00:00.000Z',
+    });
+    await expect(
+      database.updateLocalTrackMetadata('local:1', {
+        description: 'x'.repeat(10_001),
+      }),
+    ).rejects.toThrow('10,000 characters');
+  });
+
+  it('restores and clears the latest opened track identifier', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
+    await database.saveLatestOpenedTrackId('local:1');
+    database.close();
+    database = new AppDatabase(services.logger);
+
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBe('local:1');
+    await database.deleteLocalTrack('local:1');
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
   });
 
   it('renames only the summary and validates the trimmed name', async () => {

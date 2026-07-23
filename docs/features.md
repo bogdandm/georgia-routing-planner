@@ -86,12 +86,17 @@ guard. Saved track cards show icon-led recorded duration, distance, and elevatio
 when available. The detail pane presents duration, distance, derived average speed,
 elevation gain, and elevation loss in a wrapping stats grid, with missing measurements
 omitted; source file, point, segment, and save metadata remain below it. Saved tracks
-are searchable by name and support reopen, close, rename, and confirmed deletion. A
-compact local-retention notice stays pinned to the Tracks panel bottom. Catalog,
-folders, tags, filters, batch import, whole-workspace dropping, and GPX creation remain
-unavailable. A newly imported or reopened track renders as bright-blue independent lines
-and fits its complete bounds with padding for the master/detail surfaces. Closing it
-removes the active geometry without deleting a saved record or moving the camera.
+are searchable by name or description and support reopen, close, rename, and confirmed
+deletion. Users can favorite a track from its list row or detail pane; favorites sort
+before other tracks, with newest imports first inside each group. The optional
+10,000-character plain-text description is edited explicitly, persists locally, and
+renders only `http://` and `https://` text as safe new-tab links. The latest opened
+saved track reopens after restart when its content is still valid. A compact
+local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
+filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
+newly imported or reopened track renders as bright-blue independent lines and fits its
+complete bounds with padding for the master/detail surfaces. Closing it removes the
+active geometry without deleting a saved record or moving the camera.
 
 ### Create GPX
 

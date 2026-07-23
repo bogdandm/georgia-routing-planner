@@ -517,13 +517,20 @@ Switching rail sections retains the preview. `beforeunload` is registered only w
 that preview remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
-Dexie read-write transaction. The summary contains the stable display name, original
-source filename, and derived metrics used by list and detail views; the content row
-contains normalized independent segments and the retained original GPX blob. A
-transaction failure leaves neither row listable. Rename validates and changes only the
-summary. Delete removes both rows in one transaction. Opening a saved track validates
-its content independently and reports a bounded integrity error when the row is missing
-or corrupt.
+Dexie read-write transaction. The summary contains the stable display name, source
+format and filename, plain-text description, favorite state, and derived metrics used by
+list and detail views; the content row contains normalized independent segments and the
+retained original GPX blob. A transaction failure leaves neither row listable. Rename
+and metadata edits validate and change only the summary. List reads place favorites
+first and use newest-first import time inside each group. Delete removes both rows and
+clears a matching latest-opened setting in one transaction.
+
+Opening or newly saving a track records its opaque ID in the existing settings table. On
+startup the Tracks provider loads that summary and validates its content before
+restoring the details and map geometry. Missing or corrupt remembered content clears the
+setting without blocking the remaining list. Descriptions remain plain text in storage;
+the read view recognizes only `http://` and `https://` substrings and React escapes all
+other markup.
 
 The Tracks provider sends only validated independent segments to the existing map layer
 controller. That controller retains one GeoJSON `MultiLineString`, reconciles its casing

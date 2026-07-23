@@ -156,12 +156,22 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.goto('?developer=1#tracks');
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-    { timeout: 15_000 },
-  );
+  await page.goto('?developer=1#layers');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  const relief = page.getByRole('checkbox', { name: 'Relief shading' });
+  const isolines = page.getByRole('checkbox', { name: 'Elevation isolines' });
+  await relief.uncheck();
+  await isolines.uncheck();
+  await page.reload();
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await expect(relief).not.toBeChecked();
+  await expect(isolines).not.toBeChecked();
+  await page.getByRole('tab', { name: 'Tracks' }).click();
 
   for (const fixture of realWorldTrackFixtures) {
     const chooserPromise = page.waitForEvent('filechooser');

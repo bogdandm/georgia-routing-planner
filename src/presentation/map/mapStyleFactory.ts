@@ -23,7 +23,7 @@ export const englishFirstLabelExpression: ExpressionSpecification = [
 const labelLayout: NonNullable<SymbolLayerSpecification['layout']> = {
   'text-field': englishFirstLabelExpression,
   'text-font': ['Noto Sans Regular'],
-  'text-size': 12,
+  'text-size': 13,
   'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
   'text-radial-offset': 0.5,
   'text-justify': 'auto',
@@ -353,7 +353,7 @@ function createBasemapLayers(
         'symbol-placement': 'line',
         'text-field': englishFirstLabelExpression,
         'text-font': ['Noto Sans Regular'],
-        'text-size': 11,
+        'text-size': 12,
       },
       paint: {
         'text-color': mapVisualPalette.text.secondary,
@@ -386,9 +386,9 @@ function createBasemapLayers(
           ['linear'],
           ['zoom'],
           5,
-          ['match', ['get', 'class'], 'city', 14, 11],
+          ['match', ['get', 'class'], 'city', 16, 13],
           12,
-          ['match', ['get', 'class'], 'city', 18, 13],
+          ['match', ['get', 'class'], 'city', 19, 14],
         ],
       },
       paint: {

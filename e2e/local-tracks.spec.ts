@@ -86,6 +86,55 @@ interface StoredTrackState {
   readonly totalOriginalGpxBytes: number;
 }
 
+async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
+  readonly relief: boolean;
+  readonly isolines: boolean;
+} | null> {
+  return page.evaluate(
+    () =>
+      new Promise<{
+        readonly relief: boolean;
+        readonly isolines: boolean;
+      } | null>((resolve, reject) => {
+        const openRequest = indexedDB.open('GeorgiaRoutingPlanner');
+        openRequest.onerror = () => {
+          reject(openRequest.error ?? new Error('Could not open fixture database.'));
+        };
+        openRequest.onsuccess = () => {
+          const database = openRequest.result;
+          const transaction = database.transaction('settings', 'readonly');
+          const getRequest = transaction.objectStore('settings').get('map.layers');
+          getRequest.onerror = () => {
+            database.close();
+            reject(getRequest.error ?? new Error('Could not read layer settings.'));
+          };
+          getRequest.onsuccess = () => {
+            const record = getRequest.result as
+              | {
+                  value?: {
+                    visibility?: {
+                      'terrain-relief'?: boolean;
+                      'elevation-isolines'?: boolean;
+                    };
+                  };
+                }
+              | undefined;
+            database.close();
+            const visibility = record?.value?.visibility;
+            resolve(
+              visibility === undefined
+                ? null
+                : {
+                    relief: visibility['terrain-relief'] ?? true,
+                    isolines: visibility['elevation-isolines'] ?? true,
+                  },
+            );
+          };
+        };
+      }),
+  );
+}
+
 async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
   return page.evaluate(
     () =>
@@ -165,6 +214,9 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   const isolines = page.getByRole('checkbox', { name: 'Elevation isolines' });
   await relief.uncheck();
   await isolines.uncheck();
+  await expect
+    .poll(() => readStoredTerrainOverlayVisibility(page))
+    .toEqual({ relief: false, isolines: false });
   await page.reload();
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 15_000,

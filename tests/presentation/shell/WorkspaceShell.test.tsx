@@ -283,8 +283,8 @@ describe('WorkspaceShell', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Browse GPX file' })).toBeEnabled();
-    expect(screen.getByText('Drop GPX here')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Browse track file' })).toBeEnabled();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Create GPX' }),
     ).not.toBeInTheDocument();
@@ -383,7 +383,7 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     const trackNameInput = screen.getByRole('textbox', { name: 'Track name' });
     expect(trackNameInput).toHaveValue('Fixture trail');
-    expect(screen.getByText('Fixture track.gpx')).toBeVisible();
+    expect(screen.getByText('Fixture track.gpx · GPX')).toBeVisible();
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     const details = screen.getByRole('complementary', { name: 'Track details' });
@@ -470,7 +470,7 @@ describe('WorkspaceShell', () => {
         /Detailed track geometry was used instead of companion route geometry\./u,
       ),
     ).toBeVisible();
-    expect(screen.getByText('Track and route.gpx')).toBeVisible();
+    expect(screen.getByText('Track and route.gpx · GPX')).toBeVisible();
     expect(screen.getByLabelText(/^Average speed:/u)).toBeVisible();
   }, 10_000);
 
@@ -487,9 +487,9 @@ describe('WorkspaceShell', () => {
         target: { files: [new File(['not gpx'], 'notes.txt')] },
       });
 
-      const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+      const importZone = screen.getByRole('region', { name: 'Import track file' });
       expect(within(importZone).getByRole('alert')).toHaveTextContent(
-        'Choose a file with the .gpx extension.',
+        'Choose a file with a .gpx, .fit, or .kml extension.',
       );
       act(() => {
         vi.advanceTimersByTime(5_000);
@@ -520,23 +520,23 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
-    const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+    const importZone = screen.getByRole('region', { name: 'Import track file' });
     fireEvent.dragEnter(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
-    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
     fireEvent.drop(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
     expect(
       screen.queryByRole('heading', { name: 'New track' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Drop GPX here')).toBeVisible();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
 
     fireEvent.dragEnter(importZone, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
-    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
     fireEvent.drop(importZone, {
       dataTransfer: { types: ['Files'], files: [file] },
     });

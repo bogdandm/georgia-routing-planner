@@ -2,6 +2,7 @@ import type {
   GpxMetadataProjection,
   GpxValidationWarning,
   TrackCoordinate,
+  TrackPoint,
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
@@ -36,6 +37,7 @@ export interface LocalTrackContent {
   readonly trackId: string;
   readonly originalGpx: StoredGpxBlob;
   readonly segments: readonly (readonly TrackCoordinate[])[];
+  readonly trackPoints?: readonly (readonly TrackPoint[])[] | undefined;
 }
 
 /** The Blob operations retained GPX consumers require across browser storage realms. */

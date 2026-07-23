@@ -41,7 +41,7 @@ import {
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import { parseGpx, type ParsedGpx, type TrackPoint } from '@/domain/tracks/gpx';
+import type { ParsedGpx, TrackPoint } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   normalizeLocalTrackName,
@@ -58,6 +58,16 @@ import {
   type PoiCandidate,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
+import {
+  parseTrackFile,
+  trackSourceFormat,
+  type TrackSourceFormat,
+} from '@/domain/tracks/trackImport';
+import {
+  exportTrackAsGpx,
+  exportTrackAsKml,
+  safeTrackFilename,
+} from '@/domain/tracks/trackExport';
 import { requestMapFitBounds } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
 
@@ -67,6 +77,7 @@ interface PreviewTrack {
   readonly file: File;
   readonly parsed: ParsedGpx;
   readonly metrics: TrackMetrics;
+  readonly sourceFormat: TrackSourceFormat;
   readonly name: string;
   readonly namingStatus: 'loading' | 'ready' | 'unavailable';
   readonly generatedName?: string;
@@ -139,7 +150,7 @@ function initialTrackName(file: File, parsed: ParsedGpx): string {
   if (embeddedName !== undefined && embeddedName.trim().length > 0) {
     return embeddedName.trim();
   }
-  const filenameStem = file.name.replace(/\.gpx$/iu, '').trim();
+  const filenameStem = file.name.replace(/\.(gpx|fit|kml)$/iu, '').trim();
   return filenameStem.length > 0 ? filenameStem : 'New track';
 }
 
@@ -429,12 +440,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       };
       const selected = Array.from(files);
       if (selected.length !== 1) {
-        reportImportError('Choose exactly one GPX file.');
+        reportImportError('Choose exactly one GPX, FIT, or KML file.');
         return;
       }
       const file = selected[0];
-      if (!file?.name.toLocaleLowerCase('en').endsWith('.gpx')) {
-        reportImportError('Choose a file with the .gpx extension.');
+      const sourceFormat = file === undefined ? null : trackSourceFormat(file.name);
+      if (file === undefined || sourceFormat === null) {
+        reportImportError('Choose a file with a .gpx, .fit, or .kml extension.');
         return;
       }
       if (
@@ -447,7 +459,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setImportError(null);
       setError(null);
       try {
-        const parsed = parseGpx(await file.text());
+        const parsed = await parseTrackFile(file, sourceFormat);
         const metrics = calculateTrackMetrics(parsed.segments);
         const preview: PreviewTrack = {
           kind: 'preview',
@@ -455,6 +467,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           file,
           parsed,
           metrics,
+          sourceFormat,
           name: initialTrackName(file, parsed),
           namingStatus: 'loading',
         };
@@ -467,7 +480,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         reportImportError(
           importError instanceof Error
             ? importError.message
-            : 'The GPX file could not be imported.',
+            : 'The track file could not be imported.',
         );
       }
     },
@@ -484,8 +497,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ...normalizedName,
         savedAt: clock.now().toISOString(),
         sourceFilename: active.file.name,
-        sourceFormat: 'gpx',
-        description: '',
+        sourceFormat: active.sourceFormat,
+        description: active.parsed.metadata.selectedDescription ?? '',
         favorite: false,
         geometryKind: active.parsed.geometryKind,
         pointCount: active.parsed.pointCount,
@@ -510,6 +523,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         segments: active.parsed.segments.map((segment) =>
           segment.points.map((point) => point.coordinate),
         ),
+        trackPoints: active.parsed.segments.map((segment) => segment.points),
       };
       await database.saveLocalTrack(summary, content);
       await database.saveLatestOpenedTrackId(summary.id);
@@ -789,7 +803,7 @@ function TrackImportZone() {
       <Paper
         ref={zoneRef}
         component="section"
-        aria-label="Import GPX file"
+        aria-label="Import track file"
         variant="outlined"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
@@ -835,7 +849,7 @@ function TrackImportZone() {
             sx={{ fontSize: dragActive ? 36 : 24 }}
           />
           <Typography variant="subtitle2" sx={{ flex: dragActive ? 0 : 1 }}>
-            {dragActive ? 'Drop one GPX file to import' : 'Drop GPX here'}
+            Drop GPX, FIT, or KML here
           </Typography>
           {dragActive ? (
             <Typography variant="caption" color="text.secondary">
@@ -847,7 +861,7 @@ function TrackImportZone() {
               variant="outlined"
               onClick={() => inputRef.current?.click()}
             >
-              Browse GPX file
+              Browse track file
             </Button>
           )}
         </Stack>
@@ -855,7 +869,7 @@ function TrackImportZone() {
           ref={inputRef}
           hidden
           type="file"
-          accept=".gpx,application/gpx+xml"
+          accept=".gpx,.fit,.kml,application/gpx+xml,application/vnd.ant.fit,application/vnd.google-earth.kml+xml"
           onChange={(event) => {
             if (event.target.files !== null) void importFiles(event.target.files);
             event.target.value = '';
@@ -982,7 +996,7 @@ export function TracksPanel() {
           <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
             <Typography variant="body2" color="text.secondary">
               {summaries.length === 0
-                ? 'Import a GPX file to preview it, then save it in this browser.'
+                ? 'Import a GPX, FIT, or KML file to preview it, then save it in this browser.'
                 : 'No saved track matches this name.'}
             </Typography>
           </Paper>
@@ -1176,6 +1190,15 @@ function SavedTrackDescription() {
   );
 }
 
+function downloadText(filename: string, type: string, content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 interface TrackStatsProps {
   readonly metrics: TrackMetrics;
 }
@@ -1238,6 +1261,7 @@ interface TrackMetadataProps {
   readonly savedAt: string | undefined;
   readonly segmentCount: number;
   readonly sourceFilename: string;
+  readonly sourceFormat: TrackSourceFormat;
 }
 
 function TrackMetadata({
@@ -1245,12 +1269,15 @@ function TrackMetadata({
   savedAt,
   segmentCount,
   sourceFilename,
+  sourceFormat,
 }: TrackMetadataProps) {
   const pointLabel = `${pointCount.toLocaleString('en')} ${pointCount === 1 ? 'point' : 'points'}`;
   const segmentLabel = `${segmentCount.toLocaleString('en')} ${segmentCount === 1 ? 'segment' : 'segments'}`;
   return (
     <Stack spacing={0.5} sx={{ px: 1 }}>
-      <Typography variant="body2">{sourceFilename}</Typography>
+      <Typography variant="body2">
+        {sourceFilename} · {sourceFormat.toLocaleUpperCase('en')}
+      </Typography>
       <Typography variant="caption" color="text.secondary">
         {pointLabel} · {segmentLabel}
       </Typography>
@@ -1286,6 +1313,8 @@ export function TrackDetailsPane() {
       : active.parsed.segments.length;
   const sourceFilename =
     active.kind === 'saved' ? active.summary.sourceFilename : active.file.name;
+  const sourceFormat =
+    active.kind === 'saved' ? active.summary.sourceFormat : active.sourceFormat;
   const warnings =
     active.kind === 'saved' ? active.summary.warnings : active.parsed.warnings;
   return (
@@ -1408,6 +1437,32 @@ export function TrackDetailsPane() {
               </Button>
               <Button
                 size="small"
+                variant="outlined"
+                onClick={() => {
+                  downloadText(
+                    safeTrackFilename(active.summary.name, 'gpx'),
+                    'application/gpx+xml',
+                    exportTrackAsGpx(active.summary, active.content),
+                  );
+                }}
+              >
+                Download as GPX
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  downloadText(
+                    safeTrackFilename(active.summary.name, 'kml'),
+                    'application/vnd.google-earth.kml+xml',
+                    exportTrackAsKml(active.summary, active.content),
+                  );
+                }}
+              >
+                Download as KML
+              </Button>
+              <Button
+                size="small"
                 color="error"
                 startIcon={<DeleteOutlineOutlinedIcon />}
                 onClick={() => void deleteActive()}
@@ -1426,6 +1481,7 @@ export function TrackDetailsPane() {
             savedAt={savedAt}
             segmentCount={segmentCount}
             sourceFilename={sourceFilename}
+            sourceFormat={sourceFormat}
           />
           {active.kind === 'saved' ? (
             <SavedTrackDescription key={active.summary.id} />

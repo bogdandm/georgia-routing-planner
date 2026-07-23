@@ -24,6 +24,7 @@ import type {
   GpxLink,
   GpxMetadataProjection,
   GpxValidationWarning,
+  TrackPoint,
 } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
@@ -411,12 +412,33 @@ const localTrackSummarySchema = z
     return result;
   });
 
+const storedTrackPointSchema: z.ZodType<TrackPoint> = z
+  .object({
+    coordinate: coordinateSchema,
+    elevationMeters: z.number().optional(),
+    recordedAt: z.iso.datetime().optional(),
+  })
+  .strict()
+  .transform((value): TrackPoint => {
+    const point: {
+      coordinate: TrackPoint['coordinate'];
+      elevationMeters?: number;
+      recordedAt?: string;
+    } = { coordinate: value.coordinate };
+    if (value.elevationMeters !== undefined) {
+      point.elevationMeters = value.elevationMeters;
+    }
+    if (value.recordedAt !== undefined) point.recordedAt = value.recordedAt;
+    return point;
+  });
+
 const localTrackContentSchema: z.ZodType<LocalTrackContent> = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     trackId: z.string().min(1).max(200),
     originalGpx: z.custom<StoredGpxBlob>(isBlobValue),
     segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
+    trackPoints: z.array(z.array(storedTrackPointSchema).min(2)).max(512).optional(),
   })
   .strict();
 

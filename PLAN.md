@@ -335,6 +335,10 @@ unchanged.
 - New production concepts are limited to the derived elevation profile and climb result
   because the graph, recalculation, filtering, and climb details require durable,
   consistently interpreted results.
+- The official `@garmin/fitsdk` runtime dependency is necessary because FIT is a binary,
+  CRC-protected evolving format; its immediate consumer is the bounded FIT import
+  parser. KML and both export formats use browser XML/text APIs without another
+  dependency.
 
 ## Acceptance
 

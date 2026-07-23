@@ -159,7 +159,7 @@ classDiagram
   }
   class LocalTrackContentRecord {
     +string contentId
-    +Blob originalGpx
+    +Blob originalSource
     +GeoJSON normalizedGeometry
     +ElevationSample[] elevationProfile
   }
@@ -209,7 +209,7 @@ classDiagram
 | `TrackMetrics`            | Distance and optional ascent/descent/min/max elevation; every derived field is tied to its algorithm and elevation source version                                        |
 | `CuratedTrackRecord`      | Summary plus relative same-origin preview and GPX asset URLs and optional approved provenance; URLs never expose source paths                                            |
 | `LocalTrackRecord`        | Summary plus import time, content reference, and bounded validation warnings; `addedAt` equals the completed retention/import time                                       |
-| `LocalTrackContentRecord` | Original retained GPX blob, validated normalized geometry, and optional cached elevation profile; fetched separately from summaries                                      |
+| `LocalTrackContentRecord` | Original retained GPX, FIT, or KML blob, validated normalized geometry, and optional cached elevation profile; fetched separately from summaries                         |
 | `CuratedCategory`         | Read-only hierarchical category from GitHub. A track may appear in multiple curated categories through memberships                                                       |
 | `UserFolder`              | Browser-local hierarchical folder. Cycles are forbidden; sibling names need not be globally unique                                                                       |
 | `UserTrackPlacement`      | Exactly one personal placement per track, with optional folder ID for `Unfiled` and a stable fractional/manual sort rank                                                 |

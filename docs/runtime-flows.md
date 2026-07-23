@@ -510,12 +510,12 @@ shared track model; sensor, profile, health, and device fields are discarded. A 
 drag anywhere inside the application expands that target; a drop outside it is prevented
 from navigating the browser but does not import. Another import, selecting a saved
 track, or closing the preview first requires an explicit discard decision.
-File-selection and GPX-parse failures remain scoped to the import zone and clear after
-five seconds; storage and selected-track failures use the persistent panel error. A
-valid preview starts a cancellable optional English-name lookup without blocking editing
-or save. Start and end anchors use locality-level reverse geocoding. A dominant interior
-summit requests bounded named OSM features from the configured nearby endpoint and
-selects the closest returned coordinate independent of feature category; reverse
+File-selection and source-parse failures remain scoped to the import zone and clear
+after five seconds; storage and selected-track failures use the persistent panel error.
+A valid preview starts a cancellable optional English-name lookup without blocking
+editing or save. Start and end anchors use locality-level reverse geocoding. A dominant
+interior summit requests bounded named OSM features from the configured nearby endpoint
+and selects the closest returned coordinate independent of feature category; reverse
 geocoding remains the fallback when that request is empty or unavailable. Switching rail
 sections retains the preview. `beforeunload` is registered only while that preview
 remains unsaved and is removed after save or confirmed discard.
@@ -548,7 +548,9 @@ the last accepted elevation when a change is below the saved noise threshold, ne
 bridges independent segment gaps, and derives the profile, totals, gradients, and climbs
 from that one filtered result. Explicit relief recalculation samples the configured
 local elevation boundary point by point under an abort signal and replaces the derived
-point projection only after completion; the original imported blob remains unchanged.
+point projection only after complete coverage; cancellation and partial provider results
+retain the prior profile. The original imported blob remains unchanged and can be
+reparsed explicitly to restore source-file elevation.
 
 ## Teardown ownership
 

@@ -109,7 +109,9 @@ ascent/descent, and sustained climbs. The per-track noise threshold defaults to 
 and persists locally without removing geographic points. Climbs report length, gain,
 average gradient, and a Garmin-style category derived from documented length and grade
 inputs. Users can explicitly recalculate elevation from the configured relief provider,
-monitor progress, cancel it, and retain successful derived points locally.
+monitor progress, cancel it, and retain successful derived points locally. Partial
+relief results do not replace the saved profile, and a successful derived profile can be
+replaced with elevations reparsed from the unchanged original source file.
 
 At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
 persistent import region and **Back to tracks** restores the prior search/list state.
@@ -527,10 +529,9 @@ configuration must never contain secrets.
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, Create GPX
-editing/export, track elevation charts, saved-marker management, offline-region
-downloads, accounts, or cloud synchronization. Satellite provides live viewport search
-for L2A scenes with a scene-cloud control. Successful results are grouped by UTC
-acquisition day and show a thumbnail, local acquisition time, processing level, cloud,
-viewport coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
-true-color scene and its footprint; Layers can hide or restore the raster and related
-logical map groups.
+editing/export, saved-marker management, offline-region downloads, accounts, or cloud
+synchronization. Satellite provides live viewport search for L2A scenes with a
+scene-cloud control. Successful results are grouped by UTC acquisition day and show a
+thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
+sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
+its footprint; Layers can hide or restore the raster and related logical map groups.

@@ -185,13 +185,13 @@ export function WorkspaceRail({
       >
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
+        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
         <UnavailableWorkspaceTab
           icon={<PlaceOutlinedIcon />}
           label="Markers"
           reason="Saved markers are not available yet"
           value="markers"
         />
-        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
       </Tabs>
 
       <Tooltip title="Share map view" placement="right">

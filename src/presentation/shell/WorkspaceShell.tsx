@@ -17,6 +17,10 @@ import {
   workspaceTabFromHash,
 } from '@/presentation/shell/workspaceTabLocation';
 import { appColors } from '@/presentation/theme/appColors';
+import {
+  TrackDetailsPane,
+  TracksWorkspaceProvider,
+} from '@/presentation/tracks/TracksWorkspace';
 
 interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
@@ -26,7 +30,7 @@ function ControlledFailure(): never {
   throw new Error('Controlled Phase 0 component failure.');
 }
 
-export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
+function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
   const { database, logger, mapLayers, storageUsage } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
@@ -103,6 +107,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
 
   return (
     <Box
+      data-testid="workspace-shell"
       sx={{
         height: '100dvh',
         position: 'relative',
@@ -176,6 +181,7 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
           }}
         >
           <WorkspaceSidebar activeTab={activeTab} />
+          {activeTab === 'tracks' ? <TrackDetailsPane /> : null}
           <Box
             id="satellite-results-pane"
             sx={{
@@ -351,5 +357,13 @@ export function WorkspaceShell({ mapSurface = <MapWorkspace /> }: WorkspaceShell
         />
       ) : null}
     </Box>
+  );
+}
+
+export function WorkspaceShell(props: WorkspaceShellProps) {
+  return (
+    <TracksWorkspaceProvider>
+      <WorkspaceShellContent {...props} />
+    </TracksWorkspaceProvider>
   );
 }

@@ -8,3 +8,4 @@
 *.gif binary
 *.webp binary
 *.woff2 binary
+tests/fixtures/tracks/real-world/*.gpx -text -diff

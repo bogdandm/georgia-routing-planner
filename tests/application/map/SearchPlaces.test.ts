@@ -19,6 +19,36 @@ function createSearchPlaces(
 }
 
 describe('SearchPlaces', () => {
+  it('selects the nearest returned POI without restricting its category', async () => {
+    const search = vi.fn();
+    const fartherPeak = {
+      id: 'peak',
+      label: 'Chutkharo',
+      coordinate: { longitude: 43.169, latitude: 42.7205 },
+      category: 'natural:peak',
+      kind: 'mountain',
+      bounds: null,
+    } as const;
+    const nearbySaddle = {
+      id: 'saddle',
+      label: 'Kelida',
+      coordinate: { longitude: 43.1639, latitude: 42.7112 },
+      category: 'natural:saddle',
+      kind: 'mountain',
+      bounds: null,
+    } as const;
+    const nearby = vi.fn().mockResolvedValue([fartherPeak, nearbySaddle]);
+
+    await expect(
+      createSearchPlaces({ search, nearby }).nearest(
+        { longitude: 43.1634, latitude: 42.7116 },
+        new AbortController().signal,
+      ),
+    ).resolves.toBe(nearbySaddle);
+
+    expect(nearby).toHaveBeenCalledOnce();
+  });
+
   it('keeps expanding after a match and appends unique results from wider areas', async () => {
     const nearbyResult = {
       id: 'batumi-street',

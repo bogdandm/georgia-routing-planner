@@ -34,11 +34,10 @@ map navigation remains on the right, and the 2D/3D selector sits directly below 
 shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
 derived surface, border, status, and tag colors.
 
-The current shell exposes Satellite and Layers as interactive rail destinations. Tracks
-and Markers remain visible but disabled until those feature surfaces have working
-behavior; hovering either disabled destination explains which capability is not yet
-available. It has no full-width app bar, empty global elevation placeholder, or generic
-always-visible privacy notice.
+The current shell exposes Tracks, Satellite, and Layers as interactive rail
+destinations. Markers remains visible but disabled until that feature surface has
+working behavior. It has no full-width app bar, empty global elevation placeholder, or
+generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
@@ -66,9 +65,33 @@ elevation profile. The full original GPX is loaded only when requested. Import r
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
-The current implementation retains the Tracks structure for direct anchored URLs, but
-its rail action is disabled because it does not load a catalog, import GPX, manage
-folders, or open track details.
+The implemented local workflow imports one `.gpx` file from a contained drag-and-drop
+row or that row's browse button. A file drag anywhere inside the application expands the
+row as an opaque elevated overlay without moving the search and library below; only a
+drop inside that target imports the file. Import validates and previews the file's
+metadata and opens a fixed adjacent detail pane. The editable embedded or
+filename-derived name is never replaced automatically. File-selection and parsing errors
+appear inside the import zone and dismiss after five seconds; persistent track/storage
+errors remain in the panel. The stored source filename remains visible after rename, and
+structured validation warnings show their parser code, explanation, and available
+point/segment context. An optional English place candidate appears separately and
+requires an explicit apply action between the editable track-name field and the adjacent
+read-only **English place name** field. For a track with a dominant interior summit,
+that candidate uses the nearest named OSM feature across supported POI, natural, and
+place categories rather than a hard-coded feature type. Mountain passes gain a `Pass`
+suffix and named peaks or volcanoes gain an `Mt.` prefix when the source name does not
+already include one. Save retains the original file, independent line segments, and
+versioned metrics in this browser; unsaved previews activate the native leave-site
+guard. Saved track cards show icon-led recorded duration, distance, and elevation gain
+when available. The detail pane presents duration, distance, derived average speed,
+elevation gain, and elevation loss in a wrapping stats grid, with missing measurements
+omitted; source file, point, segment, and save metadata remain below it. Saved tracks
+are searchable by name and support reopen, close, rename, and confirmed deletion. A
+compact local-retention notice stays pinned to the Tracks panel bottom. Catalog,
+folders, tags, filters, batch import, whole-workspace dropping, and GPX creation remain
+unavailable. A newly imported or reopened track renders as bright-blue independent lines
+and fits its complete bounds with padding for the master/detail surfaces. Closing it
+removes the active geometry without deleting a saved record or moving the camera.
 
 ### Create GPX
 
@@ -78,7 +101,7 @@ waypoint names, notes, appearance, distance/elevation metrics, local draft savin
 GPX export. Its elevation chart uses the same calculation and provenance vocabulary as
 selected-track details.
 
-The current implementation exposes a disabled `Create GPX` action; waypoint editing,
+The current implementation does not expose a `Create GPX` action; waypoint editing,
 calculation, persistence, and export are unavailable.
 
 ### Satellite
@@ -219,29 +242,31 @@ and cross-feature actions are unavailable.
 
 ### Layers
 
-Layers groups durable controls under explicit source headings: Copernicus Sentinel-2,
-the configured terrain provider, and OpenStreetMap. The checkboxes cover Satellite
-imagery, Scene footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and
-Places and POIs, plus Natural features and Restricted areas. The single **Natural
-features** checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and
-their water labels. The terrain provider also owns the invalid-DEM repair switch and a
-compact contour-distance slider. The OpenStreetMap controls remain a single flat list
-with one shared opacity slider. While satellite imagery is visible, the slider scales
-every OpenStreetMap reference layer and the elevation isolines together while preserving
-their relative visual weights and individual visibility choices. It is disabled in
-vector-only mode. Every map data source added to the application must appear under its
-provider heading in Layers; each user-visible feature family from that source receives
-an explicit control unless it is part of the required base canvas. Each logical ID maps
-to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the
-UI boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
-retains the applied scene and does not remove its footprint, search results, or
-attribution contract. Relief and isoline visibility are independent of 3D terrain mode
-and satellite availability. Base land remains visible and cannot be disabled. Per-layer
-opacity, drag ordering, and custom layers are unavailable. Checkbox state, shared
-OpenStreetMap opacity, rendering mode, imagery stretch, and terrain-overlay preferences
-are stored locally and restored after refresh. Satellite scene metadata and assets are
-never persisted locally; imagery starts empty unless an explicit share URL requests a
-scene.
+Layers groups durable controls under explicit source headings: Local GPX, Copernicus
+Sentinel-2, the configured terrain provider, and OpenStreetMap. The checkboxes cover
+Imported tracks, Satellite imagery, Scene footprint, Relief shading, Elevation isolines,
+Hiking paths, Roads, and Places and POIs, plus Natural features and Restricted areas.
+The single **Natural features** checkbox controls vegetation, glaciers, wetlands,
+rivers, water bodies, and their water labels. The terrain provider also owns the
+invalid-DEM repair switch and a compact contour-distance slider. The OpenStreetMap
+controls remain a single flat list with one shared opacity slider. While satellite
+imagery is visible, the slider scales every OpenStreetMap reference layer and the
+elevation isolines together while preserving their relative visual weights and
+individual visibility choices. It is disabled in vector-only mode. Every map data source
+added to the application must appear under its provider heading in Layers; each
+user-visible feature family from that source receives an explicit control unless it is
+part of the required base canvas. Each logical ID maps to an allowlisted set of stable
+MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
+remain disabled until a scene is applied. Hiding imagery retains the applied scene and
+does not remove its footprint, search results, or attribution contract. Relief and
+isoline visibility are independent of 3D terrain mode and satellite availability. Base
+land remains visible and cannot be disabled. Per-layer opacity, drag ordering, and
+custom layers are unavailable. Checkbox state, shared OpenStreetMap opacity, the shared
+imported-track opacity, rendering mode, imagery stretch, and terrain-overlay preferences
+are stored locally and restored after refresh. Imported-track visibility and opacity
+affect the active preview and saved selection together; they do not create per-track
+presentation records. Satellite scene metadata and assets are never persisted locally;
+imagery starts empty unless an explicit share URL requests a scene.
 
 ## Persistent map controls
 
@@ -477,11 +502,11 @@ configuration must never contain secrets.
 
 ## Current capability boundary
 
-The application does not currently provide GPX catalog loading, GPX import, Create GPX
-editing/export, track elevation charts, saved-marker management, interactive layer
-management, offline-region downloads, accounts, or cloud synchronization. Satellite
-provides live viewport search for L2A scenes with a scene-cloud control. Successful
-results are grouped by UTC acquisition day and show a thumbnail, local acquisition time,
-processing level, cloud, viewport coverage, and sub-5-km edge warning. Selecting a card
-renders one georeferenced true-color scene and its footprint; Layers can hide or restore
-the raster and related logical map groups.
+The application does not currently provide GPX catalog loading, Create GPX
+editing/export, track elevation charts, saved-marker management, offline-region
+downloads, accounts, or cloud synchronization. Satellite provides live viewport search
+for L2A scenes with a scene-cloud control. Successful results are grouped by UTC
+acquisition day and show a thumbnail, local acquisition time, processing level, cloud,
+viewport coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
+true-color scene and its footprint; Layers can hide or restore the raster and related
+logical map groups.

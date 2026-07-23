@@ -20,6 +20,7 @@ import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
+  mapInteractionStore,
   resetMapInteractionStore,
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
@@ -113,6 +114,22 @@ function syntheticSatelliteScene(id: string, acquiredAt: string): SatelliteScene
     visualAsset: { kind: 'unavailable' },
     attribution: 'Synthetic test data',
   };
+}
+
+function gpxFile(name = 'Fixture track.gpx'): File {
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Fixture trail</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele></trkpt></trkseg></trk></gpx>`;
+  const file = new File([xml], name, { type: 'application/gpx+xml' });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
+}
+
+function gpxFileWithCompanionRoute(): File {
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"><time>2026-07-13T08:00:00Z</time></trkpt><trkpt lat="42.01" lon="44.01"><time>2026-07-13T08:02:00Z</time></trkpt></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
+  const file = new File([xml], 'Track and route.gpx', {
+    type: 'application/gpx+xml',
+  });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
 }
 
 describe('WorkspaceShell', () => {
@@ -252,30 +269,25 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Layers', 'Markers', 'Tracks']);
-    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+    ).toEqual(['Satellite', 'Layers', 'Tracks', 'Markers']);
+    expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
-      'true',
     );
     expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
       'aria-disabled',
       'true',
-    );
-    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
-      'aria-description',
-      'Track tools are not available yet',
     );
     expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
       'aria-description',
       'Saved markers are not available yet',
     );
-    await user.hover(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Browse GPX file' })).toBeEnabled();
+    expect(screen.getByText('Drop GPX here')).toBeVisible();
     expect(
-      await screen.findByRole('tooltip', {
-        name: 'Track tools are not available yet',
-      }),
-    ).toBeVisible();
-    await user.unhover(screen.getByRole('tab', { name: 'Tracks' }));
+      screen.queryByRole('button', { name: 'Create GPX' }),
+    ).not.toBeInTheDocument();
     await user.hover(screen.getByRole('tab', { name: 'Markers' }));
     expect(
       await screen.findByRole('tooltip', {
@@ -290,7 +302,7 @@ describe('WorkspaceShell', () => {
       within(screen.getByRole('complementary', { name: 'Layers tools' })).getAllByRole(
         'separator',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       screen.getByRole('heading', {
         name: 'Copernicus Sentinel-2 via Earth Search',
@@ -347,6 +359,187 @@ describe('WorkspaceShell', () => {
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
   }, 10_000);
+
+  it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
+      schemaVersion: 1,
+      trackId: 'local:test-1',
+      originalGpx: gpxFile(),
+      segments: [
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
+      ],
+    });
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile());
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    const trackNameInput = screen.getByRole('textbox', { name: 'Track name' });
+    expect(trackNameInput).toHaveValue('Fixture trail');
+    expect(screen.getByText('Fixture track.gpx')).toBeVisible();
+    expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
+    const details = screen.getByRole('complementary', { name: 'Track details' });
+    const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
+    expect(elevationGain).toBeVisible();
+    const elevationGainIcon = elevationGain.querySelector('svg');
+    expect(elevationGainIcon).not.toBeNull();
+    if (elevationGainIcon !== null) {
+      await user.hover(elevationGainIcon);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Elevation gain');
+      await user.unhover(elevationGainIcon);
+    }
+    expect(
+      within(details).queryByLabelText(/^Average speed:/u),
+    ).not.toBeInTheDocument();
+    expect(within(details).getByText('2 points · 1 segment')).toBeVisible();
+    const discard = screen.getByRole('button', { name: 'Discard' });
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(
+      discard.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
+      bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
+      padding: { top: 56, right: 56, bottom: 56, left: 840 },
+    });
+    const leaveEvent = new Event('beforeunload', { cancelable: true });
+    expect(window.dispatchEvent(leaveEvent)).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(screen.getByText('1 saved track')).toBeVisible();
+    });
+    expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByLabelText(
+        'Elevation gain: 120 m',
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
+      true,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
+    expect(
+      screen.queryByRole('heading', { name: 'Selected track' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Fixture trail/ }));
+    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Renamed trail');
+    await user.click(screen.getByRole('button', { name: 'Rename' }));
+    expect(await screen.findByText('Renamed trail')).toBeVisible();
+
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => {
+      expect(screen.getByText('0 saved tracks')).toBeVisible();
+    });
+  }, 10_000);
+
+  it('explains GPX validation warnings with their parser code and message', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFileWithCompanionRoute());
+
+    expect(await screen.findByText('track-preferred-over-route')).toBeVisible();
+    expect(
+      screen.getByText(
+        /Detailed track geometry was used instead of companion route geometry\./u,
+      ),
+    ).toBeVisible();
+    expect(screen.getByText('Track and route.gpx')).toBeVisible();
+    expect(screen.getByLabelText(/^Average speed:/u)).toBeVisible();
+  }, 10_000);
+
+  it('keeps import errors inside the drop zone and dismisses them', () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = renderWorkspaceShell();
+      fireEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
+      const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+      expect(input).not.toBeNull();
+      if (input === null) return;
+
+      fireEvent.change(input, {
+        target: { files: [new File(['not gpx'], 'notes.txt')] },
+      });
+
+      const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+      expect(within(importZone).getByRole('alert')).toHaveTextContent(
+        'Choose a file with the .gpx extension.',
+      );
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+      expect(within(importZone).queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts a GPX drop only inside the import zone and exposes discard confirmation', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { container } = renderWorkspaceShell();
+    const workspace = container.firstElementChild;
+    expect(workspace).not.toBeNull();
+    if (workspace === null) return;
+    const file = gpxFile('Dropped.gpx');
+
+    fireEvent.drop(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+    fireEvent.dragEnter(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    fireEvent.drop(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Drop GPX here')).toBeVisible();
+
+    fireEvent.dragEnter(importZone, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    fireEvent.drop(importZone, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close track' }));
+    expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
+  });
 
   it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {
     const user = userEvent.setup();
@@ -503,6 +696,27 @@ describe('WorkspaceShell', () => {
     });
 
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
+  });
+
+  it('controls all imported tracks through one Layers visibility and opacity pair', async () => {
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setVisibility = vi
+      .spyOn(mapLayers, 'setLayerVisibility')
+      .mockReturnValue({ status: 'success' });
+    const setOpacity = vi
+      .spyOn(mapLayers, 'setImportedTrackOpacity')
+      .mockReturnValue({ status: 'success' });
+    renderWorkspaceShell();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Imported tracks' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Track opacity' }), {
+      target: { value: '35' },
+    });
+
+    expect(setVisibility).toHaveBeenLastCalledWith('imported-tracks', false);
+    expect(setOpacity).toHaveBeenLastCalledWith(0.35);
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {

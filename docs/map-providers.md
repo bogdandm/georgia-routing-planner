@@ -125,6 +125,32 @@ configured maximum, validates JSON with Zod, and exposes typed timeout, rate-lim
 invalid-response, provider, and network failures. Queries and result metadata are not
 written to diagnostics. UI attribution links to the OpenStreetMap copyright page.
 
+An explicitly imported local track may also request locality-level reverse lookups for
+representative coordinates. If elevation coverage identifies a dominant interior summit,
+the application submits one bounded Overpass query around that coordinate. The query
+requests up to 50 named nodes, ways, or relations within two kilometres whose tags
+belong to broad POI, tourism, natural, mountain-pass, historic, man-made, place,
+leisure, shop, or waterway families. Provider coordinates are validated, out-of-radius
+relation centres are discarded, and the nearest result wins by geodesic distance with
+stable OSM identity as a tie-break. This avoids both map-viewport dependence and English
+keyword searches such as `pass`; it permits a saddle, peak, hut, lake, settlement, or
+another supported named feature to identify the summit area. An empty or failed nearby
+lookup falls back to reverse geocoding.
+
+The configured Nominatim and Overpass requests share pacing, bounded cache, timeout,
+cancellation, validation, and safe failure mapping. The editable source name remains
+authoritative; a returned short English candidate changes it only after the user chooses
+`Apply generated name`. A lookup failure never blocks preview or save, and coordinates
+or returned labels are not added to diagnostics.
+
+A direct request to the configured Overpass endpoint on 2026-07-22 UTC returned HTTP
+200, `Access-Control-Allow-Origin: *`, and the expected validated tags for the Kelida
+node, including `name:en=Kelida`, `natural=saddle`, and `mountain_pass=yes`. This
+confirms anonymous browser CORS for the same static-client request model used by GitHub
+Pages. The
+[Overpass API documentation](https://wiki.openstreetmap.org/wiki/Overpass_API) describes
+its read-only OSM query interface.
+
 ## Terrain: AWS Open Data Mapzen Terrain Tiles
 
 The terrain default is

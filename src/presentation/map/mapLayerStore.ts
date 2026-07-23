@@ -61,6 +61,7 @@ interface MapLayerState {
   readonly terrainComputeQueue: TerrainComputeQueueState;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly openStreetMapOpacity: number;
+  readonly importedTrackOpacity: number;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly satelliteRenderingTuning: SatelliteRenderingTuning;
   readonly selectedScene: SatelliteScene | null;
@@ -88,8 +89,10 @@ const initialMapLayerState: MapLayerState = {
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,
+    'imported-tracks': true,
   },
   openStreetMapOpacity: 1,
+  importedTrackOpacity: 1,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   satelliteRenderingTuning: defaultSatelliteRenderingTuning,
   selectedScene: null,

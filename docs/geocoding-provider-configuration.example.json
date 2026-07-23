@@ -2,6 +2,8 @@
   "schemaVersion": 1,
   "id": "osm-nominatim-public",
   "searchUrl": "https://nominatim.openstreetmap.org/search",
+  "reverseUrl": "https://nominatim.openstreetmap.org/reverse",
+  "nearbyUrl": "https://overpass-api.de/api/interpreter",
   "attribution": "Search data © OpenStreetMap contributors",
   "minimumRequestIntervalMs": 1000,
   "requestTimeoutMs": 12000,

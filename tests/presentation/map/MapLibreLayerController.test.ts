@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
+  importedTrackLayerIds,
   mapLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
@@ -116,6 +117,23 @@ class FakeLayerMap {
   }
 
   public addSource(id: string, source: unknown): void {
+    if (
+      typeof source === 'object' &&
+      source !== null &&
+      'type' in source &&
+      source.type === 'geojson'
+    ) {
+      this.sources.set(id, {
+        ...source,
+        setData: (data: unknown) => {
+          const current = this.sources.get(id);
+          if (typeof current === 'object' && current !== null) {
+            this.sources.set(id, { ...current, data });
+          }
+        },
+      });
+      return;
+    }
     if (
       typeof source === 'object' &&
       source !== null &&
@@ -402,6 +420,61 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
+  });
+
+  it('renders independent imported-track lines with shared visibility and opacity', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(
+      controller.setImportedTrackGeometry([
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
+        [
+          [45, 43],
+          [45.1, 43.1],
+        ],
+      ]),
+    ).toEqual({ status: 'success' });
+
+    const source = map.sources.get('imported-track');
+    expect(source).toHaveProperty('data.geometry.coordinates', [
+      [
+        [44, 42],
+        [44.1, 42.1],
+      ],
+      [
+        [45, 43],
+        [45.1, 43.1],
+      ],
+    ]);
+    expect([...map.layers.keys()].indexOf(importedTrackLayerIds.line)).toBeGreaterThan(
+      [...map.layers.keys()].indexOf(mapLayerIds.placeLabels),
+    );
+    expect(controller.setImportedTrackOpacity(0.45)).toEqual({ status: 'success' });
+    expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
+      0.45,
+    );
+    expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.line)).toBe('none');
+    await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: { 'imported-tracks': false },
+      importedTrackOpacity: 0.45,
+    });
+
+    controller.clearImportedTrackGeometry();
+    expect(map.sources.get('imported-track')).toHaveProperty(
+      'data.geometry.coordinates',
+      [],
+    );
   });
 
   it('applies one opacity preference to every map reference layer over satellite imagery', async () => {
@@ -1214,8 +1287,10 @@ describe('MapLibreLayerController', () => {
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,
+        'imported-tracks': false,
       },
       openStreetMapOpacity: 0.55,
+      importedTrackOpacity: 0.6,
       satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
@@ -1235,7 +1310,12 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({
-      visibility: { 'satellite-imagery': false, roads: false },
+      visibility: {
+        'satellite-imagery': false,
+        roads: false,
+        'imported-tracks': false,
+      },
+      importedTrackOpacity: 0.6,
       appliedImagery: { status: 'empty' },
     });
     expect(controller.getRenderingTuning()).toEqual({
@@ -1257,6 +1337,7 @@ describe('MapLibreLayerController', () => {
     await services.database.saveMapLayerPreferences({
       visibility: mapLayerStore.getState().visibility,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
+      importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       satelliteRenderingMode: 'auto',
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),

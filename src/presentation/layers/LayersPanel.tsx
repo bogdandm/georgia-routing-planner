@@ -98,6 +98,15 @@ const terrainControls = [
   },
 ] as const satisfies readonly LayerControl[];
 
+const importedTrackControls = [
+  {
+    id: 'imported-tracks',
+    label: 'Imported tracks',
+    description: 'The active local GPX preview or saved track.',
+    requiresScene: false,
+  },
+] as const satisfies readonly LayerControl[];
+
 export function LayersPanel() {
   const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
   const state = useStore(mapLayerStore);
@@ -107,6 +116,12 @@ export function LayersPanel() {
   const provider =
     mapProviderConfiguration.status === 'valid' ? mapProviderConfiguration.value : null;
   const groups = [
+    {
+      id: 'imported-tracks',
+      title: 'Local GPX',
+      description: 'Tracks retained only in this browser.',
+      controls: importedTrackControls,
+    },
     {
       id: 'sentinel',
       title: `Copernicus Sentinel-2 via ${provider?.satellite.label ?? 'satellite catalog'}`,
@@ -145,6 +160,10 @@ export function LayersPanel() {
 
   const changeOpenStreetMapOpacity = (_event: Event, value: number | number[]) => {
     if (typeof value === 'number') mapLayers?.setOpenStreetMapOpacity(value / 100);
+  };
+
+  const changeImportedTrackOpacity = (_event: Event, value: number | number[]) => {
+    if (typeof value === 'number') mapLayers?.setImportedTrackOpacity(value / 100);
   };
 
   const changeTerrainOverlayPreferences = (value: TerrainOverlayPreferences) => {
@@ -225,6 +244,36 @@ export function LayersPanel() {
                     sx={{ minWidth: 4, pl: 0.5, textAlign: 'right' }}
                   >
                     {Math.round(state.openStreetMapOpacity * 100)}%
+                  </Typography>
+                </Stack>
+              ) : null}
+              {group.id === 'imported-tracks' ? (
+                <Stack
+                  direction="row"
+                  spacing={1.25}
+                  sx={{ mt: 1, px: 0.25, alignItems: 'center' }}
+                >
+                  <Typography id="imported-tracks-opacity-label" variant="body2">
+                    Track opacity
+                  </Typography>
+                  <Slider
+                    aria-labelledby="imported-tracks-opacity-label"
+                    disabled={mapLayers === null}
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round(state.importedTrackOpacity * 100)}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={(value) => `${String(value)}%`}
+                    onChange={changeImportedTrackOpacity}
+                    sx={{ flex: 1, mx: 0.5 }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
+                  >
+                    {Math.round(state.importedTrackOpacity * 100)}%
                   </Typography>
                 </Stack>
               ) : null}

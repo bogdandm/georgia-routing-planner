@@ -87,8 +87,10 @@ describe('AppDatabase', () => {
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,
+        'imported-tracks': false,
       },
       openStreetMapOpacity: 0.65,
+      importedTrackOpacity: 0.7,
       satelliteRenderingMode: 'server',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
@@ -125,7 +127,9 @@ describe('AppDatabase', () => {
         'elevation-isolines': true,
         'natural-features': true,
         'restricted-areas': true,
+        'imported-tracks': true,
       },
+      importedTrackOpacity: 1,
       satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
       terrainOverlays: {

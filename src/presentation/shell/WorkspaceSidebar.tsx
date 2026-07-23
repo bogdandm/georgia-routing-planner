@@ -1,23 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
-import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
-import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
-import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
-import SearchIcon from '@mui/icons-material/Search';
-import SortOutlinedIcon from '@mui/icons-material/SortOutlined';
-import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
-import {
-  Box,
-  Button,
-  Divider,
-  IconButton,
-  InputAdornment,
-  Paper,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -26,6 +9,7 @@ import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrow
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
+import { TracksPanel } from '@/presentation/tracks/TracksWorkspace';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
@@ -56,71 +40,6 @@ function EmptyState({ description, icon, title }: EmptyStateProps) {
   );
 }
 
-function TracksContent() {
-  return (
-    <Stack spacing={2} sx={{ p: 2 }}>
-      <Stack direction="row" spacing={1}>
-        <TextField
-          fullWidth
-          disabled
-          size="small"
-          aria-label="Search tracks"
-          placeholder="Search tracks"
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
-        <Tooltip title="Track filters arrive with the catalog">
-          <span>
-            <IconButton disabled size="small" aria-label="Filter tracks">
-              <FilterAltOutlinedIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Track sorting arrives with the catalog">
-          <span>
-            <IconButton disabled size="small" aria-label="Sort tracks">
-              <SortOutlinedIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Stack>
-
-      <Stack direction="row" sx={{ alignItems: 'center' }}>
-        <Typography component="h3" variant="subtitle2" sx={{ flex: 1 }}>
-          Folders
-        </Typography>
-        <Button disabled size="small" startIcon={<AddIcon />}>
-          New
-        </Button>
-      </Stack>
-      <Paper variant="outlined" sx={{ bgcolor: appColors.surface.subtle }}>
-        <EmptyState
-          icon={<FolderOutlinedIcon />}
-          title="No track folders yet"
-          description="Catalog and personal folder management arrive in a later phase."
-        />
-      </Paper>
-
-      <Divider />
-      <Typography component="h3" variant="subtitle2">
-        Track library
-      </Typography>
-      <EmptyState
-        icon={<RouteOutlinedIcon fontSize="large" />}
-        title="No tracks loaded"
-        description="The searchable hiking catalog and GPX import workflow are not implemented yet."
-      />
-    </Stack>
-  );
-}
-
 function MarkersContent() {
   return (
     <Box sx={{ p: 2 }}>
@@ -144,22 +63,7 @@ function disabledAction(title: string, child: ReactNode) {
 const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   tracks: {
     title: 'Tracks',
-    actions: (
-      <Stack direction="row" spacing={1}>
-        {disabledAction(
-          'GPX import arrives in a later phase',
-          <IconButton disabled size="small" aria-label="Import GPX">
-            <UploadFileOutlinedIcon />
-          </IconButton>,
-        )}
-        {disabledAction(
-          'Manual planning starts here in a later phase',
-          <Button disabled size="small" variant="contained" startIcon={<AddIcon />}>
-            Create GPX
-          </Button>,
-        )}
-      </Stack>
-    ),
+    actions: null,
   },
   satellite: {
     title: 'Satellite imagery',
@@ -237,9 +141,21 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         </Box>
         {definition.actions}
       </Stack>
-      <Box sx={{ minHeight: 0, flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
-        <Box sx={{ display: activeTab === 'tracks' ? 'block' : 'none' }}>
-          <TracksContent />
+      <Box
+        sx={{
+          minHeight: 0,
+          flex: 1,
+          overflowX: 'hidden',
+          overflowY: activeTab === 'tracks' ? 'hidden' : 'auto',
+        }}
+      >
+        <Box
+          sx={{
+            display: activeTab === 'tracks' ? 'block' : 'none',
+            height: '100%',
+          }}
+        >
+          <TracksPanel />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
           <SatelliteBrowser

@@ -1,6 +1,7 @@
 import type {
   MapCamera,
   MapDebugOptions,
+  MapFitPadding,
   MapDiagnosticsSnapshot,
   MapPointInspection,
   MapViewportBounds,
@@ -29,7 +30,7 @@ export interface MapFacade {
   }): void;
 
   /** Fits a serializable geographic area without exposing native MapLibre bounds. */
-  fitBounds(bounds: MapViewportBounds, maxZoom: number): void;
+  fitBounds(bounds: MapViewportBounds, maxZoom: number, padding?: MapFitPadding): void;
 
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;

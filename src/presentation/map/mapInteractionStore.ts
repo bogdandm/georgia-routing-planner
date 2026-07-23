@@ -1,6 +1,10 @@
 import { createStore } from 'zustand/vanilla';
 
-import type { MapCoordinate, MapViewportBounds } from '@/presentation/map/mapTypes';
+import type {
+  MapCoordinate,
+  MapFitPadding,
+  MapViewportBounds,
+} from '@/presentation/map/mapTypes';
 
 interface MapNavigationTarget extends MapCoordinate {
   readonly zoom?: number;
@@ -15,6 +19,7 @@ interface MapFitBoundsCommand {
   readonly id: number;
   readonly bounds: MapViewportBounds;
   readonly maxZoom: number;
+  readonly padding?: MapFitPadding;
 }
 
 interface SatelliteSearchRequest {
@@ -45,10 +50,21 @@ export function requestMapNavigation(target: MapNavigationTarget): void {
   });
 }
 
-export function requestMapFitBounds(bounds: MapViewportBounds, maxZoom: number): void {
+export function requestMapFitBounds(
+  bounds: MapViewportBounds,
+  maxZoom: number,
+  padding?: MapFitPadding,
+): void {
   nextCommandId += 1;
+  const command: {
+    id: number;
+    bounds: MapViewportBounds;
+    maxZoom: number;
+    padding?: MapFitPadding;
+  } = { id: nextCommandId, bounds: { ...bounds }, maxZoom };
+  if (padding !== undefined) command.padding = { ...padding };
   mapInteractionStore.setState({
-    fitBoundsCommand: { id: nextCommandId, bounds: { ...bounds }, maxZoom },
+    fitBoundsCommand: command,
   });
 }
 

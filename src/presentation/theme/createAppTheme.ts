@@ -58,7 +58,29 @@ export function createAppTheme() {
       },
       MuiButton: {
         styleOverrides: {
-          root: { borderRadius: 8, minHeight: 36 },
+          root: {
+            borderRadius: 8,
+            minHeight: 36,
+            transition:
+              'background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease, filter 120ms ease',
+          },
+          text: {
+            '&:hover': {
+              backgroundColor: 'color-mix(in srgb, currentColor 14%, transparent)',
+            },
+          },
+          outlined: {
+            '&:hover': {
+              borderColor: appColors.border.strong,
+              backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)',
+            },
+          },
+          contained: {
+            '&:hover': {
+              filter: 'brightness(0.88)',
+              boxShadow: '0 4px 10px rgba(2, 48, 71, 0.28)',
+            },
+          },
         },
       },
       MuiIconButton: {

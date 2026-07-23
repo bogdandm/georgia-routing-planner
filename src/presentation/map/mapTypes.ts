@@ -16,6 +16,13 @@ export interface MapViewportBounds {
   readonly north: number;
 }
 
+export interface MapFitPadding {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
 export interface MapViewportSnapshot {
   readonly bounds: MapViewportBounds;
   readonly center: MapCoordinate;

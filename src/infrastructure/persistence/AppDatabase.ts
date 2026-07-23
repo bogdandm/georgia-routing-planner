@@ -3,6 +3,10 @@ import { z } from 'zod';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import {
+  LocalTrackStorageError,
+  type LocalTrackRepository,
+} from '@/application/ports/LocalTrackRepository';
+import {
   normalizeMapCamera,
   type MapCamera,
   type MapCameraRepository,
@@ -16,6 +20,19 @@ import {
   defaultSatelliteRenderingTuning,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
+import type {
+  GpxLink,
+  GpxMetadataProjection,
+  GpxValidationWarning,
+} from '@/domain/tracks/gpx';
+import {
+  LOCAL_TRACK_SCHEMA_VERSION,
+  normalizeLocalTrackName,
+  type LocalTrackContent,
+  type LocalTrackSummary,
+  type StoredGpxBlob,
+} from '@/domain/tracks/localTrack';
+import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
 interface SettingRecord {
   readonly key: string;
@@ -86,9 +103,11 @@ const mapLayerPreferencesSchema = z
         'hiking-paths': z.boolean(),
         roads: z.boolean(),
         'places-and-pois': z.boolean(),
+        'imported-tracks': z.boolean().default(true),
       })
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
+    importedTrackOpacity: z.number().min(0).max(1).default(1),
     satelliteRenderingMode: z
       .enum(['auto', 'server', 'direct'])
       .default(defaultSatelliteRenderingMode),
@@ -139,20 +158,297 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'hiking-paths': true,
     roads: true,
     'places-and-pois': true,
+    'imported-tracks': true,
   },
   openStreetMapOpacity: 1,
+  importedTrackOpacity: 1,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
 };
 
+const coordinateSchema = z.tuple([
+  z.number().min(-180).max(180),
+  z.number().min(-90).max(90),
+]);
+
+type PoiCandidateBuilder = {
+  -readonly [Key in keyof PoiCandidate]: PoiCandidate[Key];
+};
+
+const poiCandidateSchema = z
+  .object({
+    label: z.string().trim().min(1).max(2_000),
+    kind: z.string().trim().min(1).max(200),
+    matchedCoordinate: coordinateSchema,
+    distanceMeters: z.number().nonnegative().optional(),
+    lookedUpAt: z.iso.datetime(),
+  })
+  .strict()
+  .transform((value): PoiCandidate => {
+    const result: PoiCandidateBuilder = {
+      label: value.label,
+      kind: value.kind,
+      matchedCoordinate: value.matchedCoordinate,
+      lookedUpAt: value.lookedUpAt,
+    };
+    if (value.distanceMeters !== undefined) {
+      result.distanceMeters = value.distanceMeters;
+    }
+    return result;
+  });
+
+type PersistedTrackMetricsBuilder = {
+  -readonly [Key in keyof TrackMetrics]: TrackMetrics[Key];
+};
+
+const trackMetricsSchema = z
+  .object({
+    distanceMeters: z.number().nonnegative(),
+    distanceAlgorithmVersion: z.literal(1),
+    startCoordinate: coordinateSchema,
+    endCoordinate: coordinateSchema,
+    bounds: z
+      .object({
+        west: z.number().min(-180).max(180),
+        south: z.number().min(-90).max(90),
+        east: z.number().min(-180).max(180),
+        north: z.number().min(-90).max(90),
+        crossesAntimeridian: z.boolean(),
+      })
+      .strict(),
+    center: coordinateSchema,
+    recordedStartAt: z.iso.datetime().optional(),
+    recordedEndAt: z.iso.datetime().optional(),
+    elapsedSeconds: z.number().nonnegative().optional(),
+    ascentMeters: z.number().nonnegative().optional(),
+    descentMeters: z.number().nonnegative().optional(),
+    minimumElevationMeters: z.number().optional(),
+    maximumElevationMeters: z.number().optional(),
+    elevationSource: z.literal('gpx').optional(),
+    elevationAlgorithmVersion: z.literal(1).optional(),
+  })
+  .strict()
+  .transform((value): TrackMetrics => {
+    const result: PersistedTrackMetricsBuilder = {
+      distanceMeters: value.distanceMeters,
+      distanceAlgorithmVersion: value.distanceAlgorithmVersion,
+      startCoordinate: value.startCoordinate,
+      endCoordinate: value.endCoordinate,
+      bounds: value.bounds,
+      center: value.center,
+    };
+    if (value.recordedStartAt !== undefined) {
+      result.recordedStartAt = value.recordedStartAt;
+    }
+    if (value.recordedEndAt !== undefined) result.recordedEndAt = value.recordedEndAt;
+    if (value.elapsedSeconds !== undefined)
+      result.elapsedSeconds = value.elapsedSeconds;
+    if (value.ascentMeters !== undefined) result.ascentMeters = value.ascentMeters;
+    if (value.descentMeters !== undefined) result.descentMeters = value.descentMeters;
+    if (value.minimumElevationMeters !== undefined) {
+      result.minimumElevationMeters = value.minimumElevationMeters;
+    }
+    if (value.maximumElevationMeters !== undefined) {
+      result.maximumElevationMeters = value.maximumElevationMeters;
+    }
+    if (value.elevationSource !== undefined) {
+      result.elevationSource = value.elevationSource;
+    }
+    if (value.elevationAlgorithmVersion !== undefined) {
+      result.elevationAlgorithmVersion = value.elevationAlgorithmVersion;
+    }
+    return result;
+  });
+
+type GpxWarningBuilder = {
+  -readonly [Key in keyof GpxValidationWarning]: GpxValidationWarning[Key];
+};
+
+const warningSchema = z
+  .object({
+    code: z.enum([
+      'invalid-point',
+      'short-segment',
+      'track-preferred-over-route',
+      'invalid-time',
+      'warning-limit-reached',
+    ]),
+    message: z.string().min(1).max(500),
+    segmentIndex: z.number().int().nonnegative().optional(),
+    pointIndex: z.number().int().nonnegative().optional(),
+  })
+  .strict()
+  .transform((value): GpxValidationWarning => {
+    const result: GpxWarningBuilder = {
+      code: value.code,
+      message: value.message,
+    };
+    if (value.segmentIndex !== undefined) result.segmentIndex = value.segmentIndex;
+    if (value.pointIndex !== undefined) result.pointIndex = value.pointIndex;
+    return result;
+  });
+
+const linkSchema = z
+  .object({ href: z.url(), text: z.string().max(2_000).optional() })
+  .strict()
+  .transform((value): GpxLink => {
+    const result: { href: string; text?: string } = { href: value.href };
+    if (value.text !== undefined) result.text = value.text;
+    return result;
+  });
+
+type GpxMetadataRecordBuilder = {
+  -readonly [Key in keyof GpxMetadataProjection]: GpxMetadataProjection[Key];
+};
+
+const metadataSchema = z
+  .object({
+    version: z.enum(['1.0', '1.1']),
+    creator: z.string().max(2_000).optional(),
+    name: z.string().max(2_000).optional(),
+    description: z.string().max(2_000).optional(),
+    time: z.iso.datetime().optional(),
+    keywords: z.string().max(2_000).optional(),
+    authorName: z.string().max(2_000).optional(),
+    copyrightLabel: z.string().max(2_000).optional(),
+    copyrightYear: z.number().int().optional(),
+    links: z.array(linkSchema).max(10),
+    selectedName: z.string().max(2_000).optional(),
+    selectedDescription: z.string().max(2_000).optional(),
+    selectedComment: z.string().max(2_000).optional(),
+    selectedSource: z.string().max(2_000).optional(),
+    selectedType: z.string().max(2_000).optional(),
+    selectedNumber: z.number().optional(),
+  })
+  .strict()
+  .transform((value): GpxMetadataProjection => {
+    const result: GpxMetadataRecordBuilder = {
+      version: value.version,
+      links: value.links,
+    };
+    if (value.creator !== undefined) result.creator = value.creator;
+    if (value.name !== undefined) result.name = value.name;
+    if (value.description !== undefined) result.description = value.description;
+    if (value.time !== undefined) result.time = value.time;
+    if (value.keywords !== undefined) result.keywords = value.keywords;
+    if (value.authorName !== undefined) result.authorName = value.authorName;
+    if (value.copyrightLabel !== undefined) {
+      result.copyrightLabel = value.copyrightLabel;
+    }
+    if (value.copyrightYear !== undefined) result.copyrightYear = value.copyrightYear;
+    if (value.selectedName !== undefined) result.selectedName = value.selectedName;
+    if (value.selectedDescription !== undefined) {
+      result.selectedDescription = value.selectedDescription;
+    }
+    if (value.selectedComment !== undefined) {
+      result.selectedComment = value.selectedComment;
+    }
+    if (value.selectedSource !== undefined)
+      result.selectedSource = value.selectedSource;
+    if (value.selectedType !== undefined) result.selectedType = value.selectedType;
+    if (value.selectedNumber !== undefined)
+      result.selectedNumber = value.selectedNumber;
+    return result;
+  });
+
+type LocalTrackSummaryBuilder = {
+  -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
+};
+
+const localTrackSummarySchema = z
+  .object({
+    schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
+    id: z.string().min(1).max(200),
+    name: z.string().trim().min(1).max(200),
+    normalizedName: z.string().min(1).max(200),
+    savedAt: z.iso.datetime(),
+    sourceFilename: z.string().min(1).max(500),
+    geometryKind: z.enum(['track', 'route']),
+    pointCount: z.number().int().min(2).max(100_000),
+    segmentCount: z.number().int().min(1).max(512),
+    metrics: trackMetricsSchema,
+    metadata: metadataSchema,
+    warnings: z.array(warningSchema).max(50),
+    generatedName: z.string().trim().min(1).max(200).optional(),
+    middleAnchorKind: z.enum(['distance-midpoint', 'dominant-summit']).optional(),
+    startPoi: poiCandidateSchema.optional(),
+    middlePoi: poiCandidateSchema.optional(),
+    endPoi: poiCandidateSchema.optional(),
+    fallbackPoi: poiCandidateSchema.optional(),
+  })
+  .strict()
+  .transform((value): LocalTrackSummary => {
+    const result: LocalTrackSummaryBuilder = {
+      schemaVersion: value.schemaVersion,
+      id: value.id,
+      name: value.name,
+      normalizedName: value.normalizedName,
+      savedAt: value.savedAt,
+      sourceFilename: value.sourceFilename,
+      geometryKind: value.geometryKind,
+      pointCount: value.pointCount,
+      segmentCount: value.segmentCount,
+      metrics: value.metrics,
+      metadata: value.metadata,
+      warnings: value.warnings,
+    };
+    if (value.generatedName !== undefined) result.generatedName = value.generatedName;
+    if (value.middleAnchorKind !== undefined) {
+      result.middleAnchorKind = value.middleAnchorKind;
+    }
+    if (value.startPoi !== undefined) result.startPoi = value.startPoi;
+    if (value.middlePoi !== undefined) result.middlePoi = value.middlePoi;
+    if (value.endPoi !== undefined) result.endPoi = value.endPoi;
+    if (value.fallbackPoi !== undefined) result.fallbackPoi = value.fallbackPoi;
+    return result;
+  });
+
+const localTrackContentSchema: z.ZodType<LocalTrackContent> = z
+  .object({
+    schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
+    trackId: z.string().min(1).max(200),
+    originalGpx: z.custom<StoredGpxBlob>(isBlobValue),
+    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
+  })
+  .strict();
+
+function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
+  const result = localTrackSummarySchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+function isBlobValue(value: unknown): value is StoredGpxBlob {
+  if (value instanceof Blob) return true;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.prototype.toString.call(value) === '[object Blob]' &&
+    'size' in value &&
+    typeof value.size === 'number' &&
+    'type' in value &&
+    typeof value.type === 'string' &&
+    'arrayBuffer' in value &&
+    typeof value.arrayBuffer === 'function' &&
+    'text' in value &&
+    typeof value.text === 'function'
+  );
+}
+
+function parseLocalTrackContent(value: unknown): LocalTrackContent | null {
+  const result = localTrackContentSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
 /** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */
 export class AppDatabase
   extends Dexie
-  implements MapLayerPreferencesRepository, MapCameraRepository
+  implements MapLayerPreferencesRepository, MapCameraRepository, LocalTrackRepository
 {
   public readonly settings!: EntityTable<SettingRecord, 'key'>;
   public readonly diagnostics!: EntityTable<PersistedDiagnosticRecord, 'id'>;
+  public readonly localTracks!: EntityTable<LocalTrackSummary, 'id'>;
+  public readonly localTrackContents!: EntityTable<LocalTrackContent, 'trackId'>;
 
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
@@ -160,6 +456,108 @@ export class AppDatabase
       settings: 'key,updatedAt',
       diagnostics: '++id,timestamp,name,level',
     });
+    this.version(2).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+    });
+  }
+
+  public async saveLocalTrack(
+    summary: LocalTrackSummary,
+    content: LocalTrackContent,
+  ): Promise<void> {
+    const validSummary = parseLocalTrackSummary(summary);
+    const validContent = parseLocalTrackContent(content);
+    const idsMatch = validSummary?.id === validContent?.trackId;
+    if (validSummary === null || validContent === null || !idsMatch) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The local track record is invalid.',
+      );
+    }
+    await this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      async () => {
+        await this.localTracks.put(validSummary);
+        await this.localTrackContents.put(validContent);
+      },
+    );
+  }
+
+  public async listLocalTracks(): Promise<readonly LocalTrackSummary[]> {
+    const records = await this.localTracks.toArray();
+    const valid: LocalTrackSummary[] = [];
+    let invalidCount = 0;
+    for (const record of records) {
+      const parsed = parseLocalTrackSummary(record);
+      if (parsed === null) {
+        invalidCount += 1;
+      } else {
+        valid.push(parsed);
+      }
+    }
+    if (invalidCount > 0) {
+      this.logger.log({
+        level: 'warn',
+        name: 'storage.local-tracks.invalid-summary',
+        data: { invalidCount },
+      });
+    }
+    return valid.sort((left, right) => {
+      const byName = left.name.localeCompare(right.name, 'en', {
+        sensitivity: 'base',
+      });
+      return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+    });
+  }
+
+  public async loadLocalTrackContent(trackId: string): Promise<LocalTrackContent> {
+    const content = await this.localTrackContents.get(trackId);
+    if (content === undefined) {
+      throw new LocalTrackStorageError(
+        'content-missing',
+        'The saved track content is unavailable.',
+      );
+    }
+    const parsed = parseLocalTrackContent(content);
+    if (parsed?.trackId !== trackId) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The saved track content is invalid.',
+      );
+    }
+    return parsed;
+  }
+
+  public async renameLocalTrack(
+    trackId: string,
+    name: string,
+  ): Promise<LocalTrackSummary> {
+    const existing = await this.localTracks.get(trackId);
+    const parsed = parseLocalTrackSummary(existing);
+    if (parsed === null) {
+      throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
+    }
+    const normalized = normalizeLocalTrackName(name);
+    const updated = { ...parsed, ...normalized };
+    await this.localTracks.put(updated);
+    return updated;
+  }
+
+  public async deleteLocalTrack(trackId: string): Promise<void> {
+    await this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      async () => {
+        await this.localTrackContents.delete(trackId);
+        await this.localTracks.delete(trackId);
+      },
+    );
   }
 
   public async loadUiPreferences(): Promise<UiPreferences> {

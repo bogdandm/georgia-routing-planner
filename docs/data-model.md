@@ -77,7 +77,7 @@ flowchart LR
 | Curated catalog manifest, track summaries, categories, memberships, previews, and validation report | Generated GitHub Pages assets under `public/catalog/`        | Validated static queries and an in-memory viewport index | Versioned, read-only, fetched from the application origin                    |
 | Curated full GPX                                                                                    | Generated GitHub Pages assets under `public/tracks/`         | Parsed only for an opened/downloaded track               | Loaded on demand; never all fetched at startup                               |
 | Local GPX before retention                                                                          | Browser memory from a file picker or drop                    | Validated import preview                                 | Discarded unless the user explicitly retains it                              |
-| Retained local track summary and content                                                            | Browser IndexedDB                                            | `LocalTrackRecord` and `LocalTrackContentRecord`         | Private to the browser; never uploaded automatically                         |
+| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; private to this browser                        |
 | Personal folders and track placement                                                                | Browser IndexedDB                                            | Folder tree and one personal placement per track         | May reference curated or local track IDs; cannot modify static catalog files |
 | Route plans and saved markers                                                                       | Browser IndexedDB                                            | Aggregate records mapped to domain objects               | Private until explicit GPX/file export                                       |
 | Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                              |
@@ -221,6 +221,12 @@ omit sensitive timestamps while retaining a non-identifying duration. For curate
 tracks, `addedAt` comes from reviewed curation metadata rather than the build clock; for
 local tracks, it is the completed retention/import time.
 
+The executable local-track schema keeps listable summaries separate from large geometry
+and original GPX blobs. Both rows share the opaque local track ID. Saving and deleting
+use one IndexedDB transaction, while rename updates only the validated summary. A
+missing or invalid content row is surfaced as a bounded storage-integrity error; it
+never becomes an empty geometry or a partially successful save.
+
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not
 part of the initial model for approximately 1,200 tracks; it may be added as a derived
@@ -240,7 +246,16 @@ without validation and resource limits.
 
 Input limits cover XML size, nesting/entity behavior, coordinate ranges, segment and
 point counts, non-finite values, and cancellation. Parsing never mutates a curated
-source file or uploads a local file.
+source file or uploads a local file. The executable parser prefers renderable track
+segments over companion route geometry, preserves independent segment boundaries, and
+uses routes only when no renderable track segment exists.
+
+Local import metrics are calculated once from normalized geometry. Distance uses
+geodesic consecutive-point pairs within each segment; elevation gain and loss use only
+adjacent pairs that both contain GPX elevation. Bounds retain an explicit antimeridian
+crossing flag. Recorded duration is absent unless all rendered points have ordered,
+valid timestamps. Each calculation stores its policy version so later policy changes
+cannot silently reinterpret retained results.
 
 ## Plans, waypoints, and saved markers
 

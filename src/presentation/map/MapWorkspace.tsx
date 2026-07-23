@@ -242,13 +242,21 @@ export function MapWorkspace({
     }
   }, [facade, navigationCommand]);
   useEffect(() => {
-    if (fitBoundsCommand === null) return;
+    if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
     try {
-      facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
+      if (fitBoundsCommand.padding === undefined) {
+        facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
+      } else {
+        facade.fitBounds(
+          fitBoundsCommand.bounds,
+          fitBoundsCommand.maxZoom,
+          fitBoundsCommand.padding,
+        );
+      }
     } finally {
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
-  }, [facade, fitBoundsCommand]);
+  }, [facade, fitBoundsCommand, snapshot.lifecycle]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
     return createHikingMapStyle(mapProviderConfiguration.value);

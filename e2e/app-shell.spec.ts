@@ -45,7 +45,7 @@ test('loads the production map style and reloads under a repository subpath', as
     'aria-selected',
     'true',
   );
-  await expect(page.getByRole('tab', { name: 'Tracks' })).toBeDisabled();
+  await expect(page.getByRole('tab', { name: 'Tracks' })).toBeEnabled();
   await expect(page.getByRole('tab', { name: 'Markers' })).toBeDisabled();
 
   await expect(page.getByRole('tab', { name: 'Plan' })).toHaveCount(0);

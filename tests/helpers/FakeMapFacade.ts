@@ -4,6 +4,7 @@ import {
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
+  type MapFitPadding,
   type MapPointInspection,
   type MapViewportBounds,
   type MapViewportSnapshot,
@@ -24,6 +25,7 @@ export class FakeMapFacade implements MapFacade {
   public fitBoundsRequests: {
     readonly bounds: MapViewportBounds;
     readonly maxZoom: number;
+    readonly padding: MapFitPadding | undefined;
   }[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
   public terrainTransition:
@@ -94,8 +96,12 @@ export class FakeMapFacade implements MapFacade {
     this.navigationRequests.push(target);
   }
 
-  public fitBounds(bounds: MapViewportBounds, maxZoom: number): void {
-    this.fitBoundsRequests.push({ bounds, maxZoom });
+  public fitBounds(
+    bounds: MapViewportBounds,
+    maxZoom: number,
+    padding?: MapFitPadding,
+  ): void {
+    this.fitBoundsRequests.push({ bounds, maxZoom, padding });
   }
 
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {

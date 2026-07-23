@@ -45,6 +45,27 @@ compare while keeping the original imported file private and unchanged.
 - Changing favorite state does not change the original import date.
 - Search results retain favorite-first and newest-first ordering.
 
+## Delete tracks from the list
+
+- Every saved-track row provides a delete action without requiring the track details to
+  be opened.
+- The initial delete icon is hidden while the row is idle and becomes visible when the
+  row is hovered or receives keyboard focus.
+- Activating the initial delete icon starts an inline confirmation state on that row; it
+  does not delete immediately and does not open the track.
+- Confirmation shows two clearly separated icon actions: a red delete icon on the left
+  confirms deletion, and a grey cross on the right cancels.
+- Both confirmation actions have accessible names and remain visible until one is chosen,
+  focus leaves the confirmation safely, or another track begins confirmation.
+- Confirming uses the existing complete track-deletion behavior and removes the row only
+  after deletion succeeds.
+- Cancelling restores the normal row without changing selection, ordering, or scroll
+  position.
+- A deletion failure keeps the track in the list, exits the destructive pending state,
+  and reports the failure.
+- Interacting with any delete or confirmation icon must not also trigger the row's open
+  action.
+
 ## Latest opened track
 
 - The latest opened saved track is restored after a page refresh or browser restart.
@@ -188,7 +209,7 @@ compare while keeping the original imported file private and unchanged.
 
 1. `feat(tracks): add metadata and persistent track state`
    - Add descriptions, favorites, favorite-first ordering, latest-opened restoration,
-     and the responsive list/details layout.
+     inline list deletion, and the responsive list/details layout.
 2. `feat(search): include local tracks in global search`
    - Add the two newest matching results and transfer the query into Tracks.
 3. `feat(elevation): add filtered track elevation profiles`
@@ -223,6 +244,8 @@ compare while keeping the original imported file private and unchanged.
 
 - A user can favorite, describe, find, open, refresh, and return to a retained track
   without losing those choices.
+- Hovering or focusing a track row reveals its delete action; deletion requires the
+  inline red-delete confirmation, while the grey cross cancels without changing the row.
 - At 1920 CSS pixels and below, opening details replaces the list beneath the persistent
   upload region and returning restores the prior list state.
 - Above 1920 CSS pixels, the wider side-by-side presentation remains available.

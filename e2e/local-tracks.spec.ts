@@ -175,7 +175,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 
   for (const fixture of realWorldTrackFixtures) {
     const chooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Browse GPX file' }).click();
+    await page.getByRole('button', { name: 'Browse track file' }).click();
     const chooser = await chooserPromise;
     await chooser.setFiles(fixture.path);
 
@@ -199,7 +199,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
     }
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
-    await page.getByRole('button', { name: 'Close track' }).click();
+    await page.getByRole('button', { name: 'Back to tracks' }).click();
   }
 
   await expect(page.getByText('7 saved tracks')).toBeVisible();
@@ -215,7 +215,9 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 
   await page.reload();
   await expect(page.getByText('7 saved tracks')).toBeVisible();
-  await page.getByRole('button', { name: /sample-1mb/u }).click();
+  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to tracks' }).click();
+  await page.getByRole('button', { name: /^sample-1mb/u }).click();
   const selectedDetails = page.getByRole('complementary', {
     name: 'Track details',
   });
@@ -242,7 +244,7 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   );
 
   const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Browse GPX file' }).click();
+  await page.getByRole('button', { name: 'Browse track file' }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles(trackFixturePath);
 
@@ -292,17 +294,16 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
 
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close track' }).click();
+  await page.getByRole('button', { name: 'Back to tracks' }).click();
   await expect(page.getByRole('heading', { name: 'Selected track' })).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByText('Mon 13 Jul 2026', { exact: true })).toBeVisible();
-  await page.getByText('Mon 13 Jul 2026', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await expect(page.getByLabel('Track name')).toHaveValue('Mon 13 Jul 2026');
 
   await page.getByLabel('Track name').fill('Kazbegi ridge walk');
   await page.getByRole('button', { name: 'Rename' }).click();
-  await expect(page.getByText('Kazbegi ridge walk', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Track name')).toHaveValue('Kazbegi ridge walk');
 
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByRole('checkbox', { name: 'Imported tracks' }).uncheck();

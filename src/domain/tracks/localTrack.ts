@@ -36,18 +36,29 @@ export interface LocalTrackSummary {
 export interface LocalTrackContent {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly trackId: string;
-  readonly originalGpx: StoredGpxBlob;
-  readonly segments: readonly (readonly TrackCoordinate[])[];
-  readonly trackPoints?: readonly (readonly TrackPoint[])[] | undefined;
+  readonly trackPoints: readonly (readonly TrackPoint[])[];
+  readonly reliefElevations?: readonly (readonly number[])[] | undefined;
   readonly elevationSource?: 'source' | 'relief';
 }
 
-/** The Blob operations retained GPX consumers require across browser storage realms. */
-export interface StoredGpxBlob {
-  readonly size: number;
-  readonly type: string;
-  arrayBuffer(): Promise<ArrayBuffer>;
-  text(): Promise<string>;
+export function localTrackPoints(
+  content: LocalTrackContent,
+): readonly (readonly TrackPoint[])[] {
+  if (content.elevationSource !== 'relief' || content.reliefElevations === undefined) {
+    return content.trackPoints;
+  }
+  return content.trackPoints.map((segment, segmentIndex) =>
+    segment.map((point, pointIndex) => {
+      const elevationMeters = content.reliefElevations?.[segmentIndex]?.[pointIndex];
+      return elevationMeters === undefined ? point : { ...point, elevationMeters };
+    }),
+  );
+}
+
+export function localTrackSegments(
+  content: LocalTrackContent,
+): readonly (readonly TrackCoordinate[])[] {
+  return content.trackPoints.map((segment) => segment.map((point) => point.coordinate));
 }
 
 export function normalizeLocalTrackName(name: string): {

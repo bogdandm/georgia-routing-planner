@@ -159,9 +159,8 @@ classDiagram
   }
   class LocalTrackContentRecord {
     +string contentId
-    +Blob originalSource
-    +GeoJSON normalizedGeometry
-    +ElevationSample[] elevationProfile
+    +TrackPoint[] sourcePoints
+    +meters[] reliefElevations optional
   }
   class CuratedCategory {
     +string id
@@ -209,7 +208,7 @@ classDiagram
 | `TrackMetrics`            | Distance and optional ascent/descent/min/max elevation; every derived field is tied to its algorithm and elevation source version                                        |
 | `CuratedTrackRecord`      | Summary plus relative same-origin preview and GPX asset URLs and optional approved provenance; URLs never expose source paths                                            |
 | `LocalTrackRecord`        | Summary plus import time, content reference, and bounded validation warnings; `addedAt` equals the completed retention/import time                                       |
-| `LocalTrackContentRecord` | Original retained GPX, FIT, or KML blob, validated normalized geometry, and optional cached elevation profile; fetched separately from summaries                         |
+| `LocalTrackContentRecord` | Validated source points and an optional aligned relief-elevation array; original file bytes are not retained; fetched separately from summaries                          |
 | `CuratedCategory`         | Read-only hierarchical category from GitHub. A track may appear in multiple curated categories through memberships                                                       |
 | `UserFolder`              | Browser-local hierarchical folder. Cycles are forbidden; sibling names need not be globally unique                                                                       |
 | `UserTrackPlacement`      | Exactly one personal placement per track, with optional folder ID for `Unfiled` and a stable fractional/manual sort rank                                                 |
@@ -221,14 +220,17 @@ omit sensitive timestamps while retaining a non-identifying duration. For curate
 tracks, `addedAt` comes from reviewed curation metadata rather than the build clock; for
 local tracks, it is the completed retention/import time.
 
-The executable local-track schema keeps listable summaries separate from large geometry
-and original source blobs. Both rows share the opaque local track ID. The summary owns
-source-format identity, the bounded plain-text description, favorite state, and import
-time; content remains on demand. Saving and deleting use one IndexedDB transaction,
-while rename and metadata edits update only the validated summary. A setting stores the
-latest opened local-track ID and is cleared atomically when that track is deleted. A
-missing or invalid content row is surfaced as a bounded storage-integrity error; it
-never becomes an empty geometry or a partially successful save.
+The executable local-track schema keeps listable summaries separate from normalized
+track points. Both rows share the opaque local track ID. The summary owns source-format
+identity, source filename, the bounded plain-text description, favorite state, and
+import time; content remains on demand. The content row owns one source-point projection
+and avoids duplicating coordinates when relief elevation is selected by storing only an
+aligned elevation array. Original file bytes are discarded after parsing. Saving and
+deleting use one IndexedDB transaction, while rename and metadata edits update only the
+validated summary. A setting stores the latest opened local-track ID and is cleared
+atomically when that track is deleted. A missing or invalid content row is surfaced as a
+bounded storage-integrity error; it never becomes an empty geometry or a partially
+successful save.
 
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not

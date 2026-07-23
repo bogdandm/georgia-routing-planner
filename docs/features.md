@@ -61,7 +61,7 @@ folders store a user's organization without modifying global assets.
 
 Selecting a track draws its geometry on the map and opens an adjacent detail pane with
 source, tags, metrics, folder/download actions, calculation provenance, and a contextual
-elevation profile. The full original GPX is loaded only when requested. Import retention
+elevation profile. Curated source GPX is loaded only when requested. Import retention
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
@@ -83,8 +83,9 @@ the editable track-name field and the adjacent read-only **English place name** 
 For a track with a dominant interior summit, that candidate uses the nearest named OSM
 feature across supported POI, natural, and place categories rather than a hard-coded
 feature type. Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an
-`Mt.` prefix when the source name does not already include one. Save retains the
-original file, independent line segments, and versioned metrics in this browser; unsaved
+`Mt.` prefix when the source name does not already include one. Save retains normalized
+points, independent line segments, source filename/format metadata, and versioned
+metrics in this browser; the original file bytes are discarded after parsing. Unsaved
 previews activate the native leave-site guard. Saved track cards show icon-led recorded
 duration, distance, and elevation gain when available. The detail pane presents
 duration, distance, derived average speed, elevation gain, and elevation loss in a
@@ -110,8 +111,9 @@ and persists locally without removing geographic points. Climbs report length, g
 average gradient, and a Garmin-style category derived from documented length and grade
 inputs. Users can explicitly recalculate elevation from the configured relief provider,
 monitor progress, cancel it, and retain successful derived points locally. Partial
-relief results do not replace the saved profile, and a successful derived profile can be
-replaced with elevations reparsed from the unchanged original source file.
+relief results do not replace the saved profile. Source elevations remain in the
+internal point representation, so a successful derived profile can be discarded without
+retaining or reparsing the original source file.
 
 At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
 persistent import region and **Back to tracks** restores the prior search/list state.

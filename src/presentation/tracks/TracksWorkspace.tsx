@@ -46,6 +46,8 @@ import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ParsedGpx, TrackPoint } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  localTrackPoints,
+  localTrackSegments,
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
@@ -295,7 +297,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? active.parsed.segments.map((segment) =>
             segment.points.map((point) => point.coordinate),
           )
-        : active.content.segments;
+        : localTrackSegments(active.content);
     const metrics = active.kind === 'preview' ? active.metrics : active.summary.metrics;
     const result = mapLayers?.setImportedTrackGeometry(segments);
     if (result?.status === 'failed') return;
@@ -541,10 +543,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       const content: LocalTrackContent = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: active.id,
-        originalGpx: active.file,
-        segments: active.parsed.segments.map((segment) =>
-          segment.points.map((point) => point.coordinate),
-        ),
         trackPoints: active.parsed.segments.map((segment) => segment.points),
         elevationSource: 'source',
       };
@@ -689,11 +687,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       signal: AbortSignal,
       onProgress: (completed: number, total: number) => void,
     ) => {
-      if (
-        active?.kind !== 'saved' ||
-        active.content.trackPoints === undefined ||
-        elevationProvider === null
-      ) {
+      if (active?.kind !== 'saved' || elevationProvider === null) {
         throw new Error('Relief elevation is unavailable for this track.');
       }
       const total = active.content.trackPoints.reduce(
@@ -702,9 +696,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       );
       let completed = 0;
       let unavailable = 0;
-      const trackPoints = [];
+      const reliefElevations: number[][] = [];
       for (const segment of active.content.trackPoints) {
-        const updatedSegment = [];
+        const updatedSegment: number[] = [];
         for (const point of segment) {
           const sample = await elevationProvider.sample(
             {
@@ -713,16 +707,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             },
             signal,
           );
-          updatedSegment.push(
-            sample.status === 'available'
-              ? { ...point, elevationMeters: sample.meters }
-              : point,
-          );
+          if (sample.status === 'available') updatedSegment.push(sample.meters);
           if (sample.status !== 'available') unavailable += 1;
           completed += 1;
           onProgress(completed, total);
         }
-        trackPoints.push(updatedSegment);
+        reliefElevations.push(updatedSegment);
       }
       if (unavailable > 0) {
         const message = `Relief elevation was unavailable for ${String(unavailable)} of ${String(total)} track points. The saved profile was not changed.`;
@@ -731,7 +721,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       }
       const content: LocalTrackContent = {
         ...active.content,
-        trackPoints,
+        reliefElevations,
         elevationSource: 'relief',
       };
       await database.saveLocalTrack(active.summary, content);
@@ -744,15 +734,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const restoreActiveSourceElevation = useCallback(async () => {
     if (active?.kind !== 'saved') return;
     try {
-      const file = new File(
-        [await active.content.originalGpx.arrayBuffer()],
-        active.summary.sourceFilename,
-        { type: active.content.originalGpx.type },
-      );
-      const parsed = await parseTrackFile(file, active.summary.sourceFormat);
+      const { reliefElevations: _, ...sourceContent } = active.content;
       const content: LocalTrackContent = {
-        ...active.content,
-        trackPoints: parsed.segments.map((segment) => segment.points),
+        ...sourceContent,
         elevationSource: 'source',
       };
       await database.saveLocalTrack(active.summary, content);
@@ -1422,8 +1406,7 @@ function TrackElevationProfile() {
   const segments =
     active.kind === 'preview'
       ? active.parsed.segments.map((segment) => segment.points)
-      : active.content.trackPoints;
-  if (segments === undefined) return null;
+      : localTrackPoints(active.content);
   const threshold = active.kind === 'saved' ? active.summary.elevationFilterMeters : 3;
   const profile = calculateElevationProfile(segments, threshold);
   if (profile === null) return null;

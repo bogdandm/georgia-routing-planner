@@ -365,13 +365,7 @@ describe('WorkspaceShell', () => {
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
       schemaVersion: 1,
       trackId: 'local:test-1',
-      originalGpx: gpxFile(),
-      segments: [
-        [
-          [44, 42],
-          [44.01, 42.01],
-        ],
-      ],
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
     });
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));

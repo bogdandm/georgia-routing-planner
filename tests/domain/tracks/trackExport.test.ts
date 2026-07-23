@@ -45,13 +45,6 @@ const summary: LocalTrackSummary = {
 const content: LocalTrackContent = {
   schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
   trackId: 'local:1',
-  originalGpx: new Blob(['fit']),
-  segments: [
-    [
-      [44, 42],
-      [45, 43],
-    ],
-  ] as const,
   trackPoints: [
     [
       {
@@ -74,6 +67,17 @@ describe('track export', () => {
     expect(gpx).toContain('<time>2026-07-01T10:00:00.000Z</time>');
     expect(kml).toContain('<description>Text &lt;b&gt;only&lt;/b&gt;</description>');
     expect(kml).toContain('44,42,100 45,43,110');
+  });
+
+  it('generates downloads from the selected internal elevation projection', () => {
+    const reliefContent: LocalTrackContent = {
+      ...content,
+      reliefElevations: [[900, 910]],
+      elevationSource: 'relief',
+    };
+
+    expect(exportTrackAsGpx(summary, reliefContent)).toContain('<ele>900</ele>');
+    expect(exportTrackAsKml(summary, reliefContent)).toContain('44,42,900 45,43,910');
   });
 
   it('produces filesystem-safe names', () => {

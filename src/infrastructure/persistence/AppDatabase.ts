@@ -32,7 +32,6 @@ import {
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
-  type StoredGpxBlob,
 } from '@/domain/tracks/localTrack';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
@@ -434,37 +433,68 @@ const storedTrackPointSchema: z.ZodType<TrackPoint> = z
     return point;
   });
 
-const localTrackContentSchema: z.ZodType<LocalTrackContent> = z
+const storedTrackSegmentsSchema = z
+  .array(z.array(storedTrackPointSchema).min(2))
+  .min(1)
+  .max(512);
+
+const currentLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     trackId: z.string().min(1).max(200),
-    originalGpx: z.custom<StoredGpxBlob>(isBlobValue),
-    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
-    trackPoints: z.array(z.array(storedTrackPointSchema).min(2)).max(512).optional(),
+    trackPoints: storedTrackSegmentsSchema,
+    reliefElevations: z.array(z.array(z.number()).min(2)).min(1).max(512).optional(),
     elevationSource: z.enum(['source', 'relief']).default('source'),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.reliefElevations === undefined) {
+      if (value.elevationSource === 'relief') {
+        context.addIssue({
+          code: 'custom',
+          message: 'Relief elevation values are required for the relief source.',
+        });
+      }
+      return;
+    }
+    const aligned =
+      value.reliefElevations.length === value.trackPoints.length &&
+      value.reliefElevations.every(
+        (segment, index) => segment.length === value.trackPoints[index]?.length,
+      );
+    if (!aligned) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Relief elevation values must align with source track points.',
+      });
+    }
+  });
+
+const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
+  .object({
+    schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
+    trackId: z.string().min(1).max(200),
+    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
+    trackPoints: storedTrackSegmentsSchema.optional(),
+  })
+  .loose()
+  .transform((value): LocalTrackContent => ({
+    schemaVersion: value.schemaVersion,
+    trackId: value.trackId,
+    trackPoints:
+      value.trackPoints ??
+      value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
+    elevationSource: 'source',
+  }));
+
+const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.union([
+  currentLocalTrackContentSchema,
+  legacyLocalTrackContentSchema,
+]);
 
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
   return result.success ? result.data : null;
-}
-
-function isBlobValue(value: unknown): value is StoredGpxBlob {
-  if (value instanceof Blob) return true;
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Object.prototype.toString.call(value) === '[object Blob]' &&
-    'size' in value &&
-    typeof value.size === 'number' &&
-    'type' in value &&
-    typeof value.type === 'string' &&
-    'arrayBuffer' in value &&
-    typeof value.arrayBuffer === 'function' &&
-    'text' in value &&
-    typeof value.text === 'function'
-  );
 }
 
 function parseLocalTrackContent(value: unknown): LocalTrackContent | null {
@@ -494,6 +524,21 @@ export class AppDatabase
       localTracks: 'id,normalizedName,savedAt',
       localTrackContents: 'trackId',
     });
+    this.version(3)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+      })
+      .upgrade(async (transaction) => {
+        const table = transaction.table('localTrackContents');
+        const records: unknown[] = await table.toArray();
+        for (const record of records) {
+          const parsed = parseLocalTrackContent(record);
+          if (parsed !== null) await table.put(parsed);
+        }
+      });
   }
 
   public async saveLocalTrack(

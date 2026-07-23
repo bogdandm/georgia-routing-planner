@@ -82,8 +82,9 @@ const realWorldTrackFixtures = [
 
 interface StoredTrackState {
   readonly contentCount: number;
+  readonly pointCount: number;
   readonly summaryCount: number;
-  readonly totalOriginalGpxBytes: number;
+  readonly sourceBlobCount: number;
 }
 
 async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
@@ -154,7 +155,8 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
             .objectStore('localTrackContents')
             .openCursor();
           let contentCount = 0;
-          let totalOriginalGpxBytes = 0;
+          let pointCount = 0;
+          let sourceBlobCount = 0;
 
           contentCursorRequest.onerror = () => {
             reject(
@@ -166,17 +168,23 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
             const cursor = contentCursorRequest.result;
             if (cursor === null) return;
             const value: unknown = cursor.value;
-            if (
-              typeof value !== 'object' ||
-              value === null ||
-              !('originalGpx' in value) ||
-              !(value.originalGpx instanceof Blob)
-            ) {
-              reject(new Error('Stored GPX content has an invalid shape.'));
+            if (typeof value !== 'object' || value === null) {
+              reject(new Error('Stored track content has an invalid shape.'));
+              return;
+            }
+            if ('originalGpx' in value && value.originalGpx instanceof Blob) {
+              sourceBlobCount += 1;
+            }
+            if (!('trackPoints' in value) || !Array.isArray(value.trackPoints)) {
+              reject(new Error('Stored track points are unavailable.'));
               return;
             }
             contentCount += 1;
-            totalOriginalGpxBytes += value.originalGpx.size;
+            pointCount += value.trackPoints.reduce(
+              (total: number, segment: unknown) =>
+                total + (Array.isArray(segment) ? segment.length : 0),
+              0,
+            );
             cursor.continue();
           };
           transaction.onerror = () => {
@@ -188,8 +196,9 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
             database.close();
             resolve({
               contentCount,
+              pointCount,
               summaryCount: summaryCountRequest.result,
-              totalOriginalGpxBytes,
+              sourceBlobCount,
             });
           };
         };
@@ -255,14 +264,15 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   }
 
   await expect(page.getByText('7 saved tracks')).toBeVisible();
-  const expectedStoredBytes = realWorldTrackFixtures.reduce(
-    (total, fixture) => total + fixture.byteSize,
+  const expectedStoredPoints = realWorldTrackFixtures.reduce(
+    (total, fixture) => total + fixture.pointCount,
     0,
   );
   expect(await readStoredTrackState(page)).toEqual({
     contentCount: 7,
+    pointCount: expectedStoredPoints,
     summaryCount: 7,
-    totalOriginalGpxBytes: expectedStoredBytes,
+    sourceBlobCount: 0,
   });
 
   await page.reload();

@@ -523,11 +523,13 @@ remains unsaved and is removed after save or confirmed discard.
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display name, source
 format and filename, plain-text description, favorite state, and derived metrics used by
-list and detail views; the content row contains normalized independent segments and the
-retained original GPX blob. A transaction failure leaves neither row listable. Rename
-and metadata edits validate and change only the summary. List reads place favorites
-first and use newest-first import time inside each group. Delete removes both rows and
-clears a matching latest-opened setting in one transaction.
+list and detail views; the content row contains one normalized source-point projection
+and, only when selected, an aligned relief-elevation array. Original source bytes are
+discarded after parsing. A database upgrade compacts older blob-backed records into this
+internal representation. A transaction failure leaves neither row listable. Rename and
+metadata edits validate and change only the summary. List reads place favorites first
+and use newest-first import time inside each group. Delete removes both rows and clears
+a matching latest-opened setting in one transaction.
 
 Opening or newly saving a track records its opaque ID in the existing settings table. On
 startup the Tracks provider loads that summary and validates its content before
@@ -547,10 +549,10 @@ Elevation analysis reads the separately retained point projection. It carries fo
 the last accepted elevation when a change is below the saved noise threshold, never
 bridges independent segment gaps, and derives the profile, totals, gradients, and climbs
 from that one filtered result. Explicit relief recalculation samples the configured
-local elevation boundary point by point under an abort signal and replaces the derived
-point projection only after complete coverage; cancellation and partial provider results
-retain the prior profile. The original imported blob remains unchanged and can be
-reparsed explicitly to restore source-file elevation.
+local elevation boundary point by point under an abort signal and stores an aligned
+elevation-only array only after complete coverage; cancellation and partial provider
+results retain the prior profile. Restoring source elevation deletes that derived array
+and reuses the retained source points.
 
 ## Teardown ownership
 

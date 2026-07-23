@@ -381,14 +381,21 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile());
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    expect(screen.getByRole('textbox', { name: 'Track name' })).toHaveValue(
-      'Fixture trail',
-    );
+    const trackNameInput = screen.getByRole('textbox', { name: 'Track name' });
+    expect(trackNameInput).toHaveValue('Fixture trail');
     expect(screen.getByText('Fixture track.gpx')).toBeVisible();
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     const details = screen.getByRole('complementary', { name: 'Track details' });
-    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+    const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
+    expect(elevationGain).toBeVisible();
+    const elevationGainIcon = elevationGain.querySelector('svg');
+    expect(elevationGainIcon).not.toBeNull();
+    if (elevationGainIcon !== null) {
+      await user.hover(elevationGainIcon);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Elevation gain');
+      await user.unhover(elevationGainIcon);
+    }
     expect(
       within(details).queryByLabelText(/^Average speed:/u),
     ).not.toBeInTheDocument();

@@ -21,6 +21,7 @@ import {
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -835,13 +836,15 @@ function TrackStat({ emphasized = false, icon, label, value }: TrackStatProps) {
       aria-label={`${label}: ${value}`}
       sx={{ minWidth: 0, alignItems: 'center' }}
     >
-      <Box
-        component="span"
-        aria-hidden
-        sx={{ display: 'inline-flex', color: 'text.secondary' }}
-      >
-        {icon}
-      </Box>
+      <Tooltip title={label} enterTouchDelay={0}>
+        <Box
+          component="span"
+          aria-hidden
+          sx={{ display: 'inline-flex', color: 'text.secondary' }}
+        >
+          {icon}
+        </Box>
+      </Tooltip>
       <Typography
         component="span"
         variant={emphasized ? 'body2' : 'caption'}
@@ -1120,15 +1123,49 @@ export function TrackDetailsPane() {
       </Stack>
       <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
         <Stack spacing={2}>
-          <TextField
-            size="small"
-            label="Track name"
-            value={active.kind === 'preview' ? active.name : active.draftName}
-            onChange={(event) => {
-              setActiveName(event.target.value);
-            }}
-            slotProps={{ htmlInput: { maxLength: 200 } }}
-          />
+          <Stack spacing={2}>
+            <TextField
+              size="small"
+              label="Track name"
+              value={active.kind === 'preview' ? active.name : active.draftName}
+              onChange={(event) => {
+                setActiveName(event.target.value);
+              }}
+              slotProps={{ htmlInput: { maxLength: 200 } }}
+            />
+            {active.kind === 'preview' ? (
+              active.namingStatus === 'loading' ? (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">
+                    Looking up representative places…
+                  </Typography>
+                </Stack>
+              ) : active.generatedName === undefined ? (
+                <Typography variant="body2" color="text.secondary">
+                  No generated name is available. Saving is unaffected.
+                </Typography>
+              ) : (
+                <Stack spacing={2}>
+                  <Button
+                    size="small"
+                    variant="text"
+                    aria-label="Apply place name"
+                    onClick={applyGeneratedName}
+                    sx={{ alignSelf: 'center' }}
+                  >
+                    ↑ Apply place name ↑
+                  </Button>
+                  <TextField
+                    size="small"
+                    label="English place name"
+                    value={active.generatedName}
+                    slotProps={{ input: { readOnly: true } }}
+                  />
+                </Stack>
+              )
+            ) : null}
+          </Stack>
           {active.kind === 'preview' ? (
             <>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
@@ -1143,36 +1180,6 @@ export function TrackDetailsPane() {
                   Save
                 </Button>
               </Stack>
-              <Divider />
-              <Typography component="h3" variant="subtitle2">
-                English place name
-              </Typography>
-              {active.namingStatus === 'loading' ? (
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <CircularProgress size={18} />
-                  <Typography variant="body2">
-                    Looking up representative places…
-                  </Typography>
-                </Stack>
-              ) : active.generatedName === undefined ? (
-                <Typography variant="body2" color="text.secondary">
-                  No generated name is available. Saving is unaffected.
-                </Typography>
-              ) : (
-                <Stack spacing={1}>
-                  <TextField
-                    size="small"
-                    value={active.generatedName}
-                    slotProps={{
-                      htmlInput: { 'aria-label': 'Generated name' },
-                      input: { readOnly: true },
-                    }}
-                  />
-                  <Button size="small" variant="outlined" onClick={applyGeneratedName}>
-                    Apply generated name
-                  </Button>
-                </Stack>
-              )}
             </>
           ) : (
             <Stack direction="row" spacing={1}>

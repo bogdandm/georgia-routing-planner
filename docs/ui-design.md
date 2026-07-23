@@ -36,6 +36,11 @@ Compact checkboxes use a small glyph with no root padding and an 8 px gap before
 label. The glyph aligns with the section content edge; any description aligns with the
 label text.
 
+Buttons use the shared theme hover treatment: text and outlined variants receive a
+clearly visible color-aware background, outlined buttons strengthen their border, and
+contained buttons darken with a stronger shadow. Feature code must not weaken this
+feedback without a reviewed interaction-specific reason.
+
 Keep a section's heading and source description on the panel content edge. Put the
 section's interactive content in a deliberate, balanced 8 px horizontal inset; checkbox
 padding must not create that indentation accidentally. Full-width spatial controls such

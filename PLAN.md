@@ -56,6 +56,27 @@ compare while keeping the original imported file private and unchanged.
 - A missing, unreadable, or invalid remembered track is forgotten without blocking
   startup or access to the remaining track list.
 
+## Responsive Tracks layout
+
+- On viewports 1920 CSS pixels wide or narrower, track details do not open in a second
+  pane to the right of the track list.
+- The Tracks workspace keeps its existing single-column width so more horizontal space
+  remains available for the map.
+- The GPX upload region remains visible at the top while either the list or track details
+  are shown below it.
+- Opening a saved track replaces the search, result count, and track list with that
+  track's details in the same content area.
+- The details view provides an obvious Back to tracks action that restores the previous
+  list and search state.
+- Closing the selected track has the same navigation result as returning to the list.
+- Returning to the list preserves its search text, ordering, and scroll position.
+- Importing a new GPX remains available while details are open and follows the existing
+  confirmation rules when replacing unfinished work.
+- On viewports wider than 1920 CSS pixels, the list and selected-track details may remain
+  visible side by side.
+- Resizing across the breakpoint keeps the selected track and current list state instead
+  of closing or reopening content.
+
 ## Track description
 
 - Every saved track has an optional plain-text description.
@@ -166,7 +187,8 @@ compare while keeping the original imported file private and unchanged.
 ## Delivery sequence
 
 1. `feat(tracks): add metadata and persistent track state`
-   - Add descriptions, favorites, favorite-first ordering, and latest-opened restoration.
+   - Add descriptions, favorites, favorite-first ordering, latest-opened restoration,
+     and the responsive list/details layout.
 2. `feat(search): include local tracks in global search`
    - Add the two newest matching results and transfer the query into Tracks.
 3. `feat(elevation): add filtered track elevation profiles`
@@ -201,6 +223,9 @@ compare while keeping the original imported file private and unchanged.
 
 - A user can favorite, describe, find, open, refresh, and return to a retained track
   without losing those choices.
+- At 1920 CSS pixels and below, opening details replaces the list beneath the persistent
+  upload region and returning restores the prior list state.
+- Above 1920 CSS pixels, the wider side-by-side presentation remains available.
 - Global search shows at most two newest matching tracks and can continue the same search
   in Tracks.
 - Description links are clickable only outside edit mode and pasted HTML is inert.

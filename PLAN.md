@@ -1,20 +1,78 @@
-# Local GPX track enhancements plan
+# Local track enhancements plan
 
 ## Outcome
 
-Make retained local GPX tracks easier to find, prioritize, reopen, understand, and
-compare while keeping the original imported file private and unchanged.
+Make retained local GPX, Garmin FIT, and Google KML tracks easier to find, prioritize,
+reopen, understand, and compare while keeping the original imported file private and
+unchanged.
 
 ## Product rules
 
 - All imported tracks, descriptions, favorites, derived elevation data, and last-opened
   state remain local to the browser.
-- The original imported GPX file is preserved even when its displayed elevation or
-  calculated statistics are changed.
-- Calculated values identify whether they use GPX elevation or relief-map elevation.
+- The original imported GPX, FIT, or KML file is preserved even when its displayed
+  elevation or calculated statistics are changed.
+- Calculated values identify whether they use source-file elevation or relief-map
+  elevation.
 - Missing or unusable elevation must degrade gracefully without blocking track access.
 - Existing import, rename, delete, map display, and local-storage behavior remains
   available.
+
+## Supported track imports
+
+### Shared behavior
+
+- The import region accepts `.gpx`, `.fit`, and `.kml` files and names all supported
+  formats in its browse and drop guidance.
+- File-extension matching is case-insensitive.
+- Every supported format uses the same preview, automatic naming, save, search, favorite,
+  description, restoration, deletion, map, elevation, filtering, and
+  relief-recalculation behavior after import.
+- The track details keep the original filename and make its source format visible.
+- Missing optional data does not prevent import when usable track geometry exists.
+- Import limits and failure behavior protect the browser from malformed, unsupported, or
+  unreasonably large files.
+- The original source file is retained unchanged and is never silently converted or
+  replaced.
+
+### Garmin FIT
+
+- FIT Activity and Course files are supported when they contain an ordered GPS track.
+- FIT files without usable geographic track points, including workout-only or
+  sensor-only files, are rejected with a clear reason.
+- Import validates the FIT file structure and integrity before showing a preview or
+  retaining data.
+- The preview uses available FIT course or activity naming metadata; when no useful name
+  exists, it uses the filename and the same automatic-name workflow as GPX.
+- Ordered positions become track geometry. Separate sessions and genuine recording gaps
+  remain separate and are not joined by invented lines, distances, gradients, or climbs.
+- Available timestamps and elevation are used for the same duration, speed, elevation,
+  high-point, gradient, and climb behavior as equivalent GPX data.
+- When both standard and enhanced FIT values describe the same measurement, the more
+  precise valid value is preferred without counting the measurement twice.
+- Heart rate, power, cadence, user-profile, device-identifying, and other unrelated
+  fitness or health fields are not shown, indexed for search, or written to diagnostics.
+
+### Google KML
+
+- KML 2.2 line-based track geometry is supported from `LineString`, `MultiGeometry`,
+  Google `gx:Track`, and `gx:MultiTrack` content.
+- Multiple lines or tracks remain separate segments unless the source explicitly
+  describes them as one continuous track.
+- A KML file containing only points, polygons, overlays, tours, models, or other
+  non-track content is rejected with a clear reason.
+- Placemark or document names provide the initial track name when useful; otherwise the
+  filename and the same automatic-name workflow are used.
+- Plain-text KML descriptions may initialize the track description. Embedded markup,
+  scripts, styles, and active content are discarded rather than rendered.
+- `gx:Track` timestamps are used only when they correspond reliably to its positions.
+- Valid absolute altitude may be used as source elevation. Ground-relative,
+  sea-floor-relative, or clamped altitude is not presented as measured elevation; the
+  user can request relief-map recalculation instead.
+- External links, network links, remote styles, images, overlays, and referenced
+  resources are never fetched automatically during import or later viewing.
+- KMZ archives are outside this scope; a `.kmz` file is rejected as unsupported rather
+  than treated as KML.
 
 ## Track search
 
@@ -83,8 +141,8 @@ compare while keeping the original imported file private and unchanged.
   pane to the right of the track list.
 - The Tracks workspace keeps its existing single-column width so more horizontal space
   remains available for the map.
-- The GPX upload region remains visible at the top while either the list or track details
-  are shown below it.
+- The GPX/FIT/KML upload region remains visible at the top while either the list or track
+  details are shown below it.
 - Opening a saved track replaces the search, result count, and track list with that
   track's details in the same content area.
 - The details view provides an obvious Back to tracks action that restores the previous
@@ -112,6 +170,33 @@ compare while keeping the original imported file private and unchanged.
 - Pasted markup is displayed as text and is never interpreted as HTML.
 - Descriptions are bounded to 10,000 characters.
 
+## Track downloads
+
+- Every saved-track details view provides separate Download as GPX and Download as KML
+  buttons.
+- Both downloads are generated locally without uploading the track or contacting a
+  conversion service.
+- Downloads use the current saved track name and description and preserve separate track
+  segments.
+- Downloaded geometry retains the full stored track path; the elevation-noise filter
+  does not remove geographic points.
+- When the user has selected a usable relief-map elevation profile, the downloaded file
+  uses that active elevation source and identifies it as calculated. Otherwise it uses
+  the usable elevation retained from the original source.
+- Original timestamps are included when they correspond reliably to track positions;
+  missing timestamps are not invented.
+- GPX download produces a standards-compliant GPX track regardless of whether the source
+  was GPX, FIT, or KML.
+- KML download produces standards-compliant KML line or track geometry that Google Earth
+  can display, regardless of the original source format.
+- KML description content remains inert plain text and cannot introduce executable
+  markup or remote resource loading.
+- FIT health, fitness-sensor, profile, and device-identifying fields excluded during
+  import never appear in GPX or KML downloads.
+- Download filenames are safe for the local filesystem, use the saved track name when
+  possible, and end in the correct `.gpx` or `.kml` extension.
+- A conversion failure reports the reason without changing or deleting the saved track.
+
 ## Elevation profile
 
 - A saved track with usable elevation displays an elevation graph against distance.
@@ -134,7 +219,8 @@ compare while keeping the original imported file private and unchanged.
 - The threshold controls elevation-noise filtering: elevation changes smaller than the
   selected value do not independently count toward gradient, ascent, descent, high-point,
   or climb calculations.
-- Filtering does not remove geographic track points or alter the original GPX file.
+- Filtering does not remove geographic track points or alter the original GPX, FIT, or
+  KML file.
 - Changing the threshold updates all affected elevation statistics and climb results
   together.
 - The active threshold is visible whenever filtered results are presented.
@@ -157,11 +243,14 @@ compare while keeping the original imported file private and unchanged.
 
 - A user can explicitly request elevation recalculation from the configured relief map.
 - Recalculation shows progress and can be cancelled.
-- It never uploads the track or sends the original GPX file to another service.
+- It never uploads the track or sends the original GPX, FIT, or KML file to another
+  service.
 - A successful recalculation updates the displayed profile, statistics, high point, and
   climbs together.
-- Relief-map results remain distinguishable from elevations recorded in the GPX file.
-- The user can return to the original GPX elevation when usable GPX elevation exists.
+- Relief-map results remain distinguishable from elevations recorded in the GPX, FIT, or
+  KML file.
+- The user can return to the original recorded elevation when usable source elevation
+  exists.
 - Provider gaps and partial failures are reported clearly and do not replace a previously
   usable profile with an unusable result.
 - Recalculated results survive page refreshes and browser restarts.
@@ -208,8 +297,9 @@ compare while keeping the original imported file private and unchanged.
 ## Delivery sequence
 
 1. `feat(tracks): add metadata and persistent track state`
-   - Add descriptions, favorites, favorite-first ordering, latest-opened restoration,
-     inline list deletion, and the responsive list/details layout.
+   - Add FIT and KML import, descriptions, favorites, favorite-first ordering,
+     GPX/KML downloads, latest-opened restoration, inline list deletion, and the
+     responsive list/details layout.
 2. `feat(search): include local tracks in global search`
    - Add the two newest matching results and transfer the query into Tracks.
 3. `feat(elevation): add filtered track elevation profiles`
@@ -228,8 +318,8 @@ compare while keeping the original imported file private and unchanged.
 
 ## Reuse and complexity constraints
 
-- Extend the existing Tracks workspace, local-track persistence, search, elevation
-  provider, map interaction, and chart system.
+- Extend the existing track import, Tracks workspace, local-track persistence, search,
+  elevation provider, map interaction, and chart system.
 - Replace the current alphabetical-only list ordering with favorite-first,
   newest-first ordering.
 - Replace raw adjacent-point elevation totals with the single selected filtered-profile
@@ -244,6 +334,11 @@ compare while keeping the original imported file private and unchanged.
 
 - A user can favorite, describe, find, open, refresh, and return to a retained track
   without losing those choices.
+- Valid FIT Activity and Course files and line-based KML files import alongside GPX,
+  while unsupported or geometry-free files fail clearly and leave no partial saved
+  track.
+- Every retained track can be downloaded locally as GPX or KML with its saved metadata,
+  segments, reliable timestamps, and active usable elevation source.
 - Hovering or focusing a track row reveals its delete action; deletion requires the
   inline red-delete confirmation, while the grey cross cancels without changing the row.
 - At 1920 CSS pixels and below, opening details replaces the list beneath the persistent
@@ -254,7 +349,7 @@ compare while keeping the original imported file private and unchanged.
 - Description links are clickable only outside edit mode and pasted HTML is inert.
 - Loop tracks receive the same high-point and climb analysis as other tracks.
 - The default 3-metre elevation filter changes calculations without changing geometry.
-- GPX and relief-map profiles remain distinguishable and reversible.
+- Source-file and relief-map profiles remain distinguishable and reversible.
 - Elevation graphs, gradients, high points, and climbs remain consistent with the active
   source and filter.
 - The private GPX corpus can improve automatic naming without entering repository

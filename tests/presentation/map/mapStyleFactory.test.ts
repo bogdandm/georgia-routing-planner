@@ -135,6 +135,35 @@ describe('createHikingMapStyle', () => {
     }
   });
 
+  it('keeps labels readable across nearby and distant map detail', () => {
+    const style = createHikingMapStyle(configuration);
+
+    for (const layerId of [
+      mapLayerIds.hikingPoiLabels,
+      mapLayerIds.peakLabels,
+      mapLayerIds.waterLabels,
+    ]) {
+      expect(style.layers.find((layer) => layer.id === layerId)).toHaveProperty(
+        'layout.text-size',
+        13,
+      );
+    }
+    expect(
+      style.layers.find((layer) => layer.id === mapLayerIds.roadLabels),
+    ).toHaveProperty('layout.text-size', 12);
+    expect(
+      style.layers.find((layer) => layer.id === mapLayerIds.placeLabels),
+    ).toHaveProperty('layout.text-size', [
+      'interpolate',
+      ['linear'],
+      ['zoom'],
+      5,
+      ['match', ['get', 'class'], 'city', 16, 13],
+      12,
+      ['match', ['get', 'class'], 'city', 19, 14],
+    ]);
+  });
+
   it('uses the configured source-layer mapping exactly once at the style boundary', () => {
     const customConfiguration = {
       ...configuration,

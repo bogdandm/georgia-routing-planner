@@ -125,6 +125,7 @@ interface TracksWorkspaceValue {
     signal: AbortSignal,
     onProgress: (completed: number, total: number) => void,
   ) => Promise<void>;
+  readonly restoreActiveSourceElevation: () => Promise<void>;
 }
 
 interface GeneratedNameInput {
@@ -700,6 +701,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         0,
       );
       let completed = 0;
+      let unavailable = 0;
       const trackPoints = [];
       for (const segment of active.content.trackPoints) {
         const updatedSegment = [];
@@ -716,10 +718,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               ? { ...point, elevationMeters: sample.meters }
               : point,
           );
+          if (sample.status !== 'available') unavailable += 1;
           completed += 1;
           onProgress(completed, total);
         }
         trackPoints.push(updatedSegment);
+      }
+      if (unavailable > 0) {
+        const message = `Relief elevation was unavailable for ${String(unavailable)} of ${String(total)} track points. The saved profile was not changed.`;
+        setError(message);
+        throw new Error(message);
       }
       const content: LocalTrackContent = {
         ...active.content,
@@ -728,9 +736,37 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       };
       await database.saveLocalTrack(active.summary, content);
       setActive({ ...active, content });
+      setError(null);
     },
     [active, database, elevationProvider],
   );
+
+  const restoreActiveSourceElevation = useCallback(async () => {
+    if (active?.kind !== 'saved') return;
+    try {
+      const file = new File(
+        [await active.content.originalGpx.arrayBuffer()],
+        active.summary.sourceFilename,
+        { type: active.content.originalGpx.type },
+      );
+      const parsed = await parseTrackFile(file, active.summary.sourceFormat);
+      const content: LocalTrackContent = {
+        ...active.content,
+        trackPoints: parsed.segments.map((segment) => segment.points),
+        elevationSource: 'source',
+      };
+      await database.saveLocalTrack(active.summary, content);
+      setActive({ ...active, content });
+      setError(null);
+    } catch (restoreError) {
+      setError(
+        restoreError instanceof Error
+          ? restoreError.message
+          : 'The source elevation could not be restored.',
+      );
+      throw restoreError;
+    }
+  }, [active, database]);
 
   const deleteActive = useCallback(async () => {
     if (active?.kind !== 'saved') return;
@@ -801,6 +837,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       updateActiveDescription,
       updateElevationFilter,
       recalculateActiveElevation,
+      restoreActiveSourceElevation,
     }),
     [
       active,
@@ -824,6 +861,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       updateActiveDescription,
       updateElevationFilter,
       recalculateActiveElevation,
+      restoreActiveSourceElevation,
     ],
   );
 
@@ -1370,8 +1408,12 @@ function downloadText(filename: string, type: string, content: string): void {
 }
 
 function TrackElevationProfile() {
-  const { active, recalculateActiveElevation, updateElevationFilter } =
-    useTracksWorkspace();
+  const {
+    active,
+    recalculateActiveElevation,
+    restoreActiveSourceElevation,
+    updateElevationFilter,
+  } = useTracksWorkspace();
   const [recalculationProgress, setRecalculationProgress] = useState<number | null>(
     null,
   );
@@ -1395,6 +1437,16 @@ function TrackElevationProfile() {
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(' ');
+  const highPoint = profile.points.reduce((highest, point) =>
+    point.elevationMeters > highest.elevationMeters ? point : highest,
+  );
+  const highPointX = (highPoint.distanceMeters / distanceMaximum) * 100;
+  const highPointY =
+    38 - ((highPoint.elevationMeters - profile.minimumMeters) / elevationRange) * 34;
+  const elevationSource =
+    active.kind === 'saved' && active.content.elevationSource === 'relief'
+      ? 'relief-map elevation'
+      : 'source-file elevation';
   return (
     <Stack spacing={1}>
       <Typography component="h3" variant="subtitle2">
@@ -1403,7 +1455,7 @@ function TrackElevationProfile() {
       <Box
         component="svg"
         role="img"
-        aria-label="Elevation against distance"
+        aria-label={`Elevation against distance. High point ${String(Math.round(highPoint.elevationMeters))} metres.`}
         viewBox="0 0 100 40"
         sx={{ width: '100%', height: 160, bgcolor: appColors.surface.subtle }}
       >
@@ -1413,11 +1465,12 @@ function TrackElevationProfile() {
           stroke={appColors.brand.blueGreenDark}
           strokeWidth="1.5"
         />
+        <circle cx={highPointX} cy={highPointY} r="2" fill={appColors.status.warning} />
       </Box>
       <Typography variant="caption">
         {Math.round(profile.minimumMeters)}–{Math.round(profile.maximumMeters)} m ·
         ascent {Math.round(profile.ascentMeters)} m · descent{' '}
-        {Math.round(profile.descentMeters)} m · source file elevation
+        {Math.round(profile.descentMeters)} m · {elevationSource}
       </Typography>
       <Typography id="elevation-filter-label" variant="caption">
         Elevation noise filter: {threshold} m
@@ -1445,10 +1498,12 @@ function TrackElevationProfile() {
               setRecalculationProgress(0);
               void recalculateActiveElevation(controller.signal, (completed, total) => {
                 setRecalculationProgress(Math.round((completed / total) * 100));
-              }).finally(() => {
-                recalculationAbort.current = null;
-                setRecalculationProgress(null);
-              });
+              })
+                .catch(() => undefined)
+                .finally(() => {
+                  recalculationAbort.current = null;
+                  setRecalculationProgress(null);
+                });
             }}
           >
             Recalculate from relief map
@@ -1468,6 +1523,17 @@ function TrackElevationProfile() {
             </Button>
           </Stack>
         )
+      ) : null}
+      {active.kind === 'saved' && active.content.elevationSource === 'relief' ? (
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => {
+            void restoreActiveSourceElevation().catch(() => undefined);
+          }}
+        >
+          Restore source elevation
+        </Button>
       ) : null}
       {profile.climbs.length === 0 ? (
         <Typography variant="caption" color="text.secondary">

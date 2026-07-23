@@ -435,12 +435,28 @@ describe('WorkspaceShell', () => {
     expect(
       await screen.findByRole('link', { name: 'https://example.test/trail' }),
     ).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(
+      within(details).getByRole('img', {
+        name: /Elevation against distance\. High point 1120 metres/u,
+      }),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole('button', { name: 'Recalculate from relief map' }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Restore source elevation' }),
+    ).toBeVisible();
+    expect(screen.getByText(/relief-map elevation/u)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Restore source elevation' }));
+    await waitFor(() => {
+      expect(screen.getByText(/source-file elevation/u)).toBeVisible();
+    });
 
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(
       screen.queryByRole('heading', { name: 'Selected track' }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Fixture trail/ }));
+    await user.click(screen.getByRole('button', { name: /^Fixture trail/ }));
     const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
     await user.clear(nameInput);
     await user.type(nameInput, 'Renamed trail');

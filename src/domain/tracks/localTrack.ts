@@ -18,6 +18,7 @@ export interface LocalTrackSummary {
   readonly sourceFormat: 'gpx' | 'fit' | 'kml';
   readonly description: string;
   readonly favorite: boolean;
+  readonly elevationFilterMeters: number;
   readonly geometryKind: 'track' | 'route';
   readonly pointCount: number;
   readonly segmentCount: number;
@@ -38,6 +39,7 @@ export interface LocalTrackContent {
   readonly originalGpx: StoredGpxBlob;
   readonly segments: readonly (readonly TrackCoordinate[])[];
   readonly trackPoints?: readonly (readonly TrackPoint[])[] | undefined;
+  readonly elevationSource?: 'source' | 'relief';
 }
 
 /** The Blob operations retained GPX consumers require across browser storage realms. */

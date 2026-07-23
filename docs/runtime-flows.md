@@ -543,6 +543,13 @@ visibility/opacity pair. Import and saved-track selection issue one fit command 
 left padding for both Tracks panes. Close replaces the source data with empty geometry;
 it does not alter the stored row or camera.
 
+Elevation analysis reads the separately retained point projection. It carries forward
+the last accepted elevation when a change is below the saved noise threshold, never
+bridges independent segment gaps, and derives the profile, totals, gradients, and climbs
+from that one filtered result. Explicit relief recalculation samples the configured
+local elevation boundary point by point under an abort signal and replaces the derived
+point projection only after completion; the original imported blob remains unchanged.
+
 ## Teardown ownership
 
 `MapWorkspace` flushes camera persistence and releases the native map through its ref

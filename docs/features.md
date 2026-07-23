@@ -104,6 +104,19 @@ moving the camera. Every saved track can be downloaded locally as GPX or KML. Ge
 files preserve independent segments, saved name and description, available point
 elevation and reliably aligned timestamps; conversion never uploads the source.
 
+Saved tracks with usable elevation show a distance profile, minimum/maximum, filtered
+ascent/descent, and sustained climbs. The per-track noise threshold defaults to 3 metres
+and persists locally without removing geographic points. Climbs report length, gain,
+average gradient, and a Garmin-style category derived from documented length and grade
+inputs. Users can explicitly recalculate elevation from the configured relief provider,
+monitor progress, cancel it, and retain successful derived points locally.
+
+At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
+persistent import region and **Back to tracks** restores the prior search/list state.
+Wider viewports retain the adjacent detail pane. Each list row reveals deletion on hover
+or keyboard focus and requires inline red-delete confirmation; cancel leaves the row and
+selection unchanged.
+
 ### Create GPX
 
 `Create GPX` starts the manual waypoint workflow from Tracks. Users add, move, remove,

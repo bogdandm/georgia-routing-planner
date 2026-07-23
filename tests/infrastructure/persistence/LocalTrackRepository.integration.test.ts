@@ -25,6 +25,7 @@ function summary(id: string, name: string): LocalTrackSummary {
     sourceFormat: 'gpx',
     description: '',
     favorite: false,
+    elevationFilterMeters: 3,
     geometryKind: 'track',
     pointCount: 2,
     segmentCount: 1,

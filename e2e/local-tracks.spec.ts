@@ -156,12 +156,22 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.goto('?developer=1#tracks');
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-    { timeout: 15_000 },
-  );
+  await page.goto('?developer=1#layers');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  const relief = page.getByRole('checkbox', { name: 'Relief shading' });
+  const isolines = page.getByRole('checkbox', { name: 'Elevation isolines' });
+  await relief.uncheck();
+  await isolines.uncheck();
+  await page.reload();
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await expect(relief).not.toBeChecked();
+  await expect(isolines).not.toBeChecked();
+  await page.getByRole('tab', { name: 'Tracks' }).click();
 
   for (const fixture of realWorldTrackFixtures) {
     const chooserPromise = page.waitForEvent('filechooser');
@@ -183,7 +193,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
       );
     }
     if ('generatedName' in fixture) {
-      await expect(page.getByLabel('Generated name')).toHaveValue(
+      await expect(page.getByLabel('English place name')).toHaveValue(
         new RegExp(fixture.generatedName, 'u'),
       );
     }
@@ -237,9 +247,39 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   await chooser.setFiles(trackFixturePath);
 
   await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
-  await expect(page.getByLabel('Track name')).toHaveValue('Mon 13 Jul 2026');
+  const trackName = page.getByLabel('Track name');
+  const applyPlaceName = page.getByRole('button', { name: 'Apply place name' });
+  const englishPlaceName = page.getByLabel('English place name');
+  const saveTrack = page.getByRole('button', { name: 'Save' });
+  await expect(trackName).toHaveValue('Mon 13 Jul 2026');
   await expect(page.getByText('Saved', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Generated name')).toHaveValue('Kazbegi Municipality');
+  await expect(applyPlaceName).toHaveText('↑ Apply place name ↑');
+  await expect(englishPlaceName).toHaveValue('Kazbegi Municipality');
+  const trackNameBox = await trackName.boundingBox();
+  const applyPlaceNameBox = await applyPlaceName.boundingBox();
+  const englishPlaceNameBox = await englishPlaceName.boundingBox();
+  const saveTrackBox = await saveTrack.boundingBox();
+  expect(trackNameBox).not.toBeNull();
+  expect(applyPlaceNameBox).not.toBeNull();
+  expect(englishPlaceNameBox).not.toBeNull();
+  expect(saveTrackBox).not.toBeNull();
+  if (
+    trackNameBox !== null &&
+    applyPlaceNameBox !== null &&
+    englishPlaceNameBox !== null &&
+    saveTrackBox !== null
+  ) {
+    expect(applyPlaceNameBox.height).toBe(saveTrackBox.height);
+    const applyLeadingGap =
+      applyPlaceNameBox.y - (trackNameBox.y + trackNameBox.height);
+    const saveLeadingGap =
+      saveTrackBox.y - (englishPlaceNameBox.y + englishPlaceNameBox.height);
+    expect(Math.abs(applyLeadingGap - saveLeadingGap)).toBeLessThanOrEqual(1);
+    expect(trackNameBox.y + trackNameBox.height).toBeLessThan(applyPlaceNameBox.y);
+    expect(applyPlaceNameBox.y + applyPlaceNameBox.height).toBeLessThan(
+      englishPlaceNameBox.y,
+    );
+  }
 
   const previewResults = await new AxeBuilder({ page })
     .include('[aria-label="Track details"]')

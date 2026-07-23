@@ -1,6 +1,8 @@
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
@@ -19,10 +21,12 @@ import {
   List,
   ListItemButton,
   Paper,
+  Slider,
   Stack,
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import {
   createContext,
@@ -39,9 +43,11 @@ import {
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import { parseGpx, type ParsedGpx, type TrackPoint } from '@/domain/tracks/gpx';
+import type { ParsedGpx, TrackPoint } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  localTrackPoints,
+  localTrackSegments,
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
@@ -56,6 +62,17 @@ import {
   type PoiCandidate,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
+import {
+  parseTrackFile,
+  trackSourceFormat,
+  type TrackSourceFormat,
+} from '@/domain/tracks/trackImport';
+import {
+  exportTrackAsGpx,
+  exportTrackAsKml,
+  safeTrackFilename,
+} from '@/domain/tracks/trackExport';
+import { calculateElevationProfile } from '@/domain/tracks/elevationProfile';
 import { requestMapFitBounds } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
 
@@ -65,6 +82,7 @@ interface PreviewTrack {
   readonly file: File;
   readonly parsed: ParsedGpx;
   readonly metrics: TrackMetrics;
+  readonly sourceFormat: TrackSourceFormat;
   readonly name: string;
   readonly namingStatus: 'loading' | 'ready' | 'unavailable';
   readonly generatedName?: string;
@@ -95,12 +113,21 @@ interface TracksWorkspaceValue {
   readonly applyGeneratedName: () => void;
   readonly closeActive: () => void;
   readonly deleteActive: () => Promise<void>;
+  readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
   readonly savePreview: () => Promise<void>;
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly setActiveName: (name: string) => void;
   readonly setQuery: (query: string) => void;
   readonly renameActive: () => Promise<void>;
+  readonly toggleFavorite: (summary: LocalTrackSummary) => Promise<void>;
+  readonly updateActiveDescription: (description: string) => Promise<void>;
+  readonly updateElevationFilter: (thresholdMeters: number) => Promise<void>;
+  readonly recalculateActiveElevation: (
+    signal: AbortSignal,
+    onProgress: (completed: number, total: number) => void,
+  ) => Promise<void>;
+  readonly restoreActiveSourceElevation: () => Promise<void>;
 }
 
 interface GeneratedNameInput {
@@ -130,12 +157,16 @@ function useTracksWorkspace(): TracksWorkspaceValue {
   return value;
 }
 
+function useOptionalTracksWorkspace(): TracksWorkspaceValue | null {
+  return use(TracksWorkspaceContext);
+}
+
 function initialTrackName(file: File, parsed: ParsedGpx): string {
   const embeddedName = parsed.metadata.selectedName ?? parsed.metadata.name;
   if (embeddedName !== undefined && embeddedName.trim().length > 0) {
     return embeddedName.trim();
   }
-  const filenameStem = file.name.replace(/\.gpx$/iu, '').trim();
+  const filenameStem = file.name.replace(/\.(gpx|fit|kml)$/iu, '').trim();
   return filenameStem.length > 0 ? filenameStem : 'New track';
 }
 
@@ -175,8 +206,15 @@ function bestCandidate(
 }
 
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
-  const { clock, database, idGenerator, logger, mapLayers, searchPlaces } =
-    useRuntimeServices();
+  const {
+    clock,
+    database,
+    elevationProvider,
+    idGenerator,
+    logger,
+    mapLayers,
+    searchPlaces,
+  } = useRuntimeServices();
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
@@ -184,10 +222,32 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [importError, setImportError] = useState<ImportErrorNotice | null>(null);
   const namingAbort = useRef<AbortController | null>(null);
   const renderedTrackId = useRef<string | null>(null);
+  const restorationAttempted = useRef(false);
 
   const reloadSummaries = useCallback(async () => {
     try {
-      setSummaries(await database.listLocalTracks());
+      const loaded = await database.listLocalTracks();
+      setSummaries(loaded);
+      if (!restorationAttempted.current) {
+        restorationAttempted.current = true;
+        const latestTrackId = await database.loadLatestOpenedTrackId();
+        const latestSummary = loaded.find((summary) => summary.id === latestTrackId);
+        if (latestSummary !== undefined) {
+          try {
+            const content = await database.loadLocalTrackContent(latestSummary.id);
+            setActive({
+              kind: 'saved',
+              summary: latestSummary,
+              content,
+              draftName: latestSummary.name,
+            });
+          } catch {
+            await database.saveLatestOpenedTrackId(null);
+          }
+        } else if (latestTrackId !== null) {
+          await database.saveLatestOpenedTrackId(null);
+        }
+      }
     } catch {
       setError('Saved tracks could not be loaded from this browser.');
     }
@@ -237,7 +297,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? active.parsed.segments.map((segment) =>
             segment.points.map((point) => point.coordinate),
           )
-        : active.content.segments;
+        : localTrackSegments(active.content);
     const metrics = active.kind === 'preview' ? active.metrics : active.summary.metrics;
     const result = mapLayers?.setImportedTrackGeometry(segments);
     if (result?.status === 'failed') return;
@@ -403,12 +463,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       };
       const selected = Array.from(files);
       if (selected.length !== 1) {
-        reportImportError('Choose exactly one GPX file.');
+        reportImportError('Choose exactly one GPX, FIT, or KML file.');
         return;
       }
       const file = selected[0];
-      if (!file?.name.toLocaleLowerCase('en').endsWith('.gpx')) {
-        reportImportError('Choose a file with the .gpx extension.');
+      const sourceFormat = file === undefined ? null : trackSourceFormat(file.name);
+      if (file === undefined || sourceFormat === null) {
+        reportImportError('Choose a file with a .gpx, .fit, or .kml extension.');
         return;
       }
       if (
@@ -421,7 +482,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setImportError(null);
       setError(null);
       try {
-        const parsed = parseGpx(await file.text());
+        const parsed = await parseTrackFile(file, sourceFormat);
         const metrics = calculateTrackMetrics(parsed.segments);
         const preview: PreviewTrack = {
           kind: 'preview',
@@ -429,6 +490,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           file,
           parsed,
           metrics,
+          sourceFormat,
           name: initialTrackName(file, parsed),
           namingStatus: 'loading',
         };
@@ -441,7 +503,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         reportImportError(
           importError instanceof Error
             ? importError.message
-            : 'The GPX file could not be imported.',
+            : 'The track file could not be imported.',
         );
       }
     },
@@ -458,6 +520,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ...normalizedName,
         savedAt: clock.now().toISOString(),
         sourceFilename: active.file.name,
+        sourceFormat: active.sourceFormat,
+        description: active.parsed.metadata.selectedDescription ?? '',
+        favorite: false,
+        elevationFilterMeters: 3,
         geometryKind: active.parsed.geometryKind,
         pointCount: active.parsed.pointCount,
         segmentCount: active.parsed.segments.length,
@@ -477,12 +543,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       const content: LocalTrackContent = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: active.id,
-        originalGpx: active.file,
-        segments: active.parsed.segments.map((segment) =>
-          segment.points.map((point) => point.coordinate),
-        ),
+        trackPoints: active.parsed.segments.map((segment) => segment.points),
+        elevationSource: 'source',
       };
       await database.saveLocalTrack(summary, content);
+      await database.saveLatestOpenedTrackId(summary.id);
       namingAbort.current?.abort();
       await reloadSummaries();
       setActive({ kind: 'saved', summary, content, draftName: summary.name });
@@ -522,6 +587,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       try {
         const content = await database.loadLocalTrackContent(summary.id);
         setActive({ kind: 'saved', summary, content, draftName: summary.name });
+        await database.saveLatestOpenedTrackId(summary.id);
         setError(null);
       } catch (loadError) {
         setError(
@@ -562,6 +628,130 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, database, reloadSummaries]);
 
+  const toggleFavorite = useCallback(
+    async (summary: LocalTrackSummary) => {
+      try {
+        const updated = await database.updateLocalTrackMetadata(summary.id, {
+          favorite: !summary.favorite,
+        });
+        setActive((current) =>
+          current?.kind === 'saved' && current.summary.id === updated.id
+            ? { ...current, summary: updated }
+            : current,
+        );
+        await reloadSummaries();
+        setError(null);
+      } catch {
+        setError('The favorite could not be updated.');
+      }
+    },
+    [database, reloadSummaries],
+  );
+
+  const updateActiveDescription = useCallback(
+    async (description: string) => {
+      if (active?.kind !== 'saved') return;
+      try {
+        const summary = await database.updateLocalTrackMetadata(active.summary.id, {
+          description,
+        });
+        setActive({ ...active, summary });
+        await reloadSummaries();
+        setError(null);
+      } catch (descriptionError) {
+        setError(
+          descriptionError instanceof Error
+            ? descriptionError.message
+            : 'The description could not be updated.',
+        );
+        throw descriptionError;
+      }
+    },
+    [active, database, reloadSummaries],
+  );
+
+  const updateElevationFilter = useCallback(
+    async (thresholdMeters: number) => {
+      if (active?.kind !== 'saved') return;
+      const summary = await database.updateLocalTrackMetadata(active.summary.id, {
+        elevationFilterMeters: thresholdMeters,
+      });
+      setActive({ ...active, summary });
+      await reloadSummaries();
+    },
+    [active, database, reloadSummaries],
+  );
+
+  const recalculateActiveElevation = useCallback(
+    async (
+      signal: AbortSignal,
+      onProgress: (completed: number, total: number) => void,
+    ) => {
+      if (active?.kind !== 'saved' || elevationProvider === null) {
+        throw new Error('Relief elevation is unavailable for this track.');
+      }
+      const total = active.content.trackPoints.reduce(
+        (sum, segment) => sum + segment.length,
+        0,
+      );
+      let completed = 0;
+      let unavailable = 0;
+      const reliefElevations: number[][] = [];
+      for (const segment of active.content.trackPoints) {
+        const updatedSegment: number[] = [];
+        for (const point of segment) {
+          const sample = await elevationProvider.sample(
+            {
+              longitude: point.coordinate[0],
+              latitude: point.coordinate[1],
+            },
+            signal,
+          );
+          if (sample.status === 'available') updatedSegment.push(sample.meters);
+          if (sample.status !== 'available') unavailable += 1;
+          completed += 1;
+          onProgress(completed, total);
+        }
+        reliefElevations.push(updatedSegment);
+      }
+      if (unavailable > 0) {
+        const message = `Relief elevation was unavailable for ${String(unavailable)} of ${String(total)} track points. The saved profile was not changed.`;
+        setError(message);
+        throw new Error(message);
+      }
+      const content: LocalTrackContent = {
+        ...active.content,
+        reliefElevations,
+        elevationSource: 'relief',
+      };
+      await database.saveLocalTrack(active.summary, content);
+      setActive({ ...active, content });
+      setError(null);
+    },
+    [active, database, elevationProvider],
+  );
+
+  const restoreActiveSourceElevation = useCallback(async () => {
+    if (active?.kind !== 'saved') return;
+    try {
+      const { reliefElevations: _, ...sourceContent } = active.content;
+      const content: LocalTrackContent = {
+        ...sourceContent,
+        elevationSource: 'source',
+      };
+      await database.saveLocalTrack(active.summary, content);
+      setActive({ ...active, content });
+      setError(null);
+    } catch (restoreError) {
+      setError(
+        restoreError instanceof Error
+          ? restoreError.message
+          : 'The source elevation could not be restored.',
+      );
+      throw restoreError;
+    }
+  }, [active, database]);
+
   const deleteActive = useCallback(async () => {
     if (active?.kind !== 'saved') return;
     if (!window.confirm(`Delete “${active.summary.name}” from this browser?`)) return;
@@ -569,6 +759,25 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setActive(null);
     await reloadSummaries();
   }, [active, database, reloadSummaries]);
+
+  const deleteSaved = useCallback(
+    async (summary: LocalTrackSummary) => {
+      try {
+        await database.deleteLocalTrack(summary.id);
+        setActive((current) =>
+          current?.kind === 'saved' && current.summary.id === summary.id
+            ? null
+            : current,
+        );
+        await reloadSummaries();
+        setError(null);
+      } catch {
+        setError('The track could not be deleted.');
+        throw new Error('The track could not be deleted.');
+      }
+    },
+    [database, reloadSummaries],
+  );
 
   const applyGeneratedName = useCallback(() => {
     setActive((current) =>
@@ -582,7 +791,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const normalizedQuery = query.trim().toLocaleLowerCase('en');
     return normalizedQuery.length === 0
       ? summaries
-      : summaries.filter((summary) => summary.normalizedName.includes(normalizedQuery));
+      : summaries.filter(
+          (summary) =>
+            summary.normalizedName.includes(normalizedQuery) ||
+            summary.description.toLocaleLowerCase('en').includes(normalizedQuery),
+        );
   }, [query, summaries]);
 
   const value = useMemo<TracksWorkspaceValue>(
@@ -597,18 +810,25 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       applyGeneratedName,
       closeActive,
       deleteActive,
+      deleteSaved,
       discardPreview,
       renameActive,
       savePreview,
       selectSaved,
       setActiveName,
       setQuery,
+      toggleFavorite,
+      updateActiveDescription,
+      updateElevationFilter,
+      recalculateActiveElevation,
+      restoreActiveSourceElevation,
     }),
     [
       active,
       applyGeneratedName,
       closeActive,
       deleteActive,
+      deleteSaved,
       discardPreview,
       error,
       filteredSummaries,
@@ -619,7 +839,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       savePreview,
       selectSaved,
       setActiveName,
+      setQuery,
       summaries,
+      toggleFavorite,
+      updateActiveDescription,
+      updateElevationFilter,
+      recalculateActiveElevation,
+      restoreActiveSourceElevation,
     ],
   );
 
@@ -707,7 +933,7 @@ function TrackImportZone() {
       <Paper
         ref={zoneRef}
         component="section"
-        aria-label="Import GPX file"
+        aria-label="Import track file"
         variant="outlined"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
@@ -753,7 +979,7 @@ function TrackImportZone() {
             sx={{ fontSize: dragActive ? 36 : 24 }}
           />
           <Typography variant="subtitle2" sx={{ flex: dragActive ? 0 : 1 }}>
-            {dragActive ? 'Drop one GPX file to import' : 'Drop GPX here'}
+            Drop GPX, FIT, or KML here
           </Typography>
           {dragActive ? (
             <Typography variant="caption" color="text.secondary">
@@ -765,7 +991,7 @@ function TrackImportZone() {
               variant="outlined"
               onClick={() => inputRef.current?.click()}
             >
-              Browse GPX file
+              Browse track file
             </Button>
           )}
         </Stack>
@@ -773,7 +999,7 @@ function TrackImportZone() {
           ref={inputRef}
           hidden
           type="file"
-          accept=".gpx,application/gpx+xml"
+          accept=".gpx,.fit,.kml,application/gpx+xml,application/vnd.ant.fit,application/vnd.google-earth.kml+xml"
           onChange={(event) => {
             if (event.target.files !== null) void importFiles(event.target.files);
             event.target.value = '';
@@ -858,8 +1084,27 @@ function TrackStat({ emphasized = false, icon, label, value }: TrackStatProps) {
 }
 
 export function TracksPanel() {
-  const { active, error, filteredSummaries, query, setQuery, selectSaved, summaries } =
-    useTracksWorkspace();
+  const {
+    active,
+    error,
+    filteredSummaries,
+    query,
+    setQuery,
+    selectSaved,
+    summaries,
+    toggleFavorite,
+    deleteSaved,
+  } = useTracksWorkspace();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const compactDetails = useMediaQuery('(max-width:1920px)');
+  if (active !== null && compactDetails) {
+    return (
+      <Stack spacing={2} sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
+        <TrackImportZone />
+        <TrackDetailsPane embedded />
+      </Stack>
+    );
+  }
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
@@ -892,7 +1137,7 @@ export function TracksPanel() {
           <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
             <Typography variant="body2" color="text.secondary">
               {summaries.length === 0
-                ? 'Import a GPX file to preview it, then save it in this browser.'
+                ? 'Import a GPX, FIT, or KML file to preview it, then save it in this browser.'
                 : 'No saved track matches this name.'}
             </Typography>
           </Paper>
@@ -906,13 +1151,24 @@ export function TracksPanel() {
               const elapsedSeconds = summary.metrics.elapsedSeconds;
               const ascentMeters = summary.metrics.ascentMeters;
               return (
-                <Paper key={summary.id} variant="outlined" sx={{ overflow: 'hidden' }}>
+                <Paper
+                  key={summary.id}
+                  variant="outlined"
+                  sx={{
+                    display: 'flex',
+                    overflow: 'hidden',
+                    '& .track-delete': { opacity: 0 },
+                    '&:hover .track-delete, &:focus-within .track-delete': {
+                      opacity: 1,
+                    },
+                  }}
+                >
                   <ListItemButton
                     selected={
                       active?.kind === 'saved' && active.summary.id === summary.id
                     }
                     onClick={() => void selectSaved(summary)}
-                    sx={{ display: 'block', px: 1.5, py: 1.25 }}
+                    sx={{ display: 'block', minWidth: 0, px: 1.5, py: 1.25 }}
                   >
                     <Typography variant="subtitle2">{summary.name}</Typography>
                     <Stack
@@ -941,6 +1197,66 @@ export function TracksPanel() {
                       )}
                     </Stack>
                   </ListItemButton>
+                  <Tooltip
+                    title={
+                      summary.favorite ? 'Remove from favorites' : 'Add to favorites'
+                    }
+                  >
+                    <IconButton
+                      aria-label={
+                        summary.favorite ? 'Remove from favorites' : 'Add to favorites'
+                      }
+                      color={summary.favorite ? 'warning' : 'default'}
+                      onClick={() => void toggleFavorite(summary)}
+                      sx={{ alignSelf: 'center', mr: 0.5 }}
+                    >
+                      {summary.favorite ? <StarIcon /> : <StarBorderIcon />}
+                    </IconButton>
+                  </Tooltip>
+                  {pendingDeleteId === summary.id ? (
+                    <Stack
+                      direction="row"
+                      spacing={0.25}
+                      sx={{ alignItems: 'center', mr: 0.5 }}
+                    >
+                      <IconButton
+                        color="error"
+                        aria-label={`Confirm delete ${summary.name}`}
+                        onClick={() => {
+                          void deleteSaved(summary)
+                            .then(() => {
+                              setPendingDeleteId(null);
+                            })
+                            .catch(() => {
+                              setPendingDeleteId(null);
+                            });
+                        }}
+                      >
+                        <DeleteOutlineOutlinedIcon />
+                      </IconButton>
+                      <IconButton
+                        aria-label={`Cancel delete ${summary.name}`}
+                        onClick={() => {
+                          setPendingDeleteId(null);
+                        }}
+                      >
+                        <CloseIcon />
+                      </IconButton>
+                    </Stack>
+                  ) : (
+                    <Tooltip title="Delete track">
+                      <IconButton
+                        className="track-delete"
+                        aria-label={`Delete ${summary.name}`}
+                        onClick={() => {
+                          setPendingDeleteId(summary.id);
+                        }}
+                        sx={{ alignSelf: 'center', mr: 0.5 }}
+                      >
+                        <DeleteOutlineOutlinedIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Paper>
               );
             })}
@@ -967,6 +1283,257 @@ export function TracksPanel() {
         <Typography variant="caption">Saved tracks stay in this browser.</Typography>
       </Alert>
     </Box>
+  );
+}
+
+function SavedTrackDescription() {
+  const { active, updateActiveDescription } = useTracksWorkspace();
+  const savedDescription = active?.kind === 'saved' ? active.summary.description : '';
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(savedDescription);
+
+  if (active?.kind !== 'saved') return null;
+
+  if (editing) {
+    return (
+      <Stack spacing={1}>
+        <TextField
+          multiline
+          minRows={3}
+          label="Description"
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+          }}
+          slotProps={{ htmlInput: { maxLength: 10_000 } }}
+        />
+        <Stack direction="row" spacing={1}>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => {
+              void updateActiveDescription(draft)
+                .then(() => {
+                  setEditing(false);
+                })
+                .catch(() => undefined);
+            }}
+          >
+            Apply edit
+          </Button>
+          <Button
+            size="small"
+            color="inherit"
+            onClick={() => {
+              setDraft(savedDescription);
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </Button>
+        </Stack>
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack spacing={1}>
+      <Typography component="h3" variant="subtitle2">
+        Description
+      </Typography>
+      {savedDescription.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+          No description has been added.
+        </Typography>
+      ) : (
+        <Typography
+          component="div"
+          variant="body2"
+          sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+        >
+          {savedDescription.split(/(https?:\/\/[^\s]+)/giu).map((part, index) =>
+            /^https?:\/\//iu.test(part) ? (
+              <Box
+                component="a"
+                key={`${part}-${String(index)}`}
+                href={part}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {part}
+              </Box>
+            ) : (
+              part
+            ),
+          )}
+        </Typography>
+      )}
+      <Button
+        size="small"
+        variant="text"
+        onClick={() => {
+          setEditing(true);
+        }}
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        Edit
+      </Button>
+    </Stack>
+  );
+}
+
+function downloadText(filename: string, type: string, content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function TrackElevationProfile() {
+  const {
+    active,
+    recalculateActiveElevation,
+    restoreActiveSourceElevation,
+    updateElevationFilter,
+  } = useTracksWorkspace();
+  const [recalculationProgress, setRecalculationProgress] = useState<number | null>(
+    null,
+  );
+  const recalculationAbort = useRef<AbortController | null>(null);
+  if (active === null) return null;
+  const segments =
+    active.kind === 'preview'
+      ? active.parsed.segments.map((segment) => segment.points)
+      : localTrackPoints(active.content);
+  const threshold = active.kind === 'saved' ? active.summary.elevationFilterMeters : 3;
+  const profile = calculateElevationProfile(segments, threshold);
+  if (profile === null) return null;
+  const distanceMaximum = profile.points.at(-1)?.distanceMeters ?? 1;
+  const elevationRange = Math.max(1, profile.maximumMeters - profile.minimumMeters);
+  const polyline = profile.points
+    .map((point) => {
+      const x = (point.distanceMeters / distanceMaximum) * 100;
+      const y =
+        38 - ((point.elevationMeters - profile.minimumMeters) / elevationRange) * 34;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+  const highPoint = profile.points.reduce((highest, point) =>
+    point.elevationMeters > highest.elevationMeters ? point : highest,
+  );
+  const highPointX = (highPoint.distanceMeters / distanceMaximum) * 100;
+  const highPointY =
+    38 - ((highPoint.elevationMeters - profile.minimumMeters) / elevationRange) * 34;
+  const elevationSource =
+    active.kind === 'saved' && active.content.elevationSource === 'relief'
+      ? 'relief-map elevation'
+      : 'source-file elevation';
+  return (
+    <Stack spacing={1}>
+      <Typography component="h3" variant="subtitle2">
+        Elevation profile
+      </Typography>
+      <Box
+        component="svg"
+        role="img"
+        aria-label={`Elevation against distance. High point ${String(Math.round(highPoint.elevationMeters))} metres.`}
+        viewBox="0 0 100 40"
+        sx={{ width: '100%', height: 160, bgcolor: appColors.surface.subtle }}
+      >
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke={appColors.brand.blueGreenDark}
+          strokeWidth="1.5"
+        />
+        <circle cx={highPointX} cy={highPointY} r="2" fill={appColors.status.warning} />
+      </Box>
+      <Typography variant="caption">
+        {Math.round(profile.minimumMeters)}–{Math.round(profile.maximumMeters)} m ·
+        ascent {Math.round(profile.ascentMeters)} m · descent{' '}
+        {Math.round(profile.descentMeters)} m · {elevationSource}
+      </Typography>
+      <Typography id="elevation-filter-label" variant="caption">
+        Elevation noise filter: {threshold} m
+      </Typography>
+      <Slider
+        aria-labelledby="elevation-filter-label"
+        min={0}
+        max={20}
+        step={1}
+        value={threshold}
+        valueLabelDisplay="auto"
+        disabled={active.kind !== 'saved'}
+        onChangeCommitted={(_, value) => {
+          if (typeof value === 'number') void updateElevationFilter(value);
+        }}
+      />
+      {active.kind === 'saved' ? (
+        recalculationProgress === null ? (
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              const controller = new AbortController();
+              recalculationAbort.current = controller;
+              setRecalculationProgress(0);
+              void recalculateActiveElevation(controller.signal, (completed, total) => {
+                setRecalculationProgress(Math.round((completed / total) * 100));
+              })
+                .catch(() => undefined)
+                .finally(() => {
+                  recalculationAbort.current = null;
+                  setRecalculationProgress(null);
+                });
+            }}
+          >
+            Recalculate from relief map
+          </Button>
+        ) : (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="caption">
+              Recalculating {recalculationProgress}%
+            </Typography>
+            <Button
+              size="small"
+              onClick={() => {
+                recalculationAbort.current?.abort();
+              }}
+            >
+              Cancel
+            </Button>
+          </Stack>
+        )
+      ) : null}
+      {active.kind === 'saved' && active.content.elevationSource === 'relief' ? (
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => {
+            void restoreActiveSourceElevation().catch(() => undefined);
+          }}
+        >
+          Restore source elevation
+        </Button>
+      ) : null}
+      {profile.climbs.length === 0 ? (
+        <Typography variant="caption" color="text.secondary">
+          No sustained categorized climbs detected.
+        </Typography>
+      ) : (
+        <Stack spacing={0.5}>
+          {profile.climbs.map((climb, index) => (
+            <Typography key={index} variant="caption">
+              Category {climb.category} · {(climb.distanceMeters / 1_000).toFixed(1)} km
+              · {Math.round(climb.gainMeters)} m ·{' '}
+              {climb.averageGradientPercent.toFixed(1)}%
+            </Typography>
+          ))}
+        </Stack>
+      )}
+    </Stack>
   );
 }
 
@@ -1032,6 +1599,7 @@ interface TrackMetadataProps {
   readonly savedAt: string | undefined;
   readonly segmentCount: number;
   readonly sourceFilename: string;
+  readonly sourceFormat: TrackSourceFormat;
 }
 
 function TrackMetadata({
@@ -1039,12 +1607,15 @@ function TrackMetadata({
   savedAt,
   segmentCount,
   sourceFilename,
+  sourceFormat,
 }: TrackMetadataProps) {
   const pointLabel = `${pointCount.toLocaleString('en')} ${pointCount === 1 ? 'point' : 'points'}`;
   const segmentLabel = `${segmentCount.toLocaleString('en')} ${segmentCount === 1 ? 'segment' : 'segments'}`;
   return (
     <Stack spacing={0.5} sx={{ px: 1 }}>
-      <Typography variant="body2">{sourceFilename}</Typography>
+      <Typography variant="body2">
+        {sourceFilename} · {sourceFormat.toLocaleUpperCase('en')}
+      </Typography>
       <Typography variant="caption" color="text.secondary">
         {pointLabel} · {segmentLabel}
       </Typography>
@@ -1057,7 +1628,11 @@ function TrackMetadata({
   );
 }
 
-export function TrackDetailsPane() {
+interface TrackDetailsPaneProps {
+  readonly embedded?: boolean;
+}
+
+export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
   const {
     active,
     applyGeneratedName,
@@ -1067,8 +1642,11 @@ export function TrackDetailsPane() {
     renameActive,
     savePreview,
     setActiveName,
+    toggleFavorite,
   } = useTracksWorkspace();
+  const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active === null) return null;
+  if (compactDetails !== embedded) return null;
   const metrics = active.kind === 'saved' ? active.summary.metrics : active.metrics;
   const pointCount =
     active.kind === 'saved' ? active.summary.pointCount : active.parsed.pointCount;
@@ -1079,6 +1657,8 @@ export function TrackDetailsPane() {
       : active.parsed.segments.length;
   const sourceFilename =
     active.kind === 'saved' ? active.summary.sourceFilename : active.file.name;
+  const sourceFormat =
+    active.kind === 'saved' ? active.summary.sourceFormat : active.sourceFormat;
   const warnings =
     active.kind === 'saved' ? active.summary.warnings : active.parsed.warnings;
   return (
@@ -1086,14 +1666,14 @@ export function TrackDetailsPane() {
       component="aside"
       aria-label="Track details"
       sx={{
-        width: { xs: 404, xl: 440 },
+        width: embedded ? '100%' : { xs: 404, xl: 440 },
         height: '100%',
         minHeight: 0,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'background.paper',
-        borderRight: 1,
+        borderRight: embedded ? 0 : 1,
         borderColor: 'divider',
       }}
     >
@@ -1117,7 +1697,11 @@ export function TrackDetailsPane() {
             {active.kind === 'preview' ? 'New track' : 'Selected track'}
           </Typography>
         </Box>
-        <IconButton size="small" aria-label="Close track" onClick={closeActive}>
+        <IconButton
+          size="small"
+          aria-label={embedded ? 'Back to tracks' : 'Close track'}
+          onClick={closeActive}
+        >
           <CloseIcon fontSize="small" />
         </IconButton>
       </Stack>
@@ -1182,13 +1766,48 @@ export function TrackDetailsPane() {
               </Stack>
             </>
           ) : (
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
               <Button
                 size="small"
                 variant="outlined"
                 onClick={() => void renameActive()}
               >
                 Rename
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color={active.summary.favorite ? 'warning' : 'inherit'}
+                startIcon={active.summary.favorite ? <StarIcon /> : <StarBorderIcon />}
+                onClick={() => void toggleFavorite(active.summary)}
+              >
+                {active.summary.favorite ? 'Favorited' : 'Favorite'}
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  downloadText(
+                    safeTrackFilename(active.summary.name, 'gpx'),
+                    'application/gpx+xml',
+                    exportTrackAsGpx(active.summary, active.content),
+                  );
+                }}
+              >
+                Download as GPX
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  downloadText(
+                    safeTrackFilename(active.summary.name, 'kml'),
+                    'application/vnd.google-earth.kml+xml',
+                    exportTrackAsKml(active.summary, active.content),
+                  );
+                }}
+              >
+                Download as KML
               </Button>
               <Button
                 size="small"
@@ -1205,12 +1824,17 @@ export function TrackDetailsPane() {
             Track details
           </Typography>
           <TrackStats metrics={metrics} />
+          <TrackElevationProfile />
           <TrackMetadata
             pointCount={pointCount}
             savedAt={savedAt}
             segmentCount={segmentCount}
             sourceFilename={sourceFilename}
+            sourceFormat={sourceFormat}
           />
+          {active.kind === 'saved' ? (
+            <SavedTrackDescription key={active.summary.id} />
+          ) : null}
           {segmentCount > 1 ? (
             <Alert severity="info">
               Independent segments are not joined; totals exclude gaps.
@@ -1258,4 +1882,4 @@ export function TrackDetailsPane() {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export { useTracksWorkspace };
+export { useOptionalTracksWorkspace, useTracksWorkspace };

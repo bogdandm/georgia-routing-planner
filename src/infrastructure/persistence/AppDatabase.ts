@@ -24,13 +24,14 @@ import type {
   GpxLink,
   GpxMetadataProjection,
   GpxValidationWarning,
+  TrackPoint,
 } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  normalizeLocalTrackDescription,
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
-  type StoredGpxBlob,
 } from '@/domain/tracks/localTrack';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
@@ -364,6 +365,10 @@ const localTrackSummarySchema = z
     normalizedName: z.string().min(1).max(200),
     savedAt: z.iso.datetime(),
     sourceFilename: z.string().min(1).max(500),
+    sourceFormat: z.enum(['gpx', 'fit', 'kml']).default('gpx'),
+    description: z.string().max(10_000).default(''),
+    favorite: z.boolean().default(false),
+    elevationFilterMeters: z.number().min(0).max(50).default(3),
     geometryKind: z.enum(['track', 'route']),
     pointCount: z.number().int().min(2).max(100_000),
     segmentCount: z.number().int().min(1).max(512),
@@ -386,6 +391,10 @@ const localTrackSummarySchema = z
       normalizedName: value.normalizedName,
       savedAt: value.savedAt,
       sourceFilename: value.sourceFilename,
+      sourceFormat: value.sourceFormat,
+      description: value.description,
+      favorite: value.favorite,
+      elevationFilterMeters: value.elevationFilterMeters,
       geometryKind: value.geometryKind,
       pointCount: value.pointCount,
       segmentCount: value.segmentCount,
@@ -404,35 +413,88 @@ const localTrackSummarySchema = z
     return result;
   });
 
-const localTrackContentSchema: z.ZodType<LocalTrackContent> = z
+const storedTrackPointSchema: z.ZodType<TrackPoint> = z
+  .object({
+    coordinate: coordinateSchema,
+    elevationMeters: z.number().optional(),
+    recordedAt: z.iso.datetime().optional(),
+  })
+  .strict()
+  .transform((value): TrackPoint => {
+    const point: {
+      coordinate: TrackPoint['coordinate'];
+      elevationMeters?: number;
+      recordedAt?: string;
+    } = { coordinate: value.coordinate };
+    if (value.elevationMeters !== undefined) {
+      point.elevationMeters = value.elevationMeters;
+    }
+    if (value.recordedAt !== undefined) point.recordedAt = value.recordedAt;
+    return point;
+  });
+
+const storedTrackSegmentsSchema = z
+  .array(z.array(storedTrackPointSchema).min(2))
+  .min(1)
+  .max(512);
+
+const currentLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     trackId: z.string().min(1).max(200),
-    originalGpx: z.custom<StoredGpxBlob>(isBlobValue),
-    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
+    trackPoints: storedTrackSegmentsSchema,
+    reliefElevations: z.array(z.array(z.number()).min(2)).min(1).max(512).optional(),
+    elevationSource: z.enum(['source', 'relief']).default('source'),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.reliefElevations === undefined) {
+      if (value.elevationSource === 'relief') {
+        context.addIssue({
+          code: 'custom',
+          message: 'Relief elevation values are required for the relief source.',
+        });
+      }
+      return;
+    }
+    const aligned =
+      value.reliefElevations.length === value.trackPoints.length &&
+      value.reliefElevations.every(
+        (segment, index) => segment.length === value.trackPoints[index]?.length,
+      );
+    if (!aligned) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Relief elevation values must align with source track points.',
+      });
+    }
+  });
+
+const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
+  .object({
+    schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
+    trackId: z.string().min(1).max(200),
+    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
+    trackPoints: storedTrackSegmentsSchema.optional(),
+  })
+  .loose()
+  .transform((value): LocalTrackContent => ({
+    schemaVersion: value.schemaVersion,
+    trackId: value.trackId,
+    trackPoints:
+      value.trackPoints ??
+      value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
+    elevationSource: 'source',
+  }));
+
+const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.union([
+  currentLocalTrackContentSchema,
+  legacyLocalTrackContentSchema,
+]);
 
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
   return result.success ? result.data : null;
-}
-
-function isBlobValue(value: unknown): value is StoredGpxBlob {
-  if (value instanceof Blob) return true;
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Object.prototype.toString.call(value) === '[object Blob]' &&
-    'size' in value &&
-    typeof value.size === 'number' &&
-    'type' in value &&
-    typeof value.type === 'string' &&
-    'arrayBuffer' in value &&
-    typeof value.arrayBuffer === 'function' &&
-    'text' in value &&
-    typeof value.text === 'function'
-  );
 }
 
 function parseLocalTrackContent(value: unknown): LocalTrackContent | null {
@@ -462,6 +524,21 @@ export class AppDatabase
       localTracks: 'id,normalizedName,savedAt',
       localTrackContents: 'trackId',
     });
+    this.version(3)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+      })
+      .upgrade(async (transaction) => {
+        const table = transaction.table('localTrackContents');
+        const records: unknown[] = await table.toArray();
+        for (const record of records) {
+          const parsed = parseLocalTrackContent(record);
+          if (parsed !== null) await table.put(parsed);
+        }
+      });
   }
 
   public async saveLocalTrack(
@@ -508,10 +585,9 @@ export class AppDatabase
       });
     }
     return valid.sort((left, right) => {
-      const byName = left.name.localeCompare(right.name, 'en', {
-        sensitivity: 'base',
-      });
-      return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+      if (left.favorite !== right.favorite) return left.favorite ? -1 : 1;
+      const bySavedAt = right.savedAt.localeCompare(left.savedAt, 'en');
+      return bySavedAt === 0 ? left.id.localeCompare(right.id, 'en') : bySavedAt;
     });
   }
 
@@ -548,14 +624,74 @@ export class AppDatabase
     return updated;
   }
 
+  public async updateLocalTrackMetadata(
+    trackId: string,
+    changes: {
+      readonly description?: string;
+      readonly favorite?: boolean;
+      readonly elevationFilterMeters?: number;
+    },
+  ): Promise<LocalTrackSummary> {
+    const existing = await this.localTracks.get(trackId);
+    const parsed = parseLocalTrackSummary(existing);
+    if (parsed === null) {
+      throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
+    }
+    const updated: LocalTrackSummary = {
+      ...parsed,
+      description:
+        changes.description === undefined
+          ? parsed.description
+          : normalizeLocalTrackDescription(changes.description),
+      favorite: changes.favorite ?? parsed.favorite,
+      elevationFilterMeters:
+        changes.elevationFilterMeters ?? parsed.elevationFilterMeters,
+    };
+    await this.localTracks.put(updated);
+    return updated;
+  }
+
+  public async loadLatestOpenedTrackId(): Promise<string | null> {
+    const record = await this.settings.get('local-tracks.latest-opened');
+    if (record === undefined) return null;
+    if (typeof record.value === 'string' && record.value.length <= 200) {
+      return record.value;
+    }
+    await this.settings.delete('local-tracks.latest-opened');
+    return null;
+  }
+
+  public async saveLatestOpenedTrackId(trackId: string | null): Promise<void> {
+    if (trackId === null) {
+      await this.settings.delete('local-tracks.latest-opened');
+      return;
+    }
+    if (trackId.length === 0 || trackId.length > 200) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The latest opened track identifier is invalid.',
+      );
+    }
+    await this.settings.put({
+      key: 'local-tracks.latest-opened',
+      value: trackId,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   public async deleteLocalTrack(trackId: string): Promise<void> {
     await this.transaction(
       'rw',
+      this.settings,
       this.localTracks,
       this.localTrackContents,
       async () => {
         await this.localTrackContents.delete(trackId);
         await this.localTracks.delete(trackId);
+        const latest = await this.settings.get('local-tracks.latest-opened');
+        if (latest?.value === trackId) {
+          await this.settings.delete('local-tracks.latest-opened');
+        }
       },
     );
   }

@@ -1,14 +1,42 @@
 # AGENTS.md
 
+In Code Mode, within each bounded stage, run independent, functions.exec-available tool
+calls concurrently in one functions.exec call. Use await Promise.allSettled([...]) when
+partial results are useful, and inspect every result; use await Promise.all([...]) only
+when any failure should abort the batch. Keep dependencies, waits/resumes, approvals,
+conflicting or interdependent mutations, and adaptive investigations where each result
+may change the next step sequential. Do not split otherwise batchable inspections across
+outer tool calls.
+
 ## Scope
 
 These instructions apply to the entire Georgia Routing Planner repository.
+Directory-specific instructions live in:
 
-## Canonical UI guidance
+- [`src/AGENTS.md`](src/AGENTS.md) for production architecture, source-code boundaries,
+  TypeScript, React, state, persistence, diagnostics, MapLibre, and imported-data rules.
+- [`tests/AGENTS.md`](tests/AGENTS.md) for Vitest unit, component, and integration
+  tests.
+- [`e2e/AGENTS.md`](e2e/AGENTS.md) for Playwright Chromium and accessibility workflows.
 
+Within those directories, the nested file supplements this root file and takes
+precedence where it is more specific.
+
+## Canonical documentation
+
+[`README.md`](README.md) owns the stable project overview and developer setup.
 [`docs/features.md`](docs/features.md) owns the durable workspace and interaction
-contract. [`docs/ui-design.md`](docs/ui-design.md) owns reusable placement, hierarchy,
-spacing, disclosure, and copy conventions.
+contract. [`docs/ui-design.md`](docs/ui-design.md) owns reusable presentation guidance.
+[`docs/project-structure.md`](docs/project-structure.md) and
+[`docs/runtime-flows.md`](docs/runtime-flows.md) own the durable architecture and
+runtime description. [`docs/map-providers.md`](docs/map-providers.md) owns provider
+choice, schema, attribution, evidence, and operating limits.
+[`docs/README.md`](docs/README.md) indexes permanent project documentation and must stay
+current when documentation files are added, renamed, or removed.
+
+Keep `AGENTS.md` files focused on agent workflow and engineering constraints. Do not
+copy the product roadmap, full feature catalog, provider inventory, or detailed visual
+specification into these files.
 
 ## Git workflow and approval gate
 
@@ -53,10 +81,6 @@ When the maintainer names an existing branch or worktree, keep all requested wor
 Never reuse the main repository checkout or another agent's worktree. The maintainer
 commonly runs four to six agents in parallel; separate worktrees keep independent
 workstreams isolated without fragmenting one workstream across repeated review branches.
-
-Each worktree must also use a distinct, explicit development-server port. Check that the
-chosen port is free before starting Vite and pass both `--port <port>` and
-`--strictPort`; do not rely on Vite's automatic port fallback.
 
 The only exception is when the maintainer directly instructs that agent to use the main
 repository checkout for the current task. Treat the main checkout as
@@ -166,15 +190,12 @@ Before running JavaScript tooling in a new worktree:
 4. If the task needs dependencies, run `pnpm.cmd install --frozen-lockfile` from the
    worktree with network permission available from the start. Even with a frozen
    lockfile and warm pnpm store, missing package archives may require registry access.
-   Documentation-only tasks do not need an install.
+   Documentation-only tasks do not need an install unless the required formatter is
+   unavailable in the worktree.
 5. Prefer repository scripts through `pnpm.cmd <script>`. In managed Windows shells, do
    not use `pnpm exec`: duplicate PATH variables can prevent it from finding the current
    worktree's `.bin` directory. When no repository script exists, invoke the current
    worktree binary explicitly as `.\node_modules\.bin\<tool>.CMD <arguments>`.
-
-The development server is the deliberate exception to the repository-script preference:
-use the direct Vite command specified under Local servers and ports. Do not try pnpm
-script variants first.
 
 On Windows, use `pnpm.cmd`, not the PowerShell `pnpm.ps1` shim; managed shells may block
 the latter through execution policy. Do not change machine execution policy to make the
@@ -197,16 +218,10 @@ Delete and reinstall only the current worktree's ignored `node_modules` when evi
 shows it is incomplete or stale. Do not delete the shared pnpm store, another worktree's
 dependencies, or the lockfile as a troubleshooting shortcut.
 
-Rules:
+### Repository safety rules
 
-- Never commit directly to `main`.
 - When asked directly for code review, review code only. Do not run tests, E2E tests, or
   other pnpm automatic checks.
-- Never merge, fast-forward, rebase, cherry-pick, or push feature work into `main`; the
-  absolute main-integration prohibition above has no agent-executable approval path.
-- Do not interpret any user wording as permission for an agent to merge a pull request
-  or bypass repository policy. Hand off the verified pull request for the maintainer to
-  merge.
 - An explicit request to remove, postpone, or take a feature out of scope authorizes
   staging and committing the corresponding tracked-file deletions on the feature branch.
 - Do not create a new remote, change branch protection, publish, or deploy unless the
@@ -220,6 +235,18 @@ Rules:
   as authoritative.
 - Preserve unrelated modifications and untracked files. If they overlap the task,
   inspect and incorporate them rather than discarding them.
+
+### Live development servers
+
+Agents must not start or keep a Vite development server running by default. Prefer
+source inspection, focused automated tests, production builds, and the bounded
+Playwright runner described in [`e2e/AGENTS.md`](e2e/AGENTS.md).
+
+Start a live development server only when the maintainer explicitly requests it or when
+a specific verification cannot be completed through those alternatives. Stop it as soon
+as that check is complete. Do not create or maintain repository port reservations. For
+an explicitly authorized one-off server, use a currently free explicit port with
+`--strictPort`; never rely on automatic fallback or terminate an unknown listener.
 
 ### CI failure authorization
 
@@ -243,16 +270,18 @@ cannot be associated with the current workstream. A generic tool or skill workfl
 normally pauses for fix approval does not require a second approval in this specific
 maintainer-reported current-PR case.
 
-### Incremental commit cadence
+### Incremental commit cadence and optional planning
 
 Commit implementation incrementally. Group commits around independently reviewable
 behavior or one focused structural change, with directly relevant tests and permanent
 documentation. Keep intermediate states buildable and internally consistent.
 
-Before a multi-step workstream begins, create or update branch-local `PLAN.md` with the
-intended commit sequence. A single small atomic change does not require a plan.
+Create or update a branch-local `PLAN.md` only when the work is substantive and
+multi-step, or when the intended commit sequence, work split, or verification plan is
+not obvious from the task. `PLAN.md` is optional for small features, bug fixes,
+documentation-only changes, and single atomic changes.
 
-For each planned commit:
+When a plan is used, each planned commit should:
 
 1. Complete one independently reviewable behavior or focused structural change.
 2. Run only the focused checks needed for that commit.
@@ -265,7 +294,7 @@ verification round before committing completed, reviewable work. Treat approxima
 warning; inspect whether a completed part can be committed without creating a broken or
 misleading intermediate state.
 
-### Complexity and code-growth budget
+### Complexity, implementation, and refactoring
 
 Optimize for simplicity, explicit control flow, strong typing, shallow dependency
 graphs, discoverability, and low cognitive load. Prefer changing, reusing, simplifying,
@@ -299,51 +328,29 @@ paths, unused exports, redundant tests, and stale documentation in the same work
 Do not keep old and new implementations together unless a concrete, documented runtime
 migration requires both.
 
-Every multi-step `PLAN.md` must identify:
-
-- Existing code that will be reused.
-- Code, files, dependencies, or paths that will be removed or replaced.
-- Why each new production file, abstraction, state owner, or dependency is necessary.
-
 Before final verification, review the complete diff and remove unnecessary files, dead
 branches, wrappers, adapters, interfaces, fallbacks, defensive logic, duplicate helpers,
 and temporary compatibility code. Collapse trivial single-consumer abstractions when
 they provide no meaningful boundary, lifecycle, or test seam.
 
-Use net production growth as a review trigger:
-
-- More than 500 net new handwritten production lines requires a brief justification.
-- More than 1,000 net new handwritten production lines requires explaining why more
-  existing code could not be replaced or simplified.
-- Three or more new production files requires listing the responsibility and immediate
-  consumer of each file.
-
 Keep production and test measurements separate. Exclude tests, fixtures, generated
 files, documentation, scripts, tooling, lockfiles, and formatting-only changes from
 production LOC.
-
-### Implementation and refactoring rules
 
 - A bug fix makes the smallest semantic change that fixes the demonstrated problem. It
   must not introduce a new architectural layer or unrelated refactoring.
 - Refactoring must reduce complexity rather than redistribute it. Prefer deleting code
   over moving, renaming, wrapping, extracting, or splitting it.
-- Renaming, relocation, extraction, file splitting, and replacing one abstraction with
-  another are not simplification by themselves.
-- Refactoring should reduce production LOC, production file count, dependency count,
-  call depth, state duplication, or the concepts required to understand the affected
-  feature.
 - Prefer negative production LOC for simplification work unless added code is necessary
   to preserve required behavior or clarity.
-- Do not rewrite the application merely to conform to these instructions.
 - Preserve valuable existing boundaries when removing them would make the code less
   clear or less safe.
 
 ### Feature finalization and pull request
 
-A feature is not finished until final verification passes and its branch is available in
-a GitHub pull request targeting `main`. By final verification, implementation should
-already be distributed across its planned commits.
+A workstream is not finished until final verification passes and its branch is available
+in a GitHub pull request targeting `main`. By final verification, the work should
+already be distributed across coherent commits.
 
 After final verification:
 
@@ -377,16 +384,22 @@ Every completed-workstream report must present these fields together and in this
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` one directly runnable command in this form:
-  `cd /d "<absolute-worktree-path>" && .\node_modules\.bin\vite.CMD --port <reserved-port> --strictPort`.
+- `Test path:` one directly runnable live-server command for the maintainer's current
+  environment, or `Not applicable` with the reason.
+- `Verification:` every command run and its result, plus checks skipped as
+  `Not applicable` with the reason.
+- `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-The handoff command targets Windows Command Prompt because that is the maintainer's
-copy-paste prompt. Use `cd /d` so paths on another drive work, double quotes for the
-absolute path, and `&&` so Vite starts only after navigation succeeds. Do not use the
-PowerShell-only `Set-Location` or `;` in `Test path:`. Use the worktree's reserved port.
-Do not omit these fields, substitute the main checkout, provide a relative path, or
-describe startup only in prose. When no local server is applicable, keep `Test path:`
-and state `Not applicable` with the reason.
+When the maintainer requests a live server for the handoff, use the applicable command
+form with the worktree's native absolute path and an explicit free port:
+
+- Windows Command Prompt:
+  `cd /d "<absolute-worktree-path>" && .\node_modules\.bin\vite.CMD --port <port> --strictPort`
+- Ubuntu or another Bash environment:
+  `cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port <port> --strictPort`
+
+Do not put a Windows path into the Ubuntu command. When no live server was requested,
+keep `Test path:` and state `Not applicable` with the reason.
 
 ### Pull request title and description
 
@@ -431,35 +444,27 @@ Description rules:
 
 Keep stable system documentation independent from work breakdown and delivery progress:
 
-| Location          | Owns                                                                                                      | Must not contain                                                                                |
-| ----------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `README.md`       | Stable project overview, current application capabilities, setup, commands, and complete concept summary  | Feature phases/stages, task IDs, estimates, branch/commit/PR status, merge status, or progress  |
-| `docs/`           | Stable feature concepts, implemented behavior, unavailable capability labels, architecture, and operation | Feature phases/stages, task ordering, estimates, branch/commit/PR status, or delivery progress  |
-| `TOP_LVL_PLAN.md` | TO-BE product roadmap, feature ordering, dependencies, broad acceptance, and high-level progress          | Detailed durable technical contracts that belong in `docs/`, code, or tests                     |
-| `PLAN.md`         | Active implementation tasks, work splits, commit sequence, verification plan, and detailed progress       | The only explanation of a feature's meaning, runtime contract, ownership, or operating behavior |
+| Location          | Owns                                                                                                                                | Must not contain                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `README.md`       | Stable project overview, current capabilities, setup, and commands                                                                  | Feature stages, task IDs, estimates, branch/commit/PR status, or progress tracking              |
+| `docs/`           | Stable feature concepts, implemented behavior, architecture, and operation                                                          | Task ordering, estimates, branch/commit/PR status, or delivery history                          |
+| `AGENTS.md` files | Repository-wide or directory-specific agent workflow and engineering constraints                                                    | Product roadmap, duplicated feature specifications, or detailed design documentation            |
+| `TOP_LVL_PLAN.md` | TO-BE product roadmap, feature ordering, dependencies, broad acceptance, and high-level progress                                    | Detailed durable technical contracts that belong in `docs/`, code, or tests                     |
+| `PLAN.md`         | Optional branch-local tasks, work splits, commit sequence, verification plan, and detailed progress for substantive multi-step work | The only explanation of a feature's meaning, runtime contract, ownership, or operating behavior |
 
 Rules:
 
 - `README.md` and `docs/` may describe unavailable features needed to explain the
   reviewed system concept, but must not say when, in which stage, or through which task
   or branch they will be implemented.
-- Only `PLAN.md` and `TOP_LVL_PLAN.md` may contain roadmap sequencing, work-item
-  breakdown, estimates, branch tracking, approval progress, or implementation history.
+- Roadmap sequencing, estimates, branch tracking, approval progress, and implementation
+  history belong only in `TOP_LVL_PLAN.md` or in a temporary `PLAN.md` when one is used.
 - Stable documentation must not depend on a planning section, task number, or
   implementation split to explain a lasting contract.
 - Move durable facts discovered during implementation into `README.md`, `docs/`, code
   contracts, or tests in the same change.
 - When reviewed UI direction conflicts with stale repository prose, update the stable
-  feature documentation and relevant planning files.
-- Before a documentation handoff, verify this command returns no matches:
-
-  ```powershell
-  rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
-  ```
-
-  Also inspect `README.md` and `docs/` for estimates, task identifiers, branch names,
-  commits, pull-request state, merge state, approval state, and other progress
-  reporting.
+  feature documentation rather than expanding `AGENTS.md` with product or design detail.
 
 ## Maintainer context
 
@@ -469,619 +474,65 @@ not assume deep familiarity with modern frontend conventions; document non-obvio
 behavior and explain frontend-specific tradeoffs in pull requests and handoffs. Do not
 introduce backend-style layering merely because it may look familiar.
 
-## Documentation and code comments
+## Repository boundaries
 
-Permanent project documentation lives under `docs/` and is indexed by `docs/README.md`.
-Keep that index accurate, use repository-relative links, and avoid duplicating
-authoritative explanations.
+Do not restate the complete product concept here. Treat `README.md` and `docs/` as the
+source of truth. Unless the maintainer approves a change, preserve these engineering
+boundaries:
 
-Update documentation in the same change as the behavior it describes:
-
-| Change                                                                                     | Required permanent documentation                                      |
-| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| Production organization, dependency direction, composition, or non-obvious state owner     | `docs/project-structure.md`                                           |
-| User-visible feature, limitation, error behavior, privacy behavior, or capability boundary | `docs/features.md`                                                    |
-| Startup, async sequence, lifecycle, cleanup, persistence, or cross-module interaction      | `docs/runtime-flows.md`                                               |
-| Map endpoint, source schema, provider policy, attribution, CORS evidence, or replacement   | `docs/map-providers.md` and the configuration example when applicable |
-| Setup, stable command, supported environment, or operator workflow                         | `README.md`                                                           |
-| Documentation file added, renamed, or removed                                              | `docs/README.md`                                                      |
-
-Keep documentation compact and focused on contracts, ownership, invariants, rationale,
-failure behavior, and connections. Use TSDoc/JSDoc or inline comments when lifecycle,
-cleanup, privacy, units, ownership, ordering, compatibility, security, or performance
-constraints are not obvious from code. Do not restate declarations. Remove stale
-comments with the behavior they describe.
-
-## Product constraints
-
-Future work must preserve these core requirements unless the maintainer approves a
-change:
-
-- TypeScript and React functional components.
-- Current stable desktop Google Chrome.
-- Static GitHub Pages delivery; Safari, legacy browsers, SSR, and SEO are not required.
-- No automatic routing, accounts, cloud sync, or OAuth integrations in the MVP.
-- User-created waypoints connected by straight geodesic segments.
-- User-imported data stays local unless an explicit new requirement says otherwise.
-- Privacy-safe, explicitly activated developer functionality where currently
-  implemented; no automatic diagnostic or telemetry upload.
+- TypeScript and React functional components in a static GitHub Pages application.
+- Current stable desktop Google Chrome as the supported browser target.
+- Local-first user data and no automatic diagnostic or telemetry upload.
+- No application server, accounts, cloud synchronization, OAuth, SSR, or automatic
+  trail-following routing in the current scope.
 
 Existing diagnostics and developer-support behavior may be simplified only in a focused
-future refactor that preserves reviewed user-facing requirements, privacy, and useful
-support capability. Do not expand it by default in unrelated features.
+refactor that preserves privacy and the reviewed support capability. Do not expand it by
+default in unrelated work.
 
-## Technology policy
-
-Core technologies to preserve:
-
-- React functional components, strict TypeScript, and Vite.
-- Material UI, MUI Icons, and MUI X Charts for the existing UI system.
-- MapLibre GL JS through `react-map-gl/maplibre`.
-- pnpm with a committed lockfile.
-- Vitest, React Testing Library, Playwright Chromium, and axe for proportionate
-  verification.
-
-Currently installed tools may continue where they fit an actual responsibility:
-
-- TanStack Query for appropriate remote or static query state.
-- `ky` for HTTP transport.
-- Zod for genuinely untrusted external boundaries.
-- Zustand for suitable cross-feature transient state.
-- Dexie for IndexedDB persistence.
-- Focused Turf packages for geospatial calculations.
-- Mock Service Worker, `fake-indexeddb`, and `@testing-library/user-event` for suitable
-  tests.
-- ESLint, typescript-eslint, and Prettier.
-- The existing structured diagnostics and support tooling.
-
-A feature does not need to use every installed state, transport, persistence,
-validation, diagnostics, or testing library. Existing architectural and diagnostics
-systems are not mandatory for every feature and may be simplified by a later focused
-refactor. Do not add another component library, CSS framework, global state framework,
-HTTP client, map engine, or utility grab-bag without documenting the concrete gap.
-
-## Dependency policy
-
-- Pin reproducible versions through `pnpm-lock.yaml`.
-- Prefer current stable, maintained packages with TypeScript types.
-- Avoid release candidates, nightlies, deprecated packages, and unnecessary utilities.
-- Inspect licenses before addition and explain every new runtime dependency.
-- Prefer browser APIs when their ergonomics and failure handling are adequate.
-- Audit and check bundle impact for significant additions.
-
-## Architecture and production organization
-
-Architecture serves concrete current requirements. Organize production code primarily
-around features and meaningful subsystems, and keep closely related code together. A
-feature should normally be understandable without tracing a long chain of layers,
-forwarding abstractions, or dependency-registration entries.
-
-Prefer cohesive modules and plain functions. Use classes only when lifecycle, identity,
-encapsulated mutable state, or management of a complex imperative API clearly justifies
-them. Do not require domain, application, ports, and infrastructure layers, named
-use-case classes, constructor injection, repositories, gateways, adapters, services,
-facades, factories, managers, controllers, providers, interfaces, or dependency
-injection by default.
-
-Do not split cohesive logic merely to maintain formal layer boundaries or
-one-export-per-file conventions. Production structure must reflect actual ownership, not
-a predefined directory diagram. Do not create directories for features or subsystems
-that do not exist. A small number of genuinely shared runtime subsystems is appropriate
-when their responsibility is real and their consumers are known.
-
-Preserve deliberate isolation around genuinely complex imperative systems and
-external-data boundaries, including MapLibre integration and untrusted imported or
-remote data. Do not generalize those exceptions into a repository-wide architecture.
-Avoid circular dependencies and barrel exports that hide ownership, dependency
-direction, or cycles.
-
-## React and TypeScript
-
-- Keep JSX declarative and components small enough to remain feature-focused.
-- Keep business rules in cohesive feature code; do not default them to classes or a
-  separate application layer.
-- Isolate complex imperative MapLibre lifecycle and event handling behind the smallest
-  useful boundary.
-- Do not store mutable class instances in Zustand or TanStack Query caches.
-- Do not use React class components or UI inheritance hierarchies.
-- Keep strictness flags enabled, including `strict`, `noUncheckedIndexedAccess`, and
-  `exactOptionalPropertyTypes`.
-- Do not use `any`. Use `unknown` at untrusted boundaries and narrow it.
-- Use readonly data where mutation is not intentional and discriminated unions for
-  useful finite states.
-- Name ambiguous primitives, especially GeoJSON `[longitude, latitude]` coordinates.
-- Prefer exhaustive handling, type-only imports, and consistent descriptive file names.
-
-## TypeScript object construction
-
-Avoid building objects with long chains of conditional spreads.
-
-Do not write patterns like:
-
-```ts
-return {
-  requiredField,
-  ...(value === undefined ? {} : { optionalField: value }),
-  ...(getValue() === undefined ? {} : { anotherField: getValue() as string }),
-};
-```
-
-Rules:
-
-- Do not use `...(condition ? { key: value } : {})` repeatedly to populate optional
-  properties.
-- When an object has more than two conditional properties, create the base object first
-  and assign optional properties with explicit `if` statements.
-- Compute derived values once. Do not repeat parsing, DOM lookup, trimming, validation,
-  or function calls for the same property.
-- Do not use type assertions to compensate for repeated expressions or missing type
-  narrowing.
-- Prefer natural TypeScript narrowing after assigning a value to a local variable.
-- Validate untrusted strings before treating them as string-literal unions.
-- Preserve semantic differences between `undefined`, `null`, empty strings, and other
-  falsy values.
-- Prefer readable, debuggable code over compact object-expression tricks.
-
-Preferred:
-
-```ts
-const name = boundedText(firstChild(metadata, 'name'));
-
-const result: ParsedMetadata = {
-  version,
-  links: parseLinks(metadata),
-};
-
-if (creator !== undefined && creator.length > 0) {
-  result.creator = creator;
-}
-
-if (name !== undefined) {
-  result.name = name;
-}
-
-return result;
-```
-
-Conditional spreads are acceptable for one or two simple properties when each value has
-already been computed and the result remains easier to read than explicit assignment.
-
-## Control flow, external data, and errors
-
-- Prefer `async`/`await` and explicit control flow over nested callback workflows.
-- Pass `AbortSignal` through operations where cancellation is materially required.
-- Keep retry ownership in one place and avoid duplicate automatic retries.
-- Clean up map listeners, object URLs, workers, and subscriptions deterministically.
-- Validate genuinely untrusted external data at the boundary where it enters trusted
-  code. Do not repeat validation, mapping, normalization, result wrapping, or error
-  conversion when it adds no meaningful behavior.
-- Handle demonstrated and realistic failure modes. Do not add speculative fallbacks,
-  compatibility paths, recovery frameworks, or distinct typed error layers when the UI
-  treats the failures identically.
-- Render intentional loading, empty, partial, and error states where the interaction
-  needs them.
-- Set explicit HTTP timeouts where appropriate, treat failures differently only when
-  callers can act differently, and keep public endpoint configuration replaceable.
-- Do not put secrets in Vite environment variables; `VITE_*` values are public.
-- Respect OSM, imagery, STAC, and elevation-provider attribution and usage rules.
-
-## State ownership and persistence
-
-Choose the smallest state or persistence mechanism appropriate to the current
-responsibility. Keep ownership local and obvious:
-
-- Use component state or reducers for local visual and interaction state.
-- Use TanStack Query when its remote/static query lifecycle provides concrete value.
-- Use Zustand only for genuinely cross-feature transient state.
-- Use URL state for intentionally shareable camera or filter state.
-- Use browser storage or Dexie directly through cohesive feature code; do not require a
-  repository object solely to access persistence.
-
-Do not duplicate authoritative state across React, Zustand, TanStack Query, Dexie, or
-the URL. Document a non-obvious owner. Business rules may be plain functions or cohesive
-modules and do not belong in domain/application classes by default.
-
-## Proportional diagnostics and privacy
-
-Diagnostics, logging, health checks, redaction, support exports, schema versioning,
-correlation IDs, and troubleshooting tools must be proportional to current product and
-support needs. Do not require every feature or ordinary operation to participate in a
-repository-wide diagnostics framework or emit start, completion, failure, cancellation,
-correlation, and duration events.
-
-Do not require support-bundle compatibility, diagnostics schema migrations, a
-diagnostics CLI, a health-check framework, or bootstrap-level export recovery unless it
-remains an explicit current product requirement for the changed scope. User-visible
-error states do not require a parallel exported diagnostic representation. Focused
-development diagnostics may use `console` directly when centralized structured logging
-provides no concrete benefit; remove temporary noisy logging before handoff.
-
-Preserve these privacy boundaries:
-
-- Never log or export secrets, authorization headers, tokens, cookies, private user
-  data, raw imported content, arbitrary query strings, local paths, or complete
-  environment objects.
-- Do not export raw GPX, full geometry, timestamps, descriptions, or filenames by
-  default. Geometry export requires explicit user opt-in.
-- Keep retained diagnostic data bounded when retention exists.
-- Never upload diagnostics or telemetry automatically.
-- Logging and diagnostics must not make the primary operation fail.
-
-When changing currently implemented diagnostic export, redaction, or telemetry
-boundaries, add focused tests proving private data is excluded.
-
-## GUI and CSS
-
-Material UI is the default for application chrome and controls. Follow
-[`docs/ui-design.md`](docs/ui-design.md) for control placement, visual hierarchy,
-spacing rhythm, disclosures, helper copy, and presentation review.
-
-- Use the shared theme for palette, typography, spacing, shape, breakpoints, and
-  component defaults.
-- Prefer MUI layout primitives and components over handwritten widgets.
-- Use `sx` for small one-off details and CSS modules for map sizing or complex layout.
-- Keep feature-specific controls in their contextual panel and application-wide
-  preferences in Settings; never duplicate a control across both surfaces.
-- Use section headings stronger than control labels: `subtitle2` bold for source/group
-  headings, `body2` regular for control titles, and secondary `caption` text for
-  descriptions.
-- Use checkboxes for independent boolean options throughout the application. Do not mix
-  switches and checkboxes for equivalent choices.
-- Keep section headings and source descriptions on the panel edge, then place ordinary
-  section content in an explicit, balanced 8 px horizontal inset. Do not simulate
-  section indentation with checkbox padding; exempt full-width spatial controls such as
-  calendars when an inset would reduce clarity or usable width.
-- Build spacing on a 4 px grid, using half steps of the theme's 8 px unit when needed.
-  Use 16 px between major groups, 12 px between repeated control rows, and 8 px between
-  a parent control and its dependent row.
-- Do not leave empty `Stack`, `Box`, status, or conditional wrappers that still
-  contribute spacing when they contain no visible content.
-- Keep adjacent contextual panels at a shared width unless the reviewed workflow
-  demonstrates a concrete need for a different width.
-- Put secondary tuning controls in a collapsed, accessible disclosure at the end of
-  their section; do not hide primary actions or required recovery controls.
-- Remove helper text that repeats visible values, labels, order, or obvious behavior.
-  Keep concise help only when it prevents a likely mistake or explains a non-obvious
-  consequence.
-- Do not add Tailwind, Bootstrap, another design system, or another CSS-in-JS library.
-- Maintain visible focus, keyboard access, labels, tooltips, contrast, and minimum hit
-  areas.
-- Keep the MVP theme deliberate and small.
-
-## Map rules
-
-Use [`docs/assets/map-style-reference.png`](docs/assets/map-style-reference.png) as the
-standing visual reference. Keep roads, paths, and labels subdued over satellite imagery;
-render user GPX/routes in legible medium blue with restrained light casing.
-
-- Isolate MapLibre's complex imperative lifecycle and events within the map feature.
-- Keep layer and source IDs centralized and typed.
-- Use GeoJSON layers for many tracks and DOM/MUI markers only for a small number of
-  interactive waypoints.
-- Throttle high-frequency events before updating React or URL state.
-- Do not recreate the map because unrelated panel state changed.
-- Keep OSM attribution visible.
-- Test required layer ordering and do not leak the native map object to unrelated code.
-
-## GPX and catalog rules
-
-- Never alter the original GPX collection in place during auditing or indexing.
-- Generate published copies and metadata into a separate output directory.
-- Validate coordinate ranges, segment sizes, XML structure, and resource limits.
-- Keep catalog output deterministic and load full-resolution GPX only on demand.
-- Version schemas or calculation policies when compatibility is a current requirement.
-- Record rejected or suspicious tracks in a machine-readable validation report.
-- Preserve attribution and provenance. Remove private metadata only under an explicit
-  documented publishing policy.
-
-## Testing
-
-Automated tests are required by default for changed production behavior. Test through
-the smallest meaningful public boundary. Prefer real plain functions and focused fakes
-over preserving or creating production abstractions solely for testing.
-
-Use focused unit, integration, and component coverage plus a small number of high-value
-Chromium workflows. Coverage must not preserve redundant production layers or encourage
-low-value tests. Tests should communicate one behavioral reason for failure and use
-descriptive behavior names.
-
-Do not require tests to inject clocks, ID generators, repositories, gateways, ports, or
-other abstractions unless deterministic control is necessary. Do not require component
-tests to mock application ports at a composition boundary.
-
-### Test layout
-
-- Keep all tests outside the production source tree.
-- Use the existing top-level `tests/` tree for unit, component, integration, fixtures,
-  fakes, builders, helpers, and setup code.
-- Preserve a recognizable mapping between production paths and corresponding test paths,
-  without retaining obsolete architectural layer names.
-- Keep browser workflows under `e2e/`.
-- Production directories contain only runtime code and runtime assets.
-- Do not create a broad internal test framework merely to reduce repetition.
-- Test helpers must improve clarity rather than hide behavior behind abstraction.
-- Report test LOC and test-file changes separately from production measurements.
-
-### Verification cadence
-
-Use focused development feedback and one appropriate final verification round. Do not
-run the complete matrix after every edit, commit, review response, or follow-up.
-
-During implementation:
-
-1. Run the smallest relevant test name, file, or affected package.
-2. Use focused Playwright scenarios only when browser behavior cannot be represented
-   faithfully below E2E.
-3. A complete Vitest unit suite is acceptable when it gives useful fast feedback, but do
-   not repeat it when its inputs are unchanged.
-4. Do not run coverage, complete Playwright, `pnpm check`, or another broad aggregate
-   merely to create an intermediate commit.
-5. Record commands and outcomes concisely for the handoff.
-
-Run one Vitest unit or component file with `pnpm.cmd test <test-file>`, for example
-`pnpm.cmd test tests/presentation/shell/WorkspaceShell.test.tsx`. The `test` script
-already expands to `vitest run`; never append `-- --run`, `--run`, or a standalone `--`.
-Those forms can prevent Vitest from applying the file filter and accidentally run the
-complete suite. Before waiting for completion, inspect pnpm's echoed command and require
-it to have the form `vitest run "<test-file>"`. Stop the command if the file argument is
-missing. Use `-t '<exact-test-name-or-pattern>'` after the file path when one named test
-is the smallest relevant scope.
-
-A successful check remains valid while its inputs and configuration are unchanged. A new
-turn, commit, push, or existing CI result is not a reason to rerun it. After an edit,
-rerun only invalidated checks.
-
-When a test fails and code is changed to fix it, rerun only that failed test first. Do
-not restart its complete unit, integration, or E2E suite after every fix. Run a broader
-required check at most once after the focused test passes and all fixes that could
-invalidate the broader result are complete.
-
-### Documentation-only verification
+## Documentation-only verification
 
 When only Markdown or other non-executable documentation changes, do not run TypeScript,
 ESLint, tests, coverage, Playwright, or builds. Run Prettier against every changed
-Markdown file, including `AGENTS.md`, before committing and again before handoff. Use
+Markdown file, including `AGENTS.md`, once after the final edits and before handoff. Use
 `.\node_modules\.bin\prettier.CMD --write <changed-markdown-files>` when formatting is
 needed, then require `.\node_modules\.bin\prettier.CMD --check <changed-markdown-files>`
-to pass. Also run the documentation-boundary checks required here and
-`git diff --check`.
+to pass, then run `git diff --check`.
 
 Documentation-only pull requests must keep required CI conclusive while skipping
 Playwright installation and execution. Classification must inspect the complete diff; do
 not use top-level path filters that leave a required check pending.
 
-### Test tools and boundaries
-
-- Use React Testing Library queries by role, accessible name, and visible text.
-- Use `user-event` for realistic interaction. Avoid MUI class, hook-internal, and large
-  snapshot assertions.
-- Use Mock Service Worker when HTTP-boundary control is useful and reset handlers after
-  each test.
-- Use `fake-indexeddb` for browser persistence behavior that needs IndexedDB control.
-- Use checked-in synthetic GPX/STAC/catalog fixtures; never copy private tracks into
-  tests.
-- Cover realistic success and failure behavior appropriate to the changed scope.
-- Use a small map fake for unit/component behavior and real MapLibre in Chromium only
-  for behavior requiring WebGL or browser integration.
-- Never use live third-party tiles or public data services for required CI checks.
-
-### Managed Windows coverage timing
-
-The maintainer commonly runs four to six agents on a medium-spec Windows workstation.
-Treat CPU, memory, disk, and browser contention as normal local conditions rather than
-assuming CI-like timing.
-
-The final Vitest verification is `pnpm test:coverage` once. Its configuration includes
-the normal unit/component suite and the integration suite, so it replaces both
-`pnpm test` and `pnpm test:integration` in final verification. Do not run those three
-commands sequentially. Keep `pnpm test` and `pnpm test:integration` for focused
-development feedback before the final round.
-
-Use a single 30-second per-test ceiling for local managed-Windows coverage work; the
-previous ten-second ceiling is too aggressive under expected parallel-agent load. If one
-coverage test exceeds the ceiling, rerun only that test once with the same ceiling. Do
-not rerun the aggregate or increase the ceiling in steps. A timing-only failure in
-unrelated work is not permission to edit committed timeout configuration.
-
-### Command-wrapper timing
-
-Command-wrapper limits control how long the agent waits for a process; they are not test
-or assertion timeouts. Choose a realistic wrapper limit before launch:
-
-| Local command scope                          | Wrapper limit |
-| -------------------------------------------- | ------------- |
-| Focused unit, component, or integration test | 5 minutes     |
-| Full Vitest, coverage, integration, or build | 15 minutes    |
-| Focused Playwright subset                    | 10 minutes    |
-| Justified complete Playwright suite          | 30 minutes    |
-
-These limits do not authorize broader test scope. A command returning no incremental
-output is not evidence of a hang because some runners buffer output. If the shell tool
-yields while the process is alive, keep polling or waiting for that process and provide
-concise progress updates; do not launch a duplicate.
-
-If a wrapper expires without a runner-reported test or assertion timeout, inspect the
-existing process or terminal first. Continue waiting when it is still active. Never
-restart the same command through a sequence of larger wrapper limits. If the process was
-terminated by the wrapper, restart it at most once using the established limit from the
-table and record that the first result was an orchestration timeout, not a test failure.
-
-The complete non-coverage suite can also make the `WorkspaceShell` interactions
-`navigates the contextual feature panels without covering the map` or
-`collapses from the GR logo and restores from the remaining logo` exceed the five-second
-default when many JSDOM workers contend on managed Windows. If either exact test passes
-under a focused run, validate the complete non-coverage suite once with:
-
-```powershell
-pnpm test --maxWorkers=4
-```
-
-Keep the five-second per-test ceiling; do not add sleeps, remove assertions, or rerun
-the same unconstrained suite.
-
-### Managed Chromium timing
-
-Run at most one local Chromium worker per agent whenever other agent workstreams may be
-active. Do not increase browser workers to shorten wall-clock time. Two local workers
-are allowed only when the maintainer confirms the workstation is not shared with other
-active test runs.
-
-Preserve these Chromium limits under normal parallel-agent load:
-
-| Context | Workers | Per-test ceiling | Assertion ceiling | Retries |
-| ------- | ------- | ---------------- | ----------------- | ------- |
-| Local   | 1       | 120 seconds      | 20 seconds        | None    |
-| CI      | 1       | 120 seconds      | 20 seconds        | None    |
-
-Preserve focused existing exceptions in `e2e/map-foundation.spec.ts`, terrain workflows,
-and `e2e/satellite-imagery.spec.ts`. Do not replace observable synchronization with
-sleeps, retries, or broad timeout increases.
-
-An actual test timeout is not an instruction to ratchet limits upward. First determine
-whether the expected observable state occurred and rerun only the failed test once under
-the established local worker and timeout settings. During unrelated work, report a
-repeatable timeout without changing timeout configuration. During an explicitly scoped
-timeout fix, use measured runtime under expected workstation contention to choose one
-documented ceiling, change it once, and validate only the affected test. Do not try a
-series of guessed values.
-
-### End-to-end and accessibility
-
-Use Playwright Chromium for critical workflows and materially changed high-risk browser
-boundaries. Minor fixes covered below E2E do not require a local E2E run or new
-scenario. Use controlled fixtures and wait for observable application states. Retain
-useful failure artifacts; do not solve flakes with arbitrary sleeps or unconditional
-retries.
-
-Before running the complete local E2E suite, record concrete evidence that the branch
-changes behavior or shared runtime inputs exercised across that suite. Name the changed
-behavior or input and the E2E specs that exercise it. If the diff does not justify every
-spec, do not run the complete suite: run only the smallest relevant spec, project,
-scenario, or grep-selected subset. If no E2E scenario exercises the changed behavior,
-skip local E2E rather than using an unrelated workflow as evidence. CI may still run its
-required complete suite independently.
-
-Invoke a focused subset as
-`pnpm.cmd e2e <spec-path> --grep '<exact-test-name-or-pattern>'`. The repository wrapper
-forwards arguments to Playwright. Omit `--grep` when the complete named spec is the
-smallest justified boundary; do not insert a standalone `--`.
-
-If an E2E test fails, diagnose and fix it, then rerun only that test. Do not restart the
-complete E2E suite after each failure. A complete suite may run once later only when it
-was already justified by the branch-wide evidence and the fixes invalidate that broader
-result.
-
-This also applies when CI reports one failing E2E test while the other tests pass. After
-the focused fix, run only the failed test locally; changing that spec or its exercised
-code does not by itself justify rerunning the complete suite. Treat the other passing CI
-results as valid unless the fix changes a shared runtime input that those specific tests
-exercise.
-
-Run axe for the application shell and critical workflows. Test keyboard focus, dialog
-and drawer behavior, labels, and live status where relevant. Automated accessibility
-checks supplement a brief manual keyboard pass for changed presentation behavior.
-
-### Coverage
-
-Keep reasonable global CI minimums:
-
-- Statements, lines, and functions: 80%.
-- Branches: 75%.
-
-Do not impose directory- or architecture-specific thresholds. Exclude generated code,
-static fixtures, type-only files, and trivial composition through centralized,
-documented configuration. Never add meaningless assertions or coverage ignores merely to
-meet a threshold.
-
-### CI policy
+## CI policy
 
 GitHub Actions runs on every pull request and protected-branch push. Required checks
-include frozen-lockfile installation, formatting, linting, type checking, suitable tests
-with coverage, catalog fixture checks, production build, and Chromium/axe checks against
-the built application. Documentation-only diffs report an explicit successful E2E skip.
-Required checks block merging.
+include frozen-lockfile installation, the repository audit, formatting, linting, type
+checking, Vitest coverage, a production build, and Chromium/axe checks against the built
+application. Documentation-only diffs report an explicit successful E2E skip. Required
+checks block merging.
 
 ## Commands
 
-Maintain these stable developer commands. Server startup deliberately uses the direct
-Vite binary; the remaining entries use repository scripts. Run only commands relevant to
-the changed scope and do not require a feature to exercise every installed tool:
+`package.json` is the canonical command list. On managed Windows, invoke pnpm as
+`pnpm.cmd`; examples below use the shorter cross-platform spelling.
 
-- `.\node_modules\.bin\vite.CMD --port <reserved-port> --strictPort`
+- `pnpm repo:audit`
+- `pnpm format:check`
 - `pnpm typecheck`
 - `pnpm lint`
-- `pnpm format:check`
-- `pnpm test:watch`
-- `pnpm test` for normal focused development feedback
-- `pnpm test:integration` for focused integration development feedback
-- `pnpm test:coverage` as the single final Vitest run covering both suites
-- `pnpm e2e`
-- `pnpm catalog:audit`
-- `pnpm catalog:build`
-- `pnpm diagnostics:inspect -- <bundle.json>` when current support-bundle work requires
-  it
+- `pnpm diagnostics:inspect -- <bundle.json>` when support-bundle work requires it
 - `pnpm build`
 - `pnpm check`
 
-## Local servers and ports
-
-Every worktree owns one explicit development-server port for its lifetime. Continuation
-work reuses that port. Choose from `4173-4199` unless the task requires another range.
-Do not assume Vite's default is available.
-
-Coordinate parallel agents through ignored reservations under the main checkout at
-`.codex-worktrees/.ports/<port>/owner.txt`. Resolve the main checkout through
-`--git-common-dir`, not through the current worktree path. Before reserving a port:
-
-1. Check existing reservations and reuse the current worktree's reservation.
-2. Check listeners with
-   `netstat -ano | Select-String -Pattern '^\s*TCP\s+\S+:<port>\s+\S+\s+LISTENING\s+'`.
-   Do not treat `TIME_WAIT` connections as listeners.
-3. Choose a port with neither a reservation nor a listener.
-4. Create the port-number directory with
-   `New-Item -ItemType Directory -ErrorAction Stop`. Directory creation is the atomic
-   reservation; if it already exists, choose another port.
-5. Write the current worktree's absolute path to `owner.txt`.
-
-A new reservation can be created with:
-
-```powershell
-$port = 4173
-$commonGitDir = (git rev-parse --path-format=absolute --git-common-dir).Trim()
-$mainRoot = Split-Path $commonGitDir -Parent
-$worktreeRoot = (git rev-parse --show-toplevel).Trim()
-$reservationsRoot = Join-Path $mainRoot '.codex-worktrees\.ports'
-$reservation = Join-Path $reservationsRoot $port
-
-New-Item -ItemType Directory -Force -Path $reservationsRoot | Out-Null
-if (
-  netstat -ano |
-    Select-String -Pattern "^\s*TCP\s+\S+:$port\s+\S+\s+LISTENING\s+"
-) {
-  throw "Port $port already has a listener"
-}
-New-Item -ItemType Directory -Path $reservation -ErrorAction Stop | Out-Null
-Set-Content -LiteralPath (Join-Path $reservation 'owner.txt') -Value $worktreeRoot
-```
-
-Start Vite with exactly `.\node_modules\.bin\vite.CMD --port <port> --strictPort` from
-the worktree root. This is the single canonical agent command; do not try `pnpm dev`,
-`pnpm.cmd dev`, `pnpm run dev`, or other launch variants first. Set `E2E_PORT` to the
-same reserved port for Playwright. Never rely on automatic port fallback, terminate an
-unknown listener, or reuse another worktree's reservation. If strict startup reports a
-race, release only the reservation owned by the current worktree, reserve another free
-port, and retry once.
-
-Stop the worktree's server before releasing its reservation. Remove a reservation only
-after reading `owner.txt`, resolving both paths, and confirming it belongs to the
-current worktree. A reservation whose worktree is still listed by `git worktree list` is
-not stale merely because it has no current listener.
+Vitest commands are documented in [`tests/AGENTS.md`](tests/AGENTS.md). Playwright
+commands are documented in [`e2e/AGENTS.md`](e2e/AGENTS.md). A live development server
+is not part of normal agent verification.
 
 ## Environment troubleshooting and self-repair
 
 Agent workflow instructions must improve when a reproducible repository-specific
 environment problem is discovered. Do not leave the next agent to rediscover a known
-PATH, worktree, dependency, port, shell, browser, or command-wrapper failure.
+PATH, worktree, dependency, shell, browser, or command-wrapper failure.
 
 When the documented primary path fails:
 
@@ -1091,9 +542,9 @@ When the documented primary path fails:
 3. Apply the smallest safe fix to the current worktree or invocation.
 4. Verify the fix from the affected worktree; use a disposable worktree when the problem
    concerns worktree creation or first-time setup.
-5. Correct the root instruction in the existing relevant section of `AGENTS.md` so its
-   primary command path works without encountering the same failure. Delete the broken
-   command and superseded alternatives in the same edit.
+5. Correct the relevant root or nested `AGENTS.md` instruction so its primary command
+   path works without encountering the same failure. Delete the broken command and
+   superseded alternatives in the same edit.
 6. Update `README.md` instead when the solution is a stable developer setup or operator
    workflow, and update the appropriate `docs/` file when it changes a lasting runtime
    or architecture contract.
@@ -1110,43 +561,30 @@ Run one final verification round after implementation and expected quick follow-
 changes are complete.
 
 1. Review the complete branch diff. Confirm behavior, tests, and permanent documentation
-   agree; remove unnecessary files, branches, wrappers, adapters, interfaces, fallbacks,
-   and defensive logic.
-2. For documentation-only changes, run Prettier `--check` against every changed Markdown
-   file, including `AGENTS.md`, plus required documentation-boundary checks and
-   `git diff --check`. Run Prettier `--write` first when the check reports formatting
-   differences.
-3. For executable code, run `pnpm format:check`, `pnpm typecheck`, and `pnpm lint` once.
-4. Run `pnpm test:coverage` once as the final Vitest verification. It includes normal
-   and integration tests; do not also run `pnpm test` or `pnpm test:integration` in the
-   final round.
-5. Run catalog, diagnostics, or build commands only when scope requires them. If an
-   aggregate includes a narrower required check, run only the aggregate.
-6. Run Playwright only for a new or materially changed critical workflow or high-risk
-   browser boundary. Map each changed behavior to the specs that exercise it and run the
-   smallest relevant subset.
-7. Run the complete local Playwright suite only when recorded evidence shows the diff
-   affects behavior or shared runtime inputs exercised by every spec. When that evidence
-   exists and CI-shaped local evidence is required, run it once on Windows PowerShell:
-
-   ```powershell
-   $env:CI='1'; pnpm e2e; Remove-Item Env:CI
-   ```
-
-8. If a test fails and is fixed, rerun only that test first. Do not restart a complete
-   suite after each fix, including when the failure came from CI and the fix changes an
-   E2E spec.
-9. Visually verify changed loading, empty, error, partial, focus, and responsive states
-   in current Chrome when presentation behavior changes.
-10. Verify diagnostics or redaction only when the change affects those responsibilities.
-11. Confirm no secret, private GPX metadata, generated debug file, or unrelated artifact
-    is included.
-12. Confirm non-obvious exported contracts and invariants have accurate compact
-    comments.
-13. Report handwritten production LOC added/removed; test LOC added/removed; production
-    and test files added/removed/moved; runtime dependencies; new abstractions and their
-    current justification; significant abstractions removed; and whether the result
-    could be smaller without losing behavior or clarity.
+   agree. Apply the complexity and cleanup rules above before running broad checks.
+2. For documentation-only changes, follow the documentation-only verification section
+   and do not run executable checks.
+3. For executable code, run `pnpm format:check`, `pnpm typecheck`, and `pnpm lint` once,
+   unless a broader aggregate already includes them.
+4. Read and apply [`tests/AGENTS.md`](tests/AGENTS.md) when the changed behavior or
+   selected verification requires Vitest. Read and apply
+   [`e2e/AGENTS.md`](e2e/AGENTS.md) only when the browser scope is justified. Do not run
+   Playwright merely because the change touches UI code.
+5. Run `pnpm repo:audit`, diagnostics inspection, or a production build only when the
+   changed scope requires it. If `pnpm check` is the chosen aggregate, do not also run
+   the checks it already contains.
+6. If a check fails and code changes to fix it, rerun the failed check first. Rerun only
+   broader checks invalidated by that fix.
+7. Do not start a live development server or perform open-ended manual browsing as a
+   normal final-verification step. Use bounded automated evidence unless the maintainer
+   explicitly requests live review.
+8. Confirm no secret, private GPX metadata, generated debug file, or unrelated artifact
+   is included. Confirm non-obvious exported contracts and invariants have accurate,
+   compact comments.
+9. Report handwritten production LOC added/removed; test LOC added/removed; production
+   and test files added/removed/moved; runtime dependencies; new abstractions and their
+   current justification; significant abstractions removed; and whether the result could
+   be smaller without losing behavior or clarity.
 
 Do not duplicate successful checks. If files change after the final round, rerun only
 invalidated checks. Do not mark work complete while a required check fails; report an

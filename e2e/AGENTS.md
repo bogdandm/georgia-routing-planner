@@ -1,0 +1,124 @@
+# AGENTS.md
+
+## Scope
+
+These instructions apply to Playwright Chromium and accessibility workflows under
+`e2e/`. The root [`AGENTS.md`](../AGENTS.md) also applies. Unit, component, and
+integration tests belong under `tests/` and follow
+[`../tests/AGENTS.md`](../tests/AGENTS.md).
+
+## Default execution model
+
+Do not start Vite's live development server or a long-running preview server for E2E
+work. Use `pnpm.cmd e2e`; the repository runner builds the application, starts a bounded
+loopback Vite preview with `--strictPort`, waits for readiness, runs Playwright, and
+stops the preview in `finally`.
+
+The runner supplies the GitHub Pages base path and uses `E2E_PORT` only as a per-command
+override; otherwise it defaults to `4173`. When that port is occupied, set `E2E_PORT` to
+a currently free port for that command. The runner owns the preview lifecycle; do not
+keep it alive after the run or terminate an unknown listener.
+
+## Browser-testing policy
+
+- Agents must not browse the application manually, repeatedly capture screenshots,
+  inspect pages through trial and error, or use a live server as a substitute for
+  understanding the code and writing tests.
+- For visual feedback, prefer screenshots, recordings, and concrete observations
+  supplied by the maintainer, plus deterministic Playwright evidence from the built app.
+- When the maintainer supplies screenshots, treat them as the primary evidence for the
+  reported visual issue and update focused component or E2E coverage where practical.
+- Prefer deterministic component tests and bounded Playwright scenarios over open-ended
+  manual interaction.
+- Do not run a browser merely to confirm that the page opens when existing build,
+  component, or E2E coverage already proves the changed behavior.
+
+## End-to-end and accessibility
+
+Use Playwright Chromium for critical workflows and materially changed high-risk browser
+boundaries. Minor fixes covered below E2E do not require a local E2E run or new
+scenario. Use controlled fixtures and wait for observable application states. Retain
+useful failure artifacts; do not solve flakes with arbitrary sleeps or unconditional
+retries.
+
+Before running the complete local E2E suite, record concrete evidence that the branch
+changes behavior or shared runtime inputs exercised across that suite. Name the changed
+behavior or input and the E2E specs that exercise it. If the diff does not justify every
+spec, do not run the complete suite: run only the smallest relevant spec, project,
+scenario, or grep-selected subset. If no E2E scenario exercises the changed behavior,
+skip local E2E rather than using an unrelated workflow as evidence. CI may still run its
+required complete suite independently.
+
+Invoke a focused subset as
+`pnpm.cmd e2e <spec-path> --grep '<exact-test-name-or-pattern>'`. The repository wrapper
+forwards arguments to Playwright. Omit `--grep` when the complete named spec is the
+smallest justified boundary; do not insert a standalone `--`.
+
+If an E2E test fails, diagnose and fix it, then rerun only that test. Do not restart the
+complete E2E suite after each failure. A complete suite may run once later only when it
+was already justified by the branch-wide evidence and the fixes invalidate that broader
+result.
+
+This also applies when CI reports one failing E2E test while the other tests pass. After
+the focused fix, run only the failed test locally; changing that spec or its exercised
+code does not by itself justify rerunning the complete suite. Treat the other passing CI
+results as valid unless the fix changes a shared runtime input that those specific tests
+exercise.
+
+Run axe for the application shell and critical workflows. Test keyboard focus, dialog
+and drawer behavior, labels, and live status where relevant. Encode keyboard and
+accessibility behavior in Playwright where practical. Perform a manual keyboard pass
+only when the maintainer explicitly requests live review.
+
+## Managed Chromium timing
+
+Run at most one local Chromium worker per agent whenever other agent workstreams may be
+active. Do not increase browser workers to shorten wall-clock time. Two local workers
+are allowed only when the maintainer confirms the workstation is not shared with other
+active test runs.
+
+Preserve these Chromium limits under normal parallel-agent load:
+
+| Context | Workers | Per-test ceiling | Assertion ceiling | Retries |
+| ------- | ------- | ---------------- | ----------------- | ------- |
+| Local   | 1       | 120 seconds      | 20 seconds        | None    |
+| CI      | 1       | 120 seconds      | 20 seconds        | None    |
+
+Preserve focused existing exceptions in `e2e/map-foundation.spec.ts`, terrain workflows,
+and `e2e/satellite-imagery.spec.ts`. Do not replace observable synchronization with
+sleeps, retries, or broad timeout increases.
+
+An actual test timeout is not an instruction to ratchet limits upward. First determine
+whether the expected observable state occurred and rerun only the failed test once under
+the established local worker and timeout settings. During unrelated work, report a
+repeatable timeout without changing timeout configuration. During an explicitly scoped
+timeout fix, use measured runtime under expected workstation contention to choose one
+documented ceiling, change it once, and validate only the affected test. Do not try a
+series of guessed values.
+
+## Command-wrapper timing
+
+| Local command scope                 | Wrapper limit |
+| ----------------------------------- | ------------- |
+| Focused Playwright subset           | 10 minutes    |
+| Justified complete Playwright suite | 30 minutes    |
+
+Wrapper limits control how long the agent waits for the process; they are not Playwright
+or assertion timeouts. Buffered output is not evidence of a hang. If the process is
+still active, keep waiting and do not launch a duplicate. If the wrapper terminated the
+process, restart it at most once with the established limit and record the first result
+as an orchestration timeout.
+
+## Final E2E verification
+
+When the complete suite is justified by the criteria above and CI-shaped local evidence
+is required, run it once on Windows PowerShell:
+
+```powershell
+$env:CI='1'; pnpm.cmd e2e; Remove-Item Env:CI
+```
+
+Retain traces, screenshots, videos, and reports produced for failures. Do not add
+sleeps, unconditional retries, broad timeout increases, or live third-party dependencies
+to make a scenario pass. Report the exact focused or complete command and result in the
+handoff.

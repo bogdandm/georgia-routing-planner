@@ -962,11 +962,6 @@ export function TracksPanel() {
   } = useTracksWorkspace();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [favoriteTooltipId, setFavoriteTooltipId] = useState<string | null>(null);
-  const [favoriteTooltipSuppression, setFavoriteTooltipSuppression] = useState<{
-    readonly x: number;
-    readonly y: number;
-  } | null>(null);
   const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active !== null && compactDetails) {
     return (
@@ -1000,10 +995,6 @@ export function TracksPanel() {
           }}
         />
         {error === null ? null : <Alert severity="warning">{error}</Alert>}
-        <Typography component="h2" variant="subtitle2">
-          {filteredSummaries.length} saved{' '}
-          {filteredSummaries.length === 1 ? 'track' : 'tracks'}
-        </Typography>
         {filteredSummaries.length === 0 ? (
           <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
             <Typography variant="body2" color="text.secondary">
@@ -1116,20 +1107,6 @@ export function TracksPanel() {
                             ? 'Remove from favorites'
                             : 'Add to favorites'
                         }
-                        open={
-                          favoriteTooltipId === summary.id &&
-                          favoriteTooltipSuppression === null
-                        }
-                        onOpen={() => {
-                          if (favoriteTooltipSuppression === null) {
-                            setFavoriteTooltipId(summary.id);
-                          }
-                        }}
-                        onClose={() => {
-                          setFavoriteTooltipId((current) =>
-                            current === summary.id ? null : current,
-                          );
-                        }}
                       >
                         <IconButton
                           className={`saved-track-row-action${summary.favorite ? ' saved-track-row-favorite--active' : ''}`}
@@ -1140,26 +1117,7 @@ export function TracksPanel() {
                               : 'Add to favorites'
                           }
                           color={summary.favorite ? 'warning' : 'default'}
-                          onMouseMove={(event) => {
-                            if (
-                              favoriteTooltipSuppression !== null &&
-                              (event.clientX !== favoriteTooltipSuppression.x ||
-                                event.clientY !== favoriteTooltipSuppression.y)
-                            ) {
-                              setFavoriteTooltipSuppression(null);
-                              setFavoriteTooltipId(summary.id);
-                            }
-                          }}
-                          onClick={(event) => {
-                            if (event.detail > 0) {
-                              setFavoriteTooltipId(null);
-                              setFavoriteTooltipSuppression({
-                                x: event.clientX,
-                                y: event.clientY,
-                              });
-                            }
-                            void toggleFavorite(summary);
-                          }}
+                          onClick={() => void toggleFavorite(summary)}
                         >
                           {summary.favorite ? (
                             <StarIcon fontSize="small" />
@@ -1571,28 +1529,6 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
               }}
               sx={{ display: 'flex', alignItems: 'center' }}
             >
-              <Tooltip
-                title={
-                  active.summary.favorite ? 'Remove from favorites' : 'Add to favorites'
-                }
-              >
-                <IconButton
-                  size="small"
-                  aria-label={
-                    active.summary.favorite
-                      ? 'Remove from favorites'
-                      : 'Add to favorites'
-                  }
-                  color={active.summary.favorite ? 'warning' : 'default'}
-                  onClick={() => void toggleFavorite(active.summary)}
-                >
-                  {active.summary.favorite ? (
-                    <StarIcon fontSize="small" />
-                  ) : (
-                    <StarBorderIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </Tooltip>
               {confirmingDelete ? (
                 <Button
                   autoFocus
@@ -1636,6 +1572,21 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
                   setActionMenuAnchor(null);
                 }}
               >
+                <MenuItem
+                  onClick={() => {
+                    void toggleFavorite(active.summary);
+                    setActionMenuAnchor(null);
+                  }}
+                >
+                  {active.summary.favorite ? (
+                    <StarIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  ) : (
+                    <StarBorderIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  )}
+                  {active.summary.favorite
+                    ? 'Remove from favorites'
+                    : 'Add to favorites'}
+                </MenuItem>
                 <MenuItem
                   onClick={() => {
                     downloadText(
@@ -1687,13 +1638,6 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
             </Box>
           </ClickAwayListener>
         ) : null}
-        <IconButton
-          size="small"
-          aria-label={embedded ? 'Back to tracks' : 'Close track'}
-          onClick={closeActive}
-        >
-          <CloseIcon fontSize="small" />
-        </IconButton>
       </Stack>
       <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
         <Stack spacing={2}>
@@ -1756,10 +1700,18 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
               </Stack>
             </>
           ) : null}
-          <Divider />
-          <Typography component="h3" variant="subtitle2">
-            Track details
-          </Typography>
+          <Stack direction="row" sx={{ alignItems: 'center' }}>
+            <Typography component="h3" variant="subtitle2" sx={{ flex: 1 }}>
+              Track details
+            </Typography>
+            <IconButton
+              size="small"
+              aria-label={embedded ? 'Back to tracks' : 'Close track'}
+              onClick={closeActive}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Stack>
           <TrackStats metrics={metrics} />
           <TrackElevationProfile
             key={`elevation:${active.kind === 'preview' ? active.id : active.summary.id}`}

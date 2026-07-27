@@ -206,16 +206,6 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
   );
 }
 
-async function importAndSaveTrack(page: Page): Promise<void> {
-  const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Browse track file' }).click();
-  const chooser = await chooserPromise;
-  await chooser.setFiles(trackFixturePath);
-  await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
-  await page.getByRole('button', { name: 'Save' }).click();
-  await page.getByRole('button', { name: 'Back to tracks' }).click();
-}
-
 test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
@@ -273,7 +263,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
     await page.getByRole('button', { name: 'Back to tracks' }).click();
   }
 
-  await expect(page.getByText('7 saved tracks')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
   const expectedStoredPoints = realWorldTrackFixtures.reduce(
     (total, fixture) => total + fixture.pointCount,
     0,
@@ -286,7 +276,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   });
 
   await page.reload();
-  await expect(page.getByText('7 saved tracks')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to tracks' }).click();
   await page.getByRole('button', { name: /^sample-1mb/u }).click();
@@ -366,8 +356,33 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   ).toEqual([]);
 
   await page.getByRole('button', { name: 'Save' }).click();
+  const savedDetails = page.getByLabel('Track details');
+  const trackDetailsHeading = savedDetails.getByRole('heading', {
+    name: 'Track details',
+  });
+  const closeTrack = savedDetails.getByRole('button', { name: 'Close track' });
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close track' }).click();
+  await expect(savedDetails.getByRole('separator')).toHaveCount(0);
+  await expect(
+    savedDetails.getByRole('button', { name: 'Add to favorites' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Add to favorites' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const [headingBox, closeBox] = await Promise.all([
+    trackDetailsHeading.boundingBox(),
+    closeTrack.boundingBox(),
+  ]);
+  expect(headingBox).not.toBeNull();
+  expect(closeBox).not.toBeNull();
+  if (headingBox !== null && closeBox !== null) {
+    expect(
+      Math.abs(
+        closeBox.y + closeBox.height / 2 - (headingBox.y + headingBox.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+  }
+  await closeTrack.click();
   await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
   const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
   const savedTrackButton = savedTracks.getByRole('button', {
@@ -430,13 +445,10 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
     page.getByLabel('Track details').getByRole('heading', { name: 'Mon 13 Jul 2026' }),
   ).toBeVisible();
   await expect(page.getByLabel('Track name')).toHaveCount(0);
-  await expect(
-    page
-      .getByLabel('Track details')
-      .getByRole('button', { name: 'Remove from favorites' }),
-  ).toBeVisible();
-
   await page.getByRole('button', { name: 'Track actions' }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Remove from favorites' }),
+  ).toBeVisible();
   await page.getByRole('menuitem', { name: 'Rename' }).click();
   const savedTrackName = page.getByLabel('Track name');
   await expect(savedTrackName).toBeVisible();
@@ -503,56 +515,6 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
       name: 'Confirm deletion of Kazbegi ridge walk',
     })
     .click();
-  await expect(page.getByText('0 saved tracks')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toHaveCount(0);
   expect(dialogs).toEqual([]);
-});
-
-test('keeps favorite tooltips closed until pointer movement after sorting', async ({
-  page,
-}) => {
-  await page.goto('#tracks');
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-    { timeout: 15_000 },
-  );
-  await importAndSaveTrack(page);
-  await importAndSaveTrack(page);
-
-  const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
-  await expect(page.getByText('2 saved tracks')).toBeVisible();
-  const lowerFavoriteButton = savedTracks
-    .getByRole('button', { name: 'Add to favorites' })
-    .nth(1);
-  await savedTracks
-    .getByRole('button', { name: /^Mon 13 Jul 2026/u })
-    .nth(1)
-    .hover();
-  await lowerFavoriteButton.hover();
-  await expect(page.getByRole('tooltip')).toHaveText('Add to favorites');
-  await lowerFavoriteButton.click();
-  const movedFavoriteButton = savedTracks.getByRole('button', {
-    name: 'Remove from favorites',
-  });
-  await expect(movedFavoriteButton).toBeVisible();
-  const tooltipStabilityDeadline = Date.now() + 350;
-  await expect
-    .poll(
-      async () => ({
-        tooltipCount: await page.getByRole('tooltip').count(),
-        stable: Date.now() >= tooltipStabilityDeadline,
-      }),
-      { timeout: 1_000, intervals: [100] },
-    )
-    .toEqual({ tooltipCount: 0, stable: true });
-
-  const movedFavoriteButtonBox = await movedFavoriteButton.boundingBox();
-  if (movedFavoriteButtonBox === null) {
-    throw new Error('The reordered favorite button is not visible.');
-  }
-  await page.mouse.move(
-    movedFavoriteButtonBox.x + movedFavoriteButtonBox.width / 2,
-    movedFavoriteButtonBox.y + movedFavoriteButtonBox.height / 2,
-  );
-  await expect(page.getByRole('tooltip')).toHaveText('Remove from favorites');
 });

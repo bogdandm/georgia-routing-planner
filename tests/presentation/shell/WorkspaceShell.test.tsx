@@ -18,6 +18,11 @@ import {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import {
+  LOCAL_TRACK_SCHEMA_VERSION,
+  type LocalTrackContent,
+  type LocalTrackSummary,
+} from '@/domain/tracks/localTrack';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
   mapInteractionStore,
@@ -132,6 +137,50 @@ function gpxFileWithCompanionRoute(): File {
   return file;
 }
 
+function localTrack(
+  id: string,
+  name: string,
+  savedAt: string,
+): { readonly summary: LocalTrackSummary; readonly content: LocalTrackContent } {
+  return {
+    summary: {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      id,
+      name,
+      normalizedName: name.toLocaleLowerCase('en'),
+      savedAt,
+      sourceFilename: `${name}.gpx`,
+      sourceFormat: 'gpx',
+      description: '',
+      favorite: false,
+      geometryKind: 'track',
+      pointCount: 2,
+      segmentCount: 1,
+      metrics: {
+        distanceMeters: 1_000,
+        distanceAlgorithmVersion: 1,
+        startCoordinate: [44, 42],
+        endCoordinate: [44.01, 42.01],
+        bounds: {
+          west: 44,
+          south: 42,
+          east: 44.01,
+          north: 42.01,
+          crossesAntimeridian: false,
+        },
+        center: [44.005, 42.005],
+      },
+      metadata: { version: '1.1', links: [] },
+      warnings: [],
+    },
+    content: {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: id,
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+    },
+  };
+}
+
 describe('WorkspaceShell', () => {
   it('creates a share link only after the explicit rail action', async () => {
     const user = userEvent.setup();
@@ -165,6 +214,46 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Copy 2D link' }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('z=12.35'));
     expect(await screen.findByText('2D share link copied')).toBeVisible();
+  });
+
+  it('closes the favorite tooltip when sorting moves its row', async () => {
+    const user = userEvent.setup();
+    const earlier = localTrack(
+      'local:earlier',
+      'Earlier trail',
+      '2026-07-20T10:00:00.000Z',
+    );
+    const later = localTrack('local:later', 'Later trail', '2026-07-21T10:00:00.000Z');
+    await services.database.saveLocalTrack(earlier.summary, earlier.content);
+    await services.database.saveLocalTrack(later.summary, later.content);
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const savedTracks = await screen.findByRole('list', { name: 'Saved tracks' });
+    const movingFavoriteButton = within(savedTracks).getAllByRole('button', {
+      name: 'Add to favorites',
+    })[1];
+    if (movingFavoriteButton === undefined) {
+      throw new Error('Expected the earlier saved track to be second.');
+    }
+
+    await user.hover(movingFavoriteButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Add to favorites');
+    await user.click(movingFavoriteButton);
+
+    await waitFor(() => {
+      const favoriteButton = within(savedTracks).getByRole('button', {
+        name: 'Remove from favorites',
+      });
+      const otherFavoriteButton = within(savedTracks).getByRole('button', {
+        name: 'Add to favorites',
+      });
+      expect(
+        favoriteButton.compareDocumentPosition(otherFavoriteButton) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
   });
 
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {

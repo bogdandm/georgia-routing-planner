@@ -1185,7 +1185,7 @@ export function TracksPanel() {
                     spacing={0.5}
                     sx={{ alignItems: 'center', px: 1 }}
                   >
-                    <Tooltip
+                    <Tooltip key={`${summary.id}:${summary.favorite}`}
                       title={
                         summary.favorite ? 'Remove from favorites' : 'Add to favorites'
                       }

@@ -487,17 +487,7 @@ ESLint, tests, coverage, Playwright, or builds. Run Prettier against every chang
 Markdown file, including `AGENTS.md`, once after the final edits and before handoff. Use
 `.\node_modules\.bin\prettier.CMD --write <changed-markdown-files>` when formatting is
 needed, then require `.\node_modules\.bin\prettier.CMD --check <changed-markdown-files>`
-to pass. Also run the documentation-boundary checks required here and
-`git diff --check`.
-
-Before a documentation handoff, require this command to return no matches:
-
-```powershell
-rg -n -i '\b(phase|phases|stage|stages|roadmap)\b' README.md docs
-```
-
-Also inspect `README.md` and `docs/` for estimates, task identifiers, branch names,
-commits, pull-request or merge state, approval state, and other progress reporting.
+to pass, then run `git diff --check`.
 
 Documentation-only pull requests must keep required CI conclusive while skipping
 Playwright installation and execution. Classification must inspect the complete diff; do

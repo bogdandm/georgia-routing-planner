@@ -20,9 +20,10 @@ loopback Vite preview with `--strictPort`, waits for readiness, runs Playwright,
 stops the preview in `finally`.
 
 The runner supplies the GitHub Pages base path and uses `E2E_PORT` only as a per-command
-override; otherwise it defaults to `4173`. When that port is occupied, set `E2E_PORT` to
-a currently free port for that command. The runner owns the preview lifecycle; do not
-keep it alive after the run or terminate an unknown listener.
+override; otherwise it defaults to `4173`. Do not probe for or select another port
+automatically. The maintainer may supply `E2E_PORT` when an override is wanted. The
+runner owns the preview lifecycle; do not keep it alive after the run or terminate an
+unknown listener.
 
 ## Browser-testing policy
 

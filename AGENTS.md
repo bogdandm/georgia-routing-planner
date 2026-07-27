@@ -247,8 +247,9 @@ Playwright runner described in [`e2e/AGENTS.md`](e2e/AGENTS.md).
 Start a live development server only when the maintainer explicitly requests it or when
 a specific verification cannot be completed through those alternatives. Stop it as soon
 as that check is complete. Do not create or maintain repository port reservations. For
-an explicitly authorized one-off server, use a currently free explicit port with
-`--strictPort`; never rely on automatic fallback or terminate an unknown listener.
+an explicitly authorized one-off server, use Vite's default port `5173` with
+`--strictPort`. Do not probe for or select another port automatically. If `5173` is
+occupied, report it unless the maintainer supplies a different port.
 
 ### CI failure authorization
 
@@ -392,14 +393,14 @@ Every completed-workstream report must present these fields together and in this
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-For every production-code workstream, choose a currently free explicit port at handoff
-without reserving it and print this command with the real WSL absolute path and numeric
-port:
-`cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port <port> --strictPort`.
-Placeholders are forbidden in the final response. Providing `Test path:` does not
-authorize the agent to start the server, launch a browser, or run E2E. Use
-`Not applicable` only when no production code changed, such as documentation-only,
-configuration-only, or test-only work.
+For every production-code workstream, print this command with the real WSL absolute
+path:
+`cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`.
+Always report port `5173`; do not probe, choose, or reserve another port. The maintainer
+will edit the command when a different port is wanted. Placeholders are forbidden in the
+final response. Providing `Test path:` does not authorize the agent to start the server,
+launch a browser, or run E2E. Use `Not applicable` only when no production code changed,
+such as documentation-only, configuration-only, or test-only work.
 
 The completed handoff must contain no progress preamble, internal plan, todo or reminder
 block, commentary heading, or trailing content outside these required fields. Report

@@ -1076,6 +1076,10 @@ export function TracksPanel() {
     readonly anchor: HTMLElement;
     readonly summary: LocalTrackSummary;
   } | null>(null);
+  const [pointerFavoriteReset, setPointerFavoriteReset] = useState<{
+    readonly id: string;
+    readonly version: number;
+  } | null>(null);
   const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active !== null && compactDetails) {
     return (
@@ -1186,7 +1190,11 @@ export function TracksPanel() {
                     sx={{ alignItems: 'center', px: 1 }}
                   >
                     <Tooltip
-                      key={`${summary.id}:${summary.favorite ? 'favorite' : 'regular'}`}
+                      key={
+                        summary.id === pointerFavoriteReset?.id
+                          ? `${summary.id}:pointer-reset:${String(pointerFavoriteReset.version)}`
+                          : summary.id
+                      }
                       title={
                         summary.favorite ? 'Remove from favorites' : 'Add to favorites'
                       }
@@ -1199,7 +1207,15 @@ export function TracksPanel() {
                             : 'Add to favorites'
                         }
                         color={summary.favorite ? 'warning' : 'default'}
-                        onClick={() => void toggleFavorite(summary)}
+                        onClick={(event) => {
+                          if (event.detail > 0) {
+                            setPointerFavoriteReset((current) => ({
+                              id: summary.id,
+                              version: (current?.version ?? 0) + 1,
+                            }));
+                          }
+                          void toggleFavorite(summary);
+                        }}
                       >
                         {summary.favorite ? (
                           <StarIcon fontSize="small" />

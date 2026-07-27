@@ -216,7 +216,7 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('2D share link copied')).toBeVisible();
   });
 
-  it('closes the favorite tooltip when sorting moves its row', async () => {
+  it('closes the favorite tooltip after pointer sorting without losing keyboard focus', async () => {
     const user = userEvent.setup();
     const earlier = localTrack(
       'local:earlier',
@@ -254,6 +254,34 @@ describe('WorkspaceShell', () => {
       ).toBeTruthy();
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     });
+
+    const movedFavoriteButton = within(savedTracks).getByRole('button', {
+      name: 'Remove from favorites',
+    });
+    await user.hover(movedFavoriteButton);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Remove from favorites',
+    );
+    await user.click(movedFavoriteButton);
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(
+        within(savedTracks).getAllByRole('button', { name: 'Add to favorites' }),
+      ).toHaveLength(2);
+    });
+
+    const keyboardFavoriteButton = within(savedTracks).getAllByRole('button', {
+      name: 'Add to favorites',
+    })[1];
+    if (keyboardFavoriteButton === undefined) {
+      throw new Error('Expected the earlier saved track to be second.');
+    }
+    keyboardFavoriteButton.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => {
+      expect(keyboardFavoriteButton).toHaveAccessibleName('Remove from favorites');
+    });
+    expect(keyboardFavoriteButton).toHaveFocus();
   });
 
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {

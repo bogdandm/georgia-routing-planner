@@ -40,22 +40,12 @@ specification into these files.
 
 ## Execution environments
 
-WSL with native Linux tooling is the canonical environment for every repository
-workstream that edits files, creates worktrees, installs dependencies, runs verification
-or servers, commits, pushes, or updates pull requests. Use Bash, POSIX paths, Linux
-`node`, and Linux `pnpm` throughout such a workstream.
+Use native WSL Bash, POSIX paths, Node, and pnpm for every mutating workstream and its
+tooling. The Windows Codex app is read-only: `git status`, `git diff`, `git log`, `rg`,
+and `Get-Content`. Move to the WSL worktree if a chat expands into implementation.
 
-Simple non-mutating chats in the Windows Codex app may inspect repository state with
-Windows-native read-only commands. If the task expands into implementation or
-verification, continue it in the workstream's WSL checkout rather than routing Linux
-paths or commands through Windows. Limit Windows-side repository operations to read-only
-commands such as `git status`, `git diff`, `git log`, `rg`, and `Get-Content`; do not
-install dependencies, run verification, start servers, or mutate Git state there.
-
-Never use `wslpath`, UNC paths, Windows drive paths, `.exe` or `.cmd` fallbacks, or
-Windows-installed Node/npm tooling from WSL. Never route a WSL worktree through the
-Windows checkout. Keep paths, runtimes, dependencies, and Git operations native to the
-environment that owns the worktree.
+Never mix environments or convert paths. From WSL, do not use `wslpath`, UNC or drive
+paths, `.exe`/`.cmd` fallbacks, Windows Node/npm, or the Windows checkout.
 
 ## Git workflow and approval gate
 
@@ -240,16 +230,10 @@ lockfile as a shortcut.
 
 ### Live development servers
 
-Agents must not start or keep a Vite development server running by default. Prefer
-source inspection, focused automated tests, production builds, and the bounded
-Playwright runner described in [`e2e/AGENTS.md`](e2e/AGENTS.md).
-
-Start a live development server only when the maintainer explicitly requests it or when
-a specific verification cannot be completed through those alternatives. Stop it as soon
-as that check is complete. Do not create or maintain repository port reservations. For
-an explicitly authorized one-off server, use Vite's default port `5173` with
-`--strictPort`. Do not probe for or select another port automatically. If `5173` is
-occupied, report it unless the maintainer supplies a different port.
+Start Vite only when requested or when verification cannot otherwise be completed. Use
+`--port 5173 --strictPort`, stop it after the check, and never reserve, probe,
+substitute, or auto-fallback the port. Report an occupied port instead of terminating
+its listener.
 
 ### CI failure authorization
 
@@ -387,25 +371,17 @@ Every completed-workstream report must present these fields together and in this
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` one directly runnable WSL live-server command for a production-code
-  workstream; otherwise `Not applicable` with the reason.
+- `Test path:` for production changes,
+  `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`;
+  otherwise `Not applicable` with the reason.
 - `Verification:` every command run and its result, plus checks skipped as
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-For every production-code workstream, print this command with the real WSL absolute
-path:
-`cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`.
-Always report port `5173`; do not probe, choose, or reserve another port. The maintainer
-will edit the command when a different port is wanted. Placeholders are forbidden in the
-final response. Providing `Test path:` does not authorize the agent to start the server,
-launch a browser, or run E2E. Use `Not applicable` only when no production code changed,
-such as documentation-only, configuration-only, or test-only work.
-
-The completed handoff must contain no progress preamble, internal plan, todo or reminder
-block, commentary heading, or trailing content outside these required fields. Report
-unfinished or blocked work inside `Verification:` or `Status:` rather than appending an
-internal task list.
+Replace the `Test path:` placeholder with the real path; do not start the server,
+browser, or E2E. The final response contains only these fields, with blockers inside
+`Verification:` or `Status:` and no preamble, headings, todos, reminders, or trailing
+content.
 
 ### Pull request title and description
 

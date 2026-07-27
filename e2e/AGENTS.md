@@ -9,48 +9,25 @@ integration tests belong under `tests/` and follow
 
 ## Default execution model
 
-Do not launch Playwright, Chromium, axe, or any local E2E command unless the maintainer
-explicitly requests E2E work. Do not infer authorization from UI changes, browser risk,
-test coverage gaps, final verification, or the fact that CI runs E2E. When no explicit
-request exists, report local E2E as `Not applicable - not requested`.
-
-Do not start Vite's live development server or a long-running preview server for E2E
-work. Use `pnpm e2e`; the repository runner builds the application, starts a bounded
-loopback Vite preview with `--strictPort`, waits for readiness, runs Playwright, and
-stops the preview in `finally`.
-
-The runner supplies the GitHub Pages base path and uses `E2E_PORT` only as a per-command
-override; otherwise it defaults to `4173`. Do not probe for or select another port
-automatically. The maintainer may supply `E2E_PORT` when an override is wanted. The
-runner owns the preview lifecycle; do not keep it alive after the run or terminate an
-unknown listener.
+Local E2E is opt-in: do not launch Playwright, Chromium, axe, or `pnpm e2e` without an
+explicit request; otherwise report `Not applicable - not requested`. The runner owns
+build, bounded preview on `4173`, readiness, and cleanup. Use `E2E_PORT` only when the
+maintainer supplies it.
 
 ## Browser-testing policy
 
-- Agents must not browse the application manually, repeatedly capture screenshots,
-  inspect pages through trial and error, or use a live server as a substitute for
-  understanding the code and writing tests.
-- For visual feedback, prefer screenshots, recordings, and concrete observations
-  supplied by the maintainer, plus deterministic Playwright evidence from the built app.
-- When the maintainer supplies screenshots, treat them as the primary evidence for the
-  reported visual issue. Update focused component coverage where practical; add or
-  change E2E coverage only when the maintainer explicitly requests it.
-- Prefer deterministic component tests and bounded Playwright scenarios over open-ended
-  manual interaction.
-- Do not run a browser merely to confirm that the page opens when existing build,
-  component, or E2E coverage already proves the changed behavior.
+- Do not browse manually, capture screenshots repeatedly, inspect by trial and error, or
+  open a browser merely to confirm that the page loads.
+- Treat maintainer-supplied visual evidence as primary and prefer component coverage.
+- Add or change E2E only when explicitly requested.
 
 ## End-to-end and accessibility
 
-After an explicit E2E request, use Playwright Chromium with controlled fixtures and wait
-for observable application states. Retain useful failure artifacts; do not solve flakes
-with arbitrary sleeps or unconditional retries.
-
-Run the complete local E2E suite only when the maintainer explicitly requests the
-complete suite. For any narrower or unspecified E2E request, run the smallest relevant
-spec, project, scenario, or grep-selected subset. If no E2E scenario exercises the
-requested behavior, report that limitation instead of running an unrelated workflow. CI
-may still run its required complete suite independently.
+After a request, run its stated scope; when unspecified, run the smallest relevant
+subset. Run the complete suite only when explicitly requested. If no scenario covers the
+request, report that instead of running unrelated E2E. Use controlled fixtures,
+observable waits, and useful failure artifacts; never add sleeps or unconditional
+retries.
 
 Invoke a focused subset as `pnpm e2e <spec-path> --grep '<exact-test-name-or-pattern>'`.
 The repository wrapper forwards arguments to Playwright. Omit `--grep` when the complete

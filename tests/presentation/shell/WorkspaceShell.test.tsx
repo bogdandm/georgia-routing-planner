@@ -477,13 +477,8 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   }, 10_000);
 
-  it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
+  it('imports, saves, edits, and closes a local GPX track', async () => {
     const user = userEvent.setup();
-    vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
-      schemaVersion: 1,
-      trackId: 'local:test-1',
-      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
-    });
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
@@ -566,8 +561,24 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^Fixture trail/ }));
-    const reopenedDetails = await screen.findByRole('complementary', {
+  }, 10_000);
+
+  it('opens, renames, favorites, and deletes a local GPX track', async () => {
+    const user = userEvent.setup();
+    const track = localTrack(
+      'local:test-1',
+      'Fixture trail',
+      '2026-07-22T10:00:00.000Z',
+    );
+    await services.database.saveLocalTrack(track.summary, track.content);
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const savedTracks = await screen.findByRole('list', { name: 'Saved tracks' });
+    await user.click(
+      within(savedTracks).getByRole('button', { name: /^Fixture trail/u }),
+    );
+    const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });
     const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
@@ -575,35 +586,29 @@ describe('WorkspaceShell', () => {
     await user.type(nameInput, 'Renamed trail');
     await user.click(screen.getByRole('button', { name: 'Save track name' }));
     expect(
-      await within(reopenedDetails).findByRole('heading', { name: 'Renamed trail' }),
+      await within(details).findByRole('heading', { name: 'Renamed trail' }),
     ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(
       screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
-    const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
+    await user.click(
+      within(savedTracks).getByRole('button', { name: 'Add to favorites' }),
+    );
     expect(
-      within(savedTracks).getByRole('button', { name: 'Remove from favorites' }),
+      await within(savedTracks).findByRole('button', {
+        name: 'Remove from favorites',
+      }),
     ).toBeVisible();
     const rowActions = within(savedTracks).getByRole('button', {
       name: 'Actions for Renamed trail',
     });
-    expect(rowActions).toBeVisible();
-    await user.click(
-      within(savedTracks).getByRole('button', { name: 'Remove from favorites' }),
-    );
-    expect(
-      await within(savedTracks).findByRole('button', { name: 'Add to favorites' }),
-    ).toBeVisible();
     await user.click(rowActions);
     expect(screen.getByRole('menuitem', { name: 'Delete track' })).toBeVisible();
     await user.keyboard('{Escape}');
     expect(
       screen.queryByRole('menuitem', { name: 'Delete track' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
 
     const confirm = vi.spyOn(window, 'confirm');
@@ -622,7 +627,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(screen.getByText('0 saved tracks')).toBeVisible();
     });
-  }, 10_000);
+  });
 
   it('explains GPX validation warnings with their parser code and message', async () => {
     const user = userEvent.setup();

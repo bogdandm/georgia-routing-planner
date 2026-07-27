@@ -65,16 +65,16 @@ During implementation:
    intermediate commit.
 4. Record commands and outcomes concisely for the handoff.
 
-Run one unit or component file with `pnpm.cmd test <test-file>`, for example
-`pnpm.cmd test tests/presentation/shell/WorkspaceShell.test.tsx`. The `test` script
-already expands to `vitest run`; never append `-- --run`, `--run`, or a standalone `--`.
-Those forms can prevent Vitest from applying the file filter and accidentally run the
-complete suite. Before waiting for completion, inspect pnpm's echoed command and require
-it to have the form `vitest run "<test-file>"`. Stop the command if the file argument is
+Run one unit or component file with `pnpm test <test-file>`, for example
+`pnpm test tests/presentation/shell/WorkspaceShell.test.tsx`. The `test` script already
+expands to `vitest run`; never append `-- --run`, `--run`, or a standalone `--`. Those
+forms can prevent Vitest from applying the file filter and accidentally run the complete
+suite. Before waiting for completion, inspect pnpm's echoed command and require it to
+have the form `vitest run "<test-file>"`. Stop the command if the file argument is
 missing. Use `-t '<exact-test-name-or-pattern>'` after the file path when one named test
 is the smallest relevant scope.
 
-Run one integration file with `pnpm.cmd test:integration <integration-test-file>`. Keep
+Run one integration file with `pnpm test:integration <integration-test-file>`. Keep
 integration filenames aligned with the configured `*.integration.test.{ts,tsx}` pattern.
 
 A successful check remains valid while its inputs and configuration are unchanged. A new
@@ -105,17 +105,17 @@ Do not weaken thresholds, add meaningless assertions, or add coverage ignores me
 make a check pass. Exclusions belong in centralized configuration and require a concrete
 reason.
 
-## Managed Windows timing
+## Shared-workstation timing
 
-The maintainer commonly runs four to six agents on a medium-spec Windows workstation.
+The maintainer commonly runs four to six agents on a shared medium-spec workstation.
 Treat CPU, memory, disk, and browser contention as normal local conditions rather than
 assuming CI-like timing.
 
-Use a single 30-second per-test ceiling for local managed-Windows coverage work; the
-previous ten-second ceiling is too aggressive under expected parallel-agent load. If one
-coverage test exceeds the ceiling, rerun only that test once with the same ceiling. Do
-not rerun the aggregate or increase the ceiling in steps. A timing-only failure in
-unrelated work is not permission to edit committed timeout configuration.
+Use a single 30-second per-test ceiling for local coverage work; the previous ten-second
+ceiling is too aggressive under expected parallel-agent load. If one coverage test
+exceeds the ceiling, rerun only that test once with the same ceiling. Do not rerun the
+aggregate or increase the ceiling in steps. A timing-only failure in unrelated work is
+not permission to edit committed timeout configuration.
 
 ## Command-wrapper timing
 
@@ -141,11 +141,11 @@ record that the first result was an orchestration timeout, not a test failure.
 The complete non-coverage suite can make the `WorkspaceShell` interactions
 `navigates the contextual feature panels without covering the map` or
 `collapses from the GR logo and restores from the remaining logo` exceed the five-second
-default when many JSDOM workers contend on managed Windows. If either exact test passes
-under a focused run, validate the complete non-coverage suite once with:
+default when many JSDOM workers contend on the shared workstation. If either exact test
+passes under a focused run, validate the complete non-coverage suite once with:
 
-```powershell
-pnpm.cmd test --maxWorkers=4
+```bash
+pnpm test --maxWorkers=4
 ```
 
 Keep the five-second per-test ceiling; do not add sleeps, remove assertions, or rerun

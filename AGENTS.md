@@ -38,6 +38,15 @@ Keep `AGENTS.md` files focused on agent workflow and engineering constraints. Do
 copy the product roadmap, full feature catalog, provider inventory, or detailed visual
 specification into these files.
 
+## Execution environments
+
+Use native WSL Bash, POSIX paths, Node, and pnpm for every mutating workstream and its
+tooling. The Windows Codex app is read-only: `git status`, `git diff`, `git log`, `rg`,
+and `Get-Content`. Move to the WSL worktree if a chat expands into implementation.
+
+Never mix environments or convert paths. From WSL, do not use `wslpath`, UNC or drive
+paths, `.exe`/`.cmd` fallbacks, Windows Node/npm, or the Windows checkout.
+
 ## Git workflow and approval gate
 
 `main` is the protected approval branch. All implementation, documentation,
@@ -99,7 +108,7 @@ Before modifying files:
 3. Use branch names such as `feature/<short-description>`, `fix/<short-description>`,
    `docs/<short-description>`, or `chore/<short-description>`.
 
-### Creating a branch and worktree on Windows
+### Creating a branch and worktree in WSL
 
 First run `git worktree list` and inspect local branches. If the workstream, branch, or
 worktree already exists, reuse it for continuation work. Do not create a second one.
@@ -107,33 +116,37 @@ worktree already exists, reuse it for continuation work. Do not create a second 
 For a genuinely new workstream, resolve the main checkout through Git's common directory
 instead of assuming the current directory is the main checkout:
 
-```powershell
-$commonGitDir = (git rev-parse --path-format=absolute --git-common-dir).Trim()
-$mainRoot = Split-Path $commonGitDir -Parent
-$workstream = 'short-workstream-slug'
-$branch = 'feature/short-workstream-slug'
-$worktreesRoot = [IO.Path]::GetFullPath((Join-Path $mainRoot '.codex-worktrees'))
-$worktreePath = [IO.Path]::GetFullPath((Join-Path $worktreesRoot $workstream))
-$worktreeParent = [IO.Path]::GetDirectoryName($worktreePath)
+```bash
+common_git_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+main_root=$(dirname "$common_git_dir")
+workstream='short-workstream-slug'
+branch='feature/short-workstream-slug'
+worktrees_root=$(realpath -m "$main_root/.codex-worktrees")
+worktree_path=$(realpath -m "$worktrees_root/$workstream")
 
-if (![string]::Equals($worktreeParent, $worktreesRoot, [StringComparison]::OrdinalIgnoreCase)) {
-  throw "Worktree must be a direct child of ${worktreesRoot}: $worktreePath"
-}
+if [[ $(dirname "$worktree_path") != "$worktrees_root" ]]; then
+  echo "Worktree must be a direct child of $worktrees_root: $worktree_path" >&2
+  exit 1
+fi
 
-if (Test-Path -LiteralPath $worktreePath) {
-  throw "Worktree path already exists: $worktreePath"
-}
-git -C $mainRoot show-ref --verify --quiet "refs/heads/$branch"
-if ($LASTEXITCODE -eq 0) {
-  throw "Branch already exists: $branch"
-}
-git -C $mainRoot fetch origin main
-git -C $mainRoot worktree add $worktreePath -b $branch origin/main
-Set-Location $worktreePath
-$actualWorktreePath = [IO.Path]::GetFullPath((git rev-parse --show-toplevel).Trim())
-if (![string]::Equals($actualWorktreePath, $worktreePath, [StringComparison]::OrdinalIgnoreCase)) {
-  throw "Git created or selected the wrong worktree: $actualWorktreePath"
-}
+if [[ -e "$worktree_path" ]]; then
+  echo "Worktree path already exists: $worktree_path" >&2
+  exit 1
+fi
+
+if git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch"; then
+  echo "Branch already exists: $branch" >&2
+  exit 1
+fi
+
+git -C "$main_root" fetch origin main
+git -C "$main_root" worktree add "$worktree_path" -b "$branch" origin/main
+cd "$worktree_path"
+actual_worktree_path=$(git rev-parse --path-format=absolute --show-toplevel)
+if [[ "$actual_worktree_path" != "$worktree_path" ]]; then
+  echo "Git created or selected the wrong worktree: $actual_worktree_path" >&2
+  exit 1
+fi
 git status --short --branch
 ```
 
@@ -151,16 +164,15 @@ directory offered by the Codex host does not override this rule. Never create th
 worktree under `.codex/visualizations`, another session-owned directory, a temporary
 directory, the repository's parent directory, or another linked worktree.
 
-Before `worktree add`, print and inspect `$worktreePath`. Its direct parent must be the
-exact absolute `$worktreesRoot` path. If it is not, stop and correct the command instead
-of trying an alternate location. After creation, require `git rev-parse --show-toplevel`
-to equal `$worktreePath`; a successful Git command at a different path is not a
-successful setup. Only reuse a non-canonical existing worktree when the maintainer
-explicitly names that exact worktree for continuation work; never choose such a path for
-a new workstream.
+Before `worktree add`, print and inspect `$worktree_path`. Its direct parent must be the
+exact absolute `$worktrees_root` path. If it is not, stop and correct the command
+instead of trying an alternate location. After creation, require
+`git rev-parse --show-toplevel` to equal `$worktree_path`; a successful Git command at a
+different path is not a successful setup. Only reuse a non-canonical existing worktree
+when the maintainer explicitly names that exact worktree for continuation work; never
+choose such a path for a new workstream.
 
-Keep the local worktree directory slug at 20 characters or fewer. Windows package paths
-can exceed filesystem cleanup limits even when Git accepts a longer worktree path.
+Keep the local worktree directory slug concise and purpose-specific.
 
 The combined `worktree add -b` command creates the branch directly in its worktree
 without switching `main`. After creation, every edit, install, test, commit, and server
@@ -173,50 +185,30 @@ branch only when it was created as a disposable validation fixture or the mainta
 explicitly requests removal. Resolve and verify the exact absolute target before
 removing it.
 
-### Node, pnpm, PATH, and dependencies
+### Tooling and dependencies
 
-Each worktree has its own `node_modules`. Never copy, move, junction, or symlink
-`node_modules` from the main checkout or another worktree, and never invoke a binary
-from another worktree's `node_modules/.bin`. pnpm's content-addressed store already
-shares package data safely.
+Each worktree has its own `node_modules`. Never copy, move, or symlink `node_modules`
+from the main checkout or another worktree, and never invoke a binary from another
+worktree's `node_modules/.bin`. pnpm's content-addressed store already shares package
+data safely.
 
-Before running JavaScript tooling in a new worktree:
+Assume all repository-required runtimes, package managers, CLIs, browser tooling,
+authentication, and worktree dependencies are installed, compatible, and ready. Do not
+inspect versions, command sources, authentication, or dependency directories as a
+preflight gate. A missing `node_modules` or `.bin` path observed before execution is not
+a blocker and does not mean the worktree was created incorrectly. Start with the
+intended task command.
 
-1. Read `.node-version`, `package.json#engines`, and `package.json#packageManager`.
-2. Run `Get-Command node.exe`, `node.exe --version`, `Get-Command pnpm.cmd`, and
-   `pnpm.cmd --version`.
-3. Confirm Node satisfies the declared engine and pnpm matches the declared major and
-   pinned package-manager version.
-4. If the task needs dependencies, run `pnpm.cmd install --frozen-lockfile` from the
-   worktree with network permission available from the start. Even with a frozen
-   lockfile and warm pnpm store, missing package archives may require registry access.
-   Documentation-only tasks do not need an install unless the required formatter is
-   unavailable in the worktree.
-5. Prefer repository scripts through `pnpm.cmd <script>`. In managed Windows shells, do
-   not use `pnpm exec`: duplicate PATH variables can prevent it from finding the current
-   worktree's `.bin` directory. When no repository script exists, invoke the current
-   worktree binary explicitly as `.\node_modules\.bin\<tool>.CMD <arguments>`.
+Use native WSL `pnpm` and prefer repository scripts through `pnpm <script>`. When no
+script exists, invoke the current worktree binary explicitly as
+`./node_modules/.bin/<tool> <arguments>`.
 
-On Windows, use `pnpm.cmd`, not the PowerShell `pnpm.ps1` shim; managed shells may block
-the latter through execution policy. Do not change machine execution policy to make the
-shim work. If `pnpm.cmd` is absent but `corepack.cmd` exists, use `corepack.cmd pnpm`
-with the repository-pinned version. If no compatible Node or package manager is
-available, report the exact command lookup and version results; do not download or
-install a machine-wide runtime during an unrelated task.
-
-If an install or executable lookup fails, verify the current directory and executable
-source before changing files:
-
-```powershell
-git rev-parse --show-toplevel
-Get-Command node.exe
-Get-Command pnpm.cmd
-pnpm.cmd config get store-dir
-```
-
-Delete and reinstall only the current worktree's ignored `node_modules` when evidence
-shows it is incomplete or stale. Do not delete the shared pnpm store, another worktree's
-dependencies, or the lockfile as a troubleshooting shortcut.
+Only after the intended command actually fails, diagnose the reported tooling,
+authentication, or dependency problem and apply the smallest relevant repair. For
+missing or incomplete pnpm dependencies, run `pnpm install --frozen-lockfile` from the
+current worktree and retry the original command. Do not install a machine-wide runtime,
+delete the shared pnpm store, reuse another worktree's `node_modules`, or remove the
+lockfile as a shortcut.
 
 ### Repository safety rules
 
@@ -229,7 +221,7 @@ dependencies, or the lockfile as a troubleshooting shortcut.
 - Do not force-push, rewrite shared history, or use destructive Git commands to remove
   user work.
 - Use the installed GitHub CLI (`gh`) directly for GitHub repository and remote
-  workflows, including pull requests. Verify `gh auth status` before contacting GitHub.
+  workflows, including pull requests.
 - In managed Codex runs, immediately rerun a sandboxed `gh` authentication or likely
   network failure with required elevated sandbox permission. Treat the elevated result
   as authoritative.
@@ -238,15 +230,10 @@ dependencies, or the lockfile as a troubleshooting shortcut.
 
 ### Live development servers
 
-Agents must not start or keep a Vite development server running by default. Prefer
-source inspection, focused automated tests, production builds, and the bounded
-Playwright runner described in [`e2e/AGENTS.md`](e2e/AGENTS.md).
-
-Start a live development server only when the maintainer explicitly requests it or when
-a specific verification cannot be completed through those alternatives. Stop it as soon
-as that check is complete. Do not create or maintain repository port reservations. For
-an explicitly authorized one-off server, use a currently free explicit port with
-`--strictPort`; never rely on automatic fallback or terminate an unknown listener.
+Start Vite only when requested or when verification cannot otherwise be completed. Use
+`--port 5173 --strictPort`, stop it after the check, and never reserve, probe,
+substitute, or auto-fallback the port. Report an occupied port instead of terminating
+its listener.
 
 ### CI failure authorization
 
@@ -384,22 +371,17 @@ Every completed-workstream report must present these fields together and in this
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` one directly runnable live-server command for the maintainer's current
-  environment, or `Not applicable` with the reason.
+- `Test path:` for production changes,
+  `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`;
+  otherwise `Not applicable` with the reason.
 - `Verification:` every command run and its result, plus checks skipped as
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-When the maintainer requests a live server for the handoff, use the applicable command
-form with the worktree's native absolute path and an explicit free port:
-
-- Windows Command Prompt:
-  `cd /d "<absolute-worktree-path>" && .\node_modules\.bin\vite.CMD --port <port> --strictPort`
-- Ubuntu or another Bash environment:
-  `cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port <port> --strictPort`
-
-Do not put a Windows path into the Ubuntu command. When no live server was requested,
-keep `Test path:` and state `Not applicable` with the reason.
+Replace the `Test path:` placeholder with the real path; do not start the server,
+browser, or E2E. The final response contains only these fields, with blockers inside
+`Verification:` or `Status:` and no preamble, headings, todos, reminders, or trailing
+content.
 
 ### Pull request title and description
 
@@ -495,9 +477,9 @@ default in unrelated work.
 When only Markdown or other non-executable documentation changes, do not run TypeScript,
 ESLint, tests, coverage, Playwright, or builds. Run Prettier against every changed
 Markdown file, including `AGENTS.md`, once after the final edits and before handoff. Use
-`.\node_modules\.bin\prettier.CMD --write <changed-markdown-files>` when formatting is
-needed, then require `.\node_modules\.bin\prettier.CMD --check <changed-markdown-files>`
-to pass, then run `git diff --check`.
+`./node_modules/.bin/prettier --write <changed-markdown-files>` when formatting is
+needed, then require `./node_modules/.bin/prettier --check <changed-markdown-files>` to
+pass, then run `git diff --check`.
 
 Documentation-only pull requests must keep required CI conclusive while skipping
 Playwright installation and execution. Classification must inspect the complete diff; do
@@ -513,8 +495,7 @@ checks block merging.
 
 ## Commands
 
-`package.json` is the canonical command list. On managed Windows, invoke pnpm as
-`pnpm.cmd`; examples below use the shorter cross-platform spelling.
+`package.json` is the canonical command list. Run its scripts with native WSL `pnpm`.
 
 - `pnpm repo:audit`
 - `pnpm format:check`
@@ -568,8 +549,9 @@ changes are complete.
    unless a broader aggregate already includes them.
 4. Read and apply [`tests/AGENTS.md`](tests/AGENTS.md) when the changed behavior or
    selected verification requires Vitest. Read and apply
-   [`e2e/AGENTS.md`](e2e/AGENTS.md) only when the browser scope is justified. Do not run
-   Playwright merely because the change touches UI code.
+   [`e2e/AGENTS.md`](e2e/AGENTS.md) only when the maintainer explicitly requests local
+   E2E work. Never infer permission to launch Playwright from the changed scope, UI
+   impact, risk, or final-verification needs.
 5. Run `pnpm repo:audit`, diagnostics inspection, or a production build only when the
    changed scope requires it. If `pnpm check` is the chosen aggregate, do not also run
    the checks it already contains.

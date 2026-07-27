@@ -9,55 +9,33 @@ integration tests belong under `tests/` and follow
 
 ## Default execution model
 
-Do not start Vite's live development server or a long-running preview server for E2E
-work. Use `pnpm.cmd e2e`; the repository runner builds the application, starts a bounded
-loopback Vite preview with `--strictPort`, waits for readiness, runs Playwright, and
-stops the preview in `finally`.
-
-The runner supplies the GitHub Pages base path and uses `E2E_PORT` only as a per-command
-override; otherwise it defaults to `4173`. When that port is occupied, set `E2E_PORT` to
-a currently free port for that command. The runner owns the preview lifecycle; do not
-keep it alive after the run or terminate an unknown listener.
+Local E2E is opt-in: do not launch Playwright, Chromium, axe, or `pnpm e2e` without an
+explicit request; otherwise report `Not applicable - not requested`. The runner owns
+build, bounded preview on `4173`, readiness, and cleanup. Use `E2E_PORT` only when the
+maintainer supplies it.
 
 ## Browser-testing policy
 
-- Agents must not browse the application manually, repeatedly capture screenshots,
-  inspect pages through trial and error, or use a live server as a substitute for
-  understanding the code and writing tests.
-- For visual feedback, prefer screenshots, recordings, and concrete observations
-  supplied by the maintainer, plus deterministic Playwright evidence from the built app.
-- When the maintainer supplies screenshots, treat them as the primary evidence for the
-  reported visual issue and update focused component or E2E coverage where practical.
-- Prefer deterministic component tests and bounded Playwright scenarios over open-ended
-  manual interaction.
-- Do not run a browser merely to confirm that the page opens when existing build,
-  component, or E2E coverage already proves the changed behavior.
+- Do not browse manually, capture screenshots repeatedly, inspect by trial and error, or
+  open a browser merely to confirm that the page loads.
+- Treat maintainer-supplied visual evidence as primary and prefer component coverage.
+- Add or change E2E only when explicitly requested.
 
 ## End-to-end and accessibility
 
-Use Playwright Chromium for critical workflows and materially changed high-risk browser
-boundaries. Minor fixes covered below E2E do not require a local E2E run or new
-scenario. Use controlled fixtures and wait for observable application states. Retain
-useful failure artifacts; do not solve flakes with arbitrary sleeps or unconditional
+After a request, run its stated scope; when unspecified, run the smallest relevant
+subset. Run the complete suite only when explicitly requested. If no scenario covers the
+request, report that instead of running unrelated E2E. Use controlled fixtures,
+observable waits, and useful failure artifacts; never add sleeps or unconditional
 retries.
 
-Before running the complete local E2E suite, record concrete evidence that the branch
-changes behavior or shared runtime inputs exercised across that suite. Name the changed
-behavior or input and the E2E specs that exercise it. If the diff does not justify every
-spec, do not run the complete suite: run only the smallest relevant spec, project,
-scenario, or grep-selected subset. If no E2E scenario exercises the changed behavior,
-skip local E2E rather than using an unrelated workflow as evidence. CI may still run its
-required complete suite independently.
-
-Invoke a focused subset as
-`pnpm.cmd e2e <spec-path> --grep '<exact-test-name-or-pattern>'`. The repository wrapper
-forwards arguments to Playwright. Omit `--grep` when the complete named spec is the
-smallest justified boundary; do not insert a standalone `--`.
+Invoke a focused subset as `pnpm e2e <spec-path> --grep '<exact-test-name-or-pattern>'`.
+The repository wrapper forwards arguments to Playwright. Omit `--grep` when the complete
+named spec is the smallest justified boundary; do not insert a standalone `--`.
 
 If an E2E test fails, diagnose and fix it, then rerun only that test. Do not restart the
-complete E2E suite after each failure. A complete suite may run once later only when it
-was already justified by the branch-wide evidence and the fixes invalidate that broader
-result.
+complete E2E suite after each failure. Run the complete suite later only if the
+maintainer explicitly requests it.
 
 This also applies when CI reports one failing E2E test while the other tests pass. After
 the focused fix, run only the failed test locally; changing that spec or its exercised
@@ -98,10 +76,10 @@ series of guessed values.
 
 ## Command-wrapper timing
 
-| Local command scope                 | Wrapper limit |
-| ----------------------------------- | ------------- |
-| Focused Playwright subset           | 10 minutes    |
-| Justified complete Playwright suite | 30 minutes    |
+| Local command scope                          | Wrapper limit |
+| -------------------------------------------- | ------------- |
+| Focused Playwright subset                    | 10 minutes    |
+| Explicitly requested complete Playwright run | 30 minutes    |
 
 Wrapper limits control how long the agent waits for the process; they are not Playwright
 or assertion timeouts. Buffered output is not evidence of a hang. If the process is
@@ -111,11 +89,11 @@ as an orchestration timeout.
 
 ## Final E2E verification
 
-When the complete suite is justified by the criteria above and CI-shaped local evidence
-is required, run it once on Windows PowerShell:
+When the maintainer explicitly requests the complete suite or CI-shaped local E2E
+evidence, run it once in WSL:
 
-```powershell
-$env:CI='1'; pnpm.cmd e2e; Remove-Item Env:CI
+```bash
+CI=1 pnpm e2e
 ```
 
 Retain traces, screenshots, videos, and reports produced for failures. Do not add

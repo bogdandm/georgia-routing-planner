@@ -1,6 +1,9 @@
 import CloseIcon from '@mui/icons-material/Close';
+import CheckIcon from '@mui/icons-material/Check';
+import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import StarIcon from '@mui/icons-material/Star';
@@ -18,6 +21,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  ClickAwayListener,
   Divider,
   IconButton,
   InputAdornment,
@@ -50,7 +54,6 @@ import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ParsedGpx, TrackPoint } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
-  localTrackPoints,
   localTrackSegments,
   normalizeLocalTrackName,
   type LocalTrackContent,
@@ -122,14 +125,8 @@ interface TracksWorkspaceValue {
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly setActiveName: (name: string) => void;
   readonly setQuery: (query: string) => void;
-  readonly renameActive: () => Promise<void>;
+  readonly renameActive: () => Promise<boolean>;
   readonly toggleFavorite: (summary: LocalTrackSummary) => Promise<void>;
-  readonly updateActiveDescription: (description: string) => Promise<void>;
-  readonly recalculateActiveElevation: (
-    signal: AbortSignal,
-    onProgress: (completed: number, total: number) => void,
-  ) => Promise<void>;
-  readonly restoreActiveSourceElevation: () => Promise<void>;
 }
 
 interface GeneratedNameInput {
@@ -208,15 +205,8 @@ function bestCandidate(
 }
 
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
-  const {
-    clock,
-    database,
-    elevationProvider,
-    idGenerator,
-    logger,
-    mapLayers,
-    searchPlaces,
-  } = useRuntimeServices();
+  const { clock, database, idGenerator, logger, mapLayers, searchPlaces } =
+    useRuntimeServices();
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
@@ -523,7 +513,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         savedAt: clock.now().toISOString(),
         sourceFilename: active.file.name,
         sourceFormat: active.sourceFormat,
-        description: active.parsed.metadata.selectedDescription ?? '',
         favorite: false,
         geometryKind: active.parsed.geometryKind,
         pointCount: active.parsed.pointCount,
@@ -545,7 +534,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: active.id,
         trackPoints: active.parsed.segments.map((segment) => segment.points),
-        elevationSource: 'source',
       };
       await database.saveLocalTrack(summary, content);
       await database.saveLatestOpenedTrackId(summary.id);
@@ -610,8 +598,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     });
   }, []);
 
-  const renameActive = useCallback(async () => {
-    if (active?.kind !== 'saved') return;
+  const renameActive = useCallback(async (): Promise<boolean> => {
+    if (active?.kind !== 'saved') return false;
     try {
       const summary = await database.renameLocalTrack(
         active.summary.id,
@@ -620,21 +608,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setActive({ ...active, summary, draftName: summary.name });
       await reloadSummaries();
       setError(null);
+      return true;
     } catch (renameError) {
       setError(
         renameError instanceof Error
           ? renameError.message
           : 'The track could not be renamed.',
       );
+      return false;
     }
   }, [active, database, reloadSummaries]);
 
   const toggleFavorite = useCallback(
     async (summary: LocalTrackSummary) => {
       try {
-        const updated = await database.updateLocalTrackMetadata(summary.id, {
-          favorite: !summary.favorite,
-        });
+        const updated = await database.setLocalTrackFavorite(
+          summary.id,
+          !summary.favorite,
+        );
         setActive((current) =>
           current?.kind === 'saved' && current.summary.id === updated.id
             ? { ...current, summary: updated }
@@ -649,101 +640,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [database, reloadSummaries],
   );
 
-  const updateActiveDescription = useCallback(
-    async (description: string) => {
-      if (active?.kind !== 'saved') return;
-      try {
-        const summary = await database.updateLocalTrackMetadata(active.summary.id, {
-          description,
-        });
-        setActive({ ...active, summary });
-        await reloadSummaries();
-        setError(null);
-      } catch (descriptionError) {
-        setError(
-          descriptionError instanceof Error
-            ? descriptionError.message
-            : 'The description could not be updated.',
-        );
-        throw descriptionError;
-      }
-    },
-    [active, database, reloadSummaries],
-  );
-
-  const recalculateActiveElevation = useCallback(
-    async (
-      signal: AbortSignal,
-      onProgress: (completed: number, total: number) => void,
-    ) => {
-      if (active?.kind !== 'saved' || elevationProvider === null) {
-        throw new Error('Relief elevation is unavailable for this track.');
-      }
-      const total = active.content.trackPoints.reduce(
-        (sum, segment) => sum + segment.length,
-        0,
-      );
-      let completed = 0;
-      let unavailable = 0;
-      const reliefElevations: number[][] = [];
-      for (const segment of active.content.trackPoints) {
-        const updatedSegment: number[] = [];
-        for (const point of segment) {
-          const sample = await elevationProvider.sample(
-            {
-              longitude: point.coordinate[0],
-              latitude: point.coordinate[1],
-            },
-            signal,
-          );
-          if (sample.status === 'available') updatedSegment.push(sample.meters);
-          if (sample.status !== 'available') unavailable += 1;
-          completed += 1;
-          onProgress(completed, total);
-        }
-        reliefElevations.push(updatedSegment);
-      }
-      if (unavailable > 0) {
-        const message = `Relief elevation was unavailable for ${String(unavailable)} of ${String(total)} track points. The saved profile was not changed.`;
-        setError(message);
-        throw new Error(message);
-      }
-      const content: LocalTrackContent = {
-        ...active.content,
-        reliefElevations,
-        elevationSource: 'relief',
-      };
-      await database.saveLocalTrack(active.summary, content);
-      setActive({ ...active, content });
-      setError(null);
-    },
-    [active, database, elevationProvider],
-  );
-
-  const restoreActiveSourceElevation = useCallback(async () => {
-    if (active?.kind !== 'saved') return;
-    try {
-      const { reliefElevations: _, ...sourceContent } = active.content;
-      const content: LocalTrackContent = {
-        ...sourceContent,
-        elevationSource: 'source',
-      };
-      await database.saveLocalTrack(active.summary, content);
-      setActive({ ...active, content });
-      setError(null);
-    } catch (restoreError) {
-      setError(
-        restoreError instanceof Error
-          ? restoreError.message
-          : 'The source elevation could not be restored.',
-      );
-      throw restoreError;
-    }
-  }, [active, database]);
-
   const deleteSaved = useCallback(
     async (summary: LocalTrackSummary) => {
-      if (!window.confirm(`Delete “${summary.name}” from this browser?`)) return;
       try {
         await database.deleteLocalTrack(summary.id);
         setActive((current) =>
@@ -772,11 +670,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const normalizedQuery = query.trim().toLocaleLowerCase('en');
     return normalizedQuery.length === 0
       ? summaries
-      : summaries.filter(
-          (summary) =>
-            summary.normalizedName.includes(normalizedQuery) ||
-            summary.description.toLocaleLowerCase('en').includes(normalizedQuery),
-        );
+      : summaries.filter((summary) => summary.normalizedName.includes(normalizedQuery));
   }, [query, summaries]);
 
   const value = useMemo<TracksWorkspaceValue>(
@@ -798,9 +692,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setActiveName,
       setQuery,
       toggleFavorite,
-      updateActiveDescription,
-      recalculateActiveElevation,
-      restoreActiveSourceElevation,
     }),
     [
       active,
@@ -820,9 +711,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setQuery,
       summaries,
       toggleFavorite,
-      updateActiveDescription,
-      recalculateActiveElevation,
-      restoreActiveSourceElevation,
     ],
   );
 
@@ -1072,14 +960,8 @@ export function TracksPanel() {
     toggleFavorite,
     deleteSaved,
   } = useTracksWorkspace();
-  const [rowAction, setRowAction] = useState<{
-    readonly anchor: HTMLElement;
-    readonly summary: LocalTrackSummary;
-  } | null>(null);
-  const [pointerFavoriteReset, setPointerFavoriteReset] = useState<{
-    readonly id: string;
-    readonly version: number;
-  } | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active !== null && compactDetails) {
     return (
@@ -1134,132 +1016,163 @@ export function TracksPanel() {
             {filteredSummaries.map((summary) => {
               const elapsedSeconds = summary.metrics.elapsedSeconds;
               const ascentMeters = summary.metrics.ascentMeters;
+              const selected =
+                active?.kind === 'saved' && active.summary.id === summary.id;
+              const pending = pendingDeleteId === summary.id;
+              const deleting = deletingId === summary.id;
+              const actionClassName = `saved-track-row-action${pending ? ' saved-track-row-action--pending' : ''}`;
               return (
-                <Paper
+                <ClickAwayListener
                   key={summary.id}
-                  component="li"
-                  variant="outlined"
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'minmax(0, 1fr) auto',
-                    alignItems: 'center',
+                  onClickAway={() => {
+                    if (deletingId !== summary.id) {
+                      setPendingDeleteId((current) =>
+                        current === summary.id ? null : current,
+                      );
+                    }
                   }}
                 >
-                  <ListItemButton
-                    selected={
-                      active?.kind === 'saved' && active.summary.id === summary.id
-                    }
-                    onClick={() => void selectSaved(summary)}
+                  <Paper
+                    component="li"
+                    variant="outlined"
+                    onMouseLeave={() => {
+                      if (deletingId !== summary.id) {
+                        setPendingDeleteId((current) =>
+                          current === summary.id ? null : current,
+                        );
+                      }
+                    }}
                     sx={{
-                      display: 'block',
-                      minWidth: 0,
-                      px: 1.5,
-                      py: 1.25,
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      alignItems: 'center',
+                      bgcolor: selected ? appColors.surface.selected : 'transparent',
+                      '&:hover': {
+                        bgcolor: selected
+                          ? `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`
+                          : 'action.hover',
+                      },
+                      '& .MuiListItemButton-root, & .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-selected, & .MuiListItemButton-root.Mui-selected:hover':
+                        { bgcolor: 'transparent' },
+                      '& .saved-track-row-action': {
+                        opacity: 0,
+                        pointerEvents: 'none',
+                        transition: 'opacity 150ms ease-out',
+                      },
+                      '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:hover .saved-track-row-action, &:focus-within .saved-track-row-action':
+                        { opacity: 1, pointerEvents: 'auto' },
                     }}
                   >
-                    <Typography variant="subtitle2">{summary.name}</Typography>
+                    <ListItemButton
+                      selected={selected}
+                      onClick={() => void selectSaved(summary)}
+                      sx={{
+                        display: 'block',
+                        minWidth: 0,
+                        px: 1.5,
+                        py: 1.25,
+                      }}
+                    >
+                      <Typography variant="subtitle2">{summary.name}</Typography>
+                      <Stack
+                        direction="row"
+                        spacing={1.5}
+                        sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
+                      >
+                        {elapsedSeconds === undefined ? null : (
+                          <TrackStat
+                            icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
+                            label="Recorded time"
+                            value={formatDuration(elapsedSeconds)}
+                          />
+                        )}
+                        <TrackStat
+                          icon={<SwapHorizOutlinedIcon sx={{ fontSize: 16 }} />}
+                          label="Distance"
+                          value={formatDistance(summary.metrics.distanceMeters)}
+                        />
+                        {ascentMeters === undefined ? null : (
+                          <TrackStat
+                            icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
+                            label="Elevation gain"
+                            value={formatElevation(ascentMeters)}
+                          />
+                        )}
+                      </Stack>
+                    </ListItemButton>
                     <Stack
                       direction="row"
-                      spacing={1.5}
-                      sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
+                      spacing={0.5}
+                      sx={{ alignItems: 'center', px: 1 }}
                     >
-                      {elapsedSeconds === undefined ? null : (
-                        <TrackStat
-                          icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
-                          label="Recorded time"
-                          value={formatDuration(elapsedSeconds)}
-                        />
-                      )}
-                      <TrackStat
-                        icon={<SwapHorizOutlinedIcon sx={{ fontSize: 16 }} />}
-                        label="Distance"
-                        value={formatDistance(summary.metrics.distanceMeters)}
-                      />
-                      {ascentMeters === undefined ? null : (
-                        <TrackStat
-                          icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
-                          label="Elevation gain"
-                          value={formatElevation(ascentMeters)}
-                        />
-                      )}
-                    </Stack>
-                  </ListItemButton>
-                  <Stack
-                    direction="row"
-                    spacing={0.5}
-                    sx={{ alignItems: 'center', px: 1 }}
-                  >
-                    <Tooltip
-                      key={
-                        summary.id === pointerFavoriteReset?.id
-                          ? `${summary.id}:pointer-reset:${String(pointerFavoriteReset.version)}`
-                          : summary.id
-                      }
-                      title={
-                        summary.favorite ? 'Remove from favorites' : 'Add to favorites'
-                      }
-                    >
-                      <IconButton
-                        size="small"
-                        aria-label={
+                      <Tooltip
+                        title={
                           summary.favorite
                             ? 'Remove from favorites'
                             : 'Add to favorites'
                         }
-                        color={summary.favorite ? 'warning' : 'default'}
-                        onClick={(event) => {
-                          if (event.detail > 0) {
-                            setPointerFavoriteReset((current) => ({
-                              id: summary.id,
-                              version: (current?.version ?? 0) + 1,
-                            }));
+                      >
+                        <IconButton
+                          className={`saved-track-row-action${summary.favorite ? ' saved-track-row-favorite--active' : ''}`}
+                          size="small"
+                          aria-label={
+                            summary.favorite
+                              ? 'Remove from favorites'
+                              : 'Add to favorites'
                           }
-                          void toggleFavorite(summary);
-                        }}
-                      >
-                        {summary.favorite ? (
-                          <StarIcon fontSize="small" />
-                        ) : (
-                          <StarBorderIcon fontSize="small" />
-                        )}
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Track actions">
-                      <IconButton
-                        size="small"
-                        aria-label={`Actions for ${summary.name}`}
-                        onClick={(event) => {
-                          setRowAction({ anchor: event.currentTarget, summary });
-                        }}
-                      >
-                        <MoreVertIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                </Paper>
+                          color={summary.favorite ? 'warning' : 'default'}
+                          onClick={() => void toggleFavorite(summary)}
+                        >
+                          {summary.favorite ? (
+                            <StarIcon fontSize="small" />
+                          ) : (
+                            <StarBorderIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={pending ? 'Confirm deletion' : 'Delete track'}>
+                        <IconButton
+                          className={actionClassName}
+                          size="small"
+                          aria-label={
+                            pending
+                              ? `Confirm deletion of ${summary.name}`
+                              : `Delete ${summary.name}`
+                          }
+                          color={pending ? 'error' : 'default'}
+                          disabled={deleting}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape' && deletingId !== summary.id) {
+                              setPendingDeleteId(null);
+                              event.currentTarget.blur();
+                            }
+                          }}
+                          onClick={() => {
+                            if (!pending) {
+                              setPendingDeleteId(summary.id);
+                              return;
+                            }
+                            setDeletingId(summary.id);
+                            void deleteSaved(summary).finally(() => {
+                              setDeletingId(null);
+                              setPendingDeleteId(null);
+                            });
+                          }}
+                        >
+                          {pending ? (
+                            <DeleteForeverOutlinedIcon fontSize="small" />
+                          ) : (
+                            <DeleteOutlineOutlinedIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Paper>
+                </ClickAwayListener>
               );
             })}
           </List>
         )}
-        <Menu
-          anchorEl={rowAction?.anchor ?? null}
-          open={rowAction !== null}
-          onClose={() => {
-            setRowAction(null);
-          }}
-        >
-          <MenuItem
-            onClick={() => {
-              const action = rowAction;
-              setRowAction(null);
-              if (action !== null) void deleteSaved(action.summary);
-            }}
-            sx={{ color: 'error.main' }}
-          >
-            <DeleteOutlineOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-            Delete track
-          </MenuItem>
-        </Menu>
       </Stack>
       <Alert
         severity="info"
@@ -1284,102 +1197,6 @@ export function TracksPanel() {
   );
 }
 
-function SavedTrackDescription() {
-  const { active, updateActiveDescription } = useTracksWorkspace();
-  const savedDescription = active?.kind === 'saved' ? active.summary.description : '';
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(savedDescription);
-
-  if (active?.kind !== 'saved') return null;
-
-  if (editing) {
-    return (
-      <Stack spacing={1}>
-        <TextField
-          multiline
-          minRows={3}
-          label="Description"
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
-          slotProps={{ htmlInput: { maxLength: 10_000 } }}
-        />
-        <Stack direction="row" spacing={1}>
-          <Button
-            size="small"
-            variant="contained"
-            onClick={() => {
-              void updateActiveDescription(draft)
-                .then(() => {
-                  setEditing(false);
-                })
-                .catch(() => undefined);
-            }}
-          >
-            Apply edit
-          </Button>
-          <Button
-            size="small"
-            color="inherit"
-            onClick={() => {
-              setDraft(savedDescription);
-              setEditing(false);
-            }}
-          >
-            Cancel
-          </Button>
-        </Stack>
-      </Stack>
-    );
-  }
-
-  return (
-    <Stack spacing={1}>
-      <Typography component="h3" variant="subtitle2">
-        Description
-      </Typography>
-      {savedDescription.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          No description has been added.
-        </Typography>
-      ) : (
-        <Typography
-          component="div"
-          variant="body2"
-          sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-        >
-          {savedDescription.split(/(https?:\/\/[^\s]+)/giu).map((part, index) =>
-            /^https?:\/\//iu.test(part) ? (
-              <Box
-                component="a"
-                key={`${part}-${String(index)}`}
-                href={part}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {part}
-              </Box>
-            ) : (
-              part
-            ),
-          )}
-        </Typography>
-      )}
-      <Button
-        size="small"
-        variant="text"
-        onClick={() => {
-          setEditing(true);
-        }}
-        sx={{ alignSelf: 'flex-start' }}
-      >
-        Edit
-      </Button>
-    </Stack>
-  );
-}
-
 function downloadText(filename: string, type: string, content: string): void {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement('a');
@@ -1401,17 +1218,11 @@ function sampleProfilePoints<T>(points: readonly T[], maximum = 1_200): readonly
 }
 
 function TrackElevationProfile() {
-  const { active, recalculateActiveElevation, restoreActiveSourceElevation } =
-    useTracksWorkspace();
+  const { active } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
-  const [recalculationProgress, setRecalculationProgress] = useState<number | null>(
-    null,
-  );
-  const recalculationAbort = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
-      recalculationAbort.current?.abort();
     },
     [mapLayers],
   );
@@ -1419,24 +1230,15 @@ function TrackElevationProfile() {
   const sourceSegments =
     active.kind === 'preview'
       ? active.parsed.segments.map((segment) => segment.points)
-      : localTrackPoints(active.content);
+      : active.content.trackPoints;
   const profile = calculateElevationProfile(sourceSegments);
   if (profile === null) return null;
   const chartPoints = sampleProfilePoints(profile.points);
-  const elevationSource =
-    active.kind === 'saved' && active.content.elevationSource === 'relief'
-      ? 'Relief map'
-      : 'Source file';
   return (
     <Stack spacing={1.5}>
-      <Stack direction="row" sx={{ alignItems: 'baseline' }}>
-        <Typography component="h3" variant="subtitle2" sx={{ flex: 1 }}>
-          Elevation profile
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {elevationSource}
-        </Typography>
-      </Stack>
+      <Typography component="h3" variant="subtitle2">
+        Elevation profile
+      </Typography>
       <Box
         role="img"
         aria-label={`Elevation profile from ${String(Math.round(profile.minimumMeters))} to ${String(Math.round(profile.maximumMeters))} metres`}
@@ -1491,59 +1293,6 @@ function TrackElevationProfile() {
           slotProps={{ tooltip: { trigger: 'axis' } }}
         />
       </Box>
-      {active.kind === 'saved' ? (
-        recalculationProgress === null ? (
-          <Stack direction="row" spacing={1}>
-            <Button
-              size="small"
-              variant="text"
-              onClick={() => {
-                const controller = new AbortController();
-                recalculationAbort.current = controller;
-                setRecalculationProgress(0);
-                void recalculateActiveElevation(
-                  controller.signal,
-                  (completed, total) => {
-                    setRecalculationProgress(Math.round((completed / total) * 100));
-                  },
-                )
-                  .catch(() => undefined)
-                  .finally(() => {
-                    recalculationAbort.current = null;
-                    setRecalculationProgress(null);
-                  });
-              }}
-            >
-              Use relief elevation
-            </Button>
-            {active.content.elevationSource === 'relief' ? (
-              <Button
-                size="small"
-                variant="text"
-                onClick={() => {
-                  void restoreActiveSourceElevation().catch(() => undefined);
-                }}
-              >
-                Restore source
-              </Button>
-            ) : null}
-          </Stack>
-        ) : (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <Typography variant="caption">
-              Reading relief elevation… {recalculationProgress}%
-            </Typography>
-            <Button
-              size="small"
-              onClick={() => {
-                recalculationAbort.current?.abort();
-              }}
-            >
-              Cancel
-            </Button>
-          </Stack>
-        )
-      ) : null}
     </Stack>
   );
 }
@@ -1657,6 +1406,12 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
   } = useTracksWorkspace();
   const compactDetails = useMediaQuery('(max-width:1920px)');
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
+  const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
+  const [confirmingDeleteTrackId, setConfirmingDeleteTrackId] = useState<string | null>(
+    null,
+  );
+  const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   if (active === null) return null;
   if (compactDetails !== embedded) return null;
   const metrics = active.kind === 'saved' ? active.summary.metrics : active.metrics;
@@ -1673,6 +1428,11 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
     active.kind === 'saved' ? active.summary.sourceFormat : active.sourceFormat;
   const warnings =
     active.kind === 'saved' ? active.summary.warnings : active.parsed.warnings;
+  const savedTrackId = active.kind === 'saved' ? active.summary.id : null;
+  const renaming = savedTrackId !== null && renamingTrackId === savedTrackId;
+  const confirmingDelete =
+    savedTrackId !== null && confirmingDeleteTrackId === savedTrackId;
+  const deleting = savedTrackId !== null && deletingTrackId === savedTrackId;
   return (
     <Box
       component="aside"
@@ -1700,94 +1460,194 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
         }}
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography
-            component="h2"
-            variant="subtitle1"
-            noWrap
-            sx={{ fontWeight: 700 }}
-          >
-            {active.kind === 'preview' ? 'New track' : active.summary.name}
-          </Typography>
-        </Box>
-        {active.kind === 'saved' ? (
-          <>
-            <Tooltip
-              title={
-                active.summary.favorite ? 'Remove from favorites' : 'Add to favorites'
-              }
+          {active.kind === 'saved' && renaming ? (
+            <TextField
+              autoFocus
+              fullWidth
+              inputRef={renameInputRef}
+              size="small"
+              label="Track name"
+              value={active.draftName}
+              onChange={(event) => {
+                setActiveName(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setActiveName(active.summary.name);
+                  setRenamingTrackId(null);
+                  return;
+                }
+                if (
+                  event.key === 'Enter' &&
+                  active.draftName.trim().length > 0 &&
+                  active.draftName.trim() !== active.summary.name
+                ) {
+                  void renameActive().then((renamed) => {
+                    if (renamed) setRenamingTrackId(null);
+                  });
+                }
+              }}
+              slotProps={{ htmlInput: { maxLength: 200 } }}
+            />
+          ) : (
+            <Typography
+              component="h2"
+              variant="subtitle1"
+              noWrap
+              sx={{ fontWeight: 700 }}
             >
+              {active.kind === 'preview' ? 'New track' : active.summary.name}
+            </Typography>
+          )}
+        </Box>
+        {active.kind === 'saved' && renaming ? (
+          <Tooltip title="Confirm rename">
+            <span>
               <IconButton
                 size="small"
-                aria-label={
+                aria-label="Confirm rename"
+                disabled={
+                  active.draftName.trim().length === 0 ||
+                  active.draftName.trim() === active.summary.name
+                }
+                onClick={() => {
+                  void renameActive().then((renamed) => {
+                    if (renamed) setRenamingTrackId(null);
+                  });
+                }}
+              >
+                <CheckIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        ) : null}
+        {active.kind === 'saved' ? (
+          <ClickAwayListener
+            onClickAway={() => {
+              if (confirmingDelete && !deleting) setConfirmingDeleteTrackId(null);
+            }}
+          >
+            <Box
+              onMouseLeave={() => {
+                if (confirmingDelete && !deleting) setConfirmingDeleteTrackId(null);
+              }}
+              sx={{ display: 'flex', alignItems: 'center' }}
+            >
+              <Tooltip
+                title={
                   active.summary.favorite ? 'Remove from favorites' : 'Add to favorites'
                 }
-                color={active.summary.favorite ? 'warning' : 'default'}
-                onClick={() => void toggleFavorite(active.summary)}
               >
-                {active.summary.favorite ? (
-                  <StarIcon fontSize="small" />
-                ) : (
-                  <StarBorderIcon fontSize="small" />
-                )}
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Track actions">
-              <IconButton
-                size="small"
-                aria-label="Track actions"
-                onClick={(event) => {
-                  setActionMenuAnchor(event.currentTarget);
-                }}
-              >
-                <MoreVertIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Menu
-              anchorEl={actionMenuAnchor}
-              open={actionMenuAnchor !== null}
-              onClose={() => {
-                setActionMenuAnchor(null);
-              }}
-            >
-              <MenuItem
-                onClick={() => {
-                  downloadText(
-                    safeTrackFilename(active.summary.name, 'gpx'),
-                    'application/gpx+xml',
-                    exportTrackAsGpx(active.summary, active.content),
-                  );
+                <IconButton
+                  size="small"
+                  aria-label={
+                    active.summary.favorite
+                      ? 'Remove from favorites'
+                      : 'Add to favorites'
+                  }
+                  color={active.summary.favorite ? 'warning' : 'default'}
+                  onClick={() => void toggleFavorite(active.summary)}
+                >
+                  {active.summary.favorite ? (
+                    <StarIcon fontSize="small" />
+                  ) : (
+                    <StarBorderIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
+              {confirmingDelete ? (
+                <Button
+                  autoFocus
+                  color="error"
+                  disabled={deleting}
+                  size="small"
+                  startIcon={<DeleteForeverOutlinedIcon />}
+                  variant="text"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape' && !deleting) {
+                      setConfirmingDeleteTrackId(null);
+                    }
+                  }}
+                  onClick={() => {
+                    setDeletingTrackId(active.summary.id);
+                    void deleteSaved(active.summary).finally(() => {
+                      setDeletingTrackId(null);
+                      setConfirmingDeleteTrackId(null);
+                    });
+                  }}
+                >
+                  Confirm delete
+                </Button>
+              ) : (
+                <Tooltip title="Track actions">
+                  <IconButton
+                    size="small"
+                    aria-label="Track actions"
+                    onClick={(event) => {
+                      setActionMenuAnchor(event.currentTarget);
+                    }}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Menu
+                anchorEl={actionMenuAnchor}
+                open={actionMenuAnchor !== null}
+                onClose={() => {
                   setActionMenuAnchor(null);
                 }}
               >
-                <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                Download GPX
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  downloadText(
-                    safeTrackFilename(active.summary.name, 'kml'),
-                    'application/vnd.google-earth.kml+xml',
-                    exportTrackAsKml(active.summary, active.content),
-                  );
-                  setActionMenuAnchor(null);
-                }}
-              >
-                <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                Download KML
-              </MenuItem>
-              <Divider />
-              <MenuItem
-                onClick={() => {
-                  setActionMenuAnchor(null);
-                  void deleteSaved(active.summary);
-                }}
-                sx={{ color: 'error.main' }}
-              >
-                <DeleteOutlineOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                Delete track
-              </MenuItem>
-            </Menu>
-          </>
+                <MenuItem
+                  onClick={() => {
+                    downloadText(
+                      safeTrackFilename(active.summary.name, 'gpx'),
+                      'application/gpx+xml',
+                      exportTrackAsGpx(active.summary, active.content),
+                    );
+                    setActionMenuAnchor(null);
+                  }}
+                >
+                  <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  Download GPX
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    downloadText(
+                      safeTrackFilename(active.summary.name, 'kml'),
+                      'application/vnd.google-earth.kml+xml',
+                      exportTrackAsKml(active.summary, active.content),
+                    );
+                    setActionMenuAnchor(null);
+                  }}
+                >
+                  <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  Download KML
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setActionMenuAnchor(null);
+                    setActiveName(active.summary.name);
+                    setRenamingTrackId(active.summary.id);
+                  }}
+                >
+                  <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  Rename
+                </MenuItem>
+                <Divider />
+                <MenuItem
+                  onClick={() => {
+                    setActionMenuAnchor(null);
+                    setConfirmingDeleteTrackId(active.summary.id);
+                  }}
+                  sx={{ color: 'error.main' }}
+                >
+                  <DeleteOutlineOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  Delete track
+                </MenuItem>
+              </Menu>
+            </Box>
+          </ClickAwayListener>
         ) : null}
         <IconButton
           size="small"
@@ -1799,45 +1659,18 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
       </Stack>
       <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
         <Stack spacing={2}>
-          <Stack spacing={2}>
-            <TextField
-              size="small"
-              label="Track name"
-              value={active.kind === 'preview' ? active.name : active.draftName}
-              onChange={(event) => {
-                setActiveName(event.target.value);
-              }}
-              slotProps={{
-                htmlInput: { maxLength: 200 },
-                ...(active.kind === 'saved'
-                  ? {
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <Tooltip title="Save name">
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  aria-label="Save track name"
-                                  disabled={
-                                    active.draftName.trim().length === 0 ||
-                                    active.draftName === active.summary.name
-                                  }
-                                  onClick={() => void renameActive()}
-                                >
-                                  <SaveOutlinedIcon fontSize="small" />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          </InputAdornment>
-                        ),
-                      },
-                    }
-                  : {}),
-              }}
-            />
-            {active.kind === 'preview' ? (
-              active.namingStatus === 'loading' ? (
+          {active.kind === 'preview' ? (
+            <Stack spacing={2}>
+              <TextField
+                size="small"
+                label="Track name"
+                value={active.name}
+                onChange={(event) => {
+                  setActiveName(event.target.value);
+                }}
+                slotProps={{ htmlInput: { maxLength: 200 } }}
+              />
+              {active.namingStatus === 'loading' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <CircularProgress size={18} />
                   <Typography variant="body2">
@@ -1866,9 +1699,9 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
                     slotProps={{ input: { readOnly: true } }}
                   />
                 </Stack>
-              )
-            ) : null}
-          </Stack>
+              )}
+            </Stack>
+          ) : null}
           {active.kind === 'preview' ? (
             <>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
@@ -1900,9 +1733,6 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
             sourceFilename={sourceFilename}
             sourceFormat={sourceFormat}
           />
-          {active.kind === 'saved' ? (
-            <SavedTrackDescription key={active.summary.id} />
-          ) : null}
           {segmentCount > 1 ? (
             <Alert severity="info">
               Independent segments are not joined; totals exclude gaps.

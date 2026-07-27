@@ -90,38 +90,38 @@ previews activate the native leave-site guard. Saved track cards show icon-led r
 duration, distance, and elevation gain when available. The detail pane presents
 duration, distance, derived average speed, elevation gain, and elevation loss in a
 wrapping stats grid, with missing measurements omitted; source file, point, segment, and
-save metadata remain below it. Saved tracks are searchable by name or description and
-support reopen, close, inline name saving, and confirmed deletion. Each saved-track row
-keeps its favorite control and compact action menu visible; the menu uses native browser
-confirmation before deleting. Users can favorite a track from its list row or detail
-header; downloads and deletion also live in the detail header's compact action menu.
-Favorites sort before other tracks, with newest imports first inside each group. The
-optional 10,000-character plain-text description is edited explicitly, persists locally,
-and renders only `http://` and `https://` text as safe new-tab links. The latest opened
-saved track reopens after restart when its content is still valid. A compact
-local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
-filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
-newly imported or reopened track renders as bright-blue independent lines and fits its
-complete bounds with padding for the master/detail surfaces. Closing it removes the
-active geometry without deleting a saved record or moving the camera. Every saved track
-can be downloaded locally as GPX or KML. Generated files preserve independent segments,
-saved name and description, available point elevation and reliably aligned timestamps;
-conversion never uploads the source.
+save metadata remain below it. Saved tracks are searchable by name, reopen after close,
+and rename only from the detail header's **Rename** action. That action replaces the
+saved title with a bounded name editor; the preview retains its body **Track name**
+field and English-name application flow. Each saved-track row keeps favorite and
+icon-only delete controls in the DOM, revealing inactive controls on pointer hover or
+keyboard focus; active favorites remain visible. Row selection and hover color cover the
+entire row, including its action column. Deletion uses two-stage inline confirmation:
+the row delete icon becomes a destructive confirmation icon, while **Delete track** in
+the detail action menu replaces that menu trigger with **Confirm delete**. Pointer exit,
+Escape, and click-away cancel either confirmation without mutation. Users can favorite a
+track from its list row or detail header; downloads remain in the detail header's
+compact action menu. Favorites sort before other tracks, with newest imports first
+inside each group. The latest opened saved track reopens after restart when its content
+is still valid. A compact local-retention notice stays pinned to the Tracks panel
+bottom. Catalog, folders, tags, filters, batch import, whole-workspace dropping, and GPX
+creation remain unavailable. A newly imported or reopened track renders as bright-blue
+independent lines and fits its complete bounds with padding for the master/detail
+surfaces. Closing it removes the active geometry without deleting a saved record or
+moving the camera. Every saved track can be downloaded locally as GPX or KML. Generated
+files preserve independent segments, saved name, available point elevation, and reliably
+aligned timestamps without writing GPX or KML description elements; conversion never
+uploads the source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The
-profile does not repeat the ascent/descent metrics already shown in the stats grid.
-Users can explicitly recalculate elevation from the configured relief provider, monitor
-progress, cancel it, and retain successful derived points locally. Partial relief
-results do not replace the saved profile. Source elevations remain in the internal point
-representation, so a successful derived profile can be discarded without retaining or
-reparsing the original source file.
+profile is calculated from the retained source points and does not repeat the
+ascent/descent metrics already shown in the stats grid.
 
 At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
 persistent import region and **Back to tracks** restores the prior search/list state.
-Wider viewports retain the adjacent detail pane. Each list row keeps favorite and
-compact action-menu controls visible; deletion asks for native browser confirmation, and
-cancel leaves the row and selection unchanged.
+Wider viewports retain the adjacent detail pane. The same hover/focus row actions and
+two-stage inline deletion behavior apply at either width.
 
 ### Create GPX
 

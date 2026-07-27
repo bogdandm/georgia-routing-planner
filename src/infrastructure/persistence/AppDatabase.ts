@@ -28,7 +28,6 @@ import type {
 } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
-  normalizeLocalTrackDescription,
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
@@ -366,7 +365,6 @@ const localTrackSummarySchema = z
     savedAt: z.iso.datetime(),
     sourceFilename: z.string().min(1).max(500),
     sourceFormat: z.enum(['gpx', 'fit', 'kml']).default('gpx'),
-    description: z.string().max(10_000).default(''),
     favorite: z.boolean().default(false),
     geometryKind: z.enum(['track', 'route']),
     pointCount: z.number().int().min(2).max(100_000),
@@ -391,7 +389,6 @@ const localTrackSummarySchema = z
       savedAt: value.savedAt,
       sourceFilename: value.sourceFilename,
       sourceFormat: value.sourceFormat,
-      description: value.description,
       favorite: value.favorite,
       geometryKind: value.geometryKind,
       pointCount: value.pointCount,
@@ -441,32 +438,8 @@ const currentLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     trackId: z.string().min(1).max(200),
     trackPoints: storedTrackSegmentsSchema,
-    reliefElevations: z.array(z.array(z.number()).min(2)).min(1).max(512).optional(),
-    elevationSource: z.enum(['source', 'relief']).default('source'),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.reliefElevations === undefined) {
-      if (value.elevationSource === 'relief') {
-        context.addIssue({
-          code: 'custom',
-          message: 'Relief elevation values are required for the relief source.',
-        });
-      }
-      return;
-    }
-    const aligned =
-      value.reliefElevations.length === value.trackPoints.length &&
-      value.reliefElevations.every(
-        (segment, index) => segment.length === value.trackPoints[index]?.length,
-      );
-    if (!aligned) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Relief elevation values must align with source track points.',
-      });
-    }
-  });
+  .strict();
 
 const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   .object({
@@ -482,7 +455,6 @@ const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
     trackPoints:
       value.trackPoints ??
       value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
-    elevationSource: 'source',
   }));
 
 const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.union([
@@ -622,26 +594,16 @@ export class AppDatabase
     return updated;
   }
 
-  public async updateLocalTrackMetadata(
+  public async setLocalTrackFavorite(
     trackId: string,
-    changes: {
-      readonly description?: string;
-      readonly favorite?: boolean;
-    },
+    favorite: boolean,
   ): Promise<LocalTrackSummary> {
     const existing = await this.localTracks.get(trackId);
     const parsed = parseLocalTrackSummary(existing);
     if (parsed === null) {
       throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
     }
-    const updated: LocalTrackSummary = {
-      ...parsed,
-      description:
-        changes.description === undefined
-          ? parsed.description
-          : normalizeLocalTrackDescription(changes.description),
-      favorite: changes.favorite ?? parsed.favorite,
-    };
+    const updated: LocalTrackSummary = { ...parsed, favorite };
     await this.localTracks.put(updated);
     return updated;
   }

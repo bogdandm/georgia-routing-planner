@@ -22,7 +22,6 @@ function summary(id: string, name: string): LocalTrackSummary {
     savedAt: '2026-07-22T10:00:00.000Z',
     sourceFilename: 'fixture.gpx',
     sourceFormat: 'gpx',
-    description: '',
     favorite: false,
     geometryKind: 'track',
     pointCount: 2,
@@ -134,24 +133,15 @@ describe('local track persistence', () => {
     ]);
   });
 
-  it('updates descriptions and favorites without changing import date', async () => {
+  it('updates favorites without changing import date', async () => {
     await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
 
     await expect(
-      database.updateLocalTrackMetadata('local:1', {
-        description: 'A useful link: https://example.test/track',
-        favorite: true,
-      }),
+      database.setLocalTrackFavorite('local:1', true),
     ).resolves.toMatchObject({
-      description: 'A useful link: https://example.test/track',
       favorite: true,
       savedAt: '2026-07-22T10:00:00.000Z',
     });
-    await expect(
-      database.updateLocalTrackMetadata('local:1', {
-        description: 'x'.repeat(10_001),
-      }),
-    ).rejects.toThrow('10,000 characters');
   });
 
   it('restores and clears the latest opened track identifier', async () => {

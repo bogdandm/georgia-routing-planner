@@ -1,8 +1,4 @@
-import {
-  localTrackPoints,
-  type LocalTrackContent,
-  type LocalTrackSummary,
-} from '@/domain/tracks/localTrack';
+import type { LocalTrackContent, LocalTrackSummary } from '@/domain/tracks/localTrack';
 import type { TrackPoint } from '@/domain/tracks/gpx';
 
 function escapeXml(value: string): string {
@@ -23,17 +19,17 @@ export function exportTrackAsGpx(
   summary: LocalTrackSummary,
   content: LocalTrackContent,
 ): string {
-  const segments = localTrackPoints(content)
+  const segments = content.trackPoints
     .map((segment) => `<trkseg>${segment.map(gpxPoint).join('')}</trkseg>`)
     .join('');
-  return `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Georgia Routing Planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapeXml(summary.name)}</name><desc>${escapeXml(summary.description)}</desc></metadata><trk><name>${escapeXml(summary.name)}</name><desc>${escapeXml(summary.description)}</desc>${segments}</trk></gpx>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Georgia Routing Planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapeXml(summary.name)}</name></metadata><trk><name>${escapeXml(summary.name)}</name>${segments}</trk></gpx>`;
 }
 
 export function exportTrackAsKml(
   summary: LocalTrackSummary,
   content: LocalTrackContent,
 ): string {
-  const geometries = localTrackPoints(content)
+  const geometries = content.trackPoints
     .map(
       (segment) =>
         `<LineString><altitudeMode>absolute</altitudeMode><coordinates>${segment
@@ -44,7 +40,7 @@ export function exportTrackAsKml(
           .join(' ')}</coordinates></LineString>`,
     )
     .join('');
-  return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(summary.name)}</name><Placemark><name>${escapeXml(summary.name)}</name><description>${escapeXml(summary.description)}</description><MultiGeometry>${geometries}</MultiGeometry></Placemark></Document></kml>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(summary.name)}</name><Placemark><name>${escapeXml(summary.name)}</name><MultiGeometry>${geometries}</MultiGeometry></Placemark></Document></kml>`;
 }
 
 export function safeTrackFilename(name: string, extension: 'gpx' | 'kml'): string {

@@ -522,21 +522,21 @@ remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display name, source
-format and filename, plain-text description, favorite state, and derived metrics used by
-list and detail views; the content row contains one normalized source-point projection
-and, only when selected, an aligned relief-elevation array. Original source bytes are
-discarded after parsing. A database upgrade compacts older blob-backed records into this
-internal representation. A transaction failure leaves neither row listable. Rename and
-metadata edits validate and change only the summary. List reads place favorites first
-and use newest-first import time inside each group. Delete removes both rows and clears
-a matching latest-opened setting in one transaction.
+format and filename, favorite state, and derived metrics used by list and detail views;
+the content row contains exactly one normalized source-point projection. Original source
+bytes are discarded after parsing. A database upgrade compacts older blob-backed records
+into this internal representation. A transaction failure leaves neither row listable.
+Rename and favorite updates validate and change only the summary. List reads place
+favorites first and use newest-first import time inside each group. Delete removes both
+rows and clears a matching latest-opened setting in one transaction.
 
 Opening or newly saving a track records its opaque ID in the existing settings table. On
 startup the Tracks provider loads that summary and validates its content before
 restoring the details and map geometry. Missing or corrupt remembered content clears the
-setting without blocking the remaining list. Descriptions remain plain text in storage;
-the read view recognizes only `http://` and `https://` substrings and React escapes all
-other markup.
+setting without blocking the remaining list. Saved-track names are searched through
+their normalized name only; source metadata, including parsed source descriptions,
+remains bounded within the parsed metadata projection rather than becoming editable
+saved state.
 
 The Tracks provider sends validated independent segments to the existing map layer
 controller. The controller retains one GeoJSON `MultiLineString`, reconciles its casing
@@ -547,12 +547,8 @@ saved-track selection issue one fit command with left padding for both Tracks pa
 Close replaces the source data with empty geometry; it does not alter the stored row or
 camera.
 
-Elevation analysis reads the retained point representation, never bridges independent
-segment gaps, and derives the chart profile from actual source elevations. Explicit
-relief recalculation samples the configured local elevation boundary point by point
-under an abort signal and stores an aligned elevation-only array only after complete
-coverage; cancellation and partial provider results retain the prior profile. Restoring
-source elevation deletes that derived array and reuses the retained source points.
+Elevation analysis reads the retained source-point representation, never bridges
+independent segment gaps, and derives the chart profile from source elevations.
 
 ## Teardown ownership
 

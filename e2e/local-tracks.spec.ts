@@ -298,6 +298,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 test('imports, retains, reopens, renames, and deletes a local GPX track', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 2048, height: 1000 });
   await page.goto('#tracks');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -356,7 +357,7 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
 
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
-  await page.getByRole('button', { name: 'Back to tracks' }).click();
+  await page.getByRole('button', { name: 'Close track' }).click();
   await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
   const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
   const savedTrackButton = savedTracks.getByRole('button', {
@@ -365,43 +366,45 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   const favoriteButton = savedTracks.getByRole('button', {
     name: 'Add to favorites',
   });
-  const rowActions = savedTracks.getByRole('button', {
-    name: 'Actions for Mon 13 Jul 2026',
+  const deleteButton = savedTracks.getByRole('button', {
+    name: 'Delete Mon 13 Jul 2026',
   });
+  const savedRow = savedTrackButton.locator('xpath=..');
+  await expect(favoriteButton).toHaveCSS('opacity', '0');
+  await expect(deleteButton).toHaveCSS('opacity', '0');
+  const unselectedBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await savedRow.hover();
+  await expect(favoriteButton).toHaveCSS('opacity', '1');
+  await expect(deleteButton).toHaveCSS('opacity', '1');
+  const hoveredBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(hoveredBackground).not.toBe(unselectedBackground);
+
   await savedTrackButton.focus();
   await page.keyboard.press('Tab');
   await expect(favoriteButton).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(rowActions).toBeFocused();
-  const savedTrackButtonBox = await savedTrackButton.boundingBox();
-  const favoriteButtonBox = await favoriteButton.boundingBox();
-  const rowActionsBox = await rowActions.boundingBox();
-  expect(savedTrackButtonBox).not.toBeNull();
-  expect(favoriteButtonBox).not.toBeNull();
-  expect(rowActionsBox).not.toBeNull();
-  if (
-    savedTrackButtonBox !== null &&
-    favoriteButtonBox !== null &&
-    rowActionsBox !== null
-  ) {
-    expect(savedTrackButtonBox.x + savedTrackButtonBox.width).toBeLessThanOrEqual(
-      favoriteButtonBox.x,
-    );
-    expect(favoriteButtonBox.x + favoriteButtonBox.width).toBeLessThanOrEqual(
-      rowActionsBox.x,
-    );
-  }
+  await expect(deleteButton).toBeFocused();
+  await savedTrackButton.click();
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  const selectedBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await savedRow.hover();
+  const selectedHoveredBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(selectedBackground).not.toBe(unselectedBackground);
+  expect(selectedHoveredBackground).not.toBe(selectedBackground);
+
   await favoriteButton.click();
   await expect(
     savedTracks.getByRole('button', { name: 'Remove from favorites' }),
   ).toBeVisible();
-  await rowActions.click();
-  await expect(page.getByRole('menuitem', { name: 'Delete track' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('menuitem', { name: 'Delete track' })).toHaveCount(0);
-  await expect(page.getByRole('complementary', { name: 'Track details' })).toHaveCount(
-    0,
-  );
   const savedTracksResults = await new AxeBuilder({ page })
     .include('[aria-label="Saved tracks"]')
     .analyze();
@@ -413,12 +416,43 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
-  const savedTrackName = page.getByRole('textbox', { name: 'Track name' });
-  await expect(savedTrackName).toHaveValue('Mon 13 Jul 2026');
+  await expect(
+    page.getByLabel('Track details').getByRole('heading', { name: 'Mon 13 Jul 2026' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Track name')).toHaveCount(0);
+  await expect(
+    page
+      .getByLabel('Track details')
+      .getByRole('button', { name: 'Remove from favorites' }),
+  ).toBeVisible();
 
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const savedTrackName = page.getByLabel('Track name');
+  await expect(savedTrackName).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirm rename' })).toBeVisible();
   await savedTrackName.fill('Kazbegi ridge walk');
-  await page.getByRole('button', { name: 'Save track name' }).click();
-  await expect(savedTrackName).toHaveValue('Kazbegi ridge walk');
+  await page.getByRole('button', { name: 'Confirm rename' }).click();
+  await expect(
+    page
+      .getByLabel('Track details')
+      .getByRole('heading', { name: 'Kazbegi ridge walk' }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete track' }).click();
+  await expect(page.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  const confirmationResults = await new AxeBuilder({ page })
+    .include('[aria-label="Track details"]')
+    .analyze();
+  expect(
+    confirmationResults.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+  await page.getByRole('button', { name: 'Confirm delete' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByRole('checkbox', { name: 'Imported tracks' }).uncheck();
@@ -429,10 +463,36 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   await expect(page.getByRole('slider', { name: 'Track opacity' })).toHaveValue('65');
 
   await page.getByRole('tab', { name: 'Tracks' }).click();
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Track actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete track' }).click();
-  await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
-
+  await page.getByRole('button', { name: 'Close track' }).click();
+  await savedTracks
+    .getByRole('button', { name: /^Kazbegi ridge walk Distance:/u })
+    .hover();
+  const renamedDeleteButton = savedTracks.getByRole('button', {
+    name: 'Delete Kazbegi ridge walk',
+  });
+  const dialogs: string[] = [];
+  page.on('dialog', (dialog) => {
+    dialogs.push(dialog.message());
+    void dialog.dismiss();
+  });
+  await renamedDeleteButton.click();
+  await expect(
+    savedTracks.getByRole('button', {
+      name: 'Confirm deletion of Kazbegi ridge walk',
+    }),
+  ).toBeVisible();
+  const rowDeleteConfirmation = savedTracks.getByRole('button', {
+    name: 'Confirm deletion of Kazbegi ridge walk',
+  });
+  await rowDeleteConfirmation.focus();
+  await page.keyboard.press('Escape');
+  await expect(renamedDeleteButton).toBeVisible();
+  await renamedDeleteButton.click();
+  await savedTracks
+    .getByRole('button', {
+      name: 'Confirm deletion of Kazbegi ridge walk',
+    })
+    .click();
   await expect(page.getByText('0 saved tracks')).toBeVisible();
+  expect(dialogs).toEqual([]);
 });

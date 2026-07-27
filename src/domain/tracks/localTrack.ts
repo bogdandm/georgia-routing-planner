@@ -16,7 +16,6 @@ export interface LocalTrackSummary {
   readonly savedAt: string;
   readonly sourceFilename: string;
   readonly sourceFormat: 'gpx' | 'fit' | 'kml';
-  readonly description: string;
   readonly favorite: boolean;
   readonly geometryKind: 'track' | 'route';
   readonly pointCount: number;
@@ -36,22 +35,6 @@ export interface LocalTrackContent {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly trackId: string;
   readonly trackPoints: readonly (readonly TrackPoint[])[];
-  readonly reliefElevations?: readonly (readonly number[])[] | undefined;
-  readonly elevationSource?: 'source' | 'relief';
-}
-
-export function localTrackPoints(
-  content: LocalTrackContent,
-): readonly (readonly TrackPoint[])[] {
-  if (content.elevationSource !== 'relief' || content.reliefElevations === undefined) {
-    return content.trackPoints;
-  }
-  return content.trackPoints.map((segment, segmentIndex) =>
-    segment.map((point, pointIndex) => {
-      const elevationMeters = content.reliefElevations?.[segmentIndex]?.[pointIndex];
-      return elevationMeters === undefined ? point : { ...point, elevationMeters };
-    }),
-  );
 }
 
 export function localTrackSegments(
@@ -72,11 +55,4 @@ export function normalizeLocalTrackName(name: string): {
     name: trimmed,
     normalizedName: trimmed.toLocaleLowerCase('en'),
   };
-}
-
-export function normalizeLocalTrackDescription(description: string): string {
-  if (description.length > 10_000) {
-    throw new Error('Track description must be 10,000 characters or fewer.');
-  }
-  return description;
 }

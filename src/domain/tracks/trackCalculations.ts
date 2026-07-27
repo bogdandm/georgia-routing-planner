@@ -181,7 +181,7 @@ export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackM
     timestampsOrdered &&
     recordedStart !== undefined &&
     recordedEnd !== undefined &&
-    recordedEnd >= recordedStart;
+    recordedEnd > recordedStart;
   const result: TrackMetricsBuilder = {
     distanceMeters,
     distanceAlgorithmVersion: DISTANCE_ALGORITHM_VERSION,

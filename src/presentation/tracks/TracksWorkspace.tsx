@@ -1718,7 +1718,6 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
               </Stack>
             </>
           ) : null}
-          <Divider />
           <Typography component="h3" variant="subtitle2">
             Track details
           </Typography>

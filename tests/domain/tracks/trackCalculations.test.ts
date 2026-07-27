@@ -77,7 +77,7 @@ describe('track calculations', () => {
     expect(result.maximumElevationMeters).toBe(100);
   });
 
-  it('retains recorded duration only for complete ordered timestamps', () => {
+  it('retains recorded duration only for complete, ordered, progressing timestamps', () => {
     const complete = calculateTrackMetrics([
       {
         points: [
@@ -97,9 +97,18 @@ describe('track calculations', () => {
         ],
       },
     ]);
+    const constant = calculateTrackMetrics([
+      {
+        points: [
+          point(0, 0, undefined, '1970-01-01T00:00:01Z'),
+          point(0.01, 0, undefined, '1970-01-01T00:00:01Z'),
+        ],
+      },
+    ]);
     expect(complete.elapsedSeconds).toBe(120);
     expect(partial.elapsedSeconds).toBeUndefined();
     expect(reversed.elapsedSeconds).toBeUndefined();
+    expect(constant.elapsedSeconds).toBeUndefined();
   });
 
   it('rejects missing geometry for metrics and representative points', () => {

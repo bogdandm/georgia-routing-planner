@@ -962,6 +962,11 @@ export function TracksPanel() {
   } = useTracksWorkspace();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [favoriteTooltipId, setFavoriteTooltipId] = useState<string | null>(null);
+  const [favoriteTooltipSuppression, setFavoriteTooltipSuppression] = useState<{
+    readonly x: number;
+    readonly y: number;
+  } | null>(null);
   const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active !== null && compactDetails) {
     return (
@@ -1111,6 +1116,20 @@ export function TracksPanel() {
                             ? 'Remove from favorites'
                             : 'Add to favorites'
                         }
+                        open={
+                          favoriteTooltipId === summary.id &&
+                          favoriteTooltipSuppression === null
+                        }
+                        onOpen={() => {
+                          if (favoriteTooltipSuppression === null) {
+                            setFavoriteTooltipId(summary.id);
+                          }
+                        }}
+                        onClose={() => {
+                          setFavoriteTooltipId((current) =>
+                            current === summary.id ? null : current,
+                          );
+                        }}
                       >
                         <IconButton
                           className={`saved-track-row-action${summary.favorite ? ' saved-track-row-favorite--active' : ''}`}
@@ -1121,7 +1140,26 @@ export function TracksPanel() {
                               : 'Add to favorites'
                           }
                           color={summary.favorite ? 'warning' : 'default'}
-                          onClick={() => void toggleFavorite(summary)}
+                          onMouseMove={(event) => {
+                            if (
+                              favoriteTooltipSuppression !== null &&
+                              (event.clientX !== favoriteTooltipSuppression.x ||
+                                event.clientY !== favoriteTooltipSuppression.y)
+                            ) {
+                              setFavoriteTooltipSuppression(null);
+                              setFavoriteTooltipId(summary.id);
+                            }
+                          }}
+                          onClick={(event) => {
+                            if (event.detail > 0) {
+                              setFavoriteTooltipId(null);
+                              setFavoriteTooltipSuppression({
+                                x: event.clientX,
+                                y: event.clientY,
+                              });
+                            }
+                            void toggleFavorite(summary);
+                          }}
                         >
                           {summary.favorite ? (
                             <StarIcon fontSize="small" />
@@ -1718,6 +1756,7 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
               </Stack>
             </>
           ) : null}
+          <Divider />
           <Typography component="h3" variant="subtitle2">
             Track details
           </Typography>

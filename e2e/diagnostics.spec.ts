@@ -119,7 +119,13 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   );
   expect(bundle.map).toMatchObject({
     styleId: 'Georgia hiking basemap v1',
-    sourceIds: ['basemap-vector', 'terrain-dem', 'terrain-contours', 'imported-track'],
+    sourceIds: [
+      'basemap-vector',
+      'terrain-dem',
+      'terrain-contours',
+      'imported-track',
+      'imported-track-trace',
+    ],
     webGlCapabilities: { contextType: 'webgl2' },
   });
   expect(bundle.map?.layerIds.length).toBeGreaterThan(10);

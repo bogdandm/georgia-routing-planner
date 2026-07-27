@@ -21,7 +21,6 @@ const summary: LocalTrackSummary = {
   sourceFormat: 'fit' as const,
   description: 'Text <b>only</b>',
   favorite: false,
-  elevationFilterMeters: 3,
   geometryKind: 'track' as const,
   pointCount: 2,
   segmentCount: 1,

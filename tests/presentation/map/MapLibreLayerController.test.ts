@@ -465,6 +465,7 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('none');
     expect(map.visibility.get(importedTrackLayerIds.line)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('none');
     await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: { 'imported-tracks': false },
       importedTrackOpacity: 0.45,
@@ -475,6 +476,28 @@ describe('MapLibreLayerController', () => {
       'data.geometry.coordinates',
       [],
     );
+  });
+
+  it('moves and clears the imported-track trace point', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setImportedTrackTracePoint([44.5, 42.5]);
+
+    expect(map.sources.get('imported-track-trace')).toHaveProperty(
+      'data.features.0.geometry.coordinates',
+      [44.5, 42.5],
+    );
+    expect(map.layers.get(importedTrackLayerIds.trace)).toMatchObject({
+      type: 'circle',
+      source: 'imported-track-trace',
+    });
+
+    controller.setImportedTrackTracePoint(null);
+    expect(map.sources.get('imported-track-trace')).toHaveProperty('data.features', []);
   });
 
   it('applies one opacity preference to every map reference layer over satellite imagery', async () => {

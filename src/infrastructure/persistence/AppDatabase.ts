@@ -368,7 +368,6 @@ const localTrackSummarySchema = z
     sourceFormat: z.enum(['gpx', 'fit', 'kml']).default('gpx'),
     description: z.string().max(10_000).default(''),
     favorite: z.boolean().default(false),
-    elevationFilterMeters: z.number().min(0).max(50).default(3),
     geometryKind: z.enum(['track', 'route']),
     pointCount: z.number().int().min(2).max(100_000),
     segmentCount: z.number().int().min(1).max(512),
@@ -394,7 +393,6 @@ const localTrackSummarySchema = z
       sourceFormat: value.sourceFormat,
       description: value.description,
       favorite: value.favorite,
-      elevationFilterMeters: value.elevationFilterMeters,
       geometryKind: value.geometryKind,
       pointCount: value.pointCount,
       segmentCount: value.segmentCount,
@@ -629,7 +627,6 @@ export class AppDatabase
     changes: {
       readonly description?: string;
       readonly favorite?: boolean;
-      readonly elevationFilterMeters?: number;
     },
   ): Promise<LocalTrackSummary> {
     const existing = await this.localTracks.get(trackId);
@@ -644,8 +641,6 @@ export class AppDatabase
           ? parsed.description
           : normalizeLocalTrackDescription(changes.description),
       favorite: changes.favorite ?? parsed.favorite,
-      elevationFilterMeters:
-        changes.elevationFilterMeters ?? parsed.elevationFilterMeters,
     };
     await this.localTracks.put(updated);
     return updated;

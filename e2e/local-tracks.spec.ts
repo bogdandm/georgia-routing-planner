@@ -259,7 +259,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
       );
     }
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
     await page.getByRole('button', { name: 'Back to tracks' }).click();
   }
 
@@ -277,13 +277,13 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 
   await page.reload();
   await expect(page.getByText('7 saved tracks')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to tracks' }).click();
   await page.getByRole('button', { name: /^sample-1mb/u }).click();
   const selectedDetails = page.getByRole('complementary', {
     name: 'Track details',
   });
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await expect(selectedDetails).toContainText('18,078 points');
 
   await page
@@ -355,17 +355,18 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   ).toEqual([]);
 
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to tracks' }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
-  await expect(page.getByLabel('Track name')).toHaveValue('Mon 13 Jul 2026');
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  const savedTrackName = page.getByRole('textbox', { name: 'Track name' });
+  await expect(savedTrackName).toHaveValue('Mon 13 Jul 2026');
 
-  await page.getByLabel('Track name').fill('Kazbegi ridge walk');
-  await page.getByRole('button', { name: 'Rename' }).click();
-  await expect(page.getByLabel('Track name')).toHaveValue('Kazbegi ridge walk');
+  await savedTrackName.fill('Kazbegi ridge walk');
+  await page.getByRole('button', { name: 'Save track name' }).click();
+  await expect(savedTrackName).toHaveValue('Kazbegi ridge walk');
 
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByRole('checkbox', { name: 'Imported tracks' }).uncheck();
@@ -377,8 +378,9 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
 
   await page.getByRole('tab', { name: 'Tracks' }).click();
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete track' }).click();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
 
   await expect(page.getByText('0 saved tracks')).toBeVisible();
 });

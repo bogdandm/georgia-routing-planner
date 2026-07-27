@@ -24,7 +24,6 @@ function summary(id: string, name: string): LocalTrackSummary {
     sourceFormat: 'gpx',
     description: '',
     favorite: false,
-    elevationFilterMeters: 3,
     geometryKind: 'track',
     pointCount: 2,
     segmentCount: 1,
@@ -135,7 +134,7 @@ describe('local track persistence', () => {
     ]);
   });
 
-  it('updates descriptions and favorites without changing the import date', async () => {
+  it('updates descriptions and favorites without changing import date', async () => {
     await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
 
     await expect(

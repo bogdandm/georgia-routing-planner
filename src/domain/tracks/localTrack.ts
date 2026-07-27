@@ -18,7 +18,6 @@ export interface LocalTrackSummary {
   readonly sourceFormat: 'gpx' | 'fit' | 'kml';
   readonly description: string;
   readonly favorite: boolean;
-  readonly elevationFilterMeters: number;
   readonly geometryKind: 'track' | 'route';
   readonly pointCount: number;
   readonly segmentCount: number;

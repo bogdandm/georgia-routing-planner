@@ -416,12 +416,18 @@ describe('WorkspaceShell', () => {
         'Elevation gain: 120 m',
       ),
     ).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+    expect(
+      within(details).getByRole('heading', { name: 'Fixture trail' }),
+    ).toBeVisible();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
     );
-    await user.click(screen.getByRole('button', { name: 'Favorite' }));
-    expect(await screen.findByRole('button', { name: 'Favorited' })).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Add to favorites' }));
+    expect(
+      await within(details).findByRole('button', {
+        name: 'Remove from favorites',
+      }),
+    ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const descriptionInput = screen.getByRole('textbox', { name: 'Description' });
     await user.type(descriptionInput, 'Guide: https://example.test/trail');
@@ -429,36 +435,35 @@ describe('WorkspaceShell', () => {
     expect(
       await screen.findByRole('link', { name: 'https://example.test/trail' }),
     ).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(
-      within(details).getByRole('img', {
-        name: /Elevation against distance\. High point 1120 metres/u,
-      }),
-    ).toBeVisible();
-    await user.click(
-      screen.getByRole('button', { name: 'Recalculate from relief map' }),
-    );
-    expect(
-      await screen.findByRole('button', { name: 'Restore source elevation' }),
-    ).toBeVisible();
-    expect(screen.getByText(/relief-map elevation/u)).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Restore source elevation' }));
+    expect(within(details).getByText('Distance (km)')).toBeVisible();
+    expect(within(details).getByText('Elevation (m)')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Use relief elevation' }));
+    expect(await screen.findByRole('button', { name: 'Restore source' })).toBeVisible();
+    expect(screen.getByText('Relief map')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Restore source' }));
     await waitFor(() => {
-      expect(screen.getByText(/source-file elevation/u)).toBeVisible();
+      expect(screen.getByText('Source file')).toBeVisible();
     });
 
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(
-      screen.queryByRole('heading', { name: 'Selected track' }),
+      screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Fixture trail/ }));
+    const reopenedDetails = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
     const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
     await user.clear(nameInput);
     await user.type(nameInput, 'Renamed trail');
-    await user.click(screen.getByRole('button', { name: 'Rename' }));
-    expect(await screen.findByText('Renamed trail')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Save track name' }));
+    expect(
+      await within(reopenedDetails).findByRole('heading', { name: 'Renamed trail' }),
+    ).toBeVisible();
 
     vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
     await waitFor(() => {
       expect(screen.getByText('0 saved tracks')).toBeVisible();
     });

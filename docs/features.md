@@ -91,8 +91,9 @@ duration, distance, and elevation gain when available. The detail pane presents
 duration, distance, derived average speed, elevation gain, and elevation loss in a
 wrapping stats grid, with missing measurements omitted; source file, point, segment, and
 save metadata remain below it. Saved tracks are searchable by name or description and
-support reopen, close, rename, and confirmed deletion. Users can favorite a track from
-its list row or detail pane; favorites sort before other tracks, with newest imports
+support reopen, close, inline name saving, and confirmed deletion. Users can favorite a
+track from its list row or detail header; downloads and deletion live in the detail
+header's compact action menu. Favorites sort before other tracks, with newest imports
 first inside each group. The optional 10,000-character plain-text description is edited
 explicitly, persists locally, and renders only `http://` and `https://` text as safe
 new-tab links. The latest opened saved track reopens after restart when its content is
@@ -105,15 +106,14 @@ moving the camera. Every saved track can be downloaded locally as GPX or KML. Ge
 files preserve independent segments, saved name and description, available point
 elevation and reliably aligned timestamps; conversion never uploads the source.
 
-Saved tracks with usable elevation show a distance profile, minimum/maximum, filtered
-ascent/descent, and sustained climbs. The per-track noise threshold defaults to 3 metres
-and persists locally without removing geographic points. Climbs report length, gain,
-average gradient, and a Garmin-style category derived from documented length and grade
-inputs. Users can explicitly recalculate elevation from the configured relief provider,
-monitor progress, cancel it, and retain successful derived points locally. Partial
-relief results do not replace the saved profile. Source elevations remain in the
-internal point representation, so a successful derived profile can be discarded without
-retaining or reparsing the original source file.
+Tracks with usable elevation show an interactive distance profile with labeled axes,
+grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The
+profile does not repeat the ascent/descent metrics already shown in the stats grid.
+Users can explicitly recalculate elevation from the configured relief provider, monitor
+progress, cancel it, and retain successful derived points locally. Partial relief
+results do not replace the saved profile. Source elevations remain in the internal point
+representation, so a successful derived profile can be discarded without retaining or
+reparsing the original source file.
 
 At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
 persistent import region and **Back to tracks** restores the prior search/list state.

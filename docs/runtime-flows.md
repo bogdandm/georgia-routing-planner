@@ -538,21 +538,21 @@ setting without blocking the remaining list. Descriptions remain plain text in s
 the read view recognizes only `http://` and `https://` substrings and React escapes all
 other markup.
 
-The Tracks provider sends only validated independent segments to the existing map layer
-controller. That controller retains one GeoJSON `MultiLineString`, reconciles its casing
+The Tracks provider sends validated independent segments to the existing map layer
+controller. The controller retains one GeoJSON `MultiLineString`, reconciles its casing
 and bright-blue line after map/style attachment, and applies one persistent
-visibility/opacity pair. Import and saved-track selection issue one fit command with
-left padding for both Tracks panes. Close replaces the source data with empty geometry;
-it does not alter the stored row or camera.
+visibility/opacity pair. Chart highlighting updates a separate transient point source
+and circle layer, which is cleared when hover ends or the track closes. Import and
+saved-track selection issue one fit command with left padding for both Tracks panes.
+Close replaces the source data with empty geometry; it does not alter the stored row or
+camera.
 
-Elevation analysis reads the separately retained point projection. It carries forward
-the last accepted elevation when a change is below the saved noise threshold, never
-bridges independent segment gaps, and derives the profile, totals, gradients, and climbs
-from that one filtered result. Explicit relief recalculation samples the configured
-local elevation boundary point by point under an abort signal and stores an aligned
-elevation-only array only after complete coverage; cancellation and partial provider
-results retain the prior profile. Restoring source elevation deletes that derived array
-and reuses the retained source points.
+Elevation analysis reads the retained point representation, never bridges independent
+segment gaps, and derives the chart profile from actual source elevations. Explicit
+relief recalculation samples the configured local elevation boundary point by point
+under an abort signal and stores an aligned elevation-only array only after complete
+coverage; cancellation and partial provider results retain the prior profile. Restoring
+source elevation deletes that derived array and reuses the retained source points.
 
 ## Teardown ownership
 

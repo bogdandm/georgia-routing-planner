@@ -10,7 +10,6 @@ export interface LocalTrackRepository {
     changes: {
       readonly description?: string;
       readonly favorite?: boolean;
-      readonly elevationFilterMeters?: number;
     },
   ): Promise<LocalTrackSummary>;
   loadLatestOpenedTrackId(): Promise<string | null>;

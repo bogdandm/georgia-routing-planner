@@ -117,9 +117,11 @@ the native map instance to be recreated. The facade creates a new readonly seria
 snapshot for each update, so snapshot stores retain that value directly and consumers
 must not mutate it.
 
-The GPX parser and calculation policies stay under `domain/tracks`; they have no React,
-Dexie, MapLibre, or provider dependency. `AppDatabase` implements the narrow local-track
-repository contract because it already owns schema migration and transaction lifetime.
+The track parsers and calculation policies stay under `domain/tracks`; they have no
+React, Dexie, MapLibre, or provider dependency. `AppDatabase` implements the narrow
+local-track repository contract because it already owns schema migration and transaction
+lifetime. `MapLibreLayerController` owns both the active track line and the transient
+chart-hover marker so React never owns native map objects.
 
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
 `WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global

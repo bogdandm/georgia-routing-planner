@@ -1,13 +1,13 @@
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 
-export interface ElevationProfilePoint {
+interface ElevationProfilePoint {
   readonly coordinate: TrackCoordinate;
   readonly distanceMeters: number;
   readonly elevationMeters: number;
 }
 
-export interface ElevationProfile {
+interface ElevationProfile {
   readonly points: readonly ElevationProfilePoint[];
   readonly minimumMeters: number;
   readonly maximumMeters: number;

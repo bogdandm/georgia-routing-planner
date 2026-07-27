@@ -461,8 +461,46 @@ describe('WorkspaceShell', () => {
       await within(reopenedDetails).findByRole('heading', { name: 'Renamed trail' }),
     ).toBeVisible();
 
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    await user.click(screen.getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+    const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
+    expect(
+      within(savedTracks).getByRole('button', { name: 'Remove from favorites' }),
+    ).toBeVisible();
+    const rowActions = within(savedTracks).getByRole('button', {
+      name: 'Actions for Renamed trail',
+    });
+    expect(rowActions).toBeVisible();
+    await user.click(
+      within(savedTracks).getByRole('button', { name: 'Remove from favorites' }),
+    );
+    expect(
+      await within(savedTracks).findByRole('button', { name: 'Add to favorites' }),
+    ).toBeVisible();
+    await user.click(rowActions);
+    expect(screen.getByRole('menuitem', { name: 'Delete track' })).toBeVisible();
+    await user.keyboard('{Escape}');
+    expect(
+      screen.queryByRole('menuitem', { name: 'Delete track' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+
+    const confirm = vi.spyOn(window, 'confirm');
+    confirm.mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await user.click(rowActions);
+    await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
+    expect(confirm).toHaveBeenLastCalledWith(
+      'Delete “Renamed trail” from this browser?',
+    );
+    expect(
+      within(savedTracks).getByRole('button', { name: /^Renamed trail/u }),
+    ).toBeVisible();
+
+    await user.click(rowActions);
     await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
     await waitFor(() => {
       expect(screen.getByText('0 saved tracks')).toBeVisible();

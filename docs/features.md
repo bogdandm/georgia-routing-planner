@@ -91,20 +91,22 @@ duration, distance, and elevation gain when available. The detail pane presents
 duration, distance, derived average speed, elevation gain, and elevation loss in a
 wrapping stats grid, with missing measurements omitted; source file, point, segment, and
 save metadata remain below it. Saved tracks are searchable by name or description and
-support reopen, close, inline name saving, and confirmed deletion. Users can favorite a
-track from its list row or detail header; downloads and deletion live in the detail
-header's compact action menu. Favorites sort before other tracks, with newest imports
-first inside each group. The optional 10,000-character plain-text description is edited
-explicitly, persists locally, and renders only `http://` and `https://` text as safe
-new-tab links. The latest opened saved track reopens after restart when its content is
-still valid. A compact local-retention notice stays pinned to the Tracks panel bottom.
-Catalog, folders, tags, filters, batch import, whole-workspace dropping, and GPX
-creation remain unavailable. A newly imported or reopened track renders as bright-blue
-independent lines and fits its complete bounds with padding for the master/detail
-surfaces. Closing it removes the active geometry without deleting a saved record or
-moving the camera. Every saved track can be downloaded locally as GPX or KML. Generated
-files preserve independent segments, saved name and description, available point
-elevation and reliably aligned timestamps; conversion never uploads the source.
+support reopen, close, inline name saving, and confirmed deletion. Each saved-track row
+keeps its favorite control and compact action menu visible; the menu uses native browser
+confirmation before deleting. Users can favorite a track from its list row or detail
+header; downloads and deletion also live in the detail header's compact action menu.
+Favorites sort before other tracks, with newest imports first inside each group. The
+optional 10,000-character plain-text description is edited explicitly, persists locally,
+and renders only `http://` and `https://` text as safe new-tab links. The latest opened
+saved track reopens after restart when its content is still valid. A compact
+local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
+filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
+newly imported or reopened track renders as bright-blue independent lines and fits its
+complete bounds with padding for the master/detail surfaces. Closing it removes the
+active geometry without deleting a saved record or moving the camera. Every saved track
+can be downloaded locally as GPX or KML. Generated files preserve independent segments,
+saved name and description, available point elevation and reliably aligned timestamps;
+conversion never uploads the source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The
@@ -117,9 +119,9 @@ reparsing the original source file.
 
 At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
 persistent import region and **Back to tracks** restores the prior search/list state.
-Wider viewports retain the adjacent detail pane. Each list row reveals deletion on hover
-or keyboard focus and requires inline red-delete confirmation; cancel leaves the row and
-selection unchanged.
+Wider viewports retain the adjacent detail pane. Each list row keeps favorite and
+compact action-menu controls visible; deletion asks for native browser confirmation, and
+cancel leaves the row and selection unchanged.
 
 ### Create GPX
 

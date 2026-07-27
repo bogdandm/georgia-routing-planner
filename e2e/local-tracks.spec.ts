@@ -358,6 +358,58 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to tracks' }).click();
   await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
+  const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
+  const savedTrackButton = savedTracks.getByRole('button', {
+    name: /^Mon 13 Jul 2026/u,
+  });
+  const favoriteButton = savedTracks.getByRole('button', {
+    name: 'Add to favorites',
+  });
+  const rowActions = savedTracks.getByRole('button', {
+    name: 'Actions for Mon 13 Jul 2026',
+  });
+  await savedTrackButton.focus();
+  await page.keyboard.press('Tab');
+  await expect(favoriteButton).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(rowActions).toBeFocused();
+  const savedTrackButtonBox = await savedTrackButton.boundingBox();
+  const favoriteButtonBox = await favoriteButton.boundingBox();
+  const rowActionsBox = await rowActions.boundingBox();
+  expect(savedTrackButtonBox).not.toBeNull();
+  expect(favoriteButtonBox).not.toBeNull();
+  expect(rowActionsBox).not.toBeNull();
+  if (
+    savedTrackButtonBox !== null &&
+    favoriteButtonBox !== null &&
+    rowActionsBox !== null
+  ) {
+    expect(savedTrackButtonBox.x + savedTrackButtonBox.width).toBeLessThanOrEqual(
+      favoriteButtonBox.x,
+    );
+    expect(favoriteButtonBox.x + favoriteButtonBox.width).toBeLessThanOrEqual(
+      rowActionsBox.x,
+    );
+  }
+  await favoriteButton.click();
+  await expect(
+    savedTracks.getByRole('button', { name: 'Remove from favorites' }),
+  ).toBeVisible();
+  await rowActions.click();
+  await expect(page.getByRole('menuitem', { name: 'Delete track' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem', { name: 'Delete track' })).toHaveCount(0);
+  await expect(page.getByRole('complementary', { name: 'Track details' })).toHaveCount(
+    0,
+  );
+  const savedTracksResults = await new AxeBuilder({ page })
+    .include('[aria-label="Saved tracks"]')
+    .analyze();
+  expect(
+    savedTracksResults.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();

@@ -116,7 +116,6 @@ interface TracksWorkspaceValue {
   readonly summaries: readonly LocalTrackSummary[];
   readonly applyGeneratedName: () => void;
   readonly closeActive: () => void;
-  readonly deleteActive: () => Promise<void>;
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
   readonly savePreview: () => Promise<void>;
@@ -742,16 +741,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, database]);
 
-  const deleteActive = useCallback(async () => {
-    if (active?.kind !== 'saved') return;
-    if (!window.confirm(`Delete “${active.summary.name}” from this browser?`)) return;
-    await database.deleteLocalTrack(active.summary.id);
-    setActive(null);
-    await reloadSummaries();
-  }, [active, database, reloadSummaries]);
-
   const deleteSaved = useCallback(
     async (summary: LocalTrackSummary) => {
+      if (!window.confirm(`Delete “${summary.name}” from this browser?`)) return;
       try {
         await database.deleteLocalTrack(summary.id);
         setActive((current) =>
@@ -763,7 +755,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setError(null);
       } catch {
         setError('The track could not be deleted.');
-        throw new Error('The track could not be deleted.');
       }
     },
     [database, reloadSummaries],
@@ -799,7 +790,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       summaries,
       applyGeneratedName,
       closeActive,
-      deleteActive,
       deleteSaved,
       discardPreview,
       renameActive,
@@ -816,7 +806,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       active,
       applyGeneratedName,
       closeActive,
-      deleteActive,
       deleteSaved,
       discardPreview,
       error,
@@ -1083,7 +1072,10 @@ export function TracksPanel() {
     toggleFavorite,
     deleteSaved,
   } = useTracksWorkspace();
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [rowAction, setRowAction] = useState<{
+    readonly anchor: HTMLElement;
+    readonly summary: LocalTrackSummary;
+  } | null>(null);
   const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active !== null && compactDetails) {
     return (
@@ -1141,14 +1133,12 @@ export function TracksPanel() {
               return (
                 <Paper
                   key={summary.id}
+                  component="li"
                   variant="outlined"
                   sx={{
-                    position: 'relative',
-                    overflow: 'hidden',
-                    '& .track-delete': { opacity: 0 },
-                    '&:hover .track-delete, &:focus-within .track-delete': {
-                      opacity: 1,
-                    },
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                    alignItems: 'center',
                   }}
                 >
                   <ListItemButton
@@ -1161,7 +1151,6 @@ export function TracksPanel() {
                       minWidth: 0,
                       px: 1.5,
                       py: 1.25,
-                      pr: pendingDeleteId === summary.id ? 10 : 5.5,
                     }}
                   >
                     <Typography variant="subtitle2">{summary.name}</Typography>
@@ -1193,13 +1182,8 @@ export function TracksPanel() {
                   </ListItemButton>
                   <Stack
                     direction="row"
-                    spacing={0.25}
-                    sx={{
-                      position: 'absolute',
-                      top: 6,
-                      right: 6,
-                      alignItems: 'center',
-                    }}
+                    spacing={0.5}
+                    sx={{ alignItems: 'center', px: 1 }}
                   >
                     <Tooltip
                       title={
@@ -1223,50 +1207,42 @@ export function TracksPanel() {
                         )}
                       </IconButton>
                     </Tooltip>
-                    {pendingDeleteId === summary.id ? (
-                      <>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label={`Confirm delete ${summary.name}`}
-                          onClick={() => {
-                            void deleteSaved(summary).finally(() => {
-                              setPendingDeleteId(null);
-                            });
-                          }}
-                        >
-                          <DeleteOutlineOutlinedIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          aria-label={`Cancel delete ${summary.name}`}
-                          onClick={() => {
-                            setPendingDeleteId(null);
-                          }}
-                        >
-                          <CloseIcon fontSize="small" />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <Tooltip title="Delete track">
-                        <IconButton
-                          size="small"
-                          className="track-delete"
-                          aria-label={`Delete ${summary.name}`}
-                          onClick={() => {
-                            setPendingDeleteId(summary.id);
-                          }}
-                        >
-                          <DeleteOutlineOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    <Tooltip title="Track actions">
+                      <IconButton
+                        size="small"
+                        aria-label={`Actions for ${summary.name}`}
+                        onClick={(event) => {
+                          setRowAction({ anchor: event.currentTarget, summary });
+                        }}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </Stack>
                 </Paper>
               );
             })}
           </List>
         )}
+        <Menu
+          anchorEl={rowAction?.anchor ?? null}
+          open={rowAction !== null}
+          onClose={() => {
+            setRowAction(null);
+          }}
+        >
+          <MenuItem
+            onClick={() => {
+              const action = rowAction;
+              setRowAction(null);
+              if (action !== null) void deleteSaved(action.summary);
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            <DeleteOutlineOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+            Delete track
+          </MenuItem>
+        </Menu>
       </Stack>
       <Alert
         severity="info"
@@ -1655,7 +1631,7 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
     active,
     applyGeneratedName,
     closeActive,
-    deleteActive,
+    deleteSaved,
     discardPreview,
     renameActive,
     savePreview,
@@ -1786,7 +1762,7 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
               <MenuItem
                 onClick={() => {
                   setActionMenuAnchor(null);
-                  void deleteActive();
+                  void deleteSaved(active.summary);
                 }}
                 sx={{ color: 'error.main' }}
               >

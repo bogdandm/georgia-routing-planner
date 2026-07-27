@@ -173,50 +173,31 @@ branch only when it was created as a disposable validation fixture or the mainta
 explicitly requests removal. Resolve and verify the exact absolute target before
 removing it.
 
-### Node, pnpm, PATH, and dependencies
+### Tooling and dependencies
 
 Each worktree has its own `node_modules`. Never copy, move, junction, or symlink
 `node_modules` from the main checkout or another worktree, and never invoke a binary
 from another worktree's `node_modules/.bin`. pnpm's content-addressed store already
 shares package data safely.
 
-Before running JavaScript tooling in a new worktree:
-
-1. Read `.node-version`, `package.json#engines`, and `package.json#packageManager`.
-2. Run `Get-Command node.exe`, `node.exe --version`, `Get-Command pnpm.cmd`, and
-   `pnpm.cmd --version`.
-3. Confirm Node satisfies the declared engine and pnpm matches the declared major and
-   pinned package-manager version.
-4. If the task needs dependencies, run `pnpm.cmd install --frozen-lockfile` from the
-   worktree with network permission available from the start. Even with a frozen
-   lockfile and warm pnpm store, missing package archives may require registry access.
-   Documentation-only tasks do not need an install unless the required formatter is
-   unavailable in the worktree.
-5. Prefer repository scripts through `pnpm.cmd <script>`. In managed Windows shells, do
-   not use `pnpm exec`: duplicate PATH variables can prevent it from finding the current
-   worktree's `.bin` directory. When no repository script exists, invoke the current
-   worktree binary explicitly as `.\node_modules\.bin\<tool>.CMD <arguments>`.
+Assume all repository-required runtimes, package managers, CLIs, browser tooling,
+authentication, and worktree dependencies are installed, compatible, and ready. Do not
+inspect versions, command sources, authentication, or dependency directories as a
+preflight gate. A missing `node_modules` or `.bin` path observed before execution is not
+a blocker and does not mean the worktree was created incorrectly. Start with the
+intended task command.
 
 On Windows, use `pnpm.cmd`, not the PowerShell `pnpm.ps1` shim; managed shells may block
-the latter through execution policy. Do not change machine execution policy to make the
-shim work. If `pnpm.cmd` is absent but `corepack.cmd` exists, use `corepack.cmd pnpm`
-with the repository-pinned version. If no compatible Node or package manager is
-available, report the exact command lookup and version results; do not download or
-install a machine-wide runtime during an unrelated task.
+the latter through execution policy. Prefer repository scripts through `pnpm.cmd
+<script>`. When no script exists, invoke the current worktree binary explicitly as
+`.\node_modules\.bin\<tool>.CMD <arguments>`.
 
-If an install or executable lookup fails, verify the current directory and executable
-source before changing files:
-
-```powershell
-git rev-parse --show-toplevel
-Get-Command node.exe
-Get-Command pnpm.cmd
-pnpm.cmd config get store-dir
-```
-
-Delete and reinstall only the current worktree's ignored `node_modules` when evidence
-shows it is incomplete or stale. Do not delete the shared pnpm store, another worktree's
-dependencies, or the lockfile as a troubleshooting shortcut.
+Only after the intended command actually fails, diagnose the reported tooling,
+authentication, or dependency problem and apply the smallest relevant repair. For
+missing or incomplete pnpm dependencies, run `pnpm.cmd install --frozen-lockfile` from
+the current worktree and retry the original command. Do not install a machine-wide
+runtime, delete the shared pnpm store, reuse another worktree's `node_modules`, or remove
+the lockfile as a shortcut.
 
 ### Repository safety rules
 
@@ -229,7 +210,7 @@ dependencies, or the lockfile as a troubleshooting shortcut.
 - Do not force-push, rewrite shared history, or use destructive Git commands to remove
   user work.
 - Use the installed GitHub CLI (`gh`) directly for GitHub repository and remote
-  workflows, including pull requests. Verify `gh auth status` before contacting GitHub.
+  workflows, including pull requests.
 - In managed Codex runs, immediately rerun a sandboxed `gh` authentication or likely
   network failure with required elevated sandbox permission. Treat the elevated result
   as authoritative.

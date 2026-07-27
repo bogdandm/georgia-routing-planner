@@ -384,12 +384,22 @@ Every completed-workstream report must present these fields together and in this
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
+- `Test path:` one directly runnable live-server command for the maintainer's current
+  environment, or `Not applicable` with the reason.
 - `Verification:` every command run and its result, plus checks skipped as
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-Do not include a live-server startup command unless the maintainer explicitly requested
-a live server for the handoff.
+When the maintainer requests a live server for the handoff, use the applicable command
+form with the worktree's native absolute path and an explicit free port:
+
+- Windows Command Prompt:
+  `cd /d "<absolute-worktree-path>" && .\node_modules\.bin\vite.CMD --port <port> --strictPort`
+- Ubuntu or another Bash environment:
+  `cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port <port> --strictPort`
+
+Do not put a Windows path into the Ubuntu command. When no live server was requested,
+keep `Test path:` and state `Not applicable` with the reason.
 
 ### Pull request title and description
 

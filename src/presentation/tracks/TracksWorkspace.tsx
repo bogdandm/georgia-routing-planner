@@ -962,6 +962,10 @@ export function TracksPanel() {
   } = useTracksWorkspace();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // A sorted row can move under a stationary pointer without a leave event.
+  const [hoveredSavedTrackId, setHoveredSavedTrackId] = useState<string | null>(null);
+  const [savedTrackHoverEpoch, setSavedTrackHoverEpoch] = useState(0);
+  const [savedTrackHoverSuppressed, setSavedTrackHoverSuppressed] = useState(false);
   const compactDetails = useMediaQuery('(max-width:1920px)');
   if (active !== null && compactDetails) {
     return (
@@ -1017,6 +1021,7 @@ export function TracksPanel() {
               const pending = pendingDeleteId === summary.id;
               const deleting = deletingId === summary.id;
               const actionClassName = `saved-track-row-action${pending ? ' saved-track-row-action--pending' : ''}`;
+              const hovered = hoveredSavedTrackId === summary.id;
               return (
                 <ClickAwayListener
                   key={summary.id}
@@ -1031,7 +1036,20 @@ export function TracksPanel() {
                   <Paper
                     component="li"
                     variant="outlined"
+                    className={hovered ? 'saved-track-row--hovered' : undefined}
+                    onMouseEnter={() => {
+                      if (!savedTrackHoverSuppressed) {
+                        setHoveredSavedTrackId(summary.id);
+                      }
+                    }}
+                    onMouseMove={() => {
+                      setSavedTrackHoverSuppressed(false);
+                      setHoveredSavedTrackId(summary.id);
+                    }}
                     onMouseLeave={() => {
+                      setHoveredSavedTrackId((current) =>
+                        current === summary.id ? null : current,
+                      );
                       if (deletingId !== summary.id) {
                         setPendingDeleteId((current) =>
                           current === summary.id ? null : current,
@@ -1042,12 +1060,13 @@ export function TracksPanel() {
                       display: 'grid',
                       gridTemplateColumns: 'minmax(0, 1fr) auto',
                       alignItems: 'center',
-                      bgcolor: selected ? appColors.surface.selected : 'transparent',
-                      '&:hover': {
-                        bgcolor: selected
+                      bgcolor: selected
+                        ? hovered
                           ? `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`
-                          : 'action.hover',
-                      },
+                          : appColors.surface.selected
+                        : hovered
+                          ? 'action.hover'
+                          : 'transparent',
                       '& .MuiListItemButton-root, & .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-selected, & .MuiListItemButton-root.Mui-selected:hover':
                         { bgcolor: 'transparent' },
                       '& .saved-track-row-action': {
@@ -1055,7 +1074,7 @@ export function TracksPanel() {
                         pointerEvents: 'none',
                         transition: 'opacity 150ms ease-out',
                       },
-                      '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:hover .saved-track-row-action, &:focus-within .saved-track-row-action':
+                      '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:focus-within .saved-track-row-action, &.saved-track-row--hovered .saved-track-row-action':
                         { opacity: 1, pointerEvents: 'auto' },
                     }}
                   >
@@ -1097,11 +1116,13 @@ export function TracksPanel() {
                       </Stack>
                     </ListItemButton>
                     <Stack
+                      key={`saved-track-actions:${summary.id}:${String(savedTrackHoverEpoch)}`}
                       direction="row"
                       spacing={0.5}
                       sx={{ alignItems: 'center', px: 1 }}
                     >
                       <Tooltip
+                        disableHoverListener={savedTrackHoverSuppressed}
                         title={
                           summary.favorite
                             ? 'Remove from favorites'
@@ -1117,7 +1138,14 @@ export function TracksPanel() {
                               : 'Add to favorites'
                           }
                           color={summary.favorite ? 'warning' : 'default'}
-                          onClick={() => void toggleFavorite(summary)}
+                          onClick={(event) => {
+                            if (event.detail > 0) {
+                              setSavedTrackHoverSuppressed(true);
+                              setHoveredSavedTrackId(null);
+                              setSavedTrackHoverEpoch((current) => current + 1);
+                            }
+                            void toggleFavorite(summary);
+                          }}
                         >
                           {summary.favorite ? (
                             <StarIcon fontSize="small" />
@@ -1126,7 +1154,10 @@ export function TracksPanel() {
                           )}
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title={pending ? 'Confirm deletion' : 'Delete track'}>
+                      <Tooltip
+                        disableHoverListener={savedTrackHoverSuppressed}
+                        title={pending ? 'Confirm deletion' : 'Delete track'}
+                      >
                         <IconButton
                           className={actionClassName}
                           size="small"

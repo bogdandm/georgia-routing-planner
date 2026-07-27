@@ -210,6 +210,74 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
+test('clears saved-track hovers after favorite sorting', async ({ page }) => {
+  await page.setViewportSize({ width: 2048, height: 1000 });
+  await page.goto('#tracks');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+
+  for (const name of ['Pinned track', 'Movable track']) {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Browse track file' }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles(trackFixturePath);
+    await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
+    await page.getByLabel('Track name').fill(name);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+
+    if (name === 'Pinned track') {
+      await page.getByRole('button', { name: 'Track actions' }).click();
+      await page.getByRole('menuitem', { name: 'Add to favorites' }).click();
+    }
+
+    await page.getByRole('button', { name: 'Close track' }).click();
+  }
+
+  const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
+  const pinnedRow = savedTracks
+    .getByRole('button', { name: /^Pinned track/u })
+    .locator('xpath=..');
+  const movableRow = savedTracks
+    .getByRole('button', { name: /^Movable track/u })
+    .locator('xpath=..');
+  const movableFavorite = movableRow.getByRole('button', {
+    name: 'Add to favorites',
+  });
+  const pinnedDelete = pinnedRow.getByRole('button', {
+    name: 'Delete Pinned track',
+  });
+  const unhoveredBackground = await pinnedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+
+  await movableRow.hover();
+  await movableFavorite.hover();
+  await expect(page.getByRole('tooltip', { name: 'Add to favorites' })).toBeVisible();
+  await movableFavorite.click();
+  await expect(
+    movableRow.getByRole('button', { name: 'Remove from favorites' }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => {
+      const [movableBox, pinnedBox] = await Promise.all([
+        movableRow.boundingBox(),
+        pinnedRow.boundingBox(),
+      ]);
+      return movableBox !== null && pinnedBox !== null && movableBox.y < pinnedBox.y;
+    })
+    .toBe(true);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(pinnedRow).toHaveCSS('background-color', unhoveredBackground);
+  await expect(pinnedDelete).toHaveCSS('opacity', '0');
+
+  await pinnedRow.hover();
+  await expect(pinnedDelete).toHaveCSS('opacity', '1');
+});
+
 test('persists and renders public real-world GPX exports including a 1 MB stress track', async ({
   page,
 }) => {

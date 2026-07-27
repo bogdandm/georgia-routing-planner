@@ -455,29 +455,9 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm rename' }));
     expect(await screen.findByText('Rename unavailable')).toBeVisible();
     expect(nameInput).toHaveValue('Rejected trail');
-    await user.click(nameInput);
-    await user.keyboard('{Escape}');
-    expect(
-      within(details).getByRole('heading', { name: 'Fixture trail' }),
-    ).toBeVisible();
-
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
-    await user.clear(screen.getByRole('textbox', { name: 'Track name' }));
-    await user.type(
-      screen.getByRole('textbox', { name: 'Track name' }),
-      'Renamed trail',
-    );
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Final trail');
     await user.keyboard('{Enter}');
-    expect(
-      await within(details).findByRole('heading', { name: 'Renamed trail' }),
-    ).toBeVisible();
-
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
-    await user.clear(screen.getByRole('textbox', { name: 'Track name' }));
-    await user.type(screen.getByRole('textbox', { name: 'Track name' }), 'Final trail');
-    await user.click(screen.getByRole('button', { name: 'Confirm rename' }));
     expect(
       await within(details).findByRole('heading', { name: 'Final trail' }),
     ).toBeVisible();

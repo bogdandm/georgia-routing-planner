@@ -386,17 +386,25 @@ Every completed-workstream report must present these fields together and in this
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` one directly runnable live-server command for the maintainer's current
-  environment, or `Not applicable` with the reason.
+- `Test path:` one directly runnable WSL live-server command for a production-code
+  workstream; otherwise `Not applicable` with the reason.
 - `Verification:` every command run and its result, plus checks skipped as
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-When the maintainer requests a live server for the handoff, use the worktree's WSL
-absolute path and an explicit free port:
+For every production-code workstream, choose a currently free explicit port at handoff
+without reserving it and print this command with the real WSL absolute path and numeric
+port:
 `cd "<absolute-worktree-path>" && ./node_modules/.bin/vite --port <port> --strictPort`.
-When no live server was requested, keep `Test path:` and state `Not applicable` with the
-reason.
+Placeholders are forbidden in the final response. Providing `Test path:` does not
+authorize the agent to start the server, launch a browser, or run E2E. Use
+`Not applicable` only when no production code changed, such as documentation-only,
+configuration-only, or test-only work.
+
+The completed handoff must contain no progress preamble, internal plan, todo or reminder
+block, commentary heading, or trailing content outside these required fields. Report
+unfinished or blocked work inside `Verification:` or `Status:` rather than appending an
+internal task list.
 
 ### Pull request title and description
 

@@ -42,6 +42,8 @@ import {
 } from '@/presentation/map/mapInteractionStore';
 import { parseCoordinateQuery } from '@/presentation/shell/parseCoordinateQuery';
 import { formatPlaceSearchCategory } from '@/presentation/shell/formatPlaceSearchCategory';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 
 function preferredResultPriority(kind: PlaceSearchKind): number {
   switch (kind) {
@@ -82,6 +84,8 @@ type SearchRequestState =
 
 export function MapSearchPlaceholder() {
   const { mapViewport, searchPlaces } = useRuntimeServices();
+  const tracksWorkspace = useOptionalTracksWorkspace();
+  const setActiveTab = useUiStore((state) => state.setActiveTab);
   const [value, setValue] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState<{
     readonly query: string;
@@ -95,6 +99,7 @@ export function MapSearchPlaceholder() {
     status: 'idle',
   });
   const [showOtherResults, setShowOtherResults] = useState(false);
+  const [localSubmittedQuery, setLocalSubmittedQuery] = useState('');
   const subscribeToViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -170,6 +175,7 @@ export function MapSearchPlaceholder() {
       return;
     }
     const normalized = value.trim();
+    setLocalSubmittedQuery(normalized);
     if (normalized.length < 2) {
       setValidationMessage('Enter at least two characters or a coordinate pair.');
       return;
@@ -197,7 +203,19 @@ export function MapSearchPlaceholder() {
     setValidationMessage(null);
     setSearchProgress(null);
     setShowOtherResults(false);
+    setLocalSubmittedQuery('');
   };
+  const localTrackResults =
+    localSubmittedQuery.length < 2
+      ? []
+      : (tracksWorkspace?.summaries ?? [])
+          .filter((summary) =>
+            summary.normalizedName.includes(
+              localSubmittedQuery.toLocaleLowerCase('en'),
+            ),
+          )
+          .toSorted((left, right) => right.savedAt.localeCompare(left.savedAt, 'en'))
+          .slice(0, 2);
 
   return (
     <Paper
@@ -351,6 +369,31 @@ export function MapSearchPlaceholder() {
               />
             </ListItemButton>
           ))}
+        </List>
+      ) : null}
+      {localTrackResults.length > 0 ? (
+        <List dense aria-label="Local track search results" sx={{ py: 0 }}>
+          {localTrackResults.map((summary) => (
+            <ListItemButton
+              key={summary.id}
+              onClick={() => {
+                setActiveTab('tracks');
+                void tracksWorkspace?.selectSaved(summary);
+              }}
+            >
+              <ListItemText primary={summary.name} secondary="Saved local track" />
+            </ListItemButton>
+          ))}
+          <Button
+            size="small"
+            onClick={() => {
+              tracksWorkspace?.setQuery(localSubmittedQuery);
+              setActiveTab('tracks');
+            }}
+            sx={{ mx: 1, textTransform: 'none' }}
+          >
+            Search all saved tracks
+          </Button>
         </List>
       ) : null}
       {otherResults.length > 0 ? (

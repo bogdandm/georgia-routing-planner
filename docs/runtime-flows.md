@@ -502,35 +502,53 @@ clicked coordinate or arbitrary POI metadata.
 
 ## Local track retention
 
-A picker selection or drop inside the contained Tracks import zone parses one `.gpx`
-file in memory. A file drag anywhere inside the application expands that target; a drop
-outside it is prevented from navigating the browser but does not import. Another import,
-selecting a saved track, or closing the preview first requires an explicit discard
-decision. File-selection and GPX-parse failures remain scoped to the import zone and
-clear after five seconds; storage and selected-track failures use the persistent panel
-error. A valid preview starts a cancellable optional English-name lookup without
-blocking editing or save. Start and end anchors use locality-level reverse geocoding. A
-dominant interior summit requests bounded named OSM features from the configured nearby
-endpoint and selects the closest returned coordinate independent of feature category;
-reverse geocoding remains the fallback when that request is empty or unavailable.
-Switching rail sections retains the preview. `beforeunload` is registered only while
-that preview remains unsaved and is removed after save or confirmed discard.
+A picker selection or drop inside the contained Tracks import zone parses one supported
+GPX, FIT, or KML file in memory. GPX and KML use bounded XML parsing with DTD/entity
+rejection. FIT uses Garmin's official decoder, requires header/size/CRC integrity, and
+projects only ordered positions, timestamps, and preferred enhanced elevation into the
+shared track model; sensor, profile, health, and device fields are discarded. A file
+drag anywhere inside the application expands that target; a drop outside it is prevented
+from navigating the browser but does not import. Another import, selecting a saved
+track, or closing the preview first requires an explicit discard decision.
+File-selection and source-parse failures remain scoped to the import zone and clear
+after five seconds; storage and selected-track failures use the persistent panel error.
+A valid preview starts a cancellable optional English-name lookup without blocking
+editing or save. Start and end anchors use locality-level reverse geocoding. A dominant
+interior summit requests bounded named OSM features from the configured nearby endpoint
+and selects the closest returned coordinate independent of feature category; reverse
+geocoding remains the fallback when that request is empty or unavailable. Switching rail
+sections retains the preview. `beforeunload` is registered only while that preview
+remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
-Dexie read-write transaction. The summary contains the stable display name, original
-source filename, and derived metrics used by list and detail views; the content row
-contains normalized independent segments and the retained original GPX blob. A
-transaction failure leaves neither row listable. Rename validates and changes only the
-summary. Delete removes both rows in one transaction. Opening a saved track validates
-its content independently and reports a bounded integrity error when the row is missing
-or corrupt.
+Dexie read-write transaction. The summary contains the stable display name, source
+format and filename, favorite state, and derived metrics used by list and detail views;
+the content row contains exactly one normalized source-point projection. Original source
+bytes are discarded after parsing. A database upgrade compacts older blob-backed records
+into this internal representation. A transaction failure leaves neither row listable.
+Rename and favorite updates validate and change only the summary. List reads place
+favorites first and use newest-first import time inside each group. Delete removes both
+rows and clears a matching latest-opened setting in one transaction.
 
-The Tracks provider sends only validated independent segments to the existing map layer
-controller. That controller retains one GeoJSON `MultiLineString`, reconciles its casing
+Opening or newly saving a track records its opaque ID in the existing settings table. On
+startup the Tracks provider loads that summary and validates its content before
+restoring the details and map geometry. Missing or corrupt remembered content clears the
+setting without blocking the remaining list. Saved-track names are searched through
+their normalized name only; source metadata, including parsed source descriptions,
+remains bounded within the parsed metadata projection rather than becoming editable
+saved state.
+
+The Tracks provider sends validated independent segments to the existing map layer
+controller. The controller retains one GeoJSON `MultiLineString`, reconciles its casing
 and bright-blue line after map/style attachment, and applies one persistent
-visibility/opacity pair. Import and saved-track selection issue one fit command with
-left padding for both Tracks panes. Close replaces the source data with empty geometry;
-it does not alter the stored row or camera.
+visibility/opacity pair. Chart highlighting updates a separate transient point source
+and circle layer, which is cleared when hover ends or the track closes. Import and
+saved-track selection issue one fit command with left padding for both Tracks panes.
+Close replaces the source data with empty geometry; it does not alter the stored row or
+camera.
+
+Elevation analysis reads the retained source-point representation, never bridges
+independent segment gaps, and derives the chart profile from source elevations.
 
 ## Teardown ownership
 

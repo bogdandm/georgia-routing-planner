@@ -283,8 +283,8 @@ describe('WorkspaceShell', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Browse GPX file' })).toBeEnabled();
-    expect(screen.getByText('Drop GPX here')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Browse track file' })).toBeEnabled();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
     expect(
       screen.queryByRole('button', { name: 'Create GPX' }),
     ).not.toBeInTheDocument();
@@ -365,13 +365,7 @@ describe('WorkspaceShell', () => {
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
       schemaVersion: 1,
       trackId: 'local:test-1',
-      originalGpx: gpxFile(),
-      segments: [
-        [
-          [44, 42],
-          [44.01, 42.01],
-        ],
-      ],
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
     });
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -383,7 +377,7 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     const trackNameInput = screen.getByRole('textbox', { name: 'Track name' });
     expect(trackNameInput).toHaveValue('Fixture trail');
-    expect(screen.getByText('Fixture track.gpx')).toBeVisible();
+    expect(screen.getByText('Fixture track.gpx · GPX')).toBeVisible();
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     const details = screen.getByRole('complementary', { name: 'Track details' });
@@ -414,7 +408,11 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => {
-      expect(screen.getByText('1 saved track')).toBeVisible();
+      expect(
+        within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+          name: /^Fixture trail/u,
+        }),
+      ).toBeVisible();
     });
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     expect(
@@ -422,26 +420,117 @@ describe('WorkspaceShell', () => {
         'Elevation gain: 120 m',
       ),
     ).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+    expect(
+      within(details).getByRole('heading', { name: 'Fixture trail' }),
+    ).toBeVisible();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
     );
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Add to favorites' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('menuitem', { name: 'Add to favorites' }));
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Remove from favorites' }),
+    ).toBeVisible();
+    await user.keyboard('{Escape}');
+    expect(
+      screen.queryByRole('textbox', { name: 'Track name' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Use relief elevation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Source file')).not.toBeInTheDocument();
+    expect(within(details).getByText('Distance (km)')).toBeVisible();
+    expect(within(details).getByText('Elevation (m)')).toBeVisible();
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Rejected trail');
+    vi.spyOn(services.database, 'renameLocalTrack').mockRejectedValueOnce(
+      new Error('Rename unavailable'),
+    );
+    await user.click(screen.getByRole('button', { name: 'Confirm rename' }));
+    expect(await screen.findByText('Rename unavailable')).toBeVisible();
+    expect(nameInput).toHaveValue('Rejected trail');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Final trail');
+    await user.keyboard('{Enter}');
+    expect(
+      await within(details).findByRole('heading', { name: 'Final trail' }),
+    ).toBeVisible();
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
+    const detailConfirm = screen.getByRole('button', { name: 'Confirm delete' });
+    expect(detailConfirm).toBeVisible();
+    if (detailConfirm.parentElement !== null) {
+      fireEvent.mouseLeave(detailConfirm.parentElement);
+    }
+    expect(
+      within(details).getByRole('button', { name: 'Track actions' }),
+    ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(
-      screen.queryByRole('heading', { name: 'Selected track' }),
+      screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Fixture trail/ }));
-    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Renamed trail');
-    await user.click(screen.getByRole('button', { name: 'Rename' }));
-    expect(await screen.findByText('Renamed trail')).toBeVisible();
+    const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
+    const deleteTrack = within(savedTracks).getByRole('button', {
+      name: 'Delete Final trail',
+    });
+    const savedRow = deleteTrack.closest('li');
+    expect(savedRow).not.toBeNull();
+    if (savedRow !== null) await user.hover(savedRow);
+    const deleteLocalTrack = vi.spyOn(services.database, 'deleteLocalTrack');
+    fireEvent.click(deleteTrack);
+    expect(deleteLocalTrack).not.toHaveBeenCalled();
+    expect(
+      within(savedTracks).getByRole('button', {
+        name: 'Confirm deletion of Final trail',
+      }),
+    ).toBeVisible();
 
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    if (savedRow !== null) fireEvent.mouseLeave(savedRow);
+    expect(
+      within(savedTracks).getByRole('button', { name: 'Delete Final trail' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(savedTracks).getByRole('button', { name: 'Delete Final trail' }),
+    );
+    fireEvent.keyDown(
+      within(savedTracks).getByRole('button', {
+        name: 'Confirm deletion of Final trail',
+      }),
+      { key: 'Escape' },
+    );
+    expect(
+      within(savedTracks).getByRole('button', { name: 'Delete Final trail' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(savedTracks).getByRole('button', { name: 'Delete Final trail' }),
+    );
+    fireEvent.click(document.body);
+    expect(
+      within(savedTracks).getByRole('button', { name: 'Delete Final trail' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(savedTracks).getByRole('button', { name: 'Delete Final trail' }),
+    );
+    fireEvent.click(
+      within(savedTracks).getByRole('button', {
+        name: 'Confirm deletion of Final trail',
+      }),
+    );
     await waitFor(() => {
-      expect(screen.getByText('0 saved tracks')).toBeVisible();
+      expect(
+        screen.queryByRole('list', { name: 'Saved tracks' }),
+      ).not.toBeInTheDocument();
     });
   }, 10_000);
 
@@ -461,7 +550,7 @@ describe('WorkspaceShell', () => {
         /Detailed track geometry was used instead of companion route geometry\./u,
       ),
     ).toBeVisible();
-    expect(screen.getByText('Track and route.gpx')).toBeVisible();
+    expect(screen.getByText('Track and route.gpx · GPX')).toBeVisible();
     expect(screen.getByLabelText(/^Average speed:/u)).toBeVisible();
   }, 10_000);
 
@@ -478,9 +567,9 @@ describe('WorkspaceShell', () => {
         target: { files: [new File(['not gpx'], 'notes.txt')] },
       });
 
-      const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+      const importZone = screen.getByRole('region', { name: 'Import track file' });
       expect(within(importZone).getByRole('alert')).toHaveTextContent(
-        'Choose a file with the .gpx extension.',
+        'Choose a file with a .gpx, .fit, or .kml extension.',
       );
       act(() => {
         vi.advanceTimersByTime(5_000);
@@ -511,23 +600,23 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
-    const importZone = screen.getByRole('region', { name: 'Import GPX file' });
+    const importZone = screen.getByRole('region', { name: 'Import track file' });
     fireEvent.dragEnter(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
-    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
     fireEvent.drop(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
     expect(
       screen.queryByRole('heading', { name: 'New track' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Drop GPX here')).toBeVisible();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
 
     fireEvent.dragEnter(importZone, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
-    expect(screen.getByText('Drop one GPX file to import')).toBeVisible();
+    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
     fireEvent.drop(importZone, {
       dataTransfer: { types: ['Files'], files: [file] },
     });

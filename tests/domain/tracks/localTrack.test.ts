@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeLocalTrackName } from '@/domain/tracks/localTrack';
+import {
+  LOCAL_TRACK_SCHEMA_VERSION,
+  localTrackSegments,
+  normalizeLocalTrackName,
+  type LocalTrackContent,
+} from '@/domain/tracks/localTrack';
 
 describe('normalizeLocalTrackName', () => {
   it('trims display text and derives an English-locale search value', () => {
@@ -15,5 +20,27 @@ describe('normalizeLocalTrackName', () => {
     expect(() => normalizeLocalTrackName('x'.repeat(201))).toThrow(
       'Track name must be 200 characters or fewer.',
     );
+  });
+});
+
+describe('local track projections', () => {
+  it('projects coordinates from source points', () => {
+    const content: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: 'local:1',
+      trackPoints: [
+        [
+          { coordinate: [44, 42] as const, elevationMeters: 100 },
+          { coordinate: [45, 43] as const, elevationMeters: 110 },
+        ],
+      ],
+    };
+
+    expect(localTrackSegments(content)).toEqual([
+      [
+        [44, 42],
+        [45, 43],
+      ],
+    ]);
   });
 });

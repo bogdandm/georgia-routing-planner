@@ -2,6 +2,7 @@ import type {
   GpxMetadataProjection,
   GpxValidationWarning,
   TrackCoordinate,
+  TrackPoint,
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
@@ -14,6 +15,8 @@ export interface LocalTrackSummary {
   readonly normalizedName: string;
   readonly savedAt: string;
   readonly sourceFilename: string;
+  readonly sourceFormat: 'gpx' | 'fit' | 'kml';
+  readonly favorite: boolean;
   readonly geometryKind: 'track' | 'route';
   readonly pointCount: number;
   readonly segmentCount: number;
@@ -31,16 +34,13 @@ export interface LocalTrackSummary {
 export interface LocalTrackContent {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly trackId: string;
-  readonly originalGpx: StoredGpxBlob;
-  readonly segments: readonly (readonly TrackCoordinate[])[];
+  readonly trackPoints: readonly (readonly TrackPoint[])[];
 }
 
-/** The Blob operations retained GPX consumers require across browser storage realms. */
-export interface StoredGpxBlob {
-  readonly size: number;
-  readonly type: string;
-  arrayBuffer(): Promise<ArrayBuffer>;
-  text(): Promise<string>;
+export function localTrackSegments(
+  content: LocalTrackContent,
+): readonly (readonly TrackCoordinate[])[] {
+  return content.trackPoints.map((segment) => segment.map((point) => point.coordinate));
 }
 
 export function normalizeLocalTrackName(name: string): {

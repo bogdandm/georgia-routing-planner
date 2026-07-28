@@ -5,6 +5,9 @@ export interface LocalTrackRepository {
   listLocalTracks(): Promise<readonly LocalTrackSummary[]>;
   loadLocalTrackContent(trackId: string): Promise<LocalTrackContent>;
   renameLocalTrack(trackId: string, name: string): Promise<LocalTrackSummary>;
+  setLocalTrackFavorite(trackId: string, favorite: boolean): Promise<LocalTrackSummary>;
+  loadLatestOpenedTrackId(): Promise<string | null>;
+  saveLatestOpenedTrackId(trackId: string | null): Promise<void>;
   deleteLocalTrack(trackId: string): Promise<void>;
 }
 

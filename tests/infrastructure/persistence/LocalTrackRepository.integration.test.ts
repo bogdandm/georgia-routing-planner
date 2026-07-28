@@ -1,5 +1,4 @@
-import { Blob } from 'node:buffer';
-
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalTrackStorageError } from '@/application/ports/LocalTrackRepository';
@@ -22,6 +21,8 @@ function summary(id: string, name: string): LocalTrackSummary {
     normalizedName: name.toLocaleLowerCase('en'),
     savedAt: '2026-07-22T10:00:00.000Z',
     sourceFilename: 'fixture.gpx',
+    sourceFormat: 'gpx',
+    favorite: false,
     geometryKind: 'track',
     pointCount: 2,
     segmentCount: 1,
@@ -48,15 +49,7 @@ function content(trackId: string): LocalTrackContent {
   return {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId,
-    originalGpx: new Blob(['<gpx version="1.1"/>'], {
-      type: 'application/gpx+xml',
-    }),
-    segments: [
-      [
-        [44, 42],
-        [44.01, 42.01],
-      ],
-    ],
+    trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
   };
 }
 
@@ -73,6 +66,41 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
+  it('compacts legacy original blobs into the internal point representation', async () => {
+    database.close();
+    await database.delete();
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(2).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+    });
+    await legacy.table('localTracks').put(summary('local:legacy', 'Legacy'));
+    await legacy.table('localTrackContents').put({
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: 'local:legacy',
+      originalGpx: new Blob(['<gpx/>']),
+      segments: [
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
+      ],
+    });
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+    await expect(database.loadLocalTrackContent('local:legacy')).resolves.toMatchObject(
+      {
+        trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+      },
+    );
+    const stored = await database.localTrackContents.get('local:legacy');
+    expect(stored).not.toHaveProperty('originalGpx');
+    expect(stored).not.toHaveProperty('segments');
+  });
+
   it('saves summary and content atomically and loads both after reopen', async () => {
     await database.saveLocalTrack(summary('local:1', 'ბილიკი'), content('local:1'));
     database.close();
@@ -83,25 +111,48 @@ describe('local track persistence', () => {
     ]);
     await expect(database.loadLocalTrackContent('local:1')).resolves.toMatchObject({
       trackId: 'local:1',
-      segments: [
-        [
-          [44, 42],
-          [44.01, 42.01],
-        ],
-      ],
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
     });
   });
 
-  it('sorts duplicate and mixed-case names by English name then stable ID', async () => {
-    await database.saveLocalTrack(summary('local:3', 'beta'), content('local:3'));
-    await database.saveLocalTrack(summary('local:2', 'Alpha'), content('local:2'));
-    await database.saveLocalTrack(summary('local:1', 'alpha'), content('local:1'));
+  it('sorts favorites first, then newest first with a stable ID tie-breaker', async () => {
+    await database.saveLocalTrack(
+      { ...summary('local:3', 'Older'), savedAt: '2026-07-20T10:00:00.000Z' },
+      content('local:3'),
+    );
+    await database.saveLocalTrack(summary('local:2', 'Newest'), content('local:2'));
+    await database.saveLocalTrack(
+      { ...summary('local:1', 'Favorite'), favorite: true },
+      content('local:1'),
+    );
 
     await expect(database.listLocalTracks()).resolves.toMatchObject([
       { id: 'local:1' },
       { id: 'local:2' },
       { id: 'local:3' },
     ]);
+  });
+
+  it('updates favorites without changing import date', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
+
+    await expect(
+      database.setLocalTrackFavorite('local:1', true),
+    ).resolves.toMatchObject({
+      favorite: true,
+      savedAt: '2026-07-22T10:00:00.000Z',
+    });
+  });
+
+  it('restores and clears the latest opened track identifier', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
+    await database.saveLatestOpenedTrackId('local:1');
+    database.close();
+    database = new AppDatabase(services.logger);
+
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBe('local:1');
+    await database.deleteLocalTrack('local:1');
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
   });
 
   it('renames only the summary and validates the trimmed name', async () => {

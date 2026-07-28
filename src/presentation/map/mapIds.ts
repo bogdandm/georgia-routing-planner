@@ -6,6 +6,7 @@ export const mapSourceIds = {
   sentinelRasterB: 'sentinel-raster-b',
   sentinelFootprint: 'sentinel-footprint',
   importedTrack: 'imported-track',
+  importedTrackTrace: 'imported-track-trace',
 } as const;
 
 export const terrainOverlayLayerIds = {
@@ -24,6 +25,7 @@ export const sentinelMapLayerIds = {
 export const importedTrackLayerIds = {
   casing: 'imported-track-casing',
   line: 'imported-track-line',
+  trace: 'imported-track-trace',
 } as const;
 
 export const mapLayerIds = {

@@ -370,12 +370,14 @@ served by the GitHub Pages deployment. Catalog tooling produces:
 
 The browser must not fetch and parse all original files at startup.
 
-Separately, the implemented Tracks workflow lets a user import one GPX file into that
-browser, preview it in memory, and explicitly retain its original blob, validated
-geometry, bounded metadata, and versioned metrics in IndexedDB. Saved local tracks can
-be searched, reopened, renamed, and deleted; they are never added to GitHub or uploaded
-automatically. The catalog, personal folders, saved markers, and Create GPX drafts
-remain unavailable. See [Data model and storage ownership](docs/data-model.md).
+Separately, the implemented Tracks workflow lets a user import one GPX, FIT, or KML file
+into that browser, preview it in memory, and explicitly retain its normalized points,
+source-file metadata, bounded metadata, and versioned metrics in IndexedDB. The original
+file bytes are discarded after parsing; GPX and KML downloads are generated from the
+retained internal representation. Saved local tracks can be searched, reopened, renamed,
+and deleted; they are never added to GitHub or uploaded automatically. The catalog,
+personal folders, saved markers, and Create GPX drafts remain unavailable. See
+[Data model and storage ownership](docs/data-model.md).
 
 ## Deployment model
 

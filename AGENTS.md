@@ -422,6 +422,20 @@ Description rules:
 - Update the title and description whenever scope, evidence, risk, or reviewer focus
   materially changes.
 
+For an existing pull request, update its title or body through the GitHub REST endpoint,
+not `gh pr edit`; the installed CLI's edit path queries deprecated classic-project data.
+Put multiline Markdown in `PR_BODY` and run:
+
+```bash
+gh api --method PATCH repos/<owner>/<repo>/pulls/<number> \
+  -f title="<type>(<scope>): <imperative summary>" \
+  -f body="$PR_BODY" \
+  --silent
+```
+
+Treat the successful PATCH as the update, then run the required `gh pr view`
+mergeability query.
+
 ## Documentation ownership: system description vs planning
 
 Keep stable system documentation independent from work breakdown and delivery progress:

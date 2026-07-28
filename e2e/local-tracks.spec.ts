@@ -82,8 +82,9 @@ const realWorldTrackFixtures = [
 
 interface StoredTrackState {
   readonly contentCount: number;
+  readonly pointCount: number;
   readonly summaryCount: number;
-  readonly totalOriginalGpxBytes: number;
+  readonly sourceBlobCount: number;
 }
 
 async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
@@ -154,7 +155,8 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
             .objectStore('localTrackContents')
             .openCursor();
           let contentCount = 0;
-          let totalOriginalGpxBytes = 0;
+          let pointCount = 0;
+          let sourceBlobCount = 0;
 
           contentCursorRequest.onerror = () => {
             reject(
@@ -166,17 +168,23 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
             const cursor = contentCursorRequest.result;
             if (cursor === null) return;
             const value: unknown = cursor.value;
-            if (
-              typeof value !== 'object' ||
-              value === null ||
-              !('originalGpx' in value) ||
-              !(value.originalGpx instanceof Blob)
-            ) {
-              reject(new Error('Stored GPX content has an invalid shape.'));
+            if (typeof value !== 'object' || value === null) {
+              reject(new Error('Stored track content has an invalid shape.'));
+              return;
+            }
+            if ('originalGpx' in value && value.originalGpx instanceof Blob) {
+              sourceBlobCount += 1;
+            }
+            if (!('trackPoints' in value) || !Array.isArray(value.trackPoints)) {
+              reject(new Error('Stored track points are unavailable.'));
               return;
             }
             contentCount += 1;
-            totalOriginalGpxBytes += value.originalGpx.size;
+            pointCount += value.trackPoints.reduce(
+              (total: number, segment: unknown) =>
+                total + (Array.isArray(segment) ? segment.length : 0),
+              0,
+            );
             cursor.continue();
           };
           transaction.onerror = () => {
@@ -188,8 +196,9 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
             database.close();
             resolve({
               contentCount,
+              pointCount,
               summaryCount: summaryCountRequest.result,
-              totalOriginalGpxBytes,
+              sourceBlobCount,
             });
           };
         };
@@ -199,6 +208,74 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
 
 test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
+});
+
+test('clears saved-track hovers after favorite sorting', async ({ page }) => {
+  await page.setViewportSize({ width: 2048, height: 1000 });
+  await page.goto('#tracks');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+
+  for (const name of ['Pinned track', 'Movable track']) {
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Browse track file' }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles(trackFixturePath);
+    await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
+    await page.getByLabel('Track name').fill(name);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+
+    if (name === 'Pinned track') {
+      await page.getByRole('button', { name: 'Track actions' }).click();
+      await page.getByRole('menuitem', { name: 'Add to favorites' }).click();
+    }
+
+    await page.getByRole('button', { name: 'Close track' }).click();
+  }
+
+  const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
+  const pinnedRow = savedTracks
+    .getByRole('button', { name: /^Pinned track/u })
+    .locator('xpath=..');
+  const movableRow = savedTracks
+    .getByRole('button', { name: /^Movable track/u })
+    .locator('xpath=..');
+  const movableFavorite = movableRow.getByRole('button', {
+    name: 'Add to favorites',
+  });
+  const pinnedDelete = pinnedRow.getByRole('button', {
+    name: 'Delete Pinned track',
+  });
+  const unhoveredBackground = await pinnedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+
+  await movableRow.hover();
+  await movableFavorite.hover();
+  await expect(page.getByRole('tooltip', { name: 'Add to favorites' })).toBeVisible();
+  await movableFavorite.click();
+  await expect(
+    movableRow.getByRole('button', { name: 'Remove from favorites' }),
+  ).toBeVisible();
+  await expect
+    .poll(async () => {
+      const [movableBox, pinnedBox] = await Promise.all([
+        movableRow.boundingBox(),
+        pinnedRow.boundingBox(),
+      ]);
+      return movableBox !== null && pinnedBox !== null && movableBox.y < pinnedBox.y;
+    })
+    .toBe(true);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(pinnedRow).toHaveCSS('background-color', unhoveredBackground);
+  await expect(pinnedDelete).toHaveCSS('opacity', '0');
+
+  await pinnedRow.hover();
+  await expect(pinnedDelete).toHaveCSS('opacity', '1');
 });
 
 test('persists and renders public real-world GPX exports including a 1 MB stress track', async ({
@@ -227,7 +304,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 
   for (const fixture of realWorldTrackFixtures) {
     const chooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Browse GPX file' }).click();
+    await page.getByRole('button', { name: 'Browse track file' }).click();
     const chooser = await chooserPromise;
     await chooser.setFiles(fixture.path);
 
@@ -250,28 +327,31 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
       );
     }
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
-    await page.getByRole('button', { name: 'Close track' }).click();
+    await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to tracks' }).click();
   }
 
-  await expect(page.getByText('7 saved tracks')).toBeVisible();
-  const expectedStoredBytes = realWorldTrackFixtures.reduce(
-    (total, fixture) => total + fixture.byteSize,
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
+  const expectedStoredPoints = realWorldTrackFixtures.reduce(
+    (total, fixture) => total + fixture.pointCount,
     0,
   );
   expect(await readStoredTrackState(page)).toEqual({
     contentCount: 7,
+    pointCount: expectedStoredPoints,
     summaryCount: 7,
-    totalOriginalGpxBytes: expectedStoredBytes,
+    sourceBlobCount: 0,
   });
 
   await page.reload();
-  await expect(page.getByText('7 saved tracks')).toBeVisible();
-  await page.getByRole('button', { name: /sample-1mb/u }).click();
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to tracks' }).click();
+  await page.getByRole('button', { name: /^sample-1mb/u }).click();
   const selectedDetails = page.getByRole('complementary', {
     name: 'Track details',
   });
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await expect(selectedDetails).toContainText('18,078 points');
 
   await page
@@ -286,6 +366,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
 test('imports, retains, reopens, renames, and deletes a local GPX track', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 2048, height: 1000 });
   await page.goto('#tracks');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -294,7 +375,7 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   );
 
   const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Browse GPX file' }).click();
+  await page.getByRole('button', { name: 'Browse track file' }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles(trackFixturePath);
 
@@ -343,18 +424,125 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   ).toEqual([]);
 
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
-  await page.getByRole('button', { name: 'Close track' }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toHaveCount(0);
+  const savedDetails = page.getByLabel('Track details');
+  const trackDetailsHeading = savedDetails.getByRole('heading', {
+    name: 'Track details',
+  });
+  const closeTrack = savedDetails.getByRole('button', { name: 'Close track' });
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  await expect(savedDetails.getByRole('separator')).toHaveCount(0);
+  await expect(
+    savedDetails.getByRole('button', { name: 'Add to favorites' }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Add to favorites' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const [headingBox, closeBox] = await Promise.all([
+    trackDetailsHeading.boundingBox(),
+    closeTrack.boundingBox(),
+  ]);
+  expect(headingBox).not.toBeNull();
+  expect(closeBox).not.toBeNull();
+  if (headingBox !== null && closeBox !== null) {
+    expect(
+      Math.abs(
+        closeBox.y + closeBox.height / 2 - (headingBox.y + headingBox.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+  }
+  await closeTrack.click();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toHaveCount(0);
+  const savedTracks = page.getByRole('list', { name: 'Saved tracks' });
+  const savedTrackButton = savedTracks.getByRole('button', {
+    name: /^Mon 13 Jul 2026/u,
+  });
+  const favoriteButton = savedTracks.getByRole('button', {
+    name: 'Add to favorites',
+  });
+  const deleteButton = savedTracks.getByRole('button', {
+    name: 'Delete Mon 13 Jul 2026',
+  });
+  const savedRow = savedTrackButton.locator('xpath=..');
+  await expect(favoriteButton).toHaveCSS('opacity', '0');
+  await expect(deleteButton).toHaveCSS('opacity', '0');
+  const unselectedBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await savedRow.hover();
+  await expect(favoriteButton).toHaveCSS('opacity', '1');
+  await expect(deleteButton).toHaveCSS('opacity', '1');
+  const hoveredBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(hoveredBackground).not.toBe(unselectedBackground);
+
+  await savedTrackButton.focus();
+  await page.keyboard.press('Tab');
+  await expect(favoriteButton).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(deleteButton).toBeFocused();
+  await savedTrackButton.click();
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  const selectedBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await savedRow.hover();
+  const selectedHoveredBackground = await savedRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(selectedBackground).not.toBe(unselectedBackground);
+  expect(selectedHoveredBackground).not.toBe(selectedBackground);
+
+  await favoriteButton.click();
+  await expect(
+    savedTracks.getByRole('button', { name: 'Remove from favorites' }),
+  ).toBeVisible();
+  const savedTracksResults = await new AxeBuilder({ page })
+    .include('[aria-label="Saved tracks"]')
+    .analyze();
+  expect(
+    savedTracksResults.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
 
   await page.reload();
-  await expect(page.getByText('Mon 13 Jul 2026', { exact: true })).toBeVisible();
-  await page.getByText('Mon 13 Jul 2026', { exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  await expect(
+    page.getByLabel('Track details').getByRole('heading', { name: 'Mon 13 Jul 2026' }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Track name')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Remove from favorites' }),
+  ).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const savedTrackName = page.getByLabel('Track name');
+  await expect(savedTrackName).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirm rename' })).toBeVisible();
+  await savedTrackName.fill('Kazbegi ridge walk');
+  await page.getByRole('button', { name: 'Confirm rename' }).click();
+  await expect(
+    page
+      .getByLabel('Track details')
+      .getByRole('heading', { name: 'Kazbegi ridge walk' }),
+  ).toBeVisible();
 
-  await page.getByLabel('Track name').fill('Kazbegi ridge walk');
-  await page.getByRole('button', { name: 'Rename' }).click();
-  await expect(page.getByText('Kazbegi ridge walk', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Track actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete track' }).click();
+  await expect(page.getByRole('button', { name: 'Confirm delete' })).toBeVisible();
+  const confirmationResults = await new AxeBuilder({ page })
+    .include('[aria-label="Track details"]')
+    .analyze();
+  expect(
+    confirmationResults.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+  await page.getByRole('button', { name: 'Confirm delete' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.getByRole('checkbox', { name: 'Imported tracks' }).uncheck();
@@ -365,9 +553,36 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   await expect(page.getByRole('slider', { name: 'Track opacity' })).toHaveValue('65');
 
   await page.getByRole('tab', { name: 'Tracks' }).click();
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByRole('heading', { name: 'Selected track' })).toHaveCount(0);
-
-  await expect(page.getByText('0 saved tracks')).toBeVisible();
+  await page.getByRole('button', { name: 'Close track' }).click();
+  await savedTracks
+    .getByRole('button', { name: /^Kazbegi ridge walk Distance:/u })
+    .hover();
+  const renamedDeleteButton = savedTracks.getByRole('button', {
+    name: 'Delete Kazbegi ridge walk',
+  });
+  const dialogs: string[] = [];
+  page.on('dialog', (dialog) => {
+    dialogs.push(dialog.message());
+    void dialog.dismiss();
+  });
+  await renamedDeleteButton.click();
+  await expect(
+    savedTracks.getByRole('button', {
+      name: 'Confirm deletion of Kazbegi ridge walk',
+    }),
+  ).toBeVisible();
+  const rowDeleteConfirmation = savedTracks.getByRole('button', {
+    name: 'Confirm deletion of Kazbegi ridge walk',
+  });
+  await rowDeleteConfirmation.focus();
+  await page.keyboard.press('Escape');
+  await expect(renamedDeleteButton).toBeVisible();
+  await renamedDeleteButton.click();
+  await savedTracks
+    .getByRole('button', {
+      name: 'Confirm deletion of Kazbegi ridge walk',
+    })
+    .click();
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toHaveCount(0);
+  expect(dialogs).toEqual([]);
 });

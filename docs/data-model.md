@@ -159,9 +159,7 @@ classDiagram
   }
   class LocalTrackContentRecord {
     +string contentId
-    +Blob originalGpx
-    +GeoJSON normalizedGeometry
-    +ElevationSample[] elevationProfile
+    +TrackPoint[] sourcePoints
   }
   class CuratedCategory {
     +string id
@@ -208,8 +206,8 @@ classDiagram
 | `TrackSummary`            | ID, source kind, normalized non-empty name, added time, bounds, center, distance, point/segment counts, metrics, route shape, and tags; optional recorded times/duration |
 | `TrackMetrics`            | Distance and optional ascent/descent/min/max elevation; every derived field is tied to its algorithm and elevation source version                                        |
 | `CuratedTrackRecord`      | Summary plus relative same-origin preview and GPX asset URLs and optional approved provenance; URLs never expose source paths                                            |
-| `LocalTrackRecord`        | Summary plus import time, content reference, and bounded validation warnings; `addedAt` equals the completed retention/import time                                       |
-| `LocalTrackContentRecord` | Original retained GPX blob, validated normalized geometry, and optional cached elevation profile; fetched separately from summaries                                      |
+| `LocalTrackRecord`        | Name, source identity/format, favorite state, import time, content reference, and bounded validation warnings; `addedAt` equals the completed retention/import time      |
+| `LocalTrackContentRecord` | One validated normalized source-point projection keyed by its track ID; original file bytes are not retained; fetched separately from summaries                          |
 | `CuratedCategory`         | Read-only hierarchical category from GitHub. A track may appear in multiple curated categories through memberships                                                       |
 | `UserFolder`              | Browser-local hierarchical folder. Cycles are forbidden; sibling names need not be globally unique                                                                       |
 | `UserTrackPlacement`      | Exactly one personal placement per track, with optional folder ID for `Unfiled` and a stable fractional/manual sort rank                                                 |
@@ -221,9 +219,13 @@ omit sensitive timestamps while retaining a non-identifying duration. For curate
 tracks, `addedAt` comes from reviewed curation metadata rather than the build clock; for
 local tracks, it is the completed retention/import time.
 
-The executable local-track schema keeps listable summaries separate from large geometry
-and original GPX blobs. Both rows share the opaque local track ID. Saving and deleting
-use one IndexedDB transaction, while rename updates only the validated summary. A
+The executable local-track schema keeps listable summaries separate from normalized
+track points. Both rows share the opaque local track ID. The summary owns source-format
+identity, source filename, favorite state, and import time; content remains on demand.
+The content row owns exactly one normalized source-point projection. Original file bytes
+are discarded after parsing. Saving and deleting use one IndexedDB transaction, while
+rename and favorite updates change only the validated summary. A setting stores the
+latest opened local-track ID and is cleared atomically when that track is deleted. A
 missing or invalid content row is surfaced as a bounded storage-integrity error; it
 never becomes an empty geometry or a partially successful save.
 

@@ -61,37 +61,67 @@ folders store a user's organization without modifying global assets.
 
 Selecting a track draws its geometry on the map and opens an adjacent detail pane with
 source, tags, metrics, folder/download actions, calculation provenance, and a contextual
-elevation profile. The full original GPX is loaded only when requested. Import retention
+elevation profile. Curated source GPX is loaded only when requested. Import retention
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
-The implemented local workflow imports one `.gpx` file from a contained drag-and-drop
-row or that row's browse button. A file drag anywhere inside the application expands the
-row as an opaque elevated overlay without moving the search and library below; only a
-drop inside that target imports the file. Import validates and previews the file's
-metadata and opens a fixed adjacent detail pane. The editable embedded or
-filename-derived name is never replaced automatically. File-selection and parsing errors
-appear inside the import zone and dismiss after five seconds; persistent track/storage
-errors remain in the panel. The stored source filename remains visible after rename, and
-structured validation warnings show their parser code, explanation, and available
-point/segment context. An optional English place candidate appears separately and
-requires an explicit apply action between the editable track-name field and the adjacent
-read-only **English place name** field. For a track with a dominant interior summit,
-that candidate uses the nearest named OSM feature across supported POI, natural, and
-place categories rather than a hard-coded feature type. Mountain passes gain a `Pass`
-suffix and named peaks or volcanoes gain an `Mt.` prefix when the source name does not
-already include one. Save retains the original file, independent line segments, and
-versioned metrics in this browser; unsaved previews activate the native leave-site
-guard. Saved track cards show icon-led recorded duration, distance, and elevation gain
-when available. The detail pane presents duration, distance, derived average speed,
-elevation gain, and elevation loss in a wrapping stats grid, with missing measurements
-omitted; source file, point, segment, and save metadata remain below it. Saved tracks
-are searchable by name and support reopen, close, rename, and confirmed deletion. A
-compact local-retention notice stays pinned to the Tracks panel bottom. Catalog,
-folders, tags, filters, batch import, whole-workspace dropping, and GPX creation remain
-unavailable. A newly imported or reopened track renders as bright-blue independent lines
-and fits its complete bounds with padding for the master/detail surfaces. Closing it
-removes the active geometry without deleting a saved record or moving the camera.
+The implemented local workflow imports one `.gpx`, `.fit`, or `.kml` file from a
+contained drag-and-drop row or that row's browse button. FIT Activity and Course files
+must pass Garmin SDK integrity validation and contain geographic records. KML accepts
+line-based `LineString`, `MultiGeometry`, `gx:Track`, and `gx:MultiTrack` content
+without fetching external resources; KMZ and geometry-free files remain unsupported. A
+file drag anywhere inside the application expands the row as an opaque elevated overlay
+without moving the search and library below; only a drop inside that target imports the
+file. Import validates and previews the file's metadata and opens a fixed adjacent
+detail pane. The editable embedded or filename-derived name is never replaced
+automatically. File-selection and parsing errors appear inside the import zone and
+dismiss after five seconds; persistent track/storage errors remain in the panel. The
+stored source filename remains visible after rename, and structured validation warnings
+show their parser code, explanation, and available point/segment context. An optional
+English place candidate appears separately and requires an explicit apply action between
+the editable track-name field and the adjacent read-only **English place name** field.
+For a track with a dominant interior summit, that candidate uses the nearest named OSM
+feature across supported POI, natural, and place categories rather than a hard-coded
+feature type. Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an
+`Mt.` prefix when the source name does not already include one. Save retains normalized
+points, independent line segments, source filename/format metadata, and versioned
+metrics in this browser; the original file bytes are discarded after parsing. Unsaved
+previews activate the native leave-site guard. Saved track cards show icon-led recorded
+duration, distance, and elevation gain when available. The detail pane presents
+duration, distance, derived average speed, elevation gain, and elevation loss in a
+wrapping stats grid, with missing measurements omitted; source file, point, segment, and
+save metadata remain below it. Saved tracks are searchable by name, reopen after close,
+and rename only from the detail header's **Rename** action. That action replaces the
+saved title with a bounded name editor; the preview retains its body **Track name**
+field and English-name application flow. Each saved-track row keeps favorite and
+icon-only delete controls in the DOM, revealing inactive controls on pointer hover or
+keyboard focus; active favorites remain visible. Row selection and hover color cover the
+entire row, including its action column. Deletion uses two-stage inline confirmation:
+the row delete icon becomes a destructive confirmation icon, while **Delete track** in
+the detail action menu replaces that menu trigger with **Confirm delete**. Pointer exit,
+Escape, and click-away cancel either confirmation without mutation. Users can favorite a
+track from its list row or detail header; downloads remain in the detail header's
+compact action menu. Favorites sort before other tracks, with newest imports first
+inside each group. The latest opened saved track reopens after restart when its content
+is still valid. A compact local-retention notice stays pinned to the Tracks panel
+bottom. Catalog, folders, tags, filters, batch import, whole-workspace dropping, and GPX
+creation remain unavailable. A newly imported or reopened track renders as bright-blue
+independent lines and fits its complete bounds with padding for the master/detail
+surfaces. Closing it removes the active geometry without deleting a saved record or
+moving the camera. Every saved track can be downloaded locally as GPX or KML. Generated
+files preserve independent segments, saved name, available point elevation, and reliably
+aligned timestamps without writing GPX or KML description elements; conversion never
+uploads the source.
+
+Tracks with usable elevation show an interactive distance profile with labeled axes,
+grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The
+profile is calculated from the retained source points and does not repeat the
+ascent/descent metrics already shown in the stats grid.
+
+At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
+persistent import region and **Back to tracks** restores the prior search/list state.
+Wider viewports retain the adjacent detail pane. The same hover/focus row actions and
+two-stage inline deletion behavior apply at either width.
 
 ### Create GPX
 
@@ -503,10 +533,9 @@ configuration must never contain secrets.
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, Create GPX
-editing/export, track elevation charts, saved-marker management, offline-region
-downloads, accounts, or cloud synchronization. Satellite provides live viewport search
-for L2A scenes with a scene-cloud control. Successful results are grouped by UTC
-acquisition day and show a thumbnail, local acquisition time, processing level, cloud,
-viewport coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
-true-color scene and its footprint; Layers can hide or restore the raster and related
-logical map groups.
+editing/export, saved-marker management, offline-region downloads, accounts, or cloud
+synchronization. Satellite provides live viewport search for L2A scenes with a
+scene-cloud control. Successful results are grouped by UTC acquisition day and show a
+thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
+sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
+its footprint; Layers can hide or restore the raster and related logical map groups.

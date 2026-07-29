@@ -37,7 +37,6 @@
     "@garmin/fitsdk": "21.208.0",
     "@mui/icons-material": "9.2.0",
     "@mui/material": "9.2.0",
-    "@mui/x-charts": "9.2.0",
     "@photostructure/tz-lookup": "11.6.0",
     "@turf/area": "7.3.5",
     "@turf/boolean-point-in-polygon": "7.3.5",
@@ -52,7 +51,9 @@
     "proj4": "2.20.9",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-is": "19.2.7",
     "react-map-gl": "8.1.1",
+    "recharts": "3.10.1",
     "zod": "4.4.3",
     "zustand": "5.0.14"
   },

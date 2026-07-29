@@ -443,6 +443,11 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('Source file')).not.toBeInTheDocument();
     expect(within(details).getByText('Distance (km)')).toBeVisible();
     expect(within(details).getByText('Elevation (m)')).toBeVisible();
+    expect(
+      within(details).getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      }),
+    ).toBeVisible();
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     await user.click(screen.getByRole('menuitem', { name: 'Rename' }));

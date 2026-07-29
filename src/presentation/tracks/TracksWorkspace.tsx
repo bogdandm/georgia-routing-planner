@@ -15,7 +15,6 @@ import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
-import { LineChart } from '@mui/x-charts/LineChart';
 import {
   Alert,
   Box,
@@ -80,6 +79,7 @@ import {
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
 import { calculateElevationProfile } from '@/domain/tracks/elevationProfile';
+import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
 import { requestMapFitBounds } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
 
@@ -1233,17 +1233,6 @@ function downloadText(filename: string, type: string, content: string): void {
   URL.revokeObjectURL(url);
 }
 
-function sampleProfilePoints<T>(points: readonly T[], maximum = 1_200): readonly T[] {
-  if (points.length <= maximum) return points;
-  const sampled: T[] = [];
-  for (let index = 0; index < maximum; index += 1) {
-    const sourceIndex = Math.round((index / (maximum - 1)) * (points.length - 1));
-    const point = points[sourceIndex];
-    if (point !== undefined) sampled.push(point);
-  }
-  return sampled;
-}
-
 function TrackElevationProfile() {
   const { active } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
@@ -1260,67 +1249,13 @@ function TrackElevationProfile() {
       : active.content.trackPoints;
   const profile = calculateElevationProfile(sourceSegments);
   if (profile === null) return null;
-  const chartPoints = sampleProfilePoints(profile.points);
   return (
-    <Stack spacing={1.5}>
-      <Typography component="h3" variant="subtitle2">
-        Elevation profile
-      </Typography>
-      <Box
-        role="img"
-        aria-label={`Elevation profile from ${String(Math.round(profile.minimumMeters))} to ${String(Math.round(profile.maximumMeters))} metres`}
-        onMouseLeave={() => {
-          mapLayers?.setImportedTrackTracePoint(null);
-        }}
-        sx={{ height: 264, mx: -1 }}
-      >
-        <LineChart
-          aria-hidden
-          disableKeyboardNavigation
-          hideLegend
-          skipAnimation
-          grid={{ horizontal: true, vertical: true }}
-          axisHighlight={{ x: 'line', y: 'none' }}
-          margin={{ top: 12, right: 16, bottom: 6, left: 4 }}
-          xAxis={[
-            {
-              id: 'distance',
-              data: chartPoints.map((point) => point.distanceMeters / 1_000),
-              label: 'Distance (km)',
-              scaleType: 'linear',
-              valueFormatter: (value: number) => `${value.toFixed(1)} km`,
-            },
-          ]}
-          yAxis={[
-            {
-              label: 'Elevation (m)',
-              valueFormatter: (value: number) => `${String(Math.round(value))} m`,
-              width: 64,
-            },
-          ]}
-          series={[
-            {
-              data: chartPoints.map((point) => point.elevationMeters),
-              label: 'Elevation',
-              area: true,
-              showMark: false,
-              color: appColors.brand.blueGreenDark,
-              valueFormatter: (value) =>
-                value === null ? '' : `${String(Math.round(value))} m`,
-            },
-          ]}
-          onHighlightedAxisChange={(axisItems) => {
-            const index = axisItems.find(
-              (item) => item.axisId === 'distance',
-            )?.dataIndex;
-            mapLayers?.setImportedTrackTracePoint(
-              index === undefined ? null : (chartPoints[index]?.coordinate ?? null),
-            );
-          }}
-          slotProps={{ tooltip: { trigger: 'axis' } }}
-        />
-      </Box>
-    </Stack>
+    <ElevationProfileChart
+      profile={profile}
+      onActivePointChange={(point) => {
+        mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
+      }}
+    />
   );
 }
 

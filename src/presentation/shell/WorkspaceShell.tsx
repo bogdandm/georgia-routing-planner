@@ -1,6 +1,6 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import { Box, IconButton, Tooltip } from '@mui/material';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
@@ -17,6 +17,7 @@ import {
   workspaceTabFromHash,
 } from '@/presentation/shell/workspaceTabLocation';
 import { appColors } from '@/presentation/theme/appColors';
+import type { MapFitPadding } from '@/presentation/map/mapTypes';
 import {
   TrackDetailsPane,
   TracksWorkspaceProvider,
@@ -26,11 +27,13 @@ interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
 }
 
+const mapCameraMargin = 56;
+
 function ControlledFailure(): never {
   throw new Error('Controlled Phase 0 component failure.');
 }
 
-function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShellProps) {
+function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const { database, logger, mapLayers, storageUsage } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
@@ -44,6 +47,28 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
+  const workspaceShellRef = useRef<HTMLDivElement>(null);
+  const navigationRef = useRef<HTMLDivElement>(null);
+  const getNavigationPadding = useCallback((): MapFitPadding | undefined => {
+    const workspaceShell = workspaceShellRef.current;
+    const navigation = navigationRef.current;
+    if (workspaceShell === null || navigation === null) return undefined;
+    const workspaceBounds = workspaceShell.getBoundingClientRect();
+    const navigationBounds = navigation.getBoundingClientRect();
+    const top = Math.min(mapCameraMargin, workspaceBounds.height / 2);
+    const left = Math.min(
+      Math.max(
+        navigationBounds.right - workspaceBounds.left + mapCameraMargin,
+        mapCameraMargin,
+      ),
+      Math.max(workspaceBounds.width - mapCameraMargin, 0),
+    );
+    if (left === 0) return undefined;
+    return { top, right: mapCameraMargin, bottom: top, left };
+  }, []);
+  const renderedMapSurface = mapSurface ?? (
+    <MapWorkspace getNavigationPadding={getNavigationPadding} />
+  );
   const [shareOpen, setShareOpen] = useState(false);
   useEffect(() => {
     void mapLayers?.restorePersistedState();
@@ -107,6 +132,7 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
 
   return (
     <Box
+      ref={workspaceShellRef}
       data-testid="workspace-shell"
       sx={{
         height: '100dvh',
@@ -117,13 +143,14 @@ function WorkspaceShellContent({ mapSurface = <MapWorkspace /> }: WorkspaceShell
     >
       <Box component="main" sx={{ position: 'absolute', inset: 0 }}>
         <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
-          {mapSurface}
+          {renderedMapSurface}
           <MapSearchPlaceholder />
           <OperationalStatus />
         </Box>
       </Box>
 
       <Box
+        ref={navigationRef}
         sx={{
           position: 'absolute',
           top: 6,

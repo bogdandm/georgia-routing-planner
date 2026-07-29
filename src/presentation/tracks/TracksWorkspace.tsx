@@ -80,7 +80,10 @@ import {
 } from '@/domain/tracks/trackExport';
 import { calculateElevationProfile } from '@/domain/tracks/elevationProfile';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
-import { requestMapFitBounds } from '@/presentation/map/mapInteractionStore';
+import {
+  requestMapFitBounds,
+  requestMapNavigation,
+} from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
 
 interface PreviewTrack {
@@ -304,7 +307,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         north: metrics.bounds.north,
       },
       15,
-      { top: 56, right: 56, bottom: 56, left: 840 },
     );
   }, [active, mapLayers]);
 
@@ -1254,6 +1256,13 @@ function TrackElevationProfile() {
       profile={profile}
       onActivePointChange={(point) => {
         mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
+      }}
+      onPointClick={(point) => {
+        requestMapNavigation({
+          longitude: point.coordinate[0],
+          latitude: point.coordinate[1],
+          zoom: 13,
+        });
       }}
     />
   );

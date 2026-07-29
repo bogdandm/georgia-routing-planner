@@ -22,6 +22,7 @@ class FakeNativeMap {
   public readonly terrainTileUpdates: string[][] = [];
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
+  public readonly fitBoundsCalls: Record<string, unknown>[] = [];
   public readonly jumpCalls: Record<string, unknown>[] = [];
   public readonly queriedSourceLayers: string[] = [];
   public readonly sourceFeatures = new Map<string, readonly GeoJSONFeature[]>();
@@ -146,6 +147,10 @@ class FakeNativeMap {
     if (typeof options.zoom === 'number') this.#zoom = options.zoom;
     if (typeof options.bearing === 'number') this.#bearing = options.bearing;
     if (typeof options.pitch === 'number') this.#pitch = options.pitch;
+  }
+
+  public fitBounds(_bounds: unknown, options: Record<string, unknown>): void {
+    this.fitBoundsCalls.push(options);
   }
 
   public jumpTo(options: Record<string, unknown>): void {
@@ -273,6 +278,38 @@ describe('MapLibreFacade', () => {
         .getEvents()
         .filter((event) => event.name === 'map.lifecycle.mounted'),
     ).toHaveLength(1);
+  });
+
+  it('resets transform padding before offsetting point navigation into the visible map area', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.fitBounds({ west: 43.1, south: 41.6, east: 44.2, north: 42.4 }, 15, {
+      top: 56,
+      right: 56,
+      bottom: 56,
+      left: 536,
+    });
+
+    facade.navigateTo(
+      { longitude: 44.8, latitude: 41.7, zoom: 13 },
+      { top: 56, right: 56, bottom: 56, left: 536 },
+    );
+
+    expect(nativeMap.easeCalls.at(-1)).toMatchObject({
+      center: [44.8, 41.7],
+      zoom: 13,
+      duration: 650,
+      essential: true,
+      offset: [240, 0],
+    });
+    expect(nativeMap.easeCalls.at(-1)).toHaveProperty('padding', {
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
   });
 
   it('preserves subscribers while the native ref detaches and reattaches', () => {

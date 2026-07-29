@@ -309,19 +309,36 @@ export class MapLibreFacade implements MapFacade {
     }
   }
 
-  public navigateTo(target: {
-    readonly longitude: number;
-    readonly latitude: number;
-    readonly zoom?: number;
-  }): void {
+  public navigateTo(
+    target: {
+      readonly longitude: number;
+      readonly latitude: number;
+      readonly zoom?: number;
+    },
+    visibleAreaPadding?: MapFitPadding,
+  ): void {
     const map = this.#map;
     if (map === null) return;
-    map.easeTo({
-      center: [target.longitude, target.latitude],
+    const center: [number, number] = [target.longitude, target.latitude];
+    const padding = { top: 0, right: 0, bottom: 0, left: 0 };
+    const options = {
+      center,
       zoom: target.zoom ?? Math.max(map.getZoom(), 13),
       duration: 650,
       essential: true,
-    });
+      padding,
+    };
+    if (visibleAreaPadding === undefined) {
+      map.easeTo(options);
+    } else {
+      map.easeTo({
+        ...options,
+        offset: [
+          (visibleAreaPadding.left - visibleAreaPadding.right) / 2,
+          (visibleAreaPadding.top - visibleAreaPadding.bottom) / 2,
+        ],
+      });
+    }
     this.logger.log({
       level: 'info',
       name: 'map.navigation.requested',

@@ -20,6 +20,7 @@ import { appColors } from '@/presentation/theme/appColors';
 interface ElevationProfileChartProps {
   readonly profile: ElevationProfile;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
+  readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
 function sampleProfilePoints<T>(points: readonly T[], maximum = 1_200): readonly T[] {
@@ -31,6 +32,19 @@ function sampleProfilePoints<T>(points: readonly T[], maximum = 1_200): readonly
     if (point !== undefined) sampled.push(point);
   }
   return sampled;
+}
+function activeProfilePoint(
+  { activeIndex, activeLabel, isTooltipActive }: MouseHandlerDataParam,
+  sampledPoints: readonly ElevationProfilePoint[],
+): ElevationProfilePoint | null {
+  if (!isTooltipActive) return null;
+  if (typeof activeIndex === 'number') {
+    return sampledPoints[activeIndex] ?? null;
+  }
+  if (typeof activeLabel === 'number') {
+    return sampledPoints.find((point) => point.distanceMeters === activeLabel) ?? null;
+  }
+  return null;
 }
 
 function ElevationTooltip({
@@ -58,6 +72,7 @@ function ElevationTooltip({
 export function ElevationProfileChart({
   profile,
   onActivePointChange,
+  onPointClick,
 }: ElevationProfileChartProps): ReactElement {
   const theme = useTheme();
   const sampledPoints = sampleProfilePoints(profile.points);
@@ -67,26 +82,13 @@ export function ElevationProfileChart({
     fontSize: theme.typography.caption.fontSize,
   };
 
-  function handleMouseMove({
-    activeIndex,
-    activeLabel,
-    isTooltipActive,
-  }: MouseHandlerDataParam): void {
-    if (!isTooltipActive) {
-      onActivePointChange?.(null);
-      return;
-    }
-    if (typeof activeIndex === 'number') {
-      onActivePointChange?.(sampledPoints[activeIndex] ?? null);
-      return;
-    }
-    if (typeof activeLabel === 'number') {
-      onActivePointChange?.(
-        sampledPoints.find((point) => point.distanceMeters === activeLabel) ?? null,
-      );
-      return;
-    }
-    onActivePointChange?.(null);
+  function handleMouseMove(mouseHandlerData: MouseHandlerDataParam): void {
+    onActivePointChange?.(activeProfilePoint(mouseHandlerData, sampledPoints));
+  }
+
+  function handleClick(mouseHandlerData: MouseHandlerDataParam): void {
+    const point = activeProfilePoint(mouseHandlerData, sampledPoints);
+    if (point !== null) onPointClick?.(point);
   }
 
   return (
@@ -107,6 +109,7 @@ export function ElevationProfileChart({
           margin={{ top: 12, right: 16, bottom: 6, left: 4 }}
           style={{ width: '100%', height: '100%' }}
           onMouseMove={handleMouseMove}
+          onClick={handleClick}
           onMouseLeave={() => onActivePointChange?.(null)}
         >
           <CartesianGrid stroke={theme.palette.divider} />
@@ -114,14 +117,8 @@ export function ElevationProfileChart({
             type="number"
             dataKey="distanceMeters"
             domain={['dataMin', 'dataMax']}
-            height={48}
+            height={32}
             tick={axisText}
-            label={{
-              value: 'Distance (km)',
-              position: 'insideBottom',
-              offset: -4,
-              ...axisText,
-            }}
             tickFormatter={(distanceMeters: number) =>
               `${(distanceMeters / 1_000).toFixed(1)} km`
             }
@@ -132,13 +129,6 @@ export function ElevationProfileChart({
             domain={['auto', 'auto']}
             width={64}
             tick={axisText}
-            label={{
-              value: 'Elevation (m)',
-              position: 'insideLeft',
-              angle: -90,
-              offset: 0,
-              ...axisText,
-            }}
             tickFormatter={(elevationMeters: number) =>
               `${String(Math.round(elevationMeters))} m`
             }

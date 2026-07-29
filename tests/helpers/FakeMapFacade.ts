@@ -22,6 +22,7 @@ export class FakeMapFacade implements MapFacade {
     readonly latitude: number;
     readonly zoom?: number;
   }[] = [];
+  public navigationPaddingRequests: (MapFitPadding | undefined)[] = [];
   public fitBoundsRequests: {
     readonly bounds: MapViewportBounds;
     readonly maxZoom: number;
@@ -88,12 +89,16 @@ export class FakeMapFacade implements MapFacade {
     this.notify();
   }
 
-  public navigateTo(target: {
-    readonly longitude: number;
-    readonly latitude: number;
-    readonly zoom?: number;
-  }): void {
+  public navigateTo(
+    target: {
+      readonly longitude: number;
+      readonly latitude: number;
+      readonly zoom?: number;
+    },
+    visibleAreaPadding?: MapFitPadding,
+  ): void {
     this.navigationRequests.push(target);
+    this.navigationPaddingRequests.push(visibleAreaPadding);
   }
 
   public fitBounds(

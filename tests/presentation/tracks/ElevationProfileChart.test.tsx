@@ -69,24 +69,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderElevationProfileChart(
-  onActivePointChange?: (point: ElevationProfilePoint | null) => void,
-) {
-  const chart =
-    onActivePointChange === undefined ? (
-      <ElevationProfileChart profile={profile} />
-    ) : (
-      <ElevationProfileChart
-        profile={profile}
-        onActivePointChange={onActivePointChange}
-      />
-    );
-  return render(<ThemeProvider theme={createAppTheme()}>{chart}</ThemeProvider>);
+interface ElevationProfileChartCallbacks {
+  readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
+  readonly onPointClick?: (point: ElevationProfilePoint) => void;
+}
+
+function renderElevationProfileChart({
+  onActivePointChange,
+  onPointClick,
+}: ElevationProfileChartCallbacks = {}) {
+  const chartProps: {
+    profile: ElevationProfile;
+    onActivePointChange?: (point: ElevationProfilePoint | null) => void;
+    onPointClick?: (point: ElevationProfilePoint) => void;
+  } = { profile };
+  if (onActivePointChange !== undefined) {
+    chartProps.onActivePointChange = onActivePointChange;
+  }
+  if (onPointClick !== undefined) {
+    chartProps.onPointClick = onPointClick;
+  }
+  return render(
+    <ThemeProvider theme={createAppTheme()}>
+      <ElevationProfileChart {...chartProps} />
+    </ThemeProvider>,
+  );
 }
 
 describe('ElevationProfileChart', () => {
   it.each([420, 760])(
-    'renders the accessible profile and axis labels at %i pixels wide',
+    'renders the accessible profile without axis labels at %i pixels wide',
     (width) => {
       observedWidth = width;
       renderElevationProfileChart();
@@ -97,15 +109,16 @@ describe('ElevationProfileChart', () => {
           name: 'Elevation profile from 1000 to 1120 metres',
         }),
       ).toBeVisible();
-      expect(screen.getByText('Distance (km)')).toBeVisible();
-      expect(screen.getByText('Elevation (m)')).toBeVisible();
+      expect(screen.queryByText('Distance (km)')).not.toBeInTheDocument();
+      expect(screen.queryByText('Elevation (m)')).not.toBeInTheDocument();
     },
   );
 
-  it('reports the source point and tooltip on hover, then clears it on leave', async () => {
+  it('reports the source point and tooltip on hover, focuses it on click, then clears hover on leave', async () => {
     const onActivePointChange = vi.fn();
+    const onPointClick = vi.fn();
     observedWidth = 420;
-    renderElevationProfileChart(onActivePointChange);
+    renderElevationProfileChart({ onActivePointChange, onPointClick });
 
     const image = screen.getByRole('img', {
       name: 'Elevation profile from 1000 to 1120 metres',
@@ -122,6 +135,12 @@ describe('ElevationProfileChart', () => {
     expect(await screen.findByText('Elevation 1120 m')).toBeVisible();
     await waitFor(() => {
       expect(onActivePointChange).toHaveBeenLastCalledWith(profile.points[1]);
+    });
+
+    fireEvent.click(chartSurface, { clientX: 236, clientY: 80 });
+
+    await waitFor(() => {
+      expect(onPointClick).toHaveBeenLastCalledWith(profile.points[1]);
     });
 
     fireEvent.mouseLeave(chartSurface);

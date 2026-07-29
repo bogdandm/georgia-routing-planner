@@ -15,7 +15,7 @@ import { mapLayerIds, mapSourceIds } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
-import { MiddleMouseCameraControl } from '@/presentation/map/MiddleMouseCameraControl';
+import { CameraOrbitControl } from '@/presentation/map/CameraOrbitControl';
 import {
   MapLibrePointInspector,
   type PointInspectorPopup,
@@ -205,7 +205,7 @@ export class MapLibreFacade implements MapFacade {
   #pointInspectionSequence = 0;
   #pointInspectionAbort: AbortController | null = null;
   readonly #pointInspector: PointInspectorPopup;
-  readonly #middleMouseCamera = new MiddleMouseCameraControl();
+  readonly #cameraOrbit = new CameraOrbitControl();
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -231,8 +231,8 @@ export class MapLibreFacade implements MapFacade {
     }
     this.detach();
     this.#map = map;
-    this.#middleMouseCamera.attach(map.getCanvasContainer(), map);
-    this.#middleMouseCamera.setEnabled(this.#snapshot.terrainMode === 'terrain');
+    this.#cameraOrbit.attach(map.getCanvasContainer(), map);
+    this.#cameraOrbit.setEnabled(this.#snapshot.terrainMode === 'terrain');
     this.#pointInspector.attach(map);
     map.on('style.load', this.handleStyleLoad);
     map.on('load', this.handleLoad);
@@ -1116,7 +1116,7 @@ export class MapLibreFacade implements MapFacade {
 
   private updateSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.#snapshot = { ...this.#snapshot, ...changed };
-    this.#middleMouseCamera.setEnabled(this.#snapshot.terrainMode === 'terrain');
+    this.#cameraOrbit.setEnabled(this.#snapshot.terrainMode === 'terrain');
     this.snapshotStore?.update(this.#snapshot);
     for (const listener of this.#listeners) {
       listener();
@@ -1148,7 +1148,7 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
-    this.#middleMouseCamera.detach();
+    this.#cameraOrbit.detach();
     this.layerController?.detach(map);
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();

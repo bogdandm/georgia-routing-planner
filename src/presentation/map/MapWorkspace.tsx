@@ -584,7 +584,7 @@ export function MapWorkspace({
             mapStyle={mapStyle}
             maxPitch={75}
             onContextMenu={handleContextMenu}
-            boxZoom
+            boxZoom={false}
             doubleClickZoom
             dragPan
             dragRotate={false}

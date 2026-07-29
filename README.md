@@ -182,9 +182,10 @@ After `pnpm dev`, use current stable desktop Chrome to:
 
 1. Confirm the map reaches ready state and OpenFreeMap/OpenMapTiles/OSM attribution is
    visible and keyboard reachable.
-2. Pan, wheel/double-click zoom, use restrained middle-drag orbit in 3D, and use the
-   native keyboard commands; reset with the compass, reload, and confirm the settled
-   camera and 3D mode restore.
+2. Pan with an ordinary left drag; wheel/double-click zoom; use restrained middle-drag
+   and Shift+left-drag orbit in 3D; and use the native keyboard commands. Confirm
+   Shift+left-drag does not show a zoom rectangle, then reset with the compass, reload,
+   and confirm the settled camera and 3D mode restore.
 3. Toggle 3D on and off, confirming the map is not replaced, the camera intent is
    preserved, 2D returns north-up, and terrain attribution is visible while 3D is
    active.

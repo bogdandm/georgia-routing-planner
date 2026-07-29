@@ -337,19 +337,20 @@ imagery starts empty unless an explicit share URL requests a scene.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.
 
-Map interaction keeps MapLibre's camera behavior while adapting the desktop orbit
-gesture to the middle mouse button: left drag pans, the wheel and double-click zoom,
-arrow keys pan, `+`/`-` zoom, and Shift+arrow keys rotate or pitch after the canvas
-receives focus. Middle drag is disabled in flat 2D. In 3D it rotates and pitches at a
-restrained sensitivity around the terrain point beneath the initial press; each pointer
-update is one zero-duration MapLibre camera command with that geographic `around`
-anchor. A small blue-ring MapLibre marker identifies that pivot only while the middle
-button remains pressed; it follows terrain and disappears when covered, released, or
-returned to 2D. The 3D camera can pitch down to 75 degrees. Right drag is disabled in
-both modes, while right click continues to open the map's contextual actions. MapLibre
-retains projection, terrain anchoring, camera limits, movement events, and the native
-compass reset. The explicit 2D command returns pitch to zero and bearing to north, while
-3D restores the last useful terrain pitch. Settled results continue through the existing
+Map interaction keeps MapLibre's camera behavior while adapting desktop orbit gestures
+to middle drag and Shift+left drag: ordinary left drag pans, the wheel and double-click
+zoom, arrow keys pan, `+`/`-` zoom, and Shift+arrow keys rotate or pitch after the
+canvas receives focus. Box zoom is unavailable. Both orbit gestures are consumed without
+camera movement in flat 2D. In 3D either rotates and pitches at a restrained sensitivity
+around the terrain point beneath the initial press; each pointer update is one
+zero-duration MapLibre camera command with that geographic `around` anchor. A small
+blue-ring MapLibre marker identifies that shared pivot only while the initiating button
+remains pressed; it follows terrain and disappears when covered, released, or returned
+to 2D. The 3D camera can pitch down to 75 degrees. Right drag is disabled in both modes,
+while right click continues to open the map's contextual actions. MapLibre retains
+projection, terrain anchoring, camera limits, movement events, and the native compass
+reset. The explicit 2D command returns pitch to zero and bearing to north, while 3D
+restores the last useful terrain pitch. Settled results continue through the existing
 map-view persistence queue.
 
 ## Hiking basemap

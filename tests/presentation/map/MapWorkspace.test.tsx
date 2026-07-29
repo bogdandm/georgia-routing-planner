@@ -18,8 +18,18 @@ import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 
 vi.mock('react-map-gl/maplibre', () => ({
-  default: ({ dragRotate }: { readonly dragRotate?: boolean }) => (
-    <div data-drag-rotate={String(dragRotate)} data-testid="native-map" />
+  default: ({
+    boxZoom,
+    dragRotate,
+  }: {
+    readonly boxZoom?: boolean;
+    readonly dragRotate?: boolean;
+  }) => (
+    <div
+      data-box-zoom={String(boxZoom)}
+      data-drag-rotate={String(dragRotate)}
+      data-testid="native-map"
+    />
   ),
   GeolocateControl: () => null,
   NavigationControl: () => null,
@@ -391,7 +401,7 @@ describe('MapWorkspace', () => {
     );
   });
 
-  it('disables right-button camera drag in both map modes', async () => {
+  it('disables native box zoom and right-button camera drag in both map modes', async () => {
     const facade = new FakeMapFacade();
     render(
       <RuntimeServicesProvider services={createTestServices()}>
@@ -400,11 +410,13 @@ describe('MapWorkspace', () => {
     );
 
     const map = await screen.findByTestId('native-map');
+    expect(map).toHaveAttribute('data-box-zoom', 'false');
     expect(map).toHaveAttribute('data-drag-rotate', 'false');
 
     act(() => {
       facade.setSnapshot({ terrainMode: 'terrain' });
     });
+    expect(map).toHaveAttribute('data-box-zoom', 'false');
     expect(map).toHaveAttribute('data-drag-rotate', 'false');
   });
 

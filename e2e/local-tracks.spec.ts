@@ -282,6 +282,7 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   page,
 }) => {
   test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('?developer=1#layers');
   const workspace = page.getByTestId('map-workspace');
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
@@ -344,9 +345,9 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   });
 
   await page.reload();
-  await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to tracks' }).click();
+  await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
   await page.getByRole('button', { name: /^sample-1mb/u }).click();
   const selectedDetails = page.getByRole('complementary', {
     name: 'Track details',

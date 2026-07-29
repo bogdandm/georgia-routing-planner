@@ -137,12 +137,13 @@ calculation, persistence, and export are unavailable.
 ### Satellite
 
 Satellite uses a compact `Point | <coordinates>` search-area selector. Point uses the
-submitted viewport center; Marker becomes available when a saved marker can supply the
-search target. The catalog returns only scenes whose footprint intersects that immutable
-point, while the full submitted viewport is retained for client-side coverage. The
-sidebar shows a read-only acquisition calendar, an L2A scene-cloud slider, and the
-latest-images action. Users do not construct a date range. L1C is not exposed in the
-current MVP UI.
+submitted viewport center. Choosing **Search satellite images** from the map context
+menu sets a read-only Custom point as the search center until the map moves or the user
+chooses Point. Marker remains unavailable until a saved marker can supply the search
+target. The catalog returns only scenes whose footprint intersects that immutable point,
+while the full submitted viewport is retained for client-side coverage. The sidebar
+shows a read-only acquisition calendar, an L2A scene-cloud slider, and the latest-images
+action. Users do not construct a date range. L1C is not exposed in the current MVP UI.
 
 Results live in an adjacent right pane and compare acquisition date, platform, product
 level, cloud cover, and coverage. Cards within one acquisition day sort by acquisition

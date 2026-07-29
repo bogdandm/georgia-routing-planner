@@ -1703,8 +1703,7 @@ export function SatelliteBrowser({
               <Select
                 labelId="satellite-search-area-label"
                 label="Search area source"
-                displayEmpty
-                value={searchAreaSource === 'custom' ? '' : searchAreaSource}
+                value={searchAreaSource}
                 onChange={changeSearchAreaSource}
                 renderValue={() => (
                   <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
@@ -1719,6 +1718,11 @@ export function SatelliteBrowser({
                 )}
               >
                 <MenuItem value="viewport">Point</MenuItem>
+                {searchAreaSource === 'custom' ? (
+                  <MenuItem value="custom" disabled>
+                    Custom
+                  </MenuItem>
+                ) : null}
                 <MenuItem value="marker" disabled>
                   Marker
                 </MenuItem>

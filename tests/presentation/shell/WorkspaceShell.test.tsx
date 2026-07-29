@@ -716,7 +716,10 @@ describe('WorkspaceShell', () => {
     expect(searchAreaSource).toHaveTextContent('42.1000, 43.4000');
 
     await user.click(searchAreaSource);
-    expect(screen.queryByRole('option', { name: 'Custom' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Custom' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(screen.getByRole('option', { name: 'Marker' })).toHaveAttribute(
       'aria-disabled',
       'true',

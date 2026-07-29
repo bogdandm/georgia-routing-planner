@@ -373,7 +373,13 @@ is needed.
 
 ### Final handoff format
 
-Every completed-workstream report must present these fields together and in this order:
+Every completed-workstream report must begin with a concise `Completed work:` account in
+plain text. It MUST state what changed and explicitly confirm how the maintainer's
+requested edits were incorporated. If any requested edit was not applied, it MUST name
+that edit and the concrete reason. This account comes before the fields below.
+
+Every completed-workstream report must then present these fields together and in this
+order:
 
 - `PR link:` the clickable pull-request URL.
 - `Branch:` the exact branch name.
@@ -388,9 +394,9 @@ Every completed-workstream report must present these fields together and in this
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
 Replace the `Test path:` placeholder with the real path; do not start the server,
-browser, or E2E. The final response contains only these fields, with blockers inside
-`Verification:` or `Status:` and no preamble, headings, todos, reminders, or trailing
-content.
+browser, or E2E. The final response contains only the `Completed work:` account and
+these fields, with blockers inside `Verification:` or `Status:` and no additional
+preamble, headings, todos, reminders, or trailing content.
 
 ### Pull request title and description
 

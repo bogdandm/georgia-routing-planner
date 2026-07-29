@@ -8,6 +8,10 @@ conflicting or interdependent mutations, and adaptive investigations where each 
 may change the next step sequential. Do not split otherwise batchable inspections across
 outer tool calls.
 
+## Language policy
+
+Write chat responses in the language used by the user. Write plans in English.
+
 ## Scope
 
 These instructions apply to the entire Georgia Routing Planner repository.

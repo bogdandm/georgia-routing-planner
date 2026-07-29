@@ -32,7 +32,11 @@ import {
   type TerrainControlState,
 } from '@/presentation/map/TerrainModeControl';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
-import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
+import {
+  defaultGeorgiaCamera,
+  type MapCamera,
+  type MapFitPadding,
+} from '@/presentation/map/mapTypes';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   consumeMapFitBoundsCommand,
@@ -54,6 +58,7 @@ interface MapWorkspaceProps {
   readonly mapCanvas?: ReactNode | ((initialCamera: MapCamera) => ReactNode);
   readonly cameraRestoreTimeoutMs?: number;
   readonly terrainRetryDelaysMs?: readonly number[];
+  readonly getNavigationPadding?: () => MapFitPadding | undefined;
 }
 
 const unavailableMapStyle: StyleSpecification = {
@@ -108,6 +113,7 @@ export function MapWorkspace({
   mapCanvas,
   cameraRestoreTimeoutMs: restoreTimeoutMs = cameraRestoreTimeoutMs,
   terrainRetryDelaysMs: retryDelaysMs = terrainRetryDelaysMs,
+  getNavigationPadding,
 }: MapWorkspaceProps) {
   const {
     logger,
@@ -236,27 +242,24 @@ export function MapWorkspace({
   useEffect(() => {
     if (navigationCommand === null) return;
     try {
-      facade.navigateTo(navigationCommand.target);
+      facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
     } finally {
       consumeMapNavigationCommand(navigationCommand.id);
     }
-  }, [facade, navigationCommand]);
+  }, [facade, getNavigationPadding, navigationCommand]);
   useEffect(() => {
     if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
     try {
-      if (fitBoundsCommand.padding === undefined) {
+      const padding = fitBoundsCommand.padding ?? getNavigationPadding?.();
+      if (padding === undefined) {
         facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
       } else {
-        facade.fitBounds(
-          fitBoundsCommand.bounds,
-          fitBoundsCommand.maxZoom,
-          fitBoundsCommand.padding,
-        );
+        facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom, padding);
       }
     } finally {
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
-  }, [facade, fitBoundsCommand, snapshot.lifecycle]);
+  }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
     return createHikingMapStyle(mapProviderConfiguration.value);

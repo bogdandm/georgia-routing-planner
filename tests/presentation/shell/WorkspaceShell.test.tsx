@@ -35,6 +35,34 @@ import { createTestServices } from '@test/helpers/createTestServices';
 
 let services: RuntimeServices;
 
+class TestResizeObserver implements ResizeObserver {
+  private observedTarget: Element | null = null;
+
+  constructor(private readonly callback: ResizeObserverCallback) {}
+
+  observe(target: Element): void {
+    this.observedTarget = target;
+    const entry = {
+      target,
+      contentRect: new DOMRect(0, 0, 420, 264),
+      borderBoxSize: [],
+      contentBoxSize: [],
+      devicePixelContentBoxSize: [],
+    } satisfies ResizeObserverEntry;
+    this.callback([entry], this);
+  }
+
+  unobserve(target: Element): void {
+    if (this.observedTarget === target) {
+      this.observedTarget = null;
+    }
+  }
+
+  disconnect(): void {
+    this.observedTarget = null;
+  }
+}
+
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
   resetMapLayerStore();
@@ -56,6 +84,8 @@ beforeEach(async () => {
 afterEach(async () => {
   services.database.close();
   await services.database.delete();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function renderWorkspaceShell() {
@@ -369,6 +399,10 @@ describe('WorkspaceShell', () => {
     });
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 0, 420, 264),
+    );
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     if (input === null) return;
@@ -381,6 +415,24 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     const details = screen.getByRole('complementary', { name: 'Track details' });
+    const elevationProfile = within(details).getByRole('img', {
+      name: 'Elevation profile from 1000 to 1120 metres',
+    });
+    const chartSurface = elevationProfile.querySelector('svg');
+    if (chartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+    fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
+    expect(await screen.findByText('Elevation 1120 m')).toBeVisible();
+    fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
+    await waitFor(() => {
+      expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
+        latitude: 42.01,
+        longitude: 44.01,
+        zoom: 13,
+      });
+    });
     const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
     expect(elevationGain).toBeVisible();
     const elevationGainIcon = elevationGain.querySelector('svg');
@@ -399,10 +451,11 @@ describe('WorkspaceShell', () => {
     expect(
       discard.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
+    const fitBoundsCommand = mapInteractionStore.getState().fitBoundsCommand;
+    expect(fitBoundsCommand).toMatchObject({
       bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
-      padding: { top: 56, right: 56, bottom: 56, left: 840 },
     });
+    expect(fitBoundsCommand?.padding).toBeUndefined();
     const leaveEvent = new Event('beforeunload', { cancelable: true });
     expect(window.dispatchEvent(leaveEvent)).toBe(false);
 
@@ -441,8 +494,11 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Use relief elevation')).not.toBeInTheDocument();
     expect(screen.queryByText('Source file')).not.toBeInTheDocument();
-    expect(within(details).getByText('Distance (km)')).toBeVisible();
-    expect(within(details).getByText('Elevation (m)')).toBeVisible();
+    expect(
+      within(details).getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      }),
+    ).toBeVisible();
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     await user.click(screen.getByRole('menuitem', { name: 'Rename' }));

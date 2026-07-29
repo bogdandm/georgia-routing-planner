@@ -36,4 +36,15 @@ describe('calculateElevationProfile', () => {
 
     expect(profile?.points[1]?.distanceMeters).toBe(profile?.points[2]?.distanceMeters);
   });
+
+  it('returns null when fewer than two points have elevations', () => {
+    const profile = calculateElevationProfile([
+      [
+        { coordinate: [44, 42] as const, elevationMeters: 100 },
+        { coordinate: [44.001, 42] as const },
+      ],
+    ]);
+
+    expect(profile).toBeNull();
+  });
 });

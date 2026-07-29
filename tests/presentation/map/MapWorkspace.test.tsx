@@ -227,6 +227,48 @@ describe('MapWorkspace', () => {
       { latitude: 41.7, longitude: 44.8, zoom: 14 },
     ]);
   });
+
+  it('applies visible-area padding to point navigation and unpadded bounds', async () => {
+    const facade = new FakeMapFacade();
+    const getNavigationPadding = vi.fn(() => ({
+      top: 56,
+      right: 56,
+      bottom: 56,
+      left: 536,
+    }));
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Visible map command canvas</div>}
+          getNavigationPadding={getNavigationPadding}
+        />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Visible map command canvas');
+
+    act(() => {
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapFitBounds({ west: 43.1, south: 41.6, east: 44.2, north: 42.4 }, 15);
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+
+    expect(facade.navigationRequests).toEqual([
+      { latitude: 41.7, longitude: 44.8, zoom: 13 },
+    ]);
+    expect(facade.navigationPaddingRequests).toEqual([
+      { top: 56, right: 56, bottom: 56, left: 536 },
+    ]);
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests).toEqual([
+        {
+          bounds: { west: 43.1, south: 41.6, east: 44.2, north: 42.4 },
+          maxZoom: 15,
+          padding: { top: 56, right: 56, bottom: 56, left: 536 },
+        },
+      ]);
+    });
+  });
   it('holds fit-to-track commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
     render(

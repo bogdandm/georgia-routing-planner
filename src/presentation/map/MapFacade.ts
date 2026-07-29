@@ -23,11 +23,14 @@ export interface MapFacade {
   closePointInspection(): void;
 
   /** Moves the native camera without exposing MapLibre to callers. */
-  navigateTo(target: {
-    readonly longitude: number;
-    readonly latitude: number;
-    readonly zoom?: number;
-  }): void;
+  navigateTo(
+    target: {
+      readonly longitude: number;
+      readonly latitude: number;
+      readonly zoom?: number;
+    },
+    visibleAreaPadding?: MapFitPadding,
+  ): void;
 
   /** Fits a serializable geographic area without exposing native MapLibre bounds. */
   fitBounds(bounds: MapViewportBounds, maxZoom: number, padding?: MapFitPadding): void;

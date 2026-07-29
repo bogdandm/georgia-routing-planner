@@ -1,3 +1,4 @@
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -82,7 +83,9 @@ import {
 
 interface SatelliteBrowserProps {
   readonly active?: boolean;
+  readonly auxiliaryOverlay: boolean;
   readonly fallbackCoordinates: string;
+  readonly onPaneOpenChange: (open: boolean) => void;
 }
 
 type SearchState =
@@ -928,6 +931,7 @@ function SatelliteResultsPane({
   onSelect,
   searchState,
   scrollRequestId,
+  overlay,
   selectedSceneId,
   timeZone,
   visibleCount,
@@ -944,6 +948,7 @@ function SatelliteResultsPane({
   readonly onLoadMore: () => void;
   readonly onSelect: (match: SatelliteSceneMatch) => void;
   readonly searchState: SearchState;
+  readonly overlay: boolean;
   readonly scrollRequestId: number;
   readonly selectedSceneId: string | null;
   readonly timeZone: string;
@@ -1002,13 +1007,14 @@ function SatelliteResultsPane({
       component="aside"
       aria-label="Sentinel imagery results"
       sx={{
-        width: { xs: 404, xl: 440 },
+        width: overlay ? '100%' : { xs: 404, xl: 440 },
         height: '100%',
         minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
         bgcolor: 'background.paper',
-        borderRight: 1,
+        borderRight: overlay ? 0 : 1,
         borderColor: 'divider',
       }}
     >
@@ -1022,6 +1028,16 @@ function SatelliteResultsPane({
           borderColor: 'divider',
         }}
       >
+        {overlay ? (
+          <IconButton
+            size="small"
+            aria-label="Back to satellite search"
+            onClick={onClose}
+            sx={{ mr: 1 }}
+          >
+            <ArrowBackOutlinedIcon fontSize="small" />
+          </IconButton>
+        ) : null}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             component="h2"
@@ -1037,9 +1053,11 @@ function SatelliteResultsPane({
               : `${String(result.sceneCount)} image${result.sceneCount === 1 ? '' : 's'} · ${String(result.acquisitionDateCount)} acquisition day${result.acquisitionDateCount === 1 ? '' : 's'}`}
           </Typography>
         </Box>
-        <IconButton size="small" aria-label="Close imagery results" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
+        {!overlay ? (
+          <IconButton size="small" aria-label="Close imagery results" onClick={onClose}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        ) : null}
       </Stack>
       <Box ref={scrollViewport} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
         {searchState.status === 'loading' ? (
@@ -1116,7 +1134,9 @@ function SatelliteResultsPane({
 
 export function SatelliteBrowser({
   active = true,
+  auxiliaryOverlay,
   fallbackCoordinates,
+  onPaneOpenChange,
 }: SatelliteBrowserProps) {
   const {
     clock,
@@ -1286,6 +1306,9 @@ export function SatelliteBrowser({
   const paneOpen =
     resultsOpen ||
     (showingRestoredScene && dismissedRestoredSceneKey !== restoredSceneKey);
+  useEffect(() => {
+    onPaneOpenChange(active && paneOpen);
+  }, [active, onPaneOpenChange, paneOpen]);
   const paneCoordinates = showingRestoredScene ? coordinates : submittedCoordinates;
   const paneTimeZone =
     showingRestoredScene && viewport !== null
@@ -1772,6 +1795,7 @@ export function SatelliteBrowser({
               appliedImagery={appliedImagery}
               coordinates={paneCoordinates}
               canLoadOlder={nextArchiveMonth !== null}
+              overlay={auxiliaryOverlay}
               loadingMore={loadingMore}
               loadMoreError={loadMoreError}
               onAutoLoadMore={() => {

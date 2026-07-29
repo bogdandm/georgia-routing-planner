@@ -20,19 +20,29 @@ longer describes the reviewed interface.
   “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
   item, or independent planning destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
-- **Detail pane:** selected track and imagery details may open adjacent to the
-  contextual sidebar without replacing or remounting the map.
+- **Detail pane:** selected track and imagery details are adjacent to the contextual
+  sidebar at widths of 1900 CSS pixels and above, and overlay that sidebar below 1900
+  pixels without replacing or remounting the map.
 - **Persistent map:** the map remains the primary canvas across rail changes, detail
   selection, dialogs, and developer tools.
 
+## Smartphone workspace
+
+Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals the
+full-height feature rail and contextual tools without remounting the map; **Show map**
+and the GR logo return to the same map. Track details and imagery results replace those
+tools as full-height panes, and their Back actions restore the selected tool surface.
+This transient presentation state is not stored as a navigation preference or URL entry.
+
 ## Desktop workspace
 
-The Material UI shell is a map-first desktop workbench. The map always fills the
-viewport; the rail, contextual sidebar, and detail pane form one floating surface above
-it. Changing sections or opening a pane therefore never changes the map viewport. Native
-map navigation remains on the right, and the 2D/3D selector sits directly below it. The
-shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
-derived surface, border, status, and tag colors.
+At widths from 900 CSS pixels through 1899 pixels, a selected track or imagery result
+overlays only the contextual sidebar while the rail stays interactive. At 1900 CSS
+pixels and above, the rail, contextual sidebar, and detail pane form one floating
+surface above the full-viewport map. Changing sections or opening a pane never changes
+the map viewport. Native map navigation remains on the right, and the 2D/3D selector
+sits directly below it. The shell uses the shared sky-blue, blue-green, deep-space,
+amber, and orange palette with derived surface, border, status, and tag colors.
 
 The current shell exposes Tracks, Satellite, and Layers as interactive rail
 destinations. Markers remains visible but disabled until that feature surface has
@@ -118,10 +128,10 @@ grid, axis tooltip, and a map marker synchronized to the highlighted chart point
 profile is calculated from the retained source points and does not repeat the
 ascent/descent metrics already shown in the stats grid.
 
-At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
-persistent import region and **Back to tracks** restores the prior search/list state.
-Wider viewports retain the adjacent detail pane. The same hover/focus row actions and
-two-stage inline deletion behavior apply at either width.
+Below 1900 CSS pixels, an open track detail pane overlays Tracks tools and **Back to
+tracks** restores the prior import, search, and list state. At 1900 CSS pixels and
+above, the track pane remains adjacent and uses **Close track**. The same hover/focus
+row actions and two-stage inline deletion behavior apply at either width.
 
 ### Create GPX
 

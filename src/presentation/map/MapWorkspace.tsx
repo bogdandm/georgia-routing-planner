@@ -160,6 +160,7 @@ export function MapWorkspace({
   const developerMode = useUiStore((state) => state.developerMode);
   const mapDebugOptions = useUiStore((state) => state.mapDebugOptions);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const cameraPersistence = useMemo(
     () =>
@@ -553,6 +554,7 @@ export function MapWorkspace({
     if (contextMenu === null) return;
     requestSatelliteSearch(contextMenu);
     setActiveTab('satellite');
+    setMobileWorkspaceOpen(true);
     setNavigationCollapsed(false);
     const nextUrl = new URL(window.location.href);
     nextUrl.hash = workspaceHashForTab('satellite');

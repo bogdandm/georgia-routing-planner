@@ -1,6 +1,7 @@
 import AddIcon from '@mui/icons-material/Add';
+import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
-import { Box, Button, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -13,6 +14,10 @@ import { TracksPanel } from '@/presentation/tracks/TracksWorkspace';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
+  readonly auxiliaryOverlay: boolean;
+  readonly fullWidth: boolean;
+  readonly onSatellitePaneOpenChange: (open: boolean) => void;
+  readonly onShowMap: () => void;
 }
 
 interface SidebarDefinition {
@@ -84,7 +89,13 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
 };
 
-export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({
+  activeTab,
+  auxiliaryOverlay,
+  fullWidth,
+  onSatellitePaneOpenChange,
+  onShowMap,
+}: WorkspaceSidebarProps) {
   const { mapDiagnostics } = useRuntimeServices();
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
@@ -109,8 +120,8 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
       aria-label={`${definition.title} tools`}
       sx={{
         position: 'relative',
-        zIndex: 3,
-        width: { xs: 420, xl: 464 },
+        width: fullWidth ? 'auto' : { xs: 420, xl: 464 },
+        flexGrow: fullWidth ? 1 : 0,
         flexShrink: 0,
         minHeight: 0,
         display: 'flex',
@@ -140,6 +151,11 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
           </Typography>
         </Box>
         {definition.actions}
+        {fullWidth ? (
+          <IconButton aria-label="Show map" onClick={onShowMap}>
+            <MapOutlinedIcon />
+          </IconButton>
+        ) : null}
       </Stack>
       <Box
         sx={{
@@ -160,7 +176,9 @@ export function WorkspaceSidebar({ activeTab }: WorkspaceSidebarProps) {
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
           <SatelliteBrowser
             active={activeTab === 'satellite'}
+            auxiliaryOverlay={auxiliaryOverlay}
             fallbackCoordinates={searchAreaCoordinates}
+            onPaneOpenChange={onSatellitePaneOpenChange}
           />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>

@@ -323,7 +323,10 @@ export class MapLibreFacade implements MapFacade {
     const padding = { top: 0, right: 0, bottom: 0, left: 0 };
     const options = {
       center,
-      zoom: target.zoom ?? Math.max(map.getZoom(), 13),
+      zoom:
+        this.#snapshot.terrainMode === 'terrain'
+          ? 15
+          : (target.zoom ?? Math.max(map.getZoom(), 13)),
       duration: 650,
       essential: true,
       padding,

@@ -312,6 +312,22 @@ describe('MapLibreFacade', () => {
     });
   });
 
+  it('uses zoom 15 for point navigation while terrain is active', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem' };
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('style.load');
+
+    facade.navigateTo({ longitude: 44.8, latitude: 41.7, zoom: 13 });
+
+    expect(nativeMap.easeCalls.at(-1)).toMatchObject({
+      center: [44.8, 41.7],
+      zoom: 15,
+    });
+  });
+
   it('preserves subscribers while the native ref detaches and reattaches', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

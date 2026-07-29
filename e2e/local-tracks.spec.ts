@@ -210,6 +210,29 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
+test('previews a GPX track from the open smartphone workspace without crashing', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 400, height: 1218 });
+  await page.goto('#tracks');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Browse track file' }).click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles(trackFixturePath);
+
+  await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'The application encountered an error' }),
+  ).toHaveCount(0);
+});
+
 test('clears saved-track hovers after favorite sorting', async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 1000 });
   await page.goto('#tracks');

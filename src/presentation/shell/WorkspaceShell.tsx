@@ -54,9 +54,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
   const [controlledFailure, setControlledFailure] = useState(false);
+  const smartphoneViewport = useMediaQuery(smartphoneViewportQuery);
+  const auxiliaryOverlayViewport = useMediaQuery(auxiliaryOverlayViewportQuery);
   const workspaceShellRef = useRef<HTMLDivElement>(null);
   const navigationRef = useRef<HTMLDivElement>(null);
   const getNavigationPadding = useCallback((): MapFitPadding | undefined => {
+    if (smartphoneViewport) return undefined;
     const workspaceShell = workspaceShellRef.current;
     const navigation = navigationRef.current;
     if (workspaceShell === null || navigation === null) return undefined;
@@ -72,14 +75,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     );
     if (left === 0) return undefined;
     return { top, right: mapCameraMargin, bottom: top, left };
-  }, []);
+  }, [smartphoneViewport]);
   const renderedMapSurface = mapSurface ?? (
     <MapWorkspace getNavigationPadding={getNavigationPadding} />
   );
   const [shareOpen, setShareOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
-  const smartphoneViewport = useMediaQuery(smartphoneViewportQuery);
-  const auxiliaryOverlayViewport = useMediaQuery(auxiliaryOverlayViewportQuery);
   const { active: activeTrack } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();

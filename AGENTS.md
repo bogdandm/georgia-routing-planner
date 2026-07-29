@@ -379,9 +379,10 @@ Every completed-workstream report must present these fields together and in this
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` for production changes,
-  `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`;
-  otherwise `Not applicable` with the reason.
+- `Test path:` for every code change, always include
+  `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`,
+  even when live-server review was not requested; otherwise `Not applicable` only for
+  documentation-only or non-code changes, with the reason.
 - `Verification:` every command run and its result, plus checks skipped as
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.

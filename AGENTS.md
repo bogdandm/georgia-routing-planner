@@ -103,6 +103,10 @@ against the main checkout when starting a workstream are read-only inspection, f
 the intended base, and `git worktree list` or `git worktree add`. Run them with
 `git -C <main-root>` so the target is explicit.
 
+For filesystem tools without a `cwd` parameter, including `read`, `edit`, and `write`,
+always target files in a linked worktree with absolute paths rooted at the verified
+worktree path. Never use a bare or relative path for a mutation through those tools.
+
 Before modifying files:
 
 1. Run `git status --short --branch` and identify the current branch and existing user

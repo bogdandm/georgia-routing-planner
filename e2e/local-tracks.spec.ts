@@ -427,7 +427,8 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   await page.getByRole('button', { name: 'Save' }).click();
   const savedDetails = page.getByLabel('Track details');
   const trackDetailsHeading = savedDetails.getByRole('heading', {
-    name: 'Track details',
+    name: 'Mon 13 Jul 2026',
+    level: 2,
   });
   const closeTrack = savedDetails.getByRole('button', { name: 'Close track' });
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();

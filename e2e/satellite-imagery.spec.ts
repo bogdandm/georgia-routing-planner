@@ -11,6 +11,7 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
   page,
 }) => {
   test.setTimeout(30_000);
+  await page.setViewportSize({ width: 1900, height: 900 });
   const rendererRequests: string[] = [];
   const cogRequests: string[] = [];
   page.on('request', (request) => {
@@ -85,6 +86,7 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
 }) => {
   test.setTimeout(120_000);
   const rendererRequests: string[] = [];
+  await page.setViewportSize({ width: 1900, height: 900 });
   page.on('request', (request) => {
     if (request.url().startsWith('https://titiler.xyz/stac/tiles/')) {
       rendererRequests.push(request.url());

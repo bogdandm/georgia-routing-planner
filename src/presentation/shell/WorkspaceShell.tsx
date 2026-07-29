@@ -211,7 +211,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             : desktopNavigationCollapsed
               ? 64
               : 'calc(100dvh - 12px)',
-          zIndex: 4,
+          zIndex: smartphoneViewport && !mobileWorkspaceOpen ? 3 : 4,
           display: 'flex',
           gap: 0,
           bgcolor: smartphoneViewport ? 'background.paper' : 'transparent',
@@ -223,6 +223,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           visibility: smartphoneViewport && !mobileWorkspaceOpen ? 'hidden' : 'visible',
           opacity: smartphoneViewport && !mobileWorkspaceOpen ? 0 : 1,
           pointerEvents: smartphoneViewport && !mobileWorkspaceOpen ? 'none' : 'auto',
+          ...(smartphoneViewport && !mobileWorkspaceOpen
+            ? {
+                '& *': {
+                  visibility: 'hidden',
+                  pointerEvents: 'none',
+                },
+              }
+            : {}),
           transition: (theme) =>
             theme.transitions.create(['height', 'filter', 'opacity'], {
               duration: theme.transitions.duration.short,
@@ -265,7 +273,11 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           sx={{
             minWidth: 0,
             width: smartphoneViewport ? 'auto' : { xs: 420, xl: 464 },
-            maxWidth: desktopNavigationCollapsed ? 0 : { xs: 420, xl: 464 },
+            maxWidth: desktopNavigationCollapsed
+              ? 0
+              : smartphoneViewport
+                ? 'none'
+                : { xs: 420, xl: 464 },
             height: '100%',
             flex: smartphoneViewport ? 1 : '0 0 auto',
             opacity: desktopNavigationCollapsed ? 0 : 1,

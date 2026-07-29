@@ -120,7 +120,8 @@ export function WorkspaceSidebar({
       aria-label={`${definition.title} tools`}
       sx={{
         position: 'relative',
-        width: fullWidth ? 'auto' : { xs: 420, xl: 464 },
+        width: fullWidth ? '100%' : { xs: 420, xl: 464 },
+        height: '100%',
         flexGrow: fullWidth ? 1 : 0,
         flexShrink: 0,
         minHeight: 0,

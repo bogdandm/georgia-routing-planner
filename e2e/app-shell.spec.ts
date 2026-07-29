@@ -92,6 +92,44 @@ test('keeps the full-screen map fixed while navigation changes and collapses', a
   await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
 });
 
+test('opens full-height workspace tools at the reported phone viewport', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 606, height: 1303 });
+  await page.goto('#satellite');
+  const map = page.getByTestId('map-workspace');
+  await expect(map).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  const satelliteTools = page.getByRole('complementary', {
+    name: 'Satellite imagery tools',
+  });
+  await expect(satelliteTools).toBeVisible();
+  const toolsBox = await satelliteTools.boundingBox();
+  expect(toolsBox).not.toBeNull();
+  if (toolsBox !== null) {
+    expect(Math.abs(toolsBox.x - 64)).toBeLessThanOrEqual(1);
+    expect(Math.abs(toolsBox.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(toolsBox.width - 542)).toBeLessThanOrEqual(1);
+    expect(Math.abs(toolsBox.height - 1303)).toBeLessThanOrEqual(1);
+  }
+  await expect(map).not.toBeVisible();
+
+  await page.getByRole('tab', { name: 'Layers' }).click();
+  await expect(page.getByRole('complementary', { name: 'Layers tools' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Tracks' }).click();
+  await expect(page.getByRole('complementary', { name: 'Tracks tools' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Show map' }).click();
+  await expect(map).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open workspace' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+});
+
 test('has no serious accessibility violations in the shell and settings', async ({
   page,
 }) => {

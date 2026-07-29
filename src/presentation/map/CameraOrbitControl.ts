@@ -26,15 +26,16 @@ function createOrbitPivotIndicator() {
 }
 
 /**
- * Provides a restrained 3D-only middle-button orbit around the terrain point beneath
- * the initial press. MapLibre owns projection, terrain anchoring, camera limits, and
- * movement events through one zero-duration `easeTo` per pointer update.
+ * Provides a restrained 3D-only camera orbit around the terrain point beneath the
+ * initial middle-button or Shift+left-button press. MapLibre owns projection, terrain
+ * anchoring, camera limits, and movement events through one zero-duration `easeTo` per
+ * pointer update.
  */
-export class MiddleMouseCameraControl {
+export class CameraOrbitControl {
   #container: HTMLElement | null = null;
   #map: MapLibreMap | null = null;
   #enabled = false;
-  #active = false;
+  #activeButton: 0 | 1 | null = null;
   #orbitAnchor: LngLat | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
 
@@ -70,9 +71,15 @@ export class MiddleMouseCameraControl {
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
-    if (event.button !== 1 || this.#container === null) return;
+    const isOrbitStart = event.button === 1 || (event.button === 0 && event.shiftKey);
+    if (!isOrbitStart || this.#container === null) return;
+
     event.preventDefault();
     event.stopImmediatePropagation();
+    this.#activeButton = event.button;
+    window.addEventListener('mousemove', this.handleMouseMove, true);
+    window.addEventListener('mouseup', this.handleMouseUp, true);
+
     if (!this.#enabled || this.#map === null) return;
 
     const bounds = this.#container.getBoundingClientRect();
@@ -82,18 +89,17 @@ export class MiddleMouseCameraControl {
     ]);
     this.pivotIndicator.show(this.#map, this.#orbitAnchor);
     this.#lastPointer = { x: event.clientX, y: event.clientY };
-    this.#active = true;
-    window.addEventListener('mousemove', this.handleMouseMove, true);
-    window.addEventListener('mouseup', this.handleMouseUp, true);
   };
 
   private readonly handleMouseMove = (event: MouseEvent): void => {
+    if (this.#activeButton === null) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
     const map = this.#map;
     const anchor = this.#orbitAnchor;
     const previous = this.#lastPointer;
-    if (!this.#active || map === null || anchor === null || previous === null) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    if (map === null || anchor === null || previous === null) return;
 
     const horizontalDelta = event.clientX - previous.x;
     const verticalDelta = event.clientY - previous.y;
@@ -111,18 +117,32 @@ export class MiddleMouseCameraControl {
   };
 
   private readonly handleMouseUp = (event: MouseEvent): void => {
-    if (!this.#active || event.button !== 1) return;
+    if (this.#activeButton !== event.button) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    const suppressClick = this.#activeButton === 0;
     this.finishGesture();
+    if (suppressClick) this.suppressNextClick();
   };
 
   private readonly handleAuxClick = (event: MouseEvent): void => {
     if (event.button === 1) event.preventDefault();
   };
 
+  private suppressNextClick(): void {
+    const handleClick = (event: MouseEvent): void => {
+      event.preventDefault();
+      event.stopPropagation();
+      window.removeEventListener('click', handleClick, true);
+    };
+    window.addEventListener('click', handleClick, true);
+    window.setTimeout(() => {
+      window.removeEventListener('click', handleClick, true);
+    }, 0);
+  }
+
   private finishGesture(): void {
-    this.#active = false;
+    this.#activeButton = null;
     this.#orbitAnchor = null;
     this.#lastPointer = null;
     this.pivotIndicator.hide();

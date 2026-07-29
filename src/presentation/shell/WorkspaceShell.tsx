@@ -6,6 +6,7 @@ import {
   ButtonBase,
   IconButton,
   Paper,
+  Slide,
   Tooltip,
   useMediaQuery,
 } from '@mui/material';
@@ -93,6 +94,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
     string | null
   >(null);
+  const [mobileTrackPanelAnimatingClosed, setMobileTrackPanelAnimatingClosed] =
+    useState(false);
   const { active: activeTrack } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
@@ -252,6 +255,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       </IconButton>
 
       <Paper
+        aria-hidden={!mobileTrackDisclosureOpen}
+        data-testid="mobile-track-disclosure"
         elevation={4}
         sx={{
           position: 'absolute',
@@ -259,7 +264,21 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           right: 12,
           bottom: 'max(12px, env(safe-area-inset-bottom))',
           left: 12,
-          display: mobileTrackDisclosureOpen ? 'block' : 'none',
+          display: smartphoneViewport && activeTrackExists ? 'block' : 'none',
+          visibility: mobileTrackDisclosureOpen ? 'visible' : 'hidden',
+          opacity: mobileTrackDisclosureOpen ? 1 : 0,
+          pointerEvents: mobileTrackDisclosureOpen ? 'auto' : 'none',
+          transform: mobileTrackDisclosureOpen ? 'translateY(0)' : 'translateY(16px)',
+          transition: (theme) =>
+            `${theme.transitions.create(['opacity', 'transform'], {
+              duration: theme.transitions.duration.short,
+            })}, ${theme.transitions.create('visibility', {
+              delay: mobileTrackDisclosureOpen ? 0 : theme.transitions.duration.short,
+              duration: 0,
+            })}`,
+          '@media (prefers-reduced-motion: reduce)': {
+            transitionDuration: '0ms',
+          },
           bgcolor: 'background.paper',
         }}
       >
@@ -407,7 +426,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   ? 'none'
                   : 'auto',
             visibility:
-              smartphoneViewport && !mobileWorkspaceOpen
+              smartphoneViewport &&
+              (!mobileWorkspaceOpen || mobileTrackPanelAnimatingClosed)
                 ? 'hidden'
                 : desktopNavigationCollapsed || (auxiliaryOverlay && auxiliaryOpen)
                   ? 'hidden'
@@ -437,8 +457,16 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   position: 'absolute',
                   inset: 0,
                   zIndex: 6,
-                  display: !mobileWorkspaceOpen || !auxiliaryOpen ? 'none' : 'flex',
-                  pointerEvents: mobileWorkspaceOpen && auxiliaryOpen ? 'auto' : 'none',
+                  display:
+                    mobileWorkspaceOpen &&
+                    (auxiliaryOpen || mobileTrackPanelAnimatingClosed)
+                      ? 'flex'
+                      : 'none',
+                  pointerEvents:
+                    mobileWorkspaceOpen &&
+                    (auxiliaryOpen || mobileTrackPanelAnimatingClosed)
+                      ? 'auto'
+                      : 'none',
                   width: '100%',
                   height: '100%',
                 }
@@ -463,15 +491,39 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   }
           }
         >
-          {trackDetailsOpen ? (
+          {smartphoneViewport && activeTrackOpen ? (
+            <Slide
+              direction="up"
+              in={trackDetailsOpen}
+              mountOnEnter
+              onExited={() => {
+                if (!mobileTrackPanelAnimatingClosed) return;
+                setMobileTrackPanelAnimatingClosed(false);
+                setMobileWorkspaceOpen(false);
+              }}
+              unmountOnExit
+            >
+              <Box
+                data-testid="mobile-track-details-transition"
+                sx={{ display: 'flex', width: '100%', height: '100%', minHeight: 0 }}
+              >
+                <TrackDetailsPane
+                  mode="mobile"
+                  onCollapse={() => {
+                    setMobileTrackPanelAnimatingClosed(true);
+                    setMobileTrackDetailsExpandedKey(null);
+                  }}
+                  onClosed={() => {
+                    setMobileTrackPanelAnimatingClosed(false);
+                    setMobileTrackDetailsExpandedKey(null);
+                    setMobileWorkspaceOpen(false);
+                  }}
+                />
+              </Box>
+            </Slide>
+          ) : !smartphoneViewport && trackDetailsOpen ? (
             <TrackDetailsPane
-              mode={
-                smartphoneViewport
-                  ? 'mobile'
-                  : auxiliaryOverlayViewport
-                    ? 'overlay'
-                    : 'adjacent'
-              }
+              mode={auxiliaryOverlayViewport ? 'overlay' : 'adjacent'}
               onCollapse={() => {
                 setMobileTrackDetailsExpandedKey(null);
                 setMobileWorkspaceOpen(false);

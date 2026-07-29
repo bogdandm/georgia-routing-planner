@@ -210,27 +210,135 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
-test('previews a GPX track from the open smartphone workspace without crashing', async ({
+test('uses a map-first smartphone track disclosure without crashing', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 400, height: 1218 });
   await page.goto('#tracks');
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-    { timeout: 15_000 },
-  );
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
 
   await page.getByRole('button', { name: 'Open workspace' }).click();
+  const importPrompt = page.getByText('Drop GPX, FIT, or KML here');
+  await expect(importPrompt).toBeVisible();
+  const importPromptBox = await importPrompt.boundingBox();
+  expect(importPromptBox?.height).toBeLessThanOrEqual(20);
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Browse track file' }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles(trackFixturePath);
 
+  const disclosure = page.getByRole('button', { name: 'Expand track details' });
+  await expect(disclosure).toBeVisible();
+  const disclosureBox = await disclosure.boundingBox();
+  expect(disclosureBox).not.toBeNull();
+  expect(disclosureBox?.x).toBe(12);
+  expect(disclosureBox?.width).toBe(376);
+  expect(
+    1218 - (disclosureBox?.y ?? 0) - (disclosureBox?.height ?? 0),
+  ).toBeGreaterThanOrEqual(12);
+  await expect(page.getByRole('complementary', { name: 'Track details' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('heading', { name: 'New track' })).toHaveCount(0);
+  await expect(disclosure.getByLabel(/^Distance:/u)).toBeVisible();
+  await expect(disclosure.getByLabel(/^Elevation gain:/u)).toBeVisible();
+  await expect(disclosure.getByLabel(/^Elevation loss:/u)).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 1218 });
+  const narrowStatBoxes = await Promise.all([
+    disclosure.getByLabel(/^Distance:/u).boundingBox(),
+    disclosure.getByLabel(/^Elevation gain:/u).boundingBox(),
+    disclosure.getByLabel(/^Elevation loss:/u).boundingBox(),
+  ]);
+  expect(new Set(narrowStatBoxes.map((box) => Math.round(box?.y ?? -1))).size).toBe(2);
+  await page.setViewportSize({ width: 400, height: 1218 });
+  await expect(disclosure).toBeVisible();
+  const expandedChevronBox = await disclosure.locator('svg').first().boundingBox();
+
+  const disclosureAccessibility = await new AxeBuilder({ page })
+    .include('[aria-label="Expand track details"]')
+    .analyze();
+  expect(
+    disclosureAccessibility.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+
+  await disclosure.click();
+  const details = page.getByRole('complementary', { name: 'Track details' });
   await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
+  await expect(
+    details.getByRole('button', { name: 'Collapse track details' }),
+  ).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Close track' })).toBeVisible();
+  const collapsedChevronBox = await details
+    .getByRole('button', { name: 'Collapse track details' })
+    .locator('svg')
+    .boundingBox();
+  expect(collapsedChevronBox?.x).toBe(expandedChevronBox?.x);
+  expect(collapsedChevronBox?.width).toBe(expandedChevronBox?.width);
+  expect(collapsedChevronBox?.height).toBe(expandedChevronBox?.height);
+
+  const detailsAccessibility = await new AxeBuilder({ page })
+    .include('[aria-label="Track details"]')
+    .analyze();
+  expect(
+    detailsAccessibility.violations.filter((violation) =>
+      ['serious', 'critical'].includes(violation.impact ?? ''),
+    ),
+  ).toEqual([]);
+
+  await details.getByRole('button', { name: 'Collapse track details' }).click();
+  await expect(disclosure).toBeVisible();
+  await expect(details).toHaveCount(0);
   await expect(
     page.getByRole('heading', { name: 'The application encountered an error' }),
   ).toHaveCount(0);
+
+  await disclosure.click();
+  page.once('dialog', (dialog) => {
+    expect(dialog.message()).toBe('Discard this unsaved track?');
+    void dialog.accept();
+  });
+  await page.getByRole('button', { name: 'Close track' }).click();
+  await expect(details).toHaveCount(0);
+  await expect(disclosure).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  const savedChooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Browse track file' }).click();
+  const savedChooser = await savedChooserPromise;
+  await savedChooser.setFiles(trackFixturePath);
+  await disclosure.click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(disclosure).toBeVisible();
+  await disclosure.click();
+  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  const savedTrackName = await details.getByRole('heading', { level: 2 }).textContent();
+  expect(savedTrackName).not.toBeNull();
+  await page.getByRole('button', { name: 'Close track' }).click();
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  await expect(page.getByRole('button', { name: 'Add to favorites' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Delete /u })).toBeVisible();
+  await page
+    .getByRole('list', { name: 'Saved tracks' })
+    .getByText(savedTrackName ?? '', { exact: true })
+    .click();
+  await expect(disclosure).toBeVisible();
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  await page.getByRole('tab', { name: 'Satellite' }).click();
+  await page.getByRole('button', { name: 'Show map' }).click();
+  await page.reload();
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await expect(disclosure).toBeVisible();
+  await disclosure.click();
+  await expect(
+    page.getByRole('complementary', { name: 'Track details' }),
+  ).toBeVisible();
 });
 
 test('clears saved-track hovers after favorite sorting', async ({ page }) => {

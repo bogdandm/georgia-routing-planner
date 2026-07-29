@@ -103,6 +103,77 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
+test('keeps closed smartphone workspace surfaces off the map gesture target', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 400, height: 1218 });
+  await page.goto('#tracks');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await expect(page.locator('.maplibregl-ctrl-attrib')).toHaveCount(0);
+  const canvas = page.locator('.maplibregl-canvas');
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  const center = {
+    x: (canvasBox?.x ?? 0) + (canvasBox?.width ?? 0) / 2,
+    y: (canvasBox?.y ?? 0) + (canvasBox?.height ?? 0) / 2,
+  };
+  await canvas.hover();
+  await page.mouse.wheel(0, -300);
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.longitude ?? null, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .not.toBeNull();
+  const cameraBeforeDrag = await readStoredCamera(page);
+  expect(cameraBeforeDrag).not.toBeNull();
+
+  expect(
+    await page.evaluate(({ x, y }) => {
+      const target = document.elementFromPoint(x, y);
+      if (target === null) return false;
+      return (
+        target.closest('#mobile-workspace') === null &&
+        (target.matches('.maplibregl-canvas') ||
+          target.closest('.maplibregl-map') !== null)
+      );
+    }, center),
+  ).toBe(true);
+
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(center.x + 180, center.y, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.longitude, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .not.toBe(cameraBeforeDrag?.longitude);
+
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  await expect
+    .poll(() =>
+      page
+        .getByRole('navigation')
+        .evaluate((navigation) => getComputedStyle(navigation).borderRadius),
+    )
+    .toBe('0px');
+  await page.getByRole('button', { name: 'Show map' }).click();
+  expect(
+    await page.evaluate(({ x, y }) => {
+      const target = document.elementFromPoint(x, y);
+      if (target === null) return false;
+      return (
+        target.closest('#mobile-workspace') === null &&
+        (target.matches('.maplibregl-canvas') ||
+          target.closest('.maplibregl-map') !== null)
+      );
+    }, center),
+  ).toBe(true);
+});
+
 test('persists a settled 2D position and restarts flat after reload', async ({
   page,
 }) => {

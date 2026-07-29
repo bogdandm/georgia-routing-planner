@@ -7,6 +7,34 @@ test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
 });
 
+test('returns smartphone scene selection to the map', async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 1218 });
+  await page.goto('#satellite');
+  const workspace = page.getByTestId('map-workspace');
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  await page.getByRole('button', { name: 'Search images' }).click();
+  await page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }).click();
+
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready');
+  await expect(page.getByRole('button', { name: 'Open workspace' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await expect(
+    page.getByRole('complementary', { name: 'Sentinel imagery results' }),
+  ).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Open workspace' }).click();
+  await expect(
+    page.getByRole('complementary', { name: 'Sentinel imagery results' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Search images' })).toHaveCount(0);
+});
+
 test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery without retrying', async ({
   page,
 }) => {

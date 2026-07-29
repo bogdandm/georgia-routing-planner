@@ -428,6 +428,11 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
     ).toBeVisible();
+    expect(
+      screen
+        .getByRole('button', { name: 'Show map' })
+        .querySelector('[data-testid="ChevronLeftOutlinedIcon"]'),
+    ).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Show map' }));
 
     expect(screen.getByLabelText('Fake map')).toBe(map);
@@ -440,38 +445,70 @@ describe('WorkspaceShell', () => {
     );
   });
 
-  it('replaces smartphone tools with a track detail pane and returns to the map', async () => {
+  it('returns smartphone track imports to a collapsible map disclosure', async () => {
     mockViewportWidth(899);
     const user = userEvent.setup();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirm = vi.spyOn(window, 'confirm');
     const { container } = renderWorkspaceShell();
     const map = screen.getByLabelText('Fake map');
 
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    expect(getComputedStyle(screen.getByRole('navigation')).borderRadius).toBe('0px');
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     const input = container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     if (input === null) return;
     await user.upload(input, gpxFile());
 
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand track details',
+    });
+    expect(within(disclosure).getByLabelText('Distance: 1.4 km')).toBeVisible();
+    expect(within(disclosure).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+    expect(within(disclosure).getByLabelText('Elevation loss: 0 m')).toBeVisible();
+    expect(screen.getByLabelText('Fake map')).toBe(map);
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(disclosure);
+
     const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });
-    const trackTools = container.querySelector<HTMLElement>(
-      'aside[aria-label="Tracks tools"]',
-    );
-    if (trackTools === null) throw new Error('Tracks tools should remain mounted.');
-    const back = within(details).getByRole('button', { name: 'Back to tracks' });
-    expect(trackTools).not.toContainElement(details);
-    expect(details.firstElementChild).toContainElement(back);
-    expect(details.lastElementChild).not.toContainElement(back);
-    expect(screen.getByRole('navigation', { hidden: true })).not.toBeVisible();
+    const collapse = within(details).getByRole('button', {
+      name: 'Collapse track details',
+    });
+    const close = within(details).getByRole('button', { name: 'Close track' });
+    expect(collapse).toBeVisible();
+    expect(close).toBeVisible();
 
-    await user.click(back);
+    await user.click(collapse);
 
+    expect(confirm).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand track details' })).toBeVisible();
+    expect(screen.getByLabelText('Fake map')).toBe(map);
+
+    await user.click(screen.getByRole('button', { name: 'Expand track details' }));
+    confirm.mockReturnValueOnce(false);
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
-    expect(screen.getByRole('region', { name: 'Import track file' })).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Show map' }));
+    expect(screen.getByRole('complementary', { name: 'Track details' })).toBeVisible();
+
+    confirm.mockReturnValueOnce(true);
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Expand track details' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Fake map')).toBe(map);
   });
 
@@ -520,6 +557,17 @@ describe('WorkspaceShell', () => {
         within(adjacentDetails).getByRole('button', { name: 'Close track' }),
       ).toBeVisible();
       expect(screen.getByRole('complementary', { name: 'Tracks tools' })).toBeVisible();
+      if (width === 1900) {
+        await user.click(
+          screen.getByRole('button', { name: 'Hide navigation from GR logo' }),
+        );
+        expect(adjacentDetails).not.toBeVisible();
+        expect(
+          screen.queryByRole('heading', { name: 'New track' }),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Show navigation' }));
+        expect(adjacentDetails).toBeVisible();
+      }
       await user.click(
         within(adjacentDetails).getByRole('button', { name: 'Close track' }),
       );
@@ -579,7 +627,56 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('complementary', { name: 'Satellite imagery tools' }),
     ).toBeVisible();
+    await user.click(
+      within(adjacentResults).getByRole('button', {
+        name: 'Apply 12 Jul 2026 imagery',
+      }),
+    );
+    expect(adjacentResults).toBeVisible();
+    expect(
+      screen.getByRole('complementary', { name: 'Satellite imagery tools' }),
+    ).toBeVisible();
     rendered.unmount();
+  });
+
+  it('returns smartphone satellite scene selection to the map', async () => {
+    services.database.close();
+    await services.database.delete();
+    services = createTestServices({
+      satelliteCatalogGateway: catalogGatewayReturning({
+        totalMatched: 1,
+        scenes: [syntheticSatelliteScene('mobile-scene', '2026-07-09T10:12:00.000Z')],
+      }),
+    });
+    services.mapViewport.update(testViewport);
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const map = screen.getByLabelText('Fake map');
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Apply 9 Jul 2026 imagery' }),
+    );
+
+    expect(screen.getByLabelText('Fake map')).toBe(map);
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(
+      screen.queryByRole('complementary', { name: 'Sentinel imagery results' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    expect(
+      screen.getByRole('complementary', { name: 'Sentinel imagery results' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Search images' }),
+    ).not.toBeInTheDocument();
   });
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {

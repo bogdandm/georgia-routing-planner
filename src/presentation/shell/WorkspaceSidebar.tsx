@@ -1,5 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
-import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
+import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
@@ -113,6 +113,7 @@ export function WorkspaceSidebar({
   const definition = definitions[activeTab];
   const camera = mapSnapshot?.camera ?? defaultGeorgiaCamera;
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
+  const onSceneSelected = fullWidth ? onShowMap : undefined;
 
   return (
     <Box
@@ -154,7 +155,7 @@ export function WorkspaceSidebar({
         {definition.actions}
         {fullWidth ? (
           <IconButton aria-label="Show map" onClick={onShowMap}>
-            <MapOutlinedIcon />
+            <ChevronLeftOutlinedIcon />
           </IconButton>
         ) : null}
       </Stack>
@@ -180,6 +181,7 @@ export function WorkspaceSidebar({
             auxiliaryOverlay={auxiliaryOverlay}
             fallbackCoordinates={searchAreaCoordinates}
             onPaneOpenChange={onSatellitePaneOpenChange}
+            {...(onSceneSelected === undefined ? {} : { onSceneSelected })}
           />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>

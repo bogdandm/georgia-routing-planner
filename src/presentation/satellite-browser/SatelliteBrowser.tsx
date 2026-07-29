@@ -86,6 +86,7 @@ interface SatelliteBrowserProps {
   readonly auxiliaryOverlay: boolean;
   readonly fallbackCoordinates: string;
   readonly onPaneOpenChange: (open: boolean) => void;
+  readonly onSceneSelected?: () => void;
 }
 
 type SearchState =
@@ -1137,6 +1138,7 @@ export function SatelliteBrowser({
   auxiliaryOverlay,
   fallbackCoordinates,
   onPaneOpenChange,
+  onSceneSelected,
 }: SatelliteBrowserProps) {
   const {
     clock,
@@ -1586,6 +1588,9 @@ export function SatelliteBrowser({
       }
       mapLayers.clearScene();
       setSelectedSceneId(null);
+      if (onSceneSelected !== undefined) {
+        onSceneSelected();
+      }
       return;
     }
     setSelectedSceneId(match.scene.id);
@@ -1595,6 +1600,9 @@ export function SatelliteBrowser({
     void mapLayers.applyScene(match.scene, controller.signal).finally(() => {
       if (applyRequest.current === controller) applyRequest.current = null;
     });
+    if (onSceneSelected !== undefined) {
+      onSceneSelected();
+    }
   };
 
   const copySceneLink = async (sceneKey: string) => {

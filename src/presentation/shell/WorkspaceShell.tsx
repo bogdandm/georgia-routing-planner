@@ -1,6 +1,14 @@
-import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
-import { Box, IconButton, Tooltip, useMediaQuery } from '@mui/material';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
+import {
+  Box,
+  ButtonBase,
+  IconButton,
+  Paper,
+  Tooltip,
+  useMediaQuery,
+} from '@mui/material';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -21,6 +29,7 @@ import { appColors } from '@/presentation/theme/appColors';
 import type { MapFitPadding } from '@/presentation/map/mapTypes';
 import {
   TrackDetailsPane,
+  TrackStats,
   TracksWorkspaceProvider,
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
@@ -81,10 +90,47 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   );
   const [shareOpen, setShareOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
+  const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
+    string | null
+  >(null);
   const { active: activeTrack } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
+  const activeTrackKey =
+    activeTrack === null
+      ? null
+      : activeTrack.kind === 'preview'
+        ? `preview:${activeTrack.id}`
+        : `saved:${activeTrack.summary.id}`;
+  const mobileTrackDetailsExpanded =
+    activeTrackKey !== null && mobileTrackDetailsExpandedKey === activeTrackKey;
+  const activeTrackMetrics =
+    activeTrack === null
+      ? null
+      : activeTrack.kind === 'preview'
+        ? activeTrack.metrics
+        : activeTrack.summary.metrics;
+  useEffect(() => {
+    if (!smartphoneViewport) return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      setMobileTrackDetailsExpandedKey(null);
+      if (activeTrackKey !== null) setMobileWorkspaceOpen(false);
+    });
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [activeTrackKey, setMobileWorkspaceOpen, smartphoneViewport]);
+
+  useEffect(() => {
+    if (!smartphoneViewport || activeTab === 'tracks') return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      setMobileTrackDetailsExpandedKey(null);
+    });
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [activeTab, smartphoneViewport]);
 
   useEffect(() => {
     const restoreTabFromUrl = () => {
@@ -142,9 +188,17 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     window.history.pushState(window.history.state, '', nextUrl);
   };
   const auxiliaryOverlay = smartphoneViewport || auxiliaryOverlayViewport;
-  const trackDetailsOpen = activeTab === 'tracks' && activeTrack !== null;
+  const activeTrackExists = activeTrack !== null;
+  const activeTrackOpen = activeTab === 'tracks' && activeTrackExists;
+  const trackDetailsOpen =
+    activeTrackOpen && (!smartphoneViewport || mobileTrackDetailsExpanded);
   const satelliteResultsOpen = activeTab === 'satellite' && satellitePaneOpen;
   const auxiliaryOpen = trackDetailsOpen || satelliteResultsOpen;
+  const mobileTrackDisclosureOpen =
+    smartphoneViewport &&
+    activeTrackExists &&
+    !mobileWorkspaceOpen &&
+    !mobileTrackDetailsExpanded;
   const desktopNavigationCollapsed = !smartphoneViewport && navigationCollapsed;
 
   return (
@@ -197,6 +251,58 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         <MenuOutlinedIcon />
       </IconButton>
 
+      <Paper
+        elevation={4}
+        sx={{
+          position: 'absolute',
+          zIndex: 5,
+          right: 12,
+          bottom: 'max(12px, env(safe-area-inset-bottom))',
+          left: 12,
+          display: mobileTrackDisclosureOpen ? 'block' : 'none',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <ButtonBase
+          aria-label="Expand track details"
+          onClick={() => {
+            if (activeTrackKey !== null) {
+              setMobileTrackDetailsExpandedKey(activeTrackKey);
+            }
+            if (activeTab !== 'tracks') handleSectionChange('tracks');
+            setMobileWorkspaceOpen(true);
+          }}
+          sx={{
+            width: '100%',
+            minHeight: 56,
+            justifyContent: 'flex-start',
+            pl: 0,
+            pr: 1,
+          }}
+        >
+          <Box
+            component="span"
+            sx={{
+              width: 30,
+              height: 30,
+              ml: 0.5,
+              mr: 1,
+              flexShrink: 0,
+              display: 'grid',
+              placeItems: 'center',
+              color: 'action.active',
+            }}
+          >
+            <KeyboardArrowUpIcon fontSize="small" />
+          </Box>
+          {activeTrackMetrics === null ? null : (
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <TrackStats compact metrics={activeTrackMetrics} />
+            </Box>
+          )}
+        </ButtonBase>
+      </Paper>
+
       <Box
         ref={navigationRef}
         id={smartphoneViewport ? 'mobile-workspace' : undefined}
@@ -241,12 +347,20 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         <Box
           aria-hidden={smartphoneViewport && auxiliaryOpen}
           sx={{
-            visibility: smartphoneViewport && auxiliaryOpen ? 'hidden' : 'visible',
-            pointerEvents: smartphoneViewport && auxiliaryOpen ? 'none' : 'auto',
+            display: smartphoneViewport && !mobileWorkspaceOpen ? 'none' : 'block',
+            visibility:
+              smartphoneViewport && (!mobileWorkspaceOpen || auxiliaryOpen)
+                ? 'hidden'
+                : 'visible',
+            pointerEvents:
+              smartphoneViewport && (!mobileWorkspaceOpen || auxiliaryOpen)
+                ? 'none'
+                : 'auto',
           }}
         >
           <WorkspaceRail
             collapsed={desktopNavigationCollapsed}
+            squareEdges={smartphoneViewport}
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}
             developerMode={developerMode}
@@ -285,14 +399,19 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             transform: desktopNavigationCollapsed
               ? 'translateX(-16px)'
               : 'translateX(0)',
+            display: smartphoneViewport && !mobileWorkspaceOpen ? 'none' : 'block',
             pointerEvents:
-              desktopNavigationCollapsed || (auxiliaryOverlay && auxiliaryOpen)
+              smartphoneViewport && !mobileWorkspaceOpen
                 ? 'none'
-                : 'auto',
+                : desktopNavigationCollapsed || (auxiliaryOverlay && auxiliaryOpen)
+                  ? 'none'
+                  : 'auto',
             visibility:
-              desktopNavigationCollapsed || (auxiliaryOverlay && auxiliaryOpen)
+              smartphoneViewport && !mobileWorkspaceOpen
                 ? 'hidden'
-                : 'visible',
+                : desktopNavigationCollapsed || (auxiliaryOverlay && auxiliaryOpen)
+                  ? 'hidden'
+                  : 'visible',
             overflow: 'hidden',
             borderRadius: smartphoneViewport ? 0 : '0 0 8px 0',
             transition: (theme) =>
@@ -318,7 +437,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   position: 'absolute',
                   inset: 0,
                   zIndex: 6,
-                  display: auxiliaryOpen ? 'flex' : 'none',
+                  display: !mobileWorkspaceOpen || !auxiliaryOpen ? 'none' : 'flex',
+                  pointerEvents: mobileWorkspaceOpen && auxiliaryOpen ? 'auto' : 'none',
                   width: '100%',
                   height: '100%',
                 }
@@ -329,19 +449,39 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                     bottom: 0,
                     left: 64,
                     zIndex: 5,
-                    display: auxiliaryOpen ? 'flex' : 'none',
+                    display:
+                      auxiliaryOpen && !desktopNavigationCollapsed ? 'flex' : 'none',
                     width: { xs: 420, xl: 464 },
                   }
                 : {
                     position: 'relative',
-                    display: auxiliaryOpen ? 'flex' : 'none',
+                    display:
+                      auxiliaryOpen && !desktopNavigationCollapsed ? 'flex' : 'none',
                     height: '100%',
                     minHeight: 0,
                     flexShrink: 0,
                   }
           }
         >
-          {trackDetailsOpen ? <TrackDetailsPane overlay={auxiliaryOverlay} /> : null}
+          {trackDetailsOpen ? (
+            <TrackDetailsPane
+              mode={
+                smartphoneViewport
+                  ? 'mobile'
+                  : auxiliaryOverlayViewport
+                    ? 'overlay'
+                    : 'adjacent'
+              }
+              onCollapse={() => {
+                setMobileTrackDetailsExpandedKey(null);
+                setMobileWorkspaceOpen(false);
+              }}
+              onClosed={() => {
+                setMobileTrackDetailsExpandedKey(null);
+                setMobileWorkspaceOpen(false);
+              }}
+            />
+          ) : null}
           <Box
             id="satellite-results-pane"
             aria-hidden={!satelliteResultsOpen}

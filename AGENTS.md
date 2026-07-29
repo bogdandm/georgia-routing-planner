@@ -341,6 +341,37 @@ production LOC.
 - Preserve valuable existing boundaries when removing them would make the code less
   clear or less safe.
 
+### Mandatory final reviewer gate
+
+Before creating or updating a pull request, the primary agent must spawn the bundled
+`reviewer` subagent for a read-only review of the complete branch diff against
+`origin/main`.
+
+The reviewer must inspect:
+
+- the original user request and approved plan;
+- the complete diff against `origin/main`;
+- all applicable `AGENTS.md` files;
+- correctness, regressions, missing requirements, unnecessary complexity, and dead code;
+- test coverage visible in the diff;
+- accuracy of verification claims and the planned pull-request description.
+
+The reviewer must not edit files, run tests, commit, push, or create/update the pull
+request.
+
+The primary agent must wait for the reviewer result, inspect every finding against the
+actual code, fix every valid blocker or material issue, and rerun only checks
+invalidated by those fixes.
+
+The primary agent must not create or update the pull request until:
+
+1. the reviewer has completed;
+2. every finding has been explicitly resolved or rejected with a concrete reason;
+3. required follow-up verification has passed.
+
+Run one reviewer pass by default. Run another pass only when reviewer-driven fixes
+materially changed behavior or architecture.
+
 ### Feature finalization and pull request
 
 A workstream is not finished until final verification passes and its branch is available

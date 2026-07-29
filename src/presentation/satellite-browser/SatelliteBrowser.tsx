@@ -219,6 +219,23 @@ function hasSameSubmittedCriteria(
   );
 }
 
+function hasSameViewport(
+  left: SatelliteSearchViewport | null,
+  right: SatelliteSearchViewport | null,
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.center.longitude === right.center.longitude &&
+      left.center.latitude === right.center.latitude &&
+      left.bounds.west === right.bounds.west &&
+      left.bounds.south === right.bounds.south &&
+      left.bounds.east === right.bounds.east &&
+      left.bounds.north === right.bounds.north)
+  );
+}
+
 function mergeSearchResults(
   newer: SatelliteSearchResult,
   older: SatelliteSearchResult,
@@ -1138,6 +1155,7 @@ export function SatelliteBrowser({
   const calendarMonthLoadTimer = useRef<number | null>(null);
   const applyRequest = useRef<AbortController | null>(null);
   const cloudCoverChangedByUser = useRef(false);
+  const previousViewport = useRef<SatelliteSearchViewport | null>(null);
   const [copyLinkStatus, setCopyLinkStatus] = useState<'idle' | 'copied' | 'failed'>(
     'idle',
   );
@@ -1167,6 +1185,19 @@ export function SatelliteBrowser({
       ? viewport
       : { ...viewport, center: satelliteSearchAnchor };
   const searchAreaSource = satelliteSearchAnchor === null ? 'viewport' : 'custom';
+
+  useEffect(() => {
+    const previous = previousViewport.current;
+    previousViewport.current = viewport;
+    if (
+      satelliteSearchAnchor !== null &&
+      previous !== null &&
+      viewport !== null &&
+      !hasSameViewport(previous, viewport)
+    ) {
+      setSatelliteSearchAnchor(null);
+    }
+  }, [satelliteSearchAnchor, viewport]);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {

@@ -729,6 +729,29 @@ describe('WorkspaceShell', () => {
     expect(searchAreaSource).toHaveTextContent('Point');
   });
 
+  it('resets a context-menu search point when the map viewport moves', async () => {
+    services.mapViewport.update(testViewport);
+    setSatelliteSearchAnchor({ latitude: 42.1, longitude: 43.4 });
+    renderWorkspaceShell();
+
+    const searchAreaSource = screen.getByRole('combobox', {
+      name: 'Search area source',
+    });
+    expect(searchAreaSource).toHaveTextContent('Custom');
+
+    act(() => {
+      services.mapViewport.update({
+        bounds: { west: 44.3, south: 42.3, east: 45.1, north: 43.1 },
+        center: { longitude: 44.7, latitude: 42.7 },
+      });
+    });
+
+    await waitFor(() => {
+      expect(searchAreaSource).toHaveTextContent('Point');
+      expect(searchAreaSource).toHaveTextContent('42.7000, 44.7000');
+    });
+  });
+
   it('restores the persisted maximum cloud cover after remounting', async () => {
     const user = userEvent.setup();
     const firstRender = renderWorkspaceShell();

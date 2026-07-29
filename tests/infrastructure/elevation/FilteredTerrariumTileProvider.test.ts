@@ -16,8 +16,8 @@ import {
   type DecodedTerrariumTile,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
 
-function decodedTile(): DecodedTerrariumTile {
-  const [red, green, blue] = encodeTerrariumElevation(1_000);
+function decodedTile(elevationMeters = 1_000): DecodedTerrariumTile {
+  const [red, green, blue] = encodeTerrariumElevation(elevationMeters);
   return {
     width: 2,
     height: 2,
@@ -187,7 +187,60 @@ describe('FilteredTerrariumTileProvider', () => {
     expect(fetchImplementation).toHaveBeenCalledTimes(12);
   });
 
-  it('keeps shared source work alive when only one consumer is canceled', async () => {
+  it('coalesces concurrent processing of the same filtered tile', async () => {
+    let releaseEncode: (() => void) | undefined;
+    const encodeGate = new Promise<void>((resolve) => {
+      releaseEncode = resolve;
+    });
+    const decode = vi.fn(async (blob: Blob) =>
+      decodedTile((await blob.text()).includes('/5/8/9.png') ? 10_000 : 1_000),
+    );
+    const encode = vi.fn(async () => {
+      await encodeGate;
+      return new Blob(['filtered']);
+    });
+    const testCodec: TerrariumPngCodec = { decode, encode };
+    const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      return Promise.resolve(new Response(url, { status: 200 }));
+    });
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      logger,
+      testCodec,
+      fetchImplementation,
+    );
+    const canceled = new AbortController();
+    const retained = new AbortController();
+
+    const first = provider.getTile(5, 8, 9, canceled);
+    const second = provider.getTile(5, 8, 9, retained);
+    await vi.waitFor(() => {
+      expect(decode).toHaveBeenCalledTimes(9);
+    });
+    await vi.waitFor(() => {
+      expect(encode).toHaveBeenCalledOnce();
+    });
+    canceled.abort();
+    if (releaseEncode === undefined) {
+      throw new Error('PNG encoder gate was not initialized.');
+    }
+    releaseEncode();
+
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    const retainedResult = await second;
+    expect(retainedResult.data).toBeInstanceOf(Blob);
+    expect(fetchImplementation).toHaveBeenCalledTimes(9);
+    expect(decode).toHaveBeenCalledTimes(9);
+    expect(encode).toHaveBeenCalledOnce();
+  });
+
+  it('keeps shared source work alive when only one neighbor consumer is canceled', async () => {
     let releaseFetches: (() => void) | undefined;
     const fetchGate = new Promise<void>((resolve) => {
       releaseFetches = resolve;
@@ -206,14 +259,20 @@ describe('FilteredTerrariumTileProvider', () => {
     const retained = new AbortController();
 
     const first = provider.getTile(5, 8, 9, canceled);
-    const second = provider.getTile(5, 8, 9, retained);
+    const second = provider.getTile(5, 9, 9, retained);
+    await vi.waitFor(() => {
+      expect(fetchImplementation).toHaveBeenCalledTimes(12);
+    });
     canceled.abort();
-    releaseFetches?.();
+    if (releaseFetches === undefined) {
+      throw new Error('Source request gate was not initialized.');
+    }
+    releaseFetches();
 
     await expect(first).rejects.toMatchObject({ name: 'AbortError' });
     const retainedResult = await second;
     expect(retainedResult.data).toBeInstanceOf(Blob);
-    expect(fetchImplementation).toHaveBeenCalledTimes(9);
+    expect(fetchImplementation).toHaveBeenCalledTimes(12);
   });
 
   it('batches mixed completion states without logging each tile transition', async () => {

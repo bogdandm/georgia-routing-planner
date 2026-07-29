@@ -61,6 +61,78 @@ describe('TerrainComputeEngine', () => {
     expect(fetchImplementation).toHaveBeenCalledTimes(13);
   });
 
+  it('shares repaired pixels between DEM and contour outputs', async () => {
+    const fetchedUrls = new Set<string>();
+    const decode = vi.fn(async (blob: Blob): Promise<DecodedTerrariumTile> => {
+      const url = await blob.text();
+      const coordinates = /\/5\/(\d+)\/(\d+)\.png$/u.exec(url);
+      const xValue = coordinates?.[1];
+      const yValue = coordinates?.[2];
+      if (xValue === undefined || yValue === undefined) {
+        throw new Error(`Unexpected DEM URL: ${url}`);
+      }
+      const x = Number(xValue);
+      const y = Number(yValue);
+      const data = new Uint8ClampedArray(4 * 4 * 4);
+      for (let pixelY = 0; pixelY < 4; pixelY += 1) {
+        for (let pixelX = 0; pixelX < 4; pixelX += 1) {
+          const elevation =
+            x === 8 && y === 9 && pixelX === 1 && pixelY === 1
+              ? 10_000
+              : x * 100 + pixelX * 20 + pixelY * 5;
+          const [red, green, blue] = encodeTerrariumElevation(elevation);
+          const offset = (pixelY * 4 + pixelX) * 4;
+          data[offset] = red;
+          data[offset + 1] = green;
+          data[offset + 2] = blue;
+          data[offset + 3] = 255;
+        }
+      }
+      return { width: 4, height: 4, data };
+    });
+    const encode = vi.fn(() => Promise.resolve(new Blob(['not-a-png'])));
+    const codec: TerrariumPngCodec = { decode, encode };
+    const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      fetchedUrls.add(url);
+      return Promise.resolve(new Response(url, { status: 200 }));
+    });
+    const engine = new TerrainComputeEngine(configuration(), logger, {
+      codec,
+      fetchImplementation,
+    });
+    const contourOptions = { levels: [100, 500], subsampleBelow: 4 };
+
+    const [raster, contour] = await Promise.all([
+      engine.fetchTile(5, 8, 9, new AbortController()),
+      engine.fetchContourTile(5, 8, 9, contourOptions, new AbortController()),
+    ]);
+
+    expect(raster.data).toBeInstanceOf(Blob);
+    expect(contour.arrayBuffer.byteLength).toBeGreaterThan(0);
+    expect(encode).toHaveBeenCalledOnce();
+    expect(fetchedUrls.size).toBe(25);
+    expect(decode).toHaveBeenCalledTimes(fetchedUrls.size);
+
+    const decodedBeforeDisabling = decode.mock.calls.length;
+    engine.setFilterEnabled(false);
+    const rawContour = await engine.fetchContourTile(
+      5,
+      20,
+      9,
+      contourOptions,
+      new AbortController(),
+    );
+
+    expect(rawContour.arrayBuffer.byteLength).toBeGreaterThan(0);
+    expect(decode).toHaveBeenCalledTimes(decodedBeforeDisabling + 9);
+  });
+
   it('cancels pending work and rejects future requests after deterministic disposal', async () => {
     const codec: TerrariumPngCodec = {
       decode: () => Promise.resolve(decodedTile()),

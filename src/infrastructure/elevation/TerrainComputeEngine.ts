@@ -64,6 +64,23 @@ export class TerrainComputeEngine {
       const filteredTiles = this.#filteredTiles;
       this.#manager.fetchTile = (zoom, x, y, abortController) =>
         filteredTiles.getTile(zoom, x, y, abortController);
+      const decodeImage: LocalDemManager['decodeImage'] = async (
+        blob,
+        _encoding,
+        abortController,
+      ) => {
+        const decoded = await filteredTiles.decodeProcessedTile(
+          blob,
+          abortController.signal,
+        );
+        return maplibreContour.decodeParsedImage(
+          decoded.width,
+          decoded.height,
+          'terrarium',
+          decoded.data,
+        );
+      };
+      this.#manager.decodeImage = decodeImage;
     }
   }
 

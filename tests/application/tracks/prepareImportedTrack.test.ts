@@ -163,6 +163,25 @@ describe('prepareImportedTrack', () => {
     });
   });
 
+  it('drops a zero-length segment beside a valid route segment', async () => {
+    const prepared = await prepareImportedTrack(
+      [
+        {
+          points: [
+            { coordinate: [44, 42] as const, elevationMeters: 1_000 },
+            { coordinate: [44, 42] as const, elevationMeters: 1_000 },
+          ],
+        },
+        ...sourceSegments,
+      ],
+      null,
+      signal,
+    );
+
+    expect(prepared.segments).toHaveLength(1);
+    expect(prepared.segments[0]?.points.length).toBeGreaterThan(1);
+  });
+
   it('rejects a source segment with no usable elevation data', async () => {
     await expect(
       prepareImportedTrack(

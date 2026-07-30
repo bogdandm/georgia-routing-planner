@@ -16,7 +16,7 @@ import {
   type TabProps,
   Tooltip,
 } from '@mui/material';
-import type { SyntheticEvent } from 'react';
+import type { RefObject, SyntheticEvent } from 'react';
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
@@ -55,6 +55,7 @@ interface WorkspaceRailProps {
   readonly activeTab: WorkspaceTab;
   readonly developerToolsOpen: boolean;
   readonly developerMode: boolean;
+  readonly aboutButtonRef: RefObject<HTMLButtonElement | null>;
   readonly onOpenAbout: () => void;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
@@ -69,6 +70,7 @@ export function WorkspaceRail({
   activeTab,
   developerToolsOpen,
   developerMode,
+  aboutButtonRef,
   onToggleDeveloperTools,
   onOpenAbout,
   onOpenSettings,
@@ -251,6 +253,7 @@ export function WorkspaceRail({
         </Tooltip>
         <Tooltip title="About this site" placement="right">
           <IconButton
+            ref={aboutButtonRef}
             aria-label="About this site"
             onClick={onOpenAbout}
             sx={{ color: 'rgba(255,255,255,0.84)' }}

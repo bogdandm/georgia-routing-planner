@@ -49,7 +49,14 @@ function ControlledFailure(): never {
 }
 
 function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
-  const { database, logger, mapLayers, storageUsage } = useRuntimeServices();
+  const {
+    database,
+    geocodingProviderConfiguration,
+    logger,
+    mapLayers,
+    mapProviderConfiguration,
+    storageUsage,
+  } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
   const developerMode = useUiStore((state) => state.developerMode);
@@ -68,6 +75,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const auxiliaryOverlayViewport = useMediaQuery(auxiliaryOverlayViewportQuery);
   const workspaceShellRef = useRef<HTMLDivElement>(null);
   const navigationRef = useRef<HTMLDivElement>(null);
+  const aboutTriggerRef = useRef<HTMLButtonElement>(null);
   const getNavigationPadding = useCallback((): MapFitPadding | undefined => {
     if (smartphoneViewport) return undefined;
     const workspaceShell = workspaceShellRef.current;
@@ -366,6 +374,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}
             developerMode={developerMode}
+            aboutButtonRef={aboutTriggerRef}
             onSectionChange={handleSectionChange}
             onToggleDeveloperTools={() => {
               setDeveloperDrawerOpen(!developerDrawerOpen);
@@ -644,10 +653,13 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       </Box>
 
       <AboutDialog
+        geocodingProviderConfiguration={geocodingProviderConfiguration}
+        mapProviderConfiguration={mapProviderConfiguration}
         open={aboutOpen}
         onClose={() => {
           setAboutOpen(false);
         }}
+        triggerRef={aboutTriggerRef}
       />
       <SettingsDialog
         developerMode={developerMode}

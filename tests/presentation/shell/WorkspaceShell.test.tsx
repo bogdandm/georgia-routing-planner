@@ -238,12 +238,23 @@ describe('WorkspaceShell', () => {
     expect(
       within(about).getByRole('link', { name: 'GitHub repository' }),
     ).toHaveAttribute('href', 'https://github.com/bogdandm/georgia-routing-planner');
-    expect(within(about).getByText('Nominatim')).toBeVisible();
-    expect(within(about).getByText('Copernicus Sentinel-2')).toBeVisible();
+    expect(
+      within(about).getByRole('link', { name: 'nominatim.openstreetmap.org' }),
+    ).toBeVisible();
+    expect(
+      within(about).getByText('OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap'),
+    ).toBeVisible();
+    expect(
+      within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
+    ).toBeVisible();
     expect(about).not.toHaveTextContent('@');
 
-    await user.click(within(about).getByRole('button', { name: 'Done' }));
+    expect(within(about).getByRole('button', { name: 'Done' })).toHaveFocus();
+    await user.keyboard('{Escape}');
     expect(about).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(aboutButton).toHaveFocus();
+    });
   });
 
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {

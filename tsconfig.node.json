@@ -30,6 +30,8 @@
     "playwright.config.ts",
     "tools/**/*.ts",
     "src/infrastructure/elevation/TerrariumDemFilter.ts",
+    "tests/helpers/referenceTerrariumDemFilter.ts",
+    "tests/helpers/terrariumDemFilterFixtures.ts",
     "src/diagnostics/export/diagnosticBundleSchema.ts",
     "e2e/**/*.ts"
   ]

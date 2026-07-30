@@ -8,6 +8,8 @@ import {
   type TerrariumFilterPolicy,
   type TerrariumTileGrid,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
+import { createTerrariumParityFixtures } from '@test/helpers/terrariumDemFilterFixtures';
+import { referenceFilterTerrariumTile } from '@test/helpers/referenceTerrariumDemFilter';
 
 const policy: TerrariumFilterPolicy = {
   minimumElevationMeters: -500,
@@ -175,5 +177,74 @@ describe('filterTerrariumTile', () => {
     expect(result.counts).toMatchObject({ impossibleCount: 8, repairedCount: 8 });
     expect(elevationAt(result.tile, 4, 2)).toBe(1_100);
     expect(elevationAt(result.tile, 4, 1)).toBe(1_100);
+  });
+
+  it('matches the clean-main reference oracle', () => {
+    for (const fixture of createTerrariumParityFixtures()) {
+      const candidateGrid = fixture.createGrid();
+      const referenceGrid = fixture.createGrid();
+      const candidateInputs = candidateGrid.flatMap((row) =>
+        row.flatMap((contextTile) =>
+          contextTile === null ? [] : [new Uint8ClampedArray(contextTile.data)],
+        ),
+      );
+      const referenceInputs = referenceGrid.flatMap((row) =>
+        row.flatMap((contextTile) =>
+          contextTile === null ? [] : [new Uint8ClampedArray(contextTile.data)],
+        ),
+      );
+
+      const candidate = filterTerrariumTile(candidateGrid, fixture.policy);
+      const reference = referenceFilterTerrariumTile(referenceGrid, fixture.policy);
+
+      expect(candidate.counts, fixture.name).toEqual(reference.counts);
+      expect(candidate.tile.data, fixture.name).toEqual(reference.tile.data);
+      let inputIndex = 0;
+      for (const row of candidateGrid) {
+        for (const contextTile of row) {
+          if (contextTile === null) continue;
+          expect(
+            contextTile.data,
+            `${fixture.name} candidate input ${inputIndex}`,
+          ).toEqual(candidateInputs[inputIndex]);
+          inputIndex += 1;
+        }
+      }
+      inputIndex = 0;
+      for (const row of referenceGrid) {
+        for (const contextTile of row) {
+          if (contextTile === null) continue;
+          expect(
+            contextTile.data,
+            `${fixture.name} reference input ${inputIndex}`,
+          ).toEqual(referenceInputs[inputIndex]);
+          inputIndex += 1;
+        }
+      }
+      if (candidate.counts.repairedCount === 0) {
+        expect(candidate.tile.data, `${fixture.name} candidate identity`).toBe(
+          candidateGrid[1][1].data,
+        );
+        expect(reference.tile.data, `${fixture.name} reference identity`).toBe(
+          referenceGrid[1][1].data,
+        );
+      } else {
+        expect(candidate.tile.data, `${fixture.name} candidate lazy copy`).not.toBe(
+          candidateGrid[1][1].data,
+        );
+        expect(reference.tile.data, `${fixture.name} reference lazy copy`).not.toBe(
+          referenceGrid[1][1].data,
+        );
+      }
+    }
+
+    const mismatchedGrid: TerrariumTileGrid = [
+      [null, tile(3, 2), null],
+      [null, tile(2, 2), null],
+      [null, null, null],
+    ];
+    const error = 'Terrarium context tiles must have matching RGBA dimensions.';
+    expect(() => filterTerrariumTile(mismatchedGrid, policy)).toThrow(error);
+    expect(() => referenceFilterTerrariumTile(mismatchedGrid, policy)).toThrow(error);
   });
 });

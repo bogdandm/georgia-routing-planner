@@ -187,24 +187,38 @@ western, northern, and southern neighbors remained within 830.05 m to 1,278.50 m
 bad scanline crosses one shared tile border and begins at another; it is not a coastline
 transition or an artifact introduced by contour rendering.
 
+The separate reported lake point at `42.78452, 42.24199` falls in `15/20228/12067`. Its
+source tile contained diagonal and short vertical downward sequences as low as −1,930.92
+m among local terrain near 2,650 m. The sequences mixed out-of-range pixels with
+still-valid negative and intermediate elevations, so physical bounds alone left visible
+fragments. The configured one-pass repair classifies 129 impossible values and 120
+severe downward spikes in that center tile. The inspected lake window has no remaining
+drop of at least 300 m relative to its immediate-neighbor median after repair.
+
 The filter decodes the center plus the required one-pixel halo from all eight
 neighboring tiles exactly once into a `Float64Array` height plane and compact validity
-mask. A direct-index stencil then rejects transparent pixels, configured sentinel
-elevations, values outside the configured physical range, and isolated local extremes.
-The local test requires at least five neighbors close to their median, median absolute
-deviation no greater than 80 m, no more than one neighbor supporting the extreme center
-value, and a center residual of at least 500 m upward or 300 m downward. The asymmetric
-limit reflects confirmed provider corruption while keeping upward peak detection more
-conservative. This preserves coherent ridges and cliffs, including narrow features with
-two supporting pixels.
+mask. One direct-index stencil pass then rejects transparent pixels, configured sentinel
+elevations, values outside the configured physical range, and isolated local extremes;
+it does not iteratively feed repaired values back into later classifications.
 
-Rejected pixels are replaced with the median of valid immediate neighbors; accepted
-pixels are never resampled, blurred, or re-encoded. The stencil reuses fixed eight-value
-neighbor and deviation buffers, takes only early exits already implied by the rejection
-predicate, reuses the classification median for repair, and clones output bytes only at
-the first changed pixel. A deterministic reference oracle verifies identical repair
-counts and RGBA bytes across threshold, topology, and benchmark scenarios. A tile with
-no repairs returns the original PNG bytes.
+The standard local-extreme test requires at least five neighbors close to their median,
+median absolute deviation no greater than 80 m, no more than one neighbor supporting the
+extreme center value, and a center residual of at least 500 m upward or 300 m downward.
+A downward residual at least twice that threshold may relax the consensus and support
+limits by one vote. This narrow exception removes the provider's mutually supporting
+two-pixel artifact strands without globally weakening upward peak detection or
+flattening coherent cliffs with broad local support.
+
+Hard-invalid pixels normally use the median of valid immediate neighbors. When those
+neighbors contain one unambiguous cluster of at least three elevations within twice the
+80 m deviation limit, repair uses that cluster's median instead of allowing scattered
+downward corruption to bias the result. Ambiguous or sparse neighborhoods retain the
+overall median. Accepted pixels are never resampled, blurred, or re-encoded. The stencil
+reuses fixed eight-value neighbor and deviation buffers, clones output bytes only at the
+first changed pixel, and introduces no additional tile pass. A deterministic reference
+oracle verifies matching repair counts and RGBA bytes across threshold, topology,
+artifact, and benchmark scenarios. A tile with no repairs returns the original PNG
+bytes.
 
 The default physical range is −500 m through 9,000 m and the explicit sentinel list is
 `[-32768]`. These bounds cover global terrestrial elevations conservatively while

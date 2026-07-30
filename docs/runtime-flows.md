@@ -172,10 +172,10 @@ sequenceDiagram
   UI->>Facade: setTerrainMode(terrain)
   Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: level camera and set terrain
-  Map->>Filter: request shared raster-dem tile
-  Filter->>DEM: fetch center and neighboring tile context
-  Filter->>Filter: decode, reject, repair, re-encode, cache
-  Filter-->>Map: corrected Terrarium PNG
+  Map->>Filter: request revision-qualified raster-dem tile
+  Filter->>DEM: fetch center and optional neighboring context
+  Filter->>Filter: decode height plane, reject, repair, re-encode, cache
+  Filter-->>Map: shared corrected Terrarium PNG
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
     Facade->>Map: apply the terrain camera from the loaded DEM
@@ -214,13 +214,20 @@ over grass, forest, and other opaque land-cover fills while water bodies mask ge
 isolines. Updating the contour interval calls the existing vector source's tile update,
 so the map camera and unrelated native resources remain untouched. MapLibre abort
 signals flow through both the shared DEM and contour protocols, the request-correlated
-worker channel, and the same filtered provider. The provider fetches the center and
-eight neighbors concurrently under one timeout. Concurrent neighborhoods share in-flight
-fetch and decode work for overlapping source tiles; canceling one consumer aborts that
-source request only after its final consumer releases it. The provider applies the
-configured pure repair policy and retains completed PNGs and decoded neighbor context in
-bounded LRUs. Relief, 3D terrain, and generated isolines therefore cannot observe
-different elevation bytes.
+worker channel, and the same filtered provider. The provider coalesces each
+revision-qualified processed tile across its complete fetch, decode, filter, and encode
+lifetime. Each consumer can cancel independently; the producer continues for remaining
+consumers and aborts when the last releases it. Later calls use the unchanged bounded
+processed-PNG LRU, while overlapping neighborhoods still share decoded source work
+through the unchanged decoded-context LRU.
+
+The center remains required. Ordinary network, HTTP, or PNG-decode failures for any
+optional neighbor become null halo cells, so one unavailable context tile does not erase
+otherwise usable terrain. Parent cancellation, timeout, mode change, disposal, and
+center failure still reject instead of degrading to missing context. The repair filter
+decodes the center and one-pixel halo once into a height plane and compact validity
+mask, then uses a fixed-scratch direct-index stencil with lazy output cloning. Relief,
+3D terrain, and generated isolines therefore cannot observe different elevation bytes.
 
 One dedicated module worker owns PNG decode/encode, repair, parsed DEM data, and contour
 generation. Initialization maps validated provider configuration into the strict,

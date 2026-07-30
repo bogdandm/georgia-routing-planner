@@ -187,33 +187,44 @@ western, northern, and southern neighbors remained within 830.05 m to 1,278.50 m
 bad scanline crosses one shared tile border and begins at another; it is not a coastline
 transition or an artifact introduced by contour rendering.
 
-The filter uses a one-pixel halo decoded from all eight neighboring tiles. It rejects
-transparent pixels, configured sentinel elevations, values outside the configured
-physical range, and isolated local extremes. The local test requires at least five
-neighbors close to their median, median absolute deviation no greater than 80 m, no more
-than one neighbor supporting the extreme center value, and a center residual of at least
-500 m upward or 300 m downward. The asymmetric limit reflects confirmed provider
-corruption while keeping upward peak detection more conservative. This preserves
-coherent ridges and cliffs, including narrow features with two supporting pixels.
+The filter decodes the center plus the required one-pixel halo from all eight
+neighboring tiles exactly once into a `Float64Array` height plane and compact validity
+mask. A direct-index stencil then rejects transparent pixels, configured sentinel
+elevations, values outside the configured physical range, and isolated local extremes.
+The local test requires at least five neighbors close to their median, median absolute
+deviation no greater than 80 m, no more than one neighbor supporting the extreme center
+value, and a center residual of at least 500 m upward or 300 m downward. The asymmetric
+limit reflects confirmed provider corruption while keeping upward peak detection more
+conservative. This preserves coherent ridges and cliffs, including narrow features with
+two supporting pixels.
+
 Rejected pixels are replaced with the median of valid immediate neighbors; accepted
-pixels are never resampled, blurred, or re-encoded. The production filter reuses fixed
-eight-value neighbor/deviation buffers, reuses the classification median for repair, and
-clones output bytes only at the first changed pixel. A deterministic reference oracle
-verifies identical repair counts and RGBA bytes across the benchmark scenarios. A tile
-with no repairs returns the original PNG bytes.
+pixels are never resampled, blurred, or re-encoded. The stencil reuses fixed eight-value
+neighbor and deviation buffers, takes only early exits already implied by the rejection
+predicate, reuses the classification median for repair, and clones output bytes only at
+the first changed pixel. A deterministic reference oracle verifies identical repair
+counts and RGBA bytes across threshold, topology, and benchmark scenarios. A tile with
+no repairs returns the original PNG bytes.
 
 The default physical range is −500 m through 9,000 m and the explicit sentinel list is
 `[-32768]`. These bounds cover global terrestrial elevations conservatively while
 rejecting the observed inland −700 m scanline. Applying the policy repairs all 256 bad
 pixels and changes the center tile range to 969.49–1,191.20 m. Thresholds and the
 48-entry processed-PNG and decoded-context LRU bounds are validated provider
-configuration, not rendering constants. Requests use the provider timeout and MapLibre
-abort signal. Diagnostics export only duration and aggregate no-data, sentinel,
-impossible-value, spike, repaired, and unrepaired counts; tile URLs, indices,
-coordinates, and pixels are excluded. Overlapping neighborhoods coalesce in-flight
-source fetch and decode work, and diagnostics are emitted in fixed-size aggregate
-batches instead of one event per rendered tile. Mixed results retain the batch's most
-severe status without creating a new event for every cancellation transition.
+configuration, not rendering constants. Revision-qualified in-flight requests share the
+complete fetch, decode, filter, and encode pipeline; all active consumers receive the
+same response object. Canceling one consumer rejects it independently, while underlying
+work is aborted only after the last consumer releases it. Completed results remain owned
+only by the existing bounded LRUs. An ordinary fetch, HTTP, or decode failure for an
+optional neighbor degrades that cell to a null halo and remains retryable; center
+failures, timeout, mode changes, disposal, and parent cancellation still reject the
+processed request. Disabled mode continues to bypass decoding and repair.
+
+Diagnostics export only duration and aggregate no-data, sentinel, impossible-value,
+spike, repaired, and unrepaired counts; tile URLs, indices, coordinates, and pixels are
+excluded. They are recorded once per underlying processed request and emitted in
+fixed-size aggregate batches. Mixed results retain the batch's most severe status
+without creating a new event for every cancellation transition.
 
 At Lisi Lake, tiles `15/20455/12195` and `15/20456/12195` contain 63 compact downward
 spikes against a 626–635 m local surface. Their residuals range from −315.19 m to

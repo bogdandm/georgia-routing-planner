@@ -119,6 +119,41 @@ function medianInPlace(values: Float64Array, count: number): number {
   return (lower + upper) / 2;
 }
 
+function repairMedianInPlace(
+  values: Float64Array,
+  count: number,
+  maximumDeviation: number,
+): number {
+  const overallMedian = medianInPlace(values, count);
+  let bestStart = 0;
+  let bestEnd = 0;
+  let bestCount = 1;
+  let start = 0;
+  let ambiguous = false;
+  for (let end = 0; end < count; end += 1) {
+    while (
+      start < end &&
+      (values[end] ?? 0) - (values[start] ?? 0) > maximumDeviation * 2
+    ) {
+      start += 1;
+    }
+    const clusterCount = end - start + 1;
+    if (clusterCount > bestCount) {
+      bestStart = start;
+      bestEnd = end;
+      bestCount = clusterCount;
+      ambiguous = false;
+    } else if (clusterCount === bestCount && start > bestEnd) {
+      ambiguous = true;
+    }
+  }
+  if (bestCount < Math.min(3, count) || ambiguous) return overallMedian;
+  const middle = bestStart + Math.floor(bestCount / 2);
+  const upper = values[middle] ?? overallMedian;
+  if (bestCount % 2 === 1) return upper;
+  return ((values[middle - 1] ?? upper) + upper) / 2;
+}
+
 function validateTile(tile: DecodedTerrariumTile, width: number, height: number): void {
   if (
     tile.width !== width ||
@@ -345,10 +380,15 @@ export function filterTerrariumTile(
           outputOffset += 4;
           continue;
         }
-        neighborMedian = medianInPlace(neighbors, neighborCount);
+        neighborMedian = repairMedianInPlace(
+          neighbors,
+          neighborCount,
+          policy.maximumNeighborMadMeters,
+        );
       } else {
         const elevation = elevations[planeIndex] ?? 0;
         let supportCount = 0;
+        const severeSupportLimit = policy.maximumSpikeSupportNeighbors + 1;
         let neighborOffsetIndex = 0;
         while (neighborOffsetIndex < neighborOffsets.length) {
           const neighborIndex =
@@ -360,12 +400,16 @@ export function filterTerrariumTile(
           neighborCount += 1;
           if (Math.abs(neighbor - elevation) <= policy.maximumNeighborMadMeters) {
             supportCount += 1;
-            if (supportCount > policy.maximumSpikeSupportNeighbors) break;
+            if (supportCount > severeSupportLimit) break;
           }
         }
+        const severeConsensusMinimum = Math.max(
+          1,
+          policy.minimumConsensusNeighbors - 1,
+        );
         if (
-          supportCount > policy.maximumSpikeSupportNeighbors ||
-          neighborCount < policy.minimumConsensusNeighbors
+          supportCount > severeSupportLimit ||
+          neighborCount < severeConsensusMinimum
         ) {
           planeIndex += 1;
           outputOffset += 4;
@@ -393,9 +437,21 @@ export function filterTerrariumTile(
           if (deviation <= policy.maximumNeighborMadMeters) consensusCount += 1;
         }
         const medianAbsoluteDeviation = medianInPlace(deviations, neighborCount);
+        // Provider corruption can form a narrow downward strand with two mutually
+        // supporting pixels. Relax one support and consensus vote only for a drop at
+        // least twice the normal downward threshold; coherent cliffs retain more support.
+        const severeNegativeSpike =
+          residual <= -policy.negativeSpikeThresholdMeters * 2;
+        const consensusMinimum = severeNegativeSpike
+          ? severeConsensusMinimum
+          : policy.minimumConsensusNeighbors;
+        const supportLimit = severeNegativeSpike
+          ? severeSupportLimit
+          : policy.maximumSpikeSupportNeighbors;
         if (
           medianAbsoluteDeviation > policy.maximumNeighborMadMeters ||
-          consensusCount < policy.minimumConsensusNeighbors
+          consensusCount < consensusMinimum ||
+          supportCount > supportLimit
         ) {
           planeIndex += 1;
           outputOffset += 4;

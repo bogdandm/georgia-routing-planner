@@ -113,6 +113,39 @@ describe('filterTerrariumTile', () => {
     expect(result.counts).toMatchObject({ spikeCount: 1, repairedCount: 1 });
   });
 
+  it('repairs a narrow severe downward strand matching the reported lake artifact', () => {
+    const source = tile(7, 7, 2_650);
+    setPixel(source, 3, 2, -140);
+    setPixel(source, 3, 3, -140);
+    setPixel(source, 3, 4, -140);
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(elevationAt(result.tile, 3, 2)).toBe(2_650);
+    expect(elevationAt(result.tile, 3, 3)).toBe(2_650);
+    expect(elevationAt(result.tile, 3, 4)).toBe(2_650);
+    expect(result.counts).toMatchObject({ spikeCount: 3, repairedCount: 3 });
+  });
+
+  it('uses the local terrain consensus for an impossible lake-artifact pixel', () => {
+    const source = tile(5, 5, 1_000);
+    const neighborhood = [
+      [445.1, 2_673.4, 2_672.9],
+      [1_372.2, -1_695.6, 2_673.2],
+      [2_299.3, 1_434.9, 570.5],
+    ];
+    for (let y = 0; y < neighborhood.length; y += 1) {
+      for (let x = 0; x < (neighborhood[y]?.length ?? 0); x += 1) {
+        setPixel(source, x + 1, y + 1, neighborhood[y]?.[x] ?? 0);
+      }
+    }
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(elevationAt(result.tile, 2, 2)).toBe(2_673.199_218_75);
+    expect(result.counts.impossibleCount).toBeGreaterThan(0);
+  });
+
   it('repairs the observed shallow downward spike while preserving an equivalent rise', () => {
     const downward = tile(5, 5, 635.5);
     setPixel(downward, 2, 2, 320.25);
@@ -150,6 +183,18 @@ describe('filterTerrariumTile', () => {
     expect(result.counts.spikeCount).toBe(0);
   });
 
+  it('preserves a severe coherent downward cliff with broad local support', () => {
+    const source = tile(7, 7, 2_650);
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 3; x < source.width; x += 1) setPixel(source, x, y, 1_000);
+    }
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(result.tile.data).toEqual(source.data);
+    expect(result.counts.spikeCount).toBe(0);
+  });
+
   it('uses neighboring tile pixels to repair a corner spike without a seam', () => {
     const center = tile(3, 3);
     const north = tile(3, 3);
@@ -179,7 +224,7 @@ describe('filterTerrariumTile', () => {
     expect(elevationAt(result.tile, 4, 1)).toBe(1_100);
   });
 
-  it('matches the clean-main reference oracle', () => {
+  it('matches the deterministic reference oracle', () => {
     for (const fixture of createTerrariumParityFixtures()) {
       const candidateGrid = fixture.createGrid();
       const referenceGrid = fixture.createGrid();

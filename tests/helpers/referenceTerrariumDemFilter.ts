@@ -47,6 +47,41 @@ function medianInPlace(values: Float64Array, count: number): number {
   return (lower + upper) / 2;
 }
 
+function repairMedianInPlace(
+  values: Float64Array,
+  count: number,
+  maximumDeviation: number,
+): number {
+  const overallMedian = medianInPlace(values, count);
+  let bestStart = 0;
+  let bestEnd = 0;
+  let bestCount = 1;
+  let start = 0;
+  let ambiguous = false;
+  for (let end = 0; end < count; end += 1) {
+    while (
+      start < end &&
+      (values[end] ?? 0) - (values[start] ?? 0) > maximumDeviation * 2
+    ) {
+      start += 1;
+    }
+    const clusterCount = end - start + 1;
+    if (clusterCount > bestCount) {
+      bestStart = start;
+      bestEnd = end;
+      bestCount = clusterCount;
+      ambiguous = false;
+    } else if (clusterCount === bestCount && start > bestEnd) {
+      ambiguous = true;
+    }
+  }
+  if (bestCount < Math.min(3, count) || ambiguous) return overallMedian;
+  const middle = bestStart + Math.floor(bestCount / 2);
+  const upper = values[middle] ?? overallMedian;
+  if (bestCount % 2 === 1) return upper;
+  return ((values[middle - 1] ?? upper) + upper) / 2;
+}
+
 function pixelOffset(tile: DecodedTerrariumTile, x: number, y: number): number {
   return (y * tile.width + x) * 4;
 }
@@ -135,7 +170,8 @@ function spikeRejectionReason(
   deviations: Float64Array,
   policy: TerrariumFilterPolicy,
 ): 'spike' | null {
-  if (neighborCount < policy.minimumConsensusNeighbors) return null;
+  const severeConsensusMinimum = Math.max(1, policy.minimumConsensusNeighbors - 1);
+  if (neighborCount < severeConsensusMinimum) return null;
   const neighborMedian = medianInPlace(neighbors, neighborCount);
   let consensusCount = 0;
   let supportCount = 0;
@@ -152,10 +188,16 @@ function spikeRejectionReason(
   const residual = elevation - neighborMedian;
   const threshold =
     residual < 0 ? policy.negativeSpikeThresholdMeters : policy.spikeThresholdMeters;
-  return Math.abs(residual) >= threshold &&
-    medianAbsoluteDeviation <= policy.maximumNeighborMadMeters &&
+  const standardSpike =
+    Math.abs(residual) >= threshold &&
     consensusCount >= policy.minimumConsensusNeighbors &&
-    supportCount <= policy.maximumSpikeSupportNeighbors
+    supportCount <= policy.maximumSpikeSupportNeighbors;
+  const severeNegativeSpike =
+    residual <= -policy.negativeSpikeThresholdMeters * 2 &&
+    consensusCount >= severeConsensusMinimum &&
+    supportCount <= policy.maximumSpikeSupportNeighbors + 1;
+  return medianAbsoluteDeviation <= policy.maximumNeighborMadMeters &&
+    (standardSpike || severeNegativeSpike)
     ? 'spike'
     : null;
 }
@@ -214,9 +256,15 @@ export function referenceFilterTerrariumTile(
         counts.unrepairedCount += 1;
         continue;
       }
-      const [red, green, blue] = encodeTerrariumElevation(
-        medianInPlace(neighbors, neighborCount),
-      );
+      const repairElevation =
+        hardReason === null
+          ? medianInPlace(neighbors, neighborCount)
+          : repairMedianInPlace(
+              neighbors,
+              neighborCount,
+              policy.maximumNeighborMadMeters,
+            );
+      const [red, green, blue] = encodeTerrariumElevation(repairElevation);
       output ??= new Uint8ClampedArray(center.data);
       output[offset] = red;
       output[offset + 1] = green;

@@ -206,6 +206,35 @@ export function createTerrariumParityFixtures(): readonly TerrariumFilterFixture
     fixture('stable narrow ridge', 11, 9, (_x, y) => (y === 4 ? 1_800 : 1_000)),
     centerThresholdFixture('isolated positive spike', 1_700, Array(8).fill(1_000)),
     centerThresholdFixture('isolated negative spike', 600, Array(8).fill(1_000)),
+    fixture(
+      'severe downward strand',
+      7,
+      7,
+      () => 2_650,
+      (grid) => {
+        setTerrariumPixel(grid[1][1], 3, 2, -140);
+        setTerrariumPixel(grid[1][1], 3, 3, -140);
+        setTerrariumPixel(grid[1][1], 3, 4, -140);
+      },
+    ),
+    fixture(
+      'mixed lake corruption',
+      5,
+      5,
+      () => 1_000,
+      (grid) => {
+        const center = grid[1][1];
+        setTerrariumPixel(center, 1, 1, 445.1);
+        setTerrariumPixel(center, 2, 1, 2_673.4);
+        setTerrariumPixel(center, 3, 1, 2_672.9);
+        setTerrariumPixel(center, 1, 2, 1_372.2);
+        setTerrariumPixel(center, 2, 2, -1_695.6);
+        setTerrariumPixel(center, 3, 2, 2_673.2);
+        setTerrariumPixel(center, 1, 3, 2_299.3);
+        setTerrariumPixel(center, 2, 3, 1_434.9);
+        setTerrariumPixel(center, 3, 3, 570.5);
+      },
+    ),
     centerThresholdFixture(
       'multiple neighbors support extreme',
       1_600,

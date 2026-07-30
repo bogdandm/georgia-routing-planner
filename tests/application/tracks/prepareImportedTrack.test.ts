@@ -180,6 +180,9 @@ describe('prepareImportedTrack', () => {
 
     expect(prepared.segments).toHaveLength(1);
     expect(prepared.segments[0]?.points.length).toBeGreaterThan(1);
+    expect(
+      prepared.profile.points.every((point) => point.sourceSegmentIndex === 0),
+    ).toBe(true);
   });
 
   it('rejects a source segment with no usable elevation data', async () => {

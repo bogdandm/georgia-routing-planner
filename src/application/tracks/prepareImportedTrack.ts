@@ -287,21 +287,20 @@ export async function prepareImportedTrack(
   options: PrepareImportedTrackOptions = {},
 ): Promise<PreparedImportedTrack> {
   signal.throwIfAborted();
-  const routableSegments: { readonly segment: TrackSegment; readonly index: number }[] =
-    [];
+  const routableSegments: TrackSegment[] = [];
   let totalPoints = 0;
-  for (const [index, segment] of segments.entries()) {
+  for (const segment of segments) {
     const segmentStationCount = stationCount(segment);
     if (segmentStationCount < 2) continue;
     totalPoints += segmentStationCount;
     if (totalPoints > maximumPersistedPoints) {
       throw new TrackElevationPreparationError('point-limit-exceeded');
     }
-    routableSegments.push({ segment, index });
+    routableSegments.push(segment);
   }
   if (routableSegments.length === 0)
     throw new TrackElevationPreparationError('zero-length-track');
-  const resampled = routableSegments.map(({ segment, index }) =>
+  const resampled = routableSegments.map((segment, index) =>
     resampleSegment(segment, index, signal),
   );
   const stations = resampled.flat();

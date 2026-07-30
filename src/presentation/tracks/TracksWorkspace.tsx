@@ -263,6 +263,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const namingAbort = useRef<AbortController | null>(null);
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
+  const previewSaveInProgress = useRef(false);
   const importGeneration = useRef(0);
   const latestOpenedTrackId = useRef<string | null>(null);
   const latestOpenedTrackWrite = useRef<Promise<void>>(Promise.resolve());
@@ -650,10 +651,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (
       active?.kind !== 'preview' ||
       active.preparationStatus !== 'ready' ||
-      recalculationState === 'recalculating'
+      recalculationState === 'recalculating' ||
+      recalculationAbort.current !== null ||
+      previewSaveInProgress.current
     ) {
       return;
     }
+    previewSaveInProgress.current = true;
     const previewId = active.id;
     const generation = importGeneration.current;
     const previewNamingAbort = namingAbort.current;
@@ -713,6 +717,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           ? saveError.message
           : 'The track could not be saved.',
       );
+    } finally {
+      previewSaveInProgress.current = false;
     }
   }, [
     active,
@@ -727,7 +733,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (
       active === null ||
       (active.kind === 'preview' && active.preparationStatus === 'preparing') ||
-      recalculationState === 'recalculating'
+      recalculationState === 'recalculating' ||
+      previewSaveInProgress.current
     ) {
       return;
     }
@@ -925,6 +932,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const deleteSaved = useCallback(
     async (summary: LocalTrackSummary) => {
       try {
+        if (active?.kind === 'saved' && active.summary.id === summary.id) {
+          recalculationAbort.current?.abort();
+          setRecalculationState('idle');
+        }
         await database.deleteLocalTrack(summary.id);
         if (latestOpenedTrackId.current === summary.id) {
           await saveLatestOpenedTrackId(null);
@@ -940,7 +951,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setError('The track could not be deleted.');
       }
     },
-    [database, reloadSummaries, saveLatestOpenedTrackId],
+    [active, database, reloadSummaries, saveLatestOpenedTrackId],
   );
 
   const applyGeneratedName = useCallback(() => {

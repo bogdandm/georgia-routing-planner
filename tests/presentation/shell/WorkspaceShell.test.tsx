@@ -935,6 +935,98 @@ describe('WorkspaceShell', () => {
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('does not recalculate a preview while its save is pending', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const sampleMany = vi
+      .spyOn(provider, 'sampleMany')
+      .mockImplementation((coordinates) =>
+        Promise.resolve(coordinates.map(() => ({ status: 'unavailable' as const }))),
+      );
+    const savePending = deferred<undefined>();
+    const saveLocalTrack = vi
+      .spyOn(services.database, 'saveLocalTrack')
+      .mockImplementation(() => savePending.promise);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Save race.gpx'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Recalculate elevation' }));
+    expect(sampleMany).toHaveBeenCalledOnce();
+
+    act(() => {
+      savePending.resolve(undefined);
+    });
+  });
+
+  it('cancels saved-track recalculation before deleting that track', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    let requestCount = 0;
+    vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates, signal) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return Promise.resolve(
+          coordinates.map(() => ({ status: 'unavailable' as const })),
+        );
+      }
+      return new Promise((_, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          },
+          { once: true },
+        );
+      });
+    });
+    const replaceLocalTrackElevation = vi.spyOn(
+      services.database,
+      'replaceLocalTrackElevation',
+    );
+    const deleteLocalTrack = vi.spyOn(services.database, 'deleteLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Delete race.gpx'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    await user.click(
+      within(details).getByRole('button', { name: 'Recalculate elevation' }),
+    );
+    await waitFor(() => {
+      expect(requestCount).toBe(2);
+    });
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    await waitFor(() => {
+      expect(deleteLocalTrack).toHaveBeenCalledOnce();
+    });
+    expect(replaceLocalTrackElevation).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText('Elevation could not be recalculated.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
     const user = userEvent.setup();
     const mapLayers = services.mapLayers;

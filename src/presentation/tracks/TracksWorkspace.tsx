@@ -85,6 +85,11 @@ import {
   type ElevationProfileInputPoint,
 } from '@/domain/tracks/elevationProfile';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
+import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
+import {
+  formatTrackDistance,
+  formatTrackElevation,
+} from '@/presentation/tracks/trackFormatters';
 import {
   requestMapFitBounds,
   requestMapNavigation,
@@ -961,9 +966,6 @@ function TrackImportZone() {
   );
 }
 
-function formatTrackDistance(meters: number): string {
-  return `${(meters / 1_000).toFixed(meters < 10_000 ? 1 : 0)} km`;
-}
 
 function formatTrackDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3_600);
@@ -971,9 +973,6 @@ function formatTrackDuration(seconds: number): string {
   return `${String(hours)}h ${String(minutes)}m`;
 }
 
-function formatTrackElevation(meters: number): string {
-  return `${Math.round(meters).toLocaleString('en')} m`;
-}
 
 function averageSpeedKilometersPerHour(metrics: TrackMetrics): number | undefined {
   const elapsedSeconds = metrics.elapsedSeconds;
@@ -1321,39 +1320,68 @@ function elevationProfileInputSegments(
   return inputs;
 }
 
-function TrackElevationProfile() {
+function segmentIndexForSample(profile: ElevationProfile, sampleIndex: number): number | null {
+  const segmentIndex = profile.segments.findIndex(
+    (segment, index) =>
+      sampleIndex >= segment.startSampleIndex &&
+      (sampleIndex < segment.endSampleIndex ||
+        (index === profile.segments.length - 1 && sampleIndex <= segment.endSampleIndex)),
+  );
+  return segmentIndex < 0 ? null : segmentIndex;
+}
+
+function TrackElevationAnalysis() {
   const { active } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
+  const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState<number | null>(null);
+  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
     },
     [mapLayers],
   );
+  const profile = useMemo(() => {
+    if (active === null) return null;
+    if (active.kind === 'preview') return active.profile;
+    const savedProfileInputs = elevationProfileInputSegments(active.content.trackPoints);
+    return savedProfileInputs === null ? null : calculateElevationProfile(savedProfileInputs);
+  }, [active]);
   if (active === null) return null;
-  const savedProfileInputs =
-    active.kind === 'saved' ? elevationProfileInputSegments(active.content.trackPoints) : null;
-  const profile =
-    active.kind === 'preview'
-      ? active.profile
-      : savedProfileInputs === null
-        ? null
-        : calculateElevationProfile(savedProfileInputs);
   if (profile === null) return null;
+  const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
   return (
-    <ElevationProfileChart
-      profile={profile}
-      onActivePointChange={(point) => {
-        mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
-      }}
-      onPointClick={(point) => {
-        requestMapNavigation({
-          longitude: point.coordinate[0],
-          latitude: point.coordinate[1],
-          zoom: 13,
-        });
-      }}
-    />
+    <Stack spacing={1.5}>
+      <ElevationProfileChart
+        profile={profile}
+        onActivePointChange={(point) => {
+          mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
+          const nextSegmentIndex =
+            point === null ? null : segmentIndexForSample(profile, point.sampleIndex);
+          setHoveredSegmentIndex((current) =>
+            current === nextSegmentIndex ? current : nextSegmentIndex,
+          );
+        }}
+        onPointClick={(point) => {
+          requestMapNavigation({
+            longitude: point.coordinate[0],
+            latitude: point.coordinate[1],
+            zoom: 13,
+          });
+        }}
+      />
+      <ClimbsDescentsSection
+        segments={profile.segments}
+        activeSegmentIndex={activeSegmentIndex}
+        selectedSegmentIndex={selectedSegmentIndex}
+        onSegmentHoverChange={(nextSegmentIndex) => {
+          setHoveredSegmentIndex((current) =>
+            current === nextSegmentIndex ? current : nextSegmentIndex,
+          );
+        }}
+        onSegmentSelectionChange={setSelectedSegmentIndex}
+      />
+    </Stack>
   );
 }
 
@@ -1813,7 +1841,7 @@ export function TrackDetailsPane({
             Track details
           </Typography>
           <TrackStats metrics={metrics} />
-          <TrackElevationProfile
+          <TrackElevationAnalysis
             key={`elevation:${active.kind === 'preview' ? active.id : active.summary.id}`}
           />
           <TrackMetadata

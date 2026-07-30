@@ -7,6 +7,15 @@ export const appColors = {
     amber: '#FFB703',
     tigerOrange: '#FB8500',
   },
+  elevationGrade: {
+    'steep-descent': '#219EBC',
+    descent: '#16786A',
+    flat: '#898D8F',
+    climb: '#FFB703',
+    'hard-climb': '#FB8500',
+    'steep-climb': '#B33A3A',
+    'extreme-climb': '#7A1F1F',
+  },
   surface: {
     canvas: '#EAF5F7',
     map: '#D8D8D3',

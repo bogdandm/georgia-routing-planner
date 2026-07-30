@@ -166,6 +166,16 @@ interface GradeRange {
   band: GradeBand;
 }
 
+function requiredValue<T>(values: readonly T[], index: number): T {
+  const value = values[index];
+  if (value === undefined) throw new RangeError('Profile data is incomplete.');
+  return value;
+}
+
+function numericValue(values: Float64Array, index: number): number {
+  return values[index] ?? 0;
+}
+
 /** Applies one three-sample median pass independently to each completed source segment. */
 export function medianFilterElevationSamples(
   segments: readonly (readonly ElevationSampleInput[])[],
@@ -175,9 +185,9 @@ export function medianFilterElevationSamples(
     return segment.map((point, index) => {
       let elevationMeters = point.elevationMeters;
       if (index > 0 && index < segment.length - 1) {
-        window[0] = segment[index - 1]?.elevationMeters ?? point.elevationMeters;
+        window[0] = requiredValue(segment, index - 1).elevationMeters;
         window[1] = point.elevationMeters;
-        window[2] = segment[index + 1]?.elevationMeters ?? point.elevationMeters;
+        window[2] = requiredValue(segment, index + 1).elevationMeters;
         elevationMeters = medianInPlace(window, window.length);
       }
       const filtered: ElevationProfileInputPoint = {
@@ -216,13 +226,12 @@ function calculateRunPoints(
   const start = profile.length;
   let distanceMeters = totalDistance;
   for (let index = 0; index < inputs.length; index += 1) {
-    const input = inputs[index];
-    if (input === undefined) continue;
+    const input = requiredValue(inputs, index);
     if (index > 0) {
-      const previous = inputs[index - 1];
-      if (previous !== undefined) {
-        distanceMeters += geodesicDistanceMeters(previous.coordinate, input.coordinate);
-      }
+      distanceMeters += geodesicDistanceMeters(
+        requiredValue(inputs, index - 1).coordinate,
+        input.coordinate,
+      );
     }
     profile.push({
       ...input,
@@ -241,28 +250,27 @@ function calculateRunPoints(
   let windowEnd = start;
   let elevationSum = 0;
   for (let index = start; index <= end; index += 1) {
-    const point = profile[index];
-    if (point === undefined) continue;
+    const point = requiredValue(profile, index);
     while (
       windowEnd <= end &&
-      (profile[windowEnd]?.distanceMeters ?? Infinity) <=
+      requiredValue(profile, windowEnd).distanceMeters <=
         point.distanceMeters + halfTrendWindow
     ) {
-      elevationSum += profile[windowEnd]?.elevationMeters ?? 0;
+      elevationSum += requiredValue(profile, windowEnd).elevationMeters;
       windowEnd += 1;
     }
     while (
       windowStart < windowEnd &&
-      (profile[windowStart]?.distanceMeters ?? -Infinity) <
+      requiredValue(profile, windowStart).distanceMeters <
         point.distanceMeters - halfTrendWindow
     ) {
-      elevationSum -= profile[windowStart]?.elevationMeters ?? 0;
+      elevationSum -= requiredValue(profile, windowStart).elevationMeters;
       windowStart += 1;
     }
     trends[index - start] = elevationSum / (windowEnd - windowStart);
   }
-  const firstDistance = profile[start]?.distanceMeters ?? 0;
-  const lastDistance = profile[end]?.distanceMeters ?? firstDistance;
+  const firstDistance = requiredValue(profile, start).distanceMeters;
+  const lastDistance = requiredValue(profile, end).distanceMeters;
   const halfLocalWindow = options.localGradeWindowM / 2;
   let leftBracket = start;
   let rightBracket = start;
@@ -272,20 +280,15 @@ function calculateRunPoints(
   ): { elevation: number; bracket: number } => {
     while (
       bracket < end &&
-      (profile[bracket + 1]?.distanceMeters ?? Infinity) < targetDistance
+      requiredValue(profile, bracket + 1).distanceMeters < targetDistance
     ) {
       bracket += 1;
     }
-    const left = profile[bracket];
-    const right = profile[Math.min(bracket + 1, end)];
-    const leftTrend = trends[bracket - start] ?? left?.elevationMeters ?? 0;
-    const rightTrend =
-      trends[Math.min(bracket + 1, end) - start] ?? right?.elevationMeters ?? leftTrend;
-    if (
-      left === undefined ||
-      right === undefined ||
-      right.distanceMeters === left.distanceMeters
-    ) {
+    const left = requiredValue(profile, bracket);
+    const right = requiredValue(profile, Math.min(bracket + 1, end));
+    const leftTrend = numericValue(trends, bracket - start);
+    const rightTrend = numericValue(trends, Math.min(bracket + 1, end) - start);
+    if (right.distanceMeters === left.distanceMeters) {
       return { elevation: leftTrend, bracket };
     }
     const fraction =
@@ -297,8 +300,7 @@ function calculateRunPoints(
     };
   };
   for (let index = start; index <= end; index += 1) {
-    const point = profile[index];
-    if (point === undefined) continue;
+    const point = requiredValue(profile, index);
     const localStart = Math.max(firstDistance, point.distanceMeters - halfLocalWindow);
     const localEnd = Math.min(lastDistance, point.distanceMeters + halfLocalWindow);
     const leftSample = elevationAt(localStart, leftBracket);
@@ -312,12 +314,11 @@ function calculateRunPoints(
         : (100 * (rightSample.elevation - leftSample.elevation)) / horizontalDistance;
   }
   for (let index = start; index <= end; index += 1) {
-    const point = profile[index];
-    if (point === undefined) continue;
+    const point = requiredValue(profile, index);
     profile[index] = {
       ...point,
-      trendElevationMeters: trends[index - start] ?? point.elevationMeters,
-      localGradePct: grades[index - start] ?? 0,
+      trendElevationMeters: numericValue(trends, index - start),
+      localGradePct: numericValue(grades, index - start),
     };
   }
   return { start, end, totalDistance: distanceMeters };

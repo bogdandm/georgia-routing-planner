@@ -1,22 +1,21 @@
 /** Allocation-conscious median helpers for bounded elevation windows. */
 export function medianInPlace(values: Float64Array, count: number): number {
+  if (!Number.isInteger(count) || count < 1 || count > values.length) {
+    throw new RangeError('Median count must select populated values.');
+  }
   for (let index = 1; index < count; index += 1) {
-    const value = values[index];
-    if (value === undefined) continue;
+    const value = values[index] ?? 0;
     let insertionIndex = index - 1;
-    while (insertionIndex >= 0 && (values[insertionIndex] ?? value) > value) {
-      values[insertionIndex + 1] = values[insertionIndex] ?? value;
+    while (insertionIndex >= 0 && (values[insertionIndex] ?? 0) > value) {
+      values[insertionIndex + 1] = values[insertionIndex] ?? 0;
       insertionIndex -= 1;
     }
     values[insertionIndex + 1] = value;
   }
   const middle = Math.floor(count / 2);
-  const upper = values[middle];
-  if (upper === undefined) throw new RangeError('Median requires at least one value.');
+  const upper = values[middle] ?? 0;
   if (count % 2 === 1) return upper;
-  const lower = values[middle - 1];
-  if (lower === undefined) throw new RangeError('Median pair is incomplete.');
-  return (lower + upper) / 2;
+  return ((values[middle - 1] ?? 0) + upper) / 2;
 }
 
 export function repairMedianInPlace(
@@ -47,7 +46,7 @@ export function repairMedianInPlace(
   }
   if (bestCount < Math.min(3, count) || ambiguous) return overallMedian;
   const middle = bestStart + Math.floor(bestCount / 2);
-  const upper = values[middle] ?? overallMedian;
+  const upper = values[middle] ?? 0;
   if (bestCount % 2 === 1) return upper;
-  return ((values[middle - 1] ?? upper) + upper) / 2;
+  return ((values[middle - 1] ?? 0) + upper) / 2;
 }

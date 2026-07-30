@@ -5,6 +5,7 @@ import {
   DEFAULT_ELEVATION_ANALYSIS_OPTIONS,
   elevationSegmentIndexForSample,
   gradeBandForGrade,
+  sampleElevationProfilePoints,
   medianFilterElevationSamples,
   type ElevationProfile,
   type ElevationProfileInputPoint,
@@ -57,7 +58,12 @@ describe('calculateElevationProfile', () => {
     const filtered = medianFilterElevationSamples([
       [
         { coordinate: [0, 0], elevationMeters: 100, sourceSegmentIndex: 0 },
-        { coordinate: [0.001, 0], elevationMeters: 1_000, sourceSegmentIndex: 0 },
+        {
+          coordinate: [0.001, 0],
+          elevationMeters: 1_000,
+          recordedAt: '2026-07-30T10:00:00.000Z',
+          sourceSegmentIndex: 0,
+        },
         { coordinate: [0.002, 0], elevationMeters: 110, sourceSegmentIndex: 0 },
       ],
     ]);
@@ -69,6 +75,7 @@ describe('calculateElevationProfile', () => {
       [1_000, 110],
       [110, 110],
     ]);
+    expect(filtered[0]?.[1]?.recordedAt).toBe('2026-07-30T10:00:00.000Z');
   });
 
   it('keeps a short negative local grade inside one macro climb', () => {
@@ -146,6 +153,55 @@ describe('calculateElevationProfile', () => {
     });
   });
 
+  it('merges the symmetric short climb interruption into a descent', () => {
+    const profile = calculateElevationProfile(
+      [
+        profileInputs([
+          180, 170, 160, 150, 140, 130, 120, 110, 100, 90, 80, 90, 100, 110, 100, 90,
+          80, 70, 60, 50, 40, 30, 20, 10, 0,
+        ]),
+      ],
+      { ...DEFAULT_ELEVATION_ANALYSIS_OPTIONS, trendWindowM: 0 },
+    );
+
+    expect(profile?.segments.map((segment) => segment.type)).toEqual(['descent']);
+    expect(profile?.segments[0]).toMatchObject({
+      ascentMeters: 30,
+      descentMeters: 210,
+    });
+  });
+
+  it('absorbs an unqualified terminal reversal into the preceding climb', () => {
+    const profile = calculateElevationProfile(
+      [profileInputs([0, 25, 50, 75, 100, 125, 150, 140, 130, 120])],
+      { ...DEFAULT_ELEVATION_ANALYSIS_OPTIONS, trendWindowM: 0 },
+    );
+
+    expect(profile?.segments.map((segment) => segment.type)).toEqual(['climb']);
+    expect(profile?.segments[0]).toMatchObject({
+      ascentMeters: 150,
+      descentMeters: 30,
+    });
+  });
+
+  it('absorbs an unqualified reversal between neighboring climbs', () => {
+    const profile = calculateElevationProfile(
+      [
+        profileInputs([
+          0, 20, 40, 60, 80, 100, 120, 112.5, 105, 97.5, 90, 110, 130, 150, 170, 190,
+          210,
+        ]),
+      ],
+      { ...DEFAULT_ELEVATION_ANALYSIS_OPTIONS, trendWindowM: 0 },
+    );
+
+    expect(profile?.segments.map((segment) => segment.type)).toEqual(['climb']);
+    expect(profile?.segments[0]).toMatchObject({
+      ascentMeters: 240,
+      descentMeters: 30,
+    });
+  });
+
   it('keeps aggregate statistics on filtered rather than trend elevations', () => {
     const profile = calculateElevationProfile([profileInputs([0, 100, 0])], {
       ...DEFAULT_ELEVATION_ANALYSIS_OPTIONS,
@@ -168,6 +224,41 @@ describe('calculateElevationProfile', () => {
     });
 
     expect(profile?.points[1]?.localGradePct).toBeCloseTo(50, 3);
+  });
+
+  it('reports zero local and average grade for repeated profile coordinates', () => {
+    const profile = calculateElevationProfile([profileInputs([100, 110], 0, 0)], {
+      ...DEFAULT_ELEVATION_ANALYSIS_OPTIONS,
+      trendWindowM: 0,
+    });
+
+    expect(profile?.points.map((point) => point.localGradePct)).toEqual([0, 0]);
+    expect(profile?.segments[0]?.averageGradePct).toBe(0);
+  });
+
+  it('merges short local-grade bands without losing route distance', () => {
+    const profile = calculateElevationProfile(
+      [profileInputs([0, 0, 10, 30, 31, 11, 10, 30, 50])],
+      {
+        ...DEFAULT_ELEVATION_ANALYSIS_OPTIONS,
+        trendWindowM: 0,
+        localGradeWindowM: 200,
+        minGradeSubsegmentDistanceM: 250,
+      },
+    );
+    const segment = profile?.segments[0];
+    expect(segment).toBeDefined();
+    expect(
+      segment?.gradeSubsegments.reduce(
+        (total, gradeSegment) => total + gradeSegment.distanceMeters,
+        0,
+      ),
+    ).toBeCloseTo(segment?.distanceMeters ?? 0, 6);
+    expect(
+      segment?.gradeSubsegments.every(
+        (gradeSegment) => gradeSegment.distanceMeters >= 250,
+      ),
+    ).toBe(true);
   });
 
   it('smooths local grade over the trend before chart classification', () => {
@@ -285,5 +376,23 @@ describe('calculateElevationProfile', () => {
     expect(elevationSegmentIndexForSample(profile, 9)).toBe(0);
     expect(elevationSegmentIndexForSample(profile, 10)).toBe(1);
     expect(elevationSegmentIndexForSample(profile, 20)).toBe(1);
+    expect(elevationSegmentIndexForSample(profile, -1)).toBeNull();
+  });
+
+  it('samples optional chart points while retaining profile boundaries', () => {
+    const profile = calculateElevationProfile([
+      profileInputs(
+        Array.from({ length: 2_000 }, (_, index) => index),
+        0,
+        10,
+      ),
+    ]);
+    expect(profile).not.toBeNull();
+    if (profile === null) return;
+
+    const sampled = sampleElevationProfilePoints(profile, 100);
+    expect(sampled).toHaveLength(100);
+    expect(sampled[0]).toBe(profile.points[0]);
+    expect(sampled.at(-1)).toBe(profile.points.at(-1));
   });
 });

@@ -205,7 +205,7 @@ describe('filterTerrariumTile', () => {
           if (contextTile === null) continue;
           expect(
             contextTile.data,
-            `${fixture.name} candidate input ${inputIndex}`,
+            `${fixture.name} candidate input ${String(inputIndex)}`,
           ).toEqual(candidateInputs[inputIndex]);
           inputIndex += 1;
         }
@@ -216,7 +216,7 @@ describe('filterTerrariumTile', () => {
           if (contextTile === null) continue;
           expect(
             contextTile.data,
-            `${fixture.name} reference input ${inputIndex}`,
+            `${fixture.name} reference input ${String(inputIndex)}`,
           ).toEqual(referenceInputs[inputIndex]);
           inputIndex += 1;
         }

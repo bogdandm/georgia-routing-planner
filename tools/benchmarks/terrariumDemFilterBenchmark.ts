@@ -58,7 +58,9 @@ for (const fixture of createTerrariumBenchmarkFixtures()) {
   }
   for (let index = 0; index < candidateCheck.tile.data.length; index += 1) {
     if (candidateCheck.tile.data[index] !== oracleCheck.tile.data[index]) {
-      throw new Error(`Benchmark byte parity failed for ${fixture.name} at ${index}.`);
+      throw new Error(
+        `Benchmark byte parity failed for ${fixture.name} at ${String(index)}.`,
+      );
     }
   }
 
@@ -86,4 +88,4 @@ for (const fixture of createTerrariumBenchmarkFixtures()) {
   );
 }
 
-console.log(`Checksum: ${checksum}`);
+console.log(`Checksum: ${String(checksum)}`);

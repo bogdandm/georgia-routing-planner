@@ -150,8 +150,9 @@ function decodePlanePixel(
     tile.data[sourceOffset + 2] ?? 0,
   );
   elevations[planeIndex] = elevation;
-  for (let index = 0; index < policy.sentinelElevationsMeters.length; index += 1) {
-    const sentinel = policy.sentinelElevationsMeters[index];
+  let sentinelIndex = 0;
+  while (sentinelIndex < policy.sentinelElevationsMeters.length) {
+    const sentinel = policy.sentinelElevationsMeters[sentinelIndex];
     if (
       sentinel !== undefined &&
       Math.abs(elevation - sentinel) < 1 / terrariumQuantization
@@ -159,6 +160,7 @@ function decodePlanePixel(
       validity[planeIndex] = PixelState.Sentinel;
       return;
     }
+    sentinelIndex += 1;
   }
   validity[planeIndex] =
     elevation < policy.minimumElevationMeters ||
@@ -328,8 +330,11 @@ export function filterTerrariumTile(
           continue;
         }
 
-        for (let index = 0; index < neighborOffsets.length; index += 1) {
-          const neighborIndex = planeIndex + (neighborOffsets[index] ?? 0);
+        let neighborOffsetIndex = 0;
+        while (neighborOffsetIndex < neighborOffsets.length) {
+          const neighborIndex =
+            planeIndex + (neighborOffsets[neighborOffsetIndex] ?? 0);
+          neighborOffsetIndex += 1;
           if (validity[neighborIndex] !== PixelState.Valid) continue;
           neighbors[neighborCount] = elevations[neighborIndex] ?? 0;
           neighborCount += 1;
@@ -344,8 +349,11 @@ export function filterTerrariumTile(
       } else {
         const elevation = elevations[planeIndex] ?? 0;
         let supportCount = 0;
-        for (let index = 0; index < neighborOffsets.length; index += 1) {
-          const neighborIndex = planeIndex + (neighborOffsets[index] ?? 0);
+        let neighborOffsetIndex = 0;
+        while (neighborOffsetIndex < neighborOffsets.length) {
+          const neighborIndex =
+            planeIndex + (neighborOffsets[neighborOffsetIndex] ?? 0);
+          neighborOffsetIndex += 1;
           if (validity[neighborIndex] !== PixelState.Valid) continue;
           const neighbor = elevations[neighborIndex] ?? 0;
           neighbors[neighborCount] = neighbor;

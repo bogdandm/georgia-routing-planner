@@ -60,6 +60,11 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
+function requestError(reason: unknown, fallbackMessage: string): Error {
+  if (reason instanceof Error || reason instanceof DOMException) return reason;
+  return new Error(fallbackMessage, { cause: reason });
+}
+
 const emptyRepairCounts: TerrariumRepairCounts = {
   noDataCount: 0,
   sentinelCount: 0,
@@ -403,10 +408,7 @@ export class FilteredTerrariumTileProvider {
       };
       const handleAbort = () => {
         release();
-        reject(
-          signal.reason ??
-            new DOMException('Terrarium tile request canceled.', 'AbortError'),
-        );
+        reject(requestError(signal.reason, 'Terrarium tile request canceled.'));
       };
       if (signal.aborted) {
         handleAbort();
@@ -422,7 +424,7 @@ export class FilteredTerrariumTileProvider {
         (error: unknown) => {
           if (!active) return;
           release();
-          reject(error);
+          reject(requestError(error, 'DEM tile request failed.'));
         },
       );
     });

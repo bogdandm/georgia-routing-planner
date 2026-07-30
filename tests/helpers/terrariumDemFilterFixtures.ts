@@ -23,7 +23,7 @@ export interface TerrariumFilterFixture {
   readonly createGrid: () => TerrariumTileGrid;
 }
 
-export interface TerrariumBenchmarkFixture extends TerrariumFilterFixture {}
+export type TerrariumBenchmarkFixture = TerrariumFilterFixture;
 
 type ElevationAt = (x: number, y: number) => number;
 type MutableTerrariumTileGrid = [

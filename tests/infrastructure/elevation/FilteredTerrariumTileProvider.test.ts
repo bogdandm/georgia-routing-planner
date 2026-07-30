@@ -306,10 +306,10 @@ describe('FilteredTerrariumTileProvider', () => {
     const fetchImplementation = vi.fn((input: RequestInfo | URL) =>
       Promise.resolve(new Response(new Blob([requestUrl(input)]), { status: 200 })),
     );
-    const decode = vi.fn(async () => {
+    const decode = vi.fn(() => {
       const decoded = decodedTile();
       if (decode.mock.calls.length === 5) decoded.data[3] = 0;
-      return decoded;
+      return Promise.resolve(decoded);
     });
     const encode = vi.fn(() => Promise.resolve(new Blob(['repaired'])));
     const provider = new FilteredTerrariumTileProvider(
@@ -338,7 +338,7 @@ describe('FilteredTerrariumTileProvider', () => {
   });
 
   it('rejects one canceled consumer while retaining the shared producer', async () => {
-    const gate = deferred<void>();
+    const gate = deferred<undefined>();
     const producerSignals: AbortSignal[] = [];
     const fetchImplementation = vi.fn(
       async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -366,8 +366,9 @@ describe('FilteredTerrariumTileProvider', () => {
     await expect(first).rejects.toBe(reason);
     expect(producerSignals).toHaveLength(9);
     expect(producerSignals.every((signal) => !signal.aborted)).toBe(true);
-    gate.resolve();
-    await expect(second).resolves.toMatchObject({ data: expect.any(Blob) });
+    gate.resolve(undefined);
+    const retainedResult = await second;
+    expect(retainedResult.data).toBeInstanceOf(Blob);
   });
 
   it('aborts producer work after every same-key consumer cancels', async () => {
@@ -460,23 +461,22 @@ describe('FilteredTerrariumTileProvider', () => {
       }
       return Promise.resolve(new Response(new Blob([url]), { status: 200 }));
     });
-    const decode = vi.fn(async () => {
-      if (decode.mock.calls.length === 1) throw new Error('Invalid PNG.');
-      return decodedTile();
-    });
+    const decode = vi.fn(() =>
+      decode.mock.calls.length === 1
+        ? Promise.reject(new Error('Invalid PNG.'))
+        : Promise.resolve(decodedTile()),
+    );
     const provider = new FilteredTerrariumTileProvider(
       configuration(),
       logger,
-      { decode, encode: codec.encode },
+      { decode, encode: (tile, signal) => codec.encode(tile, signal) },
       fetchImplementation,
     );
 
-    await expect(
-      provider.getTile(5, 8, 9, new AbortController()),
-    ).resolves.toMatchObject({ data: expect.any(Blob) });
-    await expect(
-      provider.getTile(5, 7, 8, new AbortController()),
-    ).resolves.toMatchObject({ data: expect.any(Blob) });
+    const first = await provider.getTile(5, 8, 9, new AbortController());
+    const second = await provider.getTile(5, 7, 8, new AbortController());
+    expect(first.data).toBeInstanceOf(Blob);
+    expect(second.data).toBeInstanceOf(Blob);
 
     const retriedUrl = [...failedOnce][0];
     expect(retriedUrl).toBeDefined();
@@ -497,16 +497,15 @@ describe('FilteredTerrariumTileProvider', () => {
         }
         return Promise.resolve(new Response(new Blob([url]), { status: 200 }));
       });
-      const decode = vi.fn(async () => {
-        if (failure === 'decode' && decode.mock.calls.length === 5) {
-          throw new Error('Center PNG invalid.');
-        }
-        return decodedTile();
-      });
+      const decode = vi.fn(() =>
+        failure === 'decode' && decode.mock.calls.length === 5
+          ? Promise.reject(new Error('Center PNG invalid.'))
+          : Promise.resolve(decodedTile()),
+      );
       const provider = new FilteredTerrariumTileProvider(
         configuration(),
         logger,
-        { decode, encode: codec.encode },
+        { decode, encode: (tile, signal) => codec.encode(tile, signal) },
         fetchImplementation,
       );
 

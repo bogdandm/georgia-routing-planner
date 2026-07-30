@@ -33,6 +33,7 @@ import {
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
 import { SentinelQueryTimeline } from '@/presentation/developer-tools/SentinelQueryTimeline';
+import { formatDateTime } from '@/presentation/formatDateTime';
 import { useUiStore } from '@/presentation/shell/uiStore';
 
 interface DeveloperDrawerProps {
@@ -317,7 +318,10 @@ export function DeveloperDrawer({
                 <Typography variant="body2">
                   Max texture:{' '}
                   {mapSnapshot.webGlCapabilities.maxTextureSize ?? 'unknown'}; last
-                  idle: {mapSnapshot.lastIdleAt ?? 'not yet'}
+                  idle:{' '}
+                  {mapSnapshot.lastIdleAt === null
+                    ? 'not yet'
+                    : formatDateTime(new Date(mapSnapshot.lastIdleAt))}
                 </Typography>
               </Box>
               <Stack spacing={0.5}>
@@ -405,7 +409,7 @@ export function DeveloperDrawer({
                             failure.retryAttempt === 0
                               ? 'No automatic retry attempted'
                               : `Retry attempt ${String(failure.retryAttempt)}`,
-                            `Last failure: ${failure.lastOccurredAt}`,
+                            `Last failure: ${formatDateTime(new Date(failure.lastOccurredAt))}`,
                           ].join(' · ')}
                         />
                       </ListItem>
@@ -428,7 +432,7 @@ export function DeveloperDrawer({
                 <ListItem key={event.id} divider alignItems="flex-start">
                   <ListItemText
                     primary={event.name}
-                    secondary={`${event.level.toUpperCase()} · ${event.timestamp}`}
+                    secondary={`${event.level.toUpperCase()} · ${formatDateTime(new Date(event.timestamp))}`}
                   />
                 </ListItem>
               ))

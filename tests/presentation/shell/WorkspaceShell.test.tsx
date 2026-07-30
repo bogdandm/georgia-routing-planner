@@ -225,6 +225,53 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('2D share link copied')).toBeVisible();
   });
 
+  it('opens public site information from the rail action below Settings', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const settingsButton = screen.getByRole('button', { name: 'Open settings' });
+    const aboutButton = screen.getByRole('button', { name: 'About this site' });
+    expect(
+      settingsButton.compareDocumentPosition(aboutButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(aboutButton);
+
+    const about = screen.getByRole('dialog', {
+      name: 'About Georgia Routing Planner',
+    });
+    expect(about).toBeVisible();
+    expect(within(about).getByText('Bogdan Kalashnikov')).toBeVisible();
+    expect(
+      within(about).getByRole('link', { name: 'GitHub repository' }),
+    ).toHaveAttribute('href', 'https://github.com/bogdandm/georgia-routing-planner');
+    expect(
+      within(about).getByRole('link', { name: 'nominatim.openstreetmap.org' }),
+    ).toBeVisible();
+    expect(
+      within(about).getByText('OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap'),
+    ).toBeVisible();
+    expect(
+      within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
+    ).toBeVisible();
+    expect(about).not.toHaveTextContent('@');
+    expect(about).toHaveStyle({
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    });
+
+    expect(
+      within(about).getByRole('button', { name: 'Close site information' }),
+    ).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(about).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(aboutButton).toHaveFocus();
+    });
+  });
+
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
     const user = userEvent.setup();
     const selectedScene = syntheticSatelliteScene(
@@ -327,7 +374,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Layers', 'Tracks', 'Markers']);
+    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );
@@ -977,6 +1024,9 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     expect(
       within(details).getByRole('heading', { name: 'Fixture trail' }),
+    ).toBeVisible();
+    expect(
+      within(details).getByText(/^Saved \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}$/u),
     ).toBeVisible();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,

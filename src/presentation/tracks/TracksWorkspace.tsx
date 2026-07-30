@@ -85,6 +85,7 @@ import {
   type ElevationProfile,
   type ElevationProfileInputPoint,
 } from '@/domain/tracks/elevationProfile';
+import { formatDateTime } from '@/presentation/formatDateTime';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
 import {
@@ -1667,7 +1668,7 @@ function TrackMetadata({
       </Typography>
       {savedAt === undefined ? null : (
         <Typography variant="caption" color="text.secondary">
-          Saved {new Date(savedAt).toLocaleString('en')}
+          Saved {formatDateTime(new Date(savedAt))}
         </Typography>
       )}
     </Stack>

@@ -26,7 +26,7 @@ export class BrowserTerrariumPngCodec implements TerrariumPngCodec {
       return {
         width: bitmap.width,
         height: bitmap.height,
-        data: new Uint8ClampedArray(image.data),
+        data: image.data,
       };
     } finally {
       bitmap.close();

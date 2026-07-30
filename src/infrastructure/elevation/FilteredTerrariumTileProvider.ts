@@ -24,9 +24,9 @@ interface LoadedTile extends SourceTile {
   readonly decoded: DecodedTerrariumTile;
 }
 
-interface SharedLoadedTileRequest {
+interface SharedTileRequest<T> {
   readonly controller: AbortController;
-  readonly promise: Promise<LoadedTile>;
+  readonly promise: Promise<T>;
   consumers: number;
 }
 
@@ -87,8 +87,11 @@ const diagnosticStatusPriority: Readonly<Record<DemProcessingStatus, number>> = 
 export class FilteredTerrariumTileProvider {
   readonly #cache = new Map<string, FilteredTerrariumResponse>();
   readonly #decodedTileCache = new Map<string, LoadedTile>();
-  readonly #decodedTileRequests = new Map<string, SharedLoadedTileRequest>();
-  readonly #tileRequests = new Set<AbortController>();
+  readonly #decodedTileRequests = new Map<string, SharedTileRequest<LoadedTile>>();
+  readonly #processedTileRequests = new Map<
+    string,
+    SharedTileRequest<FilteredTerrariumResponse>
+  >();
   #enabled = true;
   #revision = 0;
   #disposed = false;
@@ -113,14 +116,14 @@ export class FilteredTerrariumTileProvider {
     this.#revision += 1;
     this.#cache.clear();
     this.#decodedTileCache.clear();
-    for (const controller of this.#tileRequests) {
-      controller.abort(new DOMException('DEM filter mode changed.', 'AbortError'));
+    const reason = new DOMException('DEM filter mode changed.', 'AbortError');
+    for (const request of this.#processedTileRequests.values()) {
+      request.controller.abort(reason);
     }
     for (const request of this.#decodedTileRequests.values()) {
-      request.controller.abort(
-        new DOMException('DEM filter mode changed.', 'AbortError'),
-      );
+      request.controller.abort(reason);
     }
+    this.#processedTileRequests.clear();
     this.#decodedTileRequests.clear();
   }
 
@@ -141,13 +144,48 @@ export class FilteredTerrariumTileProvider {
       return cached;
     }
 
+    let request = this.#processedTileRequests.get(key);
+    if (request === undefined) {
+      const controller = new AbortController();
+      const promise = this.processTile(
+        zoom,
+        x,
+        y,
+        revision,
+        filterEnabled,
+        key,
+        controller,
+      );
+      request = { controller, promise, consumers: 0 };
+      const createdRequest = request;
+      this.#processedTileRequests.set(key, request);
+      void promise
+        .finally(() => {
+          if (this.#processedTileRequests.get(key) === createdRequest) {
+            this.#processedTileRequests.delete(key);
+          }
+        })
+        .catch(() => undefined);
+    }
+
+    return this.waitForSharedRequest(
+      key,
+      request,
+      this.#processedTileRequests,
+      parentAbortController.signal,
+    );
+  }
+
+  private async processTile(
+    zoom: number,
+    x: number,
+    y: number,
+    revision: number,
+    filterEnabled: boolean,
+    key: string,
+    controller: AbortController,
+  ): Promise<FilteredTerrariumResponse> {
     const startedAt = this.monotonicNow();
-    const controller = new AbortController();
-    this.#tileRequests.add(controller);
-    const handleAbort = () => {
-      controller.abort(parentAbortController.signal.reason);
-    };
-    parentAbortController.signal.addEventListener('abort', handleAbort, { once: true });
     const timeout = setTimeout(() => {
       controller.abort(
         new DOMException('Terrarium tile request timed out.', 'TimeoutError'),
@@ -155,7 +193,6 @@ export class FilteredTerrariumTileProvider {
     }, this.configuration.requestTimeoutMs);
 
     try {
-      if (parentAbortController.signal.aborted) handleAbort();
       if (!filterEnabled) {
         const sourceTile = await this.fetchSourceTile(zoom, x, y, controller.signal);
         const response: FilteredTerrariumResponse = {
@@ -165,7 +202,9 @@ export class FilteredTerrariumTileProvider {
             : { cacheControl: sourceTile.cacheControl }),
           ...(sourceTile.expires === null ? {} : { expires: sourceTile.expires }),
         };
-        if (revision === this.#revision) this.putCache(key, response);
+        if (!controller.signal.aborted && revision === this.#revision) {
+          this.putCache(key, response);
+        }
         this.recordDiagnostic(
           'disabled',
           this.monotonicNow() - startedAt,
@@ -173,6 +212,7 @@ export class FilteredTerrariumTileProvider {
         );
         return response;
       }
+
       const loaded = await this.loadNeighborhood(zoom, x, y, controller.signal);
       const center = loaded[1][1];
       const decodedGrid: TerrariumTileGrid = [
@@ -198,7 +238,9 @@ export class FilteredTerrariumTileProvider {
         ...(center.cacheControl === null ? {} : { cacheControl: center.cacheControl }),
         ...(center.expires === null ? {} : { expires: center.expires }),
       };
-      if (revision === this.#revision) this.putCache(key, response);
+      if (!controller.signal.aborted && revision === this.#revision) {
+        this.putCache(key, response);
+      }
       this.recordDiagnostic(
         filtered.counts.unrepairedCount === 0 ? 'success' : 'partial',
         this.monotonicNow() - startedAt,
@@ -209,18 +251,18 @@ export class FilteredTerrariumTileProvider {
       const timedOut =
         controller.signal.reason instanceof DOMException &&
         controller.signal.reason.name === 'TimeoutError';
-      const canceled =
-        !timedOut && (isAbortError(error) || parentAbortController.signal.aborted);
+      const canceled = !timedOut && (isAbortError(error) || controller.signal.aborted);
       this.recordDiagnostic(
         timedOut ? 'timed-out' : canceled ? 'canceled' : 'failed',
         this.monotonicNow() - startedAt,
         emptyRepairCounts,
       );
+      if (timedOut) {
+        throw new DOMException('Terrarium tile request timed out.', 'AbortError');
+      }
       throw error;
     } finally {
-      this.#tileRequests.delete(controller);
       clearTimeout(timeout);
-      parentAbortController.signal.removeEventListener('abort', handleAbort);
     }
   }
 
@@ -228,15 +270,14 @@ export class FilteredTerrariumTileProvider {
   public dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    for (const controller of this.#tileRequests) {
-      controller.abort(new DOMException('Terrain compute disposed.', 'AbortError'));
+    const reason = new DOMException('Terrain compute disposed.', 'AbortError');
+    for (const request of this.#processedTileRequests.values()) {
+      request.controller.abort(reason);
     }
     for (const request of this.#decodedTileRequests.values()) {
-      request.controller.abort(
-        new DOMException('Terrain compute disposed.', 'AbortError'),
-      );
+      request.controller.abort(reason);
     }
-    this.#tileRequests.clear();
+    this.#processedTileRequests.clear();
     this.#decodedTileRequests.clear();
     this.#cache.clear();
     this.#decodedTileCache.clear();
@@ -260,16 +301,26 @@ export class FilteredTerrariumTileProvider {
     for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
       for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
         const neighborY = y + deltaY;
-        requests.push(
-          neighborY < 0 || neighborY >= tileCount
-            ? Promise.resolve(null)
-            : this.loadTile(
-                zoom,
-                (x + deltaX + tileCount) % tileCount,
-                neighborY,
-                signal,
-              ),
+        if (neighborY < 0 || neighborY >= tileCount) {
+          requests.push(Promise.resolve(null));
+          continue;
+        }
+        const request = this.loadTile(
+          zoom,
+          (x + deltaX + tileCount) % tileCount,
+          neighborY,
+          signal,
         );
+        if (deltaX === 0 && deltaY === 0) {
+          requests.push(request);
+        } else {
+          requests.push(
+            request.catch((error: unknown) => {
+              if (signal.aborted) throw error;
+              return null;
+            }),
+          );
+        }
       }
     }
     const loaded = await Promise.all(requests);
@@ -308,29 +359,33 @@ export class FilteredTerrariumTileProvider {
             ...sourceTile,
             decoded: await this.codec.decode(sourceTile.blob, controller.signal),
           };
-          this.#decodedTileCache.set(key, loaded);
-          this.trimCache(this.#decodedTileCache);
+          if (!controller.signal.aborted) {
+            this.#decodedTileCache.set(key, loaded);
+            this.trimCache(this.#decodedTileCache);
+          }
           return loaded;
         },
       );
       request = { controller, promise, consumers: 0 };
+      const createdRequest = request;
       this.#decodedTileRequests.set(key, request);
       void promise
         .finally(() => {
-          if (this.#decodedTileRequests.get(key) === request) {
+          if (this.#decodedTileRequests.get(key) === createdRequest) {
             this.#decodedTileRequests.delete(key);
           }
         })
         .catch(() => undefined);
     }
-    return this.waitForSharedTile(key, request, signal);
+    return this.waitForSharedRequest(key, request, this.#decodedTileRequests, signal);
   }
 
-  private waitForSharedTile(
+  private waitForSharedRequest<T>(
     key: string,
-    request: SharedLoadedTileRequest,
+    request: SharedTileRequest<T>,
+    requests: Map<string, SharedTileRequest<T>>,
     signal: AbortSignal,
-  ): Promise<LoadedTile> {
+  ): Promise<T> {
     request.consumers += 1;
     return new Promise((resolve, reject) => {
       let active = true;
@@ -339,8 +394,8 @@ export class FilteredTerrariumTileProvider {
         active = false;
         signal.removeEventListener('abort', handleAbort);
         request.consumers -= 1;
-        if (request.consumers === 0 && this.#decodedTileRequests.get(key) === request) {
-          this.#decodedTileRequests.delete(key);
+        if (request.consumers === 0 && requests.get(key) === request) {
+          requests.delete(key);
           request.controller.abort(
             new DOMException('Terrarium tile request canceled.', 'AbortError'),
           );
@@ -349,9 +404,8 @@ export class FilteredTerrariumTileProvider {
       const handleAbort = () => {
         release();
         reject(
-          signal.reason instanceof Error
-            ? signal.reason
-            : new DOMException('Terrarium tile request canceled.', 'AbortError'),
+          signal.reason ??
+            new DOMException('Terrarium tile request canceled.', 'AbortError'),
         );
       };
       if (signal.aborted) {
@@ -360,17 +414,15 @@ export class FilteredTerrariumTileProvider {
       }
       signal.addEventListener('abort', handleAbort, { once: true });
       void request.promise.then(
-        (tile) => {
+        (value) => {
           if (!active) return;
           release();
-          resolve(tile);
+          resolve(value);
         },
         (error: unknown) => {
           if (!active) return;
           release();
-          reject(
-            error instanceof Error ? error : new Error('DEM tile request failed.'),
-          );
+          reject(error);
         },
       );
     });

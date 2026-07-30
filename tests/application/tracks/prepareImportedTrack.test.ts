@@ -66,6 +66,14 @@ describe('prepareImportedTrack', () => {
     expect(prepared.metrics.elevationSource).toBe('dem-assisted');
   });
 
+  it('prefers newly sampled DEM heights for saved-track recalculation', async () => {
+    const prepared = await prepareImportedTrack(sourceSegments, flatDem(400), signal, {
+      preferDemElevations: true,
+    });
+
+    expect(prepared.segments[0]?.points[0]?.elevationMeters).toBe(400);
+  });
+
   it('interpolates short source legs and valid timestamps', async () => {
     const prepared = await prepareImportedTrack(
       [

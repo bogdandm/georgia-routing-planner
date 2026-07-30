@@ -581,6 +581,54 @@ export class AppDatabase
     );
   }
 
+  public async replaceLocalTrackElevation(
+    trackId: string,
+    metrics: TrackMetrics,
+    content: LocalTrackContent,
+  ): Promise<LocalTrackSummary> {
+    const validContent = parseLocalTrackContent(content);
+    if (validContent?.trackId !== trackId) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The local track content is invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      async () => {
+        const existing = await this.localTracks.get(trackId);
+        const summary = parseLocalTrackSummary(existing);
+        if (summary === null) {
+          throw new LocalTrackStorageError(
+            'not-found',
+            'The saved track was not found.',
+          );
+        }
+        const updated = {
+          ...summary,
+          pointCount: validContent.trackPoints.reduce(
+            (count, segment) => count + segment.length,
+            0,
+          ),
+          segmentCount: validContent.trackPoints.length,
+          metrics,
+        };
+        const validSummary = parseLocalTrackSummary(updated);
+        if (validSummary === null) {
+          throw new LocalTrackStorageError(
+            'record-invalid',
+            'The local track summary is invalid.',
+          );
+        }
+        await this.localTracks.put(validSummary);
+        await this.localTrackContents.put(validContent);
+        return validSummary;
+      },
+    );
+  }
+
   public async listLocalTracks(): Promise<readonly LocalTrackSummary[]> {
     const records = await this.localTracks.toArray();
     const valid: LocalTrackSummary[] = [];

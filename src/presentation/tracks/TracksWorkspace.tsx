@@ -264,9 +264,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
   const importGeneration = useRef(0);
+  const latestOpenedTrackId = useRef<string | null>(null);
+  const latestOpenedTrackWrite = useRef<Promise<void>>(Promise.resolve());
   const renderedTrackId = useRef<string | null>(null);
   const restorationAttempted = useRef(false);
 
+  const saveLatestOpenedTrackId = useCallback(
+    async (trackId: string) => {
+      latestOpenedTrackId.current = trackId;
+      const write = latestOpenedTrackWrite.current
+        .catch(() => undefined)
+        .then(async () => {
+          await database.saveLatestOpenedTrackId(latestOpenedTrackId.current);
+        });
+      latestOpenedTrackWrite.current = write;
+      await write;
+    },
+    [database],
+  );
   const reloadSummaries = useCallback(async () => {
     try {
       const loaded = await database.listLocalTracks();
@@ -672,7 +687,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       };
       await database.saveLocalTrack(summary, content);
       if (generation !== importGeneration.current) return;
-      await database.saveLatestOpenedTrackId(summary.id);
+      await saveLatestOpenedTrackId(summary.id);
       if (generation !== importGeneration.current) return;
       if (namingAbort.current === previewNamingAbort) previewNamingAbort?.abort();
       setActive((current) =>
@@ -693,7 +708,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : 'The track could not be saved.',
       );
     }
-  }, [active, clock, database, reloadSummaries]);
+  }, [active, clock, database, reloadSummaries, saveLatestOpenedTrackId]);
 
   const recalculateElevation = useCallback(async () => {
     if (
@@ -718,6 +733,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceSegments,
         elevationProvider,
         controller.signal,
+        { preferDemElevations: active.kind === 'saved' },
       );
       controller.signal.throwIfAborted();
       renderedTrackId.current = null;
@@ -738,21 +754,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           return updated;
         });
       } else {
-        const summary: LocalTrackSummary = {
-          ...active.summary,
-          pointCount: prepared.segments.reduce(
-            (count, segment) => count + segment.points.length,
-            0,
-          ),
-          segmentCount: prepared.segments.length,
-          metrics: prepared.metrics,
-        };
         const content: LocalTrackContent = {
           schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
           trackId: active.summary.id,
           trackPoints: prepared.segments.map((segment) => segment.points),
         };
-        await database.saveLocalTrack(summary, content);
+        const summary = await database.replaceLocalTrackElevation(
+          activeId,
+          prepared.metrics,
+          content,
+        );
         controller.signal.throwIfAborted();
         setActive((current) =>
           current?.kind === 'saved' && current.summary.id === activeId
@@ -820,9 +831,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       try {
         const content = await database.loadLocalTrackContent(summary.id);
         if (generation !== importGeneration.current) return;
-        setActive({ kind: 'saved', summary, content, draftName: summary.name });
-        await database.saveLatestOpenedTrackId(summary.id);
+        await saveLatestOpenedTrackId(summary.id);
         if (generation !== importGeneration.current) return;
+        setActive((current) =>
+          generation === importGeneration.current
+            ? { kind: 'saved', summary, content, draftName: summary.name }
+            : current,
+        );
         setError(null);
       } catch (loadError) {
         if (generation !== importGeneration.current) return;
@@ -833,7 +848,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         );
       }
     },
-    [active?.kind, database],
+    [active?.kind, database, saveLatestOpenedTrackId],
   );
 
   const setActiveName = useCallback((name: string) => {

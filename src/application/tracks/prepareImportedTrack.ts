@@ -26,6 +26,10 @@ interface ResampledStation {
   readonly sourceSegmentIndex: number;
 }
 
+interface PrepareImportedTrackOptions {
+  readonly preferDemElevations?: boolean;
+}
+
 export interface PreparedImportedTrack {
   readonly segments: readonly TrackSegment[];
   readonly profile: ElevationProfile;
@@ -280,6 +284,7 @@ export async function prepareImportedTrack(
   segments: readonly TrackSegment[],
   elevationProvider: ElevationProvider | null,
   signal: AbortSignal,
+  options: PrepareImportedTrackOptions = {},
 ): Promise<PreparedImportedTrack> {
   signal.throwIfAborted();
   let totalPoints = 0;
@@ -317,10 +322,12 @@ export async function prepareImportedTrack(
     );
     sampleOffset += stationSegment.length;
     const distances = stationDistances(stationSegment);
-    const values = stationSegment.map(
-      (station, index) =>
-        station.sourceElevationMeters ?? availableMeters(segmentSamples[index]),
-    );
+    const values = stationSegment.map((station, index) => {
+      const demMeters = availableMeters(segmentSamples[index]);
+      return options.preferDemElevations
+        ? (demMeters ?? station.sourceElevationMeters)
+        : (station.sourceElevationMeters ?? demMeters);
+    });
     for (let index = 1; index < stationSegment.length - 1; index += 1) {
       const source = stationSegment[index]?.sourceElevationMeters;
       const previous = values[index - 1];

@@ -73,6 +73,39 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
+  it('updates elevation atomically without discarding saved metadata', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Original'), content('local:1'));
+    await database.renameLocalTrack('local:1', 'Renamed');
+    await database.setLocalTrackFavorite('local:1', true);
+    const updatedContent: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: 'local:1',
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 900 },
+          { coordinate: [44.01, 42.01], elevationMeters: 1_000 },
+          { coordinate: [44.02, 42.02], elevationMeters: 1_100 },
+        ],
+      ],
+    };
+
+    const updated = await database.replaceLocalTrackElevation(
+      'local:1',
+      { ...summary('local:1', 'Original').metrics, ascentMeters: 200 },
+      updatedContent,
+    );
+
+    expect(updated).toMatchObject({
+      name: 'Renamed',
+      favorite: true,
+      pointCount: 3,
+      segmentCount: 1,
+      metrics: { ascentMeters: 200 },
+    });
+    await expect(database.loadLocalTrackContent('local:1')).resolves.toEqual(
+      updatedContent,
+    );
+  });
   it('migrates v3 tracks without deleting legacy metrics or geometry', async () => {
     database.close();
     await database.delete();

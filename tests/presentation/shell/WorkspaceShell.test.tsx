@@ -869,6 +869,10 @@ describe('WorkspaceShell', () => {
       return pending.promise;
     });
     const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const replaceLocalTrackElevation = vi.spyOn(
+      services.database,
+      'replaceLocalTrackElevation',
+    );
     const user = userEvent.setup();
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -925,7 +929,7 @@ describe('WorkspaceShell', () => {
       );
     });
     await waitFor(() => {
-      expect(saveLocalTrack).toHaveBeenCalledTimes(2);
+      expect(replaceLocalTrackElevation).toHaveBeenCalledOnce();
     });
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
   });

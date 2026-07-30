@@ -79,7 +79,10 @@ import {
   exportTrackAsKml,
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
-import { calculateElevationProfile } from '@/domain/tracks/elevationProfile';
+import {
+  calculateElevationProfile,
+  type ElevationProfileInputPoint,
+} from '@/domain/tracks/elevationProfile';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
 import {
   requestMapFitBounds,
@@ -1243,6 +1246,32 @@ function downloadText(filename: string, type: string, content: string): void {
   URL.revokeObjectURL(url);
 }
 
+function elevationProfileInputSegments(
+  segments: readonly (readonly TrackPoint[])[],
+): readonly (readonly ElevationProfileInputPoint[])[] {
+  const runs: ElevationProfileInputPoint[][] = [];
+  for (const [sourceSegmentIndex, segment] of segments.entries()) {
+    let run: ElevationProfileInputPoint[] = [];
+    for (const point of segment) {
+      if (point.elevationMeters === undefined) {
+        if (run.length >= 2) runs.push(run);
+        run = [];
+        continue;
+      }
+      const input: ElevationProfileInputPoint = {
+        coordinate: point.coordinate,
+        rawElevationMeters: point.elevationMeters,
+        elevationMeters: point.elevationMeters,
+        sourceSegmentIndex,
+        ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
+      };
+      run.push(input);
+    }
+    if (run.length >= 2) runs.push(run);
+  }
+  return runs;
+}
+
 function TrackElevationProfile() {
   const { active } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
@@ -1257,7 +1286,7 @@ function TrackElevationProfile() {
     active.kind === 'preview'
       ? active.parsed.segments.map((segment) => segment.points)
       : active.content.trackPoints;
-  const profile = calculateElevationProfile(sourceSegments);
+  const profile = calculateElevationProfile(elevationProfileInputSegments(sourceSegments));
   if (profile === null) return null;
   return (
     <ElevationProfileChart

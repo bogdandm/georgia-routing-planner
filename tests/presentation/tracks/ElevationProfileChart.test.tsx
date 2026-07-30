@@ -11,20 +11,41 @@ import { createAppTheme } from '@/presentation/theme/createAppTheme';
 
 const profile: ElevationProfile = {
   points: [
-    { coordinate: [44, 42], distanceMeters: 0, elevationMeters: 1_000 },
     {
+      sampleIndex: 0,
+      coordinate: [44, 42],
+      distanceMeters: 0,
+      rawElevationMeters: 1_000,
+      elevationMeters: 1_000,
+      trendElevationMeters: 1_000,
+      localGradePct: 0,
+      sourceSegmentIndex: 0,
+    },
+    {
+      sampleIndex: 1,
       coordinate: [44.01, 42.01],
       distanceMeters: 1_400,
+      rawElevationMeters: 1_120,
       elevationMeters: 1_120,
+      trendElevationMeters: 1_120,
+      localGradePct: 8.6,
+      sourceSegmentIndex: 0,
     },
     {
+      sampleIndex: 2,
       coordinate: [44.02, 42.02],
       distanceMeters: 2_800,
+      rawElevationMeters: 1_040,
       elevationMeters: 1_040,
+      trendElevationMeters: 1_040,
+      localGradePct: -5.7,
+      sourceSegmentIndex: 0,
     },
   ],
+  segments: [],
   minimumMeters: 1_000,
   maximumMeters: 1_120,
+  algorithmVersion: 2,
 };
 
 let observedWidth = 420;

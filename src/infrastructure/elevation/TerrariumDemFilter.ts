@@ -49,10 +49,16 @@ interface FilteredTerrariumTile {
   readonly counts: TerrariumRepairCounts;
 }
 
-type RejectionReason = 'no-data' | 'sentinel' | 'impossible' | 'spike';
-
 const terrariumOffsetMeters = 32_768;
 const terrariumQuantization = 256;
+
+const enum PixelState {
+  Missing = 0,
+  Valid = 1,
+  NoData = 2,
+  Sentinel = 3,
+  Impossible = 4,
+}
 
 /** Decodes one opaque Terrarium RGB pixel into elevation metres. */
 export function decodeTerrariumElevation(
@@ -63,18 +69,34 @@ export function decodeTerrariumElevation(
   return red * 256 + green + blue / terrariumQuantization - terrariumOffsetMeters;
 }
 
-/** Encodes elevation metres into the nearest representable Terrarium RGB value. */
-export function encodeTerrariumElevation(
-  elevationMeters: number,
-): readonly [number, number, number] {
-  const encoded = Math.max(
+function packedTerrariumElevation(elevationMeters: number): number {
+  return Math.max(
     0,
     Math.min(
       0xff_ff_ff,
       Math.round((elevationMeters + terrariumOffsetMeters) * terrariumQuantization),
     ),
   );
+}
+
+/** Encodes elevation metres into the nearest representable Terrarium RGB value. */
+export function encodeTerrariumElevation(
+  elevationMeters: number,
+): readonly [number, number, number] {
+  const encoded = packedTerrariumElevation(elevationMeters);
   return [encoded >>> 16, (encoded >>> 8) & 0xff, encoded & 0xff];
+}
+
+function writeTerrariumElevation(
+  elevationMeters: number,
+  output: Uint8ClampedArray,
+  offset: number,
+): void {
+  const encoded = packedTerrariumElevation(elevationMeters);
+  output[offset] = encoded >>> 16;
+  output[offset + 1] = (encoded >>> 8) & 0xff;
+  output[offset + 2] = encoded & 0xff;
+  output[offset + 3] = 255;
 }
 
 function medianInPlace(values: Float64Array, count: number): number {
@@ -97,8 +119,37 @@ function medianInPlace(values: Float64Array, count: number): number {
   return (lower + upper) / 2;
 }
 
-function pixelOffset(tile: DecodedTerrariumTile, x: number, y: number): number {
-  return (y * tile.width + x) * 4;
+function repairMedianInPlace(
+  values: Float64Array,
+  count: number,
+  maximumDeviation: number,
+): number {
+  const overallMedian = medianInPlace(values, count);
+  let bestStart = 0;
+  let bestCount = 1;
+  let start = 0;
+  let ambiguous = false;
+  for (let end = 0; end < count; end += 1) {
+    while (
+      start < end &&
+      (values[end] ?? 0) - (values[start] ?? 0) > maximumDeviation * 2
+    ) {
+      start += 1;
+    }
+    const clusterCount = end - start + 1;
+    if (clusterCount > bestCount) {
+      bestStart = start;
+      bestCount = clusterCount;
+      ambiguous = false;
+    } else if (clusterCount === bestCount && start !== bestStart) {
+      ambiguous = true;
+    }
+  }
+  if (bestCount < Math.min(3, count) || ambiguous) return overallMedian;
+  const middle = bestStart + Math.floor(bestCount / 2);
+  const upper = values[middle] ?? overallMedian;
+  if (bestCount % 2 === 1) return upper;
+  return ((values[middle - 1] ?? upper) + upper) / 2;
 }
 
 function validateTile(tile: DecodedTerrariumTile, width: number, height: number): void {
@@ -111,103 +162,139 @@ function validateTile(tile: DecodedTerrariumTile, width: number, height: number)
   }
 }
 
-function contextPixel(
-  grid: TerrariumTileGrid,
-  centerWidth: number,
-  centerHeight: number,
+function decodePlanePixel(
+  tile: DecodedTerrariumTile,
   x: number,
   y: number,
-): readonly [number, number, number, number] | null {
-  const column = x < 0 ? 0 : x >= centerWidth ? 2 : 1;
-  const row = y < 0 ? 0 : y >= centerHeight ? 2 : 1;
-  const tile = grid[row][column];
-  if (tile === null) return null;
-  const localX = x < 0 ? x + centerWidth : x >= centerWidth ? x - centerWidth : x;
-  const localY = y < 0 ? y + centerHeight : y >= centerHeight ? y - centerHeight : y;
-  const offset = pixelOffset(tile, localX, localY);
-  const red = tile.data[offset];
-  const green = tile.data[offset + 1];
-  const blue = tile.data[offset + 2];
-  const alpha = tile.data[offset + 3];
-  return red === undefined ||
-    green === undefined ||
-    blue === undefined ||
-    alpha === undefined
-    ? null
-    : [red, green, blue, alpha];
-}
-
-function hardRejectionReason(
-  pixel: readonly [number, number, number, number],
-  policy: TerrariumFilterPolicy,
-): Exclude<RejectionReason, 'spike'> | null {
-  if (pixel[3] === 0) return 'no-data';
-  const elevation = decodeTerrariumElevation(pixel[0], pixel[1], pixel[2]);
-  if (
-    policy.sentinelElevationsMeters.some(
-      (sentinel) => Math.abs(elevation - sentinel) < 1 / terrariumQuantization,
-    )
-  ) {
-    return 'sentinel';
-  }
-  return elevation < policy.minimumElevationMeters ||
-    elevation > policy.maximumElevationMeters
-    ? 'impossible'
-    : null;
-}
-
-function fillValidNeighborElevations(
-  grid: TerrariumTileGrid,
-  width: number,
-  height: number,
-  x: number,
-  y: number,
+  planeIndex: number,
   policy: TerrariumFilterPolicy,
   elevations: Float64Array,
-): number {
-  let count = 0;
-  for (let deltaY = -1; deltaY <= 1; deltaY += 1) {
-    for (let deltaX = -1; deltaX <= 1; deltaX += 1) {
-      if (deltaX === 0 && deltaY === 0) continue;
-      const pixel = contextPixel(grid, width, height, x + deltaX, y + deltaY);
-      if (pixel === null || hardRejectionReason(pixel, policy) !== null) continue;
-      elevations[count] = decodeTerrariumElevation(pixel[0], pixel[1], pixel[2]);
-      count += 1;
-    }
+  validity: Uint8Array,
+): void {
+  const sourceOffset = (y * tile.width + x) * 4;
+  if (tile.data[sourceOffset + 3] === 0) {
+    validity[planeIndex] = PixelState.NoData;
+    return;
   }
-  return count;
+
+  const elevation = decodeTerrariumElevation(
+    tile.data[sourceOffset] ?? 0,
+    tile.data[sourceOffset + 1] ?? 0,
+    tile.data[sourceOffset + 2] ?? 0,
+  );
+  elevations[planeIndex] = elevation;
+  let sentinelIndex = 0;
+  while (sentinelIndex < policy.sentinelElevationsMeters.length) {
+    const sentinel = policy.sentinelElevationsMeters[sentinelIndex];
+    if (
+      sentinel !== undefined &&
+      Math.abs(elevation - sentinel) < 1 / terrariumQuantization
+    ) {
+      validity[planeIndex] = PixelState.Sentinel;
+      return;
+    }
+    sentinelIndex += 1;
+  }
+  validity[planeIndex] =
+    elevation < policy.minimumElevationMeters ||
+    elevation > policy.maximumElevationMeters
+      ? PixelState.Impossible
+      : PixelState.Valid;
 }
 
-function spikeRejectionReason(
-  elevation: number,
-  neighbors: Float64Array,
-  neighborCount: number,
-  deviations: Float64Array,
+function populateHeightPlane(
+  grid: TerrariumTileGrid,
   policy: TerrariumFilterPolicy,
-): 'spike' | null {
-  if (neighborCount < policy.minimumConsensusNeighbors) return null;
-  const neighborMedian = medianInPlace(neighbors, neighborCount);
-  let consensusCount = 0;
-  let supportCount = 0;
-  for (let index = 0; index < neighborCount; index += 1) {
-    const neighbor = neighbors[index] ?? neighborMedian;
-    const deviation = Math.abs(neighbor - neighborMedian);
-    deviations[index] = deviation;
-    if (deviation <= policy.maximumNeighborMadMeters) consensusCount += 1;
-    if (Math.abs(neighbor - elevation) <= policy.maximumNeighborMadMeters) {
-      supportCount += 1;
+  elevations: Float64Array,
+  validity: Uint8Array,
+  stride: number,
+): void {
+  const center = grid[1][1];
+  const width = center.width;
+  const height = center.height;
+
+  for (let y = 0; y < height; y += 1) {
+    let planeIndex = (y + 1) * stride + 1;
+    for (let x = 0; x < width; x += 1) {
+      decodePlanePixel(center, x, y, planeIndex, policy, elevations, validity);
+      planeIndex += 1;
     }
   }
-  const medianAbsoluteDeviation = medianInPlace(deviations, neighborCount);
-  const residual = elevation - neighborMedian;
-  const threshold =
-    residual < 0 ? policy.negativeSpikeThresholdMeters : policy.spikeThresholdMeters;
-  return Math.abs(residual) >= threshold &&
-    medianAbsoluteDeviation <= policy.maximumNeighborMadMeters &&
-    consensusCount >= policy.minimumConsensusNeighbors &&
-    supportCount <= policy.maximumSpikeSupportNeighbors
-    ? 'spike'
-    : null;
+
+  const north = grid[0][1];
+  if (north !== null) {
+    for (let x = 0; x < width; x += 1) {
+      decodePlanePixel(north, x, height - 1, x + 1, policy, elevations, validity);
+    }
+  }
+  const south = grid[2][1];
+  if (south !== null) {
+    const planeRow = (height + 1) * stride;
+    for (let x = 0; x < width; x += 1) {
+      decodePlanePixel(south, x, 0, planeRow + x + 1, policy, elevations, validity);
+    }
+  }
+  const west = grid[1][0];
+  if (west !== null) {
+    for (let y = 0; y < height; y += 1) {
+      decodePlanePixel(
+        west,
+        width - 1,
+        y,
+        (y + 1) * stride,
+        policy,
+        elevations,
+        validity,
+      );
+    }
+  }
+  const east = grid[1][2];
+  if (east !== null) {
+    for (let y = 0; y < height; y += 1) {
+      decodePlanePixel(east, 0, y, (y + 2) * stride - 1, policy, elevations, validity);
+    }
+  }
+
+  const northWest = grid[0][0];
+  if (northWest !== null) {
+    decodePlanePixel(northWest, width - 1, height - 1, 0, policy, elevations, validity);
+  }
+  const northEast = grid[0][2];
+  if (northEast !== null) {
+    decodePlanePixel(
+      northEast,
+      0,
+      height - 1,
+      stride - 1,
+      policy,
+      elevations,
+      validity,
+    );
+  }
+  const southWest = grid[2][0];
+  if (southWest !== null) {
+    decodePlanePixel(
+      southWest,
+      width - 1,
+      0,
+      (height + 1) * stride,
+      policy,
+      elevations,
+      validity,
+    );
+  }
+  const southEast = grid[2][2];
+  if (southEast !== null) {
+    decodePlanePixel(
+      southEast,
+      0,
+      0,
+      (height + 2) * stride - 1,
+      policy,
+      elevations,
+      validity,
+    );
+  }
 }
 
 /**
@@ -219,13 +306,14 @@ export function filterTerrariumTile(
   policy: TerrariumFilterPolicy,
 ): FilteredTerrariumTile {
   const center = grid[1][1];
+  const width = center.width;
+  const height = center.height;
   for (const row of grid) {
     for (const tile of row) {
-      if (tile !== null) validateTile(tile, center.width, center.height);
+      if (tile !== null) validateTile(tile, width, height);
     }
   }
 
-  let output: Uint8ClampedArray | null = null;
   const counts = {
     noDataCount: 0,
     sentinelCount: 0,
@@ -234,51 +322,149 @@ export function filterTerrariumTile(
     repairedCount: 0,
     unrepairedCount: 0,
   };
+  if (width === 0 || height === 0) {
+    return { tile: { width, height, data: center.data }, counts };
+  }
+
+  const stride = width + 2;
+  const elevations = new Float64Array((width + 2) * (height + 2));
+  const validity = new Uint8Array((width + 2) * (height + 2));
+  populateHeightPlane(grid, policy, elevations, validity, stride);
+
+  let output: Uint8ClampedArray | null = null;
   const neighbors = new Float64Array(8);
   const deviations = new Float64Array(8);
+  const neighborOffsets = [
+    -stride - 1,
+    -stride,
+    -stride + 1,
+    -1,
+    1,
+    stride - 1,
+    stride,
+    stride + 1,
+  ] as const;
 
-  for (let y = 0; y < center.height; y += 1) {
-    for (let x = 0; x < center.width; x += 1) {
-      const offset = pixelOffset(center, x, y);
-      const pixel = contextPixel(grid, center.width, center.height, x, y);
-      if (pixel === null) continue;
-      const hardReason = hardRejectionReason(pixel, policy);
-      const elevation = decodeTerrariumElevation(pixel[0], pixel[1], pixel[2]);
-      const neighborCount = fillValidNeighborElevations(
-        grid,
-        center.width,
-        center.height,
-        x,
-        y,
-        policy,
-        neighbors,
-      );
-      const reason =
-        hardReason ??
-        spikeRejectionReason(elevation, neighbors, neighborCount, deviations, policy);
-      if (reason === 'no-data') counts.noDataCount += 1;
-      else if (reason === 'sentinel') counts.sentinelCount += 1;
-      else if (reason === 'impossible') counts.impossibleCount += 1;
-      else if (reason === 'spike') counts.spikeCount += 1;
-      else continue;
-      if (neighborCount === 0) {
-        counts.unrepairedCount += 1;
-        continue;
+  for (let y = 0; y < height; y += 1) {
+    let planeIndex = (y + 1) * stride + 1;
+    let outputOffset = y * width * 4;
+    for (let x = 0; x < width; x += 1) {
+      const state = validity[planeIndex];
+      let neighborCount = 0;
+      let neighborMedian: number;
+
+      if (state !== PixelState.Valid) {
+        if (state === PixelState.NoData) counts.noDataCount += 1;
+        else if (state === PixelState.Sentinel) counts.sentinelCount += 1;
+        else if (state === PixelState.Impossible) counts.impossibleCount += 1;
+        else {
+          planeIndex += 1;
+          outputOffset += 4;
+          continue;
+        }
+
+        let neighborOffsetIndex = 0;
+        while (neighborOffsetIndex < neighborOffsets.length) {
+          const neighborIndex =
+            planeIndex + (neighborOffsets[neighborOffsetIndex] ?? 0);
+          neighborOffsetIndex += 1;
+          if (validity[neighborIndex] !== PixelState.Valid) continue;
+          neighbors[neighborCount] = elevations[neighborIndex] ?? 0;
+          neighborCount += 1;
+        }
+        if (neighborCount === 0) {
+          counts.unrepairedCount += 1;
+          planeIndex += 1;
+          outputOffset += 4;
+          continue;
+        }
+        neighborMedian = repairMedianInPlace(
+          neighbors,
+          neighborCount,
+          policy.maximumNeighborMadMeters,
+        );
+      } else {
+        const elevation = elevations[planeIndex] ?? 0;
+        let supportCount = 0;
+        const severeSupportLimit = policy.maximumSpikeSupportNeighbors + 1;
+        let neighborOffsetIndex = 0;
+        while (neighborOffsetIndex < neighborOffsets.length) {
+          const neighborIndex =
+            planeIndex + (neighborOffsets[neighborOffsetIndex] ?? 0);
+          neighborOffsetIndex += 1;
+          if (validity[neighborIndex] !== PixelState.Valid) continue;
+          const neighbor = elevations[neighborIndex] ?? 0;
+          neighbors[neighborCount] = neighbor;
+          neighborCount += 1;
+          if (Math.abs(neighbor - elevation) <= policy.maximumNeighborMadMeters) {
+            supportCount += 1;
+            if (supportCount > severeSupportLimit) break;
+          }
+        }
+        const severeConsensusMinimum = Math.max(
+          1,
+          policy.minimumConsensusNeighbors - 1,
+        );
+        if (
+          supportCount > severeSupportLimit ||
+          neighborCount < severeConsensusMinimum
+        ) {
+          planeIndex += 1;
+          outputOffset += 4;
+          continue;
+        }
+
+        neighborMedian = medianInPlace(neighbors, neighborCount);
+        const residual = elevation - neighborMedian;
+        const threshold =
+          residual < 0
+            ? policy.negativeSpikeThresholdMeters
+            : policy.spikeThresholdMeters;
+        if (Math.abs(residual) < threshold) {
+          planeIndex += 1;
+          outputOffset += 4;
+          continue;
+        }
+
+        let consensusCount = 0;
+        for (let index = 0; index < neighborCount; index += 1) {
+          const deviation = Math.abs(
+            (neighbors[index] ?? neighborMedian) - neighborMedian,
+          );
+          deviations[index] = deviation;
+          if (deviation <= policy.maximumNeighborMadMeters) consensusCount += 1;
+        }
+        const medianAbsoluteDeviation = medianInPlace(deviations, neighborCount);
+        // Provider corruption can form a narrow downward strand with two mutually
+        // supporting pixels. Relax one support and consensus vote only for a drop at
+        // least twice the normal downward threshold; coherent cliffs retain more support.
+        const severeNegativeSpike =
+          residual <= -policy.negativeSpikeThresholdMeters * 2;
+        const consensusMinimum = severeNegativeSpike
+          ? severeConsensusMinimum
+          : policy.minimumConsensusNeighbors;
+        const supportLimit = severeNegativeSpike
+          ? severeSupportLimit
+          : policy.maximumSpikeSupportNeighbors;
+        if (
+          medianAbsoluteDeviation > policy.maximumNeighborMadMeters ||
+          consensusCount < consensusMinimum ||
+          supportCount > supportLimit
+        ) {
+          planeIndex += 1;
+          outputOffset += 4;
+          continue;
+        }
+        counts.spikeCount += 1;
       }
-      const [red, green, blue] = encodeTerrariumElevation(
-        medianInPlace(neighbors, neighborCount),
-      );
+
       output ??= new Uint8ClampedArray(center.data);
-      output[offset] = red;
-      output[offset + 1] = green;
-      output[offset + 2] = blue;
-      output[offset + 3] = 255;
+      writeTerrariumElevation(neighborMedian, output, outputOffset);
       counts.repairedCount += 1;
+      planeIndex += 1;
+      outputOffset += 4;
     }
   }
 
-  return {
-    tile: { width: center.width, height: center.height, data: output ?? center.data },
-    counts,
-  };
+  return { tile: { width, height, data: output ?? center.data }, counts };
 }

@@ -16,6 +16,25 @@ import {
   type DecodedTerrariumTile,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
 
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason: unknown) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolvePromise: ((value: T) => void) | undefined;
+  let rejectPromise: ((reason: unknown) => void) | undefined;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  if (resolvePromise === undefined || rejectPromise === undefined) {
+    throw new Error('Deferred promise initialization failed.');
+  }
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
+}
+
 function decodedTile(): DecodedTerrariumTile {
   const [red, green, blue] = encodeTerrariumElevation(1_000);
   return {
@@ -61,6 +80,14 @@ function terrain() {
 
 function configuration(requestTimeoutMs = 10_000) {
   return toTerrainComputeConfiguration(terrain(), requestTimeoutMs);
+}
+
+function requestUrl(input: RequestInfo | URL): string {
+  return typeof input === 'string'
+    ? input
+    : input instanceof URL
+      ? input.href
+      : input.url;
 }
 
 describe('FilteredTerrariumTileProvider', () => {
@@ -272,6 +299,221 @@ describe('FilteredTerrariumTileProvider', () => {
 
     expect(fetchImplementation.mock.calls.length).toBe(callsAfterNineTiles + 9);
   });
+
+  it('coalesces complete same-key processing and reuses the exact cached response', async () => {
+    const log = vi.fn<(input: DiagnosticInput) => void>();
+    const processingLogger: DiagnosticLogger = { log, getEvents: () => [] };
+    const fetchImplementation = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(new Response(new Blob([requestUrl(input)]), { status: 200 })),
+    );
+    const decode = vi.fn(() => {
+      const decoded = decodedTile();
+      if (decode.mock.calls.length === 5) decoded.data[3] = 0;
+      return Promise.resolve(decoded);
+    });
+    const encode = vi.fn(() => Promise.resolve(new Blob(['repaired'])));
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      processingLogger,
+      { decode, encode },
+      fetchImplementation,
+    );
+
+    const [first, second] = await Promise.all([
+      provider.getTile(5, 8, 9, new AbortController()),
+      provider.getTile(5, 8, 9, new AbortController()),
+    ]);
+
+    expect(first).toBe(second);
+    expect(fetchImplementation).toHaveBeenCalledTimes(9);
+    expect(decode).toHaveBeenCalledTimes(9);
+    expect(encode).toHaveBeenCalledOnce();
+    expect(log).toHaveBeenCalledOnce();
+
+    const cached = await provider.getTile(5, 8, 9, new AbortController());
+    expect(cached).toBe(first);
+    expect(fetchImplementation).toHaveBeenCalledTimes(9);
+    expect(decode).toHaveBeenCalledTimes(9);
+    expect(encode).toHaveBeenCalledOnce();
+  });
+
+  it('rejects one canceled consumer while retaining the shared producer', async () => {
+    const gate = deferred<undefined>();
+    const producerSignals: AbortSignal[] = [];
+    const fetchImplementation = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.signal !== null && init?.signal !== undefined) {
+          producerSignals.push(init.signal);
+        }
+        await gate.promise;
+        return new Response(new Blob(['tile']), { status: 200 });
+      },
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      logger,
+      codec,
+      fetchImplementation,
+    );
+    const canceled = new AbortController();
+    const retained = new AbortController();
+    const reason = new DOMException('Only this consumer canceled.', 'AbortError');
+
+    const first = provider.getTile(5, 8, 9, canceled);
+    const second = provider.getTile(5, 8, 9, retained);
+    canceled.abort(reason);
+
+    await expect(first).rejects.toBe(reason);
+    expect(producerSignals).toHaveLength(9);
+    expect(producerSignals.every((signal) => !signal.aborted)).toBe(true);
+    gate.resolve(undefined);
+    const retainedResult = await second;
+    expect(retainedResult.data).toBeInstanceOf(Blob);
+  });
+
+  it('aborts producer work after every same-key consumer cancels', async () => {
+    const producerSignals: AbortSignal[] = [];
+    const fetchImplementation = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) => {
+        const pending = deferred<Response>();
+        const signal = init?.signal;
+        if (signal !== null && signal !== undefined) {
+          producerSignals.push(signal);
+          signal.addEventListener(
+            'abort',
+            () => {
+              pending.reject(signal.reason);
+            },
+            { once: true },
+          );
+        }
+        return pending.promise;
+      },
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      logger,
+      codec,
+      fetchImplementation,
+    );
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    const first = provider.getTile(5, 8, 9, firstController);
+    const second = provider.getTile(5, 8, 9, secondController);
+
+    firstController.abort();
+    expect(producerSignals.every((signal) => !signal.aborted)).toBe(true);
+    secondController.abort();
+
+    const results = await Promise.allSettled([first, second]);
+    expect(results.every((result) => result.status === 'rejected')).toBe(true);
+    expect(producerSignals).toHaveLength(9);
+    expect(producerSignals.every((signal) => signal.aborted)).toBe(true);
+  });
+
+  it('aborts old revisions and never inserts their results into the current cache', async () => {
+    let modeChanged = false;
+    const fetchImplementation = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (modeChanged) {
+          return Promise.resolve(new Response(new Blob(['current']), { status: 200 }));
+        }
+        const pending = deferred<Response>();
+        const signal = init?.signal;
+        signal?.addEventListener(
+          'abort',
+          () => {
+            pending.reject(signal.reason);
+          },
+          { once: true },
+        );
+        return pending.promise;
+      },
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      logger,
+      codec,
+      fetchImplementation,
+    );
+    const stale = provider.getTile(5, 8, 9, new AbortController());
+
+    provider.setEnabled(false);
+    modeChanged = true;
+
+    await expect(stale).rejects.toMatchObject({ name: 'AbortError' });
+    const current = await provider.getTile(5, 8, 9, new AbortController());
+    const cached = await provider.getTile(5, 8, 9, new AbortController());
+    expect(cached).toBe(current);
+    expect(fetchImplementation).toHaveBeenCalledTimes(10);
+  });
+
+  it('degrades optional fetch, HTTP, and decode failures to retryable null halo', async () => {
+    const failedOnce = new Set<string>();
+    const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url.includes('/5/7/8.png') && !failedOnce.has(url)) {
+        failedOnce.add(url);
+        return Promise.reject(new TypeError('Network unavailable.'));
+      }
+      if (url.includes('/5/8/8.png')) {
+        return Promise.resolve(new Response(null, { status: 503 }));
+      }
+      return Promise.resolve(new Response(new Blob([url]), { status: 200 }));
+    });
+    const decode = vi.fn(() =>
+      decode.mock.calls.length === 1
+        ? Promise.reject(new Error('Invalid PNG.'))
+        : Promise.resolve(decodedTile()),
+    );
+    const provider = new FilteredTerrariumTileProvider(
+      configuration(),
+      logger,
+      { decode, encode: (tile, signal) => codec.encode(tile, signal) },
+      fetchImplementation,
+    );
+
+    const first = await provider.getTile(5, 8, 9, new AbortController());
+    const second = await provider.getTile(5, 7, 8, new AbortController());
+    expect(first.data).toBeInstanceOf(Blob);
+    expect(second.data).toBeInstanceOf(Blob);
+
+    const retriedUrl = [...failedOnce][0];
+    expect(retriedUrl).toBeDefined();
+    expect(
+      fetchImplementation.mock.calls.filter(
+        ([input]) => requestUrl(input) === retriedUrl,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it.each(['http', 'decode'] as const)(
+    'still rejects a %s failure for the center tile',
+    async (failure) => {
+      const fetchImplementation = vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (failure === 'http' && url.includes('/5/8/9.png')) {
+          return Promise.resolve(new Response(null, { status: 500 }));
+        }
+        return Promise.resolve(new Response(new Blob([url]), { status: 200 }));
+      });
+      const decode = vi.fn(() =>
+        failure === 'decode' && decode.mock.calls.length === 5
+          ? Promise.reject(new Error('Center PNG invalid.'))
+          : Promise.resolve(decodedTile()),
+      );
+      const provider = new FilteredTerrariumTileProvider(
+        configuration(),
+        logger,
+        { decode, encode: (tile, signal) => codec.encode(tile, signal) },
+        fetchImplementation,
+      );
+
+      await expect(provider.getTile(5, 8, 9, new AbortController())).rejects.toThrow(
+        failure === 'http' ? /HTTP 500/u : /Center PNG invalid/u,
+      );
+    },
+  );
 
   it('cancels pending requests and clears ownership on disposal', async () => {
     const fetchImplementation = vi.fn(

@@ -8,6 +8,8 @@ import {
   type TerrariumFilterPolicy,
   type TerrariumTileGrid,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
+import { createTerrariumParityFixtures } from '@test/helpers/terrariumDemFilterFixtures';
+import { referenceFilterTerrariumTile } from '@test/helpers/referenceTerrariumDemFilter';
 
 const policy: TerrariumFilterPolicy = {
   minimumElevationMeters: -500,
@@ -111,6 +113,52 @@ describe('filterTerrariumTile', () => {
     expect(result.counts).toMatchObject({ spikeCount: 1, repairedCount: 1 });
   });
 
+  it('repairs a narrow severe downward strand matching the reported lake artifact', () => {
+    const source = tile(7, 7, 2_650);
+    setPixel(source, 3, 2, -140);
+    setPixel(source, 3, 3, -140);
+    setPixel(source, 3, 4, -140);
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(elevationAt(result.tile, 3, 2)).toBe(2_650);
+    expect(elevationAt(result.tile, 3, 3)).toBe(2_650);
+    expect(elevationAt(result.tile, 3, 4)).toBe(2_650);
+    expect(result.counts).toMatchObject({ spikeCount: 3, repairedCount: 3 });
+  });
+
+  it('uses the local terrain consensus for an impossible lake-artifact pixel', () => {
+    const source = tile(5, 5, 1_000);
+    const neighborhood = [
+      [445.1, 2_673.4, 2_672.9],
+      [1_372.2, -1_695.6, 2_673.2],
+      [2_299.3, 1_434.9, 570.5],
+    ];
+    for (let y = 0; y < neighborhood.length; y += 1) {
+      for (let x = 0; x < (neighborhood[y]?.length ?? 0); x += 1) {
+        setPixel(source, x + 1, y + 1, neighborhood[y]?.[x] ?? 0);
+      }
+    }
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(elevationAt(result.tile, 2, 2)).toBe(2_673.199_218_75);
+    expect(result.counts.impossibleCount).toBeGreaterThan(0);
+  });
+
+  it('falls back to the overall median for overlapping equal-size clusters', () => {
+    const source = tile(3, 3, -700);
+    setPixel(source, 0, 0, 0);
+    setPixel(source, 1, 0, 80);
+    setPixel(source, 2, 0, 160);
+    setPixel(source, 0, 1, 240);
+    setPixel(source, 2, 1, 320);
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(elevationAt(result.tile, 1, 1)).toBe(160);
+  });
+
   it('repairs the observed shallow downward spike while preserving an equivalent rise', () => {
     const downward = tile(5, 5, 635.5);
     setPixel(downward, 2, 2, 320.25);
@@ -148,6 +196,18 @@ describe('filterTerrariumTile', () => {
     expect(result.counts.spikeCount).toBe(0);
   });
 
+  it('preserves a severe coherent downward cliff with broad local support', () => {
+    const source = tile(7, 7, 2_650);
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 3; x < source.width; x += 1) setPixel(source, x, y, 1_000);
+    }
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(result.tile.data).toEqual(source.data);
+    expect(result.counts.spikeCount).toBe(0);
+  });
+
   it('uses neighboring tile pixels to repair a corner spike without a seam', () => {
     const center = tile(3, 3);
     const north = tile(3, 3);
@@ -175,5 +235,74 @@ describe('filterTerrariumTile', () => {
     expect(result.counts).toMatchObject({ impossibleCount: 8, repairedCount: 8 });
     expect(elevationAt(result.tile, 4, 2)).toBe(1_100);
     expect(elevationAt(result.tile, 4, 1)).toBe(1_100);
+  });
+
+  it('matches the deterministic reference oracle', () => {
+    for (const fixture of createTerrariumParityFixtures()) {
+      const candidateGrid = fixture.createGrid();
+      const referenceGrid = fixture.createGrid();
+      const candidateInputs = candidateGrid.flatMap((row) =>
+        row.flatMap((contextTile) =>
+          contextTile === null ? [] : [new Uint8ClampedArray(contextTile.data)],
+        ),
+      );
+      const referenceInputs = referenceGrid.flatMap((row) =>
+        row.flatMap((contextTile) =>
+          contextTile === null ? [] : [new Uint8ClampedArray(contextTile.data)],
+        ),
+      );
+
+      const candidate = filterTerrariumTile(candidateGrid, fixture.policy);
+      const reference = referenceFilterTerrariumTile(referenceGrid, fixture.policy);
+
+      expect(candidate.counts, fixture.name).toEqual(reference.counts);
+      expect(candidate.tile.data, fixture.name).toEqual(reference.tile.data);
+      let inputIndex = 0;
+      for (const row of candidateGrid) {
+        for (const contextTile of row) {
+          if (contextTile === null) continue;
+          expect(
+            contextTile.data,
+            `${fixture.name} candidate input ${String(inputIndex)}`,
+          ).toEqual(candidateInputs[inputIndex]);
+          inputIndex += 1;
+        }
+      }
+      inputIndex = 0;
+      for (const row of referenceGrid) {
+        for (const contextTile of row) {
+          if (contextTile === null) continue;
+          expect(
+            contextTile.data,
+            `${fixture.name} reference input ${String(inputIndex)}`,
+          ).toEqual(referenceInputs[inputIndex]);
+          inputIndex += 1;
+        }
+      }
+      if (candidate.counts.repairedCount === 0) {
+        expect(candidate.tile.data, `${fixture.name} candidate identity`).toBe(
+          candidateGrid[1][1].data,
+        );
+        expect(reference.tile.data, `${fixture.name} reference identity`).toBe(
+          referenceGrid[1][1].data,
+        );
+      } else {
+        expect(candidate.tile.data, `${fixture.name} candidate lazy copy`).not.toBe(
+          candidateGrid[1][1].data,
+        );
+        expect(reference.tile.data, `${fixture.name} reference lazy copy`).not.toBe(
+          referenceGrid[1][1].data,
+        );
+      }
+    }
+
+    const mismatchedGrid: TerrariumTileGrid = [
+      [null, tile(3, 2), null],
+      [null, tile(2, 2), null],
+      [null, null, null],
+    ];
+    const error = 'Terrarium context tiles must have matching RGBA dimensions.';
+    expect(() => filterTerrariumTile(mismatchedGrid, policy)).toThrow(error);
+    expect(() => referenceFilterTerrariumTile(mismatchedGrid, policy)).toThrow(error);
   });
 });

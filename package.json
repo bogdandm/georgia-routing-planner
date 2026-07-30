@@ -25,6 +25,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
     "e2e": "tsx tools/e2e/runPlaywright.ts",
+    "benchmark:terrarium-dem": "tsx tools/benchmarks/terrariumDemFilterBenchmark.ts",
     "diagnostics:inspect": "tsx tools/diagnostics/inspectDiagnostics.ts",
     "repo:audit": "tsx tools/repository/auditRepository.ts",
     "build:app": "vite build",

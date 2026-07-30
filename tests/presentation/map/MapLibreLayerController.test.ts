@@ -468,6 +468,15 @@ describe('MapLibreLayerController', () => {
     expect([...map.layers.keys()].indexOf(importedTrackLayerIds.line)).toBeGreaterThan(
       [...map.layers.keys()].indexOf(mapLayerIds.placeLabels),
     );
+    const importedTrackLayerIdsInOrder = [
+      importedTrackLayerIds.casing,
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.highlight,
+      importedTrackLayerIds.trace,
+    ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
+    expect(importedTrackLayerIdsInOrder).toEqual(
+      [...importedTrackLayerIdsInOrder].sort((left, right) => left - right),
+    );
     expect(controller.setImportedTrackOpacity(0.45)).toEqual({ status: 'success' });
     expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
       0.45,

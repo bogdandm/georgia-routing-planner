@@ -774,9 +774,12 @@ describe('WorkspaceShell', () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
     if (provider === null) return;
-    vi.spyOn(provider, 'sampleMany').mockRejectedValue(
-      new Error('Terrain unavailable'),
-    );
+    const sampleMany = vi
+      .spyOn(provider, 'sampleMany')
+      .mockRejectedValueOnce(new Error('Terrain unavailable'))
+      .mockImplementation((coordinates) =>
+        Promise.resolve(coordinates.map(() => ({ status: 'unavailable' as const }))),
+      );
     const user = userEvent.setup();
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -790,6 +793,11 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('Terrain unavailable')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.getByText('Terrain failure.gpx · GPX')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Recalculate elevation' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    expect(sampleMany).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the newest import when an older preparation completes late', async () => {

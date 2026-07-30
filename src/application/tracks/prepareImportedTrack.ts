@@ -368,6 +368,6 @@ export async function prepareImportedTrack(
   return {
     segments: preparedSegments,
     profile,
-    metrics: calculateTrackMetrics(preparedSegments),
+    metrics: calculateTrackMetrics(preparedSegments, 'dem-assisted'),
   };
 }

@@ -633,6 +633,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const savePreview = useCallback(async () => {
     if (active?.kind !== 'preview' || active.preparationStatus !== 'ready') return;
+    const previewId = active.id;
+    const generation = importGeneration.current;
+    const previewNamingAbort = namingAbort.current;
     try {
       const normalizedName = normalizeLocalTrackName(active.name);
       const summary: LocalTrackSummaryBuilder = {
@@ -668,12 +671,22 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         trackPoints: active.preparedSegments.map((segment) => segment.points),
       };
       await database.saveLocalTrack(summary, content);
+      if (generation !== importGeneration.current) return;
       await database.saveLatestOpenedTrackId(summary.id);
-      namingAbort.current?.abort();
+      if (generation !== importGeneration.current) return;
+      if (namingAbort.current === previewNamingAbort) previewNamingAbort?.abort();
+      setActive((current) =>
+        current?.kind === 'preview' &&
+        current.preparationStatus === 'ready' &&
+        current.id === previewId &&
+        generation === importGeneration.current
+          ? { kind: 'saved', summary, content, draftName: summary.name }
+          : current,
+      );
       await reloadSummaries();
-      setActive({ kind: 'saved', summary, content, draftName: summary.name });
       setError(null);
     } catch (saveError) {
+      if (generation !== importGeneration.current) return;
       setError(
         saveError instanceof Error
           ? saveError.message
@@ -685,7 +698,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const recalculateElevation = useCallback(async () => {
     if (
       active === null ||
-      (active.kind === 'preview' && active.preparationStatus !== 'ready') ||
+      (active.kind === 'preview' && active.preparationStatus === 'preparing') ||
       recalculationState === 'recalculating'
     ) {
       return;
@@ -709,18 +722,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       controller.signal.throwIfAborted();
       renderedTrackId.current = null;
       if (active.kind === 'preview') {
-        setActive((current) =>
-          current?.kind === 'preview' &&
-          current.preparationStatus === 'ready' &&
-          current.id === activeId
-            ? {
-                ...current,
-                metrics: prepared.metrics,
-                preparedSegments: prepared.segments,
-                profile: prepared.profile,
-              }
-            : current,
-        );
+        setActive((current) => {
+          if (current?.kind !== 'preview' || current.id !== activeId) return current;
+          const updated: PreparedPreviewTrack = {
+            ...current,
+            preparationStatus: 'ready',
+            metrics: prepared.metrics,
+            preparedSegments: prepared.segments,
+            profile: prepared.profile,
+            namingStatus:
+              current.preparationStatus === 'ready'
+                ? current.namingStatus
+                : 'unavailable',
+          };
+          return updated;
+        });
       } else {
         const summary: LocalTrackSummary = {
           ...active.summary,
@@ -797,15 +813,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
       setRecalculationState('idle');
-      importGeneration.current += 1;
+      const generation = importGeneration.current + 1;
+      importGeneration.current = generation;
       setImportState('idle');
       namingAbort.current?.abort();
       try {
         const content = await database.loadLocalTrackContent(summary.id);
+        if (generation !== importGeneration.current) return;
         setActive({ kind: 'saved', summary, content, draftName: summary.name });
         await database.saveLatestOpenedTrackId(summary.id);
+        if (generation !== importGeneration.current) return;
         setError(null);
       } catch (loadError) {
+        if (generation !== importGeneration.current) return;
         setError(
           loadError instanceof Error
             ? loadError.message
@@ -827,21 +847,28 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const renameActive = useCallback(async (): Promise<boolean> => {
     if (active?.kind !== 'saved') return false;
+    const activeId = active.summary.id;
+    const generation = importGeneration.current;
     try {
-      const summary = await database.renameLocalTrack(
-        active.summary.id,
-        active.draftName,
+      const summary = await database.renameLocalTrack(activeId, active.draftName);
+      setActive((current) =>
+        current?.kind === 'saved' &&
+        current.summary.id === activeId &&
+        generation === importGeneration.current
+          ? { ...current, summary, draftName: summary.name }
+          : current,
       );
-      setActive({ ...active, summary, draftName: summary.name });
       await reloadSummaries();
-      setError(null);
+      if (generation === importGeneration.current) setError(null);
       return true;
     } catch (renameError) {
-      setError(
-        renameError instanceof Error
-          ? renameError.message
-          : 'The track could not be renamed.',
-      );
+      if (generation === importGeneration.current) {
+        setError(
+          renameError instanceof Error
+            ? renameError.message
+            : 'The track could not be renamed.',
+        );
+      }
       return false;
     }
   }, [active, database, reloadSummaries]);
@@ -1489,8 +1516,14 @@ function elevationProfileInputSegments(
 function TrackElevationAnalysis() {
   const { active, recalculateElevation, recalculationState } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
-  const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState<number | null>(null);
-  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
+  const [hoveredSegment, setHoveredSegment] = useState<{
+    readonly profile: ElevationProfile;
+    readonly index: number;
+  } | null>(null);
+  const [selectedSegment, setSelectedSegment] = useState<{
+    readonly profile: ElevationProfile;
+    readonly index: number;
+  } | null>(null);
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
@@ -1498,18 +1531,49 @@ function TrackElevationAnalysis() {
     },
     [mapLayers],
   );
+  const preparedProfile =
+    active?.kind === 'preview' && active.preparationStatus === 'ready'
+      ? active.profile
+      : null;
+  const savedTrackPoints = active?.kind === 'saved' ? active.content.trackPoints : null;
   const profile = useMemo(() => {
-    if (active === null) return null;
-    if (active.kind === 'preview')
-      return active.preparationStatus === 'ready' ? active.profile : null;
-    const savedProfileInputs = elevationProfileInputSegments(
-      active.content.trackPoints,
-    );
+    if (preparedProfile !== null) return preparedProfile;
+    if (savedTrackPoints === null) return null;
+    const savedProfileInputs = elevationProfileInputSegments(savedTrackPoints);
     return savedProfileInputs === null
       ? null
       : calculateElevationProfile(savedProfileInputs);
-  }, [active]);
+  }, [preparedProfile, savedTrackPoints]);
+  useEffect(() => {
+    mapLayers?.setImportedTrackTracePoint(null);
+  }, [mapLayers, profile]);
+  const hoveredSegmentIndex =
+    hoveredSegment?.profile === profile ? hoveredSegment.index : null;
+  const selectedSegmentIndex =
+    selectedSegment?.profile === profile ? selectedSegment.index : null;
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
+  const onSegmentHoverChange = (nextSegmentIndex: number | null) => {
+    if (nextSegmentIndex === null || profile === null) {
+      setHoveredSegment(null);
+      return;
+    }
+    setHoveredSegment((current) =>
+      current?.profile === profile && current.index === nextSegmentIndex
+        ? current
+        : { profile, index: nextSegmentIndex },
+    );
+  };
+  const onSegmentSelectionChange = (nextSegmentIndex: number | null) => {
+    if (nextSegmentIndex === null || profile === null) {
+      setSelectedSegment(null);
+      return;
+    }
+    setSelectedSegment((current) =>
+      current?.profile === profile && current.index === nextSegmentIndex
+        ? current
+        : { profile, index: nextSegmentIndex },
+    );
+  };
   useEffect(() => {
     let highlightSegments:
       | readonly {
@@ -1531,42 +1595,38 @@ function TrackElevationAnalysis() {
     mapLayers?.setImportedTrackHighlight(highlightSegments);
   }, [activeSegmentIndex, mapLayers, profile]);
   if (active === null) return null;
-  if (profile === null) return null;
   return (
     <Stack spacing={1.5}>
-      <ElevationProfileChart
-        profile={profile}
-        activeSegmentIndex={activeSegmentIndex}
-        selectedSegmentIndex={selectedSegmentIndex}
-        onActivePointChange={(point) => {
-          mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
-        }}
-        onSegmentHoverChange={(nextSegmentIndex) => {
-          setHoveredSegmentIndex((current) =>
-            current === nextSegmentIndex ? current : nextSegmentIndex,
-          );
-        }}
-        onSegmentSelectionChange={setSelectedSegmentIndex}
-        onPointClick={(point) => {
-          requestMapNavigation({
-            longitude: point.coordinate[0],
-            latitude: point.coordinate[1],
-            zoom: 13,
-          });
-        }}
-      />
+      {profile === null ? null : (
+        <ElevationProfileChart
+          profile={profile}
+          activeSegmentIndex={activeSegmentIndex}
+          selectedSegmentIndex={selectedSegmentIndex}
+          onActivePointChange={(point) => {
+            mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
+          }}
+          onSegmentHoverChange={onSegmentHoverChange}
+          onSegmentSelectionChange={onSegmentSelectionChange}
+          onPointClick={(point) => {
+            requestMapNavigation({
+              longitude: point.coordinate[0],
+              latitude: point.coordinate[1],
+              zoom: 13,
+            });
+          }}
+        />
+      )}
       <ClimbsDescentsSection
-        recalculating={recalculationState === 'recalculating'}
+        recalculating={
+          recalculationState === 'recalculating' ||
+          (active.kind === 'preview' && active.preparationStatus === 'preparing')
+        }
         onRecalculate={() => void recalculateElevation()}
-        segments={profile.segments}
+        segments={profile?.segments ?? []}
         activeSegmentIndex={activeSegmentIndex}
         selectedSegmentIndex={selectedSegmentIndex}
-        onSegmentHoverChange={(nextSegmentIndex) => {
-          setHoveredSegmentIndex((current) =>
-            current === nextSegmentIndex ? current : nextSegmentIndex,
-          );
-        }}
-        onSegmentSelectionChange={setSelectedSegmentIndex}
+        onSegmentHoverChange={onSegmentHoverChange}
+        onSegmentSelectionChange={onSegmentSelectionChange}
       />
     </Stack>
   );

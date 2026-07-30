@@ -1591,6 +1591,7 @@ export class MapLibreLayerController {
         });
       }
       this.applyImportedTrackPaint();
+      this.ensureImportedTrackLayerOrder(map);
       return { status: 'success' };
     } catch {
       return this.visibilityFailure('The imported track could not be rendered.');
@@ -1641,6 +1642,7 @@ export class MapLibreLayerController {
         },
       });
     }
+    this.ensureImportedTrackLayerOrder(map);
     this.applyImportedTrackPaint();
   }
 
@@ -1687,6 +1689,25 @@ export class MapLibreLayerController {
           'circle-stroke-width': 2,
         },
       });
+    }
+    this.ensureImportedTrackLayerOrder(map);
+  }
+
+  private ensureImportedTrackLayerOrder(map: MapLibreMap): void {
+    const orderedLayerIds = [
+      importedTrackLayerIds.casing,
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.highlight,
+      importedTrackLayerIds.trace,
+    ].filter((layerId) => map.getLayer(layerId) !== undefined);
+    for (let index = orderedLayerIds.length - 2; index >= 0; index -= 1) {
+      const layerId = orderedLayerIds[index];
+      const aboveLayerId = orderedLayerIds[index + 1];
+      if (layerId === undefined || aboveLayerId === undefined) continue;
+      const layerIds = map.getStyle().layers.map((layer) => layer.id);
+      if (layerIds.indexOf(layerId) > layerIds.indexOf(aboveLayerId)) {
+        map.moveLayer(layerId, aboveLayerId);
+      }
     }
   }
 

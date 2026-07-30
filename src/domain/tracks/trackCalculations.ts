@@ -33,6 +33,8 @@ export interface TrackMetrics {
   readonly elevationAlgorithmVersion?: 1 | typeof ELEVATION_ALGORITHM_VERSION;
 }
 
+type ElevationSource = NonNullable<TrackMetrics['elevationSource']>;
+
 type TrackMetricsBuilder = {
   -readonly [Key in keyof TrackMetrics]: TrackMetrics[Key];
 };
@@ -120,7 +122,10 @@ function calculateBounds(points: readonly TrackPoint[]): {
   };
 }
 
-export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackMetrics {
+export function calculateTrackMetrics(
+  segments: readonly TrackSegment[],
+  elevationSource: ElevationSource = 'gpx',
+): TrackMetrics {
   const firstSegment = segments[0];
   const lastSegment = segments[segments.length - 1];
   const startPoint = firstSegment?.points[0];
@@ -198,8 +203,9 @@ export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackM
   if (elevationValues.length > 0) {
     result.minimumElevationMeters = Math.min(...elevationValues);
     result.maximumElevationMeters = Math.max(...elevationValues);
-    result.elevationSource = 'dem-assisted';
-    result.elevationAlgorithmVersion = ELEVATION_ALGORITHM_VERSION;
+    result.elevationSource = elevationSource;
+    result.elevationAlgorithmVersion =
+      elevationSource === 'dem-assisted' ? ELEVATION_ALGORITHM_VERSION : 1;
   }
   if (elevationPairCount > 0) {
     result.ascentMeters = ascentMeters;

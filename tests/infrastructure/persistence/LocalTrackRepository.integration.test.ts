@@ -1,4 +1,3 @@
-import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalTrackStorageError } from '@/application/ports/LocalTrackRepository';
@@ -39,6 +38,8 @@ function summary(id: string, name: string): LocalTrackSummary {
         crossesAntimeridian: false,
       },
       center: [44.005, 42.005],
+      elevationSource: 'dem-assisted',
+      elevationAlgorithmVersion: 2,
     },
     metadata: { version: '1.1', links: [] },
     warnings: [],
@@ -49,7 +50,12 @@ function content(trackId: string): LocalTrackContent {
   return {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId,
-    trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+    trackPoints: [
+      [
+        { coordinate: [44, 42], elevationMeters: 1_000 },
+        { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+      ],
+    ],
   };
 }
 
@@ -66,40 +72,6 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
-  it('compacts legacy original blobs into the internal point representation', async () => {
-    database.close();
-    await database.delete();
-    const legacy = new Dexie('GeorgiaRoutingPlanner');
-    legacy.version(2).stores({
-      settings: 'key,updatedAt',
-      diagnostics: '++id,timestamp,name,level',
-      localTracks: 'id,normalizedName,savedAt',
-      localTrackContents: 'trackId',
-    });
-    await legacy.table('localTracks').put(summary('local:legacy', 'Legacy'));
-    await legacy.table('localTrackContents').put({
-      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-      trackId: 'local:legacy',
-      originalGpx: new Blob(['<gpx/>']),
-      segments: [
-        [
-          [44, 42],
-          [44.01, 42.01],
-        ],
-      ],
-    });
-    legacy.close();
-
-    database = new AppDatabase(services.logger);
-    await expect(database.loadLocalTrackContent('local:legacy')).resolves.toMatchObject(
-      {
-        trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
-      },
-    );
-    const stored = await database.localTrackContents.get('local:legacy');
-    expect(stored).not.toHaveProperty('originalGpx');
-    expect(stored).not.toHaveProperty('segments');
-  });
 
   it('saves summary and content atomically and loads both after reopen', async () => {
     await database.saveLocalTrack(summary('local:1', 'ბილიკი'), content('local:1'));

@@ -63,7 +63,7 @@ export class TerrainComputeEngine {
     if (this.#filteredTiles !== null) {
       const filteredTiles = this.#filteredTiles;
       this.#manager.fetchTile = (zoom, x, y, abortController) =>
-        filteredTiles.getTile(zoom, x, y, abortController);
+        filteredTiles.getTile(zoom, x, y, abortController.signal);
     }
   }
 

@@ -7,11 +7,17 @@ import type {
 } from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
+import {
+  BrowserTerrariumPngCodec,
+  type TerrariumPngCodec,
+} from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
+import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
 
 interface DemPixel {
   readonly red: number;
   readonly green: number;
   readonly blue: number;
+  readonly alpha: number;
 }
 
 interface TilePixelLocation {
@@ -56,7 +62,7 @@ export function locateDemPixel(
 }
 
 export function decodeDemElevation(
-  pixel: DemPixel,
+  pixel: Pick<DemPixel, 'red' | 'green' | 'blue'>,
   encoding: MapProviderConfiguration['terrain']['encoding'],
 ): number {
   if (encoding === 'terrarium') {
@@ -72,48 +78,81 @@ function tileUrl(template: string, location: TilePixelLocation): string {
     .replaceAll('{y}', String(location.y));
 }
 
-/** Fetches one configured raster-DEM tile and decodes only the selected pixel. */
+/** Batches raster DEM samples by tile and reuses repaired Terrarium tile data. */
 export class RasterDemElevationProvider implements ElevationProvider {
   public constructor(
     private readonly httpClient: KyInstance,
     private readonly terrain: MapProviderConfiguration['terrain'],
     private readonly idGenerator: IdGenerator,
+    private readonly filteredTerrariumTiles: FilteredTerrariumTileProvider | null = null,
+    private readonly pngCodec: TerrariumPngCodec = new BrowserTerrariumPngCodec(),
   ) {}
 
   public async sample(
     coordinate: ElevationCoordinate,
     signal: AbortSignal,
   ): Promise<ElevationSample> {
-    const location = locateDemPixel(
-      coordinate,
-      this.terrain.maxZoom,
-      this.terrain.tileSize,
-    );
-    if (location === null) return { status: 'unavailable' };
-    const blob = await this.httpClient
-      .get(tileUrl(this.terrain.tileUrl, location), {
-        signal,
-        context: { operationId: this.idGenerator.generate() },
-      })
-      .blob();
-    signal.throwIfAborted();
-    const bitmap = await createImageBitmap(blob);
-    try {
-      signal.throwIfAborted();
-      const canvas = new OffscreenCanvas(1, 1);
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (context === null) return { status: 'unavailable' };
-      context.drawImage(bitmap, location.pixelX, location.pixelY, 1, 1, 0, 0, 1, 1);
-      const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
-      if (red === undefined || green === undefined || blue === undefined) {
-        return { status: 'unavailable' };
+    return (await this.sampleMany([coordinate], signal))[0] ?? { status: 'unavailable' };
+  }
+
+  public async sampleMany(
+    coordinates: readonly ElevationCoordinate[],
+    signal: AbortSignal,
+  ): Promise<readonly ElevationSample[]> {
+    const samples: ElevationSample[] = coordinates.map(() => ({ status: 'unavailable' }));
+    const tiles = new Map<string, { location: TilePixelLocation; indices: number[] }>();
+    for (const [index, coordinate] of coordinates.entries()) {
+      const location = locateDemPixel(coordinate, this.terrain.maxZoom, this.terrain.tileSize);
+      if (location === null) continue;
+      const key = `${String(location.z)}/${String(location.x)}/${String(location.y)}`;
+      const tile = tiles.get(key);
+      if (tile === undefined) {
+        tiles.set(key, { location, indices: [index] });
+      } else {
+        tile.indices.push(index);
       }
-      return {
-        status: 'available',
-        meters: decodeDemElevation({ red, green, blue }, this.terrain.encoding),
-      };
-    } finally {
-      bitmap.close();
     }
+    await Promise.all(
+      [...tiles.values()].map(async ({ location, indices }) => {
+        const blob =
+          this.terrain.encoding === 'terrarium' && this.filteredTerrariumTiles !== null
+            ? (await this.filteredTerrariumTiles.getTile(location.z, location.x, location.y, signal)).data
+            : await this.httpClient
+                .get(tileUrl(this.terrain.tileUrl, location), {
+                  signal,
+                  context: { operationId: this.idGenerator.generate() },
+                })
+                .blob();
+        signal.throwIfAborted();
+        const decoded = await this.pngCodec.decode(blob, signal);
+        for (const index of indices) {
+          const coordinate = coordinates[index];
+          if (coordinate === undefined) continue;
+          const pixelLocation = locateDemPixel(
+            coordinate,
+            this.terrain.maxZoom,
+            this.terrain.tileSize,
+          );
+          if (pixelLocation === null) continue;
+          const offset = (pixelLocation.pixelY * decoded.width + pixelLocation.pixelX) * 4;
+          const red = decoded.data[offset];
+          const green = decoded.data[offset + 1];
+          const blue = decoded.data[offset + 2];
+          const alpha = decoded.data[offset + 3];
+          if (red === undefined || green === undefined || blue === undefined || alpha !== 255) continue;
+          const meters = decodeDemElevation({ red, green, blue }, this.terrain.encoding);
+          if (
+            !Number.isFinite(meters) ||
+            meters < this.terrain.filter.minimumElevationMeters ||
+            meters > this.terrain.filter.maximumElevationMeters ||
+            this.terrain.filter.sentinelElevationsMeters.includes(meters)
+          ) {
+            continue;
+          }
+          samples[index] = { status: 'available', meters };
+        }
+      }),
+    );
+    return samples;
   }
 }

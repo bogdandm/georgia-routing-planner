@@ -13,4 +13,8 @@ export interface ElevationProvider {
     coordinate: ElevationCoordinate,
     signal: AbortSignal,
   ): Promise<ElevationSample>;
+  sampleMany(
+    coordinates: readonly ElevationCoordinate[],
+    signal: AbortSignal,
+  ): Promise<readonly ElevationSample[]>;
 }

@@ -864,6 +864,7 @@ describe('MapLibreFacade', () => {
         new Promise<{ status: 'available'; meters: number }>((resolve) => {
           samples.push(resolve);
         }),
+      sampleMany: () => Promise.resolve([]),
     };
     const popup = {
       attach: vi.fn(),

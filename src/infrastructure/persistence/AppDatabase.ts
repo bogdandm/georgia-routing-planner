@@ -225,8 +225,8 @@ const trackMetricsSchema = z
     descentMeters: z.number().nonnegative().optional(),
     minimumElevationMeters: z.number().optional(),
     maximumElevationMeters: z.number().optional(),
-    elevationSource: z.literal('gpx').optional(),
-    elevationAlgorithmVersion: z.literal(1).optional(),
+    elevationSource: z.literal('dem-assisted'),
+    elevationAlgorithmVersion: z.literal(2),
   })
   .strict()
   .transform((value): TrackMetrics => {
@@ -252,12 +252,8 @@ const trackMetricsSchema = z
     if (value.maximumElevationMeters !== undefined) {
       result.maximumElevationMeters = value.maximumElevationMeters;
     }
-    if (value.elevationSource !== undefined) {
-      result.elevationSource = value.elevationSource;
-    }
-    if (value.elevationAlgorithmVersion !== undefined) {
-      result.elevationAlgorithmVersion = value.elevationAlgorithmVersion;
-    }
+    result.elevationSource = value.elevationSource;
+    result.elevationAlgorithmVersion = value.elevationAlgorithmVersion;
     return result;
   });
 
@@ -411,7 +407,7 @@ const localTrackSummarySchema = z
 const storedTrackPointSchema: z.ZodType<TrackPoint> = z
   .object({
     coordinate: coordinateSchema,
-    elevationMeters: z.number().optional(),
+    elevationMeters: z.number(),
     recordedAt: z.iso.datetime().optional(),
   })
   .strict()
@@ -441,26 +437,7 @@ const currentLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   })
   .strict();
 
-const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
-  .object({
-    schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
-    trackId: z.string().min(1).max(200),
-    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
-    trackPoints: storedTrackSegmentsSchema.optional(),
-  })
-  .loose()
-  .transform((value): LocalTrackContent => ({
-    schemaVersion: value.schemaVersion,
-    trackId: value.trackId,
-    trackPoints:
-      value.trackPoints ??
-      value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
-  }));
-
-const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.union([
-  currentLocalTrackContentSchema,
-  legacyLocalTrackContentSchema,
-]);
+const localTrackContentSchema: z.ZodType<LocalTrackContent> = currentLocalTrackContentSchema;
 
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
@@ -494,7 +471,13 @@ export class AppDatabase
       localTracks: 'id,normalizedName,savedAt',
       localTrackContents: 'trackId',
     });
-    this.version(3)
+    this.version(3).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+    });
+    this.version(4)
       .stores({
         settings: 'key,updatedAt',
         diagnostics: '++id,timestamp,name,level',
@@ -502,12 +485,8 @@ export class AppDatabase
         localTrackContents: 'trackId',
       })
       .upgrade(async (transaction) => {
-        const table = transaction.table('localTrackContents');
-        const records: unknown[] = await table.toArray();
-        for (const record of records) {
-          const parsed = parseLocalTrackContent(record);
-          if (parsed !== null) await table.put(parsed);
-        }
+        await transaction.table('localTracks').clear();
+        await transaction.table('localTrackContents').clear();
       });
   }
 

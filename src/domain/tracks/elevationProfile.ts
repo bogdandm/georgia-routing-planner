@@ -674,12 +674,17 @@ export function calculateElevationProfile(
   const segmentsResult = runs.flatMap((run) =>
     finalizeRunRanges(detectDirectionalRanges(points, run.start, run.end, options), points, options),
   );
-  const elevations = points.map((point) => point.elevationMeters);
+  let minimumMeters = Infinity;
+  let maximumMeters = -Infinity;
+  for (const point of points) {
+    minimumMeters = Math.min(minimumMeters, point.elevationMeters);
+    maximumMeters = Math.max(maximumMeters, point.elevationMeters);
+  }
   return {
     points,
     segments: segmentsResult,
-    minimumMeters: Math.min(...elevations),
-    maximumMeters: Math.max(...elevations),
+    minimumMeters,
+    maximumMeters,
     algorithmVersion: ELEVATION_ALGORITHM_VERSION,
   };
 }

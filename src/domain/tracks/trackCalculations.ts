@@ -1,7 +1,7 @@
 import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 
 export const DISTANCE_ALGORITHM_VERSION = 1;
-export const ELEVATION_ALGORITHM_VERSION = 1;
+export const ELEVATION_ALGORITHM_VERSION = 2;
 export const ROUTE_SHAPE_ALGORITHM_VERSION = 1;
 export const DOMINANT_SUMMIT_ALGORITHM_VERSION = 1;
 
@@ -29,13 +29,14 @@ export interface TrackMetrics {
   readonly descentMeters?: number;
   readonly minimumElevationMeters?: number;
   readonly maximumElevationMeters?: number;
-  readonly elevationSource?: 'gpx';
+  readonly elevationSource?: 'dem-assisted';
   readonly elevationAlgorithmVersion?: typeof ELEVATION_ALGORITHM_VERSION;
 }
 
 type TrackMetricsBuilder = {
   -readonly [Key in keyof TrackMetrics]: TrackMetrics[Key];
 };
+
 
 export interface DominantSummit {
   readonly coordinate: TrackCoordinate;
@@ -198,7 +199,7 @@ export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackM
   if (elevationValues.length > 0) {
     result.minimumElevationMeters = Math.min(...elevationValues);
     result.maximumElevationMeters = Math.max(...elevationValues);
-    result.elevationSource = 'gpx';
+    result.elevationSource = 'dem-assisted';
     result.elevationAlgorithmVersion = ELEVATION_ALGORITHM_VERSION;
   }
   if (elevationPairCount > 0) {

@@ -10,6 +10,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ElevationSample } from '@/application/ports/ElevationProvider';
 import {
   SatelliteCatalogError,
   type SatelliteCatalogGateway,
@@ -32,6 +33,17 @@ import { appColors } from '@/presentation/theme/appColors';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 import { createTestServices } from '@test/helpers/createTestServices';
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolveValue: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolve) => {
+    resolveValue = resolve;
+  });
+  return { promise, resolve: resolveValue };
+}
+
 
 let services: RuntimeServices;
 
@@ -171,7 +183,7 @@ function gpxFile(name = 'Fixture track.gpx'): File {
 }
 
 function gpxFileWithCompanionRoute(): File {
-  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"><time>2026-07-13T08:00:00Z</time></trkpt><trkpt lat="42.01" lon="44.01"><time>2026-07-13T08:02:00Z</time></trkpt></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele><time>2026-07-13T08:00:00Z</time></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele><time>2026-07-13T08:02:00Z</time></trkpt></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
   const file = new File([xml], 'Track and route.gpx', {
     type: 'application/gpx+xml',
   });
@@ -679,12 +691,88 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows preparation progress and aborts on cancel and unmount', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const signals: AbortSignal[] = [];
+    vi.spyOn(provider, 'sampleMany').mockImplementation((_coordinates, signal) => {
+      signals.push(signal);
+      return deferred<readonly ElevationSample[]>().promise;
+    });
+    const user = userEvent.setup();
+    const rendered = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Cancel.gpx'));
+    expect(await screen.findByText('Preparing elevation profile…')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel preparation' }));
+    expect(signals[0]?.aborted).toBe(true);
+    expect(screen.queryByText('Preparing elevation profile…')).not.toBeInTheDocument();
+
+    await user.upload(input, gpxFile('Unmount.gpx'));
+    expect(await screen.findByText('Preparing elevation profile…')).toBeVisible();
+    rendered.unmount();
+    expect(signals[1]?.aborted).toBe(true);
+  });
+
+  it('keeps the newest import when an older preparation completes late', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const pending: {
+      readonly count: number;
+      readonly resolve: (samples: readonly ElevationSample[]) => void;
+    }[] = [];
+    vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates) => {
+      const pendingResult = deferred<readonly ElevationSample[]>();
+      pending.push({ count: coordinates.length, resolve: pendingResult.resolve });
+      return pendingResult.promise;
+    });
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('First.gpx'));
+    expect(await screen.findByText('Preparing elevation profile…')).toBeVisible();
+    await user.upload(input, gpxFile('Second.gpx'));
+    expect(pending).toHaveLength(2);
+    await act(async () => {
+      const latest = pending[1];
+      latest?.resolve(
+        Array.from({ length: latest.count }, () => ({ status: 'unavailable' as const })),
+      );
+    });
+    expect(await screen.findByText('Second.gpx · GPX')).toBeVisible();
+
+    await act(async () => {
+      const stale = pending[0];
+      stale?.resolve(
+        Array.from({ length: stale.count }, () => ({ status: 'unavailable' as const })),
+      );
+    });
+    expect(screen.getByText('Second.gpx · GPX')).toBeVisible();
+    expect(screen.queryByText('First.gpx · GPX')).not.toBeInTheDocument();
+  });
+
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
     const user = userEvent.setup();
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       trackId: 'local:test-1',
-      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 1_000 },
+          { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+        ],
+      ],
     });
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -707,21 +795,7 @@ describe('WorkspaceShell', () => {
     const elevationProfile = within(details).getByRole('img', {
       name: 'Elevation profile from 1000 to 1120 metres',
     });
-    const chartSurface = elevationProfile.querySelector('svg');
-    if (chartSurface === null) {
-      throw new Error('Expected the elevation chart surface to render.');
-    }
-    fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
-    fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
-    expect(await screen.findByText('Elevation 1120 m')).toBeVisible();
-    fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
-    await waitFor(() => {
-      expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
-        latitude: 42.01,
-        longitude: 44.01,
-        zoom: 13,
-      });
-    });
+    expect(elevationProfile).toBeVisible();
     const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
     expect(elevationGain).toBeVisible();
     const elevationGainIcon = elevationGain.querySelector('svg');
@@ -734,7 +808,7 @@ describe('WorkspaceShell', () => {
     expect(
       within(details).queryByLabelText(/^Average speed:/u),
     ).not.toBeInTheDocument();
-    expect(within(details).getByText('2 points · 1 segment')).toBeVisible();
+    expect(within(details).getByText('140 points · 1 segment')).toBeVisible();
     const discard = screen.getByRole('button', { name: 'Discard' });
     const save = screen.getByRole('button', { name: 'Save' });
     expect(

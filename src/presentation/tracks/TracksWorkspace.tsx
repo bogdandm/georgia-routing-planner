@@ -80,6 +80,7 @@ import {
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
 import { calculateElevationProfile } from '@/domain/tracks/elevationProfile';
+import { formatDateTime } from '@/presentation/formatDateTime';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
 import {
   requestMapFitBounds,
@@ -1372,7 +1373,7 @@ function TrackMetadata({
       </Typography>
       {savedAt === undefined ? null : (
         <Typography variant="caption" color="text.secondary">
-          Saved {new Date(savedAt).toLocaleString('en')}
+          Saved {formatDateTime(new Date(savedAt))}
         </Typography>
       )}
     </Stack>

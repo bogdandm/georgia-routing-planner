@@ -93,6 +93,9 @@ describe('DeveloperDrawer', () => {
       screen.getByText(/sentinel-raster-a · HTTP 503 · http-server/u),
     ).toBeVisible();
     expect(screen.getByText(/Recovery: scheduled · Retry attempt 1/u)).toBeVisible();
+    expect(
+      screen.getByText(/Last failure: \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}/u),
+    ).toBeVisible();
 
     await user.click(screen.getByRole('checkbox', { name: 'Show tile boundaries' }));
     expect(useUiStore.getState().mapDebugOptions.showTileBoundaries).toBe(true);

@@ -812,6 +812,9 @@ describe('WorkspaceShell', () => {
     expect(
       within(details).getByRole('heading', { name: 'Fixture trail' }),
     ).toBeVisible();
+    expect(
+      within(details).getByText(/^Saved \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}$/u),
+    ).toBeVisible();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
     );

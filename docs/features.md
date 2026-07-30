@@ -105,28 +105,28 @@ previews activate the native leave-site guard. Saved track cards show icon-led r
 duration, distance, and elevation gain when available. The detail pane presents
 duration, distance, derived average speed, elevation gain, and elevation loss in a
 wrapping stats grid, with missing measurements omitted; source file, point, segment, and
-save metadata remain below it. Saved tracks are searchable by name, reopen after close,
-and rename only from the detail header's **Rename** action. That action replaces the
-saved title with a bounded name editor; the preview retains its body **Track name**
-field and English-name application flow. Each saved-track row keeps favorite and
-icon-only delete controls in the DOM, revealing inactive controls on pointer hover or
-keyboard focus; active favorites remain visible. Row selection and hover color cover the
-entire row, including its action column. Deletion uses two-stage inline confirmation:
-the row delete icon becomes a destructive confirmation icon, while **Delete track** in
-the detail action menu replaces that menu trigger with **Confirm delete**. Pointer exit,
-Escape, and click-away cancel either confirmation without mutation. Users can favorite a
-track from its list row or detail header; downloads remain in the detail header's
-compact action menu. Favorites sort before other tracks, with newest imports first
-inside each group. The latest opened saved track reopens after restart when its content
-is still valid. A compact local-retention notice stays pinned to the Tracks panel
-bottom. Catalog, folders, tags, filters, batch import, whole-workspace dropping, and GPX
-creation remain unavailable. A newly imported or reopened track renders as bright-blue
-independent lines and fits its complete bounds with padding for the master/detail
-surfaces. Closing it removes the active geometry without deleting a saved record or
-moving the camera. Every saved track can be downloaded locally as GPX or KML. Generated
-files preserve independent segments, saved name, available point elevation, and reliably
-aligned timestamps without writing GPX or KML description elements; conversion never
-uploads the source.
+save metadata, including a `DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved
+tracks are searchable by name, reopen after close, and rename only from the detail
+header's **Rename** action. That action replaces the saved title with a bounded name
+editor; the preview retains its body **Track name** field and English-name application
+flow. Each saved-track row keeps favorite and icon-only delete controls in the DOM,
+revealing inactive controls on pointer hover or keyboard focus; active favorites remain
+visible. Row selection and hover color cover the entire row, including its action
+column. Deletion uses two-stage inline confirmation: the row delete icon becomes a
+destructive confirmation icon, while **Delete track** in the detail action menu replaces
+that menu trigger with **Confirm delete**. Pointer exit, Escape, and click-away cancel
+either confirmation without mutation. Users can favorite a track from its list row or
+detail header; downloads remain in the detail header's compact action menu. Favorites
+sort before other tracks, with newest imports first inside each group. The latest opened
+saved track reopens after restart when its content is still valid. A compact
+local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
+filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
+newly imported or reopened track renders as bright-blue independent lines and fits its
+complete bounds with padding for the master/detail surfaces. Closing it removes the
+active geometry without deleting a saved record or moving the camera. Every saved track
+can be downloaded locally as GPX or KML. Generated files preserve independent segments,
+saved name, available point elevation, and reliably aligned timestamps without writing
+GPX or KML description elements; conversion never uploads the source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The

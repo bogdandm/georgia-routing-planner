@@ -254,9 +254,11 @@ export function ElevationProfileChart({
               point.sampleIndex,
             );
             if (
-              segmentIndex !== null &&
-              profile.segments[segmentIndex]?.type !== 'flat'
+              segmentIndex === null ||
+              profile.segments[segmentIndex]?.type === 'flat'
             ) {
+              onSegmentSelectionChange(null);
+            } else {
               onSegmentSelectionChange(
                 selectedSegmentIndex === segmentIndex ? null : segmentIndex,
               );

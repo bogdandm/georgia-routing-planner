@@ -270,7 +270,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const restorationAttempted = useRef(false);
 
   const saveLatestOpenedTrackId = useCallback(
-    async (trackId: string) => {
+    async (trackId: string | null) => {
       latestOpenedTrackId.current = trackId;
       const write = latestOpenedTrackWrite.current
         .catch(() => undefined)
@@ -647,7 +647,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   const savePreview = useCallback(async () => {
-    if (active?.kind !== 'preview' || active.preparationStatus !== 'ready') return;
+    if (
+      active?.kind !== 'preview' ||
+      active.preparationStatus !== 'ready' ||
+      recalculationState === 'recalculating'
+    ) {
+      return;
+    }
     const previewId = active.id;
     const generation = importGeneration.current;
     const previewNamingAbort = namingAbort.current;
@@ -708,7 +714,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : 'The track could not be saved.',
       );
     }
-  }, [active, clock, database, reloadSummaries, saveLatestOpenedTrackId]);
+  }, [
+    active,
+    clock,
+    database,
+    recalculationState,
+    reloadSummaries,
+    saveLatestOpenedTrackId,
+  ]);
 
   const recalculateElevation = useCallback(async () => {
     if (
@@ -913,6 +926,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     async (summary: LocalTrackSummary) => {
       try {
         await database.deleteLocalTrack(summary.id);
+        if (latestOpenedTrackId.current === summary.id) {
+          await saveLatestOpenedTrackId(null);
+        }
         setActive((current) =>
           current?.kind === 'saved' && current.summary.id === summary.id
             ? null
@@ -924,7 +940,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setError('The track could not be deleted.');
       }
     },
-    [database, reloadSummaries],
+    [database, reloadSummaries, saveLatestOpenedTrackId],
   );
 
   const applyGeneratedName = useCallback(() => {
@@ -1512,9 +1528,13 @@ function elevationProfileInputSegments(
 ): readonly (readonly ElevationProfileInputPoint[])[] | null {
   const inputs: ElevationProfileInputPoint[][] = [];
   for (const [sourceSegmentIndex, segment] of segments.entries()) {
-    const preparedSegment: ElevationProfileInputPoint[] = [];
+    let preparedSegment: ElevationProfileInputPoint[] = [];
     for (const point of segment) {
-      if (point.elevationMeters === undefined) return null;
+      if (point.elevationMeters === undefined) {
+        if (preparedSegment.length > 0) inputs.push(preparedSegment);
+        preparedSegment = [];
+        continue;
+      }
       preparedSegment.push({
         coordinate: point.coordinate,
         rawElevationMeters: point.elevationMeters,
@@ -1523,9 +1543,9 @@ function elevationProfileInputSegments(
         ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
       });
     }
-    inputs.push(preparedSegment);
+    if (preparedSegment.length > 0) inputs.push(preparedSegment);
   }
-  return inputs;
+  return inputs.length === 0 ? null : inputs;
 }
 
 function TrackElevationAnalysis() {
@@ -1769,6 +1789,7 @@ export function TrackDetailsPane({
     discardPreview,
     renameActive,
     savePreview,
+    recalculationState,
     setActiveName,
     toggleFavorite,
   } = useTracksWorkspace();
@@ -2115,7 +2136,10 @@ export function TrackDetailsPane({
                 <Button
                   size="small"
                   variant="contained"
-                  disabled={active.preparationStatus !== 'ready'}
+                  disabled={
+                    active.preparationStatus !== 'ready' ||
+                    recalculationState === 'recalculating'
+                  }
                   onClick={() => void savePreview()}
                 >
                   Save

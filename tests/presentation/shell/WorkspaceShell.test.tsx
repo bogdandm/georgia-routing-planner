@@ -891,6 +891,7 @@ describe('WorkspaceShell', () => {
     });
     await user.click(previewRecalculate);
     expect(previewRecalculate).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(previewRecalculate).toContainElement(
       within(previewRecalculate).getByRole('progressbar'),
     );
@@ -946,7 +947,10 @@ describe('WorkspaceShell', () => {
       trackPoints: [
         [
           { coordinate: [44, 42], elevationMeters: 1_000 },
-          { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+          { coordinate: [44.005, 42.005], elevationMeters: 1_010 },
+          { coordinate: [44.008, 42.008] },
+          { coordinate: [44.01, 42.01], elevationMeters: 1_110 },
+          { coordinate: [44.02, 42.02], elevationMeters: 1_120 },
         ],
       ],
     });

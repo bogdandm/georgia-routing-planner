@@ -127,6 +127,7 @@ afterEach(() => {
 interface ElevationProfileChartCallbacks {
   readonly activeSegmentIndex?: number | null;
   readonly selectedSegmentIndex?: number | null;
+  readonly profile?: ElevationProfile;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onSegmentHoverChange?: (index: number | null) => void;
   readonly onSegmentSelectionChange?: (index: number | null) => void;
@@ -134,6 +135,7 @@ interface ElevationProfileChartCallbacks {
 }
 
 function renderElevationProfileChart({
+  profile: chartProfile = profile,
   activeSegmentIndex,
   selectedSegmentIndex,
   onActivePointChange,
@@ -150,7 +152,7 @@ function renderElevationProfileChart({
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
   } = {
-    profile,
+    profile: chartProfile,
     activeSegmentIndex: activeSegmentIndex ?? null,
     selectedSegmentIndex: selectedSegmentIndex ?? null,
     onSegmentHoverChange: onSegmentHoverChange ?? vi.fn(),
@@ -326,6 +328,40 @@ describe('ElevationProfileChart', () => {
     fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
     fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
     await screen.findByText('Climb 1');
+    fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
+    await waitFor(() => {
+      expect(onSegmentSelectionChange).toHaveBeenLastCalledWith(null);
+    });
+  });
+
+  it('clears a selected range when a flat chart range is clicked', async () => {
+    const onSegmentHoverChange = vi.fn();
+    const onSegmentSelectionChange = vi.fn();
+    observedWidth = 420;
+    renderElevationProfileChart({
+      profile: {
+        ...profile,
+        segments: profile.segments.map((segment, index) =>
+          index === 0 ? { ...segment, type: 'flat' } : segment,
+        ),
+      },
+      selectedSegmentIndex: 0,
+      onSegmentSelectionChange,
+      onSegmentHoverChange,
+    });
+    const chartSurface = screen
+      .getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      })
+      .querySelector('svg');
+    if (chartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+    fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
+    await waitFor(() => {
+      expect(onSegmentHoverChange).toHaveBeenLastCalledWith(0);
+    });
     fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
     await waitFor(() => {
       expect(onSegmentSelectionChange).toHaveBeenLastCalledWith(null);

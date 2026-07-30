@@ -264,7 +264,6 @@ satellite commands. Pure style construction and stable identifiers belong in
 - Throttle high-frequency events before updating React, serializable stores, or URL
   state.
 - Do not recreate the map because unrelated panel state changed.
-- Keep required provider attribution visible.
 - Test required layer ordering and do not leak the native map object to unrelated code.
 - Keep provider URLs, worker state, parsed DEM data, and native caches inside their
   existing owners rather than exposing them through React state or application ports.

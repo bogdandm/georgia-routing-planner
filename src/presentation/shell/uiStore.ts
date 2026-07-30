@@ -9,12 +9,14 @@ interface UiState {
   readonly developerDrawerOpen: boolean;
   readonly developerMode: boolean;
   readonly mapDebugOptions: MapDebugOptions;
+  readonly mobileWorkspaceOpen: boolean;
   readonly navigationCollapsed: boolean;
   readonly settingsOpen: boolean;
   readonly setActiveTab: (value: WorkspaceTab) => void;
   readonly setDeveloperDrawerOpen: (value: boolean) => void;
   readonly setDeveloperMode: (value: boolean) => void;
   readonly setMapDebugOptions: (value: MapDebugOptions) => void;
+  readonly setMobileWorkspaceOpen: (value: boolean) => void;
   readonly setNavigationCollapsed: (value: boolean) => void;
   readonly setSettingsOpen: (value: boolean) => void;
 }
@@ -24,6 +26,7 @@ export const useUiStore = create<UiState>()((set) => ({
   developerDrawerOpen: false,
   developerMode: false,
   mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+  mobileWorkspaceOpen: false,
   navigationCollapsed: false,
   settingsOpen: false,
   setActiveTab: (activeTab) => {
@@ -37,6 +40,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setMapDebugOptions: (mapDebugOptions) => {
     set({ mapDebugOptions });
+  },
+  setMobileWorkspaceOpen: (mobileWorkspaceOpen) => {
+    set({ mobileWorkspaceOpen });
   },
   setNavigationCollapsed: (navigationCollapsed) => {
     set({ navigationCollapsed });

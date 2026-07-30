@@ -50,6 +50,7 @@ function UnavailableWorkspaceTab({
 
 interface WorkspaceRailProps {
   readonly collapsed: boolean;
+  readonly squareEdges: boolean;
   readonly activeTab: WorkspaceTab;
   readonly developerToolsOpen: boolean;
   readonly developerMode: boolean;
@@ -62,6 +63,7 @@ interface WorkspaceRailProps {
 
 export function WorkspaceRail({
   collapsed,
+  squareEdges,
   activeTab,
   developerToolsOpen,
   developerMode,
@@ -90,7 +92,7 @@ export function WorkspaceRail({
         alignItems: 'stretch',
         bgcolor: collapsed ? 'transparent' : appColors.brand.deepSpace,
         color: appColors.text.inverse,
-        borderRadius: collapsed ? 0 : '8px 0 0 8px',
+        borderRadius: squareEdges || collapsed ? 0 : '8px 0 0 8px',
         overflow: 'visible',
         boxShadow: 'none',
         transition: (theme) =>

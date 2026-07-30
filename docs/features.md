@@ -20,19 +20,33 @@ longer describes the reviewed interface.
   “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
   item, or independent planning destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
-- **Detail pane:** selected track and imagery details may open adjacent to the
-  contextual sidebar without replacing or remounting the map.
+- **Detail pane:** selected track and imagery details are adjacent to the contextual
+  sidebar at widths of 1900 CSS pixels and above, and overlay that sidebar below 1900
+  pixels without replacing or remounting the map.
 - **Persistent map:** the map remains the primary canvas across rail changes, detail
   selection, dialogs, and developer tools.
 
+## Smartphone workspace
+
+Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals the
+full-height feature rail and contextual tools without remounting the map; **Show map**
+and the GR logo return to the same map. An active track appears over the map as a
+collapsed disclosure containing the same distance, recorded-time, ascent, and descent
+statistics used by the full editor. Expanding it reveals the full editor; collapsing
+preserves the active track, while closing clears it. Selecting Sentinel imagery closes
+the smartphone workspace so the map immediately shows the applied scene; reopening the
+workspace restores the existing imagery results. This transient presentation state is
+not stored as a navigation preference or URL entry.
+
 ## Desktop workspace
 
-The Material UI shell is a map-first desktop workbench. The map always fills the
-viewport; the rail, contextual sidebar, and detail pane form one floating surface above
-it. Changing sections or opening a pane therefore never changes the map viewport. Native
-map navigation remains on the right, and the 2D/3D selector sits directly below it. The
-shell uses the shared sky-blue, blue-green, deep-space, amber, and orange palette with
-derived surface, border, status, and tag colors.
+At widths from 900 CSS pixels through 1899 pixels, a selected track or imagery result
+overlays only the contextual sidebar while the rail stays interactive. At 1900 CSS
+pixels and above, the rail, contextual sidebar, and detail pane form one floating
+surface above the full-viewport map. Changing sections or opening a pane never changes
+the map viewport. Native map navigation remains on the right, and the 2D/3D selector
+sits directly below it. The shell uses the shared sky-blue, blue-green, deep-space,
+amber, and orange palette with derived surface, border, status, and tag colors.
 
 The current shell exposes Tracks, Satellite, and Layers as interactive rail
 destinations. Markers remains visible but disabled until that feature surface has
@@ -118,10 +132,11 @@ grid, axis tooltip, and a map marker synchronized to the highlighted chart point
 profile is calculated from the retained source points and does not repeat the
 ascent/descent metrics already shown in the stats grid.
 
-At viewport widths up to 1920 CSS pixels, opening a track replaces the list below the
-persistent import region and **Back to tracks** restores the prior search/list state.
-Wider viewports retain the adjacent detail pane. The same hover/focus row actions and
-two-stage inline deletion behavior apply at either width.
+From 900 through 1899 CSS pixels, an open track detail pane overlays Tracks tools and
+**Back to tracks** restores the prior import, search, and list state. At 1900 CSS pixels
+and above, the track pane remains adjacent and uses **Close track**. Favorite and delete
+row actions remain visible on smartphones; desktop rows reveal them on hover or focus.
+Two-stage inline deletion behaves the same at every width.
 
 ### Create GPX
 
@@ -231,9 +246,9 @@ The expanded applied card shows validated acquisition, tile, orbit, product,
 edge-distance, and attribution evidence. `Fit footprint` preserves pitch and bearing;
 `Hide imagery` stops the raster without discarding results, selection, or the footprint.
 Clicking the already applied scene card de-applies it, removes its raster and footprint,
-and clears the transient selection. The Satellite sidebar and results stay mounted but
-hidden across rail changes, so a user can inspect Layers and return without losing the
-search session.
+and clears the transient selection. At desktop widths, the Satellite sidebar and results
+stay mounted but hidden across rail changes, so a user can inspect Layers and return
+without losing the search session.
 
 If the initial cards do not occupy most of the adjacent pane, the UI automatically
 reveals another local set or fetches preceding months, with a small bounded number of

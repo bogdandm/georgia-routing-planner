@@ -71,15 +71,16 @@ Waterways and water bodies share one blue. The `waterway` layer is ordered below
 
 ### Attribution and licensing
 
-Attribution remains visible in MapLibre's attribution control:
+At desktop widths, attribution remains visible in MapLibre's attribution control:
 
 > OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap
 
-Each name links to the provider/license page supplied by the TileJSON. OpenFreeMap's
-[attribution section](https://openfreemap.org/#attribution) requires OpenMapTiles and
-OpenStreetMap credit; OpenFreeMap credit itself is encouraged. The OpenMapTiles schema
-is CC-BY and its implementation is BSD-licensed. OSM data remains subject to ODbL and
-the OSM attribution guidance.
+The smartphone map omits the attribution control to preserve the map-first interaction
+surface. Each desktop name links to the provider/license page supplied by the TileJSON.
+OpenFreeMap's [attribution section](https://openfreemap.org/#attribution) requires
+OpenMapTiles and OpenStreetMap credit; OpenFreeMap credit itself is encouraged. The
+OpenMapTiles schema is CC-BY and its implementation is BSD-licensed. OSM data remains
+subject to ODbL and the OSM attribution guidance.
 
 ### Browser evidence and replacement
 
@@ -228,8 +229,8 @@ and reloads all three consumers together so they cannot disagree.
 
 ### Attribution, limits, and failure policy
 
-The source attribution is shown whenever the DEM source is configured or terrain is
-requested:
+The source attribution is available in the desktop MapLibre attribution control whenever
+the DEM source is configured or terrain is requested:
 
 > Terrain data: Mapzen/AWS Open Data — includes Copernicus, USGS, NOAA, and regional
 > providers
@@ -461,7 +462,7 @@ real-provider application smoke.
 1. Open the GitHub Pages and local origins in current stable desktop Chrome.
 2. Confirm vector TileJSON, a representative Georgia PBF, glyphs, and the DEM tile
    return over HTTPS with CORS and no credential.
-3. Confirm attribution links remain visible and keyboard reachable in 2D and 3D.
+3. Confirm desktop attribution links remain visible and keyboard reachable in 2D and 3D.
 4. Pan/zoom/pitch around Georgia; record style-ready and first-idle diagnostics.
 5. Simulate vector and DEM failure separately and confirm the documented fatal/degraded
    behavior.

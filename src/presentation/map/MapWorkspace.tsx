@@ -1,7 +1,15 @@
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
-import { Alert, Box, ListItemIcon, Menu, MenuItem, Snackbar } from '@mui/material';
+import {
+  Alert,
+  Box,
+  ListItemIcon,
+  Menu,
+  MenuItem,
+  Snackbar,
+  useMediaQuery,
+} from '@mui/material';
 import type { MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
 import {
   useCallback,
@@ -151,6 +159,7 @@ export function MapWorkspace({
   } | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
+  const smartphoneViewport = useMediaQuery('(width < 900px)');
   const navigationCommand = useStore(
     mapInteractionStore,
     (state) => state.navigationCommand,
@@ -166,6 +175,7 @@ export function MapWorkspace({
   const developerMode = useUiStore((state) => state.developerMode);
   const mapDebugOptions = useUiStore((state) => state.mapDebugOptions);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const cameraPersistence = useMemo(
     () =>
@@ -556,6 +566,7 @@ export function MapWorkspace({
     if (contextMenu === null) return;
     requestSatelliteSearch(contextMenu);
     setActiveTab('satellite');
+    setMobileWorkspaceOpen(true);
     setNavigationCollapsed(false);
     const nextUrl = new URL(window.location.href);
     nextUrl.hash = workspaceHashForTab('satellite');
@@ -582,7 +593,6 @@ export function MapWorkspace({
         (resolvedMapCanvas ?? (
           <Map
             ref={handleMapRef}
-            attributionControl={{ compact: false }}
             initialViewState={restoredView.camera}
             mapStyle={mapStyle}
             maxPitch={75}
@@ -591,6 +601,7 @@ export function MapWorkspace({
             doubleClickZoom
             dragPan
             dragRotate={false}
+            attributionControl={smartphoneViewport ? false : { compact: false }}
             keyboard
             reuseMaps={false}
             scrollZoom

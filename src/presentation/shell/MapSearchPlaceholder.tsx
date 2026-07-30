@@ -86,6 +86,7 @@ export function MapSearchPlaceholder() {
   const { mapViewport, searchPlaces } = useRuntimeServices();
   const tracksWorkspace = useOptionalTracksWorkspace();
   const setActiveTab = useUiStore((state) => state.setActiveTab);
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const [value, setValue] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState<{
     readonly query: string;
@@ -378,6 +379,7 @@ export function MapSearchPlaceholder() {
               key={summary.id}
               onClick={() => {
                 setActiveTab('tracks');
+                setMobileWorkspaceOpen(true);
                 void tracksWorkspace?.selectSaved(summary);
               }}
             >
@@ -389,6 +391,7 @@ export function MapSearchPlaceholder() {
             onClick={() => {
               tracksWorkspace?.setQuery(localSubmittedQuery);
               setActiveTab('tracks');
+              setMobileWorkspaceOpen(true);
             }}
             sx={{ mx: 1, textTransform: 'none' }}
           >

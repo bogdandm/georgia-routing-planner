@@ -1,9 +1,11 @@
+import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import StarIcon from '@mui/icons-material/Star';
@@ -33,7 +35,6 @@ import {
   TextField,
   Tooltip,
   Typography,
-  useMediaQuery,
 } from '@mui/material';
 import {
   createContext,
@@ -121,7 +122,7 @@ interface TracksWorkspaceValue {
   readonly query: string;
   readonly summaries: readonly LocalTrackSummary[];
   readonly applyGeneratedName: () => void;
-  readonly closeActive: () => void;
+  readonly closeActive: () => boolean;
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
   readonly savePreview: () => Promise<void>;
@@ -560,10 +561,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [active?.kind]);
 
   const closeActive = useCallback(() => {
-    if (active?.kind === 'preview' && !window.confirm('Discard this unsaved track?'))
-      return;
+    if (active?.kind === 'preview' && !window.confirm('Discard this unsaved track?')) {
+      return false;
+    }
     namingAbort.current?.abort();
     setActive(null);
+    return true;
   }, [active?.kind]);
 
   const selectSaved = useCallback(
@@ -830,13 +833,13 @@ function TrackImportZone() {
       >
         <Stack
           direction={dragActive ? 'column' : 'row'}
-          spacing={dragActive ? 0.75 : 1}
+          spacing={dragActive ? 0.75 : 0.75}
           sx={{
             minHeight: 48,
             width: '100%',
             alignItems: 'center',
             justifyContent: 'center',
-            px: 1.25,
+            px: dragActive ? 1.25 : { xs: 0.75, sm: 1.25 },
             py: dragActive ? 2 : 0.5,
             textAlign: 'center',
           }}
@@ -845,7 +848,14 @@ function TrackImportZone() {
             color="primary"
             sx={{ fontSize: dragActive ? 36 : 24 }}
           />
-          <Typography variant="subtitle2" sx={{ flex: dragActive ? 0 : 1 }}>
+          <Typography
+            variant="subtitle2"
+            noWrap={!dragActive}
+            sx={{
+              flex: dragActive ? 0 : 1,
+              fontSize: dragActive ? undefined : { xs: '0.6875rem', sm: '0.875rem' },
+            }}
+          >
             Drop GPX, FIT, or KML here
           </Typography>
           {dragActive ? (
@@ -857,6 +867,7 @@ function TrackImportZone() {
               size="small"
               variant="outlined"
               onClick={() => inputRef.current?.click()}
+              sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
             >
               Browse track file
             </Button>
@@ -893,17 +904,17 @@ function TrackImportZone() {
   );
 }
 
-function formatDistance(meters: number): string {
+function formatTrackDistance(meters: number): string {
   return `${(meters / 1_000).toFixed(meters < 10_000 ? 1 : 0)} km`;
 }
 
-function formatDuration(seconds: number): string {
+function formatTrackDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.round((seconds % 3_600) / 60);
   return `${String(hours)}h ${String(minutes)}m`;
 }
 
-function formatElevation(meters: number): string {
+function formatTrackElevation(meters: number): string {
   return `${Math.round(meters).toLocaleString('en')} m`;
 }
 
@@ -968,15 +979,6 @@ export function TracksPanel() {
   const [hoveredSavedTrackId, setHoveredSavedTrackId] = useState<string | null>(null);
   const [savedTrackHoverEpoch, setSavedTrackHoverEpoch] = useState(0);
   const [savedTrackHoverSuppressed, setSavedTrackHoverSuppressed] = useState(false);
-  const compactDetails = useMediaQuery('(max-width:1920px)');
-  if (active !== null && compactDetails) {
-    return (
-      <Stack spacing={2} sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
-        <TrackImportZone />
-        <TrackDetailsPane embedded />
-      </Stack>
-    );
-  }
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
@@ -1078,6 +1080,12 @@ export function TracksPanel() {
                       },
                       '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:focus-within .saved-track-row-action, &.saved-track-row--hovered .saved-track-row-action':
                         { opacity: 1, pointerEvents: 'auto' },
+                      '@media (width < 900px)': {
+                        '& .saved-track-row-action': {
+                          opacity: 1,
+                          pointerEvents: 'auto',
+                        },
+                      },
                     }}
                   >
                     <ListItemButton
@@ -1100,19 +1108,19 @@ export function TracksPanel() {
                           <TrackStat
                             icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
                             label="Recorded time"
-                            value={formatDuration(elapsedSeconds)}
+                            value={formatTrackDuration(elapsedSeconds)}
                           />
                         )}
                         <TrackStat
                           icon={<SwapHorizOutlinedIcon sx={{ fontSize: 16 }} />}
                           label="Distance"
-                          value={formatDistance(summary.metrics.distanceMeters)}
+                          value={formatTrackDistance(summary.metrics.distanceMeters)}
                         />
                         {ascentMeters === undefined ? null : (
                           <TrackStat
                             icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
                             label="Elevation gain"
-                            value={formatElevation(ascentMeters)}
+                            value={formatTrackElevation(ascentMeters)}
                           />
                         )}
                       </Stack>
@@ -1270,52 +1278,64 @@ function TrackElevationProfile() {
 
 interface TrackStatsProps {
   readonly metrics: TrackMetrics;
+  readonly compact?: boolean;
 }
 
-function TrackStats({ metrics }: TrackStatsProps) {
+export function TrackStats({ compact = false, metrics }: TrackStatsProps) {
   const stats: TrackStatProps[] = [];
   const elapsedSeconds = metrics.elapsedSeconds;
   if (elapsedSeconds !== undefined) {
     stats.push({
       icon: <TimerOutlinedIcon sx={{ fontSize: 18 }} />,
       label: 'Recorded time',
-      value: formatDuration(elapsedSeconds),
+      value: formatTrackDuration(elapsedSeconds),
     });
   }
   stats.push({
     icon: <SwapHorizOutlinedIcon sx={{ fontSize: 18 }} />,
     label: 'Distance',
-    value: formatDistance(metrics.distanceMeters),
+    value: formatTrackDistance(metrics.distanceMeters),
   });
-  const speedKilometersPerHour = averageSpeedKilometersPerHour(metrics);
-  if (speedKilometersPerHour !== undefined) {
-    stats.push({
-      icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
-      label: 'Average speed',
-      value: `${speedKilometersPerHour.toFixed(1)} km/h`,
-    });
+  if (!compact) {
+    const speedKilometersPerHour = averageSpeedKilometersPerHour(metrics);
+    if (speedKilometersPerHour !== undefined) {
+      stats.push({
+        icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
+        label: 'Average speed',
+        value: `${speedKilometersPerHour.toFixed(1)} km/h`,
+      });
+    }
   }
   if (metrics.ascentMeters !== undefined) {
     stats.push({
       icon: <NorthEastIcon sx={{ fontSize: 18 }} />,
       label: 'Elevation gain',
-      value: formatElevation(metrics.ascentMeters),
+      value: formatTrackElevation(metrics.ascentMeters),
     });
   }
   if (metrics.descentMeters !== undefined) {
     stats.push({
       icon: <SouthEastIcon sx={{ fontSize: 18 }} />,
       label: 'Elevation loss',
-      value: formatElevation(metrics.descentMeters),
+      value: formatTrackElevation(metrics.descentMeters),
     });
   }
   return (
     <Box
       sx={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-        columnGap: 1.5,
+        display: compact ? 'flex' : 'grid',
+        gridTemplateColumns: compact ? undefined : 'repeat(3, minmax(0, 1fr))',
+        justifyContent: compact ? 'space-around' : undefined,
+        columnGap: compact ? 0 : 1.5,
         rowGap: 1.5,
+        minWidth: 0,
+        '@media (width < 360px)': {
+          display: compact ? 'grid' : undefined,
+          gridTemplateColumns: compact ? 'repeat(2, minmax(0, 1fr))' : undefined,
+          justifyItems: compact ? 'center' : undefined,
+          rowGap: compact ? 0.75 : undefined,
+        },
+        flex: compact ? 1 : undefined,
       }}
     >
       {stats.map((stat) => (
@@ -1360,10 +1380,16 @@ function TrackMetadata({
 }
 
 interface TrackDetailsPaneProps {
-  readonly embedded?: boolean;
+  readonly mode: 'mobile' | 'overlay' | 'adjacent';
+  readonly onCollapse: () => void;
+  readonly onClosed: () => void;
 }
 
-export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
+export function TrackDetailsPane({
+  mode,
+  onCollapse,
+  onClosed,
+}: TrackDetailsPaneProps) {
   const {
     active,
     applyGeneratedName,
@@ -1375,7 +1401,6 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
     setActiveName,
     toggleFavorite,
   } = useTracksWorkspace();
-  const compactDetails = useMediaQuery('(max-width:1920px)');
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [confirmingDeleteTrackId, setConfirmingDeleteTrackId] = useState<string | null>(
@@ -1384,7 +1409,6 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
   const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   if (active === null) return null;
-  if (compactDetails !== embedded) return null;
   const metrics = active.kind === 'saved' ? active.summary.metrics : active.metrics;
   const pointCount =
     active.kind === 'saved' ? active.summary.pointCount : active.parsed.pointCount;
@@ -1404,19 +1428,23 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
   const confirmingDelete =
     savedTrackId !== null && confirmingDeleteTrackId === savedTrackId;
   const deleting = savedTrackId !== null && deletingTrackId === savedTrackId;
+  const handleClose = () => {
+    if (closeActive()) onClosed();
+  };
   return (
     <Box
       component="aside"
       aria-label="Track details"
       sx={{
-        width: embedded ? '100%' : { xs: 404, xl: 440 },
+        width: mode === 'adjacent' ? { xs: 404, xl: 440 } : '100%',
         height: '100%',
         minHeight: 0,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
         bgcolor: 'background.paper',
-        borderRight: embedded ? 0 : 1,
+        borderRight: mode === 'adjacent' ? 1 : 0,
         borderColor: 'divider',
       }}
     >
@@ -1430,6 +1458,26 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
           borderColor: 'divider',
         }}
       >
+        {mode === 'mobile' ? (
+          <IconButton
+            size="small"
+            aria-label="Collapse track details"
+            onClick={onCollapse}
+            sx={{ mr: 1 }}
+          >
+            <KeyboardArrowDownIcon fontSize="small" />
+          </IconButton>
+        ) : null}
+        {mode === 'overlay' ? (
+          <IconButton
+            size="small"
+            aria-label="Back to tracks"
+            onClick={closeActive}
+            sx={{ mr: 1 }}
+          >
+            <ArrowBackOutlinedIcon fontSize="small" />
+          </IconButton>
+        ) : null}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           {active.kind === 'saved' && renaming ? (
             <TextField
@@ -1613,6 +1661,11 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
             </Box>
           </ClickAwayListener>
         ) : null}
+        {mode !== 'overlay' ? (
+          <IconButton size="small" aria-label="Close track" onClick={handleClose}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        ) : null}
       </Stack>
       <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
         <Stack spacing={2}>
@@ -1675,18 +1728,9 @@ export function TrackDetailsPane({ embedded = false }: TrackDetailsPaneProps) {
               </Stack>
             </>
           ) : null}
-          <Stack direction="row" sx={{ alignItems: 'center' }}>
-            <Typography component="h3" variant="subtitle2" sx={{ flex: 1 }}>
-              Track details
-            </Typography>
-            <IconButton
-              size="small"
-              aria-label={embedded ? 'Back to tracks' : 'Close track'}
-              onClick={closeActive}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Stack>
+          <Typography component="h3" variant="subtitle2">
+            Track details
+          </Typography>
           <TrackStats metrics={metrics} />
           <TrackElevationProfile
             key={`elevation:${active.kind === 'preview' ? active.id : active.summary.id}`}

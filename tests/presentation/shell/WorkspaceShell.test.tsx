@@ -764,6 +764,10 @@ describe('WorkspaceShell', () => {
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
     const user = userEvent.setup();
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
       schemaVersion: 2,
       trackId: 'local:test-1',
@@ -796,6 +800,21 @@ describe('WorkspaceShell', () => {
       name: 'Elevation profile from 1000 to 1120 metres',
     });
     expect(elevationProfile).toBeVisible();
+    const elevationDisclosure = within(details).getByRole('button', {
+      name: 'Climbs & Descents',
+    });
+    expect(elevationDisclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(elevationDisclosure);
+    const climb = within(details).getByRole('button', { name: /^#1 Climb/u });
+    await user.click(climb);
+    expect(climb).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => {
+      expect(setImportedTrackHighlight).toHaveBeenLastCalledWith(
+        expect.arrayContaining([
+          expect.arrayContaining([expect.any(Number), expect.any(Number)]),
+        ]),
+      );
+    });
     const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
     expect(elevationGain).toBeVisible();
     const elevationGainIcon = elevationGain.querySelector('svg');

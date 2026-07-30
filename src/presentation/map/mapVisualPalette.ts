@@ -66,6 +66,7 @@ export const mapVisualPalette = {
     /** Reserved for imported and user-created GPX tracks. */
     gpxTrack: '#168BFF',
     gpxTrackCasing: 'rgba(255, 255, 255, 0.78)',
+    gpxTrackHighlight: appColors.brand.amber,
     satelliteFootprint: '#FF8C1A',
   },
 } as const;

@@ -42,7 +42,21 @@ const profile: ElevationProfile = {
       sourceSegmentIndex: 0,
     },
   ],
-  segments: [],
+  segments: [
+    {
+      startSampleIndex: 0,
+      endSampleIndex: 2,
+      startDistanceMeters: 0,
+      endDistanceMeters: 2_800,
+      type: 'climb',
+      distanceMeters: 2_800,
+      netElevationChangeMeters: 40,
+      ascentMeters: 120,
+      descentMeters: 80,
+      averageGradePct: 1.4,
+      gradeSubsegments: [],
+    },
+  ],
   minimumMeters: 1_000,
   maximumMeters: 1_120,
   algorithmVersion: 2,
@@ -91,19 +105,25 @@ afterEach(() => {
 });
 
 interface ElevationProfileChartCallbacks {
+  readonly activeSegmentIndex?: number | null;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
 function renderElevationProfileChart({
+  activeSegmentIndex,
   onActivePointChange,
   onPointClick,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
     profile: ElevationProfile;
+    activeSegmentIndex?: number | null;
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
   } = { profile };
+  if (activeSegmentIndex !== undefined) {
+    chartProps.activeSegmentIndex = activeSegmentIndex;
+  }
   if (onActivePointChange !== undefined) {
     chartProps.onActivePointChange = onActivePointChange;
   }
@@ -135,6 +155,16 @@ describe('ElevationProfileChart', () => {
     },
   );
 
+  it('colors local grades and overlays the active macro segment', () => {
+    const { container } = renderElevationProfileChart({ activeSegmentIndex: 0 });
+
+    const stopColors = [...container.querySelectorAll('stop')].map((stop) =>
+      stop.getAttribute('stop-color'),
+    );
+    expect(new Set(stopColors).size).toBeGreaterThan(1);
+    expect(container.querySelector('.recharts-reference-area-rect')).not.toBeNull();
+  });
+
   it('reports the source point and tooltip on hover, focuses it on click, then clears hover on leave', async () => {
     const onActivePointChange = vi.fn();
     const onPointClick = vi.fn();
@@ -154,6 +184,7 @@ describe('ElevationProfileChart', () => {
 
     expect(await screen.findByText('1.4 km')).toBeVisible();
     expect(await screen.findByText('Elevation 1120 m')).toBeVisible();
+    expect(await screen.findByText('Grade +9%')).toBeVisible();
     await waitFor(() => {
       expect(onActivePointChange).toHaveBeenLastCalledWith(profile.points[1]);
     });

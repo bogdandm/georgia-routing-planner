@@ -460,11 +460,15 @@ describe('MapLibreLayerController', () => {
     expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
       0.45,
     );
+    expect(
+      map.paintProperties.get(`${importedTrackLayerIds.highlight}.line-opacity`),
+    ).toBe(0.45);
     expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
       status: 'success',
     });
     expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('none');
     expect(map.visibility.get(importedTrackLayerIds.line)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('none');
     expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('none');
     await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: { 'imported-tracks': false },
@@ -476,6 +480,34 @@ describe('MapLibreLayerController', () => {
       'data.geometry.coordinates',
       [],
     );
+  });
+
+  it('highlights and clears one imported-track range', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setImportedTrackHighlight([
+      [44.2, 42.2],
+      [44.3, 42.3],
+    ]);
+
+    expect(map.sources.get('imported-track-highlight')).toHaveProperty(
+      'data.features.0.geometry.coordinates',
+      [
+        [44.2, 42.2],
+        [44.3, 42.3],
+      ],
+    );
+    expect(map.layers.get(importedTrackLayerIds.highlight)).toMatchObject({
+      type: 'line',
+      source: 'imported-track-highlight',
+    });
+
+    controller.setImportedTrackHighlight(null);
+    expect(map.sources.get('imported-track-highlight')).toHaveProperty('data.features', []);
   });
 
   it('moves and clears the imported-track trace point', () => {

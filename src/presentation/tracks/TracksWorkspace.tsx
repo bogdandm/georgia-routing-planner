@@ -1338,6 +1338,7 @@ function TrackElevationAnalysis() {
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
+      mapLayers?.setImportedTrackHighlight(null);
     },
     [mapLayers],
   );
@@ -1347,13 +1348,26 @@ function TrackElevationAnalysis() {
     const savedProfileInputs = elevationProfileInputSegments(active.content.trackPoints);
     return savedProfileInputs === null ? null : calculateElevationProfile(savedProfileInputs);
   }, [active]);
+  const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
+  useEffect(() => {
+    let coordinates: readonly (readonly [number, number])[] | null = null;
+    if (profile !== null && activeSegmentIndex !== null) {
+      const segment = profile.segments[activeSegmentIndex];
+      if (segment !== undefined) {
+        coordinates = profile.points
+          .slice(segment.startSampleIndex, segment.endSampleIndex + 1)
+          .map((point) => point.coordinate);
+      }
+    }
+    mapLayers?.setImportedTrackHighlight(coordinates);
+  }, [activeSegmentIndex, mapLayers, profile]);
   if (active === null) return null;
   if (profile === null) return null;
-  const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
   return (
     <Stack spacing={1.5}>
       <ElevationProfileChart
         profile={profile}
+        activeSegmentIndex={activeSegmentIndex}
         onActivePointChange={(point) => {
           mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
           const nextSegmentIndex =

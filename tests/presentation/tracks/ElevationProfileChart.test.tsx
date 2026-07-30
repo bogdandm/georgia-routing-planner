@@ -2,9 +2,10 @@ import { ThemeProvider } from '@mui/material';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type {
-  ElevationProfile,
-  ElevationProfilePoint,
+import {
+  sampleElevationProfilePoints,
+  type ElevationProfile,
+  type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -54,7 +55,26 @@ const profile: ElevationProfile = {
       ascentMeters: 120,
       descentMeters: 80,
       averageGradePct: 1.4,
-      gradeSubsegments: [],
+      gradeSubsegments: [
+        {
+          startSampleIndex: 0,
+          endSampleIndex: 1,
+          startDistanceMeters: 0,
+          endDistanceMeters: 1_400,
+          distanceMeters: 1_400,
+          averageGradePct: 8.6,
+          band: 'climb',
+        },
+        {
+          startSampleIndex: 1,
+          endSampleIndex: 2,
+          startDistanceMeters: 1_400,
+          endDistanceMeters: 2_800,
+          distanceMeters: 1_400,
+          averageGradePct: -5.7,
+          band: 'descent',
+        },
+      ],
     },
   ],
   minimumMeters: 1_000,
@@ -106,24 +126,36 @@ afterEach(() => {
 
 interface ElevationProfileChartCallbacks {
   readonly activeSegmentIndex?: number | null;
+  readonly selectedSegmentIndex?: number | null;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
+  readonly onSegmentHoverChange?: (index: number | null) => void;
+  readonly onSegmentSelectionChange?: (index: number | null) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
 function renderElevationProfileChart({
   activeSegmentIndex,
+  selectedSegmentIndex,
   onActivePointChange,
+  onSegmentHoverChange,
+  onSegmentSelectionChange,
   onPointClick,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
     profile: ElevationProfile;
-    activeSegmentIndex?: number | null;
+    activeSegmentIndex: number | null;
+    selectedSegmentIndex: number | null;
+    onSegmentHoverChange: (index: number | null) => void;
+    onSegmentSelectionChange: (index: number | null) => void;
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
-  } = { profile };
-  if (activeSegmentIndex !== undefined) {
-    chartProps.activeSegmentIndex = activeSegmentIndex;
-  }
+  } = {
+    profile,
+    activeSegmentIndex: activeSegmentIndex ?? null,
+    selectedSegmentIndex: selectedSegmentIndex ?? null,
+    onSegmentHoverChange: onSegmentHoverChange ?? vi.fn(),
+    onSegmentSelectionChange: onSegmentSelectionChange ?? vi.fn(),
+  };
   if (onActivePointChange !== undefined) {
     chartProps.onActivePointChange = onActivePointChange;
   }
@@ -155,21 +187,92 @@ describe('ElevationProfileChart', () => {
     },
   );
 
-  it('colors local grades and overlays the active macro segment', () => {
+  it('colors local grades without a rectangular active overlay', () => {
     const { container } = renderElevationProfileChart({ activeSegmentIndex: 0 });
 
-    const stopColors = [...container.querySelectorAll('stop')].map((stop) =>
-      stop.getAttribute('stop-color'),
-    );
-    expect(new Set(stopColors).size).toBeGreaterThan(1);
-    expect(container.querySelector('.recharts-reference-area-rect')).not.toBeNull();
+    const stops = [...container.querySelectorAll('stop')];
+    expect(stops.map((stop) => stop.getAttribute('offset'))).toEqual([
+      '0%',
+      '50%',
+      '50%',
+      '100%',
+    ]);
+    expect(stops.map((stop) => stop.getAttribute('stop-color'))).toEqual([
+      '#D6A100',
+      '#D6A100',
+      '#0F766E',
+      '#0F766E',
+    ]);
+    expect(container.querySelector('.recharts-reference-area-rect')).toBeNull();
   });
 
-  it('reports the source point and tooltip on hover, focuses it on click, then clears hover on leave', async () => {
+  it('fades inactive macro ranges and draws their shared boundary', () => {
+    const macro = profile.segments[0];
+    const climbGrade = macro?.gradeSubsegments[0];
+    const descentGrade = macro?.gradeSubsegments[1];
+    if (macro === undefined || climbGrade === undefined || descentGrade === undefined) {
+      throw new Error('Expected the profile segment fixture.');
+    }
+    const splitProfile: ElevationProfile = {
+      ...profile,
+      segments: [
+        {
+          ...macro,
+          endSampleIndex: 1,
+          endDistanceMeters: 1_400,
+          distanceMeters: 1_400,
+          netElevationChangeMeters: 120,
+          ascentMeters: 120,
+          descentMeters: 0,
+          averageGradePct: 8.6,
+          gradeSubsegments: [climbGrade],
+        },
+        {
+          ...macro,
+          startSampleIndex: 1,
+          startDistanceMeters: 1_400,
+          type: 'descent',
+          distanceMeters: 1_400,
+          netElevationChangeMeters: -80,
+          ascentMeters: 0,
+          descentMeters: 80,
+          averageGradePct: -5.7,
+          gradeSubsegments: [descentGrade],
+        },
+      ],
+    };
+    const { container } = render(
+      <ThemeProvider theme={createAppTheme()}>
+        <ElevationProfileChart
+          profile={splitProfile}
+          activeSegmentIndex={0}
+          onSegmentHoverChange={vi.fn()}
+          selectedSegmentIndex={null}
+          onSegmentSelectionChange={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(
+      [...container.querySelectorAll('stop')].map((stop) =>
+        stop.getAttribute('stop-opacity'),
+      ),
+    ).toEqual(['1', '1', '0.22', '0.22']);
+    expect(container.querySelectorAll('.recharts-reference-line-line')).toHaveLength(1);
+  });
+
+  it('keeps a negative local grade inside its macro climb on hover and click', async () => {
     const onActivePointChange = vi.fn();
+    const onSegmentHoverChange = vi.fn();
+    const onSegmentSelectionChange = vi.fn();
     const onPointClick = vi.fn();
     observedWidth = 420;
-    renderElevationProfileChart({ onActivePointChange, onPointClick });
+    renderElevationProfileChart({
+      onActivePointChange,
+      onSegmentHoverChange,
+      onSegmentSelectionChange,
+      onPointClick,
+    });
 
     const image = screen.getByRole('img', {
       name: 'Elevation profile from 1000 to 1120 metres',
@@ -179,24 +282,100 @@ describe('ElevationProfileChart', () => {
       throw new Error('Expected the elevation chart surface to render.');
     }
 
-    fireEvent.mouseEnter(chartSurface, { clientX: 236, clientY: 80 });
-    fireEvent.mouseMove(chartSurface, { clientX: 236, clientY: 80 });
+    fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
 
-    expect(await screen.findByText('1.4 km')).toBeVisible();
-    expect(await screen.findByText('Elevation 1120 m')).toBeVisible();
-    expect(await screen.findByText('Grade +9%')).toBeVisible();
+    const distances = await screen.findAllByText('2.8 km');
+    expect(distances).toHaveLength(2);
+    expect(await screen.findByText('1,040 m')).toBeVisible();
+    expect(await screen.findByText('-6%')).toBeVisible();
+    expect(await screen.findByText('Climb 1')).toBeVisible();
+    expect(screen.queryByText(/Net|Average/u)).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(onActivePointChange).toHaveBeenLastCalledWith(profile.points[1]);
+      expect(onActivePointChange).toHaveBeenLastCalledWith(profile.points[2]);
+      expect(onSegmentHoverChange).toHaveBeenLastCalledWith(0);
     });
 
-    fireEvent.click(chartSurface, { clientX: 236, clientY: 80 });
-
+    fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
     await waitFor(() => {
-      expect(onPointClick).toHaveBeenLastCalledWith(profile.points[1]);
+      expect(onPointClick).toHaveBeenLastCalledWith(profile.points[2]);
+      expect(onSegmentSelectionChange).toHaveBeenLastCalledWith(0);
     });
 
     fireEvent.mouseLeave(chartSurface);
-
     expect(onActivePointChange).toHaveBeenLastCalledWith(null);
+    expect(onSegmentHoverChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('clears a selected macro range when that chart range is clicked again', async () => {
+    const onSegmentSelectionChange = vi.fn();
+    observedWidth = 420;
+    renderElevationProfileChart({
+      selectedSegmentIndex: 0,
+      onSegmentSelectionChange,
+    });
+    const chartSurface = screen
+      .getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      })
+      .querySelector('svg');
+    if (chartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+
+    fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
+    await screen.findByText('Climb 1');
+    fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
+    await waitFor(() => {
+      expect(onSegmentSelectionChange).toHaveBeenLastCalledWith(null);
+    });
+  });
+
+  it('retains every grade boundary when mandatory points exceed the soft cap', () => {
+    const points: ElevationProfilePoint[] = Array.from(
+      { length: 1_202 },
+      (_, sampleIndex) => ({
+        sampleIndex,
+        coordinate: [44 + sampleIndex / 100_000, 42],
+        distanceMeters: sampleIndex * 10,
+        rawElevationMeters: 1_000 + sampleIndex,
+        elevationMeters: 1_000 + sampleIndex,
+        trendElevationMeters: 1_000 + sampleIndex,
+        localGradePct: sampleIndex % 2 === 0 ? 5 : -5,
+        sourceSegmentIndex: 0,
+      }),
+    );
+    const overflowProfile: ElevationProfile = {
+      points,
+      segments: [
+        {
+          startSampleIndex: 0,
+          endSampleIndex: 1_201,
+          startDistanceMeters: 0,
+          endDistanceMeters: 12_010,
+          type: 'climb',
+          distanceMeters: 12_010,
+          netElevationChangeMeters: 1_201,
+          ascentMeters: 1_201,
+          descentMeters: 0,
+          averageGradePct: 10,
+          gradeSubsegments: Array.from({ length: 1_201 }, (_, index) => ({
+            startSampleIndex: index,
+            endSampleIndex: index + 1,
+            startDistanceMeters: index * 10,
+            endDistanceMeters: (index + 1) * 10,
+            distanceMeters: 10,
+            averageGradePct: index % 2 === 0 ? 5 : -5,
+            band: index % 2 === 0 ? ('climb' as const) : ('descent' as const),
+          })),
+        },
+      ],
+      minimumMeters: 1_000,
+      maximumMeters: 2_201,
+      algorithmVersion: 2,
+    };
+
+    expect(sampleElevationProfilePoints(overflowProfile)).toHaveLength(1_202);
   });
 });

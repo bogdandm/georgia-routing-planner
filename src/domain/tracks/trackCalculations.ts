@@ -29,14 +29,13 @@ export interface TrackMetrics {
   readonly descentMeters?: number;
   readonly minimumElevationMeters?: number;
   readonly maximumElevationMeters?: number;
-  readonly elevationSource?: 'dem-assisted';
-  readonly elevationAlgorithmVersion?: typeof ELEVATION_ALGORITHM_VERSION;
+  readonly elevationSource?: 'gpx' | 'dem-assisted';
+  readonly elevationAlgorithmVersion?: 1 | typeof ELEVATION_ALGORITHM_VERSION;
 }
 
 type TrackMetricsBuilder = {
   -readonly [Key in keyof TrackMetrics]: TrackMetrics[Key];
 };
-
 
 export interface DominantSummit {
   readonly coordinate: TrackCoordinate;

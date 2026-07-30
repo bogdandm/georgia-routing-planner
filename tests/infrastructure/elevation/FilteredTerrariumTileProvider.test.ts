@@ -509,9 +509,9 @@ describe('FilteredTerrariumTileProvider', () => {
         fetchImplementation,
       );
 
-      await expect(provider.getTile(5, 8, 9, new AbortController().signal)).rejects.toThrow(
-        failure === 'http' ? /HTTP 500/u : /Center PNG invalid/u,
-      );
+      await expect(
+        provider.getTile(5, 8, 9, new AbortController().signal),
+      ).rejects.toThrow(failure === 'http' ? /HTTP 500/u : /Center PNG invalid/u);
     },
   );
 
@@ -539,8 +539,8 @@ describe('FilteredTerrariumTileProvider', () => {
     provider.dispose();
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    await expect(provider.getTile(5, 8, 9, new AbortController().signal)).rejects.toThrow(
-      /disposed/u,
-    );
+    await expect(
+      provider.getTile(5, 8, 9, new AbortController().signal),
+    ).rejects.toThrow(/disposed/u);
   });
 });

@@ -44,7 +44,6 @@ function deferred<T>(): {
   return { promise, resolve: resolveValue };
 }
 
-
 let services: RuntimeServices;
 
 function mockViewportWidth(width: number) {
@@ -703,27 +702,54 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     const rendered = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
-    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input =
+      rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).not.toBeNull();
     if (input === null) return;
 
     await user.upload(input, gpxFile('Cancel.gpx'));
-    expect(await screen.findByText('Preparing elevation profile…')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Cancel preparation' }));
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(screen.getByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
     expect(signals[0]?.aborted).toBe(true);
-    expect(screen.queryByText('Preparing elevation profile…')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'New track' }),
+    ).not.toBeInTheDocument();
 
     await user.upload(input, gpxFile('Unmount.gpx'));
-    expect(await screen.findByText('Preparing elevation profile…')).toBeVisible();
+    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
     rendered.unmount();
     expect(signals[1]?.aborted).toBe(true);
+  });
+
+  it('keeps the parsed New track panel when terrain preparation fails', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    vi.spyOn(provider, 'sampleMany').mockRejectedValue(
+      new Error('Terrain unavailable'),
+    );
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Terrain failure.gpx'));
+
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(await screen.findByText('Terrain unavailable')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByText('Terrain failure.gpx · GPX')).toBeVisible();
   });
 
   it('keeps the newest import when an older preparation completes late', async () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
     if (provider === null) return;
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const pending: {
       readonly count: number;
       readonly resolve: (samples: readonly ElevationSample[]) => void;
@@ -741,18 +767,20 @@ describe('WorkspaceShell', () => {
     if (input === null) return;
 
     await user.upload(input, gpxFile('First.gpx'));
-    expect(await screen.findByText('Preparing elevation profile…')).toBeVisible();
+    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
     await user.upload(input, gpxFile('Second.gpx'));
     expect(pending).toHaveLength(2);
-    await act(async () => {
+    act(() => {
       const latest = pending[1];
       latest?.resolve(
-        Array.from({ length: latest.count }, () => ({ status: 'unavailable' as const })),
+        Array.from({ length: latest.count }, () => ({
+          status: 'unavailable' as const,
+        })),
       );
     });
     expect(await screen.findByText('Second.gpx · GPX')).toBeVisible();
 
-    await act(async () => {
+    act(() => {
       const stale = pending[0];
       stale?.resolve(
         Array.from({ length: stale.count }, () => ({ status: 'unavailable' as const })),
@@ -760,6 +788,91 @@ describe('WorkspaceShell', () => {
     });
     expect(screen.getByText('Second.gpx · GPX')).toBeVisible();
     expect(screen.queryByText('First.gpx · GPX')).not.toBeInTheDocument();
+  });
+
+  it('recalculates preview and saved elevation without toggling disclosure', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const pendingRecalculations: {
+      readonly count: number;
+      readonly resolve: (samples: readonly ElevationSample[]) => void;
+    }[] = [];
+    let requestCount = 0;
+    vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return Promise.resolve(
+          coordinates.map(() => ({ status: 'unavailable' as const })),
+        );
+      }
+      const pending = deferred<readonly ElevationSample[]>();
+      pendingRecalculations.push({
+        count: coordinates.length,
+        resolve: pending.resolve,
+      });
+      return pending.promise;
+    });
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Recalculate.gpx'));
+    const disclosure = await screen.findByRole('button', {
+      name: 'Climbs & Descents',
+    });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+
+    const previewRecalculate = screen.getByRole('button', {
+      name: 'Recalculate elevation',
+    });
+    await user.click(previewRecalculate);
+    expect(previewRecalculate).toBeDisabled();
+    expect(previewRecalculate).toContainElement(
+      within(previewRecalculate).getByRole('progressbar'),
+    );
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    const previewPending = pendingRecalculations[0];
+    expect(previewPending).toBeDefined();
+    act(() => {
+      previewPending?.resolve(
+        Array.from({ length: previewPending.count }, () => ({
+          status: 'unavailable' as const,
+        })),
+      );
+    });
+    await waitFor(() => {
+      expect(previewRecalculate).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const savedDisclosure = screen.getByRole('button', {
+      name: 'Climbs & Descents',
+    });
+    const savedRecalculate = screen.getByRole('button', {
+      name: 'Recalculate elevation',
+    });
+    await user.click(savedRecalculate);
+    const savedPending = pendingRecalculations[1];
+    expect(savedPending).toBeDefined();
+    act(() => {
+      savedPending?.resolve(
+        Array.from({ length: savedPending.count }, () => ({
+          status: 'unavailable' as const,
+        })),
+      );
+    });
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledTimes(2);
+    });
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
@@ -805,16 +918,23 @@ describe('WorkspaceShell', () => {
     });
     expect(elevationDisclosure).toHaveAttribute('aria-expanded', 'false');
     await user.click(elevationDisclosure);
-    const climb = within(details).getByRole('button', { name: /^#1 Climb/u });
+    const climb = within(details).getByRole('button', { name: /^Climb 1/u });
     await user.click(climb);
     expect(climb).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => {
-      expect(setImportedTrackHighlight).toHaveBeenLastCalledWith(
-        expect.arrayContaining([
-          expect.arrayContaining([expect.any(Number), expect.any(Number)]),
-        ]),
-      );
+      expect(setImportedTrackHighlight).toHaveBeenCalled();
     });
+    const highlightedSegments = setImportedTrackHighlight.mock.lastCall?.[0];
+    expect(
+      highlightedSegments?.some(
+        (segment) =>
+          /^#[\dA-F]{6}$/u.test(segment.color) &&
+          segment.coordinates.some(
+            ([longitude, latitude]) =>
+              Number.isFinite(longitude) && Number.isFinite(latitude),
+          ),
+      ),
+    ).toBe(true);
     const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
     expect(elevationGain).toBeVisible();
     const elevationGainIcon = elevationGain.querySelector('svg');

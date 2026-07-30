@@ -104,7 +104,6 @@ function writeTerrariumElevation(
   output[offset + 3] = 255;
 }
 
-
 function validateTile(tile: DecodedTerrariumTile, width: number, height: number): void {
   if (
     tile.width !== width ||

@@ -225,10 +225,24 @@ const trackMetricsSchema = z
     descentMeters: z.number().nonnegative().optional(),
     minimumElevationMeters: z.number().optional(),
     maximumElevationMeters: z.number().optional(),
-    elevationSource: z.literal('dem-assisted'),
-    elevationAlgorithmVersion: z.literal(2),
+    elevationSource: z.enum(['gpx', 'dem-assisted']).optional(),
+    elevationAlgorithmVersion: z.union([z.literal(1), z.literal(2)]).optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    const provenanceIsValid =
+      (value.elevationSource === undefined &&
+        value.elevationAlgorithmVersion === undefined) ||
+      (value.elevationSource === 'gpx' && value.elevationAlgorithmVersion === 1) ||
+      (value.elevationSource === 'dem-assisted' &&
+        value.elevationAlgorithmVersion === 2);
+    if (!provenanceIsValid) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Elevation source and algorithm version do not match.',
+      });
+    }
+  })
   .transform((value): TrackMetrics => {
     const result: PersistedTrackMetricsBuilder = {
       distanceMeters: value.distanceMeters,
@@ -252,8 +266,12 @@ const trackMetricsSchema = z
     if (value.maximumElevationMeters !== undefined) {
       result.maximumElevationMeters = value.maximumElevationMeters;
     }
-    result.elevationSource = value.elevationSource;
-    result.elevationAlgorithmVersion = value.elevationAlgorithmVersion;
+    if (value.elevationSource !== undefined) {
+      result.elevationSource = value.elevationSource;
+    }
+    if (value.elevationAlgorithmVersion !== undefined) {
+      result.elevationAlgorithmVersion = value.elevationAlgorithmVersion;
+    }
     return result;
   });
 
@@ -352,7 +370,22 @@ type LocalTrackSummaryBuilder = {
   -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
 };
 
-const localTrackSummarySchema = z
+function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('schemaVersion' in value) ||
+    value.schemaVersion !== 1
+  ) {
+    return value;
+  }
+  return {
+    ...value,
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+  };
+}
+
+const currentLocalTrackSummarySchema = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     id: z.string().min(1).max(200),
@@ -404,10 +437,15 @@ const localTrackSummarySchema = z
     return result;
   });
 
+const localTrackSummarySchema = z.preprocess(
+  withCurrentLocalTrackSchemaVersion,
+  currentLocalTrackSummarySchema,
+);
+
 const storedTrackPointSchema: z.ZodType<TrackPoint> = z
   .object({
     coordinate: coordinateSchema,
-    elevationMeters: z.number(),
+    elevationMeters: z.number().optional(),
     recordedAt: z.iso.datetime().optional(),
   })
   .strict()
@@ -437,7 +475,26 @@ const currentLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   })
   .strict();
 
-const localTrackContentSchema: z.ZodType<LocalTrackContent> = currentLocalTrackContentSchema;
+const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
+  .object({
+    schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
+    trackId: z.string().min(1).max(200),
+    segments: z.array(z.array(coordinateSchema).min(2)).min(1).max(512),
+    trackPoints: storedTrackSegmentsSchema.optional(),
+  })
+  .loose()
+  .transform((value): LocalTrackContent => ({
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    trackId: value.trackId,
+    trackPoints:
+      value.trackPoints ??
+      value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
+  }));
+
+const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.preprocess(
+  withCurrentLocalTrackSchemaVersion,
+  z.union([currentLocalTrackContentSchema, legacyLocalTrackContentSchema]),
+);
 
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
@@ -485,8 +542,18 @@ export class AppDatabase
         localTrackContents: 'trackId',
       })
       .upgrade(async (transaction) => {
-        await transaction.table('localTracks').clear();
-        await transaction.table('localTrackContents').clear();
+        const summaryTable = transaction.table('localTracks');
+        const summaries: unknown[] = await summaryTable.toArray();
+        for (const summary of summaries) {
+          const parsed = parseLocalTrackSummary(summary);
+          if (parsed !== null) await summaryTable.put(parsed);
+        }
+        const contentTable = transaction.table('localTrackContents');
+        const contents: unknown[] = await contentTable.toArray();
+        for (const content of contents) {
+          const parsed = parseLocalTrackContent(content);
+          if (parsed !== null) await contentTable.put(parsed);
+        }
       });
   }
 

@@ -453,6 +453,18 @@ describe('MapLibreLayerController', () => {
         [45.1, 43.1],
       ],
     ]);
+    expect(map.layers.get(importedTrackLayerIds.casing)).toHaveProperty(
+      'paint.line-width',
+      7,
+    );
+    expect(map.layers.get(importedTrackLayerIds.line)).toHaveProperty(
+      'paint.line-width',
+      4,
+    );
+    expect(map.layers.get(importedTrackLayerIds.highlight)).toHaveProperty(
+      'paint.line-width',
+      4,
+    );
     expect([...map.layers.keys()].indexOf(importedTrackLayerIds.line)).toBeGreaterThan(
       [...map.layers.keys()].indexOf(mapLayerIds.placeLabels),
     );
@@ -482,32 +494,72 @@ describe('MapLibreLayerController', () => {
     );
   });
 
-  it('highlights and clears one imported-track range', () => {
+  it('renders and clears a multicolor imported-track grade zebra idempotently', () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
 
-    controller.setImportedTrackHighlight([
-      [44.2, 42.2],
-      [44.3, 42.3],
-    ]);
+    const zebra = [
+      {
+        color: '#D6A100',
+        coordinates: [
+          [44.2, 42.2],
+          [44.3, 42.3],
+        ] as const,
+      },
+      {
+        color: '#0F766E',
+        coordinates: [
+          [44.3, 42.3],
+          [44.4, 42.4],
+        ] as const,
+      },
+    ];
+    controller.setImportedTrackHighlight(zebra);
 
     expect(map.sources.get('imported-track-highlight')).toHaveProperty(
-      'data.features.0.geometry.coordinates',
+      'data.features',
       [
-        [44.2, 42.2],
-        [44.3, 42.3],
+        {
+          type: 'Feature',
+          properties: { color: '#D6A100' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [44.2, 42.2],
+              [44.3, 42.3],
+            ],
+          },
+        },
+        {
+          type: 'Feature',
+          properties: { color: '#0F766E' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [44.3, 42.3],
+              [44.4, 42.4],
+            ],
+          },
+        },
       ],
     );
     expect(map.layers.get(importedTrackLayerIds.highlight)).toMatchObject({
       type: 'line',
       source: 'imported-track-highlight',
+      paint: { 'line-color': ['get', 'color'] },
     });
+    const paintUpdateCount = map.paintUpdateCount;
+    controller.setImportedTrackHighlight(zebra);
+    expect(map.paintUpdateCount).toBe(paintUpdateCount);
 
     controller.setImportedTrackHighlight(null);
-    expect(map.sources.get('imported-track-highlight')).toHaveProperty('data.features', []);
+    expect(map.sources.get('imported-track-highlight')).toHaveProperty(
+      'data.features',
+      [],
+    );
   });
 
   it('moves and clears the imported-track trace point', () => {

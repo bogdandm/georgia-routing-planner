@@ -51,6 +51,19 @@ Use checkboxes for independent boolean options throughout the application, inclu
 layer visibility, rendering options, corrective processing, and developer controls. Do
 not mix switches and checkboxes when they represent the same kind of choice.
 
+## Use consistent metric iconography
+
+- Use the horizontal double arrow (`SwapHoriz`) for route distance everywhere. Do not
+  substitute a ruler or a one-way arrow in charts, tooltips, summaries, or list rows.
+- Use a neutral terrain icon for elevation. Elevation icons do not inherit grade-band
+  colors.
+- Use northeast and southeast arrows for ascent and descent.
+- Use a triangle for grade, rotating it downward for a negative grade. Pair the icon
+  directly with the signed percentage; omit redundant `Grade` and `Average` labels in
+  compact metric rows.
+- Keep the same metric-to-icon mapping across panels. A compact row may wrap as complete
+  icon-value pairs, but an icon must never become separated from its value.
+
 ## Use a 4 px spacing grid
 
 Prefer MUI `Stack` spacing and theme units over unrelated one-off margins. Use half

@@ -173,12 +173,7 @@ export class FilteredTerrariumTileProvider {
         .catch(() => undefined);
     }
 
-    return this.waitForSharedRequest(
-      key,
-      request,
-      this.#processedTileRequests,
-      signal,
-    );
+    return this.waitForSharedRequest(key, request, this.#processedTileRequests, signal);
   }
 
   private async processTile(

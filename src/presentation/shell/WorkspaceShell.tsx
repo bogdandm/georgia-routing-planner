@@ -109,7 +109,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     activeTrack === null
       ? null
       : activeTrack.kind === 'preview'
-        ? activeTrack.metrics
+        ? activeTrack.preparationStatus === 'ready'
+          ? activeTrack.metrics
+          : null
         : activeTrack.summary.metrics;
   useEffect(() => {
     if (!smartphoneViewport) return;

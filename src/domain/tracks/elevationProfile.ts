@@ -14,7 +14,6 @@ export interface ElevationAnalysisOptions {
   readonly reversalDistanceM: number;
   readonly minSegmentDistanceM: number;
   readonly minNetElevationM: number;
-  readonly minAverageGradePct: number;
   readonly interruptionMaxDistanceM: number;
   readonly interruptionMaxElevationM: number;
   readonly minGradeSubsegmentDistanceM: number;
@@ -28,9 +27,8 @@ export const DEFAULT_ELEVATION_ANALYSIS_OPTIONS: ElevationAnalysisOptions = {
   localGradeWindowM: 120,
   reversalElevationM: 30,
   reversalDistanceM: 250,
-  minSegmentDistanceM: 500,
-  minNetElevationM: 30,
-  minAverageGradePct: 0.8,
+  minSegmentDistanceM: 1_000,
+  minNetElevationM: 100,
   interruptionMaxDistanceM: 400,
   interruptionMaxElevationM: 30,
   minGradeSubsegmentDistanceM: 50,
@@ -100,6 +98,57 @@ export interface ElevationProfile {
   readonly maximumMeters: number;
   readonly algorithmVersion: number;
 }
+export function elevationSegmentIndexForSample(
+  profile: ElevationProfile,
+  sampleIndex: number,
+): number | null {
+  const segmentIndex = profile.segments.findIndex(
+    (segment, index) =>
+      sampleIndex >= segment.startSampleIndex &&
+      (sampleIndex < segment.endSampleIndex ||
+        (index === profile.segments.length - 1 &&
+          sampleIndex <= segment.endSampleIndex)),
+  );
+  return segmentIndex < 0 ? null : segmentIndex;
+}
+
+/** Caps chart work without dropping macro or grade-band boundaries. */
+export function sampleElevationProfilePoints(
+  profile: ElevationProfile,
+  maximum = 1_200,
+): readonly ElevationProfilePoint[] {
+  const { points } = profile;
+  if (points.length <= maximum) return points;
+  const required = new Uint8Array(points.length);
+  required[0] = 1;
+  required[points.length - 1] = 1;
+  for (const segment of profile.segments) {
+    required[segment.startSampleIndex] = 1;
+    required[segment.endSampleIndex] = 1;
+    for (const gradeSegment of segment.gradeSubsegments) {
+      required[gradeSegment.startSampleIndex] = 1;
+      required[gradeSegment.endSampleIndex] = 1;
+    }
+  }
+  let requiredCount = 0;
+  for (const isRequired of required) requiredCount += isRequired;
+  if (requiredCount < maximum) {
+    const optionalCount = maximum - requiredCount;
+    for (let index = 1; index <= optionalCount; index += 1) {
+      const pointIndex = Math.round(
+        (index / (optionalCount + 1)) * (points.length - 1),
+      );
+      required[pointIndex] = 1;
+    }
+  }
+  const sampled: ElevationProfilePoint[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    if (required[index] !== 1) continue;
+    const point = points[index];
+    if (point !== undefined) sampled.push(point);
+  }
+  return sampled;
+}
 
 interface Range {
   readonly start: number;
@@ -158,7 +207,11 @@ function calculateRunPoints(
   profile: ElevationProfilePoint[],
   totalDistance: number,
   options: ElevationAnalysisOptions,
-): { readonly start: number; readonly end: number; readonly totalDistance: number } | null {
+): {
+  readonly start: number;
+  readonly end: number;
+  readonly totalDistance: number;
+} | null {
   if (inputs.length < 2) return null;
   const start = profile.length;
   let distanceMeters = totalDistance;
@@ -192,14 +245,16 @@ function calculateRunPoints(
     if (point === undefined) continue;
     while (
       windowEnd <= end &&
-      (profile[windowEnd]?.distanceMeters ?? Infinity) <= point.distanceMeters + halfTrendWindow
+      (profile[windowEnd]?.distanceMeters ?? Infinity) <=
+        point.distanceMeters + halfTrendWindow
     ) {
       elevationSum += profile[windowEnd]?.elevationMeters ?? 0;
       windowEnd += 1;
     }
     while (
       windowStart < windowEnd &&
-      (profile[windowStart]?.distanceMeters ?? -Infinity) < point.distanceMeters - halfTrendWindow
+      (profile[windowStart]?.distanceMeters ?? -Infinity) <
+        point.distanceMeters - halfTrendWindow
     ) {
       elevationSum -= profile[windowStart]?.elevationMeters ?? 0;
       windowStart += 1;
@@ -211,7 +266,10 @@ function calculateRunPoints(
   const halfLocalWindow = options.localGradeWindowM / 2;
   let leftBracket = start;
   let rightBracket = start;
-  const elevationAt = (targetDistance: number, bracket: number): { elevation: number; bracket: number } => {
+  const elevationAt = (
+    targetDistance: number,
+    bracket: number,
+  ): { elevation: number; bracket: number } => {
     while (
       bracket < end &&
       (profile[bracket + 1]?.distanceMeters ?? Infinity) < targetDistance
@@ -220,12 +278,21 @@ function calculateRunPoints(
     }
     const left = profile[bracket];
     const right = profile[Math.min(bracket + 1, end)];
-    if (left === undefined || right === undefined || right.distanceMeters === left.distanceMeters) {
-      return { elevation: left?.elevationMeters ?? 0, bracket };
+    const leftTrend = trends[bracket - start] ?? left?.elevationMeters ?? 0;
+    const rightTrend =
+      trends[Math.min(bracket + 1, end) - start] ?? right?.elevationMeters ?? leftTrend;
+    if (
+      left === undefined ||
+      right === undefined ||
+      right.distanceMeters === left.distanceMeters
+    ) {
+      return { elevation: leftTrend, bracket };
     }
-    const fraction = (targetDistance - left.distanceMeters) / (right.distanceMeters - left.distanceMeters);
+    const fraction =
+      (targetDistance - left.distanceMeters) /
+      (right.distanceMeters - left.distanceMeters);
     return {
-      elevation: left.elevationMeters + (right.elevationMeters - left.elevationMeters) * fraction,
+      elevation: leftTrend + (rightTrend - leftTrend) * fraction,
       bracket,
     };
   };
@@ -240,7 +307,9 @@ function calculateRunPoints(
     rightBracket = rightSample.bracket;
     const horizontalDistance = localEnd - localStart;
     grades[index - start] =
-      horizontalDistance === 0 ? 0 : (100 * (rightSample.elevation - leftSample.elevation)) / horizontalDistance;
+      horizontalDistance === 0
+        ? 0
+        : (100 * (rightSample.elevation - leftSample.elevation)) / horizontalDistance;
   }
   for (let index = start; index <= end; index += 1) {
     const point = profile[index];
@@ -265,8 +334,13 @@ function detectDirectionalRanges(
   let candidateLow = start;
   let candidateHigh = start;
   const ranges: Range[] = [];
-  const push = (rangeStartIndex: number, rangeEndIndex: number, type: MacroElevationSegmentType) => {
-    if (rangeEndIndex >= rangeStartIndex) ranges.push({ start: rangeStartIndex, end: rangeEndIndex, type });
+  const push = (
+    rangeStartIndex: number,
+    rangeEndIndex: number,
+    type: MacroElevationSegmentType,
+  ) => {
+    if (rangeEndIndex >= rangeStartIndex)
+      ranges.push({ start: rangeStartIndex, end: rangeEndIndex, type });
   };
   for (let index = start + 1; index <= end; index += 1) {
     const point = points[index];
@@ -307,21 +381,31 @@ function detectDirectionalRanges(
           candidateLow = index;
         }
       }
-      if (point.trendElevationMeters < (points[candidateLow]?.trendElevationMeters ?? Infinity)) {
+      if (
+        point.trendElevationMeters <
+        (points[candidateLow]?.trendElevationMeters ?? Infinity)
+      ) {
         candidateLow = index;
       }
-      if (point.trendElevationMeters > (points[candidateHigh]?.trendElevationMeters ?? -Infinity)) {
+      if (
+        point.trendElevationMeters >
+        (points[candidateHigh]?.trendElevationMeters ?? -Infinity)
+      ) {
         candidateHigh = index;
       }
       continue;
     }
     if (mode === 'climb') {
       const highPoint = points[candidateHigh];
-      if (highPoint !== undefined && point.trendElevationMeters > highPoint.trendElevationMeters) {
+      if (
+        highPoint !== undefined &&
+        point.trendElevationMeters > highPoint.trendElevationMeters
+      ) {
         candidateHigh = index;
       } else if (
         highPoint !== undefined &&
-        highPoint.trendElevationMeters - point.trendElevationMeters >= options.reversalElevationM &&
+        highPoint.trendElevationMeters - point.trendElevationMeters >=
+          options.reversalElevationM &&
         point.distanceMeters - highPoint.distanceMeters >= options.reversalDistanceM
       ) {
         push(rangeStart, candidateHigh, 'climb');
@@ -332,11 +416,15 @@ function detectDirectionalRanges(
       continue;
     }
     const lowPoint = points[candidateLow];
-    if (lowPoint !== undefined && point.trendElevationMeters < lowPoint.trendElevationMeters) {
+    if (
+      lowPoint !== undefined &&
+      point.trendElevationMeters < lowPoint.trendElevationMeters
+    ) {
       candidateLow = index;
     } else if (
       lowPoint !== undefined &&
-      point.trendElevationMeters - lowPoint.trendElevationMeters >= options.reversalElevationM &&
+      point.trendElevationMeters - lowPoint.trendElevationMeters >=
+        options.reversalElevationM &&
       point.distanceMeters - lowPoint.distanceMeters >= options.reversalDistanceM
     ) {
       push(rangeStart, candidateLow, 'descent');
@@ -356,7 +444,8 @@ function rangeMetrics(
 ): Omit<MacroElevationSegment, 'type' | 'gradeSubsegments'> {
   const first = points[range.start];
   const last = points[range.end];
-  if (first === undefined || last === undefined) throw new RangeError('Profile range is incomplete.');
+  if (first === undefined || last === undefined)
+    throw new RangeError('Profile range is incomplete.');
   let ascentMeters = 0;
   let descentMeters = 0;
   for (let index = range.start + 1; index <= range.end; index += 1) {
@@ -378,16 +467,20 @@ function rangeMetrics(
     netElevationChangeMeters,
     ascentMeters,
     descentMeters,
-    averageGradePct: distanceMeters === 0 ? 0 : (100 * netElevationChangeMeters) / distanceMeters,
+    averageGradePct:
+      distanceMeters === 0 ? 0 : (100 * netElevationChangeMeters) / distanceMeters,
   };
 }
 
-function qualifies(range: Range, points: readonly ElevationProfilePoint[], options: ElevationAnalysisOptions): boolean {
+function qualifies(
+  range: Range,
+  points: readonly ElevationProfilePoint[],
+  options: ElevationAnalysisOptions,
+): boolean {
   const metrics = rangeMetrics(range, points);
   return (
-    metrics.distanceMeters >= options.minSegmentDistanceM &&
-    Math.abs(metrics.netElevationChangeMeters) >= options.minNetElevationM &&
-    Math.abs(metrics.averageGradePct) >= options.minAverageGradePct
+    metrics.distanceMeters >= options.minSegmentDistanceM ||
+    Math.abs(metrics.netElevationChangeMeters) >= options.minNetElevationM
   );
 }
 
@@ -408,7 +501,7 @@ function coalesceRanges(ranges: readonly Range[]): Range[] {
   const result: Range[] = [];
   for (const range of ranges) {
     const previous = result.at(-1);
-    if (previous !== undefined && previous.type === range.type && previous.end === range.start) {
+    if (previous?.type === range.type && previous.end === range.start) {
       result[result.length - 1] = {
         ...previous,
         end: range.end,
@@ -434,10 +527,20 @@ function mergeInterruptions(
       const previous = ranges[index - 1];
       const middle = ranges[index];
       const next = ranges[index + 1];
-      if (previous === undefined || middle === undefined || next === undefined) continue;
-      if (previous.type !== next.type || previous.type === 'flat' || middle.type === 'flat') continue;
+      if (previous === undefined || middle === undefined || next === undefined)
+        continue;
+      if (
+        previous.type !== next.type ||
+        previous.type === 'flat' ||
+        middle.type === 'flat'
+      )
+        continue;
       const middleMetrics = rangeMetrics(middle, points);
-      const combined: Range = { start: previous.start, end: next.end, type: previous.type };
+      const combined: Range = {
+        start: previous.start,
+        end: next.end,
+        type: previous.type,
+      };
       const combinedMetrics = rangeMetrics(combined, points);
       const oppositeMovement =
         previous.type === 'climb'
@@ -471,9 +574,10 @@ function absorbShortFlats(
     changed = false;
     for (let index = 0; index < ranges.length; index += 1) {
       const flat = ranges[index];
-      if (flat === undefined || flat.type !== 'flat') continue;
+      if (flat?.type !== 'flat') continue;
       if (flat.preventsAbsorption === true) continue;
-      if (rangeMetrics(flat, points).distanceMeters >= options.minSegmentDistanceM) continue;
+      if (rangeMetrics(flat, points).distanceMeters >= options.minSegmentDistanceM)
+        continue;
       const previous = ranges[index - 1];
       const next = ranges[index + 1];
       const previousCandidate =
@@ -496,7 +600,11 @@ function absorbShortFlats(
           options,
         )
       ) {
-        ranges.splice(index - 1, 3, { start: previous.start, end: next.end, type: previous.type });
+        ranges.splice(index - 1, 3, {
+          start: previous.start,
+          end: next.end,
+          type: previous.type,
+        });
         changed = true;
         break;
       }
@@ -507,15 +615,22 @@ function absorbShortFlats(
       ) {
         eligible.push(previousCandidate);
       }
-      if (nextCandidate !== undefined && qualifiesDirectional(nextCandidate, points, options)) {
+      if (
+        nextCandidate !== undefined &&
+        qualifiesDirectional(nextCandidate, points, options)
+      ) {
         eligible.push(nextCandidate);
       }
       if (eligible.length === 0) continue;
       const selected =
         eligible.length === 1
           ? eligible[0]
-          : Math.abs(rangeMetrics(eligible[0] ?? flat, points).netElevationChangeMeters) >=
-              Math.abs(rangeMetrics(eligible[1] ?? flat, points).netElevationChangeMeters)
+          : Math.abs(
+                rangeMetrics(eligible[0] ?? flat, points).netElevationChangeMeters,
+              ) >=
+              Math.abs(
+                rangeMetrics(eligible[1] ?? flat, points).netElevationChangeMeters,
+              )
             ? eligible[0]
             : eligible[1];
       if (selected === undefined) continue;
@@ -545,7 +660,7 @@ function buildGradeSubsegments(
     const averageGradePct = (previous.localGradePct + current.localGradePct) / 2;
     const band = gradeBandForGrade(averageGradePct);
     const last = ranges.at(-1);
-    if (last !== undefined && last.band === band) {
+    if (last?.band === band) {
       last.end = index;
       last.distanceMeters += distanceMeters;
       last.weightedGradeSum += averageGradePct * distanceMeters;
@@ -566,19 +681,24 @@ function buildGradeSubsegments(
     for (let index = 1; index < ranges.length; index += 1) {
       const previous = ranges[index - 1];
       const current = ranges[index];
-      if (previous === undefined || current === undefined || previous.band !== current.band) continue;
+      if (
+        previous?.band !== current?.band ||
+        previous === undefined ||
+        current === undefined
+      )
+        continue;
       previous.end = current.end;
       previous.distanceMeters += current.distanceMeters;
       previous.weightedGradeSum += current.weightedGradeSum;
       previous.averageGradePct =
-        previous.distanceMeters === 0 ? 0 : previous.weightedGradeSum / previous.distanceMeters;
+        previous.distanceMeters === 0
+          ? 0
+          : previous.weightedGradeSum / previous.distanceMeters;
       ranges.splice(index, 1);
       index -= 1;
     }
   };
-  let changed = true;
-  while (changed && ranges.length > 1) {
-    changed = false;
+  while (ranges.length > 1) {
     const shortIndex = ranges.findIndex(
       (gradeRange) => gradeRange.distanceMeters < options.minGradeSubsegmentDistanceM,
     );
@@ -601,24 +721,27 @@ function buildGradeSubsegments(
       previous.distanceMeters += shortRange.distanceMeters;
       previous.weightedGradeSum += shortRange.weightedGradeSum;
       previous.averageGradePct =
-        previous.distanceMeters === 0 ? 0 : previous.weightedGradeSum / previous.distanceMeters;
+        previous.distanceMeters === 0
+          ? 0
+          : previous.weightedGradeSum / previous.distanceMeters;
       previous.band = gradeBandForGrade(previous.averageGradePct);
       ranges.splice(shortIndex, 1);
     } else if (next !== undefined) {
       next.start = shortRange.start;
       next.distanceMeters += shortRange.distanceMeters;
       next.weightedGradeSum += shortRange.weightedGradeSum;
-      next.averageGradePct = next.distanceMeters === 0 ? 0 : next.weightedGradeSum / next.distanceMeters;
+      next.averageGradePct =
+        next.distanceMeters === 0 ? 0 : next.weightedGradeSum / next.distanceMeters;
       next.band = gradeBandForGrade(next.averageGradePct);
       ranges.splice(shortIndex, 1);
     }
     mergeAdjacent();
-    changed = true;
   }
   return ranges.map((gradeRange) => {
     const start = points[gradeRange.start];
     const end = points[gradeRange.end];
-    if (start === undefined || end === undefined) throw new RangeError('Grade range is incomplete.');
+    if (start === undefined || end === undefined)
+      throw new RangeError('Grade range is incomplete.');
     return {
       startSampleIndex: gradeRange.start,
       endSampleIndex: gradeRange.end,
@@ -638,8 +761,12 @@ function finalizeRunRanges(
 ): readonly MacroElevationSegment[] {
   const merged = mergeInterruptions([...initial], points, options);
   const classified = merged.map((range) => {
-    const qualified = range.type === 'flat' || qualifiesDirectional(range, points, options);
-    const netElevationChangeMeters = rangeMetrics(range, points).netElevationChangeMeters;
+    const qualified =
+      range.type === 'flat' || qualifiesDirectional(range, points, options);
+    const netElevationChangeMeters = rangeMetrics(
+      range,
+      points,
+    ).netElevationChangeMeters;
     return {
       ...range,
       type: qualified ? range.type : 'flat',
@@ -672,7 +799,11 @@ export function calculateElevationProfile(
   }
   if (points.length < 2) return null;
   const segmentsResult = runs.flatMap((run) =>
-    finalizeRunRanges(detectDirectionalRanges(points, run.start, run.end, options), points, options),
+    finalizeRunRanges(
+      detectDirectionalRanges(points, run.start, run.end, options),
+      points,
+      options,
+    ),
   );
   let minimumMeters = Infinity;
   let maximumMeters = -Infinity;

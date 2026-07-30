@@ -24,29 +24,39 @@ function equatorCoordinate(distanceMeters: number): TrackCoordinate {
 
 function flatDem(meters: number): ElevationProvider {
   return {
-    sample: async () => ({ status: 'available', meters }),
-    sampleMany: async (coordinates) =>
-      coordinates.map(() => ({ status: 'available' as const, meters })),
+    sample: () => Promise.resolve({ status: 'available', meters }),
+    sampleMany: (coordinates) =>
+      Promise.resolve(
+        coordinates.map(() => ({ status: 'available' as const, meters })),
+      ),
   };
 }
 
 describe('prepareImportedTrack', () => {
   it('resamples a long source leg, filters once, and persists prepared elevations', async () => {
     const provider: ElevationProvider = {
-      sample: async () => ({ status: 'available', meters: 1_100 }),
-      sampleMany: async (coordinates) =>
-        coordinates.map((_, index) => ({
-          status: 'available' as const,
-          meters: 1_000 + Math.min(index, coordinates.length - index) * 2,
-        })),
+      sample: () => Promise.resolve({ status: 'available', meters: 1_100 }),
+      sampleMany: (coordinates) =>
+        Promise.resolve(
+          coordinates.map((_, index) => ({
+            status: 'available' as const,
+            meters: 1_000 + Math.min(index, coordinates.length - index) * 2,
+          })),
+        ),
     };
 
     const prepared = await prepareImportedTrack(sourceSegments, provider, signal);
 
     expect(prepared.segments[0]?.points.length).toBeGreaterThan(90);
-    expect(prepared.segments[0]?.points.every((point) => point.elevationMeters !== undefined)).toBe(true);
+    expect(
+      prepared.segments[0]?.points.every(
+        (point) => point.elevationMeters !== undefined,
+      ),
+    ).toBe(true);
     expect(prepared.metrics.elevationSource).toBe('dem-assisted');
-    expect(prepared.profile.points).toHaveLength(prepared.segments[0]?.points.length ?? 0);
+    expect(prepared.profile.points).toHaveLength(
+      prepared.segments[0]?.points.length ?? 0,
+    );
   });
 
   it('uses complete source heights without an elevation provider', async () => {
@@ -56,10 +66,35 @@ describe('prepareImportedTrack', () => {
     expect(prepared.metrics.elevationSource).toBe('dem-assisted');
   });
 
+  it('explains a repeated-coordinate track as broken geometry', async () => {
+    const repeatedCoordinateSegment: TrackSegment = {
+      points: [
+        { coordinate: [-74.006, 40.7128], elevationMeters: 10 },
+        { coordinate: [-74.006, 40.7128], elevationMeters: 10 },
+        { coordinate: [-74.006, 40.7128], elevationMeters: 10 },
+      ],
+    };
+
+    await expect(
+      prepareImportedTrack([repeatedCoordinateSegment], null, signal),
+    ).rejects.toMatchObject({
+      code: 'zero-length-track',
+      message:
+        'This track is broken: all track points are in one location, so its route length is zero. Choose another file.',
+    });
+  });
+
   it('rejects a source segment with no usable elevation data', async () => {
     await expect(
       prepareImportedTrack(
-        [{ points: [{ coordinate: [44, 42] as const }, { coordinate: [44.01, 42] as const }] }],
+        [
+          {
+            points: [
+              { coordinate: [44, 42] as const },
+              { coordinate: [44.01, 42] as const },
+            ],
+          },
+        ],
         null,
         signal,
       ),
@@ -110,9 +145,13 @@ describe('prepareImportedTrack', () => {
       { status: 'unavailable' as const },
     ];
     const provider: ElevationProvider = {
-      sample: async () => ({ status: 'unavailable' }),
-      sampleMany: async (coordinates) =>
-        coordinates.map((_, index) => samples[index] ?? { status: 'unavailable' as const }),
+      sample: () => Promise.resolve({ status: 'unavailable' }),
+      sampleMany: (coordinates) =>
+        Promise.resolve(
+          coordinates.map(
+            (_, index) => samples[index] ?? { status: 'unavailable' as const },
+          ),
+        ),
     };
     const prepared = await prepareImportedTrack(
       [
@@ -129,9 +168,7 @@ describe('prepareImportedTrack', () => {
 
     expect(
       prepared.profile.points.map((point) => Math.round(point.rawElevationMeters)),
-    ).toEqual([
-      100, 100, 130, 160, 160, 160,
-    ]);
+    ).toEqual([100, 100, 130, 160, 160, 160]);
   });
 
   it('accepts 100,000 stations and rejects 100,001 before sampling', async () => {

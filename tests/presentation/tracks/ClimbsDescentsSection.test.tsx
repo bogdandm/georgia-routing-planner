@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,11 @@ import type {
   MacroElevationSegmentType,
 } from '@/domain/tracks/elevationProfile';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
+import {
+  formatTrackDistance,
+  formatTrackElevation,
+  formatTrackGrade,
+} from '@/presentation/tracks/trackFormatters';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 
 function segment(
@@ -36,15 +41,21 @@ const segments = [
   segment('descent', 20, -8),
 ];
 
-function renderSection(overrides: {
-  readonly activeSegmentIndex?: number | null;
-  readonly selectedSegmentIndex?: number | null;
-  readonly onSegmentHoverChange?: (index: number | null) => void;
-  readonly onSegmentSelectionChange?: (index: number | null) => void;
-} = {}) {
+function renderSection(
+  overrides: {
+    readonly activeSegmentIndex?: number | null;
+    readonly recalculating?: boolean;
+    readonly onRecalculate?: () => void;
+    readonly selectedSegmentIndex?: number | null;
+    readonly onSegmentHoverChange?: (index: number | null) => void;
+    readonly onSegmentSelectionChange?: (index: number | null) => void;
+  } = {},
+) {
   return render(
     <ThemeProvider theme={createAppTheme()}>
       <ClimbsDescentsSection
+        recalculating={overrides.recalculating ?? false}
+        onRecalculate={overrides.onRecalculate ?? vi.fn()}
         segments={segments}
         activeSegmentIndex={overrides.activeSegmentIndex ?? null}
         selectedSegmentIndex={overrides.selectedSegmentIndex ?? null}
@@ -66,9 +77,34 @@ describe('ClimbsDescentsSection', () => {
 
     const rows = screen.getAllByRole('button', { pressed: false });
     expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
-      '#1 Climb, +10%, 1.0 km, 100 m, 3 m descent',
-      '#2 Descent, -8%, 1.0 km, 80 m, 5 m ascent',
+      'Climb 1, +10%, 1.0 km, 100 m, 3 m descent',
+      'Descent 1, -8%, 1.0 km, 80 m, 5 m ascent',
     ]);
+  });
+
+  it('labels every segment metric icon with a tooltip', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(screen.getByRole('button', { name: 'Climbs & Descents' }));
+    const climb = screen.getByRole('button', { name: /^Climb 1/u });
+    const icons = [...climb.querySelectorAll('svg')];
+    expect(icons).toHaveLength(4);
+
+    for (const [index, label] of [
+      'Distance',
+      'Elevation gain',
+      'Elevation loss',
+      'Average grade',
+    ].entries()) {
+      const icon = icons[index];
+      if (icon === undefined) throw new Error(`Expected icon ${String(index)}.`);
+      await user.hover(icon);
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(label);
+      await user.unhover(icon);
+      await waitFor(() => {
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      });
+    }
   });
 
   it('shares hover, focus, and persistent selection callbacks', async () => {
@@ -77,13 +113,41 @@ describe('ClimbsDescentsSection', () => {
     const onSegmentSelectionChange = vi.fn();
     renderSection({ onSegmentHoverChange, onSegmentSelectionChange });
     await user.click(screen.getByRole('button', { name: 'Climbs & Descents' }));
-    const climb = screen.getByRole('button', { name: /^#1 Climb/ });
+    const climb = screen.getByRole('button', { name: /^Climb 1/ });
 
     await user.hover(climb);
     expect(onSegmentHoverChange).toHaveBeenLastCalledWith(0);
-    await user.click(climb);
-    expect(onSegmentSelectionChange).toHaveBeenCalledWith(0);
     await user.unhover(climb);
-    expect(onSegmentHoverChange).toHaveBeenLastCalledWith(null);
+    await user.tab();
+    expect(climb).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onSegmentSelectionChange).toHaveBeenCalledWith(0);
+    expect(onSegmentHoverChange).toHaveBeenCalledWith(null);
+  });
+
+  it('recalculates without toggling the disclosure', async () => {
+    const user = userEvent.setup();
+    const onRecalculate = vi.fn();
+    renderSection({ onRecalculate });
+    const disclosure = screen.getByRole('button', { name: 'Climbs & Descents' });
+
+    await user.click(screen.getByRole('button', { name: 'Recalculate elevation' }));
+
+    expect(onRecalculate).toHaveBeenCalledOnce();
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('formats signed grades, threshold distances, and rounded elevations', () => {
+    expect([
+      formatTrackGrade(-0),
+      formatTrackGrade(0),
+      formatTrackGrade(3.6),
+      formatTrackGrade(-3.6),
+    ]).toEqual(['0%', '0%', '+4%', '-4%']);
+    expect([formatTrackDistance(9_999), formatTrackDistance(10_000)]).toEqual([
+      '10.0 km',
+      '10 km',
+    ]);
+    expect(formatTrackElevation(1_234.6)).toBe('1,235 m');
   });
 });

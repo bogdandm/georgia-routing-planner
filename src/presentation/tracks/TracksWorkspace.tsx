@@ -14,7 +14,7 @@ import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
-import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
@@ -61,6 +61,7 @@ import {
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
 import {
+  calculateTrackMetrics,
   findDominantSummit,
   formatGeneratedPoiLabel,
   generateEnglishTrackName,
@@ -96,16 +97,29 @@ import {
 } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
 
-interface PreviewTrack {
+interface PreviewTrackBase {
   readonly kind: 'preview';
   readonly id: string;
   readonly file: File;
   readonly parsed: ParsedGpx;
+  readonly sourceFormat: TrackSourceFormat;
+  readonly name: string;
+}
+
+interface PreparingPreviewTrack extends PreviewTrackBase {
+  readonly preparationStatus: 'preparing';
+}
+
+interface FailedPreviewTrack extends PreviewTrackBase {
+  readonly preparationStatus: 'failed';
+  readonly preparationError: string;
+}
+
+interface PreparedPreviewTrack extends PreviewTrackBase {
+  readonly preparationStatus: 'ready';
   readonly metrics: TrackMetrics;
   readonly preparedSegments: readonly TrackSegment[];
   readonly profile: ElevationProfile;
-  readonly sourceFormat: TrackSourceFormat;
-  readonly name: string;
   readonly namingStatus: 'loading' | 'ready' | 'unavailable';
   readonly generatedName?: string;
   readonly middleAnchorKind?: 'distance-midpoint' | 'dominant-summit';
@@ -114,6 +128,8 @@ interface PreviewTrack {
   readonly endPoi?: PoiCandidate;
   readonly fallbackPoi?: PoiCandidate;
 }
+
+type PreviewTrack = PreparingPreviewTrack | FailedPreviewTrack | PreparedPreviewTrack;
 
 interface SavedTrackSelection {
   readonly kind: 'saved';
@@ -131,12 +147,14 @@ interface TracksWorkspaceValue {
   readonly importError: string | null;
   readonly importFiles: (files: FileList | readonly File[]) => Promise<void>;
   readonly importState: 'idle' | 'preparing';
+  readonly recalculationState: 'idle' | 'recalculating';
   readonly query: string;
   readonly summaries: readonly LocalTrackSummary[];
   readonly applyGeneratedName: () => void;
   readonly closeActive: () => boolean;
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
+  readonly recalculateElevation: () => Promise<void>;
   readonly savePreview: () => Promise<void>;
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly setActiveName: (name: string) => void;
@@ -161,7 +179,9 @@ interface ImportErrorNotice {
   readonly occurrence: number;
 }
 
-type PreviewTrackBuilder = { -readonly [Key in keyof PreviewTrack]: PreviewTrack[Key] };
+type PreparedPreviewTrackBuilder = {
+  -readonly [Key in keyof PreparedPreviewTrack]: PreparedPreviewTrack[Key];
+};
 type LocalTrackSummaryBuilder = {
   -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
 };
@@ -221,16 +241,27 @@ function bestCandidate(
 }
 
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
-  const { clock, database, elevationProvider, idGenerator, logger, mapLayers, searchPlaces } =
-    useRuntimeServices();
+  const {
+    clock,
+    database,
+    elevationProvider,
+    idGenerator,
+    logger,
+    mapLayers,
+    searchPlaces,
+  } = useRuntimeServices();
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importError, setImportError] = useState<ImportErrorNotice | null>(null);
   const [importState, setImportState] = useState<'idle' | 'preparing'>('idle');
+  const [recalculationState, setRecalculationState] = useState<
+    'idle' | 'recalculating'
+  >('idle');
   const namingAbort = useRef<AbortController | null>(null);
   const preparationAbort = useRef<AbortController | null>(null);
+  const recalculationAbort = useRef<AbortController | null>(null);
   const importGeneration = useRef(0);
   const renderedTrackId = useRef<string | null>(null);
   const restorationAttempted = useRef(false);
@@ -272,6 +303,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       window.clearTimeout(timeout);
       namingAbort.current?.abort();
       preparationAbort.current?.abort();
+      recalculationAbort.current?.abort();
     };
   }, [reloadSummaries]);
 
@@ -302,15 +334,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       mapLayers?.clearImportedTrackGeometry();
       return;
     }
-    const trackId = active.kind === 'preview' ? active.id : active.summary.id;
+    const trackId =
+      active.kind === 'preview'
+        ? `${active.id}:${active.preparationStatus}`
+        : active.summary.id;
     if (renderedTrackId.current === trackId) return;
     const segments =
-      active.kind === 'preview'
-        ? active.preparedSegments.map((segment) =>
-            segment.points.map((point) => point.coordinate),
-          )
-        : localTrackSegments(active.content);
-    const metrics = active.kind === 'preview' ? active.metrics : active.summary.metrics;
+      active.kind === 'saved'
+        ? localTrackSegments(active.content)
+        : (active.preparationStatus === 'ready'
+            ? active.preparedSegments
+            : active.parsed.segments
+          ).map((segment) => segment.points.map((point) => point.coordinate));
+    const metrics =
+      active.kind === 'saved'
+        ? active.summary.metrics
+        : active.preparationStatus === 'ready'
+          ? active.metrics
+          : calculateTrackMetrics(active.parsed.segments);
     const result = mapLayers?.setImportedTrackGeometry(segments);
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
@@ -328,10 +369,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [active, mapLayers]);
 
   const generateName = useCallback(
-    async (preview: PreviewTrack, controller: AbortController) => {
+    async (preview: PreparedPreviewTrack, controller: AbortController) => {
       if (searchPlaces === null) {
         setActive((current) =>
-          current?.kind === 'preview' && current.id === preview.id
+          current?.kind === 'preview' &&
+          current.preparationStatus === 'ready' &&
+          current.id === preview.id
             ? { ...current, namingStatus: 'unavailable' }
             : current,
         );
@@ -362,9 +405,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           if (fallbackPoi !== undefined) generatedNameInput.fallbackPoi = fallbackPoi;
           const generatedName = generateEnglishTrackName(generatedNameInput);
           setActive((current) => {
-            if (current?.kind !== 'preview' || current.id !== preview.id)
+            if (
+              current?.kind !== 'preview' ||
+              current.preparationStatus !== 'ready' ||
+              current.id !== preview.id
+            )
               return current;
-            const updated: PreviewTrackBuilder = { ...current, namingStatus: 'ready' };
+            const updated: PreparedPreviewTrackBuilder = {
+              ...current,
+              namingStatus: 'ready',
+            };
             if (fallbackPoi !== undefined) updated.fallbackPoi = fallbackPoi;
             if (generatedName !== null) updated.generatedName = generatedName;
             return updated;
@@ -438,8 +488,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         if (fallbackPoi !== undefined) generatedNameInput.fallbackPoi = fallbackPoi;
         const generatedName = generateEnglishTrackName(generatedNameInput);
         setActive((current) => {
-          if (current?.kind !== 'preview' || current.id !== preview.id) return current;
-          const updated: PreviewTrackBuilder = {
+          if (
+            current?.kind !== 'preview' ||
+            current.preparationStatus !== 'ready' ||
+            current.id !== preview.id
+          )
+            return current;
+          const updated: PreparedPreviewTrackBuilder = {
             ...current,
             namingStatus: 'ready',
             middleAnchorKind: summit === null ? 'distance-midpoint' : 'dominant-summit',
@@ -455,7 +510,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         if (controller.signal.aborted) return;
         logger.log({ level: 'warn', name: 'local-track.naming.failed' });
         setActive((current) =>
-          current?.kind === 'preview' && current.id === preview.id
+          current?.kind === 'preview' &&
+          current.preparationStatus === 'ready' &&
+          current.id === preview.id
             ? { ...current, namingStatus: 'unavailable' }
             : current,
         );
@@ -491,6 +548,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       }
       namingAbort.current?.abort();
       preparationAbort.current?.abort();
+      recalculationAbort.current?.abort();
+      setRecalculationState('idle');
       const generation = importGeneration.current + 1;
       importGeneration.current = generation;
       setActive(null);
@@ -499,37 +558,66 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setImportState('preparing');
       const controller = new AbortController();
       preparationAbort.current = controller;
+      const importIsStale = (): boolean =>
+        controller.signal.aborted || generation !== importGeneration.current;
       try {
         const parsed = await parseTrackFile(file, sourceFormat);
-        if (controller.signal.aborted || generation !== importGeneration.current) return;
-        const prepared = await prepareImportedTrack(
-          parsed.segments,
-          elevationProvider,
-          controller.signal,
-        );
-        if (controller.signal.aborted || generation !== importGeneration.current) return;
-        const preview: PreviewTrack = {
+        if (importIsStale()) return;
+        const previewBase: PreviewTrackBase = {
           kind: 'preview',
           id: `local:${idGenerator.generate()}`,
           file,
           parsed,
-          metrics: prepared.metrics,
-          preparedSegments: prepared.segments,
-          profile: prepared.profile,
           sourceFormat,
           name: initialTrackName(file, parsed),
-          namingStatus: 'loading',
         };
-        setActive(preview);
-        const namingController = new AbortController();
-        namingAbort.current = namingController;
-        void generateName(preview, namingController);
-      } catch (importError) {
-        if (controller.signal.aborted || generation !== importGeneration.current) return;
+        setActive({ ...previewBase, preparationStatus: 'preparing' });
+        try {
+          const prepared = await prepareImportedTrack(
+            parsed.segments,
+            elevationProvider,
+            controller.signal,
+          );
+          if (importIsStale()) return;
+          const preview: PreparedPreviewTrack = {
+            ...previewBase,
+            preparationStatus: 'ready',
+            metrics: prepared.metrics,
+            preparedSegments: prepared.segments,
+            profile: prepared.profile,
+            namingStatus: 'loading',
+          };
+          setActive((current) =>
+            current?.kind === 'preview' && current.id === preview.id
+              ? preview
+              : current,
+          );
+          const namingController = new AbortController();
+          namingAbort.current = namingController;
+          void generateName(preview, namingController);
+        } catch (preparationFailure) {
+          if (importIsStale()) return;
+          logger.log({
+            level: 'warn',
+            name: 'local-track.elevation-preparation.failed',
+          });
+          const preparationError =
+            preparationFailure instanceof Error
+              ? preparationFailure.message
+              : 'Elevation preparation failed.';
+          setActive((current) =>
+            current?.kind === 'preview' && current.id === previewBase.id
+              ? { ...previewBase, preparationStatus: 'failed', preparationError }
+              : current,
+          );
+        }
+      } catch (importFailure) {
+        if (controller.signal.aborted || generation !== importGeneration.current)
+          return;
         logger.log({ level: 'warn', name: 'local-track.import.failed' });
         reportImportError(
-          importError instanceof Error
-            ? importError.message
+          importFailure instanceof Error
+            ? importFailure.message
             : 'The track file could not be imported.',
         );
       } finally {
@@ -543,7 +631,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   const savePreview = useCallback(async () => {
-    if (active?.kind !== 'preview') return;
+    if (active?.kind !== 'preview' || active.preparationStatus !== 'ready') return;
     try {
       const normalizedName = normalizeLocalTrackName(active.name);
       const summary: LocalTrackSummaryBuilder = {
@@ -593,8 +681,89 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, clock, database, reloadSummaries]);
 
+  const recalculateElevation = useCallback(async () => {
+    if (
+      active === null ||
+      (active.kind === 'preview' && active.preparationStatus !== 'ready') ||
+      recalculationState === 'recalculating'
+    ) {
+      return;
+    }
+    recalculationAbort.current?.abort();
+    const controller = new AbortController();
+    recalculationAbort.current = controller;
+    setRecalculationState('recalculating');
+    setError(null);
+    const activeId = active.kind === 'preview' ? active.id : active.summary.id;
+    try {
+      const sourceSegments =
+        active.kind === 'preview'
+          ? active.parsed.segments
+          : active.content.trackPoints.map((points) => ({ points }));
+      const prepared = await prepareImportedTrack(
+        sourceSegments,
+        elevationProvider,
+        controller.signal,
+      );
+      controller.signal.throwIfAborted();
+      renderedTrackId.current = null;
+      if (active.kind === 'preview') {
+        setActive((current) =>
+          current?.kind === 'preview' &&
+          current.preparationStatus === 'ready' &&
+          current.id === activeId
+            ? {
+                ...current,
+                metrics: prepared.metrics,
+                preparedSegments: prepared.segments,
+                profile: prepared.profile,
+              }
+            : current,
+        );
+      } else {
+        const summary: LocalTrackSummary = {
+          ...active.summary,
+          pointCount: prepared.segments.reduce(
+            (count, segment) => count + segment.points.length,
+            0,
+          ),
+          segmentCount: prepared.segments.length,
+          metrics: prepared.metrics,
+        };
+        const content: LocalTrackContent = {
+          schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+          trackId: active.summary.id,
+          trackPoints: prepared.segments.map((segment) => segment.points),
+        };
+        await database.saveLocalTrack(summary, content);
+        controller.signal.throwIfAborted();
+        setActive((current) =>
+          current?.kind === 'saved' && current.summary.id === activeId
+            ? { ...current, summary, content }
+            : current,
+        );
+        await reloadSummaries();
+      }
+    } catch (recalculationError) {
+      if (!controller.signal.aborted) {
+        setError(
+          recalculationError instanceof Error
+            ? recalculationError.message
+            : 'Elevation could not be recalculated.',
+        );
+      }
+    } finally {
+      if (recalculationAbort.current === controller) {
+        recalculationAbort.current = null;
+        setRecalculationState('idle');
+      }
+    }
+  }, [active, database, elevationProvider, recalculationState, reloadSummaries]);
+
   const discardPreview = useCallback(() => {
     preparationAbort.current?.abort();
+    recalculationAbort.current?.abort();
+    setRecalculationState('idle');
     importGeneration.current += 1;
     namingAbort.current?.abort();
     setImportState('idle');
@@ -607,6 +776,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return false;
     }
     preparationAbort.current?.abort();
+    recalculationAbort.current?.abort();
+    setRecalculationState('idle');
     importGeneration.current += 1;
     setImportState('idle');
     namingAbort.current?.abort();
@@ -623,6 +794,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return;
       }
       preparationAbort.current?.abort();
+      recalculationAbort.current?.abort();
+      setRecalculationState('idle');
       importGeneration.current += 1;
       setImportState('idle');
       namingAbort.current?.abort();
@@ -713,7 +886,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const applyGeneratedName = useCallback(() => {
     setActive((current) =>
-      current?.kind === 'preview' && current.generatedName !== undefined
+      current?.kind === 'preview' &&
+      current.preparationStatus === 'ready' &&
+      current.generatedName !== undefined
         ? { ...current, name: current.generatedName }
         : current,
     );
@@ -740,6 +915,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       closeActive,
       deleteSaved,
       discardPreview,
+      recalculateElevation,
+      recalculationState,
       renameActive,
       savePreview,
       selectSaved,
@@ -760,6 +937,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       importState,
       query,
       renameActive,
+      recalculateElevation,
+      recalculationState,
       savePreview,
       selectSaved,
       setActiveName,
@@ -773,7 +952,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 }
 
 function TrackImportZone() {
-  const { discardPreview, importError, importFiles, importState } = useTracksWorkspace();
+  const { importError, importFiles } = useTracksWorkspace();
   const inputRef = useRef<HTMLInputElement>(null);
   const zoneRef = useRef<HTMLElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -894,45 +1073,33 @@ function TrackImportZone() {
             textAlign: 'center',
           }}
         >
-          {importState === 'preparing' ? (
-            <>
-              <CircularProgress size={20} />
-              <Typography variant="subtitle2">Preparing elevation profile…</Typography>
-              <Button size="small" color="inherit" onClick={discardPreview}>
-                Cancel preparation
-              </Button>
-            </>
+          <UploadFileOutlinedIcon
+            color="primary"
+            sx={{ fontSize: dragActive ? 36 : 24 }}
+          />
+          <Typography
+            variant="subtitle2"
+            noWrap={!dragActive}
+            sx={{
+              flex: dragActive ? 0 : 1,
+              fontSize: dragActive ? undefined : { xs: '0.6875rem', sm: '0.875rem' },
+            }}
+          >
+            Drop GPX, FIT, or KML here
+          </Typography>
+          {dragActive ? (
+            <Typography variant="caption" color="text.secondary">
+              Release the file inside this zone
+            </Typography>
           ) : (
-            <>
-              <UploadFileOutlinedIcon
-                color="primary"
-                sx={{ fontSize: dragActive ? 36 : 24 }}
-              />
-              <Typography
-                variant="subtitle2"
-                noWrap={!dragActive}
-                sx={{
-                  flex: dragActive ? 0 : 1,
-                  fontSize: dragActive ? undefined : { xs: '0.6875rem', sm: '0.875rem' },
-                }}
-              >
-                Drop GPX, FIT, or KML here
-              </Typography>
-              {dragActive ? (
-                <Typography variant="caption" color="text.secondary">
-                  Release the file inside this zone
-                </Typography>
-              ) : (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => inputRef.current?.click()}
-                  sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
-                >
-                  Browse track file
-                </Button>
-              )}
-            </>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => inputRef.current?.click()}
+              sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
+            >
+              Browse track file
+            </Button>
           )}
         </Stack>
         <input
@@ -966,13 +1133,11 @@ function TrackImportZone() {
   );
 }
 
-
 function formatTrackDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.round((seconds % 3_600) / 60);
   return `${String(hours)}h ${String(minutes)}m`;
 }
-
 
 function averageSpeedKilometersPerHour(metrics: TrackMetrics): number | undefined {
   const elapsedSeconds = metrics.elapsedSeconds;
@@ -1168,7 +1333,7 @@ export function TracksPanel() {
                           />
                         )}
                         <TrackStat
-                          icon={<SwapHorizOutlinedIcon sx={{ fontSize: 16 }} />}
+                          icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
                           label="Distance"
                           value={formatTrackDistance(summary.metrics.distanceMeters)}
                         />
@@ -1320,18 +1485,8 @@ function elevationProfileInputSegments(
   return inputs;
 }
 
-function segmentIndexForSample(profile: ElevationProfile, sampleIndex: number): number | null {
-  const segmentIndex = profile.segments.findIndex(
-    (segment, index) =>
-      sampleIndex >= segment.startSampleIndex &&
-      (sampleIndex < segment.endSampleIndex ||
-        (index === profile.segments.length - 1 && sampleIndex <= segment.endSampleIndex)),
-  );
-  return segmentIndex < 0 ? null : segmentIndex;
-}
-
 function TrackElevationAnalysis() {
-  const { active } = useTracksWorkspace();
+  const { active, recalculateElevation, recalculationState } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState<number | null>(null);
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
@@ -1344,22 +1499,35 @@ function TrackElevationAnalysis() {
   );
   const profile = useMemo(() => {
     if (active === null) return null;
-    if (active.kind === 'preview') return active.profile;
-    const savedProfileInputs = elevationProfileInputSegments(active.content.trackPoints);
-    return savedProfileInputs === null ? null : calculateElevationProfile(savedProfileInputs);
+    if (active.kind === 'preview')
+      return active.preparationStatus === 'ready' ? active.profile : null;
+    const savedProfileInputs = elevationProfileInputSegments(
+      active.content.trackPoints,
+    );
+    return savedProfileInputs === null
+      ? null
+      : calculateElevationProfile(savedProfileInputs);
   }, [active]);
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
   useEffect(() => {
-    let coordinates: readonly (readonly [number, number])[] | null = null;
+    let highlightSegments:
+      | readonly {
+          readonly coordinates: readonly (readonly [number, number])[];
+          readonly color: string;
+        }[]
+      | null = null;
     if (profile !== null && activeSegmentIndex !== null) {
       const segment = profile.segments[activeSegmentIndex];
-      if (segment !== undefined) {
-        coordinates = profile.points
-          .slice(segment.startSampleIndex, segment.endSampleIndex + 1)
-          .map((point) => point.coordinate);
+      if (segment !== undefined && segment.type !== 'flat') {
+        highlightSegments = segment.gradeSubsegments.map((gradeSubsegment) => ({
+          coordinates: profile.points
+            .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
+            .map((point) => point.coordinate),
+          color: appColors.elevationGrade[gradeSubsegment.band],
+        }));
       }
     }
-    mapLayers?.setImportedTrackHighlight(coordinates);
+    mapLayers?.setImportedTrackHighlight(highlightSegments);
   }, [activeSegmentIndex, mapLayers, profile]);
   if (active === null) return null;
   if (profile === null) return null;
@@ -1368,14 +1536,16 @@ function TrackElevationAnalysis() {
       <ElevationProfileChart
         profile={profile}
         activeSegmentIndex={activeSegmentIndex}
+        selectedSegmentIndex={selectedSegmentIndex}
         onActivePointChange={(point) => {
           mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
-          const nextSegmentIndex =
-            point === null ? null : segmentIndexForSample(profile, point.sampleIndex);
+        }}
+        onSegmentHoverChange={(nextSegmentIndex) => {
           setHoveredSegmentIndex((current) =>
             current === nextSegmentIndex ? current : nextSegmentIndex,
           );
         }}
+        onSegmentSelectionChange={setSelectedSegmentIndex}
         onPointClick={(point) => {
           requestMapNavigation({
             longitude: point.coordinate[0],
@@ -1385,6 +1555,8 @@ function TrackElevationAnalysis() {
         }}
       />
       <ClimbsDescentsSection
+        recalculating={recalculationState === 'recalculating'}
+        onRecalculate={() => void recalculateElevation()}
         segments={profile.segments}
         activeSegmentIndex={activeSegmentIndex}
         selectedSegmentIndex={selectedSegmentIndex}
@@ -1415,7 +1587,7 @@ export function TrackStats({ compact = false, metrics }: TrackStatsProps) {
     });
   }
   stats.push({
-    icon: <SwapHorizOutlinedIcon sx={{ fontSize: 18 }} />,
+    icon: <SwapHorizIcon sx={{ fontSize: 18 }} />,
     label: 'Distance',
     value: formatTrackDistance(metrics.distanceMeters),
   });
@@ -1532,14 +1704,28 @@ export function TrackDetailsPane({
   const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   if (active === null) return null;
-  const metrics = active.kind === 'saved' ? active.summary.metrics : active.metrics;
+  const metrics =
+    active.kind === 'saved'
+      ? active.summary.metrics
+      : active.preparationStatus === 'ready'
+        ? active.metrics
+        : null;
   const pointCount =
     active.kind === 'saved'
       ? active.summary.pointCount
-      : active.preparedSegments.reduce((count, segment) => count + segment.points.length, 0);
+      : active.preparationStatus === 'ready'
+        ? active.preparedSegments.reduce(
+            (count, segment) => count + segment.points.length,
+            0,
+          )
+        : active.parsed.pointCount;
   const savedAt = active.kind === 'saved' ? active.summary.savedAt : undefined;
   const segmentCount =
-    active.kind === 'saved' ? active.summary.segmentCount : active.preparedSegments.length;
+    active.kind === 'saved'
+      ? active.summary.segmentCount
+      : active.preparationStatus === 'ready'
+        ? active.preparedSegments.length
+        : active.parsed.segments.length;
   const sourceFilename =
     active.kind === 'saved' ? active.summary.sourceFilename : active.file.name;
   const sourceFormat =
@@ -1803,7 +1989,16 @@ export function TrackDetailsPane({
                 }}
                 slotProps={{ htmlInput: { maxLength: 200 } }}
               />
-              {active.namingStatus === 'loading' ? (
+              {active.preparationStatus === 'preparing' ? (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">
+                    Preparing terrain and elevation…
+                  </Typography>
+                </Stack>
+              ) : active.preparationStatus === 'failed' ? (
+                <Alert severity="warning">{active.preparationError}</Alert>
+              ) : active.namingStatus === 'loading' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <CircularProgress size={18} />
                   <Typography variant="body2">
@@ -1844,6 +2039,7 @@ export function TrackDetailsPane({
                 <Button
                   size="small"
                   variant="contained"
+                  disabled={active.preparationStatus !== 'ready'}
                   onClick={() => void savePreview()}
                 >
                   Save
@@ -1854,7 +2050,7 @@ export function TrackDetailsPane({
           <Typography component="h3" variant="subtitle2">
             Track details
           </Typography>
-          <TrackStats metrics={metrics} />
+          {metrics === null ? null : <TrackStats metrics={metrics} />}
           <TrackElevationAnalysis
             key={`elevation:${active.kind === 'preview' ? active.id : active.summary.id}`}
           />

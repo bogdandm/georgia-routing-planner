@@ -11,7 +11,7 @@ import {
   BrowserTerrariumPngCodec,
   type TerrariumPngCodec,
 } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
-import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
+import type { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
 
 interface DemPixel {
   readonly red: number;
@@ -92,17 +92,25 @@ export class RasterDemElevationProvider implements ElevationProvider {
     coordinate: ElevationCoordinate,
     signal: AbortSignal,
   ): Promise<ElevationSample> {
-    return (await this.sampleMany([coordinate], signal))[0] ?? { status: 'unavailable' };
+    return (
+      (await this.sampleMany([coordinate], signal))[0] ?? { status: 'unavailable' }
+    );
   }
 
   public async sampleMany(
     coordinates: readonly ElevationCoordinate[],
     signal: AbortSignal,
   ): Promise<readonly ElevationSample[]> {
-    const samples: ElevationSample[] = coordinates.map(() => ({ status: 'unavailable' }));
+    const samples: ElevationSample[] = coordinates.map(() => ({
+      status: 'unavailable',
+    }));
     const tiles = new Map<string, { location: TilePixelLocation; indices: number[] }>();
     for (const [index, coordinate] of coordinates.entries()) {
-      const location = locateDemPixel(coordinate, this.terrain.maxZoom, this.terrain.tileSize);
+      const location = locateDemPixel(
+        coordinate,
+        this.terrain.maxZoom,
+        this.terrain.tileSize,
+      );
       if (location === null) continue;
       const key = `${String(location.z)}/${String(location.x)}/${String(location.y)}`;
       const tile = tiles.get(key);
@@ -116,7 +124,14 @@ export class RasterDemElevationProvider implements ElevationProvider {
       [...tiles.values()].map(async ({ location, indices }) => {
         const blob =
           this.terrain.encoding === 'terrarium' && this.filteredTerrariumTiles !== null
-            ? (await this.filteredTerrariumTiles.getTile(location.z, location.x, location.y, signal)).data
+            ? (
+                await this.filteredTerrariumTiles.getTile(
+                  location.z,
+                  location.x,
+                  location.y,
+                  signal,
+                )
+              ).data
             : await this.httpClient
                 .get(tileUrl(this.terrain.tileUrl, location), {
                   signal,
@@ -134,13 +149,23 @@ export class RasterDemElevationProvider implements ElevationProvider {
             this.terrain.tileSize,
           );
           if (pixelLocation === null) continue;
-          const offset = (pixelLocation.pixelY * decoded.width + pixelLocation.pixelX) * 4;
+          const offset =
+            (pixelLocation.pixelY * decoded.width + pixelLocation.pixelX) * 4;
           const red = decoded.data[offset];
           const green = decoded.data[offset + 1];
           const blue = decoded.data[offset + 2];
           const alpha = decoded.data[offset + 3];
-          if (red === undefined || green === undefined || blue === undefined || alpha !== 255) continue;
-          const meters = decodeDemElevation({ red, green, blue }, this.terrain.encoding);
+          if (
+            red === undefined ||
+            green === undefined ||
+            blue === undefined ||
+            alpha !== 255
+          )
+            continue;
+          const meters = decodeDemElevation(
+            { red, green, blue },
+            this.terrain.encoding,
+          );
           if (
             !Number.isFinite(meters) ||
             meters < this.terrain.filter.minimumElevationMeters ||

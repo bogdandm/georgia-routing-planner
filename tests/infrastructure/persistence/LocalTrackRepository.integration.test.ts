@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalTrackStorageError } from '@/application/ports/LocalTrackRepository';
@@ -72,6 +73,62 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
+  it('migrates v3 tracks without deleting legacy metrics or geometry', async () => {
+    database.close();
+    await database.delete();
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(3).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+    });
+    const legacySummary = {
+      ...summary('local:legacy', 'Legacy'),
+      schemaVersion: 1,
+      metrics: {
+        ...summary('local:legacy', 'Legacy').metrics,
+        elevationSource: 'gpx',
+        elevationAlgorithmVersion: 1,
+      },
+    };
+    await legacy.table('localTracks').put(legacySummary);
+    await legacy.table('localTrackContents').put({
+      schemaVersion: 1,
+      trackId: 'local:legacy',
+      originalGpx: new Blob(['<gpx/>']),
+      segments: [
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
+      ],
+    });
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    await expect(database.listLocalTracks()).resolves.toMatchObject([
+      {
+        schemaVersion: 2,
+        id: 'local:legacy',
+        metrics: {
+          elevationSource: 'gpx',
+          elevationAlgorithmVersion: 1,
+        },
+      },
+    ]);
+    await expect(database.loadLocalTrackContent('local:legacy')).resolves.toEqual({
+      schemaVersion: 2,
+      trackId: 'local:legacy',
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+    });
+    const storedSummary = await database.localTracks.get('local:legacy');
+    const storedContent = await database.localTrackContents.get('local:legacy');
+    expect(storedSummary).toHaveProperty('schemaVersion', 2);
+    expect(storedContent).not.toHaveProperty('originalGpx');
+    expect(storedContent).not.toHaveProperty('segments');
+  });
 
   it('saves summary and content atomically and loads both after reopen', async () => {
     await database.saveLocalTrack(summary('local:1', 'ბილიკი'), content('local:1'));

@@ -33,27 +33,32 @@ export interface PreparedImportedTrack {
 }
 
 export type TrackElevationPreparationErrorCode =
-  | 'elevation-unavailable'
-  | 'point-limit-exceeded';
+  'elevation-unavailable' | 'point-limit-exceeded' | 'zero-length-track';
 
 export class TrackElevationPreparationError extends Error {
   public constructor(readonly code: TrackElevationPreparationErrorCode) {
-    super(
-      code === 'point-limit-exceeded'
-        ? 'This track is too long to prepare at 10 metre resolution.'
-        : 'Elevation data is unavailable for this track.',
-    );
+    const messages: Record<TrackElevationPreparationErrorCode, string> = {
+      'elevation-unavailable': 'Elevation data is unavailable for this track.',
+      'point-limit-exceeded':
+        'This track is too long to prepare at 10 metre resolution.',
+      'zero-length-track':
+        'This track is broken: all track points are in one location, so its route length is zero. Choose another file.',
+    };
+    super(messages[code]);
     this.name = 'TrackElevationPreparationError';
   }
 }
-
 
 function interpolateCoordinate(
   start: TrackCoordinate,
   end: TrackCoordinate,
   fraction: number,
 ): TrackCoordinate {
-  const toVector = ([longitude, latitude]: TrackCoordinate): readonly [number, number, number] => {
+  const toVector = ([longitude, latitude]: TrackCoordinate): readonly [
+    number,
+    number,
+    number,
+  ] => {
     const longitudeRadians = (longitude * Math.PI) / 180;
     const latitudeRadians = (latitude * Math.PI) / 180;
     return [
@@ -64,7 +69,15 @@ function interpolateCoordinate(
   };
   const startVector = toVector(start);
   const endVector = toVector(end);
-  const dot = Math.max(-1, Math.min(1, startVector[0] * endVector[0] + startVector[1] * endVector[1] + startVector[2] * endVector[2]));
+  const dot = Math.max(
+    -1,
+    Math.min(
+      1,
+      startVector[0] * endVector[0] +
+        startVector[1] * endVector[1] +
+        startVector[2] * endVector[2],
+    ),
+  );
   const angle = Math.acos(dot);
   if (angle < 1e-12) return start;
   const sine = Math.sin(angle);
@@ -75,7 +88,7 @@ function interpolateCoordinate(
   const z = startVector[2] * startWeight + endVector[2] * endWeight;
   const longitude = (Math.atan2(y, x) * 180) / Math.PI;
   return [
-    ((longitude + 180) % 360 + 360) % 360 - 180,
+    ((((longitude + 180) % 360) + 360) % 360) - 180,
     (Math.atan2(z, Math.hypot(x, y)) * 180) / Math.PI,
   ];
 }
@@ -102,7 +115,11 @@ function stationCount(segment: TrackSegment): number {
     }
   }
   const wholeStations = Math.floor(distanceMeters / sampleIntervalMeters);
-  return wholeStations + 1 + (distanceMeters - wholeStations * sampleIntervalMeters > 1e-6 ? 1 : 0);
+  return (
+    wholeStations +
+    1 +
+    (distanceMeters - wholeStations * sampleIntervalMeters > 1e-6 ? 1 : 0)
+  );
 }
 
 function resampleSegment(
@@ -139,29 +156,37 @@ function resampleSegment(
     const endDistance = distances[legIndex + 1] ?? startDistance;
     if (start === undefined || end === undefined) return;
     const legDistance = endDistance - startDistance;
-    const fraction = legDistance === 0 ? 0 : (distanceMeters - startDistance) / legDistance;
+    const fraction =
+      legDistance === 0 ? 0 : (distanceMeters - startDistance) / legDistance;
     const exactStart = fraction <= 1e-9;
     const exactEnd = fraction >= 1 - 1e-9;
     const sourcePoint = exactStart ? start : exactEnd ? end : undefined;
     const recordedAt =
-      sourcePoint?.recordedAt ?? interpolateRecordedAt(start.recordedAt, end.recordedAt, fraction);
+      sourcePoint?.recordedAt ??
+      interpolateRecordedAt(start.recordedAt, end.recordedAt, fraction);
     const sourceElevationMeters =
       sourcePoint?.elevationMeters ??
       (legDistance <= sourceInterpolationMaximumDistanceMeters &&
       start.elevationMeters !== undefined &&
       end.elevationMeters !== undefined
-        ? start.elevationMeters + (end.elevationMeters - start.elevationMeters) * fraction
+        ? start.elevationMeters +
+          (end.elevationMeters - start.elevationMeters) * fraction
         : undefined);
     const station: ResampledStation = {
       coordinate:
-        sourcePoint?.coordinate ?? interpolateCoordinate(start.coordinate, end.coordinate, fraction),
+        sourcePoint?.coordinate ??
+        interpolateCoordinate(start.coordinate, end.coordinate, fraction),
       sourceSegmentIndex,
       ...(recordedAt === undefined ? {} : { recordedAt }),
       ...(sourceElevationMeters === undefined ? {} : { sourceElevationMeters }),
     };
     stations.push(station);
   };
-  for (let distanceMeters = 0; distanceMeters <= totalDistance; distanceMeters += sampleIntervalMeters) {
+  for (
+    let distanceMeters = 0;
+    distanceMeters <= totalDistance;
+    distanceMeters += sampleIntervalMeters
+  ) {
     if (stations.length % 1_000 === 0) signal.throwIfAborted();
     appendStation(Math.min(distanceMeters, totalDistance));
   }
@@ -194,7 +219,10 @@ function availableMeters(sample: ElevationSample | undefined): number | undefine
     : undefined;
 }
 
-function fillMissingElevations(values: (number | undefined)[], distances: readonly number[]): void {
+function fillMissingElevations(
+  values: (number | undefined)[],
+  distances: readonly number[],
+): void {
   let firstKnown = values.findIndex((value) => value !== undefined);
   if (firstKnown < 0) throw new TrackElevationPreparationError('elevation-unavailable');
   const firstValue = values[firstKnown];
@@ -216,14 +244,18 @@ function fillMissingElevations(values: (number | undefined)[], distances: readon
     const next = values[nextIndex];
     if (previous === undefined) continue;
     if (next === undefined) {
-      for (let trailing = missingStart; trailing < values.length; trailing += 1) values[trailing] = previous;
+      for (let trailing = missingStart; trailing < values.length; trailing += 1)
+        values[trailing] = previous;
       break;
     }
     const startDistance = distances[previousIndex] ?? 0;
     const endDistance = distances[nextIndex] ?? startDistance;
     for (let missing = missingStart; missing < nextIndex; missing += 1) {
       const fraction =
-        endDistance === startDistance ? 0 : ((distances[missing] ?? startDistance) - startDistance) / (endDistance - startDistance);
+        endDistance === startDistance
+          ? 0
+          : ((distances[missing] ?? startDistance) - startDistance) /
+            (endDistance - startDistance);
       values[missing] = previous + (next - previous) * fraction;
     }
   }
@@ -251,39 +283,56 @@ export async function prepareImportedTrack(
 ): Promise<PreparedImportedTrack> {
   signal.throwIfAborted();
   let totalPoints = 0;
+  let hasRouteDistance = false;
   for (const segment of segments) {
-    totalPoints += stationCount(segment);
+    const segmentStationCount = stationCount(segment);
+    totalPoints += segmentStationCount;
+    if (segmentStationCount > 1) hasRouteDistance = true;
     if (totalPoints > maximumPersistedPoints) {
       throw new TrackElevationPreparationError('point-limit-exceeded');
     }
   }
+  if (!hasRouteDistance) throw new TrackElevationPreparationError('zero-length-track');
   const resampled = segments.map((segment, index) =>
     resampleSegment(segment, index, signal),
   );
   const stations = resampled.flat();
   const samples =
     elevationProvider === null
-      ? stations.map(() => ({ status: 'unavailable' } as const))
+      ? stations.map(() => ({ status: 'unavailable' }) as const)
       : await elevationProvider.sampleMany(
-          stations.map((station) => ({ longitude: station.coordinate[0], latitude: station.coordinate[1] })),
+          stations.map((station) => ({
+            longitude: station.coordinate[0],
+            latitude: station.coordinate[1],
+          })),
           signal,
         );
   signal.throwIfAborted();
   let sampleOffset = 0;
   const assembled: ElevationSampleInput[][] = [];
   for (const stationSegment of resampled) {
-    const segmentSamples = samples.slice(sampleOffset, sampleOffset + stationSegment.length);
+    const segmentSamples = samples.slice(
+      sampleOffset,
+      sampleOffset + stationSegment.length,
+    );
     sampleOffset += stationSegment.length;
     const distances = stationDistances(stationSegment);
-    const values = stationSegment.map((station, index) =>
-      station.sourceElevationMeters ?? availableMeters(segmentSamples[index]),
+    const values = stationSegment.map(
+      (station, index) =>
+        station.sourceElevationMeters ?? availableMeters(segmentSamples[index]),
     );
     for (let index = 1; index < stationSegment.length - 1; index += 1) {
       const source = stationSegment[index]?.sourceElevationMeters;
       const previous = values[index - 1];
       const next = values[index + 1];
       const dem = availableMeters(segmentSamples[index]);
-      if (source === undefined || previous === undefined || next === undefined || dem === undefined) continue;
+      if (
+        source === undefined ||
+        previous === undefined ||
+        next === undefined ||
+        dem === undefined
+      )
+        continue;
       const neighborMedian = (previous + next) / 2;
       const neighborResidual = source - neighborMedian;
       const demResidual = source - dem;
@@ -307,7 +356,8 @@ export async function prepareImportedTrack(
   }
   const filtered = medianFilterElevationSamples(assembled);
   const profile = calculateElevationProfile(filtered);
-  if (profile === null) throw new TrackElevationPreparationError('elevation-unavailable');
+  if (profile === null)
+    throw new TrackElevationPreparationError('elevation-unavailable');
   const preparedSegments = filtered.map((segment) => ({
     points: segment.map((point) => ({
       coordinate: point.coordinate,

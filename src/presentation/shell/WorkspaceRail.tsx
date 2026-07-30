@@ -1,5 +1,6 @@
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
@@ -54,6 +55,7 @@ interface WorkspaceRailProps {
   readonly activeTab: WorkspaceTab;
   readonly developerToolsOpen: boolean;
   readonly developerMode: boolean;
+  readonly onOpenAbout: () => void;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
   readonly onShare: () => void;
@@ -68,6 +70,7 @@ export function WorkspaceRail({
   developerToolsOpen,
   developerMode,
   onToggleDeveloperTools,
+  onOpenAbout,
   onOpenSettings,
   onShare,
   onSectionChange,
@@ -186,8 +189,8 @@ export function WorkspaceRail({
         }}
       >
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
-        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
         <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
+        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
         <UnavailableWorkspaceTab
           icon={<PlaceOutlinedIcon />}
           label="Markers"
@@ -244,6 +247,15 @@ export function WorkspaceRail({
             sx={{ color: 'rgba(255,255,255,0.84)' }}
           >
             <SettingsOutlinedIcon />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="About this site" placement="right">
+          <IconButton
+            aria-label="About this site"
+            onClick={onOpenAbout}
+            sx={{ color: 'rgba(255,255,255,0.84)' }}
+          >
+            <InfoOutlinedIcon />
           </IconButton>
         </Tooltip>
       </Stack>

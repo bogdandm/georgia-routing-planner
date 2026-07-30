@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
@@ -89,6 +90,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     <MapWorkspace getNavigationPadding={getNavigationPadding} />
   );
   const [shareOpen, setShareOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
     string | null
@@ -368,6 +370,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             onToggleDeveloperTools={() => {
               setDeveloperDrawerOpen(!developerDrawerOpen);
             }}
+            onOpenAbout={() => {
+              setAboutOpen(true);
+            }}
             onOpenSettings={() => {
               setSettingsOpen(true);
             }}
@@ -638,6 +643,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         ) : null}
       </Box>
 
+      <AboutDialog
+        open={aboutOpen}
+        onClose={() => {
+          setAboutOpen(false);
+        }}
+      />
       <SettingsDialog
         developerMode={developerMode}
         open={settingsOpen}

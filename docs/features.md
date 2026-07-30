@@ -12,10 +12,11 @@ presentation conventions. Repository documentation and code remain authoritative
 data, privacy, architecture, and failure contracts. Correct this document whenever it no
 longer describes the reviewed interface.
 
-- **Feature rail:** `Tracks`, `Satellite`, `Markers`, and `Layers` are the primary
+- **Feature rail:** `Satellite`, `Tracks`, `Layers`, and `Markers` are the primary
   top-level feature sections.
 - **Global rail actions:** `Diagnostics` is available when developer mode is enabled;
-  `Settings` is always a global action.
+  `Settings` is always available. The `About this site` action sits below Settings and
+  opens public author, repository, API, and data-source information.
 - **Create GPX workflow:** manual waypoint planning begins from `Create GPX` in Tracks.
   “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
   item, or independent planning destination.

@@ -214,6 +214,38 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('2D share link copied')).toBeVisible();
   });
 
+  it('opens public site information from the rail action below Settings', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const settingsButton = screen.getByRole('button', { name: 'Open settings' });
+    const aboutButton = screen.getByRole('button', { name: 'About this site' });
+    expect(
+      settingsButton.compareDocumentPosition(aboutButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(aboutButton);
+
+    const about = screen.getByRole('dialog', {
+      name: 'About Georgia Routing Planner',
+    });
+    expect(about).toBeVisible();
+    expect(within(about).getByRole('link', { name: 'bogdandm' })).toHaveAttribute(
+      'href',
+      'https://github.com/bogdandm',
+    );
+    expect(
+      within(about).getByRole('link', { name: 'GitHub repository' }),
+    ).toHaveAttribute('href', 'https://github.com/bogdandm/georgia-routing-planner');
+    expect(within(about).getByText('Nominatim')).toBeVisible();
+    expect(within(about).getByText('Copernicus Sentinel-2')).toBeVisible();
+    expect(about).not.toHaveTextContent('@');
+
+    await user.click(within(about).getByRole('button', { name: 'Done' }));
+    expect(about).not.toBeInTheDocument();
+  });
+
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
     const user = userEvent.setup();
     const selectedScene = syntheticSatelliteScene(
@@ -316,7 +348,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Layers', 'Tracks', 'Markers']);
+    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );

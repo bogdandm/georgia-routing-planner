@@ -54,7 +54,6 @@ function repairMedianInPlace(
 ): number {
   const overallMedian = medianInPlace(values, count);
   let bestStart = 0;
-  let bestEnd = 0;
   let bestCount = 1;
   let start = 0;
   let ambiguous = false;
@@ -68,10 +67,9 @@ function repairMedianInPlace(
     const clusterCount = end - start + 1;
     if (clusterCount > bestCount) {
       bestStart = start;
-      bestEnd = end;
       bestCount = clusterCount;
       ambiguous = false;
-    } else if (clusterCount === bestCount && start > bestEnd) {
+    } else if (clusterCount === bestCount && start !== bestStart) {
       ambiguous = true;
     }
   }

@@ -146,6 +146,19 @@ describe('filterTerrariumTile', () => {
     expect(result.counts.impossibleCount).toBeGreaterThan(0);
   });
 
+  it('falls back to the overall median for overlapping equal-size clusters', () => {
+    const source = tile(3, 3, -700);
+    setPixel(source, 0, 0, 0);
+    setPixel(source, 1, 0, 80);
+    setPixel(source, 2, 0, 160);
+    setPixel(source, 0, 1, 240);
+    setPixel(source, 2, 1, 320);
+
+    const result = filterTerrariumTile(grid(source), policy);
+
+    expect(elevationAt(result.tile, 1, 1)).toBe(160);
+  });
+
   it('repairs the observed shallow downward spike while preserving an equivalent rise', () => {
     const downward = tile(5, 5, 635.5);
     setPixel(downward, 2, 2, 320.25);

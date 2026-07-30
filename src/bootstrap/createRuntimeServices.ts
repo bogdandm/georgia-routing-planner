@@ -13,7 +13,10 @@ import {
   summarizeMapProviderConfiguration,
   type MapProviderConfigurationResult,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
-import { loadGeocodingProviderConfiguration } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
+import {
+  loadGeocodingProviderConfiguration,
+  type GeocodingProviderConfigurationResult,
+} from '@/bootstrap/configuration/GeocodingProviderConfiguration';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
@@ -40,6 +43,7 @@ export interface RuntimeServices {
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
+  readonly geocodingProviderConfiguration: GeocodingProviderConfigurationResult;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
@@ -214,6 +218,7 @@ export function createRuntimeServices(): RuntimeServices {
     idGenerator,
     logger,
     elevationProvider,
+    geocodingProviderConfiguration: geocodingConfiguration,
     mapCameraRepository: database,
     mapDiagnostics,
     mapViewport,

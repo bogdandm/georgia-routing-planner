@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
@@ -48,7 +49,14 @@ function ControlledFailure(): never {
 }
 
 function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
-  const { database, logger, mapLayers, storageUsage } = useRuntimeServices();
+  const {
+    database,
+    geocodingProviderConfiguration,
+    logger,
+    mapLayers,
+    mapProviderConfiguration,
+    storageUsage,
+  } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
   const developerMode = useUiStore((state) => state.developerMode);
@@ -67,6 +75,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const auxiliaryOverlayViewport = useMediaQuery(auxiliaryOverlayViewportQuery);
   const workspaceShellRef = useRef<HTMLDivElement>(null);
   const navigationRef = useRef<HTMLDivElement>(null);
+  const aboutTriggerRef = useRef<HTMLButtonElement>(null);
   const getNavigationPadding = useCallback((): MapFitPadding | undefined => {
     if (smartphoneViewport) return undefined;
     const workspaceShell = workspaceShellRef.current;
@@ -89,6 +98,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     <MapWorkspace getNavigationPadding={getNavigationPadding} />
   );
   const [shareOpen, setShareOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
     string | null
@@ -364,9 +374,13 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}
             developerMode={developerMode}
+            aboutButtonRef={aboutTriggerRef}
             onSectionChange={handleSectionChange}
             onToggleDeveloperTools={() => {
               setDeveloperDrawerOpen(!developerDrawerOpen);
+            }}
+            onOpenAbout={() => {
+              setAboutOpen(true);
             }}
             onOpenSettings={() => {
               setSettingsOpen(true);
@@ -638,6 +652,15 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         ) : null}
       </Box>
 
+      <AboutDialog
+        geocodingProviderConfiguration={geocodingProviderConfiguration}
+        mapProviderConfiguration={mapProviderConfiguration}
+        open={aboutOpen}
+        onClose={() => {
+          setAboutOpen(false);
+        }}
+        triggerRef={aboutTriggerRef}
+      />
       <SettingsDialog
         developerMode={developerMode}
         open={settingsOpen}

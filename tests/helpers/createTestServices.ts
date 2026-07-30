@@ -6,6 +6,7 @@ import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
+import { defaultGeocodingProviderConfiguration } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
@@ -147,6 +148,10 @@ export function createTestServices(
     logger,
     elevationProvider: {
       sample: () => Promise.resolve({ status: 'available' as const, meters: 1_234 }),
+    },
+    geocodingProviderConfiguration: {
+      status: 'valid',
+      value: defaultGeocodingProviderConfiguration,
     },
     mapCameraRepository: database,
     mapDiagnostics,

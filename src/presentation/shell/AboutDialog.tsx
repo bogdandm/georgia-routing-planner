@@ -1,11 +1,13 @@
 import type { GeocodingProviderConfigurationResult } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
 import type { MapProviderConfigurationResult } from '@/bootstrap/configuration/MapProviderConfiguration';
 
+import GitHubIcon from '@mui/icons-material/GitHub';
+import CloseIcon from '@mui/icons-material/Close';
 import {
-  Button,
-  DialogActions,
+  Box,
   DialogContent,
   DialogTitle,
+  IconButton,
   Link,
   Paper,
   Stack,
@@ -38,6 +40,33 @@ function originFor(endpoint: string): string {
   return new URL(endpoint).origin;
 }
 
+interface ServiceEntryProps {
+  readonly description: string;
+  readonly details?: string | undefined;
+  readonly href: string;
+  readonly title: string;
+}
+
+function ServiceEntry({ description, details, href, title }: ServiceEntryProps) {
+  return (
+    <Box>
+      <ExternalLink href={href}>{title}</ExternalLink>
+      <Typography variant="body2" color="text.secondary">
+        {description}
+      </Typography>
+      {details === undefined ? null : (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 0.5 }}
+        >
+          {details}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
 /** Public project identity and the provider configuration active in this deployment. */
 export function AboutDialog({
   geocodingProviderConfiguration,
@@ -46,10 +75,10 @@ export function AboutDialog({
   open,
   triggerRef,
 }: AboutDialogProps) {
-  const doneButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open) doneButtonRef.current?.focus();
+    if (open) closeButtonRef.current?.focus();
   }, [open]);
 
   const handleClose = () => {
@@ -75,6 +104,62 @@ export function AboutDialog({
     mapProviders === null
       ? null
       : mapProviders.terrain.attribution.replace(/<[^>]*>/gu, '');
+  const apiEntries: ServiceEntryProps[] = [];
+  if (geocoding !== null) {
+    apiEntries.push({
+      description: 'Place search',
+      href: geocoding.searchUrl,
+      title: new URL(geocoding.searchUrl).hostname,
+    });
+    if (geocoding.nearbyUrl !== undefined) {
+      apiEntries.push({
+        description: 'Nearby-feature search',
+        href: geocoding.nearbyUrl,
+        title: new URL(geocoding.nearbyUrl).hostname,
+      });
+    }
+  }
+  if (mapProviders !== null) {
+    apiEntries.push(
+      {
+        description: 'Satellite scene search',
+        href: mapProviders.satellite.searchUrl,
+        title: mapProviders.satellite.label,
+      },
+      {
+        description: 'Satellite scene rendering',
+        href: originFor(mapProviders.satellite.renderer.tileUrlTemplate),
+        title: new URL(originFor(mapProviders.satellite.renderer.tileUrlTemplate))
+          .hostname,
+      },
+    );
+  }
+
+  const dataEntries: ServiceEntryProps[] = [];
+  if (mapProviders !== null) {
+    dataEntries.push(
+      {
+        description: 'Vector map',
+        details: vectorAttribution ?? undefined,
+        href: originFor(mapProviders.vector.tileJsonUrl),
+        title: mapProviders.vector.label,
+      },
+      {
+        description: 'Elevation data',
+        details:
+          mapProviders.terrain.id === 'aws-mapzen-terrarium'
+            ? `${terrainAttribution ?? ''}. Includes Copernicus, USGS, NOAA, and regional elevation data.`
+            : (terrainAttribution ?? undefined),
+        href: originFor(mapProviders.terrain.tileUrl),
+        title: mapProviders.terrain.label,
+      },
+      {
+        description: `Satellite imagery from ${mapProviders.satellite.collections.L1C} and ${mapProviders.satellite.collections.L2A}`,
+        href: mapProviders.satellite.searchUrl,
+        title: mapProviders.satellite.attribution,
+      },
+    );
+  }
 
   return (
     <Paper
@@ -88,124 +173,93 @@ export function AboutDialog({
       sx={{
         position: 'fixed',
         zIndex: 10,
-        top: { xs: 16, sm: 24 },
-        right: { xs: 16, sm: 24 },
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
         width: { xs: 'calc(100% - 32px)', sm: 440 },
         maxHeight: 'calc(100% - 32px)',
         overflowY: 'auto',
       }}
     >
-      <DialogTitle id="about-panel-title" sx={{ px: 2, py: 1.5 }}>
+      <DialogTitle
+        id="about-panel-title"
+        sx={{ px: 2, py: 1.5, position: 'relative', pr: 6 }}
+      >
         About Georgia Routing Planner
+        <IconButton
+          aria-label="Close site information"
+          onClick={handleClose}
+          ref={closeButtonRef}
+          size="small"
+          sx={{ position: 'absolute', right: 12, top: 12 }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
       </DialogTitle>
       <DialogContent sx={{ px: 2, py: 1.5 }}>
         <Stack spacing={2}>
-          <Typography variant="body2">
-            Created by{' '}
-            <ExternalLink href="https://github.com/bogdandm">bogdandm</ExternalLink>.{' '}
-            Source code:{' '}
-            <ExternalLink href="https://github.com/bogdandm/georgia-routing-planner">
-              GitHub repository
-            </ExternalLink>
-            .
-          </Typography>
-
           <Stack spacing={0.5}>
+            <Typography variant="body2">
+              Created by <strong>Bogdan Kalashnikov</strong> (bogdandm).
+            </Typography>
+            <Link
+              href="https://github.com/bogdandm/georgia-routing-planner"
+              rel="noreferrer"
+              target="_blank"
+              sx={{
+                alignItems: 'center',
+                display: 'inline-flex',
+                gap: 0.75,
+                width: 'fit-content',
+              }}
+            >
+              <GitHubIcon fontSize="small" />
+              GitHub repository
+            </Link>
+          </Stack>
+
+          <Stack spacing={1}>
             <Typography component="h2" variant="subtitle2">
               APIs
             </Typography>
             {geocoding === null ? (
-              <Typography variant="body2">
+              <Typography variant="body2" color="text.secondary">
                 Place search is unavailable because its provider configuration is
                 invalid.
               </Typography>
-            ) : (
-              <>
-                <Typography variant="body2">
-                  <ExternalLink href={geocoding.searchUrl}>
-                    {new URL(geocoding.searchUrl).hostname}
-                  </ExternalLink>{' '}
-                  provides place search.
-                </Typography>
-                {geocoding.nearbyUrl === undefined ? null : (
-                  <Typography variant="body2">
-                    <ExternalLink href={geocoding.nearbyUrl}>
-                      {new URL(geocoding.nearbyUrl).hostname}
-                    </ExternalLink>{' '}
-                    provides nearby-feature search.
-                  </Typography>
-                )}
-              </>
-            )}
-            {mapProviders === null ? null : (
-              <>
-                <Typography variant="body2">
-                  <ExternalLink href={mapProviders.satellite.searchUrl}>
-                    {mapProviders.satellite.label}
-                  </ExternalLink>{' '}
-                  provides satellite scene search.
-                </Typography>
-                <Typography variant="body2">
-                  <ExternalLink
-                    href={originFor(mapProviders.satellite.renderer.tileUrlTemplate)}
-                  >
-                    {mapProviders.satellite.renderer.id}
-                  </ExternalLink>{' '}
-                  renders satellite scenes.
-                </Typography>
-              </>
-            )}
+            ) : null}
+            {mapProviders === null ? (
+              <Typography variant="body2" color="text.secondary">
+                Satellite search is unavailable because its provider configuration is
+                invalid.
+              </Typography>
+            ) : null}
+            <Stack spacing={1.25}>
+              {apiEntries.map((entry) => (
+                <ServiceEntry key={entry.href} {...entry} />
+              ))}
+            </Stack>
           </Stack>
 
-          <Stack spacing={0.5}>
+          <Stack spacing={1}>
             <Typography component="h2" variant="subtitle2">
               Data sources
             </Typography>
             {mapProviders === null ? (
-              <Typography variant="body2">
+              <Typography variant="body2" color="text.secondary">
                 Map, elevation, and imagery sources are unavailable because their
                 provider configuration is invalid.
               </Typography>
             ) : (
-              <>
-                <Typography variant="body2">
-                  <ExternalLink href={originFor(mapProviders.vector.tileJsonUrl)}>
-                    {mapProviders.vector.label}
-                  </ExternalLink>{' '}
-                  provides the vector map.
-                </Typography>
-                <Typography variant="body2">{vectorAttribution}</Typography>
-                <Typography variant="body2">
-                  <ExternalLink href={originFor(mapProviders.terrain.tileUrl)}>
-                    {mapProviders.terrain.label}
-                  </ExternalLink>{' '}
-                  provides elevation data.
-                </Typography>
-                <Typography variant="body2">{terrainAttribution}</Typography>
-                {mapProviders.terrain.id === 'aws-mapzen-terrarium' ? (
-                  <Typography variant="body2">
-                    This terrain source includes Copernicus, USGS, NOAA, and regional
-                    elevation data.
-                  </Typography>
-                ) : null}
-                <Typography variant="body2">
-                  <ExternalLink href={mapProviders.satellite.searchUrl}>
-                    {mapProviders.satellite.attribution}
-                  </ExternalLink>{' '}
-                  provides satellite imagery from the configured{' '}
-                  {mapProviders.satellite.collections.L1C} and{' '}
-                  {mapProviders.satellite.collections.L2A} collections.
-                </Typography>
-              </>
+              <Stack spacing={1.25}>
+                {dataEntries.map((entry) => (
+                  <ServiceEntry key={entry.href} {...entry} />
+                ))}
+              </Stack>
             )}
           </Stack>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 1.5, py: 1 }}>
-        <Button onClick={handleClose} ref={doneButtonRef}>
-          Done
-        </Button>
-      </DialogActions>
     </Paper>
   );
 }

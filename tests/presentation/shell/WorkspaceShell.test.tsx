@@ -231,10 +231,7 @@ describe('WorkspaceShell', () => {
       name: 'About Georgia Routing Planner',
     });
     expect(about).toBeVisible();
-    expect(within(about).getByRole('link', { name: 'bogdandm' })).toHaveAttribute(
-      'href',
-      'https://github.com/bogdandm',
-    );
+    expect(within(about).getByText('Bogdan Kalashnikov')).toBeVisible();
     expect(
       within(about).getByRole('link', { name: 'GitHub repository' }),
     ).toHaveAttribute('href', 'https://github.com/bogdandm/georgia-routing-planner');
@@ -248,8 +245,15 @@ describe('WorkspaceShell', () => {
       within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
     ).toBeVisible();
     expect(about).not.toHaveTextContent('@');
+    expect(about).toHaveStyle({
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    });
 
-    expect(within(about).getByRole('button', { name: 'Done' })).toHaveFocus();
+    expect(
+      within(about).getByRole('button', { name: 'Close site information' }),
+    ).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(about).not.toBeInTheDocument();
     await waitFor(() => {

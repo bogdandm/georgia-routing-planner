@@ -489,11 +489,9 @@ describe('WorkspaceShell', () => {
     await user.click(collapse);
 
     expect(confirm).not.toHaveBeenCalled();
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('complementary', { name: 'Track details' }),
-      ).not.toBeInTheDocument();
-    });
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Expand track details' })).toBeVisible();
     expect(screen.getByLabelText('Fake map')).toBe(map);
 

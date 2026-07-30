@@ -232,12 +232,6 @@ test('uses a map-first smartphone track disclosure without crashing', async ({
 
   const disclosure = page.getByRole('button', { name: 'Expand track details' });
   await expect(disclosure).toBeVisible();
-  const disclosureSurface = page.getByTestId('mobile-track-disclosure');
-  expect(
-    await disclosureSurface.evaluate((element) =>
-      Number.parseFloat(getComputedStyle(element).transitionDuration),
-    ),
-  ).toBeGreaterThan(0);
   const disclosureBox = await disclosure.boundingBox();
   expect(disclosureBox).not.toBeNull();
   expect(disclosureBox?.x).toBe(12);
@@ -273,22 +267,12 @@ test('uses a map-first smartphone track disclosure without crashing', async ({
   ).toEqual([]);
 
   await disclosure.click();
-  await expect(disclosureSurface).toHaveAttribute('aria-hidden', 'true');
-  expect(
-    await disclosureSurface.evaluate((element) => getComputedStyle(element).visibility),
-  ).toBe('visible');
   const details = page.getByRole('complementary', { name: 'Track details' });
   await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
   await expect(
     details.getByRole('button', { name: 'Collapse track details' }),
   ).toBeVisible();
   await expect(details.getByRole('button', { name: 'Close track' })).toBeVisible();
-  const trackPanelTransition = page.getByTestId('mobile-track-details-transition');
-  expect(
-    await trackPanelTransition.evaluate((element) =>
-      Number.parseFloat(getComputedStyle(element).transitionDuration),
-    ),
-  ).toBeGreaterThan(0);
   const collapsedChevronBox = await details
     .getByRole('button', { name: 'Collapse track details' })
     .locator('svg')

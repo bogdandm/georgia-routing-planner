@@ -66,6 +66,77 @@ describe('prepareImportedTrack', () => {
     expect(prepared.metrics.elevationSource).toBe('dem-assisted');
   });
 
+  it('interpolates short source legs and valid timestamps', async () => {
+    const prepared = await prepareImportedTrack(
+      [
+        {
+          points: [
+            {
+              coordinate: equatorCoordinate(0),
+              elevationMeters: 100,
+              recordedAt: '2026-07-30T10:00:00.000Z',
+            },
+            {
+              coordinate: equatorCoordinate(20),
+              elevationMeters: 120,
+              recordedAt: '2026-07-30T10:01:00.000Z',
+            },
+          ],
+        },
+      ],
+      null,
+      signal,
+    );
+
+    expect(prepared.segments[0]?.points[1]).toMatchObject({
+      elevationMeters: 110,
+      recordedAt: '2026-07-30T10:00:30.000Z',
+    });
+  });
+
+  it('omits interpolated timestamps when either source timestamp is invalid', async () => {
+    const prepared = await prepareImportedTrack(
+      [
+        {
+          points: [
+            {
+              coordinate: equatorCoordinate(0),
+              elevationMeters: 100,
+              recordedAt: 'not-a-date',
+            },
+            {
+              coordinate: equatorCoordinate(20),
+              elevationMeters: 120,
+              recordedAt: '2026-07-30T10:01:00.000Z',
+            },
+          ],
+        },
+      ],
+      null,
+      signal,
+    );
+
+    expect(prepared.segments[0]?.points[1]).not.toHaveProperty('recordedAt');
+  });
+
+  it('falls back to the neighboring trend when source and DEM spikes disagree', async () => {
+    const prepared = await prepareImportedTrack(
+      [
+        {
+          points: [
+            { coordinate: equatorCoordinate(0), elevationMeters: 100 },
+            { coordinate: equatorCoordinate(10), elevationMeters: 200 },
+            { coordinate: equatorCoordinate(20), elevationMeters: 100 },
+          ],
+        },
+      ],
+      flatDem(160),
+      signal,
+    );
+
+    expect(prepared.profile.points[1]?.rawElevationMeters).toBe(100);
+  });
+
   it('explains a repeated-coordinate track as broken geometry', async () => {
     const repeatedCoordinateSegment: TrackSegment = {
       points: [

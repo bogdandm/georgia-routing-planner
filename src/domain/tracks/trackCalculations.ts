@@ -1,11 +1,13 @@
 import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 
 export const DISTANCE_ALGORITHM_VERSION = 1;
-export const ELEVATION_ALGORITHM_VERSION = 2;
+export const ELEVATION_ALGORITHM_VERSION = 3;
 export const ROUTE_SHAPE_ALGORITHM_VERSION = 1;
 export const DOMINANT_SUMMIT_ALGORITHM_VERSION = 1;
 
 const earthRadiusMeters = 6_371_008.8;
+const elevationSampleIntervalMeters = 10;
+const stationDistanceEpsilonMeters = 1e-6;
 
 export interface TrackBounds {
   readonly west: number;
@@ -30,7 +32,7 @@ export interface TrackMetrics {
   readonly minimumElevationMeters?: number;
   readonly maximumElevationMeters?: number;
   readonly elevationSource?: 'gpx' | 'dem-assisted';
-  readonly elevationAlgorithmVersion?: 1 | typeof ELEVATION_ALGORITHM_VERSION;
+  readonly elevationAlgorithmVersion?: 1 | 2 | typeof ELEVATION_ALGORITHM_VERSION;
 }
 
 type ElevationSource = NonNullable<TrackMetrics['elevationSource']>;
@@ -69,6 +71,134 @@ export function formatGeneratedPoiLabel(label: string, category: string): string
 
 function radians(value: number): number {
   return (value * Math.PI) / 180;
+}
+
+interface SegmentChanges {
+  readonly distanceMeters: number;
+  readonly ascentMeters: number;
+  readonly descentMeters: number;
+  readonly hasElevationPairs: boolean;
+}
+
+/**
+ * Aggregates elevation on fixed 10 m stations so source point density cannot amplify
+ * sub-station GPS noise. Runs and GPX segments stay independent; missing elevations
+ * are never bridged.
+ */
+function calculateSegmentChanges(segment: TrackSegment): SegmentChanges {
+  let distanceMeters = 0;
+  let ascentMeters = 0;
+  let descentMeters = 0;
+  let hasElevationPairs = false;
+  let sampleCount = 0;
+  let olderSample = 0;
+  let previousSample = 0;
+  let previousFilteredSample = 0;
+  let runDistanceMeters = 0;
+  let nextStationMeters = elevationSampleIntervalMeters;
+  let runHasElevationPair = false;
+
+  const appendChange = (change: number): void => {
+    if (change > 0) ascentMeters += change;
+    if (change < 0) descentMeters -= change;
+  };
+  const appendSample = (elevationMeters: number): void => {
+    if (sampleCount === 0) {
+      olderSample = elevationMeters;
+      sampleCount = 1;
+      return;
+    }
+    if (sampleCount === 1) {
+      previousSample = elevationMeters;
+      sampleCount = 2;
+      return;
+    }
+    const filteredSample =
+      olderSample +
+      previousSample +
+      elevationMeters -
+      Math.min(olderSample, previousSample, elevationMeters) -
+      Math.max(olderSample, previousSample, elevationMeters);
+    appendChange(
+      filteredSample - (sampleCount === 2 ? olderSample : previousFilteredSample),
+    );
+    previousFilteredSample = filteredSample;
+    olderSample = previousSample;
+    previousSample = elevationMeters;
+    sampleCount += 1;
+  };
+  const finishRun = (endpointElevationMeters: number): void => {
+    if (runHasElevationPair) {
+      appendSample(endpointElevationMeters);
+      if (sampleCount === 2) {
+        appendChange(previousSample - olderSample);
+      } else {
+        appendChange(previousSample - previousFilteredSample);
+      }
+      hasElevationPairs = true;
+    }
+    sampleCount = 0;
+    runDistanceMeters = 0;
+    nextStationMeters = elevationSampleIntervalMeters;
+    runHasElevationPair = false;
+  };
+
+  let previousDistinctElevationMeters = segment.points[0]?.elevationMeters;
+  if (previousDistinctElevationMeters !== undefined) {
+    appendSample(previousDistinctElevationMeters);
+  }
+  for (let index = 1; index < segment.points.length; index += 1) {
+    const previous = segment.points[index - 1];
+    const current = segment.points[index];
+    if (previous === undefined || current === undefined) continue;
+    const legDistanceMeters = geodesicDistanceMeters(
+      previous.coordinate,
+      current.coordinate,
+    );
+    distanceMeters += legDistanceMeters;
+    const currentElevationMeters = current.elevationMeters;
+    if (legDistanceMeters <= stationDistanceEpsilonMeters) {
+      if (currentElevationMeters === undefined) {
+        if (previousDistinctElevationMeters !== undefined) {
+          finishRun(previousDistinctElevationMeters);
+          previousDistinctElevationMeters = undefined;
+        }
+      } else if (previousDistinctElevationMeters === undefined) {
+        previousDistinctElevationMeters = currentElevationMeters;
+        appendSample(currentElevationMeters);
+      }
+      continue;
+    }
+    if (
+      previousDistinctElevationMeters !== undefined &&
+      currentElevationMeters !== undefined
+    ) {
+      const legEndMeters = runDistanceMeters + legDistanceMeters;
+      while (nextStationMeters < legEndMeters - stationDistanceEpsilonMeters) {
+        const fraction = Math.max(
+          0,
+          (nextStationMeters - runDistanceMeters) / legDistanceMeters,
+        );
+        appendSample(
+          previousDistinctElevationMeters +
+            (currentElevationMeters - previousDistinctElevationMeters) * fraction,
+        );
+        nextStationMeters += elevationSampleIntervalMeters;
+      }
+      runDistanceMeters = legEndMeters;
+      runHasElevationPair = true;
+    } else {
+      if (previousDistinctElevationMeters !== undefined) {
+        finishRun(previousDistinctElevationMeters);
+      }
+      if (currentElevationMeters !== undefined) appendSample(currentElevationMeters);
+    }
+    previousDistinctElevationMeters = currentElevationMeters;
+  }
+  if (previousDistinctElevationMeters !== undefined) {
+    finishRun(previousDistinctElevationMeters);
+  }
+  return { distanceMeters, ascentMeters, descentMeters, hasElevationPairs };
 }
 
 export function geodesicDistanceMeters(
@@ -161,21 +291,11 @@ export function calculateTrackMetrics(
         previousTimestamp = timestamp;
       }
     }
-    for (let index = 1; index < segment.points.length; index += 1) {
-      const previous = segment.points[index - 1];
-      const current = segment.points[index];
-      if (previous === undefined || current === undefined) continue;
-      distanceMeters += geodesicDistanceMeters(previous.coordinate, current.coordinate);
-      if (
-        previous.elevationMeters !== undefined &&
-        current.elevationMeters !== undefined
-      ) {
-        elevationPairCount += 1;
-        const delta = current.elevationMeters - previous.elevationMeters;
-        if (delta > 0) ascentMeters += delta;
-        if (delta < 0) descentMeters += Math.abs(delta);
-      }
-    }
+    const changes = calculateSegmentChanges(segment);
+    distanceMeters += changes.distanceMeters;
+    ascentMeters += changes.ascentMeters;
+    descentMeters += changes.descentMeters;
+    if (changes.hasElevationPairs) elevationPairCount += 1;
   }
 
   const { bounds, center } = calculateBounds(allPoints);
@@ -204,8 +324,7 @@ export function calculateTrackMetrics(
     result.minimumElevationMeters = Math.min(...elevationValues);
     result.maximumElevationMeters = Math.max(...elevationValues);
     result.elevationSource = elevationSource;
-    result.elevationAlgorithmVersion =
-      elevationSource === 'dem-assisted' ? ELEVATION_ALGORITHM_VERSION : 1;
+    result.elevationAlgorithmVersion = ELEVATION_ALGORITHM_VERSION;
   }
   if (elevationPairCount > 0) {
     result.ascentMeters = ascentMeters;

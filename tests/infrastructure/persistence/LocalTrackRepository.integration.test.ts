@@ -40,7 +40,7 @@ function summary(id: string, name: string): LocalTrackSummary {
       },
       center: [44.005, 42.005],
       elevationSource: 'dem-assisted',
-      elevationAlgorithmVersion: 2,
+      elevationAlgorithmVersion: 3,
     },
     metadata: { version: '1.1', links: [] },
     warnings: [],

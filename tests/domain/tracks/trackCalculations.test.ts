@@ -29,6 +29,8 @@ function point(
   return result;
 }
 
+const equatorialLongitudePerMeter = 180 / Math.PI / 6_371_008.8;
+
 describe('track calculations', () => {
   it('qualifies pass and mountain names without duplicating existing wording', () => {
     expect(formatGeneratedPoiLabel('Kelida', 'mountain_pass:yes')).toBe('Kelida Pass');
@@ -76,7 +78,87 @@ describe('track calculations', () => {
     expect(result.minimumElevationMeters).toBe(10);
     expect(result.maximumElevationMeters).toBe(100);
     expect(result.elevationSource).toBe('gpx');
-    expect(result.elevationAlgorithmVersion).toBe(1);
+    expect(result.elevationAlgorithmVersion).toBe(3);
+  });
+
+  it('aggregates elevation at fixed stations regardless of source point density', () => {
+    const elevationAt = (distanceMeters: number): number => {
+      if (distanceMeters <= 100) return 1_000 + distanceMeters;
+      if (distanceMeters <= 200) return 1_100;
+      if (distanceMeters <= 300) return 1_300 - distanceMeters;
+      if (distanceMeters <= 400) return 1_000;
+      if (distanceMeters <= 500) return 200 + 2 * distanceMeters;
+      if (distanceMeters <= 600) return 1_200;
+      return 2_400 - 2 * distanceMeters;
+    };
+    const sparse: TrackSegment = {
+      points: [0, 100, 200, 300, 400, 500, 600, 700].map((distanceMeters) =>
+        point(
+          equatorialLongitudePerMeter * distanceMeters,
+          0,
+          elevationAt(distanceMeters),
+        ),
+      ),
+    };
+    const densePoints: TrackPoint[] = [];
+    for (let distanceMeters = 0; distanceMeters <= 700; distanceMeters += 10) {
+      densePoints.push(
+        point(
+          equatorialLongitudePerMeter * distanceMeters,
+          0,
+          elevationAt(distanceMeters),
+        ),
+      );
+      if (distanceMeters < 700) {
+        densePoints.push(
+          point(
+            equatorialLongitudePerMeter * (distanceMeters + 0.1),
+            0,
+            elevationAt(distanceMeters) + (distanceMeters % 20 === 0 ? 20 : -20),
+          ),
+        );
+      }
+    }
+
+    const sparseMetrics = calculateTrackMetrics([sparse]);
+    const denseMetrics = calculateTrackMetrics([{ points: densePoints }]);
+
+    expect(sparseMetrics.ascentMeters).toBeCloseTo(300, 6);
+    expect(sparseMetrics.descentMeters).toBeCloseTo(300, 6);
+    expect(denseMetrics.ascentMeters).toBeCloseTo(sparseMetrics.ascentMeters ?? 0, 6);
+    expect(denseMetrics.descentMeters).toBeCloseTo(sparseMetrics.descentMeters ?? 0, 6);
+  });
+
+  it('ignores elevation jitter at duplicate coordinates', () => {
+    const endpointLongitude = equatorialLongitudePerMeter * 100;
+    const metrics = calculateTrackMetrics([
+      {
+        points: [
+          point(0, 0, 1_000),
+          point(0, 0, 2_000),
+          point(endpointLongitude, 0, 1_100),
+          point(endpointLongitude, 0, 500),
+        ],
+      },
+    ]);
+
+    expect(metrics.ascentMeters).toBeCloseTo(100, 6);
+    expect(metrics.descentMeters).toBe(0);
+  });
+
+  it('does not bridge a missing elevation at a duplicate coordinate', () => {
+    const metrics = calculateTrackMetrics([
+      {
+        points: [
+          point(0, 0, 1_000),
+          point(0, 0),
+          point(equatorialLongitudePerMeter * 100, 0, 1_100),
+        ],
+      },
+    ]);
+
+    expect(metrics.ascentMeters).toBeUndefined();
+    expect(metrics.descentMeters).toBeUndefined();
   });
 
   it('retains recorded duration only for complete, ordered, progressing timestamps', () => {

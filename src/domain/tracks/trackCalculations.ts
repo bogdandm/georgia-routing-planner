@@ -1,7 +1,7 @@
 import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 
 export const DISTANCE_ALGORITHM_VERSION = 1;
-export const ELEVATION_ALGORITHM_VERSION = 1;
+export const ELEVATION_ALGORITHM_VERSION = 2;
 export const ROUTE_SHAPE_ALGORITHM_VERSION = 1;
 export const DOMINANT_SUMMIT_ALGORITHM_VERSION = 1;
 
@@ -29,9 +29,11 @@ export interface TrackMetrics {
   readonly descentMeters?: number;
   readonly minimumElevationMeters?: number;
   readonly maximumElevationMeters?: number;
-  readonly elevationSource?: 'gpx';
-  readonly elevationAlgorithmVersion?: typeof ELEVATION_ALGORITHM_VERSION;
+  readonly elevationSource?: 'gpx' | 'dem-assisted';
+  readonly elevationAlgorithmVersion?: 1 | typeof ELEVATION_ALGORITHM_VERSION;
 }
+
+type ElevationSource = NonNullable<TrackMetrics['elevationSource']>;
 
 type TrackMetricsBuilder = {
   -readonly [Key in keyof TrackMetrics]: TrackMetrics[Key];
@@ -120,7 +122,10 @@ function calculateBounds(points: readonly TrackPoint[]): {
   };
 }
 
-export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackMetrics {
+export function calculateTrackMetrics(
+  segments: readonly TrackSegment[],
+  elevationSource: ElevationSource = 'gpx',
+): TrackMetrics {
   const firstSegment = segments[0];
   const lastSegment = segments[segments.length - 1];
   const startPoint = firstSegment?.points[0];
@@ -198,8 +203,9 @@ export function calculateTrackMetrics(segments: readonly TrackSegment[]): TrackM
   if (elevationValues.length > 0) {
     result.minimumElevationMeters = Math.min(...elevationValues);
     result.maximumElevationMeters = Math.max(...elevationValues);
-    result.elevationSource = 'gpx';
-    result.elevationAlgorithmVersion = ELEVATION_ALGORITHM_VERSION;
+    result.elevationSource = elevationSource;
+    result.elevationAlgorithmVersion =
+      elevationSource === 'dem-assisted' ? ELEVATION_ALGORITHM_VERSION : 1;
   }
   if (elevationPairCount > 0) {
     result.ascentMeters = ascentMeters;

@@ -45,7 +45,7 @@ interface DemDiagnosticAggregate {
   status: DemProcessingStatus;
 }
 
-interface FilteredTerrariumResponse {
+export interface FilteredTerrariumResponse {
   readonly data: Blob;
   readonly cacheControl?: string;
   readonly expires?: string;
@@ -136,7 +136,7 @@ export class FilteredTerrariumTileProvider {
     zoom: number,
     x: number,
     y: number,
-    parentAbortController: AbortController,
+    signal: AbortSignal,
   ): Promise<FilteredTerrariumResponse> {
     this.assertActive();
     const revision = this.#revision;
@@ -173,12 +173,7 @@ export class FilteredTerrariumTileProvider {
         .catch(() => undefined);
     }
 
-    return this.waitForSharedRequest(
-      key,
-      request,
-      this.#processedTileRequests,
-      parentAbortController.signal,
-    );
+    return this.waitForSharedRequest(key, request, this.#processedTileRequests, signal);
   }
 
   private async processTile(

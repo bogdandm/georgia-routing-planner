@@ -75,6 +75,8 @@ describe('track calculations', () => {
     expect(result.descentMeters).toBe(20);
     expect(result.minimumElevationMeters).toBe(10);
     expect(result.maximumElevationMeters).toBe(100);
+    expect(result.elevationSource).toBe('gpx');
+    expect(result.elevationAlgorithmVersion).toBe(1);
   });
 
   it('retains recorded duration only for complete, ordered, progressing timestamps', () => {

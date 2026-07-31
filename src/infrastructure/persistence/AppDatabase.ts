@@ -225,10 +225,24 @@ const trackMetricsSchema = z
     descentMeters: z.number().nonnegative().optional(),
     minimumElevationMeters: z.number().optional(),
     maximumElevationMeters: z.number().optional(),
-    elevationSource: z.literal('gpx').optional(),
-    elevationAlgorithmVersion: z.literal(1).optional(),
+    elevationSource: z.enum(['gpx', 'dem-assisted']).optional(),
+    elevationAlgorithmVersion: z.union([z.literal(1), z.literal(2)]).optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    const provenanceIsValid =
+      (value.elevationSource === undefined &&
+        value.elevationAlgorithmVersion === undefined) ||
+      (value.elevationSource === 'gpx' && value.elevationAlgorithmVersion === 1) ||
+      (value.elevationSource === 'dem-assisted' &&
+        value.elevationAlgorithmVersion === 2);
+    if (!provenanceIsValid) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Elevation source and algorithm version do not match.',
+      });
+    }
+  })
   .transform((value): TrackMetrics => {
     const result: PersistedTrackMetricsBuilder = {
       distanceMeters: value.distanceMeters,
@@ -356,7 +370,22 @@ type LocalTrackSummaryBuilder = {
   -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
 };
 
-const localTrackSummarySchema = z
+function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('schemaVersion' in value) ||
+    value.schemaVersion !== 1
+  ) {
+    return value;
+  }
+  return {
+    ...value,
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+  };
+}
+
+const currentLocalTrackSummarySchema = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     id: z.string().min(1).max(200),
@@ -408,6 +437,11 @@ const localTrackSummarySchema = z
     return result;
   });
 
+const localTrackSummarySchema = z.preprocess(
+  withCurrentLocalTrackSchemaVersion,
+  currentLocalTrackSummarySchema,
+);
+
 const storedTrackPointSchema: z.ZodType<TrackPoint> = z
   .object({
     coordinate: coordinateSchema,
@@ -450,17 +484,17 @@ const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   })
   .loose()
   .transform((value): LocalTrackContent => ({
-    schemaVersion: value.schemaVersion,
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId: value.trackId,
     trackPoints:
       value.trackPoints ??
       value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
   }));
 
-const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.union([
-  currentLocalTrackContentSchema,
-  legacyLocalTrackContentSchema,
-]);
+const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.preprocess(
+  withCurrentLocalTrackSchemaVersion,
+  z.union([currentLocalTrackContentSchema, legacyLocalTrackContentSchema]),
+);
 
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
@@ -494,7 +528,13 @@ export class AppDatabase
       localTracks: 'id,normalizedName,savedAt',
       localTrackContents: 'trackId',
     });
-    this.version(3)
+    this.version(3).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+    });
+    this.version(4)
       .stores({
         settings: 'key,updatedAt',
         diagnostics: '++id,timestamp,name,level',
@@ -502,11 +542,17 @@ export class AppDatabase
         localTrackContents: 'trackId',
       })
       .upgrade(async (transaction) => {
-        const table = transaction.table('localTrackContents');
-        const records: unknown[] = await table.toArray();
-        for (const record of records) {
-          const parsed = parseLocalTrackContent(record);
-          if (parsed !== null) await table.put(parsed);
+        const summaryTable = transaction.table('localTracks');
+        const summaries: unknown[] = await summaryTable.toArray();
+        for (const summary of summaries) {
+          const parsed = parseLocalTrackSummary(summary);
+          if (parsed !== null) await summaryTable.put(parsed);
+        }
+        const contentTable = transaction.table('localTrackContents');
+        const contents: unknown[] = await contentTable.toArray();
+        for (const content of contents) {
+          const parsed = parseLocalTrackContent(content);
+          if (parsed !== null) await contentTable.put(parsed);
         }
       });
   }
@@ -531,6 +577,54 @@ export class AppDatabase
       async () => {
         await this.localTracks.put(validSummary);
         await this.localTrackContents.put(validContent);
+      },
+    );
+  }
+
+  public async replaceLocalTrackElevation(
+    trackId: string,
+    metrics: TrackMetrics,
+    content: LocalTrackContent,
+  ): Promise<LocalTrackSummary> {
+    const validContent = parseLocalTrackContent(content);
+    if (validContent?.trackId !== trackId) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The local track content is invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      async () => {
+        const existing = await this.localTracks.get(trackId);
+        const summary = parseLocalTrackSummary(existing);
+        if (summary === null) {
+          throw new LocalTrackStorageError(
+            'not-found',
+            'The saved track was not found.',
+          );
+        }
+        const updated = {
+          ...summary,
+          pointCount: validContent.trackPoints.reduce(
+            (count, segment) => count + segment.length,
+            0,
+          ),
+          segmentCount: validContent.trackPoints.length,
+          metrics,
+        };
+        const validSummary = parseLocalTrackSummary(updated);
+        if (validSummary === null) {
+          throw new LocalTrackStorageError(
+            'record-invalid',
+            'The local track summary is invalid.',
+          );
+        }
+        await this.localTracks.put(validSummary);
+        await this.localTrackContents.put(validContent);
+        return validSummary;
       },
     );
   }

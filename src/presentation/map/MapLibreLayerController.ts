@@ -5,7 +5,13 @@ import type {
   MapSourceDataEvent,
   Source,
 } from 'maplibre-gl';
-import type { Feature, FeatureCollection, MultiLineString, Point } from 'geojson';
+import type {
+  Feature,
+  FeatureCollection,
+  LineString,
+  MultiLineString,
+  Point,
+} from 'geojson';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
@@ -96,6 +102,11 @@ type SatelliteImageryCommandResult =
 
 type TerrainOverlayCommandResult = MapLayerVisibilityResult;
 
+export interface ImportedTrackHighlightSegment {
+  readonly coordinates: readonly (readonly [number, number])[];
+  readonly color: string;
+}
+
 const logicalNativeLayerGroups: Readonly<
   Record<
     Exclude<LogicalMapLayerId, 'satellite-imagery' | 'scene-footprint'>,
@@ -128,9 +139,13 @@ const logicalNativeLayerGroups: Readonly<
   'imported-tracks': [
     importedTrackLayerIds.casing,
     importedTrackLayerIds.line,
+    importedTrackLayerIds.highlight,
     importedTrackLayerIds.trace,
   ],
 };
+
+const importedTrackCasingWidth = 7;
+const importedTrackLineWidth = 4;
 
 type RasterSlot = (typeof rasterSlots)[number];
 interface RasterTileCoordinate {
@@ -311,6 +326,7 @@ export class MapLibreLayerController {
     type: 'MultiLineString',
     coordinates: [],
   };
+  #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
@@ -355,6 +371,7 @@ export class MapLibreLayerController {
       this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
       this.reconcileImportedTrack();
+      this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
       return;
     }
@@ -366,6 +383,7 @@ export class MapLibreLayerController {
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
     this.reconcileImportedTrack();
+    this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
   }
 
@@ -513,9 +531,31 @@ export class MapLibreLayerController {
 
   public clearImportedTrackGeometry(): void {
     this.#importedTrackGeometry = { type: 'MultiLineString', coordinates: [] };
+    this.#importedTrackHighlightSegments = [];
     this.#importedTrackTraceCoordinate = null;
     this.reconcileImportedTrack();
+    this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+  }
+
+  public setImportedTrackHighlight(
+    segments: readonly ImportedTrackHighlightSegment[] | null,
+  ): void {
+    this.#importedTrackHighlightSegments =
+      segments?.flatMap((segment) =>
+        segment.coordinates.length < 2
+          ? []
+          : [
+              {
+                color: segment.color,
+                coordinates: segment.coordinates.map(([longitude, latitude]) => [
+                  longitude,
+                  latitude,
+                ]),
+              },
+            ],
+      ) ?? [];
+    this.reconcileImportedTrackHighlight();
   }
 
   public setImportedTrackTracePoint(
@@ -743,6 +783,7 @@ export class MapLibreLayerController {
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
       this.reconcileImportedTrack();
+      this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
     } catch {
       this.logger.log({
@@ -1179,6 +1220,7 @@ export class MapLibreLayerController {
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
     this.reconcileImportedTrack();
+    this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
   };
 
@@ -1530,7 +1572,7 @@ export class MapLibreLayerController {
           layout: { ...layout, 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
-            'line-width': 7,
+            'line-width': importedTrackCasingWidth,
             'line-opacity': importedTrackOpacity,
           },
         });
@@ -1543,16 +1585,65 @@ export class MapLibreLayerController {
           layout: { ...layout, 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': mapVisualPalette.userGeometry.gpxTrack,
-            'line-width': 4,
+            'line-width': importedTrackLineWidth,
             'line-opacity': importedTrackOpacity,
           },
         });
       }
       this.applyImportedTrackPaint();
+      this.ensureImportedTrackLayerOrder(map);
       return { status: 'success' };
     } catch {
       return this.visibilityFailure('The imported track could not be rendered.');
     }
+  }
+
+  private reconcileImportedTrackHighlight(): void {
+    const map = this.#map;
+    if (map?.getLayer(mapLayerIds.background) === undefined) return;
+    const features: Feature<LineString, { readonly color: string }>[] =
+      this.#importedTrackHighlightSegments.map((segment) => ({
+        type: 'Feature',
+        properties: { color: segment.color },
+        geometry: {
+          type: 'LineString',
+          coordinates: segment.coordinates.map(([longitude, latitude]) => [
+            longitude,
+            latitude,
+          ]),
+        },
+      }));
+    const data: FeatureCollection<LineString, { readonly color: string }> = {
+      type: 'FeatureCollection',
+      features,
+    };
+    const source = map.getSource(mapSourceIds.importedTrackHighlight);
+    if (source === undefined) {
+      map.addSource(mapSourceIds.importedTrackHighlight, { type: 'geojson', data });
+    } else if (isGeoJsonSource(source)) {
+      source.setData(data);
+    }
+    if (map.getLayer(importedTrackLayerIds.highlight) === undefined) {
+      map.addLayer({
+        id: importedTrackLayerIds.highlight,
+        type: 'line',
+        source: mapSourceIds.importedTrackHighlight,
+        layout: {
+          visibility: mapLayerStore.getState().visibility['imported-tracks']
+            ? 'visible'
+            : 'none',
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': importedTrackLineWidth,
+          'line-opacity': mapLayerStore.getState().importedTrackOpacity,
+        },
+      });
+    }
+    this.ensureImportedTrackLayerOrder(map);
+    this.applyImportedTrackPaint();
   }
 
   private reconcileImportedTrackTrace(): void {
@@ -1599,13 +1690,36 @@ export class MapLibreLayerController {
         },
       });
     }
+    this.ensureImportedTrackLayerOrder(map);
+  }
+
+  private ensureImportedTrackLayerOrder(map: MapLibreMap): void {
+    const orderedLayerIds = [
+      importedTrackLayerIds.casing,
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.highlight,
+      importedTrackLayerIds.trace,
+    ].filter((layerId) => map.getLayer(layerId) !== undefined);
+    for (let index = orderedLayerIds.length - 2; index >= 0; index -= 1) {
+      const layerId = orderedLayerIds[index];
+      const aboveLayerId = orderedLayerIds[index + 1];
+      if (layerId === undefined || aboveLayerId === undefined) continue;
+      const layerIds = map.getStyle().layers.map((layer) => layer.id);
+      if (layerIds.indexOf(layerId) > layerIds.indexOf(aboveLayerId)) {
+        map.moveLayer(layerId, aboveLayerId);
+      }
+    }
   }
 
   private applyImportedTrackPaint(): void {
     const map = this.#map;
     if (map === null) return;
     const opacity = mapLayerStore.getState().importedTrackOpacity;
-    const layerIds = [importedTrackLayerIds.casing, importedTrackLayerIds.line];
+    const layerIds = [
+      importedTrackLayerIds.casing,
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.highlight,
+    ];
     const layerChanged = layerIds.some(
       (layerId) =>
         map.getLayer(layerId) !== this.#importedTrackLayerAnchors.get(layerId),

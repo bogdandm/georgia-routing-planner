@@ -2,6 +2,11 @@ import type { LocalTrackContent, LocalTrackSummary } from '@/domain/tracks/local
 
 export interface LocalTrackRepository {
   saveLocalTrack(summary: LocalTrackSummary, content: LocalTrackContent): Promise<void>;
+  replaceLocalTrackElevation(
+    trackId: string,
+    metrics: LocalTrackSummary['metrics'],
+    content: LocalTrackContent,
+  ): Promise<LocalTrackSummary>;
   listLocalTracks(): Promise<readonly LocalTrackSummary[]>;
   loadLocalTrackContent(trackId: string): Promise<LocalTrackContent>;
   renameLocalTrack(trackId: string, name: string): Promise<LocalTrackSummary>;

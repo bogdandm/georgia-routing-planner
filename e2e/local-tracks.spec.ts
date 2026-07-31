@@ -55,6 +55,7 @@ const realWorldTrackFixtures = [
     ),
     pointCount: 18_078,
     byteSize: 1_048_617,
+    zeroLength: true,
   },
   {
     path: fileURLToPath(
@@ -203,6 +204,49 @@ async function readStoredTrackState(page: Page): Promise<StoredTrackState> {
           };
         };
       }),
+  );
+}
+async function readStoredTrackSummary(
+  page: Page,
+  sourceFilename: string,
+): Promise<{ readonly name: string; readonly pointCount: number }> {
+  return page.evaluate(
+    (filename) =>
+      new Promise<{ readonly name: string; readonly pointCount: number }>(
+        (resolve, reject) => {
+          const openRequest = indexedDB.open('GeorgiaRoutingPlanner');
+          openRequest.onerror = () => {
+            reject(openRequest.error ?? new Error('Could not open fixture database.'));
+          };
+          openRequest.onsuccess = () => {
+            const database = openRequest.result;
+            const transaction = database.transaction('localTracks', 'readonly');
+            const request = transaction.objectStore('localTracks').getAll();
+            request.onerror = () => {
+              database.close();
+              reject(
+                request.error ?? new Error('Could not read saved track summaries.'),
+              );
+            };
+            request.onsuccess = () => {
+              database.close();
+              const summary = (
+                request.result as {
+                  sourceFilename?: string;
+                  name?: string;
+                  pointCount?: number;
+                }[]
+              ).find((candidate) => candidate.sourceFilename === filename);
+              if (summary?.name === undefined || summary.pointCount === undefined) {
+                reject(new Error(`Saved summary is unavailable for ${filename}.`));
+                return;
+              }
+              resolve({ name: summary.name, pointCount: summary.pointCount });
+            };
+          };
+        },
+      ),
+    sourceFilename,
   );
 }
 
@@ -409,7 +453,7 @@ test('clears saved-track hovers after favorite sorting', async ({ page }) => {
   await expect(pinnedDelete).toHaveCSS('opacity', '1');
 });
 
-test('persists and renders public real-world GPX exports including a 1 MB stress track', async ({
+test('persists valid public GPX exports and rejects zero-length geometry', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -458,20 +502,27 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
         new RegExp(fixture.generatedName, 'u'),
       );
     }
+    if ('zeroLength' in fixture) {
+      await expect(details).toContainText('route length is zero');
+      await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+      await page.getByRole('button', { name: 'Discard' }).click();
+      continue;
+    }
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
     await page.getByRole('button', { name: 'Back to tracks' }).click();
   }
 
   await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
-  const expectedStoredPoints = realWorldTrackFixtures.reduce(
-    (total, fixture) => total + fixture.pointCount,
-    0,
+  const expectedPreparedPointCount = 10_148;
+  const garminSummary = await readStoredTrackSummary(
+    page,
+    'garmin-connect-activity.gpx',
   );
   expect(await readStoredTrackState(page)).toEqual({
-    contentCount: 7,
-    pointCount: expectedStoredPoints,
-    summaryCount: 7,
+    contentCount: 6,
+    pointCount: expectedPreparedPointCount,
+    summaryCount: 6,
     sourceBlobCount: 0,
   });
 
@@ -479,12 +530,16 @@ test('persists and renders public real-world GPX exports including a 1 MB stress
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
   await page.getByRole('button', { name: 'Back to tracks' }).click();
   await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
-  await page.getByRole('button', { name: /^sample-1mb/u }).click();
+  await page
+    .getByRole('button', { name: new RegExp(`^${garminSummary.name}`, 'u') })
+    .click();
   const selectedDetails = page.getByRole('complementary', {
     name: 'Track details',
   });
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
-  await expect(selectedDetails).toContainText('18,078 points');
+  await expect(selectedDetails).toContainText(
+    `${garminSummary.pointCount.toLocaleString('en')} points`,
+  );
 
   await page
     .getByRole('button', { name: 'Developer diagnostics', exact: true })

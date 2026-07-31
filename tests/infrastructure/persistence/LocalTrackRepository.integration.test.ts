@@ -39,6 +39,8 @@ function summary(id: string, name: string): LocalTrackSummary {
         crossesAntimeridian: false,
       },
       center: [44.005, 42.005],
+      elevationSource: 'dem-assisted',
+      elevationAlgorithmVersion: 2,
     },
     metadata: { version: '1.1', links: [] },
     warnings: [],
@@ -49,7 +51,12 @@ function content(trackId: string): LocalTrackContent {
   return {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId,
-    trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+    trackPoints: [
+      [
+        { coordinate: [44, 42], elevationMeters: 1_000 },
+        { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+      ],
+    ],
   };
 }
 
@@ -66,19 +73,61 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
-  it('compacts legacy original blobs into the internal point representation', async () => {
+  it('updates elevation atomically without discarding saved metadata', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Original'), content('local:1'));
+    await database.renameLocalTrack('local:1', 'Renamed');
+    await database.setLocalTrackFavorite('local:1', true);
+    const updatedContent: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: 'local:1',
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 900 },
+          { coordinate: [44.01, 42.01], elevationMeters: 1_000 },
+          { coordinate: [44.02, 42.02], elevationMeters: 1_100 },
+        ],
+      ],
+    };
+
+    const updated = await database.replaceLocalTrackElevation(
+      'local:1',
+      { ...summary('local:1', 'Original').metrics, ascentMeters: 200 },
+      updatedContent,
+    );
+
+    expect(updated).toMatchObject({
+      name: 'Renamed',
+      favorite: true,
+      pointCount: 3,
+      segmentCount: 1,
+      metrics: { ascentMeters: 200 },
+    });
+    await expect(database.loadLocalTrackContent('local:1')).resolves.toEqual(
+      updatedContent,
+    );
+  });
+  it('migrates v3 tracks without deleting legacy metrics or geometry', async () => {
     database.close();
     await database.delete();
     const legacy = new Dexie('GeorgiaRoutingPlanner');
-    legacy.version(2).stores({
+    legacy.version(3).stores({
       settings: 'key,updatedAt',
       diagnostics: '++id,timestamp,name,level',
       localTracks: 'id,normalizedName,savedAt',
       localTrackContents: 'trackId',
     });
-    await legacy.table('localTracks').put(summary('local:legacy', 'Legacy'));
+    const legacySummary = {
+      ...summary('local:legacy', 'Legacy'),
+      schemaVersion: 1,
+      metrics: {
+        ...summary('local:legacy', 'Legacy').metrics,
+        elevationSource: 'gpx',
+        elevationAlgorithmVersion: 1,
+      },
+    };
+    await legacy.table('localTracks').put(legacySummary);
     await legacy.table('localTrackContents').put({
-      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      schemaVersion: 1,
       trackId: 'local:legacy',
       originalGpx: new Blob(['<gpx/>']),
       segments: [
@@ -91,14 +140,27 @@ describe('local track persistence', () => {
     legacy.close();
 
     database = new AppDatabase(services.logger);
-    await expect(database.loadLocalTrackContent('local:legacy')).resolves.toMatchObject(
+
+    await expect(database.listLocalTracks()).resolves.toMatchObject([
       {
-        trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+        schemaVersion: 2,
+        id: 'local:legacy',
+        metrics: {
+          elevationSource: 'gpx',
+          elevationAlgorithmVersion: 1,
+        },
       },
-    );
-    const stored = await database.localTrackContents.get('local:legacy');
-    expect(stored).not.toHaveProperty('originalGpx');
-    expect(stored).not.toHaveProperty('segments');
+    ]);
+    await expect(database.loadLocalTrackContent('local:legacy')).resolves.toEqual({
+      schemaVersion: 2,
+      trackId: 'local:legacy',
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+    });
+    const storedSummary = await database.localTracks.get('local:legacy');
+    const storedContent = await database.localTrackContents.get('local:legacy');
+    expect(storedSummary).toHaveProperty('schemaVersion', 2);
+    expect(storedContent).not.toHaveProperty('originalGpx');
+    expect(storedContent).not.toHaveProperty('segments');
   });
 
   it('saves summary and content atomically and loads both after reopen', async () => {

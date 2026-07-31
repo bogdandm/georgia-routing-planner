@@ -6,7 +6,7 @@ import type {
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
-export const LOCAL_TRACK_SCHEMA_VERSION = 1;
+export const LOCAL_TRACK_SCHEMA_VERSION = 2;
 
 export interface LocalTrackSummary {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;

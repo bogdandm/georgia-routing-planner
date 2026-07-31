@@ -112,7 +112,7 @@ describe('FilteredTerrariumTileProvider', () => {
     );
     provider.setEnabled(false);
 
-    const raw = await provider.getTile(5, 8, 9, new AbortController());
+    const raw = await provider.getTile(5, 8, 9, new AbortController().signal);
 
     expect(fetchImplementation).toHaveBeenCalledOnce();
     expect(decode).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe('FilteredTerrariumTileProvider', () => {
     expect(raw.data).toBeInstanceOf(Blob);
 
     provider.setEnabled(true);
-    await provider.getTile(5, 8, 9, new AbortController());
+    await provider.getTile(5, 8, 9, new AbortController().signal);
 
     expect(fetchImplementation).toHaveBeenCalledTimes(10);
     expect(decode).toHaveBeenCalledTimes(9);
@@ -154,7 +154,7 @@ describe('FilteredTerrariumTileProvider', () => {
     );
     const controller = new AbortController();
 
-    const pending = provider.getTile(4, 8, 8, controller);
+    const pending = provider.getTile(4, 8, 8, controller.signal);
     controller.abort();
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
@@ -186,7 +186,7 @@ describe('FilteredTerrariumTileProvider', () => {
     );
 
     await expect(
-      provider.getTile(4, 8, 8, new AbortController()),
+      provider.getTile(4, 8, 8, new AbortController().signal),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(log).toHaveBeenCalledOnce();
     const event = log.mock.calls[0]?.[0];
@@ -207,8 +207,8 @@ describe('FilteredTerrariumTileProvider', () => {
     );
 
     await Promise.all([
-      provider.getTile(5, 8, 9, new AbortController()),
-      provider.getTile(5, 9, 9, new AbortController()),
+      provider.getTile(5, 8, 9, new AbortController().signal),
+      provider.getTile(5, 9, 9, new AbortController().signal),
     ]);
 
     expect(fetchImplementation).toHaveBeenCalledTimes(12);
@@ -232,8 +232,8 @@ describe('FilteredTerrariumTileProvider', () => {
     const canceled = new AbortController();
     const retained = new AbortController();
 
-    const first = provider.getTile(5, 8, 9, canceled);
-    const second = provider.getTile(5, 8, 9, retained);
+    const first = provider.getTile(5, 8, 9, canceled.signal);
+    const second = provider.getTile(5, 8, 9, retained.signal);
     canceled.abort();
     releaseFetches?.();
 
@@ -258,14 +258,14 @@ describe('FilteredTerrariumTileProvider', () => {
       () => now,
     );
 
-    await provider.getTile(5, 8, 9, new AbortController());
+    await provider.getTile(5, 8, 9, new AbortController().signal);
     const canceled = new AbortController();
     canceled.abort();
-    await expect(provider.getTile(5, 20, 9, canceled)).rejects.toMatchObject({
+    await expect(provider.getTile(5, 20, 9, canceled.signal)).rejects.toMatchObject({
       name: 'AbortError',
     });
     now = 1;
-    await provider.getTile(5, 24, 9, new AbortController());
+    await provider.getTile(5, 24, 9, new AbortController().signal);
 
     expect(log).toHaveBeenCalledOnce();
   });
@@ -292,10 +292,10 @@ describe('FilteredTerrariumTileProvider', () => {
     );
 
     for (let x = 2; x <= 10; x += 1) {
-      await provider.getTile(5, x, 10, new AbortController());
+      await provider.getTile(5, x, 10, new AbortController().signal);
     }
     const callsAfterNineTiles = fetchImplementation.mock.calls.length;
-    await provider.getTile(5, 2, 10, new AbortController());
+    await provider.getTile(5, 2, 10, new AbortController().signal);
 
     expect(fetchImplementation.mock.calls.length).toBe(callsAfterNineTiles + 9);
   });
@@ -320,8 +320,8 @@ describe('FilteredTerrariumTileProvider', () => {
     );
 
     const [first, second] = await Promise.all([
-      provider.getTile(5, 8, 9, new AbortController()),
-      provider.getTile(5, 8, 9, new AbortController()),
+      provider.getTile(5, 8, 9, new AbortController().signal),
+      provider.getTile(5, 8, 9, new AbortController().signal),
     ]);
 
     expect(first).toBe(second);
@@ -330,7 +330,7 @@ describe('FilteredTerrariumTileProvider', () => {
     expect(encode).toHaveBeenCalledOnce();
     expect(log).toHaveBeenCalledOnce();
 
-    const cached = await provider.getTile(5, 8, 9, new AbortController());
+    const cached = await provider.getTile(5, 8, 9, new AbortController().signal);
     expect(cached).toBe(first);
     expect(fetchImplementation).toHaveBeenCalledTimes(9);
     expect(decode).toHaveBeenCalledTimes(9);
@@ -359,8 +359,8 @@ describe('FilteredTerrariumTileProvider', () => {
     const retained = new AbortController();
     const reason = new DOMException('Only this consumer canceled.', 'AbortError');
 
-    const first = provider.getTile(5, 8, 9, canceled);
-    const second = provider.getTile(5, 8, 9, retained);
+    const first = provider.getTile(5, 8, 9, canceled.signal);
+    const second = provider.getTile(5, 8, 9, retained.signal);
     canceled.abort(reason);
 
     await expect(first).rejects.toBe(reason);
@@ -398,8 +398,8 @@ describe('FilteredTerrariumTileProvider', () => {
     );
     const firstController = new AbortController();
     const secondController = new AbortController();
-    const first = provider.getTile(5, 8, 9, firstController);
-    const second = provider.getTile(5, 8, 9, secondController);
+    const first = provider.getTile(5, 8, 9, firstController.signal);
+    const second = provider.getTile(5, 8, 9, secondController.signal);
 
     firstController.abort();
     expect(producerSignals.every((signal) => !signal.aborted)).toBe(true);
@@ -436,14 +436,14 @@ describe('FilteredTerrariumTileProvider', () => {
       codec,
       fetchImplementation,
     );
-    const stale = provider.getTile(5, 8, 9, new AbortController());
+    const stale = provider.getTile(5, 8, 9, new AbortController().signal);
 
     provider.setEnabled(false);
     modeChanged = true;
 
     await expect(stale).rejects.toMatchObject({ name: 'AbortError' });
-    const current = await provider.getTile(5, 8, 9, new AbortController());
-    const cached = await provider.getTile(5, 8, 9, new AbortController());
+    const current = await provider.getTile(5, 8, 9, new AbortController().signal);
+    const cached = await provider.getTile(5, 8, 9, new AbortController().signal);
     expect(cached).toBe(current);
     expect(fetchImplementation).toHaveBeenCalledTimes(10);
   });
@@ -473,8 +473,8 @@ describe('FilteredTerrariumTileProvider', () => {
       fetchImplementation,
     );
 
-    const first = await provider.getTile(5, 8, 9, new AbortController());
-    const second = await provider.getTile(5, 7, 8, new AbortController());
+    const first = await provider.getTile(5, 8, 9, new AbortController().signal);
+    const second = await provider.getTile(5, 7, 8, new AbortController().signal);
     expect(first.data).toBeInstanceOf(Blob);
     expect(second.data).toBeInstanceOf(Blob);
 
@@ -509,9 +509,9 @@ describe('FilteredTerrariumTileProvider', () => {
         fetchImplementation,
       );
 
-      await expect(provider.getTile(5, 8, 9, new AbortController())).rejects.toThrow(
-        failure === 'http' ? /HTTP 500/u : /Center PNG invalid/u,
-      );
+      await expect(
+        provider.getTile(5, 8, 9, new AbortController().signal),
+      ).rejects.toThrow(failure === 'http' ? /HTTP 500/u : /Center PNG invalid/u);
     },
   );
 
@@ -534,13 +534,13 @@ describe('FilteredTerrariumTileProvider', () => {
       codec,
       fetchImplementation,
     );
-    const pending = provider.getTile(5, 8, 9, new AbortController());
+    const pending = provider.getTile(5, 8, 9, new AbortController().signal);
 
     provider.dispose();
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    await expect(provider.getTile(5, 8, 9, new AbortController())).rejects.toThrow(
-      /disposed/u,
-    );
+    await expect(
+      provider.getTile(5, 8, 9, new AbortController().signal),
+    ).rejects.toThrow(/disposed/u);
   });
 });

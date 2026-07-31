@@ -148,6 +148,8 @@ export function createTestServices(
     logger,
     elevationProvider: {
       sample: () => Promise.resolve({ status: 'available' as const, meters: 1_234 }),
+      sampleMany: (coordinates) =>
+        Promise.resolve(coordinates.map(() => ({ status: 'unavailable' as const }))),
     },
     geocodingProviderConfiguration: {
       status: 'valid',

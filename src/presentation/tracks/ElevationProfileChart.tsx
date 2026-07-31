@@ -1,9 +1,15 @@
+import ChangeHistoryOutlinedIcon from '@mui/icons-material/ChangeHistoryOutlined';
+import NorthEastIcon from '@mui/icons-material/NorthEast';
+import SouthEastIcon from '@mui/icons-material/SouthEast';
+import TerrainOutlinedIcon from '@mui/icons-material/TerrainOutlined';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { Box, Paper, Stack, Typography, useTheme } from '@mui/material';
-import type { ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
@@ -11,84 +17,215 @@ import {
   type TooltipContentProps,
 } from 'recharts';
 
-import type {
-  ElevationProfile,
-  ElevationProfilePoint,
+import {
+  elevationSegmentIndexForSample,
+  sampleElevationProfilePoints,
+  type ElevationProfile,
+  type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import { appColors } from '@/presentation/theme/appColors';
+import {
+  formatTrackDistance,
+  formatTrackElevation,
+  formatTrackGrade,
+} from '@/presentation/tracks/trackFormatters';
 
 interface ElevationProfileChartProps {
   readonly profile: ElevationProfile;
+  readonly activeSegmentIndex: number | null;
+  readonly selectedSegmentIndex: number | null;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
+  readonly onSegmentHoverChange: (index: number | null) => void;
+  readonly onSegmentSelectionChange: (index: number | null) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
-function sampleProfilePoints<T>(points: readonly T[], maximum = 1_200): readonly T[] {
-  if (points.length <= maximum) return points;
-  const sampled: T[] = [];
-  for (let index = 0; index < maximum; index += 1) {
-    const sourceIndex = Math.round((index / (maximum - 1)) * (points.length - 1));
-    const point = points[sourceIndex];
-    if (point !== undefined) sampled.push(point);
-  }
-  return sampled;
-}
 function activeProfilePoint(
-  { activeIndex, activeLabel, isTooltipActive }: MouseHandlerDataParam,
+  { activeIndex, isTooltipActive }: MouseHandlerDataParam,
   sampledPoints: readonly ElevationProfilePoint[],
 ): ElevationProfilePoint | null {
   if (!isTooltipActive) return null;
-  if (typeof activeIndex === 'number') {
-    return sampledPoints[activeIndex] ?? null;
-  }
-  if (typeof activeLabel === 'number') {
-    return sampledPoints.find((point) => point.distanceMeters === activeLabel) ?? null;
-  }
-  return null;
+  const sampledIndex = Number(activeIndex);
+  if (!Number.isInteger(sampledIndex)) return null;
+  return sampledPoints[sampledIndex] ?? null;
+}
+
+interface ElevationTooltipProps extends TooltipContentProps {
+  readonly profile: ElevationProfile;
 }
 
 function ElevationTooltip({
   active,
-  label,
   payload,
-}: TooltipContentProps): ReactElement | null {
-  const elevationMeters = payload[0]?.value;
-  if (!active || typeof label !== 'number' || typeof elevationMeters !== 'number') {
+  profile,
+}: ElevationTooltipProps): ReactElement | null {
+  const point: unknown = payload[0]?.payload;
+  if (
+    !active ||
+    typeof point !== 'object' ||
+    point === null ||
+    !('sampleIndex' in point) ||
+    typeof point.sampleIndex !== 'number'
+  ) {
     return null;
   }
+  const segmentIndex = elevationSegmentIndexForSample(profile, point.sampleIndex);
+  const segment = segmentIndex === null ? undefined : profile.segments[segmentIndex];
+  if (
+    segment === undefined ||
+    !('distanceMeters' in point) ||
+    typeof point.distanceMeters !== 'number' ||
+    !('elevationMeters' in point) ||
+    typeof point.elevationMeters !== 'number' ||
+    !('localGradePct' in point) ||
+    typeof point.localGradePct !== 'number'
+  ) {
+    return null;
+  }
+  const typeNumber =
+    segment.type === 'flat'
+      ? null
+      : profile.segments
+          .slice(0, (segmentIndex ?? 0) + 1)
+          .filter((candidate) => candidate.type === segment.type).length;
+  const typeLabel =
+    segment.type === 'climb'
+      ? `Climb ${String(typeNumber)}`
+      : segment.type === 'descent'
+        ? `Descent ${String(typeNumber)}`
+        : 'Flat';
 
   return (
-    <Paper elevation={3} sx={{ p: 1 }}>
-      <Typography variant="caption" component="div">
-        {(label / 1_000).toFixed(1)} km
-      </Typography>
-      <Typography variant="body2">
-        Elevation {String(Math.round(elevationMeters))} m
-      </Typography>
+    <Paper elevation={3} sx={{ p: 1, minWidth: 210 }}>
+      <Stack spacing={0.4}>
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            columnGap: 1.5,
+            rowGap: 0.25,
+          }}
+        >
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <SwapHorizIcon aria-hidden sx={{ fontSize: 16 }} />
+            <Typography variant="caption">
+              {formatTrackDistance(point.distanceMeters)}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <TerrainOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
+            <Typography variant="body2">
+              {formatTrackElevation(point.elevationMeters)}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <ChangeHistoryOutlinedIcon
+              aria-hidden
+              sx={{
+                fontSize: 16,
+                transform: point.localGradePct < 0 ? 'rotate(180deg)' : undefined,
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {formatTrackGrade(point.localGradePct)}
+            </Typography>
+          </Stack>
+        </Stack>
+        <Typography variant="body2" sx={{ pt: 0.35, fontWeight: 600 }}>
+          {typeLabel}
+        </Typography>
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            columnGap: 1.5,
+            rowGap: 0.25,
+          }}
+        >
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <SwapHorizIcon aria-hidden sx={{ fontSize: 16 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              {formatTrackDistance(segment.distanceMeters)}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <NorthEastIcon aria-hidden sx={{ fontSize: 16 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              {formatTrackElevation(segment.ascentMeters)}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <SouthEastIcon aria-hidden sx={{ fontSize: 16 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              {formatTrackElevation(segment.descentMeters)}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <ChangeHistoryOutlinedIcon
+              aria-hidden
+              sx={{
+                fontSize: 16,
+                transform: segment.averageGradePct < 0 ? 'rotate(180deg)' : undefined,
+              }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              {formatTrackGrade(segment.averageGradePct)}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Stack>
     </Paper>
   );
 }
 
 export function ElevationProfileChart({
   profile,
+  activeSegmentIndex,
+  selectedSegmentIndex,
   onActivePointChange,
+  onSegmentHoverChange,
+  onSegmentSelectionChange,
   onPointClick,
 }: ElevationProfileChartProps): ReactElement {
   const theme = useTheme();
-  const sampledPoints = sampleProfilePoints(profile.points);
+  const sampledPoints = sampleElevationProfilePoints(profile);
+  const gradientId = `elevation-grade-${useId().replaceAll(':', '')}`;
+  const maximumDistance = profile.points.at(-1)?.distanceMeters ?? 0;
   const axisText = {
     fill: theme.palette.text.secondary,
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.caption.fontSize,
   };
 
-  function handleMouseMove(mouseHandlerData: MouseHandlerDataParam): void {
-    onActivePointChange?.(activeProfilePoint(mouseHandlerData, sampledPoints));
-  }
-
-  function handleClick(mouseHandlerData: MouseHandlerDataParam): void {
+  function publishActivePoint(
+    mouseHandlerData: MouseHandlerDataParam,
+  ): ElevationProfilePoint | null {
     const point = activeProfilePoint(mouseHandlerData, sampledPoints);
-    if (point !== null) onPointClick?.(point);
+    onActivePointChange?.(point);
+    onSegmentHoverChange(
+      point === null
+        ? null
+        : elevationSegmentIndexForSample(profile, point.sampleIndex),
+    );
+    return point;
   }
 
   return (
@@ -108,9 +245,30 @@ export function ElevationProfileChart({
           data={sampledPoints}
           margin={{ top: 12, right: 16, bottom: 6, left: 4 }}
           style={{ width: '100%', height: '100%' }}
-          onMouseMove={handleMouseMove}
-          onClick={handleClick}
-          onMouseLeave={() => onActivePointChange?.(null)}
+          onMouseMove={publishActivePoint}
+          onClick={(mouseHandlerData) => {
+            const point = activeProfilePoint(mouseHandlerData, sampledPoints);
+            if (point === null) return;
+            const segmentIndex = elevationSegmentIndexForSample(
+              profile,
+              point.sampleIndex,
+            );
+            if (
+              segmentIndex === null ||
+              profile.segments[segmentIndex]?.type === 'flat'
+            ) {
+              onSegmentSelectionChange(null);
+            } else {
+              onSegmentSelectionChange(
+                selectedSegmentIndex === segmentIndex ? null : segmentIndex,
+              );
+            }
+            onPointClick?.(point);
+          }}
+          onMouseLeave={() => {
+            onActivePointChange?.(null);
+            onSegmentHoverChange(null);
+          }}
         >
           <CartesianGrid stroke={theme.palette.divider} />
           <XAxis
@@ -135,17 +293,61 @@ export function ElevationProfileChart({
           />
           <Tooltip
             cursor={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
-            content={ElevationTooltip}
+            content={(props) => <ElevationTooltip {...props} profile={profile} />}
           />
+          {profile.segments.slice(1).map((segment) => (
+            <ReferenceLine
+              key={segment.startSampleIndex}
+              x={segment.startDistanceMeters}
+              stroke={theme.palette.divider}
+              strokeWidth={1}
+            />
+          ))}
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+              {profile.segments.flatMap((segment, segmentIndex) =>
+                segment.gradeSubsegments.flatMap((gradeSegment) => {
+                  const startOffset =
+                    maximumDistance <= 0
+                      ? 0
+                      : (gradeSegment.startDistanceMeters / maximumDistance) * 100;
+                  const endOffset =
+                    maximumDistance <= 0
+                      ? 0
+                      : (gradeSegment.endDistanceMeters / maximumDistance) * 100;
+                  const color = appColors.elevationGrade[gradeSegment.band];
+                  const opacity =
+                    activeSegmentIndex === null || activeSegmentIndex === segmentIndex
+                      ? 1
+                      : 0.22;
+                  const key = `${String(segmentIndex)}:${String(gradeSegment.startSampleIndex)}`;
+                  return [
+                    <stop
+                      key={`${key}:start`}
+                      offset={`${String(startOffset)}%`}
+                      stopColor={color}
+                      stopOpacity={opacity}
+                    />,
+                    <stop
+                      key={`${key}:end`}
+                      offset={`${String(endOffset)}%`}
+                      stopColor={color}
+                      stopOpacity={opacity}
+                    />,
+                  ];
+                }),
+              )}
+            </linearGradient>
+          </defs>
           <Area
             type="linear"
             dataKey="elevationMeters"
             name="Elevation"
             baseValue="dataMin"
             dot={false}
-            stroke={appColors.brand.blueGreenDark}
-            fill={appColors.brand.blueGreenDark}
-            fillOpacity={0.16}
+            stroke={`url(#${gradientId})`}
+            fill={`url(#${gradientId})`}
+            fillOpacity={0.2}
             isAnimationActive={false}
           />
         </AreaChart>

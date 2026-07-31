@@ -129,16 +129,30 @@ export function WorkspaceRail({
             borderRadius: 1.25,
             bgcolor: 'transparent',
             color: appColors.text.inverse,
-            '&:hover': {
-              boxShadow: `inset 0 0 0 2px ${appColors.brand.sky}`,
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              inset: 0,
+              zIndex: 2,
+              border: `2px solid ${appColors.brand.sky}`,
+              borderRadius: 'inherit',
+              opacity: 0,
+              pointerEvents: 'none',
+              transition: (theme) =>
+                theme.transitions.create('opacity', {
+                  duration: theme.transitions.duration.shorter,
+                }),
             },
+            '&:hover::before': { opacity: 1 },
             '&:hover .collapsed-navigation-segment::after': { opacity: 1 },
-            '&.Mui-focusVisible': {
-              outline: `2px solid ${appColors.brand.amber}`,
-              outlineOffset: -2,
+            '&.Mui-focusVisible::before': {
+              borderColor: appColors.brand.amber,
+              opacity: 1,
             },
             '@media (prefers-reduced-motion: reduce)': {
-              '& .collapsed-navigation-segment::after': { transition: 'none' },
+              '&::before, & .collapsed-navigation-segment::after': {
+                transition: 'none',
+              },
             },
           }}
         >

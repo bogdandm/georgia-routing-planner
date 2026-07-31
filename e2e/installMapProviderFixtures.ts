@@ -194,29 +194,38 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
   await page.route(`${overpassOrigin}/api/interpreter**`, (route) => {
     const body = new URLSearchParams(route.request().postData() ?? '');
     const query = body.get('data') ?? '';
-    const elements = query.includes('42.711630,43.163426')
-      ? [
-          {
-            type: 'node',
-            id: 5_873_637_780,
-            lat: 42.711212,
-            lon: 43.1638654,
-            tags: {
-              name: 'ყელიდა',
-              'name:en': 'Kelida',
-              natural: 'saddle',
-              mountain_pass: 'yes',
+    const nearbyCoordinates = /nwr\(around:2000,(-?\d+\.\d+),(-?\d+\.\d+)\)/u.exec(
+      query,
+    );
+    const nearbyLatitude = Number(nearbyCoordinates?.[1]);
+    const nearbyLongitude = Number(nearbyCoordinates?.[2]);
+    const elements =
+      Number.isFinite(nearbyLatitude) &&
+      Number.isFinite(nearbyLongitude) &&
+      Math.abs(nearbyLatitude - 42.711212) < 0.02 &&
+      Math.abs(nearbyLongitude - 43.1638654) < 0.02
+        ? [
+            {
+              type: 'node',
+              id: 5_873_637_780,
+              lat: 42.711212,
+              lon: 43.1638654,
+              tags: {
+                name: 'ყელიდა',
+                'name:en': 'Kelida',
+                natural: 'saddle',
+                mountain_pass: 'yes',
+              },
             },
-          },
-          {
-            type: 'node',
-            id: 5_873_637_781,
-            lat: 42.720518,
-            lon: 43.1690168,
-            tags: { name: 'Chutkharo', natural: 'peak' },
-          },
-        ]
-      : [];
+            {
+              type: 'node',
+              id: 5_873_637_781,
+              lat: 42.720518,
+              lon: 43.1690168,
+              tags: { name: 'Chutkharo', natural: 'peak' },
+            },
+          ]
+        : [];
     return route.fulfill({
       status: 200,
       contentType: 'application/json',

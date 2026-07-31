@@ -606,7 +606,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           };
           setActive((current) =>
             current?.kind === 'preview' && current.id === preview.id
-              ? preview
+              ? { ...preview, name: current.name }
               : current,
           );
           const namingController = new AbortController();
@@ -624,7 +624,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               : 'Elevation preparation failed.';
           setActive((current) =>
             current?.kind === 'preview' && current.id === previewBase.id
-              ? { ...previewBase, preparationStatus: 'failed', preparationError }
+              ? {
+                  ...previewBase,
+                  name: current.name,
+                  preparationStatus: 'failed',
+                  preparationError,
+                }
               : current,
           );
         }

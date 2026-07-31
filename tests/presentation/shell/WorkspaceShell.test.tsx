@@ -845,6 +845,35 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('First.gpx · GPX')).not.toBeInTheDocument();
   });
 
+  it('preserves a manually edited preview name through preparation', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const pending = deferred<readonly ElevationSample[]>();
+    vi.spyOn(provider, 'sampleMany').mockImplementation((_coordinates) => {
+      return pending.promise;
+    });
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Manual name.gpx'));
+    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Manual trail');
+    pending.resolve(
+      Array.from({ length: 3 }, () => ({ status: 'unavailable' as const })),
+    );
+
+    await waitFor(() => {
+      expect(nameInput).toHaveValue('Manual trail');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+  });
+
   it('recalculates preview and saved elevation without toggling disclosure', async () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();

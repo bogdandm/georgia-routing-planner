@@ -146,6 +146,21 @@ describe('track calculations', () => {
     expect(metrics.descentMeters).toBe(0);
   });
 
+  it('does not bridge a missing elevation at a duplicate coordinate', () => {
+    const metrics = calculateTrackMetrics([
+      {
+        points: [
+          point(0, 0, 1_000),
+          point(0, 0),
+          point(equatorialLongitudePerMeter * 100, 0, 1_100),
+        ],
+      },
+    ]);
+
+    expect(metrics.ascentMeters).toBeUndefined();
+    expect(metrics.descentMeters).toBeUndefined();
+  });
+
   it('retains recorded duration only for complete, ordered, progressing timestamps', () => {
     const complete = calculateTrackMetrics([
       {

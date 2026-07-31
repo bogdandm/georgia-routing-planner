@@ -158,10 +158,12 @@ function calculateSegmentChanges(segment: TrackSegment): SegmentChanges {
     distanceMeters += legDistanceMeters;
     const currentElevationMeters = current.elevationMeters;
     if (legDistanceMeters <= stationDistanceEpsilonMeters) {
-      if (
-        previousDistinctElevationMeters === undefined &&
-        currentElevationMeters !== undefined
-      ) {
+      if (currentElevationMeters === undefined) {
+        if (previousDistinctElevationMeters !== undefined) {
+          finishRun(previousDistinctElevationMeters);
+          previousDistinctElevationMeters = undefined;
+        }
+      } else if (previousDistinctElevationMeters === undefined) {
         previousDistinctElevationMeters = currentElevationMeters;
         appendSample(currentElevationMeters);
       }

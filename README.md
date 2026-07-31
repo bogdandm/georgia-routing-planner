@@ -19,9 +19,11 @@ Sentinel-2 L2A search and georeferenced true-color scene rendering; logical map 
 visibility; configurable relief shading and elevation isolines; native desktop camera
 gestures; durable settled-camera restoration; browser-local GPX import, preview,
 retention, search, rename, and deletion; provider failure feedback; settings; and
-bounded map/WebGL diagnostics. Imported tracks render as independent bright-blue lines
-with shared visibility and opacity controls. Unavailable feature actions are shown as
-disabled controls or explicit empty states instead of synthetic data.
+bounded map/WebGL diagnostics. Imported tracks retain a bright-blue base line and, when
+elevation is usable, an independently switchable whole-track climb/descent grade
+overlay; both share Imported tracks visibility and opacity controls. Unavailable feature
+actions are shown as disabled controls or explicit empty states instead of synthetic
+data.
 
 See [docs/README.md](./docs/README.md) for the permanent project handbook and
 [AGENTS.md](./AGENTS.md) for required engineering conventions.

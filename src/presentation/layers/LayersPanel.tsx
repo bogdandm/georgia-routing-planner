@@ -105,6 +105,12 @@ const importedTrackControls = [
     description: 'The active local GPX preview or saved track.',
     requiresScene: false,
   },
+  {
+    id: 'track-elevation-gradient',
+    label: 'Elevation gradient',
+    description: 'Climb and descent grade colors across the active track.',
+    requiresScene: false,
+  },
 ] as const satisfies readonly LayerControl[];
 
 export function LayersPanel() {

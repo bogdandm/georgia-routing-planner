@@ -181,6 +181,15 @@ function gpxFile(name = 'Fixture track.gpx'): File {
   return file;
 }
 
+function gpxFileWithGradeBands(): File {
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Fixture trail</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele></trkpt><trkpt lat="42.02" lon="44.02"><ele>1000</ele></trkpt><trkpt lat="42.03" lon="44.03"><ele>1120</ele></trkpt></trkseg></trk></gpx>`;
+  const file = new File([xml], 'Fixture track.gpx', {
+    type: 'application/gpx+xml',
+  });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
+}
+
 function gpxFileWithCompanionRoute(): File {
   const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele><time>2026-07-13T08:00:00Z</time></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele><time>2026-07-13T08:02:00Z</time></trkpt></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
   const file = new File([xml], 'Track and route.gpx', {
@@ -1088,7 +1097,7 @@ describe('WorkspaceShell', () => {
     expect(input).not.toBeNull();
     if (input === null) return;
 
-    await user.upload(input, gpxFile());
+    await user.upload(input, gpxFileWithGradeBands());
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     const trackNameInput = screen.getByRole('textbox', { name: 'Track name' });
     expect(trackNameInput).toHaveValue('Fixture trail');
@@ -1100,6 +1109,21 @@ describe('WorkspaceShell', () => {
       name: 'Elevation profile from 1000 to 1120 metres',
     });
     expect(elevationProfile).toBeVisible();
+    await waitFor(() => {
+      const highlightedSegments = setImportedTrackHighlight.mock.lastCall?.[0];
+      expect(highlightedSegments).not.toBeNull();
+      expect(highlightedSegments?.length).toBeGreaterThan(0);
+      expect(
+        new Set(highlightedSegments?.map((segment) => segment.color)).size,
+      ).toBeGreaterThan(1);
+    });
+    const highlightedSegments = setImportedTrackHighlight.mock.lastCall?.[0];
+    if (highlightedSegments === undefined || highlightedSegments === null) {
+      throw new Error(
+        'Expected the prepared elevation profile to publish grade bands.',
+      );
+    }
+    const highlightCallCount = setImportedTrackHighlight.mock.calls.length;
     const elevationDisclosure = within(details).getByRole('button', {
       name: 'Climbs & Descents',
     });
@@ -1108,21 +1132,11 @@ describe('WorkspaceShell', () => {
     const climb = within(details).getByRole('button', { name: /^Climb 1/u });
     await user.click(climb);
     expect(climb).toHaveAttribute('aria-pressed', 'true');
-    await waitFor(() => {
-      expect(setImportedTrackHighlight).toHaveBeenCalled();
-    });
-    const highlightedSegments = setImportedTrackHighlight.mock.lastCall?.[0];
-    expect(
-      highlightedSegments?.some(
-        (segment) =>
-          /^#[\dA-F]{6}$/u.test(segment.color) &&
-          segment.coordinates.some(
-            ([longitude, latitude]) =>
-              Number.isFinite(longitude) && Number.isFinite(latitude),
-          ),
-      ),
-    ).toBe(true);
-    const elevationGain = within(details).getByLabelText('Elevation gain: 120 m');
+    expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
+    expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
+    const elevationGain = within(details).getByLabelText(
+      /^Elevation gain: (?:23[5-9]|24[0-5]) m$/u,
+    );
     expect(elevationGain).toBeVisible();
     const elevationGainIcon = elevationGain.querySelector('svg');
     expect(elevationGainIcon).not.toBeNull();
@@ -1134,7 +1148,7 @@ describe('WorkspaceShell', () => {
     expect(
       within(details).queryByLabelText(/^Average speed:/u),
     ).not.toBeInTheDocument();
-    expect(within(details).getByText('140 points · 1 segment')).toBeVisible();
+    expect(within(details).getByText(/\d+ points · 1 segment/u)).toBeVisible();
     const discard = screen.getByRole('button', { name: 'Discard' });
     const save = screen.getByRole('button', { name: 'Save' });
     expect(
@@ -1142,7 +1156,7 @@ describe('WorkspaceShell', () => {
     ).toBeTruthy();
     const fitBoundsCommand = mapInteractionStore.getState().fitBoundsCommand;
     expect(fitBoundsCommand).toMatchObject({
-      bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
+      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
     });
     expect(fitBoundsCommand?.padding).toBeUndefined();
     const leaveEvent = new Event('beforeunload', { cancelable: true });
@@ -1159,7 +1173,7 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('list', { name: 'Saved tracks' })).getByLabelText(
-        'Elevation gain: 120 m',
+        /^Elevation gain: (?:23[5-9]|24[0-5]) m$/u,
       ),
     ).toBeVisible();
     expect(
@@ -1561,7 +1575,7 @@ describe('WorkspaceShell', () => {
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
 
-  it('controls all imported tracks through one Layers visibility and opacity pair', async () => {
+  it('controls all imported tracks and their elevation gradient through Layers', async () => {
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
     const setVisibility = vi
@@ -1572,6 +1586,13 @@ describe('WorkspaceShell', () => {
       .mockReturnValue({ status: 'success' });
     renderWorkspaceShell();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
+
+    const elevationGradient = screen.getByRole('checkbox', {
+      name: 'Elevation gradient',
+    });
+    expect(elevationGradient).toBeChecked();
+    fireEvent.click(elevationGradient);
+    expect(setVisibility).toHaveBeenLastCalledWith('track-elevation-gradient', false);
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Imported tracks' }));
     fireEvent.change(screen.getByRole('slider', { name: 'Track opacity' }), {

@@ -8,7 +8,8 @@ export type LogicalMapLayerId =
   | 'hiking-paths'
   | 'roads'
   | 'places-and-pois'
-  | 'imported-tracks';
+  | 'imported-tracks'
+  | 'track-elevation-gradient';
 
 type MapLayerVisibilityPreferences = Readonly<Record<LogicalMapLayerId, boolean>>;
 

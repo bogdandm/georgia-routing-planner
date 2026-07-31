@@ -90,6 +90,7 @@ const initialMapLayerState: MapLayerState = {
     roads: true,
     'places-and-pois': true,
     'imported-tracks': true,
+    'track-elevation-gradient': true,
   },
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,

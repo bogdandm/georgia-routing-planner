@@ -1626,25 +1626,24 @@ function TrackElevationAnalysis() {
     );
   };
   useEffect(() => {
-    let highlightSegments:
-      | readonly {
-          readonly coordinates: readonly (readonly [number, number])[];
-          readonly color: string;
-        }[]
-      | null = null;
-    if (profile !== null && activeSegmentIndex !== null) {
-      const segment = profile.segments[activeSegmentIndex];
-      if (segment !== undefined && segment.type !== 'flat') {
-        highlightSegments = segment.gradeSubsegments.map((gradeSubsegment) => ({
-          coordinates: profile.points
-            .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
-            .map((point) => point.coordinate),
-          color: appColors.elevationGrade[gradeSubsegment.band],
-        }));
-      }
-    }
+    const highlightSegments =
+      profile === null
+        ? null
+        : profile.segments.flatMap((segment) =>
+            segment.type === 'flat'
+              ? []
+              : segment.gradeSubsegments.map((gradeSubsegment) => ({
+                  coordinates: profile.points
+                    .slice(
+                      gradeSubsegment.startSampleIndex,
+                      gradeSubsegment.endSampleIndex + 1,
+                    )
+                    .map((point) => point.coordinate),
+                  color: appColors.elevationGrade[gradeSubsegment.band],
+                })),
+          );
     mapLayers?.setImportedTrackHighlight(highlightSegments);
-  }, [activeSegmentIndex, mapLayers, profile]);
+  }, [mapLayers, profile]);
   if (active === null) return null;
   return (
     <Stack spacing={1.5}>

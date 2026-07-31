@@ -503,7 +503,7 @@ describe('MapLibreLayerController', () => {
     );
   });
 
-  it('renders and clears a multicolor imported-track grade zebra idempotently', () => {
+  it('renders and gates a multicolor imported-track grade zebra', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -559,6 +559,55 @@ describe('MapLibreLayerController', () => {
       type: 'line',
       source: 'imported-track-highlight',
       paint: { 'line-color': ['get', 'color'] },
+    });
+    expect(controller.setLayerVisibility('imported-tracks', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('visible');
+    expect(map.visibility.get(importedTrackLayerIds.line)).toBe('visible');
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('visible');
+    expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('visible');
+
+    expect(controller.setLayerVisibility('track-elevation-gradient', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('visible');
+    expect(map.visibility.get(importedTrackLayerIds.line)).toBe('visible');
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('visible');
+
+    expect(controller.setLayerVisibility('track-elevation-gradient', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('visible');
+
+    expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.line)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('none');
+
+    expect(controller.setLayerVisibility('track-elevation-gradient', false)).toEqual({
+      status: 'success',
+    });
+    expect(controller.setLayerVisibility('track-elevation-gradient', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('none');
+
+    expect(controller.setLayerVisibility('imported-tracks', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('visible');
+    controller.attach(map as unknown as MapLibreMap);
+    expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('visible');
+    await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: {
+        'imported-tracks': true,
+        'track-elevation-gradient': true,
+      },
     });
     const paintUpdateCount = map.paintUpdateCount;
     controller.setImportedTrackHighlight(zebra);
@@ -1404,6 +1453,7 @@ describe('MapLibreLayerController', () => {
         roads: false,
         'places-and-pois': true,
         'imported-tracks': false,
+        'track-elevation-gradient': false,
       },
       openStreetMapOpacity: 0.55,
       importedTrackOpacity: 0.6,
@@ -1430,6 +1480,7 @@ describe('MapLibreLayerController', () => {
         'satellite-imagery': false,
         roads: false,
         'imported-tracks': false,
+        'track-elevation-gradient': false,
       },
       importedTrackOpacity: 0.6,
       appliedImagery: { status: 'empty' },

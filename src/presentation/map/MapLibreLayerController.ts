@@ -139,9 +139,9 @@ const logicalNativeLayerGroups: Readonly<
   'imported-tracks': [
     importedTrackLayerIds.casing,
     importedTrackLayerIds.line,
-    importedTrackLayerIds.highlight,
     importedTrackLayerIds.trace,
   ],
+  'track-elevation-gradient': [importedTrackLayerIds.highlight],
 };
 
 const importedTrackCasingWidth = 7;
@@ -450,10 +450,23 @@ export class MapLibreLayerController {
       return this.visibilityFailure('The requested map layer is not available yet.');
     }
 
-    for (const nativeId of nativeLayerIds) {
-      map.setLayoutProperty(nativeId, 'visibility', visible ? 'visible' : 'none');
-    }
     const visibility = { ...state.visibility, [layerId]: visible };
+    const highlightVisible = this.importedTrackHighlightVisible(visibility);
+    for (const nativeId of nativeLayerIds) {
+      const nativeVisible =
+        layerId === 'track-elevation-gradient' ? highlightVisible : visible;
+      map.setLayoutProperty(nativeId, 'visibility', nativeVisible ? 'visible' : 'none');
+    }
+    if (
+      layerId === 'imported-tracks' &&
+      map.getLayer(importedTrackLayerIds.highlight) !== undefined
+    ) {
+      map.setLayoutProperty(
+        importedTrackLayerIds.highlight,
+        'visibility',
+        highlightVisible ? 'visible' : 'none',
+      );
+    }
     const appliedImagery =
       layerId !== 'satellite-imagery'
         ? state.appliedImagery
@@ -1505,6 +1518,12 @@ export class MapLibreLayerController {
     return { status: 'failed', message };
   }
 
+  private importedTrackHighlightVisible(
+    visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+  ): boolean {
+    return visibility['imported-tracks'] && visibility['track-elevation-gradient'];
+  }
+
   private nativeLayerIds(layerId: LogicalMapLayerId): readonly string[] {
     if (layerId === 'satellite-imagery') {
       return this.#activeSlot === null ? [] : [this.#activeSlot.layerId];
@@ -1526,13 +1545,18 @@ export class MapLibreLayerController {
       'roads',
       'places-and-pois',
       'imported-tracks',
+      'track-elevation-gradient',
     ] as const) {
+      const layerVisible =
+        layerId === 'track-elevation-gradient'
+          ? this.importedTrackHighlightVisible(visibility)
+          : visibility[layerId];
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
             nativeId,
             'visibility',
-            visibility[layerId] ? 'visible' : 'none',
+            layerVisible ? 'visible' : 'none',
           );
         }
       }
@@ -1629,7 +1653,9 @@ export class MapLibreLayerController {
         type: 'line',
         source: mapSourceIds.importedTrackHighlight,
         layout: {
-          visibility: mapLayerStore.getState().visibility['imported-tracks']
+          visibility: this.importedTrackHighlightVisible(
+            mapLayerStore.getState().visibility,
+          )
             ? 'visible'
             : 'none',
           'line-cap': 'round',

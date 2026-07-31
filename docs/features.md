@@ -122,11 +122,15 @@ saved track reopens after restart when its content is still valid. A compact
 local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
 filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
 newly imported or reopened track renders as bright-blue independent lines and fits its
-complete bounds with padding for the master/detail surfaces. Closing it removes the
-active geometry without deleting a saved record or moving the camera. Every saved track
-can be downloaded locally as GPX or KML. Generated files preserve independent segments,
-saved name, available point elevation, and reliably aligned timestamps without writing
-GPX or KML description elements; conversion never uploads the source.
+complete bounds with padding for the master/detail surfaces. With usable elevation, the
+map overlays every non-flat climb/descent grade subsegment across the active track,
+leaving flat spans bright blue. The overlay is not narrowed by chart or Climbs &
+Descents segment hover/selection; those interactions remain panel-only. Closing the
+track removes the active geometry without deleting a saved record or moving the camera.
+Every saved track can be downloaded locally as GPX or KML. Generated files preserve
+independent segments, saved name, available point elevation, and reliably aligned
+timestamps without writing GPX or KML description elements; conversion never uploads the
+source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The
@@ -291,29 +295,33 @@ and cross-feature actions are unavailable.
 
 Layers groups durable controls under explicit source headings: Local GPX, Copernicus
 Sentinel-2, the configured terrain provider, and OpenStreetMap. The checkboxes cover
-Imported tracks, Satellite imagery, Scene footprint, Relief shading, Elevation isolines,
-Hiking paths, Roads, and Places and POIs, plus Natural features and Restricted areas.
-The single **Natural features** checkbox controls vegetation, glaciers, wetlands,
-rivers, water bodies, and their water labels. The terrain provider also owns the
-invalid-DEM repair switch and a compact contour-distance slider. The OpenStreetMap
-controls remain a single flat list with one shared opacity slider. While satellite
-imagery is visible, the slider scales every OpenStreetMap reference layer and the
-elevation isolines together while preserving their relative visual weights and
-individual visibility choices. It is disabled in vector-only mode. Every map data source
-added to the application must appear under its provider heading in Layers; each
-user-visible feature family from that source receives an explicit control unless it is
-part of the required base canvas. Each logical ID maps to an allowlisted set of stable
-MapLibre layer IDs; arbitrary native IDs never cross the UI boundary. Satellite controls
-remain disabled until a scene is applied. Hiding imagery retains the applied scene and
-does not remove its footprint, search results, or attribution contract. Relief and
-isoline visibility are independent of 3D terrain mode and satellite availability. Base
-land remains visible and cannot be disabled. Per-layer opacity, drag ordering, and
-custom layers are unavailable. Checkbox state, shared OpenStreetMap opacity, the shared
-imported-track opacity, rendering mode, imagery stretch, and terrain-overlay preferences
-are stored locally and restored after refresh. Imported-track visibility and opacity
-affect the active preview and saved selection together; they do not create per-track
-presentation records. Satellite scene metadata and assets are never persisted locally;
-imagery starts empty unless an explicit share URL requests a scene.
+Imported tracks, its default-on **Elevation gradient**, Satellite imagery, Scene
+footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs,
+plus Natural features and Restricted areas. The gradient colors climb and descent grades
+across the active track; its durable checkbox remains independently editable while
+Imported tracks gates its effective map visibility. The base bright-blue geometry and
+gradient share the imported-track opacity control. The single **Natural features**
+checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and their water
+labels. The terrain provider also owns the invalid-DEM repair switch and a compact
+contour-distance slider. The OpenStreetMap controls remain a single flat list with one
+shared opacity slider. While satellite imagery is visible, the slider scales every
+OpenStreetMap reference layer and the elevation isolines together while preserving their
+relative visual weights and individual visibility choices. It is disabled in vector-only
+mode. Every map data source added to the application must appear under its provider
+heading in Layers; each user-visible feature family from that source receives an
+explicit control unless it is part of the required base canvas. Each logical ID maps to
+an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the UI
+boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
+retains the applied scene and does not remove its footprint, search results, or
+attribution contract. Relief and isoline visibility are independent of 3D terrain mode
+and satellite availability. Base land remains visible and cannot be disabled. Per-layer
+opacity, drag ordering, and custom layers are unavailable. Checkbox state, shared
+OpenStreetMap opacity, the shared imported-track opacity, rendering mode, imagery
+stretch, and terrain-overlay preferences are stored locally and restored after refresh.
+Imported-track visibility and opacity affect the active preview and saved selection
+together; they do not create per-track presentation records. Satellite scene metadata
+and assets are never persisted locally; imagery starts empty unless an explicit share
+URL requests a scene.
 
 ## Persistent map controls
 

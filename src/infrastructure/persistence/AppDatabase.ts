@@ -104,6 +104,7 @@ const mapLayerPreferencesSchema = z
         roads: z.boolean(),
         'places-and-pois': z.boolean(),
         'imported-tracks': z.boolean().default(true),
+        'track-elevation-gradient': z.boolean().default(true),
       })
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
@@ -159,6 +160,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     roads: true,
     'places-and-pois': true,
     'imported-tracks': true,
+    'track-elevation-gradient': true,
   },
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,

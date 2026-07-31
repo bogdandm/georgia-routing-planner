@@ -548,11 +548,16 @@ saved state.
 The Tracks provider sends validated independent segments to the existing map layer
 controller. The controller retains one GeoJSON `MultiLineString`, reconciles its casing
 and bright-blue line after map/style attachment, and applies one persistent
-visibility/opacity pair. Chart highlighting updates a separate transient point source
-and circle layer, which is cleared when hover ends or the track closes. Import and
-saved-track selection issue one fit command with left padding for both Tracks panes.
-Close replaces the source data with empty geometry; it does not alter the stored row or
-camera.
+visibility/opacity pair. Once an elevation profile is available, Tracks also publishes
+every non-flat macro segment's grade subsegments to the existing highlight layer. That
+whole-track colored overlay shares the imported-track opacity and is visible only when
+both durable Imported tracks and Elevation gradient preferences are enabled. Hovering or
+selecting a chart or Climbs & Descents segment changes panel emphasis only; it does not
+republish or filter the overlay. Chart-point highlighting independently updates a
+transient point source and circle layer, which is cleared when hover ends or the track
+closes. Import and saved-track selection issue one fit command with left padding for
+both Tracks panes. Close replaces the source data with empty geometry; it does not alter
+the stored row or camera.
 
 Elevation analysis reads the retained source-point representation, never bridges
 independent segment gaps, and derives the chart profile from source elevations.

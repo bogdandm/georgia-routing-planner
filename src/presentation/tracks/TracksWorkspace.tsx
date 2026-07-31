@@ -12,8 +12,6 @@ import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
-import SouthEastIcon from '@mui/icons-material/SouthEast';
-import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
@@ -46,7 +44,6 @@ import {
   useState,
   type DragEvent,
   type PropsWithChildren,
-  type ReactNode,
 } from 'react';
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
@@ -87,6 +84,11 @@ import {
 } from '@/domain/tracks/elevationProfile';
 import { formatDateTime } from '@/presentation/formatDateTime';
 import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
+import {
+  formatTrackDuration,
+  TrackStat,
+  TrackStats,
+} from '@/presentation/tracks/TrackSummary';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
 import {
   formatTrackDistance,
@@ -143,6 +145,7 @@ type ActiveTrack = PreviewTrack | SavedTrackSelection;
 
 interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
+  readonly activeProfile: ElevationProfile | null;
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
   readonly importError: string | null;
@@ -976,9 +979,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       : summaries.filter((summary) => summary.normalizedName.includes(normalizedQuery));
   }, [query, summaries]);
 
+  const activeProfile = useMemo(() => elevationProfileForActiveTrack(active), [active]);
+
   const value = useMemo<TracksWorkspaceValue>(
     () => ({
       active,
+      activeProfile,
       error,
       filteredSummaries,
       importError: importError?.message ?? null,
@@ -1001,6 +1007,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }),
     [
       active,
+      activeProfile,
       applyGeneratedName,
       closeActive,
       deleteSaved,
@@ -1205,55 +1212,6 @@ function TrackImportZone() {
         )}
       </Paper>
     </Box>
-  );
-}
-
-function formatTrackDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.round((seconds % 3_600) / 60);
-  return `${String(hours)}h ${String(minutes)}m`;
-}
-
-function averageSpeedKilometersPerHour(metrics: TrackMetrics): number | undefined {
-  const elapsedSeconds = metrics.elapsedSeconds;
-  if (elapsedSeconds === undefined || elapsedSeconds <= 0) return undefined;
-  return (metrics.distanceMeters / elapsedSeconds) * 3.6;
-}
-
-interface TrackStatProps {
-  readonly emphasized?: boolean;
-  readonly icon: ReactNode;
-  readonly label: string;
-  readonly value: string;
-}
-
-function TrackStat({ emphasized = false, icon, label, value }: TrackStatProps) {
-  return (
-    <Stack
-      component="span"
-      direction="row"
-      spacing={0.5}
-      aria-label={`${label}: ${value}`}
-      sx={{ minWidth: 0, alignItems: 'center' }}
-    >
-      <Tooltip title={label} enterTouchDelay={0}>
-        <Box
-          component="span"
-          aria-hidden
-          sx={{ display: 'inline-flex', color: 'text.secondary' }}
-        >
-          {icon}
-        </Box>
-      </Tooltip>
-      <Typography
-        component="span"
-        variant={emphasized ? 'body2' : 'caption'}
-        noWrap
-        sx={{ fontWeight: emphasized ? 600 : 400 }}
-      >
-        {value}
-      </Typography>
-    </Stack>
   );
 }
 
@@ -1564,8 +1522,24 @@ function elevationProfileInputSegments(
   return inputs.length === 0 ? null : inputs;
 }
 
+function elevationProfileForActiveTrack(
+  active: ActiveTrack | null,
+): ElevationProfile | null {
+  if (active === null) return null;
+  if (active.kind === 'preview') {
+    return active.preparationStatus === 'ready' ? active.profile : null;
+  }
+  const inputs = elevationProfileInputSegments(active.content.trackPoints);
+  return inputs === null ? null : calculateElevationProfile(inputs);
+}
+
 function TrackElevationAnalysis() {
-  const { active, recalculateElevation, recalculationState } = useTracksWorkspace();
+  const {
+    active,
+    activeProfile: profile,
+    recalculateElevation,
+    recalculationState,
+  } = useTracksWorkspace();
   const { mapLayers } = useRuntimeServices();
   const [hoveredSegment, setHoveredSegment] = useState<{
     readonly profile: ElevationProfile;
@@ -1582,19 +1556,6 @@ function TrackElevationAnalysis() {
     },
     [mapLayers],
   );
-  const preparedProfile =
-    active?.kind === 'preview' && active.preparationStatus === 'ready'
-      ? active.profile
-      : null;
-  const savedTrackPoints = active?.kind === 'saved' ? active.content.trackPoints : null;
-  const profile = useMemo(() => {
-    if (preparedProfile !== null) return preparedProfile;
-    if (savedTrackPoints === null) return null;
-    const savedProfileInputs = elevationProfileInputSegments(savedTrackPoints);
-    return savedProfileInputs === null
-      ? null
-      : calculateElevationProfile(savedProfileInputs);
-  }, [preparedProfile, savedTrackPoints]);
   useEffect(() => {
     mapLayers?.setImportedTrackTracePoint(null);
   }, [mapLayers, profile]);
@@ -1679,75 +1640,6 @@ function TrackElevationAnalysis() {
         onSegmentSelectionChange={onSegmentSelectionChange}
       />
     </Stack>
-  );
-}
-
-interface TrackStatsProps {
-  readonly metrics: TrackMetrics;
-  readonly compact?: boolean;
-}
-
-export function TrackStats({ compact = false, metrics }: TrackStatsProps) {
-  const stats: TrackStatProps[] = [];
-  const elapsedSeconds = metrics.elapsedSeconds;
-  if (elapsedSeconds !== undefined) {
-    stats.push({
-      icon: <TimerOutlinedIcon sx={{ fontSize: 18 }} />,
-      label: 'Recorded time',
-      value: formatTrackDuration(elapsedSeconds),
-    });
-  }
-  stats.push({
-    icon: <SwapHorizIcon sx={{ fontSize: 18 }} />,
-    label: 'Distance',
-    value: formatTrackDistance(metrics.distanceMeters),
-  });
-  if (!compact) {
-    const speedKilometersPerHour = averageSpeedKilometersPerHour(metrics);
-    if (speedKilometersPerHour !== undefined) {
-      stats.push({
-        icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
-        label: 'Average speed',
-        value: `${speedKilometersPerHour.toFixed(1)} km/h`,
-      });
-    }
-  }
-  if (metrics.ascentMeters !== undefined) {
-    stats.push({
-      icon: <NorthEastIcon sx={{ fontSize: 18 }} />,
-      label: 'Elevation gain',
-      value: formatTrackElevation(metrics.ascentMeters),
-    });
-  }
-  if (metrics.descentMeters !== undefined) {
-    stats.push({
-      icon: <SouthEastIcon sx={{ fontSize: 18 }} />,
-      label: 'Elevation loss',
-      value: formatTrackElevation(metrics.descentMeters),
-    });
-  }
-  return (
-    <Box
-      sx={{
-        display: compact ? 'flex' : 'grid',
-        gridTemplateColumns: compact ? undefined : 'repeat(3, minmax(0, 1fr))',
-        justifyContent: compact ? 'space-around' : undefined,
-        columnGap: compact ? 0 : 1.5,
-        rowGap: 1.5,
-        minWidth: 0,
-        '@media (width < 360px)': {
-          display: compact ? 'grid' : undefined,
-          gridTemplateColumns: compact ? 'repeat(2, minmax(0, 1fr))' : undefined,
-          justifyItems: compact ? 'center' : undefined,
-          rowGap: compact ? 0.75 : undefined,
-        },
-        flex: compact ? 1 : undefined,
-      }}
-    >
-      {stats.map((stat) => (
-        <TrackStat key={stat.label} {...stat} emphasized />
-      ))}
-    </Box>
   );
 }
 

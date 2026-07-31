@@ -533,6 +533,7 @@ describe('WorkspaceShell', () => {
     expect(within(disclosure).getByLabelText('Distance: 1.4 km')).toBeVisible();
     expect(within(disclosure).getByLabelText('Elevation gain: 120 m')).toBeVisible();
     expect(within(disclosure).getByLabelText('Elevation loss: 0 m')).toBeVisible();
+    expect(within(disclosure).getByTestId('compact-elevation-profile')).toBeVisible();
     expect(screen.getByLabelText('Fake map')).toBe(map);
     expect(
       screen.queryByRole('complementary', { name: 'Track details' }),
@@ -2149,26 +2150,24 @@ describe('WorkspaceShell', () => {
     await user.click(projectLogo);
 
     const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
+    const collapsedProjectLogo =
+      within(showNavigation).getByTestId('project-logo-image');
     expect(navigation).toBeVisible();
-    expect(navigation).toHaveStyle({ width: '64px' });
-    expect(projectLogo).toHaveStyle({
+    expect(navigation).toHaveStyle({ width: '94px' });
+    expect(collapsedProjectLogo).toHaveStyle({
       width: '52px',
       height: '52px',
-      marginTop: '6px',
-      marginLeft: '6px',
-      borderRadius: '10px 0 0 10px',
+    });
+    expect(collapsedProjectLogo.parentElement).toHaveStyle({
       backgroundColor: appColors.brand.deepSpace,
     });
-    expect(showNavigation).toBe(collapseToggle);
+    expect(showNavigation).not.toBe(collapseToggle);
     expect(showNavigation).toHaveStyle({
       width: '88px',
       height: '52px',
-      top: '6px',
-      right: '-30px',
-      borderWidth: '0px',
-      borderRadius: '10px',
-      boxShadow: 'none',
     });
+    expect(screen.queryByTestId('compact-elevation-profile')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
     await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));
     expect(
       await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
@@ -2209,6 +2208,124 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('4.00 MB')).toBeVisible();
     expect(screen.getByText('48.00 MB')).toBeVisible();
     expect(screen.getByText(/HTTP and MapLibre tile caches/i)).toBeVisible();
+  });
+
+  it.each([900, 1900])(
+    'joins the active-track summary into collapsed navigation at %i pixels',
+    async (width) => {
+      mockViewportWidth(width);
+      const user = userEvent.setup();
+      const { container } = renderWorkspaceShell();
+      await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+      const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+      expect(input).not.toBeNull();
+      if (input === null) return;
+
+      await user.upload(input, gpxFile());
+      await screen.findByRole('heading', { name: 'New track' });
+      await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
+
+      const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
+      const navigation = screen.getByRole('navigation');
+      const compactProfile = within(showNavigation).getByTestId(
+        'compact-elevation-profile',
+      );
+      const logo = within(showNavigation).getByTestId('project-logo-image');
+      const children = [...showNavigation.children];
+      expect(navigation).toHaveStyle({ width: '414px' });
+      expect(showNavigation).toHaveStyle({ width: '408px', height: '52px' });
+      expect(within(showNavigation).getByLabelText('Distance: 1.4 km')).toBeVisible();
+      expect(
+        within(showNavigation).getByLabelText('Elevation gain: 120 m'),
+      ).toBeVisible();
+      expect(
+        within(showNavigation).getByLabelText('Elevation loss: 0 m'),
+      ).toBeVisible();
+      expect(children[0]).toContainElement(logo);
+      expect(children[1]).toContainElement(compactProfile);
+      expect(
+        children[2]?.querySelector('[data-testid="ChevronLeftOutlinedIcon"]'),
+      ).not.toBeNull();
+      expect(screen.getAllByRole('button', { name: 'Show navigation' })).toHaveLength(
+        1,
+      );
+      const tracksTools = container.querySelector<HTMLElement>(
+        'aside[aria-label="Tracks tools"]',
+      );
+      expect(tracksTools).not.toBeNull();
+      expect(tracksTools).not.toBeVisible();
+
+      await user.click(showNavigation);
+      await waitFor(() => {
+        expect(
+          within(navigation).queryByTestId('compact-elevation-profile'),
+        ).not.toBeInTheDocument();
+      });
+      if (width < 1900) {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        await user.click(screen.getByRole('button', { name: 'Back to tracks' }));
+      }
+      await waitFor(() => {
+        expect(tracksTools).toBeVisible();
+      });
+    },
+  );
+
+  it('keeps the smartphone disclosure expandable without profile data after failure', async () => {
+    mockViewportWidth(899);
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const sampleMany = vi
+      .spyOn(provider, 'sampleMany')
+      .mockRejectedValue(new Error('Terrain unavailable'));
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Terrain failure.gpx'));
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand track details',
+    });
+    await waitFor(() => {
+      expect(sampleMany).toHaveBeenCalledOnce();
+    });
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+    expect(within(disclosure).queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
+  });
+
+  it('omits the desktop summary when profile preparation fails', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    vi.spyOn(provider, 'sampleMany').mockRejectedValue(
+      new Error('Terrain unavailable'),
+    );
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Terrain failure.gpx'));
+    expect(await screen.findByText('Terrain unavailable')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
+
+    const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
+    expect(showNavigation).toHaveStyle({ width: '88px', height: '52px' });
+    expect(
+      within(showNavigation).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(showNavigation).queryByLabelText(/^Distance:/u),
+    ).not.toBeInTheDocument();
   });
 
   it('opens the complete current map error from the lightweight status line', async () => {

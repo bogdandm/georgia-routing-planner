@@ -1,5 +1,4 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
 import {
   Box,
@@ -30,10 +29,10 @@ import { appColors } from '@/presentation/theme/appColors';
 import type { MapFitPadding } from '@/presentation/map/mapTypes';
 import {
   TrackDetailsPane,
-  TrackStats,
   TracksWorkspaceProvider,
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
+import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
 const smartphoneViewportQuery = '(width < 900px)';
 const auxiliaryOverlayViewportQuery = '(width < 1900px)';
@@ -103,7 +102,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
     string | null
   >(null);
-  const { active: activeTrack } = useTracksWorkspace();
+  const { active: activeTrack, activeProfile } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
@@ -212,6 +211,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     !mobileWorkspaceOpen &&
     !mobileTrackDetailsExpanded;
   const desktopNavigationCollapsed = !smartphoneViewport && navigationCollapsed;
+  const collapsedTrackSummary =
+    desktopNavigationCollapsed && activeTrackMetrics !== null ? (
+      <CompactTrackSummary metrics={activeTrackMetrics} profile={activeProfile} />
+    ) : null;
 
   return (
     <Box
@@ -285,33 +288,17 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             setMobileWorkspaceOpen(true);
           }}
           sx={{
+            position: 'relative',
             width: '100%',
             minHeight: 56,
-            justifyContent: 'flex-start',
-            pl: 0,
-            pr: 1,
+            overflow: 'hidden',
           }}
         >
-          <Box
-            component="span"
-            sx={{
-              width: 30,
-              height: 30,
-              ml: 0.5,
-              mr: 1,
-              flexShrink: 0,
-              display: 'grid',
-              placeItems: 'center',
-              color: 'action.active',
-            }}
-          >
-            <KeyboardArrowUpIcon fontSize="small" />
-          </Box>
-          {activeTrackMetrics === null ? null : (
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <TrackStats compact metrics={activeTrackMetrics} />
-            </Box>
-          )}
+          <CompactTrackSummary
+            showExpandIndicator
+            metrics={activeTrackMetrics}
+            profile={activeProfile}
+          />
         </ButtonBase>
       </Paper>
 
@@ -372,6 +359,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         >
           <WorkspaceRail
             collapsed={desktopNavigationCollapsed}
+            collapsedSummary={collapsedTrackSummary}
             squareEdges={smartphoneViewport}
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}
@@ -510,63 +498,35 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             }}
           />
         </Box>
-        {!smartphoneViewport ? (
-          <Tooltip
-            title={navigationCollapsed ? '' : 'Hide navigation'}
-            placement="right"
-          >
+        {!smartphoneViewport && !navigationCollapsed ? (
+          <Tooltip title="Hide navigation" placement="right">
             <IconButton
-              aria-label={navigationCollapsed ? 'Show navigation' : 'Hide navigation'}
+              aria-label="Hide navigation"
               data-testid="navigation-collapse-toggle"
               onClick={() => {
-                handleNavigationCollapsedChange(!navigationCollapsed);
+                handleNavigationCollapsedChange(true);
               }}
               size="small"
               sx={{
                 position: 'absolute',
                 zIndex: 5,
-                top: navigationCollapsed ? 6 : 0,
-                right: navigationCollapsed ? -30 : -35,
-                width: navigationCollapsed ? 88 : 36,
-                height: navigationCollapsed ? 52 : 64,
-                bgcolor: navigationCollapsed ? 'transparent' : appColors.surface.subtle,
+                top: 0,
+                right: -35,
+                width: 36,
+                height: 64,
+                bgcolor: appColors.surface.subtle,
                 borderStyle: 'solid',
                 borderWidth: 0,
-                borderBottomWidth: navigationCollapsed ? 0 : 1,
+                borderBottomWidth: 1,
                 borderBottomColor: appColors.brand.sky,
-                borderRadius: navigationCollapsed ? '10px' : '0 8px 8px 0',
+                borderRadius: '0 8px 8px 0',
                 boxShadow: 0,
                 overflow: 'hidden',
                 transition: (theme) =>
-                  theme.transitions.create(
-                    [
-                      'top',
-                      'right',
-                      'width',
-                      'height',
-                      'background-color',
-                      'border-radius',
-                      'box-shadow',
-                    ],
-                    {
-                      duration: theme.transitions.duration.short,
-                      easing: theme.transitions.easing.easeInOut,
-                    },
-                  ),
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  inset: '0 0 0 auto',
-                  zIndex: 0,
-                  width: 36,
-                  bgcolor: appColors.surface.subtle,
-                  borderRadius: '0 8px 8px 0',
-                  opacity: navigationCollapsed ? 1 : 0,
-                  transition: (theme) =>
-                    theme.transitions.create(['opacity', 'border-radius'], {
-                      duration: theme.transitions.duration.short,
-                    }),
-                },
+                  theme.transitions.create(['background-color', 'border-radius'], {
+                    duration: theme.transitions.duration.short,
+                    easing: theme.transitions.easing.easeInOut,
+                  }),
                 '&::after': {
                   content: '""',
                   position: 'absolute',
@@ -580,75 +540,22 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                       duration: theme.transitions.duration.shorter,
                     }),
                 },
-                '&:hover': {
-                  bgcolor: navigationCollapsed
-                    ? 'transparent'
-                    : appColors.surface.subtle,
-                  boxShadow: 0,
-                  '&::after': { opacity: 1 },
-                },
+                '&:hover::after': { opacity: 1 },
                 '&.Mui-focusVisible': {
                   outline: `2px solid ${appColors.brand.amber}`,
                   outlineOffset: -2,
                 },
                 '& .MuiSvgIcon-root': {
-                  position: 'absolute',
-                  top: navigationCollapsed ? 16 : 22,
-                  right: 8,
+                  position: 'relative',
                   zIndex: 2,
-                  transform: navigationCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: (theme) =>
-                    theme.transitions.create('transform', {
-                      duration: theme.transitions.duration.short,
-                      easing: theme.transitions.easing.easeInOut,
-                    }),
                 },
                 '@media (prefers-reduced-motion: reduce)': {
                   transition: 'none',
-                  '&::before, &::after': { transition: 'none' },
-                  '& .MuiSvgIcon-root': { transition: 'none' },
+                  '&::after': { transition: 'none' },
                 },
               }}
             >
               <ChevronLeftOutlinedIcon fontSize="small" />
-              {navigationCollapsed ? (
-                <>
-                  <Tooltip
-                    title="Georgia Routing Planner"
-                    placement="bottom-start"
-                    slotProps={{
-                      popper: {
-                        modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
-                      },
-                    }}
-                  >
-                    <Box
-                      aria-hidden="true"
-                      component="span"
-                      data-testid="collapsed-project-tooltip-target"
-                      sx={{
-                        position: 'absolute',
-                        zIndex: 3,
-                        inset: '0 auto 0 0',
-                        width: 44,
-                      }}
-                    />
-                  </Tooltip>
-                  <Tooltip title="Show navigation" placement="right">
-                    <Box
-                      aria-hidden="true"
-                      component="span"
-                      data-testid="collapsed-show-navigation-tooltip-target"
-                      sx={{
-                        position: 'absolute',
-                        zIndex: 3,
-                        inset: '0 0 0 auto',
-                        width: 36,
-                      }}
-                    />
-                  </Tooltip>
-                </>
-              ) : null}
             </IconButton>
           </Tooltip>
         ) : null}

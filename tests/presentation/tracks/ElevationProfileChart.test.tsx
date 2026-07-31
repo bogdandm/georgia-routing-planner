@@ -7,7 +7,10 @@ import {
   type ElevationProfile,
   type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
-import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
+import {
+  CompactElevationProfile,
+  ElevationProfileChart,
+} from '@/presentation/tracks/ElevationProfileChart';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 
 const profile: ElevationProfile = {
@@ -413,5 +416,28 @@ describe('ElevationProfileChart', () => {
     };
 
     expect(sampleElevationProfilePoints(overflowProfile)).toHaveLength(1_202);
+  });
+
+  it('renders the compact profile as a decorative non-interactive chart', () => {
+    const { container } = render(
+      <ThemeProvider theme={createAppTheme()}>
+        <CompactElevationProfile profile={profile} />
+      </ThemeProvider>,
+    );
+
+    const compactProfile = screen.getByTestId('compact-elevation-profile');
+    expect(compactProfile).toHaveAttribute('aria-hidden', 'true');
+    expect(compactProfile).toHaveStyle({ pointerEvents: 'none' });
+    expect(
+      [...container.querySelectorAll('stop')].map((stop) =>
+        stop.getAttribute('stop-color'),
+      ),
+    ).toEqual(['#D6A100', '#D6A100', '#0F766E', '#0F766E']);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(container.querySelector('.recharts-cartesian-grid')).toBeNull();
+    expect(container.querySelector('.recharts-tooltip-wrapper')).toBeNull();
+    expect(container.querySelector('.recharts-reference-line')).toBeNull();
+    expect(container.querySelector('.recharts-cartesian-axis-tick')).toBeNull();
+    expect(container.querySelector('.recharts-cartesian-axis-line')).toBeNull();
   });
 });

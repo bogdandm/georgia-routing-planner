@@ -347,13 +347,14 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
 }
 
 export function isConfiguredProviderRequest(url: URL): boolean {
+  if (url.origin === terrainOrigin)
+    return url.pathname.startsWith('/elevation-tiles-prod/');
+  if (url.origin === nominatimOrigin) return url.pathname === '/reverse';
+  if (url.origin === overpassOrigin) return url.pathname === '/api/interpreter';
   return (
     url.origin === openFreeMapOrigin ||
-    url.origin === terrainOrigin ||
     url.origin === earthSearchOrigin ||
     url.origin === satelliteRendererOrigin ||
-    url.origin === sentinelCogFixtureOrigin ||
-    url.origin === nominatimOrigin ||
-    url.origin === overpassOrigin
+    url.origin === sentinelCogFixtureOrigin
   );
 }

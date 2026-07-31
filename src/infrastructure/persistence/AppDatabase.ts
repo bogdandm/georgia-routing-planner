@@ -226,7 +226,9 @@ const trackMetricsSchema = z
     minimumElevationMeters: z.number().optional(),
     maximumElevationMeters: z.number().optional(),
     elevationSource: z.enum(['gpx', 'dem-assisted']).optional(),
-    elevationAlgorithmVersion: z.union([z.literal(1), z.literal(2)]).optional(),
+    elevationAlgorithmVersion: z
+      .union([z.literal(1), z.literal(2), z.literal(3)])
+      .optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -235,7 +237,9 @@ const trackMetricsSchema = z
         value.elevationAlgorithmVersion === undefined) ||
       (value.elevationSource === 'gpx' && value.elevationAlgorithmVersion === 1) ||
       (value.elevationSource === 'dem-assisted' &&
-        value.elevationAlgorithmVersion === 2);
+        value.elevationAlgorithmVersion === 2) ||
+      ((value.elevationSource === 'gpx' || value.elevationSource === 'dem-assisted') &&
+        value.elevationAlgorithmVersion === 3);
     if (!provenanceIsValid) {
       context.addIssue({
         code: 'custom',

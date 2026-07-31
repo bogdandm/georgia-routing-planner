@@ -403,6 +403,7 @@ export function CompactElevationProfile({
       >
         <XAxis
           hide
+          height={0}
           type="number"
           dataKey="distanceMeters"
           domain={['dataMin', 'dataMax']}
@@ -410,6 +411,7 @@ export function CompactElevationProfile({
         />
         <YAxis
           hide
+          width={0}
           type="number"
           dataKey="elevationMeters"
           domain={['dataMin', 'dataMax']}

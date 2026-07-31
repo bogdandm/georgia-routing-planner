@@ -276,6 +276,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           left: 12,
           display: mobileTrackDisclosureOpen ? 'block' : 'none',
           bgcolor: 'background.paper',
+          overflow: 'hidden',
         }}
       >
         <ButtonBase
@@ -293,6 +294,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             height: 56,
             minHeight: 56,
             overflow: 'hidden',
+            borderRadius: 'inherit',
           }}
         >
           <CompactTrackSummary

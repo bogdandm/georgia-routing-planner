@@ -129,7 +129,14 @@ export function WorkspaceRail({
             borderRadius: 1.25,
             bgcolor: 'transparent',
             color: appColors.text.inverse,
+            '&:hover': {
+              boxShadow: `inset 0 0 0 2px ${appColors.brand.sky}`,
+            },
             '&:hover .collapsed-navigation-segment::after': { opacity: 1 },
+            '&.Mui-focusVisible': {
+              outline: `2px solid ${appColors.brand.amber}`,
+              outlineOffset: -2,
+            },
             '@media (prefers-reduced-motion: reduce)': {
               '& .collapsed-navigation-segment::after': { transition: 'none' },
             },

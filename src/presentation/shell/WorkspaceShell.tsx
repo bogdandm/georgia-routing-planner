@@ -540,7 +540,11 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                       duration: theme.transitions.duration.shorter,
                     }),
                 },
-                '&:hover::after': { opacity: 1 },
+                '&:hover': {
+                  bgcolor: appColors.surface.subtle,
+                  boxShadow: 0,
+                  '&::after': { opacity: 1 },
+                },
                 '&.Mui-focusVisible': {
                   outline: `2px solid ${appColors.brand.amber}`,
                   outlineOffset: -2,

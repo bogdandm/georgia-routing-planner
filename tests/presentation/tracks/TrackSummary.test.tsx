@@ -147,12 +147,9 @@ describe('CompactTrackSummary', () => {
     const renderedStyles = [...document.querySelectorAll('style')]
       .map((style) => style.textContent)
       .join('');
-    expect(renderedStyles).toContain(
-      'text-shadow:0 0 2px rgba(255,255,255,1),0 0 6px rgba(255,255,255,0.96)',
-    );
-    expect(renderedStyles).toContain(
-      'filter:drop-shadow(0 0 2px rgba(255,255,255,1)) drop-shadow(0 0 4px rgba(255,255,255,0.96))',
-    );
+    expect(renderedStyles).toContain('background-color:rgba(255,255,255,0.78)');
+    expect(renderedStyles).toContain('backdrop-filter:blur(2px)');
+    expect(renderedStyles).toContain('border:1px solid rgba(255,255,255,0.88)');
   });
 
   it('keeps metrics on the paper surface without a profile', () => {

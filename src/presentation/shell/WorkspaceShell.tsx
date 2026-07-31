@@ -290,6 +290,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           sx={{
             position: 'relative',
             width: '100%',
+            height: 56,
             minHeight: 56,
             overflow: 'hidden',
           }}

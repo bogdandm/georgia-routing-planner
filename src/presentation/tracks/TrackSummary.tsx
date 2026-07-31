@@ -49,22 +49,19 @@ export function TrackStat({
       direction="row"
       spacing={0.5}
       aria-label={`${label}: ${value}`}
-      sx={{
-        minWidth: 0,
-        alignItems: 'center',
-        bgcolor: overGraphic ? 'rgba(255,255,255,0.78)' : undefined,
-        backdropFilter: overGraphic ? 'blur(2px)' : undefined,
-        border: overGraphic ? '1px solid rgba(255,255,255,0.88)' : undefined,
-        borderRadius: overGraphic ? 0.75 : undefined,
-        px: overGraphic ? 0.5 : undefined,
-        py: overGraphic ? 0.25 : undefined,
-      }}
+      sx={{ minWidth: 0, alignItems: 'center' }}
     >
       <Tooltip title={label} enterTouchDelay={0}>
         <Box
           component="span"
           aria-hidden
-          sx={{ color: 'text.secondary', display: 'inline-flex' }}
+          sx={{
+            color: 'text.secondary',
+            display: 'inline-flex',
+            filter: overGraphic
+              ? 'drop-shadow(0 0 1px rgba(255,255,255,0.92))'
+              : undefined,
+          }}
         >
           {icon}
         </Box>
@@ -73,7 +70,11 @@ export function TrackStat({
         component="span"
         variant={emphasized ? 'body2' : 'caption'}
         noWrap
-        sx={{ color: 'text.primary', fontWeight: emphasized ? 600 : 400 }}
+        sx={{
+          color: 'text.primary',
+          fontWeight: emphasized ? 600 : 400,
+          WebkitTextStroke: overGraphic ? '0.6px rgba(255,255,255,0.92)' : undefined,
+        }}
       >
         {value}
       </Typography>

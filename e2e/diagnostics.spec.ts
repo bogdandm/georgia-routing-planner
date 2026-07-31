@@ -124,6 +124,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
       'terrain-dem',
       'terrain-contours',
       'imported-track',
+      'imported-track-highlight',
       'imported-track-trace',
     ],
     webGlCapabilities: { contextType: 'webgl2' },

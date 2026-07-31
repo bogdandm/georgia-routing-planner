@@ -66,6 +66,16 @@ describe('prepareImportedTrack', () => {
     expect(prepared.metrics.elevationSource).toBe('dem-assisted');
   });
 
+  it('interpolates source elevations across long legs before DEM fallback', async () => {
+    const prepared = await prepareImportedTrack(sourceSegments, flatDem(400), signal);
+    const segment = prepared.segments[0];
+    if (segment === undefined) throw new Error('Expected one prepared segment.');
+    const middlePoint = segment.points.at(Math.floor(segment.points.length / 2));
+
+    expect(middlePoint?.elevationMeters).toBeGreaterThan(1_050);
+    expect(middlePoint?.elevationMeters).toBeLessThan(1_150);
+  });
+
   it('prefers newly sampled DEM heights for saved-track recalculation', async () => {
     const prepared = await prepareImportedTrack(sourceSegments, flatDem(400), signal, {
       preferDemElevations: true,

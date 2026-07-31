@@ -16,7 +16,6 @@ import {
 } from '@/domain/tracks/trackCalculations';
 
 const sampleIntervalMeters = 10;
-const sourceInterpolationMaximumDistanceMeters = 20;
 const maximumPersistedPoints = 100_000;
 
 interface ResampledStation {
@@ -170,9 +169,7 @@ function resampleSegment(
       interpolateRecordedAt(start.recordedAt, end.recordedAt, fraction);
     const sourceElevationMeters =
       sourcePoint?.elevationMeters ??
-      (legDistance <= sourceInterpolationMaximumDistanceMeters &&
-      start.elevationMeters !== undefined &&
-      end.elevationMeters !== undefined
+      (start.elevationMeters !== undefined && end.elevationMeters !== undefined
         ? start.elevationMeters +
           (end.elevationMeters - start.elevationMeters) * fraction
         : undefined);

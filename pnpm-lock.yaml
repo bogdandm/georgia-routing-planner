@@ -116,6 +116,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      deno:
+        specifier: 2.9.4
+        version: 2.9.4
       eslint:
         specifier: 10.7.0
         version: 10.7.0
@@ -387,6 +390,56 @@ packages:
         integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==,
       }
     engines: { node: '>=20.19.0' }
+
+  '@deno/darwin-arm64@2.9.4':
+    resolution:
+      {
+        integrity: sha512-Pjq1OdRauzaWtFB8W4FJuXp0U/if2tEzlQEgbmVflNIUJhUVJh0jUjxAgVP84P5vYSaKJTzXAHaftNH5PbQcFA==,
+      }
+    cpu: [arm64]
+    os: [darwin]
+
+  '@deno/darwin-x64@2.9.4':
+    resolution:
+      {
+        integrity: sha512-gsKNBOeU0iOgl/kYLItvdtcrAQhK3W0z4EdPVyF8NVZfzB+iqkZbTwbq0tgIcZbo3fpKFaJ6gT53XvaFIwVK5Q==,
+      }
+    cpu: [x64]
+    os: [darwin]
+
+  '@deno/linux-arm64-glibc@2.9.4':
+    resolution:
+      {
+        integrity: sha512-SHHmaFnfOtFe0RWEAqo0lGlKFww21O6utyNzcFNYpIFRyQSKXKrfegwYMYP7hN1GEhZ49bDPKIpjJHjPbGFqyw==,
+      }
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@deno/linux-x64-glibc@2.9.4':
+    resolution:
+      {
+        integrity: sha512-Or3ItpBDUC4GKtE723T4LpWs1nKOAQ4Zt8E+tufFeEnX9k+OhYOQTnu8kXqz+8FM42JKeuegfss8pr7k0PVQTQ==,
+      }
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@deno/win32-arm64@2.9.4':
+    resolution:
+      {
+        integrity: sha512-Xcvs+3W7vAoSQAzyhXr954s6hDC6N95oCHQelWiZt3fbUWPJjUzxtUP4EC4AygC+EC0zYBgIlDGv6tmJ8dwSAQ==,
+      }
+    cpu: [arm64]
+    os: [win32]
+
+  '@deno/win32-x64@2.9.4':
+    resolution:
+      {
+        integrity: sha512-u69MJjnr/4ttQ1a/lMVch57LJJgzplEIDiHepZX+yHOw9Q4FdWinr9Gj0oZ/hpEnTvVtih/CZc3IvYagBqQBag==,
+      }
+    cpu: [x64]
+    os: [win32]
 
   '@emnapi/core@1.11.1':
     resolution:
@@ -2219,6 +2272,13 @@ packages:
       {
         integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==,
       }
+
+  deno@2.9.4:
+    resolution:
+      {
+        integrity: sha512-fK8l+v1DGlsLN8Xich0tP6zCKU9wD22lmtZObebSXTqX8ZzVqasDguUz+V0OwOwCuzUtq9jweHfOrvvocQftYQ==,
+      }
+    hasBin: true
 
   dequal@2.0.3:
     resolution:
@@ -4418,6 +4478,24 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
+  '@deno/darwin-arm64@2.9.4':
+    optional: true
+
+  '@deno/darwin-x64@2.9.4':
+    optional: true
+
+  '@deno/linux-arm64-glibc@2.9.4':
+    optional: true
+
+  '@deno/linux-x64-glibc@2.9.4':
+    optional: true
+
+  '@deno/win32-arm64@2.9.4':
+    optional: true
+
+  '@deno/win32-x64@2.9.4':
+    optional: true
+
   '@emnapi/core@1.11.1':
     dependencies:
       '@emnapi/wasi-threads': 1.2.2
@@ -5503,6 +5581,15 @@ snapshots:
   decimal.js@10.6.0: {}
 
   deep-is@0.1.4: {}
+
+  deno@2.9.4:
+    optionalDependencies:
+      '@deno/darwin-arm64': 2.9.4
+      '@deno/darwin-x64': 2.9.4
+      '@deno/linux-arm64-glibc': 2.9.4
+      '@deno/linux-x64-glibc': 2.9.4
+      '@deno/win32-arm64': 2.9.4
+      '@deno/win32-x64': 2.9.4
 
   dequal@2.0.3: {}
 

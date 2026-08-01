@@ -297,6 +297,39 @@ perimeter derived from provider-tagged military geometry.
   to the user. A restoration event refreshes capabilities and returns the snapshot to
   ready.
 
+## Track synchronization trust boundary
+
+The repository defines one authenticated `track-sync` Edge Function. Supabase performs
+its platform JWT check, and `@supabase/server` in `auth: "user"` mode supplies verified
+claims and the platform-provided admin client. The function derives `user_id` only from
+`userClaims.id`. It rejects client-supplied identity, object paths, quota counters,
+unknown fields, oversized bodies, and malformed protocol values. No privileged key is
+stored in the browser or this repository.
+
+Uploads use bounded multipart requests containing `action=upload`, `baseRevision`,
+`contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry
+file. The function checks actual compressed size, bounded decompression, the complete
+GRPT version 1 envelope, and SHA-256 before reserving quota. The database generates a
+unique path under the verified user's prefix. The function validates that path, writes
+the immutable object with `upsert: false`, and finalizes the reservation. A concurrent
+`Asset Already Exists` response proceeds to finalization; other failures delete only an
+object created by that request and release its reservation. If compensation cannot
+delete the object, the released row makes it an orphan for mandatory later cleanup.
+
+JSON requests support metadata update, hard deletion, and quota status. The database RPC
+response has one explicit outcome: `applied | upload | conflict | existing | missing`.
+Metadata and deletion carry a server `baseRevision`; an upload with a nonzero revision
+must match the current record before it can return `existing` or `upload`. A matching
+ready upload applies its metadata atomically with a new revision; a stale revision
+returns the current record as `conflict`, while a nonzero revision cannot recreate a row
+that deletion already removed. Client wall clocks do not decide conflicts.
+
+Delete commits row removal and quota release before idempotent object removal. A storage
+failure is returned without restoring the row. Before status and every later mutation,
+the function lists objects under the verified user prefix, then re-reads current
+`reserved` and `ready` paths before deleting candidates. This ordering prevents cleanup
+from racing a new reservation. No flow creates a server tombstone.
+
 ## Diagnostics and health
 
 ```mermaid

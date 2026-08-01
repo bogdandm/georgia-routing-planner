@@ -1,0 +1,21 @@
+{
+  "codec": {
+    "magic": "GRPT",
+    "version": 1,
+    "coordinateScale": 1000000,
+    "coordinateEncoding": "delta-zigzag-varuint",
+    "timestampEncoding": "presence-tagged-delta-zigzag-varuint"
+  },
+  "input": {
+    "segments": [
+      [
+        { "longitude": 44.793, "latitude": 41.709, "timestamp": 1704067200000 },
+        { "longitude": 44.793001, "latitude": 41.709002, "timestamp": null },
+        { "longitude": 44.79301, "latitude": 41.709005, "timestamp": 1704067260000 }
+      ]
+    ]
+  },
+  "canonicalHex": "4752505401010103d0f2db2a90b7e32781d08fa598630204001206c1a907",
+  "gzipHex": "1f8b08000000000002ff730f0a0861646464bef0e9b6d684ed8fd51b2ff42f9d91ccc4c220c47670253b00949ebdd61e000000",
+  "sha256": "c4034c77caed21d7264ecd178a07c3e290e62946113d494c880b6aee25e1c88e"
+}

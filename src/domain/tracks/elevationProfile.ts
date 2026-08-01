@@ -66,6 +66,17 @@ export type GradeBand =
   | 'hard-climb'
   | 'steep-climb'
   | 'extreme-climb';
+export const GRADE_BANDS_ASCENDING = [
+  'steep-descent',
+  'descent',
+  'flat',
+  'climb',
+  'hard-climb',
+  'steep-climb',
+  'extreme-climb',
+] as const satisfies readonly GradeBand[];
+
+export const GRADE_BAND_THRESHOLDS_PCT = [-10, -3, 3, 10, 20, 30] as const;
 
 export interface GradeSubsegment {
   readonly startSampleIndex: number;
@@ -203,12 +214,12 @@ export function medianFilterElevationSamples(
 }
 
 export function gradeBandForGrade(gradePct: number): GradeBand {
-  if (gradePct <= -10) return 'steep-descent';
-  if (gradePct < -3) return 'descent';
-  if (gradePct <= 3) return 'flat';
-  if (gradePct < 10) return 'climb';
-  if (gradePct < 20) return 'hard-climb';
-  if (gradePct < 30) return 'steep-climb';
+  if (gradePct <= GRADE_BAND_THRESHOLDS_PCT[0]) return 'steep-descent';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[1]) return 'descent';
+  if (gradePct <= GRADE_BAND_THRESHOLDS_PCT[2]) return 'flat';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[3]) return 'climb';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[4]) return 'hard-climb';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[5]) return 'steep-climb';
   return 'extreme-climb';
 }
 

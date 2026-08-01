@@ -6,6 +6,8 @@ import {
   elevationSegmentIndexForSample,
   gradeBandForGrade,
   sampleElevationProfilePoints,
+  GRADE_BANDS_ASCENDING,
+  GRADE_BAND_THRESHOLDS_PCT,
   medianFilterElevationSamples,
   type ElevationProfile,
   type ElevationProfileInputPoint,
@@ -335,6 +337,7 @@ describe('calculateElevationProfile', () => {
     expect(gradeBandForGrade(10)).toBe('hard-climb');
     expect(gradeBandForGrade(20)).toBe('steep-climb');
     expect(gradeBandForGrade(30)).toBe('extreme-climb');
+    expect(GRADE_BANDS_ASCENDING).toHaveLength(GRADE_BAND_THRESHOLDS_PCT.length + 1);
   });
 
   it('assigns a shared macro boundary to the following segment except at the route end', () => {

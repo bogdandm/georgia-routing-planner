@@ -1,10 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
-import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
+
+import {
+  GRADE_BANDS_ASCENDING,
+  GRADE_BAND_THRESHOLDS_PCT,
+  type ElevationProfile,
+} from '@/domain/tracks/elevationProfile';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
@@ -14,6 +18,7 @@ import {
   requestMapNavigation,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
@@ -712,8 +717,24 @@ describe('MapWorkspace', () => {
     const legend = await screen.findByRole('region', {
       name: 'Elevation grade legend',
     });
-    expect(legend).toHaveTextContent('≤ −10%');
-    expect(legend).toHaveTextContent('≥ 30%');
+    const legendImage = within(legend).getByRole('img', {
+      name: 'Track grade color thresholds',
+    });
+
+    for (const threshold of GRADE_BAND_THRESHOLDS_PCT) {
+      const label = `${threshold < 0 ? '−' : ''}${String(Math.abs(threshold))}%`;
+      expect(within(legend).getByText(label)).toBeVisible();
+    }
+
+    const gradientStops = Array.from(legendImage.querySelectorAll('stop'));
+    expect(gradientStops).toHaveLength(GRADE_BANDS_ASCENDING.length * 2);
+    for (const [index, band] of GRADE_BANDS_ASCENDING.entries()) {
+      expect(
+        gradientStops
+          .slice(index * 2, index * 2 + 2)
+          .map((stop) => stop.getAttribute('stop-color')),
+      ).toEqual([appColors.elevationGrade[band], appColors.elevationGrade[band]]);
+    }
 
     act(() => {
       mapLayerStore.setState((state) => ({

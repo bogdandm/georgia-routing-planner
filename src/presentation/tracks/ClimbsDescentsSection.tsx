@@ -80,14 +80,41 @@ export function ClimbsDescentsSection({
         sx={{
           minHeight: 44,
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
           alignItems: 'center',
           columnGap: 0.5,
         }}
       >
-        <Typography component="h3" variant="subtitle2">
-          Climbs & Descents
-        </Typography>
+        <ButtonBase
+          aria-label="Climbs & Descents"
+          aria-controls={detailsId}
+          aria-expanded={expanded}
+          onClick={() => {
+            setExpanded((current) => !current);
+          }}
+          sx={{
+            minWidth: 0,
+            minHeight: 44,
+            justifyContent: 'space-between',
+            px: 1,
+            textAlign: 'left',
+          }}
+        >
+          <Typography component="h3" variant="subtitle2">
+            Climbs & Descents
+          </Typography>
+          <ExpandMoreIcon
+            aria-hidden
+            fontSize="small"
+            sx={{
+              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: (theme) =>
+                theme.transitions.create('transform', {
+                  duration: theme.transitions.duration.shortest,
+                }),
+            }}
+          />
+        </ButtonBase>
         <Tooltip title="Recalculate elevation">
           <span>
             <IconButton
@@ -103,28 +130,6 @@ export function ClimbsDescentsSection({
               )}
             </IconButton>
           </span>
-        </Tooltip>
-        <Tooltip title={expanded ? 'Collapse' : 'Expand'}>
-          <IconButton
-            size="small"
-            aria-label="Climbs & Descents"
-            aria-controls={detailsId}
-            aria-expanded={expanded}
-            onClick={() => {
-              setExpanded((current) => !current);
-            }}
-          >
-            <ExpandMoreIcon
-              fontSize="small"
-              sx={{
-                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: (theme) =>
-                  theme.transitions.create('transform', {
-                    duration: theme.transitions.duration.shortest,
-                  }),
-              }}
-            />
-          </IconButton>
         </Tooltip>
       </Box>
       {expanded ? (

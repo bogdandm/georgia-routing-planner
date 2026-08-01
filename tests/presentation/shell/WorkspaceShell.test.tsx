@@ -979,6 +979,9 @@ describe('WorkspaceShell', () => {
       name: 'Climbs & Descents',
     });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+
 
     const previewRecalculate = screen.getByRole('button', {
       name: 'Recalculate elevation',
@@ -989,7 +992,7 @@ describe('WorkspaceShell', () => {
     expect(previewRecalculate).toContainElement(
       within(previewRecalculate).getByRole('progressbar'),
     );
-    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     const previewPending = pendingRecalculations[0];
     expect(previewPending).toBeDefined();
     act(() => {
@@ -1016,6 +1019,12 @@ describe('WorkspaceShell', () => {
     const savedRecalculate = screen.getByRole('button', {
       name: 'Recalculate elevation',
     });
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
+    await user.click(savedDisclosure);
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(savedDisclosure);
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
+
     await user.click(savedRecalculate);
     const savedPending = pendingRecalculations[1];
     expect(savedPending).toBeDefined();
@@ -1029,7 +1038,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(replaceLocalTrackElevation).toHaveBeenCalledOnce();
     });
-    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('does not recalculate a preview while its save is pending', async () => {

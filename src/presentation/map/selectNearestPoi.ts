@@ -26,11 +26,10 @@ type FiniteCoordinate = [number, number, ...number[]];
 
 function isFiniteCoordinate(value: unknown): value is FiniteCoordinate {
   if (!Array.isArray(value)) return false;
-  const [longitude, latitude] = value;
   return (
-    typeof longitude === 'number' &&
-    typeof latitude === 'number' &&
     value.length >= 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number' &&
     value.every(
       (coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate),
     )

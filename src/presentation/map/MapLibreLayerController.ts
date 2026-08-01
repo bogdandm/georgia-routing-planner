@@ -1343,9 +1343,7 @@ export class MapLibreLayerController {
         map.getLayer(activeRasterLayerId) !== undefined &&
         mapLayerStore.getState().visibility['satellite-imagery'];
       const beforeId =
-        !this.#terrainOverlayPreferences.shadeAboveSatellite &&
-        satelliteVisible &&
-        activeRasterLayerId !== undefined
+        !this.#terrainOverlayPreferences.shadeAboveSatellite && satelliteVisible
           ? activeRasterLayerId
           : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
             ? mapInsertionPoints.terrainOverlaysBeforeLayerId

@@ -742,10 +742,7 @@ describe('MapLibreLayerController', () => {
     expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
       status: 'success',
     });
-    await controller.applyScene(
-      scene('scene-relief-b'),
-      new AbortController().signal,
-    );
+    await controller.applyScene(scene('scene-relief-b'), new AbortController().signal);
     expect(map.layers.get(sentinelMapLayerIds.rasterA)).toMatchObject({
       layout: { visibility: 'visible' },
     });

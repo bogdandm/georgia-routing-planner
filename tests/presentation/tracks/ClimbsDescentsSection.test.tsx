@@ -88,7 +88,6 @@ describe('ClimbsDescentsSection', () => {
     const disclosure = screen.getByRole('button', { name: 'Climbs & Descents' });
     expect(disclosure).toHaveAttribute('aria-controls');
 
-
     await user.click(screen.getByRole('heading', { name: 'Climbs & Descents' }));
     expect(disclosure).toHaveFocus();
     expect(disclosure).toHaveAttribute('aria-expanded', 'true');

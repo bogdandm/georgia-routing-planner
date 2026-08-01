@@ -32,8 +32,7 @@ function isFiniteCoordinate(value: unknown): value is FiniteCoordinate {
     typeof latitude === 'number' &&
     value.length >= 2 &&
     value.every(
-      (coordinate) =>
-        typeof coordinate === 'number' && Number.isFinite(coordinate),
+      (coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate),
     )
   );
 }

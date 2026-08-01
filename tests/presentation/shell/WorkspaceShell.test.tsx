@@ -602,16 +602,11 @@ describe('WorkspaceShell', () => {
       name: 'Expand track details',
     });
     const status = within(disclosure).getByRole('status');
-    expect(
-      within(status).getByText('Preparing terrain and elevation…'),
-    ).toBeVisible();
+    expect(within(status).getByText('Preparing terrain and elevation…')).toBeVisible();
     expect(within(status).getByRole('progressbar')).toBeVisible();
 
     act(() => {
-      pending.resolve([
-        { status: 'unavailable' },
-        { status: 'unavailable' },
-      ]);
+      pending.resolve([{ status: 'unavailable' }, { status: 'unavailable' }]);
     });
 
     await waitFor(() => {
@@ -808,9 +803,9 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('Cancel.gpx'));
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
-      within(
-        screen.getByRole('complementary', { name: 'Track details' }),
-      ).getByText('Preparing terrain and elevation…'),
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+        'Preparing terrain and elevation…',
+      ),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Discard' }));
@@ -822,9 +817,9 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('Unmount.gpx'));
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
-      within(
-        screen.getByRole('complementary', { name: 'Track details' }),
-      ).getByText('Preparing terrain and elevation…'),
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+        'Preparing terrain and elevation…',
+      ),
     ).toBeVisible();
     rendered.unmount();
     expect(signals[1]?.aborted).toBe(true);
@@ -884,9 +879,9 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('First.gpx'));
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
-      within(
-        screen.getByRole('complementary', { name: 'Track details' }),
-      ).getByText('Preparing terrain and elevation…'),
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+        'Preparing terrain and elevation…',
+      ),
     ).toBeVisible();
     await user.upload(input, gpxFile('Second.gpx'));
     expect(pending).toHaveLength(2);
@@ -981,7 +976,6 @@ describe('WorkspaceShell', () => {
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
     await user.click(disclosure);
     expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-
 
     const previewRecalculate = screen.getByRole('button', {
       name: 'Recalculate elevation',

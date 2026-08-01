@@ -142,12 +142,10 @@ describe('selectNearestPoi', () => {
     expect(
       selectNearestPoi(
         [
-          waterNameFeature(
-            'incomplete-lake-line',
-            'LineString',
-            [[44.8, 41.7]],
-            { name: 'Incomplete lake', class: 'lake' },
-          ),
+          waterNameFeature('incomplete-lake-line', 'LineString', [[44.8, 41.7]], {
+            name: 'Incomplete lake',
+            class: 'lake',
+          }),
           waterNameFeature(
             'non-finite-lake-line',
             'MultiLineString',

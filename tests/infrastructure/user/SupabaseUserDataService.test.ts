@@ -28,6 +28,7 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
     data: { session: session('signed-in@example.test') },
     error: null,
   });
+  const signUp = vi.fn().mockResolvedValue({ data: { session: null }, error: null });
   const signOut = vi.fn().mockResolvedValue({ error: null });
   const dispose = vi.fn().mockResolvedValue(undefined);
   const getSession = vi.fn().mockResolvedValue({
@@ -45,6 +46,7 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
         },
       ),
       signInWithPassword,
+      signUp,
       signOut,
     },
   } as unknown as SupabaseClient;
@@ -57,6 +59,7 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
     getSession,
     signInWithPassword,
     signOut,
+    signUp,
     dispose,
     unsubscribe,
   };
@@ -72,6 +75,7 @@ describe('SupabaseUserDataService', () => {
         busy: false,
         email: 'restored@example.test',
         errorMessage: null,
+        noticeMessage: null,
         status: 'signed-in',
       });
     });
@@ -97,7 +101,57 @@ describe('SupabaseUserDataService', () => {
       email: null,
       errorMessage: 'Unable to sign in. Check your email and password.',
       status: 'error',
+      noticeMessage: null,
     });
+  });
+
+  it('uses neutral confirmation for registration without a session', async () => {
+    const fake = createClient();
+    const service = new SupabaseUserDataService(fake.client);
+
+    await service.signUp('existing-or-new@example.test', 'password');
+
+    expect(fake.signUp).toHaveBeenCalledWith({
+      email: 'existing-or-new@example.test',
+      password: 'password',
+    });
+    expect(service.getSnapshot()).toEqual({
+      busy: false,
+      email: null,
+      errorMessage: null,
+      noticeMessage: 'Check your email to confirm your account, then sign in.',
+      status: 'signed-out',
+    });
+  });
+
+  it('enters the signed-in flow when registration returns a session', async () => {
+    const fake = createClient();
+    fake.signUp.mockResolvedValueOnce({
+      data: { session: session('new@example.test') },
+      error: null,
+    });
+    const service = new SupabaseUserDataService(fake.client);
+
+    await service.signUp('new@example.test', 'password');
+
+    expect(service.getSnapshot().email).toBe('new@example.test');
+    expect(service.getSnapshot().status).toBe('signed-in');
+  });
+
+  it('does not reveal an existing registration address', async () => {
+    const fake = createClient();
+    fake.signUp.mockResolvedValueOnce({
+      data: { session: null },
+      error: { code: 'email_exists' },
+    });
+    const service = new SupabaseUserDataService(fake.client);
+
+    await service.signUp('existing@example.test', 'password');
+
+    expect(service.getSnapshot().noticeMessage).toBe(
+      'Check your email to confirm your account, then sign in.',
+    );
+    expect(service.getSnapshot().errorMessage).toBeNull();
   });
 
   it('disposes the auth client and subscription exactly once', () => {

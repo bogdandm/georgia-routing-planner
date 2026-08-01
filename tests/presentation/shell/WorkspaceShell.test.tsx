@@ -2793,7 +2793,7 @@ describe('WorkspaceShell', () => {
     useUiStore.setState({ developerMode: true });
     renderWorkspaceShell();
 
-    const userButton = screen.getByRole('tab', { name: 'User' });
+    const userButton = screen.getByRole('button', { name: 'User' });
     const settingsButton = screen.getByRole('button', { name: 'Open settings' });
     expect(
       userButton.compareDocumentPosition(settingsButton) &

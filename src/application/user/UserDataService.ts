@@ -5,6 +5,7 @@ export interface UserDataSnapshot {
   readonly busy: boolean;
   readonly email: string | null;
   readonly errorMessage: string | null;
+  readonly noticeMessage: string | null;
   readonly status: UserDataStatus;
 }
 
@@ -13,6 +14,7 @@ export interface UserDataService {
   getSnapshot(): UserDataSnapshot;
   subscribe(listener: () => void): () => void;
   signIn(email: string, password: string): Promise<void>;
+  signUp(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
   dispose(): void;
 }
@@ -21,6 +23,7 @@ export const unconfiguredUserDataSnapshot: UserDataSnapshot = {
   busy: false,
   email: null,
   errorMessage: null,
+  noticeMessage: null,
   status: 'unconfigured',
 };
 
@@ -30,6 +33,7 @@ export function createUnconfiguredUserDataService(): UserDataService {
     dispose: () => undefined,
     getSnapshot: () => unconfiguredUserDataSnapshot,
     signIn: () => Promise.resolve(),
+    signUp: () => Promise.resolve(),
     signOut: () => Promise.resolve(),
     subscribe: () => () => undefined,
   };

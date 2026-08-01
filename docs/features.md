@@ -75,10 +75,10 @@ generic always-visible privacy notice.
 ### User
 
 **User** is optional. When the deployable build has valid public Supabase configuration,
-it restores a persistent email-and-password session and exposes sign-in status and
-sign-out. It does not offer registration, password reset, or track synchronization.
-Without configuration, the section explains that browser-local tracks remain available
-and does not issue an account request.
+an ordinary user can create an email/password account, confirm the address by email, and
+then sign in to restore a persistent session. Password reset and track synchronization
+are not offered. Without configuration, the section explains that browser-local tracks
+remain available and does not issue an account request.
 
 ## Feature surfaces
 

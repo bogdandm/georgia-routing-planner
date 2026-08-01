@@ -12,46 +12,40 @@ import { UserPanel } from '@/presentation/user/UserPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 
-function createUserDataService(snapshot: UserDataSnapshot) {
-  const signIn = vi.fn().mockResolvedValue(undefined);
-  const service: UserDataService = {
-    dispose: vi.fn(),
-    getSnapshot: () => snapshot,
-    signIn,
-    signOut: vi.fn().mockResolvedValue(undefined),
-    subscribe: () => () => undefined,
-  };
-  return { service, signIn };
+function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
+  return { busy: false, email: null, errorMessage: null, noticeMessage: null, status };
 }
 
-function createObservableUserDataService(initialSnapshot: UserDataSnapshot) {
-  let snapshot = initialSnapshot;
+function createService(initial: UserDataSnapshot) {
+  let current = initial;
   const listeners = new Set<() => void>();
+  const signIn = vi.fn().mockResolvedValue(undefined);
+  const signUp = vi.fn().mockResolvedValue(undefined);
   const service: UserDataService = {
     dispose: vi.fn(),
-    getSnapshot: () => snapshot,
-    signIn: vi.fn().mockResolvedValue(undefined),
+    getSnapshot: () => current,
+    signIn,
     signOut: vi.fn().mockResolvedValue(undefined),
+    signUp,
     subscribe(listener) {
       listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
+      return () => listeners.delete(listener);
     },
   };
   return {
     service,
-    setSnapshot(nextSnapshot: UserDataSnapshot) {
-      snapshot = nextSnapshot;
+    signIn,
+    signUp,
+    set(next: UserDataSnapshot) {
+      current = next;
       for (const listener of listeners) listener();
     },
   };
 }
 
 function renderPanel(userData: UserDataService) {
-  const services = createTestServices({ userData });
   return render(
-    <RuntimeServicesProvider services={services}>
+    <RuntimeServicesProvider services={createTestServices({ userData })}>
       <ThemeProvider theme={createAppTheme()}>
         <UserPanel />
       </ThemeProvider>
@@ -59,105 +53,77 @@ function renderPanel(userData: UserDataService) {
   );
 }
 
+function accountButton(name: 'Create account' | 'Sign in', index: number) {
+  const button = screen.getAllByRole('button', { name })[index];
+  if (button === undefined) throw new Error(`Missing ${name} button.`);
+  return button;
+}
+
 describe('UserPanel', () => {
-  it('renders an accessible password sign-in form for signed-out users', async () => {
-    const { service: userData, signIn } = createUserDataService({
-      busy: false,
-      email: null,
-      errorMessage: null,
-      status: 'signed-out',
-    });
-    const user = userEvent.setup();
-    renderPanel(userData);
-
-    await user.type(
-      screen.getByRole('textbox', { name: 'Email' }),
-      'user@example.test',
-    );
-    await user.type(screen.getByLabelText(/Password/u), 'password');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-
-    expect(signIn).toHaveBeenCalledWith('user@example.test', 'password');
-    expect(screen.getByLabelText(/Password/u)).toHaveValue('');
-  });
-
-  it('shows the connected user and sign-out control', () => {
-    renderPanel(
-      createUserDataService({
-        busy: false,
-        email: 'user@example.test',
-        errorMessage: null,
-        status: 'signed-in',
-      }).service,
-    );
-
-    expect(screen.getByText('user@example.test')).toBeVisible();
-    expect(screen.getByText('Connected')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeVisible();
-  });
-
-  it('explains the unconfigured local-only state without a form', () => {
-    renderPanel(
-      createUserDataService({
-        busy: false,
-        email: null,
-        errorMessage: null,
-        status: 'unconfigured',
-      }).service,
-    );
-
-    expect(screen.getByText(/Account features are not configured/)).toBeVisible();
-    expect(screen.queryByRole('textbox', { name: 'Email' })).not.toBeInTheDocument();
-  });
-
-  it('announces busy and authentication error states', () => {
-    renderPanel(
-      createUserDataService({
-        busy: true,
-        email: null,
-        errorMessage: 'Unable to sign in. Check your email and password.',
-        status: 'error',
-      }).service,
-    );
-
-    expect(screen.getByRole('alert')).toHaveTextContent('Unable to sign in');
-    expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled();
-  });
-
-  it('clears entered credentials after external auth transitions', async () => {
-    const userData = createObservableUserDataService({
-      busy: false,
-      email: null,
-      errorMessage: null,
-      status: 'signed-out',
-    });
+  it('submits sign-in credentials and clears the password', async () => {
+    const userData = createService(snapshot('signed-out'));
     const user = userEvent.setup();
     renderPanel(userData.service);
-
     await user.type(
       screen.getByRole('textbox', { name: 'Email' }),
       'user@example.test',
     );
     await user.type(screen.getByLabelText(/Password/u), 'password');
+    await user.click(accountButton('Sign in', 1));
+    expect(userData.signIn).toHaveBeenCalledWith('user@example.test', 'password');
+    expect(screen.getByLabelText(/Password/u)).toHaveValue('');
+  });
 
+  it('submits create-account credentials and announces confirmation', async () => {
+    const userData = createService(snapshot('signed-out'));
+    const user = userEvent.setup();
+    renderPanel(userData.service);
+    await user.click(accountButton('Create account', 0));
+    await user.type(screen.getByRole('textbox', { name: 'Email' }), 'new@example.test');
+    await user.type(screen.getByLabelText(/Password/u), 'password');
+    await user.click(accountButton('Create account', 1));
+    expect(userData.signUp).toHaveBeenCalledWith('new@example.test', 'password');
     act(() => {
-      userData.setSnapshot({
-        busy: false,
-        email: 'user@example.test',
-        errorMessage: null,
-        status: 'signed-in',
+      userData.set({
+        ...snapshot('signed-out'),
+        noticeMessage: 'Check your email to confirm your account, then sign in.',
       });
     });
-    act(() => {
-      userData.setSnapshot({
-        busy: false,
-        email: null,
-        errorMessage: null,
-        status: 'signed-out',
-      });
-    });
+    expect(screen.getByRole('status')).toHaveTextContent('Check your email');
+  });
 
+  it('clears credentials after external sign-in then sign-out', async () => {
+    const userData = createService(snapshot('signed-out'));
+    const user = userEvent.setup();
+    renderPanel(userData.service);
+    await user.type(
+      screen.getByRole('textbox', { name: 'Email' }),
+      'user@example.test',
+    );
+    await user.type(screen.getByLabelText(/Password/u), 'password');
+    act(() => {
+      userData.set({ ...snapshot('signed-in'), email: 'user@example.test' });
+    });
+    act(() => {
+      userData.set(snapshot('signed-out'));
+    });
     expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('');
     expect(screen.getByLabelText(/Password/u)).toHaveValue('');
+  });
+
+  it('starts with an empty password after the panel is reopened', async () => {
+    const userData = createService(snapshot('signed-out'));
+    const user = userEvent.setup();
+    const rendered = renderPanel(userData.service);
+    await user.type(screen.getByLabelText(/Password/u), 'password');
+    rendered.unmount();
+    renderPanel(userData.service);
+    expect(screen.getByLabelText(/Password/u)).toHaveValue('');
+  });
+
+  it('explains the unconfigured local-only state', () => {
+    renderPanel(createService(snapshot('unconfigured')).service);
+    expect(screen.getByText(/Account features are not configured/)).toBeVisible();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
   });
 });

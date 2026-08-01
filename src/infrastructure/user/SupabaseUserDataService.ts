@@ -9,10 +9,13 @@ const initialSnapshot: UserDataSnapshot = {
   busy: false,
   email: null,
   errorMessage: null,
+  noticeMessage: null,
   status: 'loading',
 };
 
+const registrationNotice = 'Check your email to confirm your account, then sign in.';
 const signInErrorMessage = 'Unable to sign in. Check your email and password.';
+const signUpErrorMessage = 'Unable to create an account. Try again.';
 const sessionErrorMessage = 'Unable to restore your account session.';
 const signOutErrorMessage = 'Unable to sign out. Try again.';
 
@@ -49,12 +52,7 @@ export class SupabaseUserDataService implements UserDataService {
 
   public async signIn(email: string, password: string): Promise<void> {
     if (this.#disposed) return;
-    this.#setSnapshot({
-      busy: true,
-      email: null,
-      errorMessage: null,
-      status: 'signed-out',
-    });
+    this.#beginOperation();
     this.#sessionRevision += 1;
     try {
       const { data, error } = await this.#client.auth.signInWithPassword({
@@ -62,48 +60,69 @@ export class SupabaseUserDataService implements UserDataService {
         password,
       });
       if (error !== null) {
+        this.#setError(signInErrorMessage);
+        return;
+      }
+      this.#setSignedIn(data.session);
+    } catch {
+      this.#setError(signInErrorMessage);
+    }
+  }
+
+  public async signUp(email: string, password: string): Promise<void> {
+    if (this.#disposed) return;
+    this.#beginOperation();
+    this.#sessionRevision += 1;
+    try {
+      const { data, error } = await this.#client.auth.signUp({ email, password });
+      if (error !== null) {
+        if (error.code === 'user_already_exists' || error.code === 'email_exists') {
+          this.#setSnapshot({
+            busy: false,
+            email: null,
+            errorMessage: null,
+            noticeMessage: registrationNotice,
+            status: 'signed-out',
+          });
+          return;
+        }
+        this.#setError(signUpErrorMessage);
+        return;
+      }
+      if (data.session === null) {
         this.#setSnapshot({
           busy: false,
           email: null,
-          errorMessage: signInErrorMessage,
-          status: 'error',
+          errorMessage: null,
+          noticeMessage: registrationNotice,
+          status: 'signed-out',
         });
         return;
       }
       this.#setSignedIn(data.session);
     } catch {
-      this.#setSnapshot({
-        busy: false,
-        email: null,
-        errorMessage: signInErrorMessage,
-        status: 'error',
-      });
+      this.#setError(signUpErrorMessage);
     }
   }
 
   public async signOut(): Promise<void> {
     if (this.#disposed) return;
-    this.#setSnapshot({ ...this.#snapshot, busy: true, errorMessage: null });
+    this.#setSnapshot({
+      ...this.#snapshot,
+      busy: true,
+      errorMessage: null,
+      noticeMessage: null,
+    });
     this.#sessionRevision += 1;
     try {
       const { error } = await this.#client.auth.signOut();
       if (error !== null) {
-        this.#setSnapshot({
-          ...this.#snapshot,
-          busy: false,
-          errorMessage: signOutErrorMessage,
-          status: 'error',
-        });
+        this.#setError(signOutErrorMessage, this.#snapshot.email);
         return;
       }
       this.#setSignedIn(null);
     } catch {
-      this.#setSnapshot({
-        ...this.#snapshot,
-        busy: false,
-        errorMessage: signOutErrorMessage,
-        status: 'error',
-      });
+      this.#setError(signOutErrorMessage, this.#snapshot.email);
     }
   }
 
@@ -127,23 +146,13 @@ export class SupabaseUserDataService implements UserDataService {
       const { data, error } = await this.#client.auth.getSession();
       if (sessionRevision !== this.#sessionRevision) return;
       if (error !== null) {
-        this.#setSnapshot({
-          busy: false,
-          email: null,
-          errorMessage: sessionErrorMessage,
-          status: 'error',
-        });
+        this.#setError(sessionErrorMessage);
         return;
       }
       this.#setSignedIn(data.session);
     } catch {
       if (sessionRevision !== this.#sessionRevision) return;
-      this.#setSnapshot({
-        busy: false,
-        email: null,
-        errorMessage: sessionErrorMessage,
-        status: 'error',
-      });
+      this.#setError(sessionErrorMessage);
     }
   }
 
@@ -160,12 +169,44 @@ export class SupabaseUserDataService implements UserDataService {
     }
   }
 
+  #beginOperation(): void {
+    this.#setSnapshot({
+      busy: true,
+      email: null,
+      errorMessage: null,
+      noticeMessage: null,
+      status: 'signed-out',
+    });
+  }
+
+  #setError(errorMessage: string, email: string | null = null): void {
+    this.#setSnapshot({
+      busy: false,
+      email,
+      errorMessage,
+      noticeMessage: null,
+      status: 'error',
+    });
+  }
+
   #setSignedIn(session: Session | null): void {
     const email = session?.user.email ?? null;
     this.#setSnapshot(
       email === null
-        ? { busy: false, email: null, errorMessage: null, status: 'signed-out' }
-        : { busy: false, email, errorMessage: null, status: 'signed-in' },
+        ? {
+            busy: false,
+            email: null,
+            errorMessage: null,
+            noticeMessage: null,
+            status: 'signed-out',
+          }
+        : {
+            busy: false,
+            email,
+            errorMessage: null,
+            noticeMessage: null,
+            status: 'signed-in',
+          },
     );
   }
 

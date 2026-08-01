@@ -636,11 +636,7 @@ export class AppDatabase
     const validSummary = parseLocalTrackSummary(summary);
     const validContent = parseLocalTrackContent(content);
     const idsMatch = validSummary?.id === validContent?.trackId;
-    if (
-      validSummary?.contentHash === undefined ||
-      validContent === null ||
-      !idsMatch
-    ) {
+    if (validSummary?.contentHash === undefined || validContent === null || !idsMatch) {
       throw new LocalTrackStorageError(
         'record-invalid',
         'The local track record is invalid.',

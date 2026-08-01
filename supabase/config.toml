@@ -1,0 +1,13 @@
+project_id = "georgia-routing-planner"
+
+[storage]
+enabled = true
+file_size_limit = "8MiB"
+
+[storage.buckets.track-geometries]
+public = false
+file_size_limit = "8MiB"
+allowed_mime_types = ["application/gzip"]
+
+[functions.track-sync]
+verify_jwt = true

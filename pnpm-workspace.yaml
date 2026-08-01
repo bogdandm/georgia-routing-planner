@@ -1,4 +1,5 @@
 allowBuilds:
+  deno: true
   esbuild: true
   msw: false
 nodeVersion: 24.14.0

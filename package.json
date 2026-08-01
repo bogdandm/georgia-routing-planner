@@ -24,13 +24,15 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
+    "supabase:functions:check": "deno check --config supabase/functions/deno.json supabase/functions/track-sync/index.ts supabase/functions/track-sync/index.test.ts",
+    "supabase:functions:test": "deno test --config supabase/functions/deno.json --no-prompt supabase/functions/track-sync/index.test.ts",
     "e2e": "tsx tools/e2e/runPlaywright.ts",
     "benchmark:terrarium-dem": "tsx tools/benchmarks/terrariumDemFilterBenchmark.ts",
     "diagnostics:inspect": "tsx tools/diagnostics/inspectDiagnostics.ts",
     "repo:audit": "tsx tools/repository/auditRepository.ts",
     "build:app": "vite build",
     "build": "pnpm typecheck && pnpm build:app",
-    "check": "pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm build"
+    "check": "pnpm supabase:functions:check && pnpm supabase:functions:test && pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm build"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -71,6 +73,7 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.3",
     "@vitest/coverage-v8": "4.1.10",
+    "deno": "2.9.4",
     "eslint": "10.7.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.3",

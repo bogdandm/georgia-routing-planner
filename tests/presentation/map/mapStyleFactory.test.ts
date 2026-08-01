@@ -160,6 +160,7 @@ describe('createHikingMapStyle', () => {
       filter: ['==', ['get', 'class'], 'river'],
       layout: {
         'symbol-placement': 'line',
+        'symbol-spacing': 750,
         'text-field': englishFirstLabelExpression,
         'text-font': ['Noto Sans Regular'],
         'text-size': 12,

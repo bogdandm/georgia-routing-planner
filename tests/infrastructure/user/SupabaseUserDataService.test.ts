@@ -29,6 +29,7 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
     error: null,
   });
   const signOut = vi.fn().mockResolvedValue({ error: null });
+  const dispose = vi.fn().mockResolvedValue(undefined);
   const getSession = vi.fn().mockResolvedValue({
     data: { session: options.restoredSession ?? null },
     error: null,
@@ -36,6 +37,7 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
   const client = {
     auth: {
       getSession,
+      dispose,
       onAuthStateChange: vi.fn(
         (nextCallback: (event: AuthChangeEvent, value: Session | null) => void) => {
           callback = nextCallback;
@@ -55,6 +57,7 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
     getSession,
     signInWithPassword,
     signOut,
+    dispose,
     unsubscribe,
   };
 }
@@ -97,7 +100,20 @@ describe('SupabaseUserDataService', () => {
     });
   });
 
-  it('handles refresh and sign-out events then releases the client subscription', async () => {
+  it('disposes the auth client and subscription exactly once', () => {
+    const fake = createClient();
+    const service = new SupabaseUserDataService(fake.client);
+
+    service.dispose();
+    service.dispose();
+    fake.emit('TOKEN_REFRESHED', session('refresh@example.test'));
+
+    expect(fake.unsubscribe).toHaveBeenCalledOnce();
+    expect(fake.dispose).toHaveBeenCalledOnce();
+    expect(service.getSnapshot().status).toBe('loading');
+  });
+
+  it('handles refresh and sign-out events', async () => {
     const fake = createClient();
     const service = new SupabaseUserDataService(fake.client);
     const listener = vi.fn();
@@ -110,8 +126,6 @@ describe('SupabaseUserDataService', () => {
     expect(service.getSnapshot().status).toBe('signed-out');
 
     unsubscribe();
-    service.dispose();
-    expect(fake.unsubscribe).toHaveBeenCalledOnce();
     expect(listener).toHaveBeenCalled();
   });
 });

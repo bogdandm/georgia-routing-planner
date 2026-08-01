@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +22,30 @@ function createUserDataService(snapshot: UserDataSnapshot) {
     subscribe: () => () => undefined,
   };
   return { service, signIn };
+}
+
+function createObservableUserDataService(initialSnapshot: UserDataSnapshot) {
+  let snapshot = initialSnapshot;
+  const listeners = new Set<() => void>();
+  const service: UserDataService = {
+    dispose: vi.fn(),
+    getSnapshot: () => snapshot,
+    signIn: vi.fn().mockResolvedValue(undefined),
+    signOut: vi.fn().mockResolvedValue(undefined),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+  return {
+    service,
+    setSnapshot(nextSnapshot: UserDataSnapshot) {
+      snapshot = nextSnapshot;
+      for (const listener of listeners) listener();
+    },
+  };
 }
 
 function renderPanel(userData: UserDataService) {
@@ -98,5 +122,42 @@ describe('UserPanel', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to sign in');
     expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled();
+  });
+
+  it('clears entered credentials after external auth transitions', async () => {
+    const userData = createObservableUserDataService({
+      busy: false,
+      email: null,
+      errorMessage: null,
+      status: 'signed-out',
+    });
+    const user = userEvent.setup();
+    renderPanel(userData.service);
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Email' }),
+      'user@example.test',
+    );
+    await user.type(screen.getByLabelText(/Password/u), 'password');
+
+    act(() => {
+      userData.setSnapshot({
+        busy: false,
+        email: 'user@example.test',
+        errorMessage: null,
+        status: 'signed-in',
+      });
+    });
+    act(() => {
+      userData.setSnapshot({
+        busy: false,
+        email: null,
+        errorMessage: null,
+        status: 'signed-out',
+      });
+    });
+
+    expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('');
+    expect(screen.getByLabelText(/Password/u)).toHaveValue('');
   });
 });

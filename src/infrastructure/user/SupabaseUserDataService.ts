@@ -22,6 +22,7 @@ export class SupabaseUserDataService implements UserDataService {
   readonly #listeners = new Set<() => void>();
   #snapshot = initialSnapshot;
   #unsubscribe: (() => void) | null = null;
+  #disposed = false;
   #sessionRevision = 0;
 
   public constructor(client: Pick<SupabaseClient, 'auth'>) {
@@ -47,6 +48,7 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   public async signIn(email: string, password: string): Promise<void> {
+    if (this.#disposed) return;
     this.#setSnapshot({
       busy: true,
       email: null,
@@ -80,6 +82,7 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   public async signOut(): Promise<void> {
+    if (this.#disposed) return;
     this.#setSnapshot({ ...this.#snapshot, busy: true, errorMessage: null });
     this.#sessionRevision += 1;
     try {
@@ -105,9 +108,17 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   public dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#sessionRevision += 1;
     this.#unsubscribe?.();
     this.#unsubscribe = null;
     this.#listeners.clear();
+    try {
+      void this.#client.auth.dispose().catch(() => undefined);
+    } catch {
+      // Cleanup is best-effort; disposal must remain safe during teardown.
+    }
   }
 
   async #restoreSession(): Promise<void> {
@@ -137,6 +148,7 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   #handleAuthStateChange(event: AuthChangeEvent, session: Session | null): void {
+    if (this.#disposed) return;
     if (
       event === 'INITIAL_SESSION' ||
       event === 'SIGNED_IN' ||
@@ -158,6 +170,7 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   #setSnapshot(snapshot: UserDataSnapshot): void {
+    if (this.#disposed) return;
     this.#snapshot = snapshot;
     for (const listener of this.#listeners) listener();
   }

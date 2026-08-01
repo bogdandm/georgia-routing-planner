@@ -43,4 +43,27 @@ describe('createRuntimeServices', () => {
 
     services.dispose();
   });
+
+  it('disposes a configured client and its auth-state subscription', () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'publishable-key');
+    stubWorker();
+    const authDispose = vi.fn().mockResolvedValue(undefined);
+    const subscriptionUnsubscribe = vi.fn();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        dispose: authDispose,
+        getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+        onAuthStateChange: vi.fn(() => ({
+          data: { subscription: { unsubscribe: subscriptionUnsubscribe } },
+        })),
+      },
+    } as unknown as ReturnType<typeof createClient>);
+
+    const services = createRuntimeServices();
+    services.dispose();
+
+    expect(subscriptionUnsubscribe).toHaveBeenCalledOnce();
+    expect(authDispose).toHaveBeenCalledOnce();
+  });
 });

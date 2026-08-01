@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import {
   useCallback,
+  useEffect,
   useState,
   useSyncExternalStore,
   type SyntheticEvent,
@@ -31,6 +32,16 @@ export function UserPanel() {
   const snapshot = useUserDataSnapshot(userData);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  useEffect(() => {
+    if (
+      snapshot.status === 'loading' ||
+      snapshot.status === 'signed-in' ||
+      snapshot.status === 'unconfigured'
+    ) {
+      setEmail('');
+      setPassword('');
+    }
+  }, [snapshot.status]);
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();

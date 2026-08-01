@@ -195,9 +195,7 @@ export function WorkspaceSidebar({
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
           <LayersPanel />
         </Box>
-        <Box sx={{ display: activeTab === 'user' ? 'block' : 'none' }}>
-          <UserPanel />
-        </Box>
+        {activeTab === 'user' ? <UserPanel /> : null}
       </Box>
     </Box>
   );

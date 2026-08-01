@@ -637,8 +637,7 @@ export class AppDatabase
     const validContent = parseLocalTrackContent(content);
     const idsMatch = validSummary?.id === validContent?.trackId;
     if (
-      validSummary === null ||
-      validSummary.contentHash === undefined ||
+      validSummary?.contentHash === undefined ||
       validContent === null ||
       !idsMatch
     ) {
@@ -901,7 +900,7 @@ export class AppDatabase
           const content = parseLocalTrackContent(
             await this.localTrackContents.get(summary.id),
           );
-          if (content === null || content.trackId !== summary.id) {
+          if (content?.trackId !== summary.id) {
             throw new LocalTrackStorageError(
               'content-missing',
               'The saved track content is unavailable.',
@@ -931,14 +930,13 @@ export class AppDatabase
       const summary = parseLocalTrackSummary(pair.summary);
       const content = parseLocalTrackContent(pair.content);
       const state = states.find((candidate) => candidate.trackId === pair.summary.id);
-      if (
-        summary === null ||
-        summary.contentHash === undefined ||
-        content === null ||
-        summary.id !== content.trackId ||
-        state === undefined ||
-        state.contentHash !== summary.contentHash
-      ) {
+      if (summary?.contentHash === undefined || content?.trackId !== summary.id) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The local track record is invalid.',
+        );
+      }
+      if (state?.contentHash !== summary.contentHash) {
         throw new LocalTrackStorageError(
           'record-invalid',
           'The local track record is invalid.',
@@ -961,7 +959,7 @@ export class AppDatabase
           await this.localTrackContents.put(pair.content);
         }
         for (const state of states) {
-          if (state !== null) await this.trackSyncStates.put(state);
+          await this.trackSyncStates.put(state);
         }
       },
     );

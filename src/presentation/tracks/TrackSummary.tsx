@@ -177,11 +177,6 @@ export function CompactTrackSummary({
         bgcolor: 'background.paper',
       }}
     >
-      {profile === null ? null : (
-        <Box sx={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-          <CompactElevationProfile profile={profile} />
-        </Box>
-      )}
       <Box
         sx={{
           position: 'relative',
@@ -216,6 +211,11 @@ export function CompactTrackSummary({
           </Box>
         )}
       </Box>
+      {profile === null ? null : (
+        <Box sx={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+          <CompactElevationProfile profile={profile} />
+        </Box>
+      )}
     </Box>
   );
 }

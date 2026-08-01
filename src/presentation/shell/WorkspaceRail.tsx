@@ -1,4 +1,5 @@
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
@@ -16,7 +17,7 @@ import {
   type TabProps,
   Tooltip,
 } from '@mui/material';
-import type { RefObject, SyntheticEvent } from 'react';
+import type { ReactNode, RefObject, SyntheticEvent } from 'react';
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
@@ -51,6 +52,7 @@ function UnavailableWorkspaceTab({
 
 interface WorkspaceRailProps {
   readonly collapsed: boolean;
+  readonly collapsedSummary: ReactNode | null;
   readonly squareEdges: boolean;
   readonly activeTab: WorkspaceTab;
   readonly developerToolsOpen: boolean;
@@ -66,6 +68,7 @@ interface WorkspaceRailProps {
 
 export function WorkspaceRail({
   collapsed,
+  collapsedSummary,
   squareEdges,
   activeTab,
   developerToolsOpen,
@@ -89,7 +92,7 @@ export function WorkspaceRail({
       sx={{
         position: 'relative',
         zIndex: 4,
-        width: 64,
+        width: collapsed ? (collapsedSummary === null ? 94 : 414) : 64,
         height: '100%',
         flexShrink: 0,
         display: 'flex',
@@ -108,43 +111,31 @@ export function WorkspaceRail({
               }),
       }}
     >
-      <Tooltip
-        title="Georgia Routing Planner"
-        placement="bottom-start"
-        slotProps={{
-          popper: {
-            modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
-          },
-        }}
-      >
+      {collapsed ? (
         <ButtonBase
-          aria-hidden={collapsed}
-          aria-label="Hide navigation from GR logo"
+          aria-label="Show navigation"
+          data-testid="navigation-collapse-toggle"
           onClick={onToggleNavigation}
-          tabIndex={collapsed ? -1 : 0}
           sx={{
             position: 'relative',
-            width: 52,
+            width: collapsedSummary === null ? 88 : 408,
             height: 52,
             flexShrink: 0,
             mt: 0.75,
             ml: 0.75,
-            display: 'grid',
-            placeItems: 'center',
+            display: 'flex',
+            alignItems: 'stretch',
             overflow: 'hidden',
-            bgcolor: appColors.brand.deepSpace,
+            borderRadius: 1.25,
+            bgcolor: 'transparent',
             color: appColors.text.inverse,
-            borderRadius: collapsed ? '10px 0 0 10px' : 1.25,
-            pointerEvents: collapsed ? 'none' : 'auto',
-            transition: (theme) =>
-              theme.transitions.create('border-radius', {
-                duration: theme.transitions.duration.short,
-              }),
-            '&::after': {
+            '&::before': {
               content: '""',
               position: 'absolute',
               inset: 0,
-              bgcolor: appColors.interaction.navigationHoverOverlay,
+              zIndex: 2,
+              border: `2px solid ${appColors.brand.sky}`,
+              borderRadius: 'inherit',
               opacity: 0,
               pointerEvents: 'none',
               transition: (theme) =>
@@ -152,24 +143,182 @@ export function WorkspaceRail({
                   duration: theme.transitions.duration.shorter,
                 }),
             },
-            '&:hover::after': { opacity: 1 },
+            '&:hover::before': { opacity: 1 },
+            '&:hover .collapsed-navigation-segment::after': { opacity: 1 },
+            '&.Mui-focusVisible::before': {
+              borderColor: appColors.brand.amber,
+              opacity: 1,
+            },
             '@media (prefers-reduced-motion: reduce)': {
-              transition: 'none',
-              '&::after': { transition: 'none' },
+              '&::before, & .collapsed-navigation-segment::after': {
+                transition: 'none',
+              },
             },
           }}
         >
           <Box
-            alt=""
-            aria-hidden="true"
-            component="img"
-            data-testid="project-logo-image"
-            draggable={false}
-            src={`${import.meta.env.BASE_URL}favicon.png`}
-            sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
-          />
+            className="collapsed-navigation-segment"
+            sx={{
+              position: 'relative',
+              zIndex: 1,
+              width: 52,
+              height: 52,
+              flexShrink: 0,
+              bgcolor: appColors.brand.deepSpace,
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                inset: 0,
+                bgcolor: appColors.interaction.navigationHoverOverlay,
+                opacity: 0,
+                pointerEvents: 'none',
+                transition: (theme) =>
+                  theme.transitions.create('opacity', {
+                    duration: theme.transitions.duration.shorter,
+                  }),
+              },
+            }}
+          >
+            <Box
+              alt=""
+              aria-hidden="true"
+              component="img"
+              data-testid="project-logo-image"
+              draggable={false}
+              src={`${import.meta.env.BASE_URL}favicon.png`}
+              sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
+            />
+          </Box>
+          {collapsedSummary === null ? null : (
+            <Box
+              sx={{
+                position: 'relative',
+                zIndex: 1,
+                width: 320,
+                height: 52,
+                minWidth: 0,
+              }}
+            >
+              {collapsedSummary}
+            </Box>
+          )}
+          <Box
+            className="collapsed-navigation-segment"
+            sx={{
+              position: 'relative',
+              zIndex: 1,
+              width: 36,
+              height: 52,
+              flexShrink: 0,
+              display: 'grid',
+              placeItems: 'center',
+              bgcolor: appColors.surface.subtle,
+              color: 'text.primary',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                inset: 0,
+                bgcolor: appColors.interaction.navigationHoverOverlay,
+                opacity: 0,
+                pointerEvents: 'none',
+                transition: (theme) =>
+                  theme.transitions.create('opacity', {
+                    duration: theme.transitions.duration.shorter,
+                  }),
+              },
+            }}
+          >
+            <ChevronLeftOutlinedIcon
+              fontSize="small"
+              sx={{ position: 'relative', zIndex: 1, transform: 'rotate(180deg)' }}
+            />
+          </Box>
+          <Tooltip
+            title="Georgia Routing Planner"
+            placement="bottom-start"
+            slotProps={{
+              popper: {
+                modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
+              },
+            }}
+          >
+            <Box
+              aria-hidden="true"
+              component="span"
+              data-testid="collapsed-project-tooltip-target"
+              sx={{ position: 'absolute', zIndex: 3, inset: '0 auto 0 0', width: 52 }}
+            />
+          </Tooltip>
+          <Tooltip title="Show navigation" placement="right">
+            <Box
+              aria-hidden="true"
+              component="span"
+              data-testid="collapsed-show-navigation-tooltip-target"
+              sx={{ position: 'absolute', zIndex: 3, inset: '0 0 0 auto', width: 36 }}
+            />
+          </Tooltip>
         </ButtonBase>
-      </Tooltip>
+      ) : (
+        <Tooltip
+          title="Georgia Routing Planner"
+          placement="bottom-start"
+          slotProps={{
+            popper: {
+              modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
+            },
+          }}
+        >
+          <ButtonBase
+            aria-label="Hide navigation from GR logo"
+            onClick={onToggleNavigation}
+            sx={{
+              position: 'relative',
+              width: 52,
+              height: 52,
+              flexShrink: 0,
+              mt: 0.75,
+              ml: 0.75,
+              display: 'grid',
+              placeItems: 'center',
+              overflow: 'hidden',
+              bgcolor: appColors.brand.deepSpace,
+              color: appColors.text.inverse,
+              borderRadius: 1.25,
+              transition: (theme) =>
+                theme.transitions.create('border-radius', {
+                  duration: theme.transitions.duration.short,
+                }),
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                inset: 0,
+                bgcolor: appColors.interaction.navigationHoverOverlay,
+                opacity: 0,
+                pointerEvents: 'none',
+                transition: (theme) =>
+                  theme.transitions.create('opacity', {
+                    duration: theme.transitions.duration.shorter,
+                  }),
+              },
+              '&:hover::after': { opacity: 1 },
+              '@media (prefers-reduced-motion: reduce)': {
+                transition: 'none',
+                '&::after': { transition: 'none' },
+              },
+            }}
+          >
+            <Box
+              alt=""
+              aria-hidden="true"
+              component="img"
+              data-testid="project-logo-image"
+              draggable={false}
+              src={`${import.meta.env.BASE_URL}favicon.png`}
+              sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
+            />
+          </ButtonBase>
+        </Tooltip>
+      )}
 
       <Tabs
         aria-label="Workspace sections"

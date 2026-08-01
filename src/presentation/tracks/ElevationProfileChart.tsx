@@ -196,6 +196,72 @@ function ElevationTooltip({
   );
 }
 
+interface ElevationProfileAreaProps {
+  readonly profile: ElevationProfile;
+  readonly gradientId: string;
+  readonly activeSegmentIndex: number | null;
+}
+
+function ElevationProfileArea({
+  profile,
+  gradientId,
+  activeSegmentIndex,
+}: ElevationProfileAreaProps): ReactElement {
+  const maximumDistance = profile.points.at(-1)?.distanceMeters ?? 0;
+
+  return (
+    <>
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+          {profile.segments.flatMap((segment, segmentIndex) =>
+            segment.gradeSubsegments.flatMap((gradeSegment) => {
+              const startOffset =
+                maximumDistance <= 0
+                  ? 0
+                  : (gradeSegment.startDistanceMeters / maximumDistance) * 100;
+              const endOffset =
+                maximumDistance <= 0
+                  ? 0
+                  : (gradeSegment.endDistanceMeters / maximumDistance) * 100;
+              const color = appColors.elevationGrade[gradeSegment.band];
+              const opacity =
+                activeSegmentIndex === null || activeSegmentIndex === segmentIndex
+                  ? 1
+                  : 0.22;
+              const key = `${String(segmentIndex)}:${String(gradeSegment.startSampleIndex)}`;
+              return [
+                <stop
+                  key={`${key}:start`}
+                  offset={`${String(startOffset)}%`}
+                  stopColor={color}
+                  stopOpacity={opacity}
+                />,
+                <stop
+                  key={`${key}:end`}
+                  offset={`${String(endOffset)}%`}
+                  stopColor={color}
+                  stopOpacity={opacity}
+                />,
+              ];
+            }),
+          )}
+        </linearGradient>
+      </defs>
+      <Area
+        type="linear"
+        dataKey="elevationMeters"
+        name="Elevation"
+        baseValue="dataMin"
+        dot={false}
+        stroke={`url(#${gradientId})`}
+        fill={`url(#${gradientId})`}
+        fillOpacity={0.2}
+        isAnimationActive={false}
+      />
+    </>
+  );
+}
+
 export function ElevationProfileChart({
   profile,
   activeSegmentIndex,
@@ -208,7 +274,6 @@ export function ElevationProfileChart({
   const theme = useTheme();
   const sampledPoints = sampleElevationProfilePoints(profile);
   const gradientId = `elevation-grade-${useId().replaceAll(':', '')}`;
-  const maximumDistance = profile.points.at(-1)?.distanceMeters ?? 0;
   const axisText = {
     fill: theme.palette.text.secondary,
     fontFamily: theme.typography.fontFamily,
@@ -303,55 +368,60 @@ export function ElevationProfileChart({
               strokeWidth={1}
             />
           ))}
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-              {profile.segments.flatMap((segment, segmentIndex) =>
-                segment.gradeSubsegments.flatMap((gradeSegment) => {
-                  const startOffset =
-                    maximumDistance <= 0
-                      ? 0
-                      : (gradeSegment.startDistanceMeters / maximumDistance) * 100;
-                  const endOffset =
-                    maximumDistance <= 0
-                      ? 0
-                      : (gradeSegment.endDistanceMeters / maximumDistance) * 100;
-                  const color = appColors.elevationGrade[gradeSegment.band];
-                  const opacity =
-                    activeSegmentIndex === null || activeSegmentIndex === segmentIndex
-                      ? 1
-                      : 0.22;
-                  const key = `${String(segmentIndex)}:${String(gradeSegment.startSampleIndex)}`;
-                  return [
-                    <stop
-                      key={`${key}:start`}
-                      offset={`${String(startOffset)}%`}
-                      stopColor={color}
-                      stopOpacity={opacity}
-                    />,
-                    <stop
-                      key={`${key}:end`}
-                      offset={`${String(endOffset)}%`}
-                      stopColor={color}
-                      stopOpacity={opacity}
-                    />,
-                  ];
-                }),
-              )}
-            </linearGradient>
-          </defs>
-          <Area
-            type="linear"
-            dataKey="elevationMeters"
-            name="Elevation"
-            baseValue="dataMin"
-            dot={false}
-            stroke={`url(#${gradientId})`}
-            fill={`url(#${gradientId})`}
-            fillOpacity={0.2}
-            isAnimationActive={false}
+          <ElevationProfileArea
+            profile={profile}
+            gradientId={gradientId}
+            activeSegmentIndex={activeSegmentIndex}
           />
         </AreaChart>
       </Box>
     </Stack>
+  );
+}
+
+export function CompactElevationProfile({
+  profile,
+}: {
+  readonly profile: ElevationProfile;
+}): ReactElement {
+  const sampledPoints = sampleElevationProfilePoints(profile);
+  const gradientId = `compact-elevation-grade-${useId().replaceAll(':', '')}`;
+
+  return (
+    <Box
+      aria-hidden
+      data-testid="compact-elevation-profile"
+      sx={{ width: '100%', height: '100%', pointerEvents: 'none' }}
+    >
+      <AreaChart<ElevationProfilePoint>
+        aria-hidden
+        accessibilityLayer={false}
+        responsive
+        data={sampledPoints}
+        margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+        style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
+      >
+        <XAxis
+          hide
+          height={0}
+          type="number"
+          dataKey="distanceMeters"
+          domain={['dataMin', 'dataMax']}
+          padding={{ left: 0, right: 0 }}
+        />
+        <YAxis
+          hide
+          width={0}
+          type="number"
+          dataKey="elevationMeters"
+          domain={['dataMin', 'dataMax']}
+        />
+        <ElevationProfileArea
+          profile={profile}
+          gradientId={gradientId}
+          activeSegmentIndex={null}
+        />
+      </AreaChart>
+    </Box>
   );
 }

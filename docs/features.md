@@ -33,7 +33,9 @@ Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals
 full-height feature rail and contextual tools without remounting the map; **Show map**
 and the GR logo return to the same map. An active track appears over the map as a
 collapsed disclosure containing the same distance, recorded-time, ascent, and descent
-statistics used by the full editor. Expanding it reveals the full editor; collapsing
+statistics used by the full editor. When the active track has a usable elevation
+profile, its grade-colored graph is drawn decoratively behind these compact stats
+without chart interaction. Expanding the disclosure reveals the full editor; collapsing
 preserves the active track, while closing clears it. Selecting Sentinel imagery closes
 the smartphone workspace so the map immediately shows the applied scene; reopening the
 workspace restores the existing imagery results. This transient presentation state is
@@ -48,6 +50,11 @@ surface above the full-viewport map. Changing sections or opening a pane never c
 the map viewport. Native map navigation remains on the right, and the 2D/3D selector
 sits directly below it. The shell uses the shared sky-blue, blue-green, deep-space,
 amber, and orange palette with derived surface, border, status, and tag colors.
+
+When navigation is collapsed on desktop with an active track, the same decorative
+profile-and-stats summary sits between the fixed GR mark and the navigation expansion
+affordance. Without an active track summary, the GR mark and expansion affordance remain
+the compact collapsed control.
 
 The current shell exposes Tracks, Satellite, and Layers as interactive rail
 destinations. Markers remains visible but disabled until that feature surface has

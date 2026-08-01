@@ -3,9 +3,12 @@
 ## System shape
 
 The application is a static React client. GitHub Pages serves the build; the browser
-talks directly to public map providers and stores durable local state in IndexedDB.
-There is no application server, account, secret-bearing frontend configuration, or
-automatic telemetry upload.
+talks directly to public map providers and stores durable local state in IndexedDB. The
+project operates no application server. With valid public Supabase configuration, the
+browser may communicate directly with the managed Supabase project for an optional
+email/password account; cloud track synchronization is not active yet. Frontend
+configuration contains no secrets, and diagnostics or telemetry are never uploaded
+automatically.
 
 ```mermaid
 flowchart LR

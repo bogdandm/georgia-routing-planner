@@ -577,8 +577,9 @@ configuration must never contain secrets.
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, Create GPX
-editing/export, saved-marker management, offline-region downloads, accounts, or cloud
-synchronization. Satellite provides live viewport search for L2A scenes with a
+editing/export, saved-marker management, offline-region downloads, or cloud track
+synchronization. Optional email/password accounts are available when public Supabase
+configuration is present. Satellite provides live viewport search for L2A scenes with a
 scene-cloud control. Successful results are grouped by UTC acquisition day and show a
 thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
 sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and

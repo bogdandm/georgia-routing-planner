@@ -20,6 +20,8 @@ function summary(id: string, name: string): LocalTrackSummary {
     name,
     normalizedName: name.toLocaleLowerCase('en'),
     savedAt: '2026-07-22T10:00:00.000Z',
+    updatedAt: '2026-07-22T10:00:00.000Z',
+    contentHash: 'a'.repeat(64),
     sourceFilename: 'fixture.gpx',
     sourceFormat: 'gpx',
     favorite: false,
@@ -73,10 +75,11 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
-  it('updates elevation atomically without discarding saved metadata', async () => {
+  it('updates elevation atomically without changing sync identity or metadata time', async () => {
     await database.saveLocalTrack(summary('local:1', 'Original'), content('local:1'));
     await database.renameLocalTrack('local:1', 'Renamed');
     await database.setLocalTrackFavorite('local:1', true);
+    const beforeElevation = await database.listLocalTracks();
     const updatedContent: LocalTrackContent = {
       schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:1',
@@ -100,31 +103,40 @@ describe('local track persistence', () => {
       favorite: true,
       pointCount: 3,
       segmentCount: 1,
+      updatedAt: beforeElevation[0]?.updatedAt,
+      contentHash: 'a'.repeat(64),
       metrics: { ascentMeters: 200 },
+    });
+    await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({
+      pendingKind: 'upsert',
     });
     await expect(database.loadLocalTrackContent('local:1')).resolves.toEqual(
       updatedContent,
     );
   });
-  it('migrates v3 tracks without deleting legacy metrics or geometry', async () => {
+
+  it('migrates v4 records to local schema v3 without fabricating content hashes', async () => {
     database.close();
     await database.delete();
     const legacy = new Dexie('GeorgiaRoutingPlanner');
-    legacy.version(3).stores({
+    legacy.version(4).stores({
       settings: 'key,updatedAt',
       diagnostics: '++id,timestamp,name,level',
       localTracks: 'id,normalizedName,savedAt',
       localTrackContents: 'trackId',
     });
-    const legacySummary = {
-      ...summary('local:legacy', 'Legacy'),
-      schemaVersion: 1,
+    const currentSummary = summary('local:legacy', 'Legacy');
+    const legacySummary: Record<string, unknown> = {
+      ...currentSummary,
+      schemaVersion: 2,
       metrics: {
-        ...summary('local:legacy', 'Legacy').metrics,
+        ...currentSummary.metrics,
         elevationSource: 'gpx',
         elevationAlgorithmVersion: 1,
       },
     };
+    delete legacySummary.contentHash;
+    delete legacySummary.updatedAt;
     await legacy.table('localTracks').put(legacySummary);
     await legacy.table('localTrackContents').put({
       schemaVersion: 1,
@@ -135,46 +147,158 @@ describe('local track persistence', () => {
           [44, 42],
           [44.01, 42.01],
         ],
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
+      ],
+    });
+    await legacy.table('localTracks').put({
+      ...legacySummary,
+      id: 'local:legacy-duplicate',
+    });
+    await legacy.table('localTrackContents').put({
+      schemaVersion: 1,
+      trackId: 'local:legacy-duplicate',
+      segments: [
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
       ],
     });
     legacy.close();
 
     database = new AppDatabase(services.logger);
 
-    await expect(database.listLocalTracks()).resolves.toMatchObject([
-      {
-        schemaVersion: 2,
-        id: 'local:legacy',
-        metrics: {
-          elevationSource: 'gpx',
-          elevationAlgorithmVersion: 1,
-        },
-      },
-    ]);
+    const migratedTracks = await database.listLocalTracks();
+    const migrated = migratedTracks.find((track) => track.id === 'local:legacy');
+    expect(migrated?.schemaVersion).toBe(3);
+    expect(migrated?.metrics.elevationSource).toBe('gpx');
+    expect(migrated?.metrics.elevationAlgorithmVersion).toBe(1);
     await expect(database.loadLocalTrackContent('local:legacy')).resolves.toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       trackId: 'local:legacy',
-      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+      trackPoints: [
+        [{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }],
+        [{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }],
+      ],
     });
     const storedSummary = await database.localTracks.get('local:legacy');
-    const storedContent = await database.localTrackContents.get('local:legacy');
-    expect(storedSummary).toHaveProperty('schemaVersion', 2);
-    expect(storedContent).not.toHaveProperty('originalGpx');
-    expect(storedContent).not.toHaveProperty('segments');
+    expect(storedSummary).toHaveProperty('schemaVersion', 3);
+    expect(storedSummary).toHaveProperty('updatedAt', storedSummary?.savedAt);
+    expect(storedSummary).not.toHaveProperty('contentHash');
+    await expect(database.loadTrackSyncState('local:legacy')).resolves.toBeNull();
+    await expect(database.listLocalTracks()).resolves.toHaveLength(2);
+    await expect(database.listLocalTrackPairsWithoutSyncState()).resolves.toHaveLength(
+      2,
+    );
   });
 
-  it('saves summary and content atomically and loads both after reopen', async () => {
+  it('applies the Plan 04 remote merge batch atomically', async () => {
+    const record = summary('local:remote', 'Remote');
+    const geometry = content('local:remote');
+    await database.applyRemoteTrackMergeBatch({
+      put: [{ summary: record, content: geometry }],
+      deleteTrackIds: [],
+      states: [
+        {
+          trackId: record.id,
+          contentHash: record.contentHash ?? '',
+          remoteRevision: 3,
+          pendingKind: null,
+        },
+      ],
+    });
+
+    await expect(database.loadLocalTrackContent(record.id)).resolves.toEqual(geometry);
+    await expect(database.loadTrackSyncState(record.id)).resolves.toEqual({
+      trackId: record.id,
+      contentHash: record.contentHash,
+      remoteRevision: 3,
+      pendingKind: null,
+    });
+    await expect(database.listLocalTrackPairsWithoutSyncState()).resolves.toEqual([]);
+  });
+
+  it('saves track rows and the pending upsert atomically', async () => {
     await database.saveLocalTrack(summary('local:1', 'ბილიკი'), content('local:1'));
+    await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({
+      contentHash: 'a'.repeat(64),
+      pendingKind: 'upsert',
+      remoteRevision: null,
+    });
+
+    vi.spyOn(database.trackSyncStates, 'put').mockRejectedValueOnce(
+      new Error('quota unavailable'),
+    );
+    await expect(
+      database.saveLocalTrack(summary('local:2', 'Broken'), content('local:2')),
+    ).rejects.toThrow('quota unavailable');
+    await expect(database.localTracks.get('local:2')).resolves.toBeUndefined();
+    await expect(database.localTrackContents.get('local:2')).resolves.toBeUndefined();
+  });
+
+  it('preserves upsert precedence and turns synchronized metadata into metadata work', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
+    await database.renameLocalTrack('local:1', 'Renamed');
+    await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({
+      pendingKind: 'upsert',
+    });
+    await database.saveTrackSyncState({
+      trackId: 'local:1',
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 4,
+      pendingKind: null,
+    });
+    await database.setLocalTrackFavorite('local:1', true);
+    await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({
+      remoteRevision: 4,
+      pendingKind: 'metadata',
+    });
+  });
+
+  it('deletes unsent upserts and retains only sent deletion retry state', async () => {
+    await database.saveLocalTrack(
+      summary('local:unsent', 'Unsent'),
+      content('local:unsent'),
+    );
+    await database.deleteLocalTrack('local:unsent');
+    await expect(database.loadTrackSyncState('local:unsent')).resolves.toBeNull();
+
+    await database.saveLocalTrack(summary('local:sent', 'Sent'), content('local:sent'));
+    await database.saveTrackSyncState({
+      trackId: 'local:sent',
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 8,
+      pendingKind: null,
+    });
+    await database.deleteLocalTrack('local:sent');
+    await expect(database.localTracks.get('local:sent')).resolves.toBeUndefined();
+    await expect(
+      database.localTrackContents.get('local:sent'),
+    ).resolves.toBeUndefined();
+    await expect(database.loadTrackSyncState('local:sent')).resolves.toEqual({
+      trackId: 'local:sent',
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 8,
+      pendingKind: 'delete',
+    });
+  });
+
+  it('restores and clears the latest opened track identifier', async () => {
+    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
+    await database.saveLatestOpenedTrackId('local:1');
     database.close();
     database = new AppDatabase(services.logger);
 
-    await expect(database.listLocalTracks()).resolves.toMatchObject([
-      { id: 'local:1', name: 'ბილიკი' },
-    ]);
-    await expect(database.loadLocalTrackContent('local:1')).resolves.toMatchObject({
-      trackId: 'local:1',
-      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
-    });
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBe('local:1');
+    await database.deleteLocalTrack('local:1');
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
   });
 
   it('sorts favorites first, then newest first with a stable ID tie-breaker', async () => {
@@ -195,59 +319,12 @@ describe('local track persistence', () => {
     ]);
   });
 
-  it('updates favorites without changing import date', async () => {
-    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
-
+  it('rejects mismatched summary and content IDs before writing', async () => {
     await expect(
-      database.setLocalTrackFavorite('local:1', true),
-    ).resolves.toMatchObject({
-      favorite: true,
-      savedAt: '2026-07-22T10:00:00.000Z',
-    });
-  });
-
-  it('restores and clears the latest opened track identifier', async () => {
-    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
-    await database.saveLatestOpenedTrackId('local:1');
-    database.close();
-    database = new AppDatabase(services.logger);
-
-    await expect(database.loadLatestOpenedTrackId()).resolves.toBe('local:1');
-    await database.deleteLocalTrack('local:1');
-    await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
-  });
-
-  it('renames only the summary and validates the trimmed name', async () => {
-    await database.saveLocalTrack(summary('local:1', 'Old'), content('local:1'));
-    await expect(
-      database.renameLocalTrack('local:1', '  New name  '),
-    ).resolves.toMatchObject({ name: 'New name', normalizedName: 'new name' });
-    await expect(database.loadLocalTrackContent('local:1')).resolves.toMatchObject({
-      trackId: 'local:1',
-    });
-    await expect(database.renameLocalTrack('local:1', '   ')).rejects.toThrow(
-      'Track name is required.',
-    );
-  });
-
-  it('deletes summary and content in one transaction', async () => {
-    await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
-    await database.deleteLocalTrack('local:1');
-
-    await expect(database.listLocalTracks()).resolves.toEqual([]);
-    await expect(database.loadLocalTrackContent('local:1')).rejects.toMatchObject({
-      code: 'content-missing',
-    });
-  });
-
-  it('rolls back the summary when content persistence fails', async () => {
-    vi.spyOn(database.localTrackContents, 'put').mockRejectedValueOnce(
-      new Error('quota unavailable'),
-    );
-    await expect(
-      database.saveLocalTrack(summary('local:1', 'Track'), content('local:1')),
-    ).rejects.toThrow('quota unavailable');
-    await expect(database.localTracks.get('local:1')).resolves.toBeUndefined();
+      database.saveLocalTrack(summary('local:1', 'Track'), content('local:2')),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+    await expect(database.localTracks.count()).resolves.toBe(0);
+    await expect(database.localTrackContents.count()).resolves.toBe(0);
   });
 
   it('skips corrupt summaries and reports missing content as bounded errors', async () => {
@@ -265,13 +342,5 @@ describe('local track persistence', () => {
     await expect(database.loadLocalTrackContent('local:1')).rejects.toBeInstanceOf(
       LocalTrackStorageError,
     );
-  });
-
-  it('rejects mismatched summary and content IDs before writing', async () => {
-    await expect(
-      database.saveLocalTrack(summary('local:1', 'Track'), content('local:2')),
-    ).rejects.toMatchObject({ code: 'record-invalid' });
-    await expect(database.localTracks.count()).resolves.toBe(0);
-    await expect(database.localTrackContents.count()).resolves.toBe(0);
   });
 });

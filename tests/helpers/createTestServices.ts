@@ -22,6 +22,7 @@ import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
+import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
@@ -149,6 +150,7 @@ export function createTestServices(
       userData.dispose();
     },
     httpClient,
+    trackContentHasher: new WebCryptoTrackContentHasher(),
     idGenerator,
     logger,
     elevationProvider: {

@@ -1177,7 +1177,7 @@ describe('WorkspaceShell', () => {
     if (mapLayers === null) return;
     const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
-      schemaVersion: 2,
+      schemaVersion: 3,
       trackId: 'local:test-1',
       trackPoints: [
         [

@@ -6,6 +6,7 @@ import type { MapCameraRepository } from '@/application/ports/MapCameraRepositor
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
+import type { TrackContentHasher } from '@/application/ports/TrackContentHasher';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
@@ -38,6 +39,7 @@ import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/Terrai
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
+import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -53,6 +55,7 @@ export interface RuntimeServices {
   readonly database: AppDatabase;
   readonly diagnostics: DiagnosticsService;
   readonly dispose: () => void;
+  readonly trackContentHasher: TrackContentHasher;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
@@ -91,6 +94,7 @@ export function createRuntimeServices(): RuntimeServices {
     buildInfo.mode !== 'production' || developerFlag === '1',
   );
   const database = new AppDatabase(logger);
+  const trackContentHasher = new WebCryptoTrackContentHasher();
   const supabaseConfiguration = loadSupabaseConfiguration(
     import.meta.env.VITE_SUPABASE_URL,
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -264,6 +268,7 @@ export function createRuntimeServices(): RuntimeServices {
       userData.dispose();
       database.close();
     },
+    trackContentHasher,
     idGenerator,
     logger,
     elevationProvider,

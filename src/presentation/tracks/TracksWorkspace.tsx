@@ -249,6 +249,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     clock,
     database,
     elevationProvider,
+    trackContentHasher,
     idGenerator,
     logger,
     mapLayers,
@@ -671,11 +672,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const previewNamingAbort = namingAbort.current;
     try {
       const normalizedName = normalizeLocalTrackName(active.name);
+      const savedAt = clock.now().toISOString();
+      const content: LocalTrackContent = {
+        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+        trackId: active.id,
+        trackPoints: active.preparedSegments.map((segment) => segment.points),
+      };
       const summary: LocalTrackSummaryBuilder = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         id: active.id,
         ...normalizedName,
-        savedAt: clock.now().toISOString(),
+        savedAt,
+        updatedAt: savedAt,
+        contentHash: await trackContentHasher.hash(content),
         sourceFilename: active.file.name,
         sourceFormat: active.sourceFormat,
         favorite: false,
@@ -698,11 +707,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
       if (active.fallbackPoi !== undefined) summary.fallbackPoi = active.fallbackPoi;
-      const content: LocalTrackContent = {
-        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-        trackId: active.id,
-        trackPoints: active.preparedSegments.map((segment) => segment.points),
-      };
       await database.saveLocalTrack(summary, content);
       if (generation !== importGeneration.current) return;
       await saveLatestOpenedTrackId(summary.id);
@@ -735,6 +739,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     recalculationState,
     reloadSummaries,
     saveLatestOpenedTrackId,
+    trackContentHasher,
   ]);
 
   const recalculateElevation = useCallback(async () => {

@@ -17,6 +17,7 @@ const summary: LocalTrackSummary = {
   name: 'Ridge <loop>',
   normalizedName: 'ridge <loop>',
   savedAt: '2026-07-01T00:00:00.000Z',
+  updatedAt: '2026-07-01T00:00:00.000Z',
   sourceFilename: 'source.fit',
   sourceFormat: 'fit' as const,
   favorite: false,

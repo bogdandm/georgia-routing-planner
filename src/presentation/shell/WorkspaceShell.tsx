@@ -3,9 +3,12 @@ import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
 import {
   Box,
   ButtonBase,
+  CircularProgress,
   IconButton,
   Paper,
+  Stack,
   Tooltip,
+  Typography,
   useMediaQuery,
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -114,6 +117,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         : `saved:${activeTrack.summary.id}`;
   const mobileTrackDetailsExpanded =
     activeTrackKey !== null && mobileTrackDetailsExpandedKey === activeTrackKey;
+  const activeTrackPreparing =
+    activeTrack?.kind === 'preview' &&
+    activeTrack.preparationStatus === 'preparing';
   const activeTrackMetrics =
     activeTrack === null
       ? null
@@ -297,11 +303,25 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             borderRadius: 'inherit',
           }}
         >
-          <CompactTrackSummary
-            showExpandIndicator
-            metrics={activeTrackMetrics}
-            profile={activeProfile}
-          />
+          {activeTrackPreparing ? (
+            <Stack
+              role="status"
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'center' }}
+            >
+              <CircularProgress size={18} />
+              <Typography variant="body2">
+                Preparing terrain and elevation…
+              </Typography>
+            </Stack>
+          ) : activeTrackMetrics !== null ? (
+            <CompactTrackSummary
+              showExpandIndicator
+              metrics={activeTrackMetrics}
+              profile={activeProfile}
+            />
+          ) : null}
         </ButtonBase>
       </Paper>
 

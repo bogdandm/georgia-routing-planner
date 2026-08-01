@@ -1105,7 +1105,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('Fixture track.gpx · GPX')).toBeVisible();
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
-    const details = screen.getByRole('complementary', { name: 'Track details' });
+    let details = screen.getByRole('complementary', { name: 'Track details' });
     const elevationProfile = within(details).getByRole('img', {
       name: 'Elevation profile from 1000 to 1120 metres',
     });
@@ -1135,6 +1135,10 @@ describe('WorkspaceShell', () => {
     expect(climb).toHaveAttribute('aria-pressed', 'true');
     expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
     expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    details = screen.getByRole('complementary', { name: 'Track details' });
     const elevationGain = within(details).getByLabelText(
       /^Elevation gain: (?:23[5-9]|24[0-5]) m$/u,
     );

@@ -40,6 +40,16 @@ describe('createHikingMapStyle', () => {
     expect(layerIds.indexOf(mapLayerIds.placeLabels)).toBeGreaterThan(
       layerIds.indexOf(mapLayerIds.hikingPois),
     );
+    expect(
+      layerIds.slice(
+        layerIds.indexOf(mapLayerIds.roadLabels),
+        layerIds.indexOf(mapLayerIds.waterLabels) + 1,
+      ),
+    ).toEqual([
+      mapLayerIds.roadLabels,
+      mapLayerIds.riverLabels,
+      mapLayerIds.waterLabels,
+    ]);
   });
 
   it('retains provider attribution and contains no query secrets', () => {
@@ -133,6 +143,33 @@ describe('createHikingMapStyle', () => {
         englishFirstLabelExpression,
       );
     }
+  });
+
+  it('places English-first river labels along river geometry before water-body labels', () => {
+    const style = createHikingMapStyle(configuration);
+    const riverLabels = style.layers.find(
+      (layer) => layer.id === mapLayerIds.riverLabels,
+    );
+
+    expect(riverLabels).toMatchObject({
+      id: mapLayerIds.riverLabels,
+      type: 'symbol',
+      source: mapSourceIds.basemapVector,
+      'source-layer': 'waterway',
+      minzoom: 7,
+      filter: ['==', ['get', 'class'], 'river'],
+      layout: {
+        'symbol-placement': 'line',
+        'text-field': englishFirstLabelExpression,
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+      paint: {
+        'text-color': mapVisualPalette.water.label,
+        'text-halo-color': mapVisualPalette.text.haloVector,
+        'text-halo-width': 1,
+      },
+    });
   });
 
   it('keeps labels readable across nearby and distant map detail', () => {

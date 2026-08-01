@@ -8,6 +8,7 @@ export const appColors = {
     tigerOrange: '#FB8500',
   },
   elevationGrade: {
+    'extreme-descent': '#C93C8E',
     'steep-descent': '#005F73',
     descent: '#0F766E',
     flat: '#667085',

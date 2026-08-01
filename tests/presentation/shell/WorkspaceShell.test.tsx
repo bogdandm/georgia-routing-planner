@@ -190,6 +190,18 @@ function gpxFileWithGradeBands(): File {
   return file;
 }
 
+function flatGpxFile(): File {
+  const points = Array.from(
+    { length: 16 },
+    (_, index) =>
+      `<trkpt lat="42" lon="${String(44 + index * 0.001)}"><ele>1000</ele></trkpt>`,
+  ).join('');
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Flat fixture</name><trkseg>${points}</trkseg></trk></gpx>`;
+  const file = new File([xml], 'Flat fixture.gpx', { type: 'application/gpx+xml' });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
+}
+
 function gpxFileWithCompanionRoute(): File {
   const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Detailed track</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele><time>2026-07-13T08:00:00Z</time></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele><time>2026-07-13T08:02:00Z</time></trkpt></trkseg></trk><rte><name>Companion route</name><rtept lat="42" lon="44"/><rtept lat="42.01" lon="44.01"/></rte></gpx>`;
   const file = new File([xml], 'Track and route.gpx', {
@@ -1105,6 +1117,9 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Delete race.gpx'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
     const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });
@@ -1125,6 +1140,33 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText('Elevation could not be recalculated.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('publishes whole-track grade colors for flat macro ranges', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
+    const { container } = renderWorkspaceShell();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 0, 420, 264),
+    );
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, flatGpxFile());
+    await waitFor(() => {
+      const highlightedSegments = setImportedTrackHighlight.mock.lastCall?.[0];
+      expect(highlightedSegments).toHaveLength(1);
+      expect(highlightedSegments?.[0]?.color).toBe(appColors.elevationGrade.flat);
+      expect(highlightedSegments?.[0]?.coordinates.length).toBeGreaterThan(16);
+      expect(highlightedSegments?.[0]?.coordinates[0]).toEqual([44, 42]);
+      expect(highlightedSegments?.[0]?.coordinates.at(-1)).toEqual([44.015, 42]);
+    });
   });
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {

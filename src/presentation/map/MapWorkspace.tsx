@@ -60,6 +60,8 @@ import {
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
+import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
@@ -168,6 +170,13 @@ export function MapWorkspace({
     mapLayerStore,
     (state) => state.terrainComputeStatus,
   );
+  const elevationGradientVisible = useStore(
+    mapLayerStore,
+    (state) =>
+      state.visibility['imported-tracks'] &&
+      state.visibility['track-elevation-gradient'],
+  );
+  const activeProfile = useOptionalTracksWorkspace()?.activeProfile ?? null;
   const fitBoundsCommand = useStore(
     mapInteractionStore,
     (state) => state.fitBoundsCommand,
@@ -644,6 +653,14 @@ export function MapWorkspace({
           onModeChange={handleTerrainControlChange}
         />
       ) : null}
+      <ElevationGradeLegend
+        profile={activeProfile}
+        visible={
+          !smartphoneViewport &&
+          mapProviderConfiguration.status === 'valid' &&
+          elevationGradientVisible
+        }
+      />
       {!online && mapProviderConfiguration.status === 'valid' ? (
         <Alert
           severity="info"

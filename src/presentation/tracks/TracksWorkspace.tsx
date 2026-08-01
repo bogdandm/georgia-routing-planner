@@ -990,19 +990,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const highlightSegments =
       activeProfile === null
         ? null
-        : activeProfile.segments.flatMap((segment) =>
-            segment.type === 'flat'
-              ? []
-              : segment.gradeSubsegments.map((gradeSubsegment) => ({
-                  coordinates: activeProfile.points
-                    .slice(
-                      gradeSubsegment.startSampleIndex,
-                      gradeSubsegment.endSampleIndex + 1,
-                    )
-                    .map((point) => point.coordinate),
-                  color: appColors.elevationGrade[gradeSubsegment.band],
-                })),
-          );
+        : activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
+            coordinates: activeProfile.points
+              .slice(
+                gradeSubsegment.startSampleIndex,
+                gradeSubsegment.endSampleIndex + 1,
+              )
+              .map((point) => point.coordinate),
+            color: appColors.elevationGrade[gradeSubsegment.band],
+          }));
     mapLayers?.setImportedTrackHighlight(highlightSegments);
   }, [activeProfile, mapLayers]);
 

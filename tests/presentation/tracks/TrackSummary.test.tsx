@@ -55,9 +55,10 @@ const profile: ElevationProfile = {
       ],
     },
   ],
+  gradeSubsegments: [],
   minimumMeters: 1_000,
   maximumMeters: 1_120,
-  algorithmVersion: 2,
+  algorithmVersion: 3,
 };
 
 const metrics: TrackMetrics = {

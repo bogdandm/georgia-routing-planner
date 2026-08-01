@@ -1,9 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+
+import {
+  GRADE_BANDS_ASCENDING,
+  GRADE_BAND_THRESHOLDS_PCT,
+  type ElevationProfile,
+} from '@/domain/tracks/elevationProfile';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
@@ -13,6 +18,7 @@ import {
   requestMapNavigation,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
@@ -35,6 +41,16 @@ vi.mock('react-map-gl/maplibre', () => ({
   NavigationControl: () => null,
 }));
 
+const tracksWorkspaceMock = vi.hoisted(() => ({
+  activeProfile: null as ElevationProfile | null,
+}));
+
+vi.mock('@/presentation/tracks/TracksWorkspace', () => ({
+  useOptionalTracksWorkspace: () =>
+    tracksWorkspaceMock.activeProfile === null
+      ? null
+      : { activeProfile: tracksWorkspaceMock.activeProfile },
+}));
 const sharedScene: SatelliteScene = {
   id: 'shared-scene',
   collection: 'sentinel-2-l2a',
@@ -61,11 +77,69 @@ const sharedScene: SatelliteScene = {
   attribution: 'Synthetic test data',
 };
 
+const gradeProfile: ElevationProfile = {
+  points: [],
+  segments: [
+    {
+      startSampleIndex: 0,
+      endSampleIndex: 1,
+      startDistanceMeters: 0,
+      endDistanceMeters: 1_000,
+      type: 'climb',
+      distanceMeters: 1_000,
+      netElevationChangeMeters: 80,
+      ascentMeters: 80,
+      descentMeters: 0,
+      averageGradePct: 8,
+      gradeSubsegments: [
+        {
+          startSampleIndex: 0,
+          endSampleIndex: 1,
+          startDistanceMeters: 0,
+          endDistanceMeters: 1_000,
+          distanceMeters: 1_000,
+          averageGradePct: 8,
+          band: 'climb',
+        },
+      ],
+    },
+  ],
+  gradeSubsegments: [
+    {
+      startSampleIndex: 0,
+      endSampleIndex: 1,
+      startDistanceMeters: 0,
+      endDistanceMeters: 1_000,
+      distanceMeters: 1_000,
+      averageGradePct: 8,
+      band: 'climb',
+    },
+  ],
+  minimumMeters: 1_000,
+  maximumMeters: 1_080,
+  algorithmVersion: 3,
+};
+
+function mockViewportWidth(width: number): void {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query === '(width < 900px)' && width < 900,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 describe('MapWorkspace', () => {
   beforeEach(() => {
     resetMapInteractionStore();
     resetMapLayerStore();
     window.history.replaceState(null, '', '/');
+    tracksWorkspaceMock.activeProfile = null;
+    mockViewportWidth(900);
   });
 
   it('uses a valid explicit share view over local camera persistence', async () => {
@@ -638,5 +712,132 @@ describe('MapWorkspace', () => {
       showCollisionBoxes: false,
       showTileBoundaries: false,
     });
+  });
+
+  it('shows the legend only while the desktop grade overlay is visible', async () => {
+    tracksWorkspaceMock.activeProfile = gradeProfile;
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={new FakeMapFacade()}
+          mapCanvas={<div>Gradient map</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    const legend = await screen.findByRole('region', {
+      name: 'Elevation grade legend',
+    });
+    const legendImage = within(legend).getByRole('img', {
+      name: 'Track grade color thresholds',
+    });
+
+    const visibleThresholds = GRADE_BAND_THRESHOLDS_PCT.filter((_, index) => {
+      const lowerBand = GRADE_BANDS_ASCENDING[index];
+      const upperBand = GRADE_BANDS_ASCENDING[index + 1];
+      return (
+        lowerBand !== undefined &&
+        upperBand !== undefined &&
+        appColors.elevationGrade[lowerBand] !== appColors.elevationGrade[upperBand]
+      );
+    });
+    const thresholdX = (threshold: number): number => {
+      const label = `${threshold < 0 ? '−' : ''}${String(Math.abs(threshold))}%`;
+      const x = within(legend).getByText(label).getAttribute('x');
+      expect(x).not.toBeNull();
+      return Number(x);
+    };
+
+    for (const threshold of visibleThresholds) {
+      expect(thresholdX(threshold)).toBeGreaterThan(0);
+    }
+    expect(within(legend).queryByText('30%')).not.toBeInTheDocument();
+    const zeroGradeX = (thresholdX(-3) + thresholdX(3)) / 2;
+    expect(thresholdX(-3) + thresholdX(3)).toBeCloseTo(
+      thresholdX(-10) + thresholdX(10),
+    );
+    expect(
+      (thresholdX(3) - thresholdX(-3)) / (thresholdX(10) - thresholdX(-10)),
+    ).toBeCloseTo(6 / 20);
+
+    const gradeCurve = legendImage.querySelector('path[fill="none"]');
+    const curveCoordinates = Array.from(
+      gradeCurve?.getAttribute('d')?.matchAll(/-?\d+(?:\.\d+)?/g) ?? [],
+      (match) => Number(match[0]),
+    );
+    expect(curveCoordinates).toHaveLength(6);
+    const coordinate = (index: number): number => {
+      const value = curveCoordinates[index];
+      expect(value).toBeDefined();
+      return value ?? 0;
+    };
+    const startX = coordinate(0);
+    const startY = coordinate(1);
+    const controlX = coordinate(2);
+    const controlY = coordinate(3);
+    const endX = coordinate(4);
+    const endY = coordinate(5);
+    const startGradePct = -((controlY - startY) / (controlX - startX)) * 100;
+    const endGradePct = -((endY - controlY) / (endX - controlX)) * 100;
+    expect(startGradePct).toBeCloseTo(-25);
+    expect(endGradePct).toBeCloseTo(35);
+    expect(
+      startX + ((0 - startGradePct) / (endGradePct - startGradePct)) * (endX - startX),
+    ).toBeCloseTo(zeroGradeX);
+
+    const gradientStops = Array.from(legendImage.querySelectorAll('stop'));
+    expect(gradientStops).toHaveLength(GRADE_BANDS_ASCENDING.length * 2);
+    for (const [index, band] of GRADE_BANDS_ASCENDING.entries()) {
+      expect(
+        gradientStops
+          .slice(index * 2, index * 2 + 2)
+          .map((stop) => stop.getAttribute('stop-color')),
+      ).toEqual([appColors.elevationGrade[band], appColors.elevationGrade[band]]);
+    }
+    for (const threshold of visibleThresholds) {
+      const thresholdIndex = GRADE_BAND_THRESHOLDS_PCT.indexOf(threshold);
+      const expectedOffset = ((thresholdX(threshold) - 7) / (245 - 7)) * 100;
+      expect(
+        Number(
+          gradientStops[thresholdIndex * 2 + 1]
+            ?.getAttribute('offset')
+            ?.replace('%', ''),
+        ),
+      ).toBeCloseTo(expectedOffset);
+      expect(
+        Number(
+          gradientStops[thresholdIndex * 2 + 2]
+            ?.getAttribute('offset')
+            ?.replace('%', ''),
+        ),
+      ).toBeCloseTo(expectedOffset);
+    }
+
+    act(() => {
+      mapLayerStore.setState((state) => ({
+        visibility: {
+          ...state.visibility,
+          'track-elevation-gradient': false,
+        },
+      }));
+    });
+    expect(
+      screen.queryByRole('region', { name: 'Elevation grade legend' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the legend on smartphone viewports', async () => {
+    tracksWorkspaceMock.activeProfile = gradeProfile;
+    mockViewportWidth(899);
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Mobile map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Mobile map');
+    expect(
+      screen.queryByRole('region', { name: 'Elevation grade legend' }),
+    ).not.toBeInTheDocument();
   });
 });

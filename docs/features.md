@@ -306,19 +306,22 @@ Imported tracks, its default-on **Elevation gradient**, Satellite imagery, Scene
 footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs,
 plus Natural features and Restricted areas. The gradient colors climb and descent grades
 across the active track; its durable checkbox remains independently editable while
-Imported tracks gates its effective map visibility. The base bright-blue geometry and
-gradient share the imported-track opacity control. The single **Natural features**
-checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and their water
-labels. The terrain provider also owns the invalid-DEM repair switch and a compact
-contour-distance slider. The OpenStreetMap controls remain a single flat list with one
-shared opacity slider. While satellite imagery is visible, the slider scales every
-OpenStreetMap reference layer and the elevation isolines together while preserving their
-relative visual weights and individual visibility choices. It is disabled in vector-only
-mode. Every map data source added to the application must appear under its provider
-heading in Layers; each user-visible feature family from that source receives an
-explicit control unless it is part of the required base canvas. Each logical ID maps to
-an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the UI
-boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
+Imported tracks gates its effective map visibility. When the colored overlay is visible,
+desktop and tablet maps show a compact lower-right profile-shaped, stepped color scale.
+Labels sit at numerically positioned color boundaries around 0% grade; thresholds that
+do not change color are omitted. Smartphones omit the scale. The base bright-blue
+geometry and gradient share the imported-track opacity control. The single **Natural
+features** checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and
+their water labels. The terrain provider also owns the invalid-DEM repair switch and a
+compact contour-distance slider. The OpenStreetMap controls remain a single flat list
+with one shared opacity slider. While satellite imagery is visible, the slider scales
+every OpenStreetMap reference layer and the elevation isolines together while preserving
+their relative visual weights and individual visibility choices. It is disabled in
+vector-only mode. Every map data source added to the application must appear under its
+provider heading in Layers; each user-visible feature family from that source receives
+an explicit control unless it is part of the required base canvas. Each logical ID maps
+to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs never cross the
+UI boundary. Satellite controls remain disabled until a scene is applied. Hiding imagery
 retains the applied scene and does not remove its footprint, search results, or
 attribution contract. Relief and isoline visibility are independent of 3D terrain mode
 and satellite availability. Base land remains visible and cannot be disabled. Per-layer

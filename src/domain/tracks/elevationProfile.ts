@@ -2,7 +2,7 @@ import { medianInPlace } from '@/domain/elevation/robustElevationStatistics';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 
-export const ELEVATION_ALGORITHM_VERSION = 2;
+export const ELEVATION_ALGORITHM_VERSION = 3;
 
 export interface ElevationAnalysisOptions {
   readonly sampleIntervalM: number;
@@ -59,6 +59,7 @@ export interface ElevationProfilePoint extends ElevationProfileInputPoint {
 export type MacroElevationSegmentType = 'climb' | 'descent' | 'flat';
 
 export type GradeBand =
+  | 'extreme-descent'
   | 'steep-descent'
   | 'descent'
   | 'flat'
@@ -66,6 +67,18 @@ export type GradeBand =
   | 'hard-climb'
   | 'steep-climb'
   | 'extreme-climb';
+export const GRADE_BANDS_ASCENDING = [
+  'extreme-descent',
+  'steep-descent',
+  'descent',
+  'flat',
+  'climb',
+  'hard-climb',
+  'steep-climb',
+  'extreme-climb',
+] as const satisfies readonly GradeBand[];
+
+export const GRADE_BAND_THRESHOLDS_PCT = [-20, -10, -3, 3, 10, 20, 30] as const;
 
 export interface GradeSubsegment {
   readonly startSampleIndex: number;
@@ -94,6 +107,7 @@ export interface MacroElevationSegment {
 export interface ElevationProfile {
   readonly points: readonly ElevationProfilePoint[];
   readonly segments: readonly MacroElevationSegment[];
+  readonly gradeSubsegments: readonly GradeSubsegment[];
   readonly minimumMeters: number;
   readonly maximumMeters: number;
   readonly algorithmVersion: number;
@@ -203,12 +217,13 @@ export function medianFilterElevationSamples(
 }
 
 export function gradeBandForGrade(gradePct: number): GradeBand {
-  if (gradePct <= -10) return 'steep-descent';
-  if (gradePct < -3) return 'descent';
-  if (gradePct <= 3) return 'flat';
-  if (gradePct < 10) return 'climb';
-  if (gradePct < 20) return 'hard-climb';
-  if (gradePct < 30) return 'steep-climb';
+  if (gradePct <= GRADE_BAND_THRESHOLDS_PCT[0]) return 'extreme-descent';
+  if (gradePct <= GRADE_BAND_THRESHOLDS_PCT[1]) return 'steep-descent';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[2]) return 'descent';
+  if (gradePct <= GRADE_BAND_THRESHOLDS_PCT[3]) return 'flat';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[4]) return 'climb';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[5]) return 'hard-climb';
+  if (gradePct < GRADE_BAND_THRESHOLDS_PCT[6]) return 'steep-climb';
   return 'extreme-climb';
 }
 
@@ -648,12 +663,13 @@ function absorbShortFlats(
 }
 
 function buildGradeSubsegments(
-  range: Range,
+  startSampleIndex: number,
+  endSampleIndex: number,
   points: readonly ElevationProfilePoint[],
   options: ElevationAnalysisOptions,
 ): readonly GradeSubsegment[] {
   const ranges: GradeRange[] = [];
-  for (let index = range.start + 1; index <= range.end; index += 1) {
+  for (let index = startSampleIndex + 1; index <= endSampleIndex; index += 1) {
     const previous = points[index - 1];
     const current = points[index];
     if (previous === undefined || current === undefined) continue;
@@ -780,7 +796,7 @@ function finalizeRunRanges(
   return coalesceRanges(absorbed).map((range) => ({
     ...rangeMetrics(range, points),
     type: range.type,
-    gradeSubsegments: buildGradeSubsegments(range, points, options),
+    gradeSubsegments: buildGradeSubsegments(range.start, range.end, points, options),
   }));
 }
 
@@ -806,6 +822,9 @@ export function calculateElevationProfile(
       options,
     ),
   );
+  const gradeSubsegments = runs.flatMap((run) =>
+    buildGradeSubsegments(run.start, run.end, points, options),
+  );
   let minimumMeters = Infinity;
   let maximumMeters = -Infinity;
   for (const point of points) {
@@ -815,6 +834,7 @@ export function calculateElevationProfile(
   return {
     points,
     segments: segmentsResult,
+    gradeSubsegments,
     minimumMeters,
     maximumMeters,
     algorithmVersion: ELEVATION_ALGORITHM_VERSION,

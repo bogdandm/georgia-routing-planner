@@ -306,10 +306,12 @@ Imported tracks, its default-on **Elevation gradient**, Satellite imagery, Scene
 footprint, Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs,
 plus Natural features and Restricted areas. The gradient colors climb and descent grades
 across the active track; its durable checkbox remains independently editable while
-Imported tracks gates its effective map visibility. The base bright-blue geometry and
-gradient share the imported-track opacity control. The single **Natural features**
-checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and their water
-labels. The terrain provider also owns the invalid-DEM repair switch and a compact
+Imported tracks gates its effective map visibility. When the colored overlay is visible,
+desktop and tablet maps show a compact lower-right legend mapping every color to its
+grade-percent range; smartphones omit it. The base bright-blue geometry and gradient
+share the imported-track opacity control. The single **Natural features** checkbox
+controls vegetation, glaciers, wetlands, rivers, water bodies, and their water labels.
+The terrain provider also owns the invalid-DEM repair switch and a compact
 contour-distance slider. The OpenStreetMap controls remain a single flat list with one
 shared opacity slider. While satellite imagery is visible, the slider scales every
 OpenStreetMap reference layer and the elevation isolines together while preserving their

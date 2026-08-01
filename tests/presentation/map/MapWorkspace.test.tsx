@@ -4,6 +4,7 @@ import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
@@ -35,6 +36,16 @@ vi.mock('react-map-gl/maplibre', () => ({
   NavigationControl: () => null,
 }));
 
+const tracksWorkspaceMock = vi.hoisted(() => ({
+  activeProfile: null as ElevationProfile | null,
+}));
+
+vi.mock('@/presentation/tracks/TracksWorkspace', () => ({
+  useOptionalTracksWorkspace: () =>
+    tracksWorkspaceMock.activeProfile === null
+      ? null
+      : { activeProfile: tracksWorkspaceMock.activeProfile },
+}));
 const sharedScene: SatelliteScene = {
   id: 'shared-scene',
   collection: 'sentinel-2-l2a',
@@ -61,11 +72,58 @@ const sharedScene: SatelliteScene = {
   attribution: 'Synthetic test data',
 };
 
+const gradeProfile: ElevationProfile = {
+  points: [],
+  segments: [
+    {
+      startSampleIndex: 0,
+      endSampleIndex: 1,
+      startDistanceMeters: 0,
+      endDistanceMeters: 1_000,
+      type: 'climb',
+      distanceMeters: 1_000,
+      netElevationChangeMeters: 80,
+      ascentMeters: 80,
+      descentMeters: 0,
+      averageGradePct: 8,
+      gradeSubsegments: [
+        {
+          startSampleIndex: 0,
+          endSampleIndex: 1,
+          startDistanceMeters: 0,
+          endDistanceMeters: 1_000,
+          distanceMeters: 1_000,
+          averageGradePct: 8,
+          band: 'climb',
+        },
+      ],
+    },
+  ],
+  minimumMeters: 1_000,
+  maximumMeters: 1_080,
+  algorithmVersion: 2,
+};
+
+function mockViewportWidth(width: number): void {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: query === '(width < 900px)' && width < 900,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 describe('MapWorkspace', () => {
   beforeEach(() => {
     resetMapInteractionStore();
     resetMapLayerStore();
     window.history.replaceState(null, '', '/');
+    tracksWorkspaceMock.activeProfile = null;
+    mockViewportWidth(900);
   });
 
   it('uses a valid explicit share view over local camera persistence', async () => {
@@ -638,5 +696,50 @@ describe('MapWorkspace', () => {
       showCollisionBoxes: false,
       showTileBoundaries: false,
     });
+  });
+
+  it('shows the legend only while the desktop grade overlay is visible', async () => {
+    tracksWorkspaceMock.activeProfile = gradeProfile;
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={new FakeMapFacade()}
+          mapCanvas={<div>Gradient map</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    const legend = await screen.findByRole('region', {
+      name: 'Elevation grade legend',
+    });
+    expect(legend).toHaveTextContent('≤ −10%');
+    expect(legend).toHaveTextContent('≥ 30%');
+
+    act(() => {
+      mapLayerStore.setState((state) => ({
+        visibility: {
+          ...state.visibility,
+          'track-elevation-gradient': false,
+        },
+      }));
+    });
+    expect(
+      screen.queryByRole('region', { name: 'Elevation grade legend' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the legend on smartphone viewports', async () => {
+    tracksWorkspaceMock.activeProfile = gradeProfile;
+    mockViewportWidth(899);
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Mobile map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Mobile map');
+    expect(
+      screen.queryByRole('region', { name: 'Elevation grade legend' }),
+    ).not.toBeInTheDocument();
   });
 });

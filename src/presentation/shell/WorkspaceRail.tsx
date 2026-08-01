@@ -347,6 +347,21 @@ export function WorkspaceRail({
           transition: (theme) => theme.transitions.create('opacity'),
         }}
       >
+        {developerMode ? (
+          <Tooltip title="Developer diagnostics" placement="right">
+            <IconButton
+              aria-label="Developer diagnostics"
+              aria-pressed={developerToolsOpen}
+              onClick={onToggleDeveloperTools}
+              sx={{
+                color: 'rgba(255,255,255,0.84)',
+                bgcolor: developerToolsOpen ? 'rgba(33,158,188,0.34)' : 'transparent',
+              }}
+            >
+              <BugReportOutlinedIcon />
+            </IconButton>
+          </Tooltip>
+        ) : null}
         <Tabs
           aria-label="Account section"
           orientation="vertical"
@@ -364,21 +379,6 @@ export function WorkspaceRail({
         >
           <Tab icon={<AccountCircleOutlinedIcon />} label="User" value="user" />
         </Tabs>
-        {developerMode ? (
-          <Tooltip title="Developer diagnostics" placement="right">
-            <IconButton
-              aria-label="Developer diagnostics"
-              aria-pressed={developerToolsOpen}
-              onClick={onToggleDeveloperTools}
-              sx={{
-                color: 'rgba(255,255,255,0.84)',
-                bgcolor: developerToolsOpen ? 'rgba(33,158,188,0.34)' : 'transparent',
-              }}
-            >
-              <BugReportOutlinedIcon />
-            </IconButton>
-          </Tooltip>
-        ) : null}
         <Tooltip title="Settings" placement="right">
           <IconButton
             aria-label="Open settings"

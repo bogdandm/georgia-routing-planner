@@ -32,9 +32,10 @@ export function UserPanel() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
+  const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
-    void userData.signIn(email, password);
+    await userData.signIn(email, password);
+    setPassword('');
   };
 
   if (snapshot.status === 'unconfigured') {

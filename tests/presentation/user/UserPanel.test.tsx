@@ -54,6 +54,7 @@ describe('UserPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(signIn).toHaveBeenCalledWith('user@example.test', 'password');
+    expect(screen.getByLabelText(/Password/u)).toHaveValue('');
   });
 
   it('shows the connected user and sign-out control', () => {

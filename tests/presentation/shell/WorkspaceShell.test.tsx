@@ -2790,12 +2790,20 @@ describe('WorkspaceShell', () => {
   it('places User before Settings and activates it without an unmatched Tabs value', async () => {
     const user = userEvent.setup();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useUiStore.setState({ developerMode: true });
     renderWorkspaceShell();
 
     const userButton = screen.getByRole('tab', { name: 'User' });
     const settingsButton = screen.getByRole('button', { name: 'Open settings' });
     expect(
       userButton.compareDocumentPosition(settingsButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const diagnosticsButton = screen.getByRole('button', {
+      name: 'Developer diagnostics',
+    });
+    expect(
+      diagnosticsButton.compareDocumentPosition(userButton) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 

@@ -1,3 +1,6 @@
+import { lineString, point } from '@turf/helpers';
+import pointToLineDistance from '@turf/point-to-line-distance';
+import type { Feature, Point } from 'geojson';
 import type { GeoJSONFeature } from 'maplibre-gl';
 
 import type { MapCoordinate, NearbyPoi } from '@/presentation/map/mapTypes';
@@ -19,6 +22,46 @@ export function geodesicDistanceMeters(from: MapCoordinate, to: MapCoordinate): 
   return 2 * earthRadiusMeters * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
+type FiniteCoordinate = [number, number, ...number[]];
+
+function isFiniteCoordinate(value: unknown): value is FiniteCoordinate {
+  if (!Array.isArray(value)) return false;
+  const [longitude, latitude] = value;
+  return (
+    typeof longitude === 'number' &&
+    typeof latitude === 'number' &&
+    value.length >= 2 &&
+    value.every(
+      (coordinate) =>
+        typeof coordinate === 'number' && Number.isFinite(coordinate),
+    )
+  );
+}
+
+function isFiniteLineCoordinates(
+  coordinates: unknown,
+): coordinates is FiniteCoordinate[] {
+  return (
+    Array.isArray(coordinates) &&
+    coordinates.length >= 2 &&
+    coordinates.every(isFiniteCoordinate)
+  );
+}
+
+function lineDistanceMeters(
+  selectedPoint: Feature<Point>,
+  coordinates: FiniteCoordinate[],
+): number | null {
+  try {
+    const distance = pointToLineDistance(selectedPoint, lineString(coordinates), {
+      units: 'meters',
+    });
+    return Number.isFinite(distance) ? distance : null;
+  } catch {
+    return null;
+  }
+}
+
 function safeProperty(
   properties: Readonly<Record<string, unknown>> | null,
   key: string,
@@ -33,16 +76,42 @@ function toCandidate(
   feature: GeoJSONFeature,
   selected: MapCoordinate,
 ): (NearbyPoi & { readonly stableKey: string }) | null {
-  if (feature.geometry.type !== 'Point') return null;
-  const [longitude, latitude] = feature.geometry.coordinates;
-  if (
-    typeof longitude !== 'number' ||
-    typeof latitude !== 'number' ||
-    !Number.isFinite(longitude) ||
-    !Number.isFinite(latitude)
-  ) {
-    return null;
+  let distanceMeters: number | null;
+  switch (feature.geometry.type) {
+    case 'Point': {
+      const coordinates = feature.geometry.coordinates;
+      if (!isFiniteCoordinate(coordinates)) return null;
+      const [longitude, latitude] = coordinates;
+      distanceMeters = geodesicDistanceMeters(selected, { longitude, latitude });
+      break;
+    }
+    case 'LineString':
+      if (!isFiniteLineCoordinates(feature.geometry.coordinates)) return null;
+      distanceMeters = lineDistanceMeters(
+        point([selected.longitude, selected.latitude]),
+        feature.geometry.coordinates,
+      );
+      break;
+    case 'MultiLineString': {
+      const lineCoordinates = feature.geometry.coordinates;
+      if (!Array.isArray(lineCoordinates) || lineCoordinates.length === 0) return null;
+      const selectedPoint = point([selected.longitude, selected.latitude]);
+      let nearestDistanceMeters = Number.POSITIVE_INFINITY;
+      for (const coordinates of lineCoordinates) {
+        if (!isFiniteLineCoordinates(coordinates)) return null;
+        const distance = lineDistanceMeters(selectedPoint, coordinates);
+        if (distance === null) return null;
+        nearestDistanceMeters = Math.min(nearestDistanceMeters, distance);
+      }
+      distanceMeters = Number.isFinite(nearestDistanceMeters)
+        ? nearestDistanceMeters
+        : null;
+      break;
+    }
+    default:
+      return null;
   }
+  if (distanceMeters === null) return null;
   const properties = feature.properties as Readonly<Record<string, unknown>> | null;
   const name =
     safeProperty(properties, 'name:en') ??
@@ -57,7 +126,7 @@ function toCandidate(
   return {
     name,
     category,
-    distanceMeters: geodesicDistanceMeters(selected, { longitude, latitude }),
+    distanceMeters,
     stableKey: `${String(feature.id ?? '')}\u0000${name}\u0000${category}`,
   };
 }

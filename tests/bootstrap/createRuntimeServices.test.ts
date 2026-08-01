@@ -9,10 +9,18 @@ function stubWorker() {
   vi.stubGlobal(
     'Worker',
     class {
-      public addEventListener(): void {}
-      public removeEventListener(): void {}
-      public postMessage(): void {}
-      public terminate(): void {}
+      public addEventListener(): void {
+        return undefined;
+      }
+      public removeEventListener(): void {
+        return undefined;
+      }
+      public postMessage(): void {
+        return undefined;
+      }
+      public terminate(): void {
+        return undefined;
+      }
     },
   );
 }
@@ -35,5 +43,4 @@ describe('createRuntimeServices', () => {
 
     services.dispose();
   });
-
 });

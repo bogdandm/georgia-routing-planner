@@ -7,7 +7,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useCallback, useState, useSyncExternalStore, type FormEvent } from 'react';
+import {
+  useCallback,
+  useState,
+  useSyncExternalStore,
+  type SyntheticEvent,
+} from 'react';
 
 import type { UserDataService } from '@/application/user/UserDataService';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -27,7 +32,7 @@ export function UserPanel() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
     void userData.signIn(email, password);
   };

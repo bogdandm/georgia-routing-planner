@@ -36,10 +36,12 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
   const client = {
     auth: {
       getSession,
-      onAuthStateChange: vi.fn((nextCallback) => {
-        callback = nextCallback;
-        return { data: { subscription: { unsubscribe } } };
-      }),
+      onAuthStateChange: vi.fn(
+        (nextCallback: (event: AuthChangeEvent, value: Session | null) => void) => {
+          callback = nextCallback;
+          return { data: { subscription: { unsubscribe } } };
+        },
+      ),
       signInWithPassword,
       signOut,
     },

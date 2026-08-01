@@ -18,13 +18,13 @@ const signOutErrorMessage = 'Unable to sign out. Try again.';
 
 /** Bridges the official Supabase session lifecycle to a serializable React snapshot. */
 export class SupabaseUserDataService implements UserDataService {
-  readonly #client: SupabaseClient;
+  readonly #client: Pick<SupabaseClient, 'auth'>;
   readonly #listeners = new Set<() => void>();
   #snapshot = initialSnapshot;
   #unsubscribe: (() => void) | null = null;
   #sessionRevision = 0;
 
-  public constructor(client: SupabaseClient) {
+  public constructor(client: Pick<SupabaseClient, 'auth'>) {
     this.#client = client;
     const { data } = client.auth.onAuthStateChange((event, session) => {
       this.#handleAuthStateChange(event, session);

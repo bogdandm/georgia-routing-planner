@@ -12,14 +12,16 @@ import { UserPanel } from '@/presentation/user/UserPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 
-function createUserDataService(snapshot: UserDataSnapshot): UserDataService {
-  return {
+function createUserDataService(snapshot: UserDataSnapshot) {
+  const signIn = vi.fn().mockResolvedValue(undefined);
+  const service: UserDataService = {
     dispose: vi.fn(),
     getSnapshot: () => snapshot,
-    signIn: vi.fn().mockResolvedValue(undefined),
+    signIn,
     signOut: vi.fn().mockResolvedValue(undefined),
     subscribe: () => () => undefined,
   };
+  return { service, signIn };
 }
 
 function renderPanel(userData: UserDataService) {
@@ -35,7 +37,7 @@ function renderPanel(userData: UserDataService) {
 
 describe('UserPanel', () => {
   it('renders an accessible password sign-in form for signed-out users', async () => {
-    const userData = createUserDataService({
+    const { service: userData, signIn } = createUserDataService({
       busy: false,
       email: null,
       errorMessage: null,
@@ -51,7 +53,7 @@ describe('UserPanel', () => {
     await user.type(screen.getByLabelText(/Password/u), 'password');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    expect(userData.signIn).toHaveBeenCalledWith('user@example.test', 'password');
+    expect(signIn).toHaveBeenCalledWith('user@example.test', 'password');
   });
 
   it('shows the connected user and sign-out control', () => {
@@ -61,7 +63,7 @@ describe('UserPanel', () => {
         email: 'user@example.test',
         errorMessage: null,
         status: 'signed-in',
-      }),
+      }).service,
     );
 
     expect(screen.getByText('user@example.test')).toBeVisible();
@@ -76,7 +78,7 @@ describe('UserPanel', () => {
         email: null,
         errorMessage: null,
         status: 'unconfigured',
-      }),
+      }).service,
     );
 
     expect(screen.getByText(/Account features are not configured/)).toBeVisible();
@@ -90,7 +92,7 @@ describe('UserPanel', () => {
         email: null,
         errorMessage: 'Unable to sign in. Check your email and password.',
         status: 'error',
-      }),
+      }).service,
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to sign in');

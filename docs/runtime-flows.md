@@ -316,20 +316,19 @@ the immutable object with `upsert: false`, and finalizes the reservation. A conc
 object created by that request and release its reservation. If compensation cannot
 delete the object, the released row makes it an orphan for mandatory later cleanup.
 
-JSON requests support metadata update, hard deletion, quota status, and full purge. The
-database RPC response has one explicit outcome:
-`applied | upload | conflict | existing | missing`. Metadata and deletion carry a server
-`baseRevision`; a stale revision returns the current record as `conflict`, while a
-nonzero revision cannot recreate a row that deletion already removed. Client wall clocks
-do not decide conflicts.
+JSON requests support metadata update, hard deletion, and quota status. The database RPC
+response has one explicit outcome: `applied | upload | conflict | existing | missing`.
+Metadata and deletion carry a server `baseRevision`; an upload with a nonzero revision
+must match the current record before it can return `existing` or `upload`. A matching
+ready upload applies its metadata atomically with a new revision; a stale revision
+returns the current record as `conflict`, while a nonzero revision cannot recreate a row
+that deletion already removed. Client wall clocks do not decide conflicts.
 
 Delete commits row removal and quota release before idempotent object removal. A storage
 failure is returned without restoring the row. Before status and every later mutation,
 the function lists objects under the verified user prefix, then re-reads current
 `reserved` and `ready` paths before deleting candidates. This ordering prevents cleanup
-from racing a new reservation. Purge similarly commits database removal first, deletes
-all objects under the user prefix, and exposes partial cleanup failure. No flow creates
-a server tombstone.
+from racing a new reservation. No flow creates a server tombstone.
 
 ## Diagnostics and health
 

@@ -114,20 +114,18 @@ one object at 8 MiB. Server paths have the form
 late cleanup of an old upload from touching a later upload with the same content hash.
 
 The service-role-only RPCs reserve and finalize uploads, release failed reservations,
-apply metadata, hard-delete one track, and purge one user's synchronization data. Every
-mutation locks the user's usage row. The combined
-`used_bytes + reserved_bytes + incoming` value may not exceed `8_388_608`. Under that
-lock, an expired reservation is finalized when its exact object is visible in Storage;
-otherwise its bytes are released and its row is removed. A ready duplicate receives no
-new path or quota charge.
+apply metadata, and hard-delete one track. Every mutation locks the user's usage row.
+The combined `used_bytes + reserved_bytes + incoming` value may not exceed `8_388_608`.
+Under that lock, an expired reservation is finalized when its exact object is visible in
+Storage; otherwise its bytes are released and its row is removed. A ready duplicate
+receives no new path or quota charge. A nonzero upload revision must match the ready
+record before its metadata is atomically applied with a newly allocated revision.
 
 Successful deletion first removes the row and decrements its counter in one database
 transaction, then the Edge Function idempotently removes the old object. There is no
 server tombstone. Before later synchronization mutations and status reads, the function
 lists user-owned objects, re-reads every current reserved and ready path, and removes
-only objects still absent from that authoritative set. Purge commits row and counter
-deletion before deleting every object under the user's prefix and reports partial
-Storage cleanup failure.
+only objects still absent from that authoritative set.
 
 ### Canonical GRPT version 1 geometry
 

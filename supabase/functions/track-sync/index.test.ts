@@ -2,13 +2,10 @@ import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
 import fixture from '../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
-import {
-  cleanupOrphanedObjects,
-  handleTrackSync,
-  TRACK_GEOMETRY_BUCKET,
-  TRACK_QUOTA_BYTES,
-  validateCanonicalGeometry,
-} from './index.ts';
+import { TRACK_GEOMETRY_BUCKET, TRACK_QUOTA_BYTES } from './internal/contracts.ts';
+import { validateCanonicalGeometry } from './internal/geometry.ts';
+import { SupabaseTrackSyncGateway } from './internal/supabase-track-sync-gateway.ts';
+import { handleTrackSync } from './track-sync.ts';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -196,6 +193,7 @@ function jsonRequest(value: unknown): Request {
 function uploadRequest(
   overrides: {
     readonly contentHash?: string;
+    readonly baseRevision?: number;
     readonly compressedBytes?: number;
     readonly gzipHex?: string;
   } = {},
@@ -203,7 +201,7 @@ function uploadRequest(
   const geometry = bytesFromHex(overrides.gzipHex ?? fixture.gzipHex);
   const form = new FormData();
   form.set('action', 'upload');
-  form.set('baseRevision', '0');
+  form.set('baseRevision', String(overrides.baseRevision ?? 0));
   form.set('contentHash', overrides.contentHash ?? CONTENT_HASH);
   form.set('compressedBytes', String(overrides.compressedBytes ?? geometry.byteLength));
   form.set('metadata', JSON.stringify({ name: 'Synthetic track' }));
@@ -281,6 +279,18 @@ Deno.test(
       context,
     );
     assertEquals(clientIdentity.status, 400);
+
+    const removedPurge = await handleTrackSync(
+      jsonRequest({ action: 'purge' }),
+      context,
+    );
+    assertEquals(removedPurge.status, 400);
+    assertEquals(await responseJson(removedPurge), {
+      error: {
+        code: 'invalid_action',
+        message: 'Unsupported track synchronization action.',
+      },
+    });
     assertEquals(state.calls.length, 0);
   },
 );
@@ -354,6 +364,40 @@ Deno.test(
     const response = await handleTrackSync(uploadRequest(), makeContext(state));
     assertEquals((await responseJson(response)).outcome, 'applied');
     assert(state.objects.has(OBJECT_PATH));
+  },
+);
+
+Deno.test(
+  'a stale upload returns the current record without storing geometry',
+  async () => {
+    const state = makeState();
+    state.rpcResults.set('reserve_track_upload', [
+      {
+        data: {
+          outcome: 'conflict',
+          record: { content_hash: CONTENT_HASH, revision: 12 },
+        },
+        error: null,
+      },
+    ]);
+
+    const response = await handleTrackSync(
+      uploadRequest({ baseRevision: 7 }),
+      makeContext(state),
+    );
+
+    assertEquals((await responseJson(response)).outcome, 'conflict');
+    assertEquals(
+      (
+        state.calls.find((call) => call.name === 'reserve_track_upload')
+          ?.value as Record<string, unknown>
+      ).p_base_revision,
+      7,
+    );
+    assertEquals(
+      state.calls.some((call) => call.kind === 'upload'),
+      false,
+    );
   },
 );
 
@@ -480,7 +524,7 @@ Deno.test(
     state.objects.add(OBJECT_PATH);
     state.objects.add(orphanPath);
     state.activePaths.add(OBJECT_PATH);
-    await cleanupOrphanedObjects(makeContext(state), USER_ID);
+    await new SupabaseTrackSyncGateway(makeContext(state), USER_ID).cleanupOrphans();
     assert(state.objects.has(OBJECT_PATH));
     assertEquals(state.objects.has(orphanPath), false);
     assertEquals(
@@ -503,35 +547,11 @@ Deno.test(
     const orphanPath = `${USER_ID}/${CONTENT_HASH}/77777777-7777-4777-8777-777777777777.grpt.gz`;
     state.objects.add(orphanPath);
 
-    await cleanupOrphanedObjects(makeContext(state), USER_ID);
+    await new SupabaseTrackSyncGateway(makeContext(state), USER_ID).cleanupOrphans();
 
     assertEquals(state.objects.size, 1);
     assertEquals(state.objects.has(orphanPath), false);
     assertEquals(state.calls.filter((call) => call.kind === 'select').length, 11);
-  },
-);
-
-Deno.test(
-  'purge preserves a track uploaded after its database transaction',
-  async () => {
-    const state = makeState();
-    const concurrentPath = `${USER_ID}/${CONTENT_HASH}/88888888-8888-4888-8888-888888888888.grpt.gz`;
-    state.objects.add(OBJECT_PATH);
-    state.activePaths.add(OBJECT_PATH);
-    state.rpcEffects.set('purge_user_track_data', () => {
-      state.activePaths.clear();
-      state.objects.add(concurrentPath);
-      state.activePaths.add(concurrentPath);
-    });
-
-    const response = await handleTrackSync(
-      jsonRequest({ action: 'purge' }),
-      makeContext(state),
-    );
-
-    assertEquals(await responseJson(response), { outcome: 'applied' });
-    assertEquals(state.objects.has(OBJECT_PATH), false);
-    assert(state.objects.has(concurrentPath));
   },
 );
 
@@ -557,34 +577,22 @@ Deno.test(
   },
 );
 
-Deno.test(
-  'status cleans orphans before returning quota and purge reports partial cleanup failure',
-  async () => {
-    const state = makeState();
-    state.usage = { used_bytes: 123, reserved_bytes: 45 };
-    const orphanPath = `${USER_ID}/${CONTENT_HASH}/55555555-5555-4555-8555-555555555555.grpt.gz`;
-    state.objects.add(orphanPath);
-    const status = await handleTrackSync(
-      jsonRequest({ action: 'status' }),
-      makeContext(state),
-    );
-    assertEquals(await responseJson(status), {
-      usedBytes: 123,
-      reservedBytes: 45,
-      limitBytes: TRACK_QUOTA_BYTES,
-    });
-    assertEquals(state.objects.size, 0);
-
-    state.objects.add(orphanPath);
-    state.removeErrors.push({ message: 'storage unavailable' });
-    const purge = await handleTrackSync(
-      jsonRequest({ action: 'purge' }),
-      makeContext(state),
-    );
-    assertEquals(purge.status, 500);
-    assert(state.calls.some((call) => call.name === 'purge_user_track_data'));
-  },
-);
+Deno.test('status cleans orphans before returning quota', async () => {
+  const state = makeState();
+  state.usage = { used_bytes: 123, reserved_bytes: 45 };
+  const orphanPath = `${USER_ID}/${CONTENT_HASH}/55555555-5555-4555-8555-555555555555.grpt.gz`;
+  state.objects.add(orphanPath);
+  const status = await handleTrackSync(
+    jsonRequest({ action: 'status' }),
+    makeContext(state),
+  );
+  assertEquals(await responseJson(status), {
+    usedBytes: 123,
+    reservedBytes: 45,
+    limitBytes: TRACK_QUOTA_BYTES,
+  });
+  assertEquals(state.objects.size, 0);
+});
 
 Deno.test(
   'oversized and malformed upload declarations fail without filesystem, network, or environment access',

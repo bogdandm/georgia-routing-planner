@@ -148,6 +148,7 @@ declare
   v_record public.track_records%rowtype;
   v_usage public.user_track_usage%rowtype;
   v_object_path text;
+  v_revision bigint;
 begin
   if p_user_id is null
     or p_content_hash is null
@@ -181,11 +182,31 @@ begin
   select track_records.* into v_record
   from public.track_records
   where track_records.user_id = p_user_id
-    and track_records.content_hash = p_content_hash;
+    and track_records.content_hash = p_content_hash
+  for update;
 
   if found then
+    if p_base_revision > 0 and v_record.revision <> p_base_revision then
+      return jsonb_build_object('outcome', 'conflict', 'record', to_jsonb(v_record));
+    end if;
+
     if v_record.state = 'ready' then
-      return jsonb_build_object('outcome', 'existing', 'record', to_jsonb(v_record));
+      if p_base_revision = 0 then
+        return jsonb_build_object('outcome', 'existing', 'record', to_jsonb(v_record));
+      end if;
+
+      update public.user_track_usage
+      set next_revision = next_revision + 1
+      where user_track_usage.user_id = p_user_id
+      returning next_revision - 1 into v_revision;
+
+      update public.track_records
+      set metadata = p_metadata, revision = v_revision, updated_at = now()
+      where track_records.user_id = p_user_id
+        and track_records.content_hash = p_content_hash
+      returning * into v_record;
+
+      return jsonb_build_object('outcome', 'applied', 'record', to_jsonb(v_record));
     end if;
 
     if v_record.compressed_bytes <> p_compressed_bytes then
@@ -481,33 +502,6 @@ begin
 end;
 $$;
 
-create function public.purge_user_track_data(p_user_id uuid)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if p_user_id is null then
-    raise exception 'invalid user track purge';
-  end if;
-
-  insert into public.user_track_usage (user_id)
-  values (p_user_id)
-  on conflict (user_id) do nothing;
-
-  perform 1
-  from public.user_track_usage
-  where user_track_usage.user_id = p_user_id
-  for update;
-
-  delete from public.track_records
-  where track_records.user_id = p_user_id;
-
-  delete from public.user_track_usage
-  where user_track_usage.user_id = p_user_id;
-end;
-$$;
 
 revoke execute on function private.reconcile_expired_track_reservations(uuid)
 from public, anon, authenticated, service_role;
@@ -522,8 +516,6 @@ revoke execute on function public.apply_track_metadata(uuid, text, bigint, jsonb
 from public, anon, authenticated;
 revoke execute on function public.delete_track(uuid, text, bigint)
 from public, anon, authenticated;
-revoke execute on function public.purge_user_track_data(uuid)
-from public, anon, authenticated;
 
 grant execute on function public.reserve_track_upload(uuid, text, bigint, jsonb, bigint)
 to service_role;
@@ -534,6 +526,4 @@ to service_role;
 grant execute on function public.apply_track_metadata(uuid, text, bigint, jsonb)
 to service_role;
 grant execute on function public.delete_track(uuid, text, bigint)
-to service_role;
-grant execute on function public.purge_user_track_data(uuid)
 to service_role;

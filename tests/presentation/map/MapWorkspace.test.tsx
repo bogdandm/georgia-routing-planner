@@ -104,9 +104,20 @@ const gradeProfile: ElevationProfile = {
       ],
     },
   ],
+  gradeSubsegments: [
+    {
+      startSampleIndex: 0,
+      endSampleIndex: 1,
+      startDistanceMeters: 0,
+      endDistanceMeters: 1_000,
+      distanceMeters: 1_000,
+      averageGradePct: 8,
+      band: 'climb',
+    },
+  ],
   minimumMeters: 1_000,
   maximumMeters: 1_080,
-  algorithmVersion: 2,
+  algorithmVersion: 3,
 };
 
 function mockViewportWidth(width: number): void {
@@ -721,10 +732,58 @@ describe('MapWorkspace', () => {
       name: 'Track grade color thresholds',
     });
 
-    for (const threshold of GRADE_BAND_THRESHOLDS_PCT) {
+    const visibleThresholds = GRADE_BAND_THRESHOLDS_PCT.filter((_, index) => {
+      const lowerBand = GRADE_BANDS_ASCENDING[index];
+      const upperBand = GRADE_BANDS_ASCENDING[index + 1];
+      return (
+        lowerBand !== undefined &&
+        upperBand !== undefined &&
+        appColors.elevationGrade[lowerBand] !== appColors.elevationGrade[upperBand]
+      );
+    });
+    const thresholdX = (threshold: number): number => {
       const label = `${threshold < 0 ? '−' : ''}${String(Math.abs(threshold))}%`;
-      expect(within(legend).getByText(label)).toBeVisible();
+      const x = within(legend).getByText(label).getAttribute('x');
+      expect(x).not.toBeNull();
+      return Number(x);
+    };
+
+    for (const threshold of visibleThresholds) {
+      expect(thresholdX(threshold)).toBeGreaterThan(0);
     }
+    expect(within(legend).queryByText('30%')).not.toBeInTheDocument();
+    const zeroGradeX = (thresholdX(-3) + thresholdX(3)) / 2;
+    expect(thresholdX(-3) + thresholdX(3)).toBeCloseTo(
+      thresholdX(-10) + thresholdX(10),
+    );
+    expect(
+      (thresholdX(3) - thresholdX(-3)) / (thresholdX(10) - thresholdX(-10)),
+    ).toBeCloseTo(6 / 20);
+
+    const gradeCurve = legendImage.querySelector('path[fill="none"]');
+    const curveCoordinates = Array.from(
+      gradeCurve?.getAttribute('d')?.matchAll(/-?\d+(?:\.\d+)?/g) ?? [],
+      (match) => Number(match[0]),
+    );
+    expect(curveCoordinates).toHaveLength(6);
+    const coordinate = (index: number): number => {
+      const value = curveCoordinates[index];
+      expect(value).toBeDefined();
+      return value ?? 0;
+    };
+    const startX = coordinate(0);
+    const startY = coordinate(1);
+    const controlX = coordinate(2);
+    const controlY = coordinate(3);
+    const endX = coordinate(4);
+    const endY = coordinate(5);
+    const startGradePct = -((controlY - startY) / (controlX - startX)) * 100;
+    const endGradePct = -((endY - controlY) / (endX - controlX)) * 100;
+    expect(startGradePct).toBeCloseTo(-25);
+    expect(endGradePct).toBeCloseTo(35);
+    expect(
+      startX + ((0 - startGradePct) / (endGradePct - startGradePct)) * (endX - startX),
+    ).toBeCloseTo(zeroGradeX);
 
     const gradientStops = Array.from(legendImage.querySelectorAll('stop'));
     expect(gradientStops).toHaveLength(GRADE_BANDS_ASCENDING.length * 2);
@@ -734,6 +793,24 @@ describe('MapWorkspace', () => {
           .slice(index * 2, index * 2 + 2)
           .map((stop) => stop.getAttribute('stop-color')),
       ).toEqual([appColors.elevationGrade[band], appColors.elevationGrade[band]]);
+    }
+    for (const threshold of visibleThresholds) {
+      const thresholdIndex = GRADE_BAND_THRESHOLDS_PCT.indexOf(threshold);
+      const expectedOffset = ((thresholdX(threshold) - 7) / (245 - 7)) * 100;
+      expect(
+        Number(
+          gradientStops[thresholdIndex * 2 + 1]
+            ?.getAttribute('offset')
+            ?.replace('%', ''),
+        ),
+      ).toBeCloseTo(expectedOffset);
+      expect(
+        Number(
+          gradientStops[thresholdIndex * 2 + 2]
+            ?.getAttribute('offset')
+            ?.replace('%', ''),
+        ),
+      ).toBeCloseTo(expectedOffset);
     }
 
     act(() => {

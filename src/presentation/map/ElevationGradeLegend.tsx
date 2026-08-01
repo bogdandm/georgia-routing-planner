@@ -13,9 +13,57 @@ interface ElevationGradeLegendProps {
   readonly visible: boolean;
 }
 
-function hasGradeSubsegments(profile: ElevationProfile): boolean {
-  return profile.segments.some(
-    (segment) => segment.type !== 'flat' && segment.gradeSubsegments.length > 0,
+// With the SVG rendered 1:1, the curve tangent is grade: 30% rises 30 vertical
+// units per 100 horizontal units. The asymmetric range leaves visible room beyond
+// both outer labeled color boundaries.
+const LEGEND_GRADE_MINIMUM_PCT = -25;
+const LEGEND_GRADE_MAXIMUM_PCT = 35;
+const LEGEND_PLOT_LEFT = 7;
+const LEGEND_PLOT_RIGHT = 245;
+const LEGEND_CURVE_START_Y = 25;
+const legendPlotWidth = LEGEND_PLOT_RIGHT - LEGEND_PLOT_LEFT;
+const legendCurveControlX = (LEGEND_PLOT_LEFT + LEGEND_PLOT_RIGHT) / 2;
+const legendCurveControlY =
+  LEGEND_CURVE_START_Y - (LEGEND_GRADE_MINIMUM_PCT / 100) * (legendPlotWidth / 2);
+const legendCurveEndY =
+  LEGEND_CURVE_START_Y -
+  ((LEGEND_GRADE_MINIMUM_PCT + LEGEND_GRADE_MAXIMUM_PCT) / 2 / 100) * legendPlotWidth;
+const legendCurvePath = `M ${String(LEGEND_PLOT_LEFT)} ${String(LEGEND_CURVE_START_Y)} Q ${String(legendCurveControlX)} ${String(legendCurveControlY)} ${String(LEGEND_PLOT_RIGHT)} ${String(legendCurveEndY)}`;
+const legendAreaPath = `${legendCurvePath} L ${String(LEGEND_PLOT_RIGHT)} 40 L ${String(LEGEND_PLOT_LEFT)} 40 Z`;
+const legendBandBoundariesPct = [
+  LEGEND_GRADE_MINIMUM_PCT,
+  ...GRADE_BAND_THRESHOLDS_PCT,
+  LEGEND_GRADE_MAXIMUM_PCT,
+] as const;
+const visibleGradeThresholdsPct = GRADE_BAND_THRESHOLDS_PCT.filter((_, index) => {
+  const lowerBand = GRADE_BANDS_ASCENDING[index];
+  const upperBand = GRADE_BANDS_ASCENDING[index + 1];
+  return (
+    lowerBand !== undefined &&
+    upperBand !== undefined &&
+    appColors.elevationGrade[lowerBand] !== appColors.elevationGrade[upperBand]
+  );
+});
+
+function legendBandBoundary(index: number): number {
+  const boundary = legendBandBoundariesPct[index];
+  if (boundary === undefined)
+    throw new RangeError('Grade legend bands are inconsistent.');
+  return boundary;
+}
+
+function legendPositionPct(gradePct: number): number {
+  return (
+    ((gradePct - LEGEND_GRADE_MINIMUM_PCT) /
+      (LEGEND_GRADE_MAXIMUM_PCT - LEGEND_GRADE_MINIMUM_PCT)) *
+    100
+  );
+}
+
+function legendPlotX(gradePct: number): number {
+  return (
+    LEGEND_PLOT_LEFT +
+    (legendPositionPct(gradePct) / 100) * (LEGEND_PLOT_RIGHT - LEGEND_PLOT_LEFT)
   );
 }
 
@@ -27,7 +75,8 @@ function formatGradeThreshold(threshold: number): string {
 export function ElevationGradeLegend({ profile, visible }: ElevationGradeLegendProps) {
   const gradientId = `elevation-grade-legend-${useId().replaceAll(':', '')}`;
 
-  if (!visible || profile === null || !hasGradeSubsegments(profile)) return null;
+  if (!visible || profile === null || profile.gradeSubsegments.length === 0)
+    return null;
 
   return (
     <Paper
@@ -57,8 +106,8 @@ export function ElevationGradeLegend({ profile, visible }: ElevationGradeLegendP
         <defs>
           <linearGradient id={gradientId} x1="0" x2="1" y1="0" y2="0">
             {GRADE_BANDS_ASCENDING.flatMap((band, index) => {
-              const startOffset = (index / GRADE_BANDS_ASCENDING.length) * 100;
-              const endOffset = ((index + 1) / GRADE_BANDS_ASCENDING.length) * 100;
+              const startOffset = legendPositionPct(legendBandBoundary(index));
+              const endOffset = legendPositionPct(legendBandBoundary(index + 1));
               const color = appColors.elevationGrade[band];
               return [
                 <stop
@@ -75,20 +124,16 @@ export function ElevationGradeLegend({ profile, visible }: ElevationGradeLegendP
             })}
           </linearGradient>
         </defs>
+        <path d={legendAreaPath} fill={`url(#${gradientId})`} fillOpacity={0.2} />
         <path
-          d="M 7 36 C 47 36 74 8 126 8 C 178 8 205 36 245 36 L 245 40 L 7 40 Z"
-          fill={`url(#${gradientId})`}
-          fillOpacity={0.2}
-        />
-        <path
-          d="M 7 36 C 47 36 74 8 126 8 C 178 8 205 36 245 36"
+          d={legendCurvePath}
           fill="none"
           stroke={`url(#${gradientId})`}
           strokeLinecap="round"
           strokeWidth={3}
         />
-        {GRADE_BAND_THRESHOLDS_PCT.map((threshold, index) => {
-          const x = 41 + index * 34;
+        {visibleGradeThresholdsPct.map((threshold) => {
+          const x = legendPlotX(threshold);
           return (
             <g key={threshold}>
               <line

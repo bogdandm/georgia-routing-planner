@@ -39,7 +39,7 @@ describe('calculateElevationProfile', () => {
     expect(profile?.points.map((point) => point.sampleIndex)).toEqual([0, 1, 2]);
     expect(profile?.minimumMeters).toBe(100);
     expect(profile?.maximumMeters).toBe(110);
-    expect(profile?.algorithmVersion).toBe(2);
+    expect(profile?.algorithmVersion).toBe(3);
   });
 
   it('does not invent elevation changes across source segment gaps', () => {
@@ -331,6 +331,7 @@ describe('calculateElevationProfile', () => {
     expect(longNearFlat?.segments.map((segment) => segment.type)).toEqual(['flat']);
   });
   it('uses exact grade-band thresholds', () => {
+    expect(gradeBandForGrade(-20)).toBe('extreme-descent');
     expect(gradeBandForGrade(-10)).toBe('steep-descent');
     expect(gradeBandForGrade(-3)).toBe('flat');
     expect(gradeBandForGrade(3)).toBe('flat');
@@ -338,6 +339,23 @@ describe('calculateElevationProfile', () => {
     expect(gradeBandForGrade(20)).toBe('steep-climb');
     expect(gradeBandForGrade(30)).toBe('extreme-climb');
     expect(GRADE_BANDS_ASCENDING).toHaveLength(GRADE_BAND_THRESHOLDS_PCT.length + 1);
+  });
+
+  it('builds whole-track grade coverage independently of flat macro segments', () => {
+    const profile = calculateElevationProfile([
+      profileInputs(Array.from({ length: 16 }, () => 100)),
+    ]);
+
+    expect(profile?.segments.map((segment) => segment.type)).toEqual(['flat']);
+    expect(profile?.gradeSubsegments).toHaveLength(1);
+    expect(profile?.gradeSubsegments[0]).toEqual(
+      expect.objectContaining({
+        startSampleIndex: 0,
+        endSampleIndex: 15,
+        band: 'flat',
+      }),
+    );
+    expect(profile?.gradeSubsegments[0]?.distanceMeters).toBeCloseTo(1_500);
   });
 
   it('assigns a shared macro boundary to the following segment except at the route end', () => {
@@ -372,8 +390,9 @@ describe('calculateElevationProfile', () => {
         },
       ],
       minimumMeters: 0,
+      gradeSubsegments: [],
       maximumMeters: 20,
-      algorithmVersion: 2,
+      algorithmVersion: 3,
     };
 
     expect(elevationSegmentIndexForSample(profile, 9)).toBe(0);

@@ -80,9 +80,10 @@ const profile: ElevationProfile = {
       ],
     },
   ],
+  gradeSubsegments: [],
   minimumMeters: 1_000,
   maximumMeters: 1_120,
-  algorithmVersion: 2,
+  algorithmVersion: 3,
 };
 
 let observedWidth = 420;
@@ -410,9 +411,10 @@ describe('ElevationProfileChart', () => {
           })),
         },
       ],
+      gradeSubsegments: [],
       minimumMeters: 1_000,
       maximumMeters: 2_201,
-      algorithmVersion: 2,
+      algorithmVersion: 3,
     };
 
     expect(sampleElevationProfilePoints(overflowProfile)).toHaveLength(1_202);

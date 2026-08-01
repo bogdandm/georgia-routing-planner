@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import type { MapDebugOptions } from '@/presentation/map/mapTypes';
 
-export type WorkspaceTab = 'tracks' | 'satellite' | 'markers' | 'layers';
+export type WorkspaceTab = 'tracks' | 'satellite' | 'markers' | 'layers' | 'user';
 
 interface UiState {
   readonly activeTab: WorkspaceTab;

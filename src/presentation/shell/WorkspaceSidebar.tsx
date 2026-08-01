@@ -9,6 +9,7 @@ import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
+import { UserPanel } from '@/presentation/user/UserPanel';
 import { appColors } from '@/presentation/theme/appColors';
 import { TracksPanel } from '@/presentation/tracks/TracksWorkspace';
 
@@ -85,6 +86,10 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
   layers: {
     title: 'Layers',
+    actions: null,
+  },
+  user: {
+    title: 'User',
     actions: null,
   },
 };
@@ -189,6 +194,9 @@ export function WorkspaceSidebar({
         </Box>
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
           <LayersPanel />
+        </Box>
+        <Box sx={{ display: activeTab === 'user' ? 'block' : 'none' }}>
+          <UserPanel />
         </Box>
       </Box>
     </Box>

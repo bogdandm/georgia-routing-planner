@@ -1,5 +1,7 @@
 import type { KyInstance } from 'ky';
 
+import { createUnconfiguredUserDataService } from '@/application/user/UserDataService';
+import type { UserDataService } from '@/application/user/UserDataService';
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import {
@@ -49,6 +51,7 @@ class TestIdGenerator implements IdGenerator {
 
 interface CreateTestServicesOptions {
   readonly satelliteCatalogGateway?: SatelliteCatalogGateway;
+  readonly userData?: UserDataService;
 }
 
 export function createTestServices(
@@ -67,6 +70,7 @@ export function createTestServices(
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const mapViewport = new MapViewportSnapshotStore();
+  const userData = options.userData ?? createUnconfiguredUserDataService();
   const httpClient = createHttpClient(logger, clock, idGenerator);
   const parsedMapProviderConfiguration = parseMapProviderConfiguration(
     defaultMapProviderConfigurationInput,
@@ -142,6 +146,7 @@ export function createTestServices(
     dispose: () => {
       mapLayers.dispose();
       database.close();
+      userData.dispose();
     },
     httpClient,
     idGenerator,
@@ -196,5 +201,7 @@ export function createTestServices(
       localStorageEntries: () => [['test', 'value']],
       now: () => new Date('2026-07-19T12:00:00.000Z'),
     }),
+    supabaseConfiguration: { status: 'unconfigured' },
+    userData,
   };
 }

@@ -14,9 +14,9 @@ longer describes the reviewed interface.
 
 - **Feature rail:** `Satellite`, `Tracks`, `Layers`, and `Markers` are the primary
   top-level feature sections.
-- **Global rail actions:** `Diagnostics` is available when developer mode is enabled;
-  `Settings` is always available. The `About this site` action sits below Settings and
-  opens public author, repository, API, and data-source information.
+- **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
+  available when developer mode is enabled. The `About this site` action sits below
+  Settings and opens public author, repository, API, and data-source information.
 - **Create GPX workflow:** manual waypoint planning begins from `Create GPX` in Tracks.
   “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
   item, or independent planning destination.
@@ -56,7 +56,7 @@ profile-and-stats summary sits between the fixed GR mark and the navigation expa
 affordance. Without an active track summary, the GR mark and expansion affordance remain
 the compact collapsed control.
 
-The current shell exposes Tracks, Satellite, and Layers as interactive rail
+The current shell exposes Tracks, Satellite, Layers, and User as interactive rail
 destinations. Markers remains visible but disabled until that feature surface has
 working behavior. It has no full-width app bar, empty global elevation placeholder, or
 generic always-visible privacy notice.
@@ -71,6 +71,14 @@ generic always-visible privacy notice.
   in megabytes.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
+
+### User
+
+**User** is optional. When the deployable build has valid public Supabase configuration,
+it restores a persistent email-and-password session and exposes sign-in status and
+sign-out. It does not offer registration, password reset, or track synchronization.
+Without configuration, the section explains that browser-local tracks remain available
+and does not issue an account request.
 
 ## Feature surfaces
 
@@ -268,8 +276,8 @@ automatic month requests. The same load-more button remains available for furthe
 archive traversal.
 
 Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
-`#markers`, or `#layers`. Loading an anchored URL restores that tab, and changing tabs
-updates the anchor.
+`#markers`, `#layers`, or `#user`. Loading an anchored URL restores that tab, and
+changing tabs updates the anchor.
 
 Regular map sharing is always available and encodes a 2D center and zoom; context-menu
 point links follow the same flat-camera contract and do not include satellite imagery.

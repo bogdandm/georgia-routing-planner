@@ -13,4 +13,9 @@ describe('workspace tab location', () => {
   it('retains the previous misspelled Satellite anchor as an inbound alias', () => {
     expect(workspaceTabFromHash('#satelite')).toBe('satellite');
   });
+
+  it('round-trips the User anchor', () => {
+    expect(workspaceHashForTab('user')).toBe('#user');
+    expect(workspaceTabFromHash('#USER')).toBe('user');
+  });
 });

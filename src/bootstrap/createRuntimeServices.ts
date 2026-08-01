@@ -9,6 +9,14 @@ import type { StorageUsageReader } from '@/application/ports/StorageUsageReader'
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
+  createUnconfiguredUserDataService,
+  type UserDataService,
+} from '@/application/user/UserDataService';
+import {
+  loadSupabaseConfiguration,
+  type SupabaseConfigurationResult,
+} from '@/bootstrap/configuration/SupabaseConfiguration';
+import {
   loadMapProviderConfiguration,
   summarizeMapProviderConfiguration,
   type MapProviderConfigurationResult,
@@ -35,6 +43,8 @@ import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshot
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { MapLibreSatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
+import { createClient } from '@supabase/supabase-js';
+import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -57,6 +67,8 @@ export interface RuntimeServices {
   readonly searchPlaces: SearchPlaces | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
   readonly storageUsage: StorageUsageReader;
+  readonly supabaseConfiguration: SupabaseConfigurationResult;
+  readonly userData: UserDataService;
 }
 
 /**
@@ -79,6 +91,26 @@ export function createRuntimeServices(): RuntimeServices {
     buildInfo.mode !== 'production' || developerFlag === '1',
   );
   const database = new AppDatabase(logger);
+  const supabaseConfiguration = loadSupabaseConfiguration(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  );
+  const userData =
+    supabaseConfiguration.status === 'configured'
+      ? new SupabaseUserDataService(
+          createClient(
+            supabaseConfiguration.value.url,
+            supabaseConfiguration.value.publishableKey,
+            {
+              auth: {
+                autoRefreshToken: true,
+                detectSessionInUrl: false,
+                persistSession: true,
+              },
+            },
+          ),
+        )
+      : createUnconfiguredUserDataService();
   const storageUsage = new BrowserStorageUsageReader();
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
@@ -229,6 +261,7 @@ export function createRuntimeServices(): RuntimeServices {
     diagnostics,
     dispose: () => {
       mapLayers?.dispose();
+      userData.dispose();
       database.close();
     },
     idGenerator,
@@ -245,5 +278,7 @@ export function createRuntimeServices(): RuntimeServices {
     searchPlaces,
     sentinelQueryDiagnostics,
     storageUsage,
+    supabaseConfiguration,
+    userData,
   };
 }

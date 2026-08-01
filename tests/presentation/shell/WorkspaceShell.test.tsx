@@ -2786,4 +2786,25 @@ describe('WorkspaceShell', () => {
     );
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
+
+  it('places User before Settings and activates it without an unmatched Tabs value', async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    renderWorkspaceShell();
+
+    const userButton = screen.getByRole('tab', { name: 'User' });
+    const settingsButton = screen.getByRole('button', { name: 'Open settings' });
+    expect(
+      userButton.compareDocumentPosition(settingsButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(userButton);
+
+    expect(window.location.hash).toBe('#user');
+    expect(screen.getByText(/Account features are not configured/)).toBeVisible();
+    expect(consoleError).not.toHaveBeenCalledWith(
+      expect.stringContaining('The `value` provided to the Tabs component is invalid'),
+    );
+  });
 });

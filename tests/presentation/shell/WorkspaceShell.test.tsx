@@ -395,7 +395,8 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers', 'User']);
+    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );

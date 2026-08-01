@@ -121,6 +121,28 @@ describe('UserPanel', () => {
     expect(screen.getByLabelText(/Password/u)).toHaveValue('');
   });
 
+  it('shows signed-in, busy, and error states', () => {
+    renderPanel(
+      createService({ ...snapshot('signed-in'), email: 'user@example.test' }).service,
+    );
+    expect(screen.getByText('user@example.test')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  });
+
+  it('announces a busy registration error', () => {
+    renderPanel(
+      createService({
+        busy: true,
+        email: null,
+        errorMessage: 'Unable to create an account. Try again.',
+        noticeMessage: null,
+        status: 'error',
+      }).service,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to create an account');
+    expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled();
+  });
+
   it('explains the unconfigured local-only state', () => {
     renderPanel(createService(snapshot('unconfigured')).service);
     expect(screen.getByText(/Account features are not configured/)).toBeVisible();

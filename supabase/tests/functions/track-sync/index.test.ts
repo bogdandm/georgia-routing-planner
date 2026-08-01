@@ -1,11 +1,16 @@
 import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
-import fixture from '../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
-import { TRACK_GEOMETRY_BUCKET, TRACK_QUOTA_BYTES } from './internal/contracts.ts';
-import { validateCanonicalGeometry } from './internal/geometry.ts';
-import { SupabaseTrackSyncGateway } from './internal/supabase-track-sync-gateway.ts';
-import { handleTrackSync } from './track-sync.ts';
+import fixture from '../../../../tests/fixtures/track-sync/geometry-v1.json' with {
+  type: 'json',
+};
+import {
+  TRACK_GEOMETRY_BUCKET,
+  TRACK_QUOTA_BYTES,
+} from '../../../functions/track-sync/internal/contracts.ts';
+import { validateCanonicalGeometry } from '../../../functions/track-sync/internal/geometry.ts';
+import { SupabaseTrackSyncGateway } from '../../../functions/track-sync/internal/supabase-track-sync-gateway.ts';
+import { handleTrackSync } from '../../../functions/track-sync/track-sync.ts';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -63,7 +68,7 @@ function directStorageEntries(
     else children.set(remainder.slice(0, slash), null);
   }
   return Array.from(children, ([name, id]) => ({ id, name })).sort((left, right) =>
-    left.name.localeCompare(right.name),
+    left.name.localeCompare(right.name)
   );
 }
 
@@ -143,9 +148,7 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
               });
               const paths = Array.from(state.activePaths, (object_path) => ({
                 object_path,
-              })).sort((left, right) =>
-                left.object_path.localeCompare(right.object_path),
-              );
+              })).sort((left, right) => left.object_path.localeCompare(right.object_path));
               return { data: paths.slice(start, end + 1), error: null };
             },
             then(resolve: (value: unknown) => void) {

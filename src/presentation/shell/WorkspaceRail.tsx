@@ -59,6 +59,7 @@ interface WorkspaceRailProps {
   readonly developerMode: boolean;
   readonly aboutButtonRef: RefObject<HTMLButtonElement | null>;
   readonly onOpenAbout: () => void;
+  readonly onOpenTracks: () => void;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
   readonly onShare: () => void;
@@ -74,6 +75,7 @@ export function WorkspaceRail({
   developerToolsOpen,
   developerMode,
   aboutButtonRef,
+  onOpenTracks,
   onToggleDeveloperTools,
   onOpenAbout,
   onOpenSettings,
@@ -112,10 +114,7 @@ export function WorkspaceRail({
       }}
     >
       {collapsed ? (
-        <ButtonBase
-          aria-label="Show navigation"
-          data-testid="navigation-collapse-toggle"
-          onClick={onToggleNavigation}
+        <Box
           sx={{
             position: 'relative',
             width: collapsedSummary === null ? 88 : 408,
@@ -129,13 +128,12 @@ export function WorkspaceRail({
             borderRadius: 1.25,
             bgcolor: 'transparent',
             color: appColors.text.inverse,
-            '&::before': {
+            '& .collapsed-navigation-segment::after': {
               content: '""',
               position: 'absolute',
               inset: 0,
               zIndex: 2,
-              border: `2px solid ${appColors.brand.sky}`,
-              borderRadius: 'inherit',
+              bgcolor: appColors.interaction.navigationHoverOverlay,
               opacity: 0,
               pointerEvents: 'none',
               transition: (theme) =>
@@ -143,96 +141,19 @@ export function WorkspaceRail({
                   duration: theme.transitions.duration.shorter,
                 }),
             },
-            '&:hover::before': { opacity: 1 },
-            '&:hover .collapsed-navigation-segment::after': { opacity: 1 },
-            '&.Mui-focusVisible::before': {
-              borderColor: appColors.brand.amber,
-              opacity: 1,
+            '& .collapsed-navigation-segment:hover::after, & .collapsed-navigation-segment.Mui-focusVisible::after':
+              { opacity: 1 },
+            '& .collapsed-navigation-segment.Mui-focusVisible': {
+              outline: `2px solid ${appColors.brand.amber}`,
+              outlineOffset: -2,
             },
             '@media (prefers-reduced-motion: reduce)': {
-              '&::before, & .collapsed-navigation-segment::after': {
+              '& .collapsed-navigation-segment::after': {
                 transition: 'none',
               },
             },
           }}
         >
-          <Box
-            className="collapsed-navigation-segment"
-            sx={{
-              position: 'relative',
-              zIndex: 1,
-              width: 52,
-              height: 52,
-              flexShrink: 0,
-              bgcolor: appColors.brand.deepSpace,
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                inset: 0,
-                bgcolor: appColors.interaction.navigationHoverOverlay,
-                opacity: 0,
-                pointerEvents: 'none',
-                transition: (theme) =>
-                  theme.transitions.create('opacity', {
-                    duration: theme.transitions.duration.shorter,
-                  }),
-              },
-            }}
-          >
-            <Box
-              alt=""
-              aria-hidden="true"
-              component="img"
-              data-testid="project-logo-image"
-              draggable={false}
-              src={`${import.meta.env.BASE_URL}favicon.png`}
-              sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
-            />
-          </Box>
-          {collapsedSummary === null ? null : (
-            <Box
-              sx={{
-                position: 'relative',
-                zIndex: 1,
-                width: 320,
-                height: 52,
-                minWidth: 0,
-              }}
-            >
-              {collapsedSummary}
-            </Box>
-          )}
-          <Box
-            className="collapsed-navigation-segment"
-            sx={{
-              position: 'relative',
-              zIndex: 1,
-              width: 36,
-              height: 52,
-              flexShrink: 0,
-              display: 'grid',
-              placeItems: 'center',
-              bgcolor: appColors.surface.subtle,
-              color: 'text.primary',
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                inset: 0,
-                bgcolor: appColors.interaction.navigationHoverOverlay,
-                opacity: 0,
-                pointerEvents: 'none',
-                transition: (theme) =>
-                  theme.transitions.create('opacity', {
-                    duration: theme.transitions.duration.shorter,
-                  }),
-              },
-            }}
-          >
-            <ChevronLeftOutlinedIcon
-              fontSize="small"
-              sx={{ position: 'relative', zIndex: 1, transform: 'rotate(180deg)' }}
-            />
-          </Box>
           <Tooltip
             title="Georgia Routing Planner"
             placement="bottom-start"
@@ -242,22 +163,71 @@ export function WorkspaceRail({
               },
             }}
           >
-            <Box
-              aria-hidden="true"
-              component="span"
-              data-testid="collapsed-project-tooltip-target"
-              sx={{ position: 'absolute', zIndex: 3, inset: '0 auto 0 0', width: 52 }}
-            />
+            <ButtonBase
+              aria-label="Show navigation from GR logo"
+              className="collapsed-navigation-segment"
+              onClick={onToggleNavigation}
+              sx={{
+                position: 'relative',
+                zIndex: 1,
+                width: 52,
+                height: 52,
+                flexShrink: 0,
+                bgcolor: appColors.brand.deepSpace,
+              }}
+            >
+              <Box
+                alt=""
+                aria-hidden="true"
+                component="img"
+                data-testid="project-logo-image"
+                draggable={false}
+                src={`${import.meta.env.BASE_URL}favicon.png`}
+                sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
+              />
+            </ButtonBase>
           </Tooltip>
+          {collapsedSummary === null ? null : (
+            <ButtonBase
+              aria-label="Open tracks"
+              className="collapsed-navigation-segment"
+              onClick={onOpenTracks}
+              sx={{
+                position: 'relative',
+                zIndex: 1,
+                width: 320,
+                height: 52,
+                minWidth: 0,
+                color: 'inherit',
+              }}
+            >
+              {collapsedSummary}
+            </ButtonBase>
+          )}
           <Tooltip title="Show navigation" placement="right">
-            <Box
-              aria-hidden="true"
-              component="span"
-              data-testid="collapsed-show-navigation-tooltip-target"
-              sx={{ position: 'absolute', zIndex: 3, inset: '0 0 0 auto', width: 36 }}
-            />
+            <ButtonBase
+              aria-label="Show navigation"
+              className="collapsed-navigation-segment"
+              onClick={onToggleNavigation}
+              sx={{
+                position: 'relative',
+                zIndex: 1,
+                width: 36,
+                height: 52,
+                flexShrink: 0,
+                display: 'grid',
+                placeItems: 'center',
+                bgcolor: appColors.surface.subtle,
+                color: 'text.primary',
+              }}
+            >
+              <ChevronLeftOutlinedIcon
+                fontSize="small"
+                sx={{ position: 'relative', zIndex: 1, transform: 'rotate(180deg)' }}
+              />
+            </ButtonBase>
           </Tooltip>
-        </ButtonBase>
+        </Box>
       ) : (
         <Tooltip
           title="Georgia Routing Planner"

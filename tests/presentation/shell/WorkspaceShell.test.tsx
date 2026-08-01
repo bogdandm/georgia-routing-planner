@@ -580,6 +580,42 @@ describe('WorkspaceShell', () => {
     expect(screen.getByLabelText('Fake map')).toBe(map);
   });
 
+  it('shows mobile track preparation in the collapsed disclosure until metrics are ready', async () => {
+    mockViewportWidth(899);
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const pending = deferred<readonly ElevationSample[]>();
+    vi.spyOn(provider, 'sampleMany').mockImplementation(() => pending.promise);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Preparing.gpx'));
+
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand track details',
+    });
+    const status = within(disclosure).getByRole('status');
+    expect(within(status).getByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(within(status).getByRole('progressbar')).toBeVisible();
+
+    act(() => {
+      pending.resolve([{ status: 'unavailable' }, { status: 'unavailable' }]);
+    });
+
+    await waitFor(() => {
+      expect(within(disclosure).getByLabelText('Distance: 1.4 km')).toBeVisible();
+    });
+    expect(within(disclosure).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+    expect(within(disclosure).queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('overlays track details below 1900px and keeps them adjacent at 1900px and 1920px', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockViewportWidth(1899);
@@ -766,7 +802,11 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Cancel.gpx'));
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    expect(screen.getByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+        'Preparing terrain and elevation…',
+      ),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Discard' }));
     expect(signals[0]?.aborted).toBe(true);
@@ -775,7 +815,12 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
 
     await user.upload(input, gpxFile('Unmount.gpx'));
-    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+        'Preparing terrain and elevation…',
+      ),
+    ).toBeVisible();
     rendered.unmount();
     expect(signals[1]?.aborted).toBe(true);
   });
@@ -832,7 +877,12 @@ describe('WorkspaceShell', () => {
     if (input === null) return;
 
     await user.upload(input, gpxFile('First.gpx'));
-    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+        'Preparing terrain and elevation…',
+      ),
+    ).toBeVisible();
     await user.upload(input, gpxFile('Second.gpx'));
     expect(pending).toHaveLength(2);
     act(() => {
@@ -924,6 +974,8 @@ describe('WorkspaceShell', () => {
       name: 'Climbs & Descents',
     });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(disclosure);
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
 
     const previewRecalculate = screen.getByRole('button', {
       name: 'Recalculate elevation',
@@ -934,7 +986,7 @@ describe('WorkspaceShell', () => {
     expect(previewRecalculate).toContainElement(
       within(previewRecalculate).getByRole('progressbar'),
     );
-    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     const previewPending = pendingRecalculations[0];
     expect(previewPending).toBeDefined();
     act(() => {
@@ -961,6 +1013,12 @@ describe('WorkspaceShell', () => {
     const savedRecalculate = screen.getByRole('button', {
       name: 'Recalculate elevation',
     });
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
+    await user.click(savedDisclosure);
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(savedDisclosure);
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
+
     await user.click(savedRecalculate);
     const savedPending = pendingRecalculations[1];
     expect(savedPending).toBeDefined();
@@ -974,7 +1032,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(replaceLocalTrackElevation).toHaveBeenCalledOnce();
     });
-    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'false');
+    expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('does not recalculate a preview while its save is pending', async () => {

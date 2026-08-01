@@ -879,7 +879,12 @@ describe('MapLibreFacade', () => {
       {
         terrain: provider.value.terrain,
         demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
-        sourceLayers: { pois: 'poi', peaks: 'mountain_peak', places: 'place' },
+        sourceLayers: {
+          pois: 'poi',
+          peaks: 'mountain_peak',
+          places: 'place',
+          waterNames: 'water_name',
+        },
         requestTimeoutMs: 100,
         equivalentErrorWindowMs: 10_000,
       },
@@ -910,23 +915,33 @@ describe('MapLibreFacade', () => {
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
   });
 
-  it('includes named settlements when inspecting nearby map features', () => {
+  it('includes named lakes when inspecting nearby map features', () => {
     const services = createTestServices();
     const provider = services.mapProviderConfiguration;
     expect(provider.status).toBe('valid');
     if (provider.status !== 'valid') return;
     const nativeMap = new FakeNativeMap();
     nativeMap.addSource('basemap-vector', { type: 'vector' });
-    nativeMap.sourceFeatures.set('place', [
+    nativeMap.sourceFeatures.set('water_name', [
       {
         type: 'Feature',
-        id: 'shovi',
-        geometry: { type: 'Point', coordinates: [43.6759, 42.7023] },
-        properties: { 'name:en': 'Shovi', class: 'village' },
+        id: 'lake-shovi',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [43.6758, 42.7023],
+            [43.676, 42.7023],
+          ],
+        },
+        properties: {
+          'name:en': 'Lake Shovi',
+          name: 'შოვის ტბა',
+          class: 'lake',
+        },
         source: 'basemap-vector',
-        sourceLayer: 'place',
+        sourceLayer: 'water_name',
         state: {},
-        layer: { id: 'basemap-place-labels', type: 'symbol' },
+        layer: { id: 'basemap-water-labels', type: 'symbol' },
       } as unknown as GeoJSONFeature,
     ]);
     const popup = {
@@ -946,6 +961,7 @@ describe('MapLibreFacade', () => {
           pois: provider.value.vector.sourceLayers.pois,
           peaks: provider.value.vector.sourceLayers.peaks,
           places: provider.value.vector.sourceLayers.places,
+          waterNames: provider.value.vector.sourceLayers.waterNames,
         },
         requestTimeoutMs: 100,
         equivalentErrorWindowMs: 10_000,
@@ -959,11 +975,16 @@ describe('MapLibreFacade', () => {
 
     nativeMap.fire('click', { lngLat: { lng: 43.67592, lat: 42.70227 } });
 
-    expect(nativeMap.queriedSourceLayers).toEqual(['poi', 'mountain_peak', 'place']);
+    expect(nativeMap.queriedSourceLayers).toEqual([
+      'poi',
+      'mountain_peak',
+      'place',
+      'water_name',
+    ]);
     expect(facade.getPointInspection()).toMatchObject({
       nearbyPoi: {
         status: 'found',
-        poi: { name: 'Shovi', category: 'village' },
+        poi: { name: 'Lake Shovi', category: 'lake' },
       },
     });
   });

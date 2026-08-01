@@ -75,6 +75,7 @@ const openStreetMapOpacityProperties = {
   [mapLayerIds.roadCasings]: ['line-opacity'],
   [mapLayerIds.roads]: ['line-opacity'],
   [mapLayerIds.roadLabels]: ['text-opacity'],
+  [mapLayerIds.riverLabels]: ['text-opacity'],
   [mapLayerIds.hikingPois]: ['circle-opacity', 'circle-stroke-opacity'],
   [mapLayerIds.hikingPoiLabels]: ['text-opacity'],
   [mapLayerIds.peaks]: ['circle-opacity', 'circle-stroke-opacity'],
@@ -124,6 +125,7 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.glacierAreas,
     mapLayerIds.waterways,
     mapLayerIds.water,
+    mapLayerIds.riverLabels,
     mapLayerIds.waterLabels,
   ],
   'restricted-areas': [mapLayerIds.restrictedAreas],
@@ -472,14 +474,18 @@ export class MapLibreLayerController {
         ? state.appliedImagery
         : this.withRasterVisibility(state.appliedImagery, visible);
     mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
-    if (layerId === 'satellite-imagery') this.applyMapVisualMode();
+    let terrainResult: TerrainOverlayCommandResult | null = null;
+    if (layerId === 'satellite-imagery') {
+      this.applyMapVisualMode();
+      terrainResult = this.reconcileTerrainOverlays();
+    }
     this.persistStableState();
     this.logger.log({
       level: 'info',
       name: 'map.layer.visibility-changed',
       data: { category: layerId, status: visible ? 'visible' : 'hidden' },
     });
-    return { status: 'success' };
+    return terrainResult ?? { status: 'success' };
   }
 
   public setOpenStreetMapOpacity(opacity: number): MapLayerVisibilityResult {
@@ -1073,7 +1079,6 @@ export class MapLibreLayerController {
       this.#stagingSourceId = null;
       this.#stagingScene = null;
       this.#appliedScene = scene;
-      this.reconcileTerrainOverlays();
       mapLayerStore.setState({
         appliedImagery: { status: 'ready', sceneKey, sceneId: scene.id, visible: true },
         automaticAlternativeProviderState:
@@ -1084,6 +1089,7 @@ export class MapLibreLayerController {
         visibility: { ...state.visibility, 'satellite-imagery': true },
         errorMessage: null,
       });
+      this.reconcileTerrainOverlays();
       this.applyMapVisualMode();
       operation.complete();
       if (persist) this.persistStableState();
@@ -1331,11 +1337,14 @@ export class MapLibreLayerController {
       }
       this.ensureContourLayers(map);
       this.ensureContourOrder(map);
+      const activeRasterLayerId = this.#activeSlot?.layerId;
+      const satelliteVisible =
+        activeRasterLayerId !== undefined &&
+        map.getLayer(activeRasterLayerId) !== undefined &&
+        mapLayerStore.getState().visibility['satellite-imagery'];
       const beforeId =
-        !this.#terrainOverlayPreferences.shadeAboveSatellite &&
-        this.#activeSlot !== null &&
-        map.getLayer(this.#activeSlot.layerId) !== undefined
-          ? this.#activeSlot.layerId
+        !this.#terrainOverlayPreferences.shadeAboveSatellite && satelliteVisible
+          ? activeRasterLayerId
           : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
             ? mapInsertionPoints.terrainOverlaysBeforeLayerId
             : terrainOverlayLayerIds.contourMinor;
@@ -1347,7 +1356,9 @@ export class MapLibreLayerController {
       const orderIsCorrect = this.#terrainOverlayPreferences.shadeAboveSatellite
         ? activeRasterIndex < 0 ||
           (reliefIndex > activeRasterIndex && reliefIndex < beforeIndex)
-        : reliefIndex >= 0 && reliefIndex < beforeIndex;
+        : satelliteVisible
+          ? reliefIndex >= 0 && reliefIndex < beforeIndex
+          : reliefIndex === beforeIndex - 1;
       if (!orderIsCorrect) map.moveLayer(terrainOverlayLayerIds.reliefShade, beforeId);
       mapLayerStore.setState({
         terrainOverlays: {

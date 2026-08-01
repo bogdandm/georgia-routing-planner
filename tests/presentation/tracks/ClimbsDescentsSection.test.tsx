@@ -82,6 +82,23 @@ describe('ClimbsDescentsSection', () => {
     ]);
   });
 
+  it('toggles from the title area with pointer, Enter, and Space', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    const disclosure = screen.getByRole('button', { name: 'Climbs & Descents' });
+    expect(disclosure).toHaveAttribute('aria-controls');
+
+    await user.click(screen.getByRole('heading', { name: 'Climbs & Descents' }));
+    expect(disclosure).toHaveFocus();
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+
+    await user.keyboard('{Enter}');
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+
+    await user.keyboard(' ');
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('labels every segment metric icon with a tooltip', async () => {
     const user = userEvent.setup();
     renderSection();
@@ -119,6 +136,7 @@ describe('ClimbsDescentsSection', () => {
     expect(onSegmentHoverChange).toHaveBeenLastCalledWith(0);
     await user.unhover(climb);
     await user.tab();
+    await user.tab();
     expect(climb).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(onSegmentSelectionChange).toHaveBeenCalledWith(0);
@@ -135,6 +153,19 @@ describe('ClimbsDescentsSection', () => {
 
     expect(onRecalculate).toHaveBeenCalledOnce();
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('recalculates without toggling an expanded disclosure', async () => {
+    const user = userEvent.setup();
+    const onRecalculate = vi.fn();
+    renderSection({ onRecalculate });
+    const disclosure = screen.getByRole('button', { name: 'Climbs & Descents' });
+    await user.click(disclosure);
+
+    await user.click(screen.getByRole('button', { name: 'Recalculate elevation' }));
+
+    expect(onRecalculate).toHaveBeenCalledOnce();
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('formats signed grades, threshold distances, and rounded elevations', () => {

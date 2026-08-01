@@ -201,6 +201,8 @@ export function MapWorkspace({
                 peaks: mapProviderConfiguration.value.vector.sourceLayers.peaks,
                 places: mapProviderConfiguration.value.vector.sourceLayers.places,
                 pois: mapProviderConfiguration.value.vector.sourceLayers.pois,
+                waterNames:
+                  mapProviderConfiguration.value.vector.sourceLayers.waterNames,
               },
               demTileUrl: mapLayers?.createDemTileUrl() ?? '',
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,

@@ -362,6 +362,26 @@ function createBasemapLayers(
       },
     },
     {
+      id: mapLayerIds.riverLabels,
+      type: 'symbol',
+      source,
+      'source-layer': sourceLayers.waterways,
+      minzoom: 7,
+      filter: ['==', ['get', 'class'], 'river'],
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 750,
+        'text-field': englishFirstLabelExpression,
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+      paint: {
+        'text-color': mapVisualPalette.water.label,
+        'text-halo-color': mapVisualPalette.text.haloVector,
+        'text-halo-width': 1,
+      },
+    },
+    {
       id: mapLayerIds.waterLabels,
       type: 'symbol',
       source,

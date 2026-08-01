@@ -49,6 +49,7 @@ export const mapLayerIds = {
   peaks: 'basemap-peaks',
   peakLabels: 'basemap-peak-labels',
   roadLabels: 'basemap-road-labels',
+  riverLabels: 'basemap-river-labels',
   waterLabels: 'basemap-water-labels',
   placeLabels: 'basemap-place-labels',
 } as const;

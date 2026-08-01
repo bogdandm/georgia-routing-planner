@@ -841,7 +841,7 @@ export class AppDatabase
         const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
         await this.localTrackContents.delete(trackId);
         await this.localTracks.delete(trackId);
-        if (state?.remoteRevision !== null && state !== null) {
+        if (state !== null && state.remoteRevision !== null) {
           await this.trackSyncStates.put({
             trackId,
             contentHash: state.contentHash,
@@ -916,17 +916,29 @@ export class AppDatabase
 
   /** Applies the all-or-nothing remote merge contract consumed by the next sync plan. */
   public async applyRemoteTrackMergeBatch(batch: RemoteTrackMergeBatch): Promise<void> {
-    const states = batch.states.map(parseTrackSyncState);
-    if (states.some((state) => state === null)) {
-      throw new LocalTrackStorageError(
-        'record-invalid',
-        'The track synchronization state is invalid.',
-      );
+    const states: TrackSyncState[] = [];
+    for (const candidate of batch.states) {
+      const state = parseTrackSyncState(candidate);
+      if (state === null) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The track synchronization state is invalid.',
+        );
+      }
+      states.push(state);
     }
     for (const pair of batch.put) {
       const summary = parseLocalTrackSummary(pair.summary);
       const content = parseLocalTrackContent(pair.content);
-      if (summary === null || content === null || summary.id !== content.trackId) {
+      const state = states.find((candidate) => candidate.trackId === pair.summary.id);
+      if (
+        summary === null ||
+        summary.contentHash === undefined ||
+        content === null ||
+        summary.id !== content.trackId ||
+        state === undefined ||
+        state.contentHash !== summary.contentHash
+      ) {
         throw new LocalTrackStorageError(
           'record-invalid',
           'The local track record is invalid.',

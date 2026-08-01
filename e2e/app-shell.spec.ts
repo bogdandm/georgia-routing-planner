@@ -80,16 +80,22 @@ test('keeps the full-screen map fixed while navigation changes and collapses', a
   await page.getByRole('tab', { name: 'Satellite' }).click();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
   await page.getByRole('button', { name: 'Hide navigation', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Show navigation', exact: true }),
+  ).toBeVisible();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
 
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
-  await page.getByRole('button', { name: 'Show navigation' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Show navigation', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show navigation', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Satellite' })).toBeVisible();
   expect(await workspace.boundingBox()).toEqual(initialBounds);
   await page.getByRole('button', { name: 'Hide navigation', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Show navigation' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Show navigation', exact: true }),
+  ).toBeVisible();
 });
 
 test('opens full-height workspace tools at the reported phone viewport', async ({

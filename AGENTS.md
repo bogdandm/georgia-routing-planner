@@ -276,6 +276,15 @@ multi-step, or when the intended commit sequence, work split, or verification pl
 not obvious from the task. `PLAN.md` is optional for small features, bug fixes,
 documentation-only changes, and single atomic changes.
 
+For every multi-step request, maintain the agent task checklist as the live execution
+record: add every requested item before work begins, mark each item done immediately
+after it is completed, and record scope changes before acting on them. After completing
+an item, give the maintainer a concise user-visible progress update naming the completed
+requirement and its observed result; do not merely flip the tracker state or list tool
+activity. Do not begin finalization, create or update a pull request, or hand off while
+the checklist contains stale pending or in-progress work; resolve it, explicitly mark it
+blocked, or remove it only when the maintainer has taken it out of scope.
+
 When a plan is used, each planned commit should:
 
 1. Complete one independently reviewable behavior or focused structural change.
@@ -345,9 +354,17 @@ production LOC.
 
 Before creating or updating a pull request, the primary agent must spawn the bundled
 `reviewer` subagent for a read-only review of the complete branch diff against
-`origin/main`.
+`origin/main` only when the diff contains a substantial production-logic change.
 
-The reviewer must inspect:
+A substantial production-logic change introduces or materially alters runtime behavior,
+algorithm or control flow, state or persistence schema, security or privacy enforcement,
+public contracts, or architectural boundaries. Determine this from the actual diff, not
+the wording of the prompt. Documentation, formatting, build or CI configuration, and
+tests-only changes—including focused updates to test expectations while fixing tests or
+CI—do not require a reviewer unless they also contain a substantial production-logic
+change.
+
+When required, the reviewer must inspect:
 
 - the original user request and approved plan;
 - the complete diff against `origin/main`;
@@ -359,18 +376,19 @@ The reviewer must inspect:
 The reviewer must not edit files, run tests, commit, push, or create/update the pull
 request.
 
-The primary agent must wait for the reviewer result, inspect every finding against the
-actual code, fix every valid blocker or material issue, and rerun only checks
-invalidated by those fixes.
+When a reviewer is required, the primary agent must wait for the reviewer result,
+inspect every finding against the actual code, fix every valid blocker or material
+issue, and rerun only checks invalidated by those fixes.
 
-The primary agent must not create or update the pull request until:
+The primary agent must not create or update a pull request with a required reviewer
+until:
 
 1. the reviewer has completed;
 2. every finding has been explicitly resolved or rejected with a concrete reason;
 3. required follow-up verification has passed.
 
-Run one reviewer pass by default. Run another pass only when reviewer-driven fixes
-materially changed behavior or architecture.
+Run one reviewer pass by default when it is required. Run another pass only when
+reviewer-driven fixes materially changed behavior or architecture.
 
 ### Feature finalization and pull request
 

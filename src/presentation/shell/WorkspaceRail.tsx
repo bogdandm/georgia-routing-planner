@@ -1,3 +1,4 @@
+import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
@@ -293,7 +294,7 @@ export function WorkspaceRail({
       <Tabs
         aria-label="Workspace sections"
         orientation="vertical"
-        value={activeTab}
+        value={activeTab === 'user' ? false : activeTab}
         onChange={handleSectionChange}
         sx={{
           visibility: collapsed ? 'hidden' : 'visible',
@@ -361,6 +362,21 @@ export function WorkspaceRail({
             </IconButton>
           </Tooltip>
         ) : null}
+        <Tooltip title="User" placement="right">
+          <IconButton
+            aria-label="User"
+            aria-pressed={activeTab === 'user'}
+            onClick={() => {
+              onSectionChange('user');
+            }}
+            sx={{
+              color: 'rgba(255,255,255,0.84)',
+              bgcolor: activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
+            }}
+          >
+            <AccountCircleOutlinedIcon />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Settings" placement="right">
           <IconButton
             aria-label="Open settings"

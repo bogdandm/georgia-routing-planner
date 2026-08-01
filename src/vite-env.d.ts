@@ -8,6 +8,8 @@ declare const __BUILD_MODE__: string;
 interface ImportMetaEnv {
   readonly VITE_MAP_PROVIDER_CONFIGURATION?: string;
   readonly VITE_GEOCODING_PROVIDER_CONFIGURATION?: string;
+  readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  readonly VITE_SUPABASE_URL?: string;
 }
 
 declare module '*.module.css' {

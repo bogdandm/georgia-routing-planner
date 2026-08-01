@@ -396,6 +396,7 @@ describe('WorkspaceShell', () => {
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
     ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );
@@ -2785,5 +2786,34 @@ describe('WorkspaceShell', () => {
       'The browser lost the WebGL context.',
     );
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('places User before Settings and activates it without an unmatched Tabs value', async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useUiStore.setState({ developerMode: true });
+    renderWorkspaceShell();
+
+    const userButton = screen.getByRole('button', { name: 'User' });
+    const settingsButton = screen.getByRole('button', { name: 'Open settings' });
+    expect(
+      userButton.compareDocumentPosition(settingsButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const diagnosticsButton = screen.getByRole('button', {
+      name: 'Developer diagnostics',
+    });
+    expect(
+      diagnosticsButton.compareDocumentPosition(userButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(userButton);
+
+    expect(window.location.hash).toBe('#user');
+    expect(screen.getByText(/Account features are not configured/)).toBeVisible();
+    expect(consoleError).not.toHaveBeenCalledWith(
+      expect.stringContaining('The `value` provided to the Tabs component is invalid'),
+    );
   });
 });

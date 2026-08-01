@@ -51,6 +51,13 @@ uses the public provider defaults unless `VITE_MAP_PROVIDER_CONFIGURATION` or
 integration, and browser tests use controlled local fixtures and never depend on a
 public provider.
 
+The optional account shell uses the public build-time `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` settings only in the deployable Pages build. It lets an
+ordinary user create an email/password account, confirm the address by email, and then
+sign in. Missing or invalid settings leave it unconfigured without creating a network
+client; local tracks remain available. These public values are GitHub repository
+variables, not committed `.env` files or credentials. Password reset is not available.
+
 Playwright uses its own pinned Chromium build. Install it before the first local browser
 test:
 

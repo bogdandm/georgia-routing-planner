@@ -395,7 +395,8 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers', 'User']);
+    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );
@@ -2793,7 +2794,7 @@ describe('WorkspaceShell', () => {
     useUiStore.setState({ developerMode: true });
     renderWorkspaceShell();
 
-    const userButton = screen.getByRole('tab', { name: 'User' });
+    const userButton = screen.getByRole('button', { name: 'User' });
     const settingsButton = screen.getByRole('button', { name: 'Open settings' });
     expect(
       userButton.compareDocumentPosition(settingsButton) &
@@ -2808,10 +2809,7 @@ describe('WorkspaceShell', () => {
     ).toBeTruthy();
 
     await user.click(userButton);
-    expect(userButton).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tablist', { name: 'Account section' })).toContainElement(
-      userButton,
-    );
+    expect(userButton).toHaveAttribute('aria-pressed', 'true');
 
     expect(window.location.hash).toBe('#user');
     expect(screen.getByText(/Account features are not configured/)).toBeVisible();

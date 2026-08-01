@@ -362,24 +362,21 @@ export function WorkspaceRail({
             </IconButton>
           </Tooltip>
         ) : null}
-        <Tabs
-          aria-label="Account section"
-          orientation="vertical"
-          value={activeTab === 'user' ? 'user' : false}
-          onChange={handleSectionChange}
-          sx={{
-            minHeight: 0,
-            '& .MuiTabs-indicator': {
-              left: 0,
-              right: 'auto',
-              width: 3,
-              borderRadius: '0 3px 3px 0',
-              bgcolor: appColors.brand.amber,
-            },
-          }}
-        >
-          <Tab icon={<AccountCircleOutlinedIcon />} label="User" value="user" />
-        </Tabs>
+        <Tooltip title="User" placement="right">
+          <IconButton
+            aria-label="User"
+            aria-pressed={activeTab === 'user'}
+            onClick={() => {
+              onSectionChange('user');
+            }}
+            sx={{
+              color: 'rgba(255,255,255,0.84)',
+              bgcolor: activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
+            }}
+          >
+            <AccountCircleOutlinedIcon />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Settings" placement="right">
           <IconButton
             aria-label="Open settings"

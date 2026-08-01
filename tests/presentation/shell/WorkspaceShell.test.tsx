@@ -395,7 +395,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers', 'User']);
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );

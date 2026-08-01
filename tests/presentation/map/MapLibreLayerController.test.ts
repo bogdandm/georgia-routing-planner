@@ -706,10 +706,60 @@ describe('MapLibreLayerController', () => {
       [...map.layers.keys()].filter((id) => id === 'terrain-relief-shade'),
     ).toHaveLength(1);
 
-    await controller.applyScene(scene('scene-relief'), new AbortController().signal);
-    const belowOrder = [...map.layers.keys()];
-    expect(belowOrder.indexOf('terrain-relief-shade')).toBeLessThan(
-      belowOrder.indexOf('sentinel-raster-a'),
+    await controller.applyScene(scene('scene-relief-a'), new AbortController().signal);
+    const visibleOrder = [...map.layers.keys()];
+    expect(visibleOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      visibleOrder.indexOf(sentinelMapLayerIds.rasterA),
+    );
+
+    expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+    const hiddenOrder = [...map.layers.keys()];
+    for (const basemapLayerId of [
+      mapLayerIds.landcover,
+      mapLayerIds.glacierAreas,
+      mapLayerIds.landuse,
+    ]) {
+      expect(hiddenOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeGreaterThan(
+        hiddenOrder.indexOf(basemapLayerId),
+      );
+    }
+    expect(
+      hiddenOrder[hiddenOrder.indexOf(terrainOverlayLayerIds.reliefShade) + 1],
+    ).toBe(terrainOverlayLayerIds.contourMinor);
+
+    expect(controller.setLayerVisibility('satellite-imagery', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
+    const restoredOrder = [...map.layers.keys()];
+    expect(restoredOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      restoredOrder.indexOf(sentinelMapLayerIds.rasterA),
+    );
+
+    expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
+      status: 'success',
+    });
+    await controller.applyScene(
+      scene('scene-relief-b'),
+      new AbortController().signal,
+    );
+    expect(map.layers.get(sentinelMapLayerIds.rasterA)).toMatchObject({
+      layout: { visibility: 'visible' },
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      appliedImagery: {
+        status: 'ready',
+        sceneId: 'scene-relief-b',
+        visible: true,
+      },
+      visibility: { 'satellite-imagery': true },
+    });
+    const replacementOrder = [...map.layers.keys()];
+    expect(replacementOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      replacementOrder.indexOf(sentinelMapLayerIds.rasterA),
     );
 
     expect(
@@ -720,13 +770,13 @@ describe('MapLibreLayerController', () => {
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
-    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeGreaterThan(
-      aboveOrder.indexOf('sentinel-raster-a'),
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeGreaterThan(
+      aboveOrder.indexOf(sentinelMapLayerIds.rasterA),
     );
-    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeLessThan(
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
       aboveOrder.indexOf(mapLayerIds.boundaries),
     );
-    expect(aboveOrder.indexOf('terrain-relief-shade')).toBeGreaterThan(
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeGreaterThan(
       aboveOrder.indexOf(mapLayerIds.landcover),
     );
     expect(mapLayerStore.getState().terrainOverlays).toMatchObject({

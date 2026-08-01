@@ -1,9 +1,7 @@
 import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
-import fixture from '../../../../tests/fixtures/track-sync/geometry-v1.json' with {
-  type: 'json',
-};
+import fixture from '../../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
 import {
   TRACK_GEOMETRY_BUCKET,
   TRACK_QUOTA_BYTES,
@@ -68,7 +66,7 @@ function directStorageEntries(
     else children.set(remainder.slice(0, slash), null);
   }
   return Array.from(children, ([name, id]) => ({ id, name })).sort((left, right) =>
-    left.name.localeCompare(right.name)
+    left.name.localeCompare(right.name),
   );
 }
 
@@ -148,7 +146,9 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
               });
               const paths = Array.from(state.activePaths, (object_path) => ({
                 object_path,
-              })).sort((left, right) => left.object_path.localeCompare(right.object_path));
+              })).sort((left, right) =>
+                left.object_path.localeCompare(right.object_path),
+              );
               return { data: paths.slice(start, end + 1), error: null };
             },
             then(resolve: (value: unknown) => void) {

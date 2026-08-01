@@ -980,6 +980,31 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [query, summaries]);
 
   const activeProfile = useMemo(() => elevationProfileForActiveTrack(active), [active]);
+  useEffect(
+    () => () => {
+      mapLayers?.setImportedTrackHighlight(null);
+    },
+    [mapLayers],
+  );
+  useEffect(() => {
+    const highlightSegments =
+      activeProfile === null
+        ? null
+        : activeProfile.segments.flatMap((segment) =>
+            segment.type === 'flat'
+              ? []
+              : segment.gradeSubsegments.map((gradeSubsegment) => ({
+                  coordinates: activeProfile.points
+                    .slice(
+                      gradeSubsegment.startSampleIndex,
+                      gradeSubsegment.endSampleIndex + 1,
+                    )
+                    .map((point) => point.coordinate),
+                  color: appColors.elevationGrade[gradeSubsegment.band],
+                })),
+          );
+    mapLayers?.setImportedTrackHighlight(highlightSegments);
+  }, [activeProfile, mapLayers]);
 
   const value = useMemo<TracksWorkspaceValue>(
     () => ({
@@ -1552,7 +1577,6 @@ function TrackElevationAnalysis() {
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
-      mapLayers?.setImportedTrackHighlight(null);
     },
     [mapLayers],
   );
@@ -1586,25 +1610,6 @@ function TrackElevationAnalysis() {
         : { profile, index: nextSegmentIndex },
     );
   };
-  useEffect(() => {
-    const highlightSegments =
-      profile === null
-        ? null
-        : profile.segments.flatMap((segment) =>
-            segment.type === 'flat'
-              ? []
-              : segment.gradeSubsegments.map((gradeSubsegment) => ({
-                  coordinates: profile.points
-                    .slice(
-                      gradeSubsegment.startSampleIndex,
-                      gradeSubsegment.endSampleIndex + 1,
-                    )
-                    .map((point) => point.coordinate),
-                  color: appColors.elevationGrade[gradeSubsegment.band],
-                })),
-          );
-    mapLayers?.setImportedTrackHighlight(highlightSegments);
-  }, [mapLayers, profile]);
   if (active === null) return null;
   return (
     <Stack spacing={1.5}>

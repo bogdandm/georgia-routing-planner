@@ -368,6 +368,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             developerToolsOpen={developerDrawerOpen}
             developerMode={developerMode}
             aboutButtonRef={aboutTriggerRef}
+            onOpenTracks={() => {
+              handleSectionChange('tracks');
+              handleNavigationCollapsedChange(false);
+            }}
             onSectionChange={handleSectionChange}
             onToggleDeveloperTools={() => {
               setDeveloperDrawerOpen(!developerDrawerOpen);

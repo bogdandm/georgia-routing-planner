@@ -53,6 +53,13 @@ export function createAppTheme() {
           },
         },
       },
+      MuiFormLabel: {
+        styleOverrides: {
+          root: {
+            color: appColors.text.secondary,
+          },
+        },
+      },
       MuiAppBar: {
         styleOverrides: { root: { backgroundImage: 'none' } },
       },

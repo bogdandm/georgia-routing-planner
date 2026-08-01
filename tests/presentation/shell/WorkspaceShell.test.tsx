@@ -1105,7 +1105,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('Fixture track.gpx · GPX')).toBeVisible();
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
-    const details = screen.getByRole('complementary', { name: 'Track details' });
+    let details = screen.getByRole('complementary', { name: 'Track details' });
     const elevationProfile = within(details).getByRole('img', {
       name: 'Elevation profile from 1000 to 1120 metres',
     });
@@ -1135,6 +1135,10 @@ describe('WorkspaceShell', () => {
     expect(climb).toHaveAttribute('aria-pressed', 'true');
     expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
     expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    details = screen.getByRole('complementary', { name: 'Track details' });
     const elevationGain = within(details).getByLabelText(
       /^Elevation gain: (?:23[5-9]|24[0-5]) m$/u,
     );
@@ -2150,30 +2154,33 @@ describe('WorkspaceShell', () => {
     await user.click(projectLogo);
 
     const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
-    const collapsedProjectLogo =
-      within(showNavigation).getByTestId('project-logo-image');
+    const collapsedProjectLogo = screen.getByRole('button', {
+      name: 'Show navigation from GR logo',
+    });
+    const collapsedLogoImage =
+      within(collapsedProjectLogo).getByTestId('project-logo-image');
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '94px' });
-    expect(collapsedProjectLogo).toHaveStyle({
+    expect(collapsedLogoImage).toHaveStyle({
       width: '52px',
       height: '52px',
     });
-    expect(collapsedProjectLogo.parentElement).toHaveStyle({
+    expect(collapsedProjectLogo).toHaveStyle({
       backgroundColor: appColors.brand.deepSpace,
     });
     expect(showNavigation).not.toBe(collapseToggle);
     expect(showNavigation).toHaveStyle({
-      width: '88px',
+      width: '36px',
       height: '52px',
     });
     expect(screen.queryByTestId('compact-elevation-profile')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
-    await user.hover(screen.getByTestId('collapsed-project-tooltip-target'));
+    await user.hover(collapsedProjectLogo);
     expect(
       await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
     ).toBeVisible();
-    await user.unhover(screen.getByTestId('collapsed-project-tooltip-target'));
-    await user.hover(screen.getByTestId('collapsed-show-navigation-tooltip-target'));
+    await user.unhover(collapsedProjectLogo);
+    await user.hover(showNavigation);
     expect(
       await screen.findByRole('tooltip', { name: 'Show navigation' }),
     ).toBeVisible();
@@ -2225,27 +2232,26 @@ describe('WorkspaceShell', () => {
       await screen.findByRole('heading', { name: 'New track' });
       await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
 
+      const trackSummary = screen.getByRole('button', { name: 'Open tracks' });
       const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
+      const collapsedProjectLogo = screen.getByRole('button', {
+        name: 'Show navigation from GR logo',
+      });
       const navigation = screen.getByRole('navigation');
-      const compactProfile = within(showNavigation).getByTestId(
+      const compactProfile = within(trackSummary).getByTestId(
         'compact-elevation-profile',
       );
-      const logo = within(showNavigation).getByTestId('project-logo-image');
-      const children = [...showNavigation.children];
+      const logo = within(collapsedProjectLogo).getByTestId('project-logo-image');
       expect(navigation).toHaveStyle({ width: '414px' });
-      expect(showNavigation).toHaveStyle({ width: '408px', height: '52px' });
-      expect(within(showNavigation).getByLabelText('Distance: 1.4 km')).toBeVisible();
+      expect(trackSummary).toHaveStyle({ width: '320px', height: '52px' });
+      expect(showNavigation).toHaveStyle({ width: '36px', height: '52px' });
+      expect(within(trackSummary).getByLabelText('Distance: 1.4 km')).toBeVisible();
       expect(
-        within(showNavigation).getByLabelText('Elevation gain: 120 m'),
+        within(trackSummary).getByLabelText('Elevation gain: 120 m'),
       ).toBeVisible();
-      expect(
-        within(showNavigation).getByLabelText('Elevation loss: 0 m'),
-      ).toBeVisible();
-      expect(children[0]).toContainElement(logo);
-      expect(children[1]).toContainElement(compactProfile);
-      expect(
-        children[2]?.querySelector('[data-testid="ChevronLeftOutlinedIcon"]'),
-      ).not.toBeNull();
+      expect(within(trackSummary).getByLabelText('Elevation loss: 0 m')).toBeVisible();
+      expect(compactProfile).toBeVisible();
+      expect(logo).toHaveStyle({ width: '52px', height: '52px' });
       expect(screen.getAllByRole('button', { name: 'Show navigation' })).toHaveLength(
         1,
       );
@@ -2270,6 +2276,42 @@ describe('WorkspaceShell', () => {
       });
     },
   );
+
+  it('opens tracks from the collapsed track summary without changing other expand controls', async () => {
+    mockViewportWidth(1900);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile());
+    await screen.findByRole('heading', { name: 'New track' });
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Show navigation from GR logo' }),
+    );
+    expect(screen.getByRole('tab', { name: 'Satellite' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    await user.click(screen.getByRole('button', { name: 'Show navigation' }));
+    expect(screen.getByRole('tab', { name: 'Satellite' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    await user.click(screen.getByRole('button', { name: 'Open tracks' }));
+    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
 
   it('keeps the smartphone disclosure expandable without profile data after failure', async () => {
     mockViewportWidth(899);
@@ -2318,14 +2360,15 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('Terrain unavailable')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
 
+    const navigation = screen.getByRole('navigation');
     const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
-    expect(showNavigation).toHaveStyle({ width: '88px', height: '52px' });
+    expect(navigation).toHaveStyle({ width: '94px' });
+    expect(showNavigation).toHaveStyle({ width: '36px', height: '52px' });
     expect(
-      within(showNavigation).queryByTestId('compact-elevation-profile'),
+      screen.queryByRole('button', { name: 'Open tracks' }),
     ).not.toBeInTheDocument();
-    expect(
-      within(showNavigation).queryByLabelText(/^Distance:/u),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('compact-elevation-profile')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
   });
 
   it('opens the complete current map error from the lightweight status line', async () => {

@@ -79,3 +79,7 @@ export function isAuthExpiredWorkerError(error: unknown): boolean {
     error instanceof Error && (error as WorkerRpcRemoteError).code === 'auth-expired'
   );
 }
+
+export function isQuotaWorkerError(error: unknown): boolean {
+  return error instanceof Error && (error as WorkerRpcRemoteError).code === 'quota';
+}

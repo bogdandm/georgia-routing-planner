@@ -226,6 +226,27 @@ describe('local track persistence', () => {
     await expect(database.listLocalTrackPairsWithoutSyncState()).resolves.toEqual([]);
   });
 
+  it('rejects a remote batch that deletes and replaces the same track', async () => {
+    const record = summary('local:overlap', 'Overlap');
+
+    await expect(
+      database.applyRemoteTrackMergeBatch({
+        put: [{ summary: record, content: content(record.id) }],
+        deleteTrackIds: [record.id],
+        states: [
+          {
+            trackId: record.id,
+            contentHash: record.contentHash ?? '',
+            remoteRevision: 1,
+            pendingKind: null,
+          },
+        ],
+        usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
+      }),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
+  });
+
   it('collapses duplicate hashes before sync with canonical metadata and precedence', async () => {
     const older = {
       ...summary('local:older', 'Older'),

@@ -975,6 +975,7 @@ describe('WorkspaceShell', () => {
       services.database,
       'replaceLocalTrackElevation',
     );
+    const trackMetadataChanged = vi.spyOn(services.userData, 'trackMetadataChanged');
     const user = userEvent.setup();
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -1045,6 +1046,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(replaceLocalTrackElevation).toHaveBeenCalledOnce();
     });
+    expect(trackMetadataChanged).not.toHaveBeenCalled();
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -1172,6 +1174,9 @@ describe('WorkspaceShell', () => {
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
     const user = userEvent.setup();
+    const trackSaved = vi.spyOn(services.userData, 'trackSaved');
+    const trackMetadataChanged = vi.spyOn(services.userData, 'trackMetadataChanged');
+    const trackDeleted = vi.spyOn(services.userData, 'trackDeleted');
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();
     if (mapLayers === null) return;
@@ -1276,6 +1281,9 @@ describe('WorkspaceShell', () => {
         }),
       ).toBeVisible();
     });
+    await waitFor(() => {
+      expect(trackSaved).toHaveBeenCalledOnce();
+    });
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('list', { name: 'Saved tracks' })).getByLabelText(
@@ -1296,6 +1304,9 @@ describe('WorkspaceShell', () => {
       await screen.findByRole('menuitem', { name: 'Add to favorites' }),
     ).toBeVisible();
     await user.click(screen.getByRole('menuitem', { name: 'Add to favorites' }));
+    await waitFor(() => {
+      expect(trackMetadataChanged).toHaveBeenCalledOnce();
+    });
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(
       await screen.findByRole('menuitem', { name: 'Remove from favorites' }),
@@ -1329,6 +1340,9 @@ describe('WorkspaceShell', () => {
     expect(
       await within(details).findByRole('heading', { name: 'Final trail' }),
     ).toBeVisible();
+    await waitFor(() => {
+      expect(trackMetadataChanged).toHaveBeenCalledTimes(2);
+    });
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
@@ -1399,6 +1413,9 @@ describe('WorkspaceShell', () => {
       expect(
         screen.queryByRole('list', { name: 'Saved tracks' }),
       ).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(trackDeleted).toHaveBeenCalledOnce();
     });
   }, 30_000);
 

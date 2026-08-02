@@ -7,6 +7,7 @@ import type {
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import {
   isAuthExpiredWorkerError,
+  isQuotaWorkerError,
   TrackSyncWorkerClient,
 } from '@/infrastructure/supabase/TrackSyncWorkerClient';
 
@@ -28,6 +29,8 @@ const sessionErrorMessage = 'Unable to restore your account session.';
 const signOutErrorMessage = 'Unable to sign out. Try again.';
 const syncErrorMessage =
   'Synchronization could not finish. Your local tracks remain available.';
+const syncQuotaErrorMessage =
+  'Cloud track storage is full. Delete a synchronized track and try again.';
 
 /** Bridges session lifecycle and one cancellable worker run to the serializable UI snapshot. */
 export class SupabaseUserDataService implements UserDataService {
@@ -282,14 +285,17 @@ export class SupabaseUserDataService implements UserDataService {
           controller.signal,
         );
       }
-      if (controller.signal.aborted || this.#disposed) return;
+      if (controller.signal.aborted || this.#disposed) {
+        this.#setSnapshot({ ...this.#snapshot, busy: false, syncStatus: 'idle' });
+        return;
+      }
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
         syncStatus: 'idle',
         syncUsage: result.usage,
       });
-    } catch {
+    } catch (error) {
       if (controller.signal.aborted || this.#disposed) {
         this.#setSnapshot({ ...this.#snapshot, busy: false, syncStatus: 'idle' });
         return;
@@ -298,7 +304,9 @@ export class SupabaseUserDataService implements UserDataService {
         ...this.#snapshot,
         busy: false,
         syncStatus: 'error',
-        errorMessage: syncErrorMessage,
+        errorMessage: isQuotaWorkerError(error)
+          ? syncQuotaErrorMessage
+          : syncErrorMessage,
       });
     }
   }

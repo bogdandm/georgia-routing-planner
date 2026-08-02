@@ -134,4 +134,36 @@ describe('FetchRemoteGateway', () => {
 
     await expect(gateway.snapshot(signal)).resolves.toHaveLength(2);
   });
+  it('retrieves every page of a full server snapshot', async () => {
+    const record = (index: number) => {
+      const hash = index.toString(16).padStart(64, '0');
+      return {
+        content_hash: hash,
+        revision: 1,
+        state: 'ready',
+        object_path: `user/${hash}/upload.grpt.gz`,
+        compressed_bytes: 128,
+        metadata: {},
+      };
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json(Array.from({ length: 1_000 }, (_, index) => record(index))),
+      )
+      .mockResolvedValueOnce(Response.json([record(1_000)]));
+    vi.stubGlobal('fetch', fetchMock);
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+
+    await expect(gateway.snapshot(signal)).resolves.toHaveLength(1_001);
+    const firstCall = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    const secondCall = fetchMock.mock.calls[1] as unknown as [URL, RequestInit];
+    expect(firstCall[0].searchParams.get('order')).toBe('content_hash.asc');
+    expect(new Headers(firstCall[1].headers).get('Range')).toBe('0-999');
+    expect(new Headers(secondCall[1].headers).get('Range')).toBe('1000-1999');
+  });
 });

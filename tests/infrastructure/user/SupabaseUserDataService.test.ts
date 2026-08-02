@@ -1,9 +1,10 @@
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
 import type { TrackSyncWorkerClient } from '@/infrastructure/supabase/TrackSyncWorkerClient';
+import { TrackSyncWorkerError } from '@/infrastructure/supabase/TrackSyncWorkerClient';
 
 const database = {
   loadTrackSyncEnabled: vi.fn().mockResolvedValue(false),
@@ -14,6 +15,7 @@ const database = {
   }),
   saveTrackSyncEnabled: vi.fn().mockResolvedValue(undefined),
 } as unknown as AppDatabase;
+const emptyUsage = { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 } as const;
 function session(email: string): Session {
   return {
     access_token: 'access-token',
@@ -75,6 +77,17 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
     unsubscribe,
   };
 }
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  database.loadTrackSyncEnabled = vi.fn().mockResolvedValue(false);
+  database.loadTrackSyncUsage = vi.fn().mockResolvedValue({
+    usedBytes: 0,
+    reservedBytes: 0,
+    limitBytes: 8_388_608,
+  });
+  database.saveTrackSyncEnabled = vi.fn().mockResolvedValue(undefined);
+});
 
 describe('SupabaseUserDataService', () => {
   it('restores a persisted session without exposing its tokens', async () => {
@@ -192,6 +205,169 @@ describe('SupabaseUserDataService', () => {
 
     unsubscribe();
     expect(listener).toHaveBeenCalled();
+  });
+
+  it('does not start synchronization for a restored session while disabled', async () => {
+    const fake = createClient({ restoredSession: session('disabled@example.test') });
+    const synchronize = vi.fn();
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    expect(service.getSnapshot().syncEnabled).toBe(false);
+    expect(synchronize).not.toHaveBeenCalled();
+    service.dispose();
+  });
+
+  it('aborts an active synchronization when synchronization is disabled', async () => {
+    const fake = createClient({ restoredSession: session('abort@example.test') });
+    const synchronize = vi.fn(
+      (_accessToken: string, signal: AbortSignal) =>
+        new Promise<{ usage: typeof emptyUsage; changed: boolean }>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              resolve({ usage: emptyUsage, changed: false });
+            },
+            { once: true },
+          );
+        }),
+    );
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    const enabling = service.setSyncEnabled(true);
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledOnce();
+    });
+    await service.setSyncEnabled(false);
+    await enabling;
+
+    expect(synchronize.mock.calls[0]?.[1].aborted).toBe(true);
+    expect(service.getSnapshot().syncStatus).toBe('idle');
+    service.dispose();
+  });
+
+  it('aborts an active synchronization when the account signs out', async () => {
+    const activeSession = session('signout-abort@example.test');
+    const fake = createClient({ restoredSession: activeSession });
+    const synchronize = vi.fn(
+      (_accessToken: string, signal: AbortSignal) =>
+        new Promise<{ usage: typeof emptyUsage; changed: boolean }>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              resolve({ usage: emptyUsage, changed: false });
+            },
+            { once: true },
+          );
+        }),
+    );
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    const enabling = service.setSyncEnabled(true);
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledOnce();
+    });
+    fake.emit('SIGNED_OUT', null);
+    await enabling;
+
+    expect(synchronize.mock.calls[0]?.[1].aborted).toBe(true);
+    expect(service.getSnapshot()).toMatchObject({
+      email: null,
+      status: 'signed-out',
+      syncStatus: 'idle',
+    });
+    service.dispose();
+  });
+
+  it('surfaces a quota-specific synchronization error', async () => {
+    const fake = createClient({ restoredSession: session('quota@example.test') });
+    const synchronize = vi
+      .fn()
+      .mockRejectedValue(new TrackSyncWorkerError('Quota exceeded.', 'quota'));
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    await service.setSyncEnabled(true);
+
+    expect(service.getSnapshot()).toMatchObject({
+      syncStatus: 'error',
+      errorMessage:
+        'Cloud track storage is full. Delete a synchronized track and try again.',
+    });
+    service.dispose();
+  });
+
+  it('refreshes an expired worker token exactly once', async () => {
+    const initialSession = session('refresh-sync@example.test');
+    const refreshedSession = {
+      ...initialSession,
+      access_token: 'refreshed-access-token',
+    };
+    const fake = createClient({ restoredSession: initialSession });
+    fake.getSession
+      .mockResolvedValueOnce({ data: { session: initialSession }, error: null })
+      .mockResolvedValueOnce({ data: { session: initialSession }, error: null })
+      .mockResolvedValueOnce({ data: { session: refreshedSession }, error: null });
+    const synchronize = vi
+      .fn()
+      .mockRejectedValueOnce(new TrackSyncWorkerError('Expired.', 'auth-expired'))
+      .mockResolvedValue({ usage: emptyUsage, changed: false });
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    await service.setSyncEnabled(true);
+
+    expect(synchronize).toHaveBeenCalledTimes(2);
+    expect(synchronize).toHaveBeenNthCalledWith(
+      1,
+      'access-token',
+      expect.any(AbortSignal),
+    );
+    expect(synchronize).toHaveBeenNthCalledWith(
+      2,
+      'refreshed-access-token',
+      expect.any(AbortSignal),
+    );
+    expect(fake.getSession).toHaveBeenCalledTimes(3);
+    service.dispose();
   });
 
   it('queues one follow-up synchronization for lifecycle work during an active run', async () => {

@@ -12,12 +12,15 @@ const basePath = '/georgia-routing-planner/';
 const previewPort = process.env.E2E_PORT ?? '4173';
 const previewUrl = `http://127.0.0.1:${previewPort}${basePath}`;
 const playwrightArguments = process.argv.slice(2);
+const testEnvironment: NodeJS.ProcessEnv = { ...process.env, BASE_PATH: basePath };
+delete testEnvironment.VITE_SUPABASE_URL;
+delete testEnvironment.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function runCommand(command: string, arguments_: readonly string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, arguments_, {
       cwd: projectRoot,
-      env: { ...process.env, BASE_PATH: basePath },
+      env: testEnvironment,
       stdio: 'inherit',
     });
     child.once('error', reject);
@@ -75,7 +78,7 @@ async function main(): Promise<void> {
     [viteCli, 'preview', '--host', '127.0.0.1', '--port', previewPort, '--strictPort'],
     {
       cwd: projectRoot,
-      env: { ...process.env, BASE_PATH: basePath },
+      env: testEnvironment,
       stdio: 'inherit',
     },
   );

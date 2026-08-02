@@ -147,7 +147,7 @@ export class FetchRemoteGateway implements RemoteGateway {
     const records: RemoteRecord[] = [];
     for (let offset = 0; offset < maximumSnapshotRecords; offset += snapshotPageSize) {
       const response = await this.request(
-        '/rest/v1/track_records?select=content_hash,revision,state,object_path,compressed_bytes,metadata&state=in.(reserved,ready)',
+        '/rest/v1/track_records?select=content_hash,revision,state,object_path,compressed_bytes,metadata&state=in.(reserved,ready)&order=content_hash.asc',
         {
           headers: {
             Range: [String(offset), String(offset + snapshotPageSize - 1)].join('-'),
@@ -606,7 +606,7 @@ export class TrackSyncWorkerServer {
         state = { ...state, remoteRevision: result.revision };
         continue;
       }
-      if (state.pendingKind === 'delete') return { state: null, deleteLocal: false };
+      if (state.pendingKind === 'delete') return { state: null, deleteLocal: true };
       return {
         state: { ...state, remoteRevision: result.revision, pendingKind: null },
         deleteLocal: false,

@@ -30,13 +30,14 @@ function createService(initial: UserDataSnapshot) {
   const listeners = new Set<() => void>();
   const signIn = vi.fn().mockResolvedValue(undefined);
   const signUp = vi.fn().mockResolvedValue(undefined);
+  const setSyncEnabled = vi.fn().mockResolvedValue(undefined);
   const service: UserDataService = {
     dispose: vi.fn(),
     getSnapshot: () => current,
     signIn,
     signOut: vi.fn().mockResolvedValue(undefined),
     signUp,
-    setSyncEnabled: vi.fn().mockResolvedValue(undefined),
+    setSyncEnabled,
     subscribeTracksChanged: () => () => undefined,
     synchronizeNow: vi.fn().mockResolvedValue(undefined),
     trackDeleted: vi.fn().mockResolvedValue(undefined),
@@ -51,6 +52,7 @@ function createService(initial: UserDataSnapshot) {
     service,
     signIn,
     signUp,
+    setSyncEnabled,
     set(next: UserDataSnapshot) {
       current = next;
       for (const listener of listeners) listener();
@@ -154,6 +156,49 @@ describe('UserPanel', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to create an account');
     expect(screen.getByRole('button', { name: 'Signing in…' })).toBeDisabled();
+  });
+
+  it('toggles synchronization and shows reservation-aware quota errors', async () => {
+    const userData = createService({
+      ...snapshot('signed-in'),
+      email: 'user@example.test',
+      errorMessage: 'Cloud track storage is full.',
+      syncEnabled: true,
+      syncStatus: 'error',
+      syncUsage: {
+        usedBytes: 2 * 1024 * 1024,
+        reservedBytes: 1024 * 1024,
+        limitBytes: 8_388_608,
+      },
+    });
+    const user = userEvent.setup();
+    renderPanel(userData.service);
+
+    expect(screen.getByLabelText('Sync across devices')).toBeChecked();
+    expect(screen.getByText('2.00 MiB / 8 MiB (1.00 MiB reserved)')).toBeVisible();
+    expect(
+      screen.getByRole('progressbar', { name: 'Cloud track quota' }),
+    ).toHaveAttribute('aria-valuenow', '37.5');
+    expect(screen.getByRole('alert')).toHaveTextContent('Cloud track storage is full.');
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
+
+    await user.click(screen.getByLabelText('Sync across devices'));
+    expect(userData.setSyncEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('hides synchronization controls after sign-out', () => {
+    const userData = createService({
+      ...snapshot('signed-in'),
+      email: 'user@example.test',
+      syncEnabled: true,
+    });
+    renderPanel(userData.service);
+
+    act(() => {
+      userData.set(snapshot('signed-out'));
+    });
+
+    expect(screen.queryByLabelText('Sync across devices')).not.toBeInTheDocument();
   });
 
   it('explains the unconfigured local-only state', () => {

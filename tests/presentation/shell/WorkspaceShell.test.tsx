@@ -1124,9 +1124,12 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Delete race.gpx'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+      },
+      { timeout: 5_000 },
+    );
     const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });

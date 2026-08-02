@@ -3,6 +3,7 @@ import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabas
 import type {
   UserDataService,
   UserDataSnapshot,
+  UserDataSyncProgress,
 } from '@/application/user/UserDataService';
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import {
@@ -16,11 +17,13 @@ const emptyUsage = { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 };
 const initialSnapshot: UserDataSnapshot = {
   busy: false,
   email: null,
+  userId: null,
   errorMessage: null,
   noticeMessage: null,
   status: 'loading',
   syncEnabled: false,
   syncStatus: 'idle',
+  syncProgress: null,
   syncUsage: emptyUsage,
 };
 const registrationNotice = 'Check your email to confirm your account, then sign in.';
@@ -49,6 +52,9 @@ export class SupabaseUserDataService implements UserDataService {
   #sessionRevision = 0;
   #syncPreferenceRevision = 0;
   #syncPreferenceRun: Promise<void> = Promise.resolve();
+  #persistentStateRestored = false;
+  #sessionRestored = false;
+  #startupSyncHandled = false;
 
   public constructor(
     private readonly client: Pick<SupabaseClient, 'auth'>,
@@ -56,9 +62,7 @@ export class SupabaseUserDataService implements UserDataService {
     worker: TrackSyncWorkerClient | null = null,
   ) {
     this.#worker = worker;
-    worker?.subscribeTracksChanged(() => {
-      for (const listener of this.#trackListeners) listener();
-    });
+    if (worker !== null) this.#bindWorker(worker);
     const { data } = client.auth.onAuthStateChange((event, session) => {
       this.#handleAuthStateChange(event, session);
     });
@@ -106,6 +110,7 @@ export class SupabaseUserDataService implements UserDataService {
       ...this.#snapshot,
       syncEnabled: enabled,
       syncStatus: enabled ? this.#snapshot.syncStatus : 'idle',
+      syncProgress: enabled ? this.#snapshot.syncProgress : null,
       errorMessage: enabled ? this.#snapshot.errorMessage : null,
     });
     if (!enabled) {
@@ -130,6 +135,7 @@ export class SupabaseUserDataService implements UserDataService {
       ...this.#snapshot,
       busy: true,
       syncStatus: 'syncing',
+      syncProgress: null,
       errorMessage: null,
     });
     const run = this.#runSynchronization(controller);
@@ -148,9 +154,11 @@ export class SupabaseUserDataService implements UserDataService {
   public async trackSaved(_trackId: string): Promise<void> {
     await this.synchronizeNow();
   }
+
   public async trackMetadataChanged(_trackId: string): Promise<void> {
     await this.synchronizeNow();
   }
+
   public async trackDeleted(_trackId: string): Promise<void> {
     await this.synchronizeNow();
   }
@@ -169,6 +177,7 @@ export class SupabaseUserDataService implements UserDataService {
         return;
       }
       this.#setSignedIn(data.session);
+      if (this.#snapshot.syncEnabled) void this.synchronizeNow();
     } catch {
       this.#setError(signInErrorMessage);
     }
@@ -193,13 +202,16 @@ export class SupabaseUserDataService implements UserDataService {
           ...this.#snapshot,
           busy: false,
           email: null,
+          userId: null,
           errorMessage: null,
           noticeMessage: registrationNotice,
           status: 'signed-out',
+          syncProgress: null,
         });
         return;
       }
       this.#setSignedIn(data.session);
+      if (this.#snapshot.syncEnabled) void this.synchronizeNow();
     } catch {
       this.#setError(signUpErrorMessage);
     }
@@ -214,17 +226,22 @@ export class SupabaseUserDataService implements UserDataService {
       busy: true,
       errorMessage: null,
       noticeMessage: null,
+      syncProgress: null,
     });
     this.#sessionRevision += 1;
     try {
       const { error } = await this.client.auth.signOut();
       if (error !== null) {
-        this.#setError(signOutErrorMessage, this.#snapshot.email);
+        this.#setError(
+          signOutErrorMessage,
+          this.#snapshot.email,
+          this.#snapshot.userId,
+        );
         return;
       }
       this.#setSignedIn(null);
     } catch {
-      this.#setError(signOutErrorMessage, this.#snapshot.email);
+      this.#setError(signOutErrorMessage, this.#snapshot.email, this.#snapshot.userId);
     }
   }
 
@@ -250,11 +267,11 @@ export class SupabaseUserDataService implements UserDataService {
       ]);
       if (this.#disposed) return;
       this.#setSnapshot({ ...this.#snapshot, syncEnabled, syncUsage });
-      if (syncEnabled && this.#snapshot.email !== null) {
-        void this.synchronizeNow();
-      }
     } catch {
       // Closing a runtime during startup must not surface a rejected background task.
+    } finally {
+      this.#persistentStateRestored = true;
+      this.#handleStartupSynchronization();
     }
   }
 
@@ -270,6 +287,9 @@ export class SupabaseUserDataService implements UserDataService {
       this.#setSignedIn(data.session);
     } catch {
       if (revision === this.#sessionRevision) this.#setError(sessionErrorMessage);
+    } finally {
+      this.#sessionRestored = true;
+      this.#handleStartupSynchronization();
     }
   }
 
@@ -310,24 +330,36 @@ export class SupabaseUserDataService implements UserDataService {
         );
       }
       if (controller.signal.aborted || this.#disposed) {
-        this.#setSnapshot({ ...this.#snapshot, busy: false, syncStatus: 'idle' });
+        this.#setSnapshot({
+          ...this.#snapshot,
+          busy: false,
+          syncStatus: 'idle',
+          syncProgress: null,
+        });
         return;
       }
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
         syncStatus: 'success',
+        syncProgress: null,
         syncUsage: result.usage,
       });
     } catch (error) {
       if (controller.signal.aborted || this.#disposed) {
-        this.#setSnapshot({ ...this.#snapshot, busy: false, syncStatus: 'idle' });
+        this.#setSnapshot({
+          ...this.#snapshot,
+          busy: false,
+          syncStatus: 'idle',
+          syncProgress: null,
+        });
         return;
       }
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
         syncStatus: 'error',
+        syncProgress: null,
         errorMessage: isQuotaWorkerError(error)
           ? syncQuotaErrorMessage
           : (syncWorkerErrorMessage(error) ?? syncErrorMessage),
@@ -337,20 +369,31 @@ export class SupabaseUserDataService implements UserDataService {
 
   #handleAuthStateChange(event: AuthChangeEvent, session: Session | null): void {
     if (this.#disposed) return;
-    if (event === 'SIGNED_OUT') {
-      this.#resyncRequested = false;
-      this.#syncAbort?.abort(new DOMException('Signed out.', 'AbortError'));
+    const nextUserId = session?.user.email === undefined ? null : session.user.id;
+    const accountChanged = this.#snapshot.userId !== nextUserId;
+    if (event === 'INITIAL_SESSION') {
+      this.#sessionRevision += 1;
+      if (accountChanged) {
+        this.#resyncRequested = false;
+        this.#syncAbort?.abort(
+          new DOMException('Authentication account changed.', 'AbortError'),
+        );
+      }
+      this.#setSignedIn(session);
+      this.#sessionRestored = true;
+      this.#handleStartupSynchronization();
+      return;
     }
-    if (
-      event === 'INITIAL_SESSION' ||
-      event === 'SIGNED_IN' ||
-      event === 'SIGNED_OUT' ||
-      event === 'TOKEN_REFRESHED'
-    ) {
+    if (event === 'SIGNED_OUT' || accountChanged) {
+      this.#resyncRequested = false;
       this.#syncAbort?.abort(
-        new DOMException('Authentication session changed.', 'AbortError'),
+        new DOMException('Authentication account changed.', 'AbortError'),
       );
       this.#sessionRevision += 1;
+      this.#setSignedIn(session);
+      return;
+    }
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       this.#setSignedIn(session);
     }
   }
@@ -360,34 +403,72 @@ export class SupabaseUserDataService implements UserDataService {
       ...this.#snapshot,
       busy: true,
       email: null,
+      userId: null,
       errorMessage: null,
       noticeMessage: null,
       status: 'signed-out',
+      syncProgress: null,
     });
   }
-  #setError(errorMessage: string, email: string | null = null): void {
+
+  #setError(
+    errorMessage: string,
+    email: string | null = null,
+    userId: string | null = null,
+  ): void {
     this.#setSnapshot({
       ...this.#snapshot,
       busy: false,
       email,
+      userId: email === null ? null : userId,
       errorMessage,
       noticeMessage: null,
       status: 'error',
+      syncProgress: null,
     });
   }
+
   #setSignedIn(session: Session | null): void {
     const email = session?.user.email ?? null;
+    const userId = email === null ? null : (session?.user.id ?? null);
     this.#setSnapshot({
       ...this.#snapshot,
       busy: false,
       email,
+      userId,
       errorMessage: null,
       noticeMessage: null,
       status: email === null ? 'signed-out' : 'signed-in',
       syncStatus: email === null ? 'idle' : this.#snapshot.syncStatus,
+      syncProgress:
+        email === null || userId !== this.#snapshot.userId
+          ? null
+          : this.#snapshot.syncProgress,
     });
-    if (email !== null && this.#snapshot.syncEnabled) void this.synchronizeNow();
   }
+
+  #handleStartupSynchronization(): void {
+    if (
+      this.#startupSyncHandled ||
+      !this.#persistentStateRestored ||
+      !this.#sessionRestored
+    ) {
+      return;
+    }
+    this.#startupSyncHandled = true;
+    if (this.#canSynchronize()) void this.synchronizeNow();
+  }
+
+  #bindWorker(worker: TrackSyncWorkerClient): void {
+    worker.subscribeTracksChanged(() => {
+      for (const listener of this.#trackListeners) listener();
+    });
+    worker.subscribeProgress((progress: UserDataSyncProgress) => {
+      if (this.#snapshot.syncStatus !== 'syncing') return;
+      this.#setSnapshot({ ...this.#snapshot, syncProgress: progress });
+    });
+  }
+
   #setSnapshot(snapshot: UserDataSnapshot): void {
     if (this.#disposed) return;
     this.#snapshot = snapshot;
@@ -404,16 +485,14 @@ export class SupabaseUserDataService implements UserDataService {
 
   #canSynchronize(): boolean {
     return (
-      !this.#disposed && this.#snapshot.syncEnabled && this.#snapshot.email !== null
+      !this.#disposed && this.#snapshot.syncEnabled && this.#snapshot.userId !== null
     );
   }
 
   #requireWorker(): TrackSyncWorkerClient {
     if (this.#worker !== null) return this.#worker;
     const worker = new TrackSyncWorkerClient();
-    worker.subscribeTracksChanged(() => {
-      for (const listener of this.#trackListeners) listener();
-    });
+    this.#bindWorker(worker);
     this.#worker = worker;
     return worker;
   }

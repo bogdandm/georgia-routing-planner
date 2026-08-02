@@ -16,11 +16,13 @@ function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
   return {
     busy: false,
     email: null,
+    userId: null,
     errorMessage: null,
     noticeMessage: null,
     status,
     syncEnabled: false,
     syncStatus: 'idle',
+    syncProgress: null,
     syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
   };
 }
@@ -31,6 +33,7 @@ function createService(initial: UserDataSnapshot) {
   const signIn = vi.fn().mockResolvedValue(undefined);
   const signUp = vi.fn().mockResolvedValue(undefined);
   const setSyncEnabled = vi.fn().mockResolvedValue(undefined);
+  const synchronizeNow = vi.fn().mockResolvedValue(undefined);
   const service: UserDataService = {
     dispose: vi.fn(),
     getSnapshot: () => current,
@@ -39,7 +42,7 @@ function createService(initial: UserDataSnapshot) {
     signUp,
     setSyncEnabled,
     subscribeTracksChanged: () => () => undefined,
-    synchronizeNow: vi.fn().mockResolvedValue(undefined),
+    synchronizeNow,
     trackDeleted: vi.fn().mockResolvedValue(undefined),
     trackMetadataChanged: vi.fn().mockResolvedValue(undefined),
     trackSaved: vi.fn().mockResolvedValue(undefined),
@@ -53,6 +56,7 @@ function createService(initial: UserDataSnapshot) {
     signIn,
     signUp,
     setSyncEnabled,
+    synchronizeNow,
     set(next: UserDataSnapshot) {
       current = next;
       for (const listener of listeners) listener();
@@ -184,6 +188,44 @@ describe('UserPanel', () => {
 
     await user.click(screen.getByLabelText('Sync across devices'));
     expect(userData.setSyncEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('shows support identity and controls manual synchronization progress', async () => {
+    const userData = createService({
+      ...snapshot('signed-in'),
+      email: 'user@example.test',
+      userId: 'user-id',
+      syncEnabled: true,
+    });
+    const user = userEvent.setup();
+    renderPanel(userData.service);
+
+    expect(screen.getByText('User ID')).toBeVisible();
+    expect(screen.getByText('user-id')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Sync now' }));
+    expect(userData.synchronizeNow).toHaveBeenCalledOnce();
+
+    act(() => {
+      userData.set({
+        ...snapshot('signed-in'),
+        email: 'user@example.test',
+        userId: 'user-id',
+        syncEnabled: true,
+        syncStatus: 'syncing',
+        syncProgress: { completedTracks: 1, totalTracks: 10 },
+      });
+    });
+    expect(screen.getByText('Synchronizing… 1/10')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
+
+    act(() => {
+      userData.set({
+        ...snapshot('signed-in'),
+        email: 'user@example.test',
+        userId: 'user-id',
+      });
+    });
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
   });
 
   it('hides synchronization controls after sign-out', () => {

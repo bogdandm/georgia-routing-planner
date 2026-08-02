@@ -166,6 +166,19 @@ export function UserPanel() {
           Signed in as
         </Typography>
         <Typography>{snapshot.email}</Typography>
+        {snapshot.userId === null ? null : (
+          <Stack spacing={0.25}>
+            <Typography variant="body2" color="text.secondary">
+              User ID
+            </Typography>
+            <Typography
+              sx={{ userSelect: 'text', wordBreak: 'break-all' }}
+              variant="body2"
+            >
+              {snapshot.userId}
+            </Typography>
+          </Stack>
+        )}
         <FormControlLabel
           control={
             <Switch
@@ -185,7 +198,10 @@ export function UserPanel() {
               variant="body2"
             >
               {snapshot.syncStatus === 'syncing'
-                ? 'Synchronizing…'
+                ? snapshot.syncProgress !== null &&
+                  snapshot.syncProgress.totalTracks > 0
+                  ? `Synchronizing… ${snapshot.syncProgress.completedTracks.toString()}/${snapshot.syncProgress.totalTracks.toString()}`
+                  : 'Synchronizing…'
                 : snapshot.syncStatus === 'error'
                   ? 'Synchronization needs attention'
                   : 'Connected'}
@@ -201,6 +217,15 @@ export function UserPanel() {
             />
           </Stack>
         ) : null}
+        <Button
+          disabled={!snapshot.syncEnabled || snapshot.syncStatus === 'syncing'}
+          onClick={() => {
+            void userData.synchronizeNow();
+          }}
+          variant="outlined"
+        >
+          Sync now
+        </Button>
         {snapshot.errorMessage === null ? null : (
           <Alert role="alert" severity="error">
             {snapshot.errorMessage}

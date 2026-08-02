@@ -300,14 +300,16 @@ perimeter derived from provider-tagged military geometry.
 ## Explicit cross-device synchronization
 
 Startup restores the local `sync.enabled` preference and account session independently.
-Only an authenticated user with that preference set to `true` starts one coalesced
-worker run; disabling sync or signing out aborts it. The main thread supplies the
-current access token only. The worker validates remote records and private GZIP objects,
-performs pending deletes before other mutations, then merges the second full snapshot
-atomically. Known remote revisions absent from that snapshot are hard-deleted locally;
-no server tombstone is retained. A conflict retries one explicit action against the
-current revision, while invalid/network failures preserve valid local data and pending
-work.
+Exactly one worker run starts after both are resolved when the user is authenticated and
+sync is enabled. Further runs occur only after an explicit local track mutation,
+enabling sync, an explicit sign-in, or **Sync now**; authentication refresh and focus
+notifications update account state without synchronizing. Disabling sync or signing out
+aborts an active run. The main thread supplies the current access token only. The worker
+validates remote records and private GZIP objects, performs pending deletes before other
+mutations, then merges the second full snapshot atomically. Known remote revisions
+absent from that snapshot are hard-deleted locally; no server tombstone is retained. A
+conflict retries one explicit action against the current revision, while invalid/network
+failures preserve valid local data and pending work.
 
 ## Track synchronization trust boundary
 

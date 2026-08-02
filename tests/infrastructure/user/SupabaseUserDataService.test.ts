@@ -1,6 +1,8 @@
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { UserDataSyncProgress } from '@/application/user/UserDataService';
+
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
 import type { TrackSyncWorkerClient } from '@/infrastructure/supabase/TrackSyncWorkerClient';
@@ -16,7 +18,7 @@ const database = {
   saveTrackSyncEnabled: vi.fn().mockResolvedValue(undefined),
 } as unknown as AppDatabase;
 const emptyUsage = { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 } as const;
-function session(email: string): Session {
+function session(email: string, userId = 'user-id'): Session {
   return {
     access_token: 'access-token',
     expires_at: 2_000_000_000,
@@ -28,7 +30,7 @@ function session(email: string): Session {
       aud: 'authenticated',
       created_at: '2026-01-01T00:00:00.000Z',
       email,
-      id: 'user-id',
+      id: userId,
       user_metadata: {},
     },
   };
@@ -100,6 +102,7 @@ describe('SupabaseUserDataService', () => {
         email: 'restored@example.test',
         errorMessage: null,
         noticeMessage: null,
+        userId: 'user-id',
         status: 'signed-in',
       });
     });
@@ -213,6 +216,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -241,6 +245,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -283,6 +288,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -320,6 +326,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -337,6 +344,7 @@ describe('SupabaseUserDataService', () => {
     expect(synchronize.mock.calls[0]?.[1].aborted).toBe(true);
     expect(service.getSnapshot()).toMatchObject({
       email: null,
+      userId: null,
       status: 'signed-out',
       syncStatus: 'idle',
     });
@@ -351,6 +359,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -381,6 +390,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -415,6 +425,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -453,6 +464,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -488,6 +500,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
     const service = new SupabaseUserDataService(fake.client, database, worker);
@@ -508,5 +521,185 @@ describe('SupabaseUserDataService', () => {
       expect(synchronize).toHaveBeenCalledTimes(2);
     });
     expect(synchronize).toHaveBeenCalledWith('access-token', expect.any(AbortSignal));
+  });
+
+  it('starts one enabled startup synchronization regardless of restore order', async () => {
+    for (const restoredFirst of [true, false]) {
+      let resolvePreference: ((value: boolean) => void) | undefined;
+      const preference = new Promise<boolean>((resolve) => {
+        resolvePreference = resolve;
+      });
+      let resolveSession:
+        ((value: { data: { session: Session }; error: null }) => void) | undefined;
+      const restored = new Promise<{ data: { session: Session }; error: null }>(
+        (resolve) => {
+          resolveSession = resolve;
+        },
+      );
+      const activeSession = session('startup@example.test');
+      database.loadTrackSyncEnabled = vi.fn().mockReturnValue(preference);
+      const fake = createClient();
+      fake.getSession
+        .mockImplementationOnce(() => restored)
+        .mockResolvedValue({ data: { session: activeSession }, error: null });
+      const synchronize = vi
+        .fn()
+        .mockResolvedValue({ usage: emptyUsage, changed: false });
+      const worker = {
+        synchronize,
+        subscribeTracksChanged: vi.fn(),
+        subscribeProgress: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as TrackSyncWorkerClient;
+      const service = new SupabaseUserDataService(fake.client, database, worker);
+
+      if (restoredFirst) {
+        resolveSession?.({ data: { session: activeSession }, error: null });
+        await Promise.resolve();
+        expect(synchronize).not.toHaveBeenCalled();
+        resolvePreference?.(true);
+      } else {
+        resolvePreference?.(true);
+        await Promise.resolve();
+        expect(synchronize).not.toHaveBeenCalled();
+        resolveSession?.({ data: { session: activeSession }, error: null });
+      }
+
+      await vi.waitFor(() => {
+        expect(synchronize).toHaveBeenCalledOnce();
+      });
+      fake.emit('SIGNED_IN', activeSession);
+      fake.emit('TOKEN_REFRESHED', activeSession);
+      expect(synchronize).toHaveBeenCalledOnce();
+      expect((synchronize.mock.calls[0]?.[1] as AbortSignal | undefined)?.aborted).toBe(
+        false,
+      );
+      service.dispose();
+    }
+  });
+
+  it('synchronizes explicit sign-in and coalesces all track mutation triggers', async () => {
+    database.loadTrackSyncEnabled = vi.fn().mockResolvedValue(true);
+    const fake = createClient();
+    fake.getSession
+      .mockResolvedValueOnce({ data: { session: null }, error: null })
+      .mockResolvedValue({
+        data: { session: session('signed-in@example.test') },
+        error: null,
+      });
+    let resolveFirst: (() => void) | undefined;
+    const firstRun = new Promise<{ usage: typeof emptyUsage; changed: boolean }>(
+      (resolve) => {
+        resolveFirst = () => {
+          resolve({ usage: emptyUsage, changed: false });
+        };
+      },
+    );
+    const synchronize = vi
+      .fn()
+      .mockReturnValueOnce(firstRun)
+      .mockResolvedValue({ usage: emptyUsage, changed: false });
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+
+    await vi.waitFor(() => {
+      expect(service.getSnapshot()).toMatchObject({
+        status: 'signed-out',
+        syncEnabled: true,
+      });
+    });
+    await service.signIn('signed-in@example.test', 'password');
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledOnce();
+    });
+    const saves = [
+      service.trackSaved('local:save'),
+      service.trackMetadataChanged('local:rename'),
+      service.trackDeleted('local:delete'),
+    ];
+    resolveFirst?.();
+    await Promise.all(saves);
+
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledTimes(2);
+    });
+    service.dispose();
+  });
+
+  it('retains worker progress only for an active synchronization run', async () => {
+    const activeSession = session('progress@example.test');
+    const fake = createClient({ restoredSession: activeSession });
+    let resolveFirst: (() => void) | undefined;
+    const firstRun = new Promise<{ usage: typeof emptyUsage; changed: boolean }>(
+      (resolve) => {
+        resolveFirst = () => {
+          resolve({ usage: emptyUsage, changed: false });
+        };
+      },
+    );
+    const synchronize = vi
+      .fn()
+      .mockReturnValueOnce(firstRun)
+      .mockImplementationOnce(
+        (_accessToken: string, signal: AbortSignal) =>
+          new Promise<{ usage: typeof emptyUsage; changed: boolean }>((resolve) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                resolve({ usage: emptyUsage, changed: false });
+              },
+              { once: true },
+            );
+          }),
+      );
+    let emitProgress: ((progress: UserDataSyncProgress) => void) | undefined;
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      subscribeProgress: vi.fn((listener) => {
+        emitProgress = listener as (progress: UserDataSyncProgress) => void;
+        return () => undefined;
+      }),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+    const enabling = service.setSyncEnabled(true);
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledOnce();
+    });
+    emitProgress?.({ completedTracks: 1, totalTracks: 10 });
+    expect(service.getSnapshot().syncProgress).toEqual({
+      completedTracks: 1,
+      totalTracks: 10,
+    });
+    resolveFirst?.();
+    await enabling;
+    expect(service.getSnapshot().syncProgress).toBeNull();
+    emitProgress?.({ completedTracks: 2, totalTracks: 10 });
+    expect(service.getSnapshot().syncProgress).toBeNull();
+
+    const manual = service.synchronizeNow();
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledTimes(2);
+    });
+    emitProgress?.({ completedTracks: 3, totalTracks: 10 });
+    expect(service.getSnapshot().syncProgress).toEqual({
+      completedTracks: 3,
+      totalTracks: 10,
+    });
+    await service.setSyncEnabled(false);
+    await manual;
+    emitProgress?.({ completedTracks: 4, totalTracks: 10 });
+    expect(service.getSnapshot().syncProgress).toBeNull();
+    service.dispose();
   });
 });

@@ -2846,11 +2846,13 @@ describe('WorkspaceShell', () => {
     let snapshot: UserDataSnapshot = {
       busy: false,
       email: 'sync@example.test',
+      userId: 'user-id',
       errorMessage: 'Synchronization failed.',
       noticeMessage: null,
       status: 'signed-in',
       syncEnabled: true,
       syncStatus: 'error',
+      syncProgress: null,
       syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
     };
     let notify: () => void = () => undefined;

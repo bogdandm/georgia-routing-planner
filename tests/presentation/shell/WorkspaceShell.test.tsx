@@ -1024,9 +1024,7 @@ describe('WorkspaceShell', () => {
     });
     await waitFor(
       () => {
-        expect(
-          screen.queryByRole('button', { name: 'Save' }),
-        ).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
       },
       { timeout: 5_000 },
     );

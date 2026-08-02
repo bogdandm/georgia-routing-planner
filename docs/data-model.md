@@ -282,11 +282,14 @@ part of the canonical identity. Original file bytes are discarded after parsing.
 `trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
 stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,
 or `delete` intent. A save, metadata change, or deletion updates the affected track rows
-and queue state in one IndexedDB transaction. Deleting an unsent upsert removes its
-local intent; deleting a previously synchronized track retains only a minimal delete
-retry record. This is local preparation only: no synchronization execution or
-synchronization UI is present yet. A missing or invalid content row remains a bounded
-storage-integrity error, never an empty geometry or partial save.
+and queue state in one IndexedDB transaction. `sync.enabled` is a validated setting with
+default `false`; it alone permits startup or lifecycle synchronization. Deleting an
+unsent upsert removes its local intent; deleting a previously synchronized track retains
+only a minimal delete retry record, never local geometry or metadata. The worker stores
+the authoritative used/reserved/limit quota only after validated remote merge. Canonical
+geometry excludes elevations and derived elevation metrics; opening a downloaded track
+recalculates those browser-local values without changing its hash, timestamp, or pending
+state.
 
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not

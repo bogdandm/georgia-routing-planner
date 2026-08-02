@@ -1,8 +1,19 @@
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
+import type { TrackSyncWorkerClient } from '@/infrastructure/supabase/TrackSyncWorkerClient';
 
+const database = {
+  loadTrackSyncEnabled: vi.fn().mockResolvedValue(false),
+  loadTrackSyncUsage: vi.fn().mockResolvedValue({
+    usedBytes: 0,
+    reservedBytes: 0,
+    limitBytes: 8_388_608,
+  }),
+  saveTrackSyncEnabled: vi.fn().mockResolvedValue(undefined),
+} as unknown as AppDatabase;
 function session(email: string): Session {
   return {
     access_token: 'access-token',
@@ -68,10 +79,10 @@ function createClient(options: { readonly restoredSession?: Session | null } = {
 describe('SupabaseUserDataService', () => {
   it('restores a persisted session without exposing its tokens', async () => {
     const fake = createClient({ restoredSession: session('restored@example.test') });
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
 
     await vi.waitFor(() => {
-      expect(service.getSnapshot()).toEqual({
+      expect(service.getSnapshot()).toMatchObject({
         busy: false,
         email: 'restored@example.test',
         errorMessage: null,
@@ -88,7 +99,7 @@ describe('SupabaseUserDataService', () => {
       data: { session: null },
       error: new Error('Detailed server message'),
     });
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
 
     await service.signIn('user@example.test', 'password');
 
@@ -96,7 +107,7 @@ describe('SupabaseUserDataService', () => {
       email: 'user@example.test',
       password: 'password',
     });
-    expect(service.getSnapshot()).toEqual({
+    expect(service.getSnapshot()).toMatchObject({
       busy: false,
       email: null,
       errorMessage: 'Unable to sign in. Check your email and password.',
@@ -107,7 +118,7 @@ describe('SupabaseUserDataService', () => {
 
   it('uses neutral confirmation for registration without a session', async () => {
     const fake = createClient();
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
 
     await service.signUp('existing-or-new@example.test', 'password');
 
@@ -115,7 +126,7 @@ describe('SupabaseUserDataService', () => {
       email: 'existing-or-new@example.test',
       password: 'password',
     });
-    expect(service.getSnapshot()).toEqual({
+    expect(service.getSnapshot()).toMatchObject({
       busy: false,
       email: null,
       errorMessage: null,
@@ -130,7 +141,7 @@ describe('SupabaseUserDataService', () => {
       data: { session: session('new@example.test') },
       error: null,
     });
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
 
     await service.signUp('new@example.test', 'password');
 
@@ -144,7 +155,7 @@ describe('SupabaseUserDataService', () => {
       data: { session: null },
       error: { code: 'email_exists' },
     });
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
 
     await service.signUp('existing@example.test', 'password');
 
@@ -156,7 +167,7 @@ describe('SupabaseUserDataService', () => {
 
   it('disposes the auth client and subscription exactly once', () => {
     const fake = createClient();
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
 
     service.dispose();
     service.dispose();
@@ -169,7 +180,7 @@ describe('SupabaseUserDataService', () => {
 
   it('handles refresh and sign-out events', async () => {
     const fake = createClient();
-    const service = new SupabaseUserDataService(fake.client);
+    const service = new SupabaseUserDataService(fake.client, database);
     const listener = vi.fn();
     const unsubscribe = service.subscribe(listener);
 
@@ -181,5 +192,43 @@ describe('SupabaseUserDataService', () => {
 
     unsubscribe();
     expect(listener).toHaveBeenCalled();
+  });
+
+  it('queues one follow-up synchronization for lifecycle work during an active run', async () => {
+    const fake = createClient({ restoredSession: session('sync@example.test') });
+    let resolveFirst: (() => void) | undefined;
+    const firstRun = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const synchronize = vi
+      .fn()
+      .mockReturnValueOnce(firstRun)
+      .mockResolvedValue({
+        usage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+        changed: false,
+      });
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().email).toBe('sync@example.test');
+    });
+    const enabled = service.setSyncEnabled(true);
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledOnce();
+    });
+    const queued = service.trackMetadataChanged('local:track');
+    resolveFirst?.();
+    await enabled;
+    await queued;
+
+    await vi.waitFor(() => {
+      expect(synchronize).toHaveBeenCalledTimes(2);
+    });
+    expect(synchronize).toHaveBeenCalledWith('access-token', expect.any(AbortSignal));
   });
 });

@@ -311,7 +311,17 @@ function normalizeFailure(error: unknown): WorkerRpcFailure {
   if (error instanceof DOMException) {
     return { name: error.name, message: error.message };
   }
-  if (error instanceof Error) return { name: error.name, message: error.message };
+  if (error instanceof Error) {
+    const candidate = error as Error & { readonly code?: unknown };
+    if (typeof candidate.code === 'string') {
+      return {
+        name: candidate.name,
+        message: candidate.message,
+        code: candidate.code,
+      };
+    }
+    return { name: candidate.name, message: candidate.message };
+  }
   return { name: 'Error', message: 'The worker request failed.' };
 }
 

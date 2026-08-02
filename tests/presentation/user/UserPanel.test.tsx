@@ -95,6 +95,23 @@ describe('UserPanel', () => {
     expect(screen.getByLabelText(/Password/u)).toHaveValue('');
   });
 
+  it('reveals and conceals the password without submitting the form', async () => {
+    const userData = createService(snapshot('signed-out'));
+    const user = userEvent.setup();
+    renderPanel(userData.service);
+
+    const password = screen.getByLabelText(/Password/u);
+    expect(password).toHaveAttribute('type', 'password');
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(password).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('button', { name: 'Hide password' })).toBeVisible();
+    expect(userData.signIn).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(password).toHaveAttribute('type', 'password');
+  });
+
   it('submits create-account credentials and announces confirmation', async () => {
     const userData = createService(snapshot('signed-out'));
     const user = userEvent.setup();

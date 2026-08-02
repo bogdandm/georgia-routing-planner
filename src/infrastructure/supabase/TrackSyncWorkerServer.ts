@@ -440,8 +440,8 @@ export class TrackSyncWorkerServer {
     const remoteByHash = new Map(
       secondSnapshot.map((record) => [record.content_hash, record]),
     );
-    const initialStateByTrackId = new Map(
-      local.map((entry) => [entry.state.trackId, entry.state]),
+    const initialEntryByTrackId = new Map(
+      local.map((entry) => [entry.state.trackId, entry]),
     );
     const put: LocalTrackSyncPair[] = [];
     const states: TrackSyncState[] = [];
@@ -449,12 +449,16 @@ export class TrackSyncWorkerServer {
     const current = await this.readLocal();
     const currentHashes = new Set(current.map((entry) => entry.state.contentHash));
     for (const entry of current) {
-      const initial = initialStateByTrackId.get(entry.state.trackId);
+      const initial = initialEntryByTrackId.get(entry.state.trackId);
       const hasMutation = mutationStates.has(entry.state.trackId);
       const stateUnchangedSinceScan =
-        initial !== undefined && syncStatesEqual(initial, entry.state);
+        initial !== undefined && syncStatesEqual(initial.state, entry.state);
+      const pairUnchangedSinceScan =
+        initial?.pair?.summary.updatedAt === entry.pair?.summary.updatedAt &&
+        initial?.pair?.summary.name === entry.pair?.summary.name &&
+        initial?.pair?.summary.favorite === entry.pair?.summary.favorite;
       let effective: TrackSyncState | null = entry.state;
-      if (stateUnchangedSinceScan && hasMutation) {
+      if (stateUnchangedSinceScan && pairUnchangedSinceScan && hasMutation) {
         effective = mutationStates.get(entry.state.trackId) ?? null;
       }
       if (effective === null) {

@@ -59,6 +59,18 @@ describe('prepareImportedTrack', () => {
     );
   });
 
+  it('retains canonical geometry while deriving downloaded-track elevations', async () => {
+    const prepared = await prepareImportedTrack(sourceSegments, flatDem(400), signal, {
+      preferDemElevations: true,
+      preserveGeometry: true,
+    });
+
+    expect(prepared.segments[0]?.points).toEqual([
+      { coordinate: [44, 42], elevationMeters: 400 },
+      { coordinate: [44.01, 42.01], elevationMeters: 400 },
+    ]);
+  });
+
   it('uses complete source heights without an elevation provider', async () => {
     const prepared = await prepareImportedTrack(sourceSegments, null, signal);
 

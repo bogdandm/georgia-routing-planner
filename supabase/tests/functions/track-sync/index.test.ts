@@ -96,7 +96,11 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
         error: null,
       };
     },
-    async upload(path: string, body: Blob, options: { readonly contentType: string }) {
+    async upload(
+      path: string,
+      body: ArrayBuffer,
+      options: { readonly contentType: string },
+    ) {
       state.calls.push({ kind: 'upload', name: path, value: { body, options } });
       if (state.uploadError !== null) return { data: null, error: state.uploadError };
       state.objects.add(path);
@@ -369,16 +373,46 @@ Deno.test(
     assert(state.objects.has(OBJECT_PATH));
     const uploadCall = state.calls.find((call) => call.kind === 'upload');
     const uploadValue = uploadCall?.value as
-      | { readonly body: Blob; readonly options: { readonly contentType: string } }
+      | {
+          readonly body: ArrayBuffer;
+          readonly options: { readonly contentType: string };
+        }
       | undefined;
     assert(uploadValue !== undefined);
-    assert(uploadValue.body instanceof Blob);
-    assertEquals(uploadValue.body.type, 'application/gzip');
+    assert(uploadValue.body instanceof ArrayBuffer);
     assertEquals(uploadValue.options.contentType, 'application/gzip');
-    assertEquals(
-      new Uint8Array(await uploadValue.body.arrayBuffer()),
-      bytesFromHex(fixture.gzipHex),
-    );
+    assertEquals(new Uint8Array(uploadValue.body), bytesFromHex(fixture.gzipHex));
+  },
+);
+
+Deno.test(
+  'storage upload failures return a bounded stage code and release the reservation',
+  async () => {
+    const state = makeState();
+    state.uploadError = {
+      message: 'private storage provider detail',
+      statusCode: 500,
+    };
+    state.rpcResults.set('reserve_track_upload', [
+      { data: { outcome: 'upload', objectPath: OBJECT_PATH }, error: null },
+    ]);
+
+    const response = await handleTrackSync(uploadRequest(), makeContext(state));
+    const body = await responseJson(response);
+
+    assertEquals(response.status, 502);
+    assertEquals(body, {
+      error: {
+        code: 'storage_upload_failed',
+        message: 'Track geometry storage is unavailable.',
+      },
+    });
+    const release = state.calls.find((call) => call.name === 'release_track_upload');
+    assertEquals(release?.value, {
+      p_user_id: USER_ID,
+      p_content_hash: CONTENT_HASH,
+      p_object_path: OBJECT_PATH,
+    });
   },
 );
 

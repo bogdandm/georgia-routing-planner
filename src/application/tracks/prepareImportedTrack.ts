@@ -27,6 +27,11 @@ interface ResampledStation {
 
 interface PrepareImportedTrackOptions {
   readonly preferDemElevations?: boolean;
+  /**
+   * Retains canonical stored geometry while deriving browser-local elevations.
+   * Imported tracks use the default resampling behavior.
+   */
+  readonly preserveGeometry?: boolean;
 }
 
 export interface PreparedImportedTrack {
@@ -297,9 +302,18 @@ export async function prepareImportedTrack(
   }
   if (routableSegments.length === 0)
     throw new TrackElevationPreparationError('zero-length-track');
-  const resampled = routableSegments.map((segment, index) =>
-    resampleSegment(segment, index, signal),
-  );
+  const resampled = options.preserveGeometry
+    ? routableSegments.map((segment, sourceSegmentIndex) =>
+        segment.points.map((point) => ({
+          coordinate: point.coordinate,
+          ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
+          ...(point.elevationMeters === undefined
+            ? {}
+            : { sourceElevationMeters: point.elevationMeters }),
+          sourceSegmentIndex,
+        })),
+      )
+    : routableSegments.map((segment, index) => resampleSegment(segment, index, signal));
   const stations = resampled.flat();
   const samples =
     elevationProvider === null

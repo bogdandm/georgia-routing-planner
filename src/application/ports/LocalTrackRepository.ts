@@ -6,6 +6,7 @@ export interface LocalTrackRepository {
     trackId: string,
     metrics: LocalTrackSummary['metrics'],
     content: LocalTrackContent,
+    options?: { readonly expectedContentHash?: string },
   ): Promise<LocalTrackSummary>;
   listLocalTracks(): Promise<readonly LocalTrackSummary[]>;
   loadLocalTrackContent(trackId: string): Promise<LocalTrackContent>;

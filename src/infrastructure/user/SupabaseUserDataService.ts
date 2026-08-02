@@ -24,6 +24,7 @@ const initialSnapshot: UserDataSnapshot = {
   syncEnabled: false,
   syncStatus: 'idle',
   syncProgress: null,
+  remoteTrackDeletions: [],
   syncUsage: emptyUsage,
 };
 const registrationNotice = 'Check your email to confirm your account, then sign in.';
@@ -37,6 +38,8 @@ const syncQuotaErrorMessage =
   'Cloud track storage is full. Delete a synchronized track and try again.';
 const syncPreferenceErrorMessage =
   'Unable to update synchronization. Your previous setting is unchanged.';
+const deletionDecisionErrorMessage =
+  'Unable to apply the track deletion decision. Your local tracks remain available.';
 
 /** Bridges session lifecycle and one cancellable worker run to the serializable UI snapshot. */
 export class SupabaseUserDataService implements UserDataService {
@@ -48,6 +51,7 @@ export class SupabaseUserDataService implements UserDataService {
   #syncAbort: AbortController | null = null;
   #syncRun: Promise<void> | null = null;
   #resyncRequested = false;
+  #remoteDeletionDecisionInProgress = false;
   #disposed = false;
   #sessionRevision = 0;
   #syncPreferenceRevision = 0;
@@ -111,6 +115,7 @@ export class SupabaseUserDataService implements UserDataService {
       syncEnabled: enabled,
       syncStatus: enabled ? this.#snapshot.syncStatus : 'idle',
       syncProgress: enabled ? this.#snapshot.syncProgress : null,
+      remoteTrackDeletions: enabled ? this.#snapshot.remoteTrackDeletions : [],
       errorMessage: enabled ? this.#snapshot.errorMessage : null,
     });
     if (!enabled) {
@@ -148,6 +153,59 @@ export class SupabaseUserDataService implements UserDataService {
       const shouldResynchronize = this.#resyncRequested && this.#canSynchronize();
       this.#resyncRequested = false;
       if (shouldResynchronize) void this.synchronizeNow();
+    }
+  }
+
+  public async resolveRemoteTrackDeletions(
+    deleteTrackIds: readonly string[],
+  ): Promise<void> {
+    if (this.#disposed) return;
+    const candidates = this.#snapshot.remoteTrackDeletions;
+    const candidateIds = new Set(candidates.map((candidate) => candidate.trackId));
+    const selected = new Set(deleteTrackIds);
+    const sessionRevision = this.#sessionRevision;
+    const userId = this.#snapshot.userId;
+    if (userId === null) return;
+    if (this.#remoteDeletionDecisionInProgress) return;
+    this.#remoteDeletionDecisionInProgress = true;
+    try {
+      if (
+        selected.size !== deleteTrackIds.length ||
+        [...selected].some((trackId) => !candidateIds.has(trackId))
+      ) {
+        throw new Error('The deletion decision contains an unknown track.');
+      }
+      const restoreTrackIds = candidates.flatMap((candidate) =>
+        selected.has(candidate.trackId) ? [] : [candidate.trackId],
+      );
+      this.#setSnapshot({
+        ...this.#snapshot,
+        busy: true,
+        errorMessage: null,
+      });
+      await this.database.resolveRemoteTrackDeletions([...selected], restoreTrackIds);
+      if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
+      this.#setSnapshot({
+        ...this.#snapshot,
+        busy: false,
+        syncStatus: 'idle',
+        remoteTrackDeletions: [],
+        errorMessage: null,
+      });
+      for (const listener of this.#trackListeners) listener();
+      if (this.#isDecisionCurrent(userId, sessionRevision)) {
+        await this.synchronizeNow();
+      }
+    } catch {
+      if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
+      this.#setSnapshot({
+        ...this.#snapshot,
+        busy: false,
+        syncStatus: 'needs-action',
+        errorMessage: deletionDecisionErrorMessage,
+      });
+    } finally {
+      this.#remoteDeletionDecisionInProgress = false;
     }
   }
 
@@ -206,7 +264,9 @@ export class SupabaseUserDataService implements UserDataService {
           errorMessage: null,
           noticeMessage: registrationNotice,
           status: 'signed-out',
+          syncStatus: 'idle',
           syncProgress: null,
+          remoteTrackDeletions: [],
         });
         return;
       }
@@ -228,6 +288,7 @@ export class SupabaseUserDataService implements UserDataService {
       errorMessage: null,
       noticeMessage: null,
       syncProgress: null,
+      remoteTrackDeletions: [],
     });
     this.#sessionRevision += 1;
     try {
@@ -295,17 +356,24 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   async #runSynchronization(controller: AbortController): Promise<void> {
+    const sessionRevision = this.#sessionRevision;
     try {
-      const sessionRevision = this.#sessionRevision;
       const first = await this.client.auth.getSession();
       const initialSession = first.data.session;
       if (first.error !== null || initialSession === null) {
         throw new Error('No active session.');
       }
+      if (
+        !this.#isRunCurrent(controller, sessionRevision) ||
+        initialSession.user.id !== this.#snapshot.userId
+      ) {
+        return;
+      }
       const worker = this.#requireWorker();
       let result;
       try {
         result = await worker.synchronize(
+          initialSession.user.id,
           initialSession.access_token,
           controller.signal,
         );
@@ -326,36 +394,22 @@ export class SupabaseUserDataService implements UserDataService {
           });
         }
         result = await worker.synchronize(
+          refreshedSession.user.id,
           refreshedSession.access_token,
           controller.signal,
         );
       }
-      if (controller.signal.aborted || this.#disposed) {
-        this.#setSnapshot({
-          ...this.#snapshot,
-          busy: false,
-          syncStatus: 'idle',
-          syncProgress: null,
-        });
-        return;
-      }
+      if (!this.#isRunCurrent(controller, sessionRevision)) return;
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
-        syncStatus: 'success',
+        syncStatus: result.remoteTrackDeletions.length > 0 ? 'needs-action' : 'success',
         syncProgress: null,
         syncUsage: result.usage,
+        remoteTrackDeletions: result.remoteTrackDeletions,
       });
     } catch (error) {
-      if (controller.signal.aborted || this.#disposed) {
-        this.#setSnapshot({
-          ...this.#snapshot,
-          busy: false,
-          syncStatus: 'idle',
-          syncProgress: null,
-        });
-        return;
-      }
+      if (!this.#isRunCurrent(controller, sessionRevision)) return;
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
@@ -370,7 +424,7 @@ export class SupabaseUserDataService implements UserDataService {
 
   #handleAuthStateChange(event: AuthChangeEvent, session: Session | null): void {
     if (this.#disposed) return;
-    const nextUserId = session?.user.email === undefined ? null : session.user.id;
+    const nextUserId = session?.user.id ?? null;
     const accountChanged = this.#snapshot.userId !== nextUserId;
     if (event === 'INITIAL_SESSION') {
       this.#sessionRevision += 1;
@@ -383,6 +437,7 @@ export class SupabaseUserDataService implements UserDataService {
           ...this.#snapshot,
           syncStatus: 'idle',
           syncProgress: null,
+          remoteTrackDeletions: [],
         });
       }
       this.#setSignedIn(session);
@@ -400,6 +455,7 @@ export class SupabaseUserDataService implements UserDataService {
         ...this.#snapshot,
         syncStatus: 'idle',
         syncProgress: null,
+        remoteTrackDeletions: [],
       });
       this.#setSignedIn(session);
       return;
@@ -410,6 +466,10 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   #beginOperation(): void {
+    this.#resyncRequested = false;
+    this.#syncAbort?.abort(
+      new DOMException('Authentication operation started.', 'AbortError'),
+    );
     this.#setSnapshot({
       ...this.#snapshot,
       busy: true,
@@ -418,7 +478,9 @@ export class SupabaseUserDataService implements UserDataService {
       errorMessage: null,
       noticeMessage: null,
       status: 'signed-out',
+      syncStatus: 'idle',
       syncProgress: null,
+      remoteTrackDeletions: [],
     });
   }
 
@@ -431,17 +493,19 @@ export class SupabaseUserDataService implements UserDataService {
       ...this.#snapshot,
       busy: false,
       email,
-      userId: email === null ? null : userId,
+      userId,
       errorMessage,
       noticeMessage: null,
       status: 'error',
+      syncStatus: 'idle',
       syncProgress: null,
+      remoteTrackDeletions: [],
     });
   }
 
   #setSignedIn(session: Session | null): void {
     const email = session?.user.email ?? null;
-    const userId = email === null ? null : (session?.user.id ?? null);
+    const userId = session?.user.id ?? null;
     this.#setSnapshot({
       ...this.#snapshot,
       busy: false,
@@ -449,12 +513,16 @@ export class SupabaseUserDataService implements UserDataService {
       userId,
       errorMessage: null,
       noticeMessage: null,
-      status: email === null ? 'signed-out' : 'signed-in',
-      syncStatus: email === null ? 'idle' : this.#snapshot.syncStatus,
+      status: userId === null ? 'signed-out' : 'signed-in',
+      syncStatus: userId === null ? 'idle' : this.#snapshot.syncStatus,
       syncProgress:
-        email === null || userId !== this.#snapshot.userId
+        userId === null || userId !== this.#snapshot.userId
           ? null
           : this.#snapshot.syncProgress,
+      remoteTrackDeletions:
+        userId === null || userId !== this.#snapshot.userId
+          ? []
+          : this.#snapshot.remoteTrackDeletions,
     });
   }
 
@@ -494,9 +562,20 @@ export class SupabaseUserDataService implements UserDataService {
     );
   }
 
+  #isDecisionCurrent(userId: string, sessionRevision: number): boolean {
+    return (
+      !this.#disposed &&
+      userId === this.#snapshot.userId &&
+      sessionRevision === this.#sessionRevision
+    );
+  }
+
   #canSynchronize(): boolean {
     return (
-      !this.#disposed && this.#snapshot.syncEnabled && this.#snapshot.userId !== null
+      !this.#disposed &&
+      this.#snapshot.syncEnabled &&
+      this.#snapshot.userId !== null &&
+      this.#snapshot.remoteTrackDeletions.length === 0
     );
   }
 

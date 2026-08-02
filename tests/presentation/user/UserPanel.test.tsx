@@ -24,6 +24,7 @@ function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
     syncStatus: 'idle',
     syncProgress: null,
     syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+    remoteTrackDeletions: [],
   };
 }
 
@@ -42,6 +43,7 @@ function createService(initial: UserDataSnapshot) {
     signUp,
     setSyncEnabled,
     subscribeTracksChanged: () => () => undefined,
+    resolveRemoteTrackDeletions: vi.fn().mockResolvedValue(undefined),
     synchronizeNow,
     trackDeleted: vi.fn().mockResolvedValue(undefined),
     trackMetadataChanged: vi.fn().mockResolvedValue(undefined),
@@ -254,6 +256,20 @@ describe('UserPanel', () => {
       });
     });
     expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
+
+    act(() => {
+      userData.set({
+        ...snapshot('signed-in'),
+        email: 'user@example.test',
+        userId: 'user-id',
+        syncEnabled: true,
+        syncStatus: 'needs-action',
+        remoteTrackDeletions: [{ trackId: 'local:pending', name: 'Pending' }],
+      });
+    });
+    expect(screen.getByText('Synchronization needs your decision')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
+    expect(screen.getByLabelText('Sync across devices')).toBeDisabled();
   });
 
   it('hides synchronization controls after sign-out', () => {

@@ -1,5 +1,4 @@
 import { ThemeProvider } from '@mui/material';
-import { userEvent } from '@testing-library/user-event';
 import {
   act,
   fireEvent,
@@ -8,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ElevationSample } from '@/application/ports/ElevationProvider';
@@ -2843,7 +2843,7 @@ describe('WorkspaceShell', () => {
     );
   });
 
-  it('shows error, active, and successful synchronization colors on User', () => {
+  it('shows error, active, and successful synchronization colors on User', async () => {
     let snapshot: UserDataSnapshot = {
       busy: false,
       email: 'sync@example.test',
@@ -2855,14 +2855,15 @@ describe('WorkspaceShell', () => {
       syncStatus: 'error',
       syncProgress: null,
       syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+      remoteTrackDeletions: [],
     };
-    let notify: () => void = () => undefined;
+    const listeners = new Set<() => void>();
     const userData = {
       ...services.userData,
       getSnapshot: () => snapshot,
       subscribe: (listener: () => void) => {
-        notify = listener;
-        return () => undefined;
+        listeners.add(listener);
+        return () => listeners.delete(listener);
       },
     } satisfies UserDataService;
     services = { ...services, userData };
@@ -2877,14 +2878,18 @@ describe('WorkspaceShell', () => {
     const setSyncStatus = (syncStatus: UserDataSnapshot['syncStatus']) => {
       act(() => {
         snapshot = { ...snapshot, syncStatus };
-        notify();
+        for (const listener of listeners) listener();
       });
     };
 
     expectIndicator('User synchronization failed', appColors.status.error);
     setSyncStatus('syncing');
-    expectIndicator('User synchronization in progress', appColors.brand.tigerOrange);
+    await waitFor(() => {
+      expectIndicator('User synchronization in progress', appColors.brand.tigerOrange);
+    });
     setSyncStatus('success');
-    expectIndicator('User synchronization successful', appColors.status.success);
+    await waitFor(() => {
+      expectIndicator('User synchronization successful', appColors.status.success);
+    });
   });
 });

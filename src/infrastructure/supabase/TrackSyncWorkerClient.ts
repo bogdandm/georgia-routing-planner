@@ -3,7 +3,10 @@ import {
   type WorkerRpcEndpoint,
   type WorkerRpcRemoteError,
 } from '@/infrastructure/runtime/WorkerRpc';
-import type { UserDataSyncProgress } from '@/application/user/UserDataService';
+import type {
+  RemoteTrackDeletionCandidate,
+  UserDataSyncProgress,
+} from '@/application/user/UserDataService';
 
 export const trackSyncWorkerMethods = {
   synchronize: 'track-sync.synchronize',
@@ -16,6 +19,7 @@ export const trackSyncWorkerEventNames = {
 
 export interface TrackSyncWorkerRequest {
   readonly accessToken: string;
+  readonly userId: string;
 }
 
 export interface TrackSyncWorkerResult {
@@ -25,6 +29,7 @@ export interface TrackSyncWorkerResult {
     readonly limitBytes: number;
   };
   readonly changed: boolean;
+  readonly remoteTrackDeletions: readonly RemoteTrackDeletionCandidate[];
 }
 
 export class TrackSyncWorkerError extends Error {
@@ -72,12 +77,13 @@ export class TrackSyncWorkerClient {
   }
 
   public synchronize(
+    userId: string,
     accessToken: string,
     signal: AbortSignal,
   ): Promise<TrackSyncWorkerResult> {
     return this.#rpc.request<TrackSyncWorkerResult>(
       trackSyncWorkerMethods.synchronize,
-      { accessToken } satisfies TrackSyncWorkerRequest,
+      { accessToken, userId } satisfies TrackSyncWorkerRequest,
       signal,
     );
   }

@@ -65,7 +65,8 @@ export class TrackSyncFailure extends Error {
     readonly code: string,
     message: string,
     readonly details?: Record<string, unknown>,
+    cause?: unknown,
   ) {
-    super(message);
+    super(message, { cause });
   }
 }

@@ -68,15 +68,20 @@ export class SupabaseTrackSyncGateway {
     objectPath: string,
     geometry: Uint8Array<ArrayBuffer>,
   ): Promise<'created' | 'existing'> {
-    const geometryFile = new Blob([geometry], { type: 'application/gzip' });
     const { error } = await this.context.supabaseAdmin.storage
       .from(TRACK_GEOMETRY_BUCKET)
-      .upload(objectPath, geometryFile, {
-        contentType: geometryFile.type,
+      .upload(objectPath, geometry.buffer, {
+        contentType: 'application/gzip',
         upsert: false,
       });
     if (error && !isAlreadyExistsError(error)) {
-      throw new Error(`Unable to upload track geometry: ${error.message}`);
+      throw new TrackSyncFailure(
+        502,
+        'storage_upload_failed',
+        'Track geometry storage is unavailable.',
+        undefined,
+        error,
+      );
     }
     return error === null ? 'created' : 'existing';
   }

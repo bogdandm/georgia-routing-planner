@@ -96,7 +96,11 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
         error: null,
       };
     },
-    async upload(path: string, body: Blob, options: { readonly contentType: string }) {
+    async upload(
+      path: string,
+      body: ArrayBuffer,
+      options: { readonly contentType: string },
+    ) {
       state.calls.push({ kind: 'upload', name: path, value: { body, options } });
       if (state.uploadError !== null) return { data: null, error: state.uploadError };
       state.objects.add(path);
@@ -219,6 +223,21 @@ function uploadRequest(
 
 async function responseJson(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>;
+}
+
+async function captureConsoleErrors(
+  run: () => Promise<Response>,
+): Promise<{ readonly response: Response; readonly messages: readonly string[] }> {
+  const messages: string[] = [];
+  const original = console.error;
+  console.error = (...values: unknown[]) => {
+    messages.push(values.map(String).join(' '));
+  };
+  try {
+    return { response: await run(), messages };
+  } finally {
+    console.error = original;
+  }
 }
 
 Deno.test(
@@ -369,16 +388,112 @@ Deno.test(
     assert(state.objects.has(OBJECT_PATH));
     const uploadCall = state.calls.find((call) => call.kind === 'upload');
     const uploadValue = uploadCall?.value as
-      | { readonly body: Blob; readonly options: { readonly contentType: string } }
+      | {
+          readonly body: ArrayBuffer;
+          readonly options: { readonly contentType: string };
+        }
       | undefined;
     assert(uploadValue !== undefined);
-    assert(uploadValue.body instanceof Blob);
-    assertEquals(uploadValue.body.type, 'application/gzip');
+    assert(uploadValue.body instanceof ArrayBuffer);
     assertEquals(uploadValue.options.contentType, 'application/gzip');
-    assertEquals(
-      new Uint8Array(await uploadValue.body.arrayBuffer()),
-      bytesFromHex(fixture.gzipHex),
+    assertEquals(new Uint8Array(uploadValue.body), bytesFromHex(fixture.gzipHex));
+  },
+);
+
+Deno.test(
+  'storage upload failures are logged safely, return a bounded code, and release',
+  async () => {
+    const state = makeState();
+    state.uploadError = {
+      message:
+        `provider rejected ${USER_ID}/${CONTENT_HASH} for user@example.test ` +
+        'Bearer private-token',
+      statusCode: 500,
+    };
+    state.rpcResults.set('reserve_track_upload', [
+      { data: { outcome: 'upload', objectPath: OBJECT_PATH }, error: null },
+    ]);
+
+    const { response, messages } = await captureConsoleErrors(
+      async () => await handleTrackSync(uploadRequest(), makeContext(state)),
     );
+    const body = await responseJson(response);
+
+    assertEquals(response.status, 502);
+    assertEquals(body, {
+      error: {
+        code: 'storage_upload_failed',
+        message: 'Track geometry storage is unavailable.',
+      },
+    });
+    assertEquals(messages.length, 1);
+    assertEquals(JSON.parse(messages[0]!), {
+      event: 'track_sync_failure',
+      method: 'POST',
+      action: 'upload',
+      status: 502,
+      code: 'storage_upload_failed',
+      cause: {
+        message:
+          'provider rejected [redacted-uuid]/[redacted-hash] for [redacted-email] [redacted-token]',
+        statusCode: 500,
+      },
+    });
+    const release = state.calls.find((call) => call.name === 'release_track_upload');
+    assertEquals(release?.value, {
+      p_user_id: USER_ID,
+      p_content_hash: CONTENT_HASH,
+      p_object_path: OBJECT_PATH,
+    });
+  },
+);
+
+Deno.test(
+  'unexpected RPC failures are logged safely without exposing details',
+  async () => {
+    const state = makeState();
+    state.rpcResults.set('apply_track_metadata', [
+      {
+        data: null,
+        error: {
+          message: `database rejected ${USER_ID}/${CONTENT_HASH} for user@example.test`,
+        },
+      },
+    ]);
+
+    const { response, messages } = await captureConsoleErrors(
+      async () =>
+        await handleTrackSync(
+          jsonRequest({
+            action: 'metadata',
+            contentHash: CONTENT_HASH,
+            baseRevision: 7,
+            metadata: { name: 'Updated' },
+          }),
+          makeContext(state),
+        ),
+    );
+
+    assertEquals(response.status, 500);
+    assertEquals(await responseJson(response), {
+      error: {
+        code: 'internal_error',
+        message: 'Track synchronization failed.',
+      },
+    });
+    assertEquals(messages.length, 1);
+    assertEquals(JSON.parse(messages[0]!), {
+      event: 'track_sync_failure',
+      method: 'POST',
+      action: 'metadata',
+      status: 500,
+      code: 'internal_error',
+      cause: {
+        name: 'Error',
+        message:
+          'apply_track_metadata failed: database rejected [redacted-uuid]/[redacted-hash] for [redacted-email]',
+      },
+    });
   },
 );
 
@@ -503,10 +618,35 @@ Deno.test(
     state.rpcResults.set('finalize_track_upload', [
       { data: null, error: { message: 'finalize failed' } },
     ]);
-    const response = await handleTrackSync(uploadRequest(), makeContext(state));
+    const { response, messages } = await captureConsoleErrors(
+      async () => await handleTrackSync(uploadRequest(), makeContext(state)),
+    );
     assertEquals(response.status, 500);
     assert(state.objects.has(OBJECT_PATH));
     assert(state.calls.some((call) => call.name === 'release_track_upload'));
+    assertEquals(messages.length, 1);
+    assertEquals(JSON.parse(messages[0]!), {
+      event: 'track_sync_failure',
+      method: 'POST',
+      action: 'upload',
+      status: 500,
+      code: 'internal_error',
+      cause: {
+        name: 'AggregateError',
+        message: 'Track upload finalization failed.',
+        errors: [
+          {
+            name: 'Error',
+            message: 'finalize_track_upload failed: finalize failed',
+          },
+          {
+            name: 'Error',
+            message:
+              'Uploaded object cleanup failed: Unable to delete track geometry: storage unavailable',
+          },
+        ],
+      },
+    });
   },
 );
 

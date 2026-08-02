@@ -147,10 +147,12 @@ describe('TrackSyncWorkerServer', () => {
     await expect(
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
+        userId: 'user-id',
       }),
     ).resolves.toEqual({
       usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
       changed: true,
+      remoteTrackDeletions: [],
     });
     await vi.waitFor(() => {
       expect(changed).toHaveBeenCalledOnce();
@@ -222,6 +224,7 @@ describe('TrackSyncWorkerServer', () => {
 
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
 
     await vi.waitFor(() => {
@@ -240,7 +243,7 @@ describe('TrackSyncWorkerServer', () => {
     );
     client.dispose();
   });
-  it('hard-deletes a known remote track absent from the second snapshot', async () => {
+  it('returns a decision candidate for a known remote track absent from the snapshot', async () => {
     const track = summary('local:known');
     await database.saveLocalTrack(track, content(track.id));
     await database.saveTrackSyncState({
@@ -250,6 +253,11 @@ describe('TrackSyncWorkerServer', () => {
       pendingKind: null,
     });
     await database.saveLatestOpenedTrackId(track.id);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     new TrackSyncWorkerServer(serverEndpoint, database, () => ({
       status: () =>
@@ -263,11 +271,22 @@ describe('TrackSyncWorkerServer', () => {
     await expect(
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
+        userId: 'user-id',
       }),
-    ).resolves.toMatchObject({ changed: true });
-    await expect(database.listLocalTracks()).resolves.toEqual([]);
-    await expect(database.loadTrackSyncState(track.id)).resolves.toBeNull();
-    await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
+    ).resolves.toMatchObject({
+      changed: false,
+      remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
+    });
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: track.id }),
+    ]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
+      trackId: track.id,
+      contentHash,
+      remoteRevision: 2,
+      pendingKind: null,
+    });
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBe(track.id);
     client.dispose();
   });
 
@@ -287,6 +306,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
+        userId: 'user-id',
       }),
     ).rejects.toMatchObject({ message: 'invalid remote response' });
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
@@ -302,6 +322,11 @@ describe('TrackSyncWorkerServer', () => {
       contentHash,
       remoteRevision: 1,
       pendingKind: 'metadata',
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
     });
     const mutate = vi
       .fn()
@@ -327,6 +352,7 @@ describe('TrackSyncWorkerServer', () => {
 
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
 
     expect(mutate).toHaveBeenNthCalledWith(
@@ -348,7 +374,7 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
-  it('hard-deletes a known track when its pending mutation returns missing', async () => {
+  it('returns a candidate when a pending metadata mutation is missing remotely', async () => {
     const track = summary('local:missing');
     await database.saveLocalTrack(track, content(track.id));
     await database.saveTrackSyncState({
@@ -356,6 +382,11 @@ describe('TrackSyncWorkerServer', () => {
       contentHash,
       remoteRevision: 2,
       pendingKind: 'metadata',
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
     });
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     new TrackSyncWorkerServer(serverEndpoint, database, () => ({
@@ -367,12 +398,24 @@ describe('TrackSyncWorkerServer', () => {
     }));
     const client = new WorkerRpcClient(clientEndpoint);
 
-    await client.request(trackSyncWorkerMethods.synchronize, {
-      accessToken: 'access-token',
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+      }),
+    ).resolves.toMatchObject({
+      changed: false,
+      remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
-
-    await expect(database.listLocalTracks()).resolves.toEqual([]);
-    await expect(database.loadTrackSyncState(track.id)).resolves.toBeNull();
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: track.id }),
+    ]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
+      trackId: track.id,
+      contentHash,
+      remoteRevision: 2,
+      pendingKind: 'metadata',
+    });
     client.dispose();
   });
 
@@ -385,6 +428,12 @@ describe('TrackSyncWorkerServer', () => {
       remoteRevision: 2,
       pendingKind: 'delete',
     });
+    await database.deleteLocalTrack(track.id);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     new TrackSyncWorkerServer(serverEndpoint, database, () => ({
       status: () =>
@@ -395,12 +444,149 @@ describe('TrackSyncWorkerServer', () => {
     }));
     const client = new WorkerRpcClient(clientEndpoint);
 
-    await client.request(trackSyncWorkerMethods.synchronize, {
-      accessToken: 'access-token',
-    });
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+      }),
+    ).resolves.toMatchObject({ remoteTrackDeletions: [] });
 
     await expect(database.listLocalTracks()).resolves.toEqual([]);
     await expect(database.loadTrackSyncState(track.id)).resolves.toBeNull();
+    client.dispose();
+  });
+
+  it('preserves a track re-saved while its pending remote delete is in flight', async () => {
+    const track = summary('local:delete-resaved');
+    const restored = {
+      ...track,
+      name: 'Restored local track',
+      updatedAt: '2026-07-23T12:00:00.000Z',
+    };
+    await database.saveLocalTrack(track, content(track.id));
+    await database.saveTrackSyncState({
+      trackId: track.id,
+      contentHash,
+      remoteRevision: 2,
+      pendingKind: 'delete',
+    });
+    await database.deleteLocalTrack(track.id);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: vi.fn().mockResolvedValue([]),
+      mutate: vi.fn().mockImplementation(async () => {
+        await database.saveLocalTrack(restored, content(restored.id));
+        return { outcome: 'applied' as const, revision: 0 };
+      }),
+      download: vi.fn(),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+    });
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: restored.id, name: restored.name }),
+    ]);
+    await expect(database.loadTrackSyncState(restored.id)).resolves.toMatchObject({
+      pendingKind: 'upsert',
+    });
+    client.dispose();
+  });
+
+  it('preserves account-A browser tracks while merging account-B remote tracks', async () => {
+    const local = summary('local:account-a');
+    await database.saveLocalTrack(local, content(local.id));
+    await database.saveTrackSyncState({
+      trackId: local.id,
+      contentHash,
+      remoteRevision: 4,
+      pendingKind: null,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'account-a',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const fixture = JSON.parse(
+      await readFile('tests/fixtures/track-sync/geometry-v1.json', 'utf8'),
+    ) as { readonly gzipHex: string; readonly sha256: string };
+    vi.stubGlobal('Blob', NodeBlob);
+    const compressed = bytesFromHex(fixture.gzipHex);
+    const accountBRemote = {
+      content_hash: fixture.sha256,
+      revision: 2,
+      state: 'ready' as const,
+      object_path: `user/${fixture.sha256}/upload.grpt.gz`,
+      compressed_bytes: compressed.byteLength,
+      metadata: {
+        name: 'Account B track',
+        savedAt: '2026-07-22T10:00:00.000Z',
+        updatedAt: '2026-07-22T10:00:00.000Z',
+        sourceFilename: 'remote.gpx',
+        sourceFormat: 'gpx',
+        favorite: false,
+        geometryKind: 'track',
+        metadata: { version: '1.1', links: [] },
+        warnings: [],
+      },
+    };
+    const uploadedLocal = {
+      content_hash: contentHash,
+      revision: 1,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: {},
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({
+          usedBytes: compressed.byteLength,
+          reservedBytes: 0,
+          limitBytes: 8_388_608,
+        }),
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce([accountBRemote])
+        .mockResolvedValueOnce([uploadedLocal, accountBRemote]),
+      mutate: vi.fn().mockResolvedValue({ outcome: 'applied' as const, revision: 1 }),
+      download: vi.fn().mockResolvedValue(compressed),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'account-b',
+      }),
+    ).resolves.toMatchObject({ remoteTrackDeletions: [] });
+
+    await expect(database.listLocalTracks()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: local.id }),
+        expect.objectContaining({
+          id: `local:sync:${fixture.sha256}`,
+          name: 'Account B track',
+        }),
+      ]),
+    );
+    await expect(database.loadTrackSyncState(local.id)).resolves.toEqual({
+      trackId: local.id,
+      contentHash,
+      remoteRevision: 1,
+      pendingKind: null,
+    });
     client.dispose();
   });
 
@@ -445,6 +631,7 @@ describe('TrackSyncWorkerServer', () => {
 
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
 
     const localId = `local:sync:${remoteHash}`;
@@ -503,6 +690,7 @@ describe('TrackSyncWorkerServer', () => {
     const client = new WorkerRpcClient(clientEndpoint);
     const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
 
     await mutationStarted;
@@ -521,6 +709,7 @@ describe('TrackSyncWorkerServer', () => {
 
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
     await expect(database.loadTrackSyncState(track.id)).resolves.toBeNull();
     await expect(database.listLocalTracks()).resolves.toEqual([]);
@@ -573,6 +762,7 @@ describe('TrackSyncWorkerServer', () => {
     const client = new WorkerRpcClient(clientEndpoint);
     const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
 
     await mutationStarted;
@@ -592,6 +782,7 @@ describe('TrackSyncWorkerServer', () => {
 
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
+      userId: 'user-id',
     });
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
       remoteRevision: 1,

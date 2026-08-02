@@ -6,6 +6,7 @@ import {
   decodeTrackSyncGeometry,
   encodeTrackSyncGeometry,
 } from '@/domain/tracks/trackSyncGeometry';
+import type { RemoteTrackDeletionCandidate } from '@/application/user/UserDataService';
 import {
   validateLocalTrackSyncPair,
   type AppDatabase,
@@ -436,10 +437,17 @@ export class TrackSyncWorkerServer {
     this.#rpc = new WorkerRpcServer(endpoint, {
       [trackSyncWorkerMethods.synchronize]: async (payload, { signal }) => {
         const request = z
-          .object({ accessToken: z.string().min(1).max(8_192) })
+          .object({
+            accessToken: z.string().min(1).max(8_192),
+            userId: z.string().min(1).max(200),
+          })
           .strict()
           .parse(payload) as TrackSyncWorkerRequest;
-        const result = await this.synchronize(request.accessToken, signal);
+        const result = await this.synchronize(
+          request.userId,
+          request.accessToken,
+          signal,
+        );
         if (result.changed) {
           this.#rpc.publishEvent(trackSyncWorkerEventNames.tracksChanged, null);
         }
@@ -449,11 +457,12 @@ export class TrackSyncWorkerServer {
   }
 
   public async synchronize(
+    userId: string,
     accessToken: string,
     signal: AbortSignal,
   ): Promise<TrackSyncWorkerResult> {
     const gateway = this.#gatewayFactory(accessToken);
-    const local = await this.backfillAndDeduplicate();
+    const local = await this.backfillAndDeduplicate(userId, signal);
     signal.throwIfAborted();
     let usage = await gateway.status(signal);
     const firstSnapshot = await gateway.snapshot(signal);
@@ -470,6 +479,7 @@ export class TrackSyncWorkerServer {
               localEntry.state.remoteRevision !== remote.revision))
         );
       }).length;
+    const remoteDeletionCandidates = new Map<string, RemoteTrackDeletionCandidate>();
     const publishProgress = () => {
       this.#rpc.publishEvent(trackSyncWorkerEventNames.progress, {
         completedTracks,
@@ -478,7 +488,6 @@ export class TrackSyncWorkerServer {
     };
     if (totalTracks > 0) publishProgress();
     const mutationStates = new Map<string, TrackSyncState | null>();
-    const mutationDeleted = new Set<string>();
     for (const entry of [...local].sort(
       (left, right) =>
         Number(right.state.pendingKind === 'delete') -
@@ -487,7 +496,12 @@ export class TrackSyncWorkerServer {
       if (entry.state.pendingKind === null) continue;
       const outcome = await this.applyPending(entry, gateway, signal);
       mutationStates.set(entry.state.trackId, outcome.state);
-      if (outcome.deleteLocal) mutationDeleted.add(entry.state.trackId);
+      if (outcome.remoteTrackDeletion !== null) {
+        remoteDeletionCandidates.set(
+          outcome.remoteTrackDeletion.trackId,
+          outcome.remoteTrackDeletion,
+        );
+      }
       completedTracks += 1;
       publishProgress();
     }
@@ -509,7 +523,7 @@ export class TrackSyncWorkerServer {
     const downloads: DownloadSelection[] = [];
     const put: LocalTrackSyncPair[] = [];
     const states: TrackSyncState[] = [];
-    const deleted = new Set(mutationDeleted);
+    const deleted = new Set<string>();
     const current = await this.readLocal();
     const currentHashes = new Set(current.map((entry) => entry.state.contentHash));
     for (const entry of current) {
@@ -543,7 +557,14 @@ export class TrackSyncWorkerServer {
       }
       const remote = remoteByHash.get(effective.contentHash);
       if (remote === undefined && effective.remoteRevision !== null) {
-        deleted.add(effective.trackId);
+        if (entry.pair !== null && effective.pendingKind !== 'delete') {
+          remoteDeletionCandidates.set(entry.pair.summary.id, {
+            trackId: entry.pair.summary.id,
+            name: entry.pair.summary.name,
+          });
+        } else if (entry.pair === null) {
+          deleted.add(effective.trackId);
+        }
         continue;
       }
       if (
@@ -598,11 +619,15 @@ export class TrackSyncWorkerServer {
       put,
       deleteTrackIds: [...deleted],
       states,
+      expectedStates: local.map((entry) => entry.state),
+      expectedUserId: userId,
+      signal,
       usage,
     });
     return {
       usage,
       changed: put.length > 0 || deleted.size > 0 || states.length > 0,
+      remoteTrackDeletions: [...remoteDeletionCandidates.values()],
     };
   }
 
@@ -654,7 +679,10 @@ export class TrackSyncWorkerServer {
     return entries;
   }
 
-  private async backfillAndDeduplicate(): Promise<
+  private async backfillAndDeduplicate(
+    userId: string,
+    signal: AbortSignal,
+  ): Promise<
     readonly {
       readonly pair: LocalTrackSyncPair | null;
       readonly state: TrackSyncState;
@@ -672,8 +700,9 @@ export class TrackSyncWorkerServer {
         trackId: summary.id,
         contentHash: await hash(encodeTrackSyncGeometry(content)),
       });
+      signal.throwIfAborted();
     }
-    await this.database.backfillAndDeduplicateTrackSync(contentHashes);
+    await this.database.backfillAndDeduplicateTrackSync(userId, contentHashes, signal);
     return this.readLocal();
   }
 
@@ -681,27 +710,62 @@ export class TrackSyncWorkerServer {
     entry: { readonly pair: LocalTrackSyncPair | null; readonly state: TrackSyncState },
     gateway: RemoteGateway,
     signal: AbortSignal,
-  ): Promise<{ readonly state: TrackSyncState | null; readonly deleteLocal: boolean }> {
+  ): Promise<{
+    readonly state: TrackSyncState | null;
+    readonly deleteLocal: boolean;
+    readonly remoteTrackDeletion: RemoteTrackDeletionCandidate | null;
+  }> {
     let state = entry.state;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = await gateway.mutate(state, entry.pair, signal);
       if (result.outcome === 'missing') {
-        return { state: null, deleteLocal: state.remoteRevision !== null };
+        if (entry.pair !== null && state.pendingKind !== 'delete') {
+          return {
+            state: entry.state,
+            deleteLocal: false,
+            remoteTrackDeletion: {
+              trackId: entry.pair.summary.id,
+              name: entry.pair.summary.name,
+            },
+          };
+        }
+        return {
+          state: null,
+          deleteLocal: entry.pair === null,
+          remoteTrackDeletion: null,
+        };
       }
       if (result.outcome === 'reserved') {
-        return { state: entry.state, deleteLocal: false };
+        return {
+          state: entry.state,
+          deleteLocal: false,
+          remoteTrackDeletion: null,
+        };
       }
       if (result.outcome === 'conflict') {
-        if (attempt === 1) return { state: entry.state, deleteLocal: false };
+        if (attempt === 1) {
+          return {
+            state: entry.state,
+            deleteLocal: false,
+            remoteTrackDeletion: null,
+          };
+        }
         state = { ...state, remoteRevision: result.revision };
         continue;
       }
-      if (state.pendingKind === 'delete') return { state: null, deleteLocal: true };
+      if (state.pendingKind === 'delete') {
+        return { state: null, deleteLocal: true, remoteTrackDeletion: null };
+      }
       return {
         state: { ...state, remoteRevision: result.revision, pendingKind: null },
         deleteLocal: false,
+        remoteTrackDeletion: null,
       };
     }
-    return { state: entry.state, deleteLocal: false };
+    return {
+      state: entry.state,
+      deleteLocal: false,
+      remoteTrackDeletion: null,
+    };
   }
 }

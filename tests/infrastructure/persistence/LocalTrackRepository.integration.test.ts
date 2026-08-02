@@ -280,6 +280,63 @@ describe('local track persistence', () => {
     });
   });
 
+  it('preserves a local resave that commits before a prepared remote merge', async () => {
+    const track = summary('local:resaved-before-merge', 'Original');
+    const resaved = {
+      ...track,
+      name: 'Resaved locally',
+      updatedAt: '2026-07-23T12:00:00.000Z',
+    };
+    await database.saveLocalTrack(resaved, content(resaved.id));
+
+    await database.applyRemoteTrackMergeBatch({
+      put: [{ summary: track, content: content(track.id) }],
+      deleteTrackIds: [],
+      states: [
+        {
+          trackId: track.id,
+          contentHash: track.contentHash ?? '',
+          remoteRevision: 3,
+          pendingKind: null,
+        },
+      ],
+      expectedStates: [
+        {
+          trackId: track.id,
+          contentHash: track.contentHash ?? '',
+          remoteRevision: 2,
+          pendingKind: null,
+        },
+      ],
+      usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
+    });
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: resaved.id, name: resaved.name }),
+    ]);
+    await expect(database.loadTrackSyncState(resaved.id)).resolves.toMatchObject({
+      pendingKind: 'upsert',
+    });
+
+    await database.applyRemoteTrackMergeBatch({
+      put: [],
+      deleteTrackIds: [resaved.id],
+      states: [],
+      expectedStates: [
+        {
+          trackId: resaved.id,
+          contentHash: resaved.contentHash ?? '',
+          remoteRevision: 3,
+          pendingKind: null,
+        },
+      ],
+      usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
+    });
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: resaved.id, name: resaved.name }),
+    ]);
+  });
+
   it('collapses duplicate hashes before sync with canonical metadata and precedence', async () => {
     const older = {
       ...summary('local:older', 'Older'),
@@ -308,7 +365,12 @@ describe('local track persistence', () => {
     });
     await database.saveLatestOpenedTrackId(older.id);
 
-    await database.backfillAndDeduplicateTrackSync([]);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    await database.backfillAndDeduplicateTrackSync('user-id', []);
 
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({
@@ -344,7 +406,12 @@ describe('local track persistence', () => {
     });
     await database.deleteLocalTrack(deleted.id);
 
-    await database.backfillAndDeduplicateTrackSync([]);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    await database.backfillAndDeduplicateTrackSync('user-id', []);
 
     await expect(database.listLocalTracks()).resolves.toEqual([]);
     await expect(database.loadTrackSyncState(deleted.id)).resolves.toEqual({
@@ -364,7 +431,7 @@ describe('local track persistence', () => {
     await database.deleteLocalTrack(deleted.id);
     await database.trackSyncStates.delete(survivor.id);
 
-    await database.backfillAndDeduplicateTrackSync([]);
+    await database.backfillAndDeduplicateTrackSync('user-id', []);
 
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({ id: survivor.id }),
@@ -376,6 +443,88 @@ describe('local track persistence', () => {
       pendingKind: 'upsert',
     });
     await expect(database.loadTrackSyncState(deleted.id)).resolves.toBeNull();
+  });
+  it('resets unknown account sync state without deleting valid local tracks', async () => {
+    const retained = summary('local:retained', 'Retained');
+    const tombstone = summary('local:tombstone', 'Tombstone');
+    await database.saveLocalTrack(retained, content(retained.id));
+    await database.saveTrackSyncState({
+      trackId: retained.id,
+      contentHash: retained.contentHash ?? '',
+      remoteRevision: 8,
+      pendingKind: null,
+    });
+    await database.saveLocalTrack(tombstone, content(tombstone.id));
+    await database.saveTrackSyncState({
+      trackId: tombstone.id,
+      contentHash: tombstone.contentHash ?? '',
+      remoteRevision: 4,
+      pendingKind: null,
+    });
+    await database.deleteLocalTrack(tombstone.id);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'another-user',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    await database.saveTrackSyncUsage({
+      usedBytes: 512,
+      reservedBytes: 128,
+      limitBytes: 8_388_608,
+    });
+
+    await database.backfillAndDeduplicateTrackSync('current-user', []);
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: retained.id }),
+    ]);
+    await expect(database.loadTrackSyncState(retained.id)).resolves.toEqual({
+      trackId: retained.id,
+      contentHash: retained.contentHash,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    });
+    await expect(database.loadTrackSyncState(tombstone.id)).resolves.toBeNull();
+    await expect(database.settings.get('sync.user-id')).resolves.toMatchObject({
+      value: 'current-user',
+    });
+    await expect(database.loadTrackSyncUsage()).resolves.toEqual({
+      usedBytes: 0,
+      reservedBytes: 0,
+      limitBytes: 8_388_608,
+    });
+  });
+
+  it('applies remote deletion choices atomically without resurrecting absent tracks', async () => {
+    const deleted = summary('local:delete-choice', 'Delete');
+    const restored = {
+      ...summary('local:restore-choice', 'Restore'),
+      contentHash: 'b'.repeat(64),
+    };
+    const absent = {
+      ...summary('local:absent-choice', 'Absent'),
+      contentHash: 'c'.repeat(64),
+    };
+    await database.saveLocalTrack(deleted, content(deleted.id));
+    await database.saveLocalTrack(restored, content(restored.id));
+    await database.saveLocalTrack(absent, content(absent.id));
+    await database.saveLatestOpenedTrackId(deleted.id);
+    await database.deleteLocalTrack(absent.id);
+
+    await database.resolveRemoteTrackDeletions([deleted.id], [restored.id, absent.id]);
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: restored.id }),
+    ]);
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
+    await expect(database.loadTrackSyncState(deleted.id)).resolves.toBeNull();
+    await expect(database.loadTrackSyncState(restored.id)).resolves.toEqual({
+      trackId: restored.id,
+      contentHash: restored.contentHash,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    });
+    await expect(database.loadTrackSyncState(absent.id)).resolves.toBeNull();
   });
 
   it('saves track rows and the pending upsert atomically', async () => {

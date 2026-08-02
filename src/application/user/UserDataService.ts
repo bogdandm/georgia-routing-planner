@@ -1,10 +1,16 @@
 export type UserDataStatus =
   'unconfigured' | 'loading' | 'signed-out' | 'signed-in' | 'error';
 
-export type UserDataSyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+export type UserDataSyncStatus =
+  'idle' | 'syncing' | 'success' | 'error' | 'needs-action';
 export interface UserDataSyncProgress {
   readonly completedTracks: number;
   readonly totalTracks: number;
+}
+
+export interface RemoteTrackDeletionCandidate {
+  readonly trackId: string;
+  readonly name: string;
 }
 
 export interface UserDataSnapshot {
@@ -22,6 +28,7 @@ export interface UserDataSnapshot {
     readonly reservedBytes: number;
     readonly usedBytes: number;
   };
+  readonly remoteTrackDeletions: readonly RemoteTrackDeletionCandidate[];
 }
 
 /** Owns browser authentication state and the official persisted Supabase session. */
@@ -29,6 +36,7 @@ export interface UserDataService {
   getSnapshot(): UserDataSnapshot;
   subscribe(listener: () => void): () => void;
   setSyncEnabled(enabled: boolean): Promise<void>;
+  resolveRemoteTrackDeletions(deleteTrackIds: readonly string[]): Promise<void>;
   synchronizeNow(): Promise<void>;
   trackSaved(trackId: string): Promise<void>;
   trackMetadataChanged(trackId: string): Promise<void>;
@@ -50,6 +58,7 @@ export const unconfiguredUserDataSnapshot: UserDataSnapshot = {
   syncEnabled: false,
   syncStatus: 'idle',
   syncProgress: null,
+  remoteTrackDeletions: [],
   syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
 };
 
@@ -64,6 +73,7 @@ export function createUnconfiguredUserDataService(): UserDataService {
     signOut: () => Promise.resolve(),
     subscribe: () => () => undefined,
     subscribeTracksChanged: () => () => undefined,
+    resolveRemoteTrackDeletions: () => Promise.resolve(),
     synchronizeNow: () => Promise.resolve(),
     trackDeleted: () => Promise.resolve(),
     trackMetadataChanged: () => Promise.resolve(),

@@ -23,6 +23,7 @@ import type {
   UserDataSnapshot,
 } from '@/application/user/UserDataService';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { appColors } from '@/presentation/theme/appColors';
 
 type AccountMode = 'sign-in' | 'sign-up';
 
@@ -151,7 +152,7 @@ export function UserPanel() {
       </Stack>
     );
   }
-  if (snapshot.email !== null) {
+  if (snapshot.status === 'signed-in') {
     const usedMiB = snapshot.syncUsage.usedBytes / (1024 * 1024);
     const reservedMiB = snapshot.syncUsage.reservedBytes / (1024 * 1024);
     const progress = Math.min(
@@ -165,7 +166,7 @@ export function UserPanel() {
         <Typography variant="body2" color="text.secondary">
           Signed in as
         </Typography>
-        <Typography>{snapshot.email}</Typography>
+        <Typography>{snapshot.email ?? 'Email unavailable'}</Typography>
         {snapshot.userId === null ? null : (
           <Stack spacing={0.25}>
             <Typography variant="body2" color="text.secondary">
@@ -183,7 +184,10 @@ export function UserPanel() {
           control={
             <Switch
               checked={snapshot.syncEnabled}
-              disabled={snapshot.busy && snapshot.syncStatus !== 'syncing'}
+              disabled={
+                snapshot.syncStatus === 'needs-action' ||
+                (snapshot.busy && snapshot.syncStatus !== 'syncing')
+              }
               onChange={(_, checked) => {
                 void userData.setSyncEnabled(checked);
               }}
@@ -194,7 +198,13 @@ export function UserPanel() {
         {snapshot.syncEnabled ? (
           <Stack spacing={0.5}>
             <Typography
-              color={snapshot.syncStatus === 'error' ? 'error.main' : 'text.secondary'}
+              color={
+                snapshot.syncStatus === 'error'
+                  ? 'error.main'
+                  : snapshot.syncStatus === 'needs-action'
+                    ? appColors.brand.tigerOrange
+                    : 'text.secondary'
+              }
               variant="body2"
             >
               {snapshot.syncStatus === 'syncing'
@@ -204,7 +214,9 @@ export function UserPanel() {
                   : 'Synchronizing…'
                 : snapshot.syncStatus === 'error'
                   ? 'Synchronization needs attention'
-                  : 'Connected'}
+                  : snapshot.syncStatus === 'needs-action'
+                    ? 'Synchronization needs your decision'
+                    : 'Connected'}
             </Typography>
             <Typography variant="body2">
               {usedMiB.toFixed(2)} MiB / 8 MiB
@@ -219,7 +231,10 @@ export function UserPanel() {
         ) : null}
         <Button
           disabled={
-            !snapshot.syncEnabled || snapshot.busy || snapshot.syncStatus === 'syncing'
+            !snapshot.syncEnabled ||
+            snapshot.busy ||
+            snapshot.syncStatus === 'syncing' ||
+            snapshot.syncStatus === 'needs-action'
           }
           onClick={() => {
             void userData.synchronizeNow();

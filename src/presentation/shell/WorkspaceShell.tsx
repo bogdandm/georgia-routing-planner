@@ -21,6 +21,7 @@ import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder'
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
+import { RemoteTrackDeletionDialog } from '@/presentation/user/RemoteTrackDeletionDialog';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
 import { WorkspaceSidebar } from '@/presentation/shell/WorkspaceSidebar';
@@ -613,6 +614,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           setShareOpen(false);
         }}
       />
+      <RemoteTrackDeletionDialog />
       {developerMode ? (
         <DeveloperDrawer
           open={developerDrawerOpen}

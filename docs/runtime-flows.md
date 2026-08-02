@@ -304,12 +304,20 @@ Exactly one worker run starts after both are resolved when the user is authentic
 sync is enabled. Further runs occur only after an explicit local track mutation,
 enabling sync, an explicit sign-in, or **Sync now**; authentication refresh and focus
 notifications update account state without synchronizing. Disabling sync or signing out
-aborts an active run. The main thread supplies the current access token only. The worker
-validates remote records and private GZIP objects, performs pending deletes before other
-mutations, then merges the second full snapshot atomically. Known remote revisions
-absent from that snapshot are hard-deleted locally; no server tombstone is retained. A
-conflict retries one explicit action against the current revision, while invalid/network
-failures preserve valid local data and pending work.
+aborts an active run. The main thread passes the authenticated user ID only to namespace
+browser-local preparation; the access token remains the sole remote authorization
+credential.
+
+Before any remote status, snapshot, or mutation, the worker records `sync.user-id` in
+the same IndexedDB transaction that prepares local pairs. A new, malformed, or different
+owner resets all remembered remote revisions and tombstones to pending upserts while
+retaining valid browser tracks. The worker then validates remote records and private
+GZIP objects, performs explicit pending deletes before other mutations, and merges the
+second full snapshot atomically. A known same-account revision absent from that snapshot
+pauses synchronization for a global decision: selected tracks are deleted locally, while
+unselected tracks become pending upserts and upload again. Only explicit local deletes
+complete silently. Conflicts retry one explicit action against the current revision, and
+invalid or network failures preserve valid local data and pending work.
 
 ## Track synchronization trust boundary
 

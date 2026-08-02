@@ -283,13 +283,25 @@ part of the canonical identity. Original file bytes are discarded after parsing.
 stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,
 or `delete` intent. A save, metadata change, or deletion updates the affected track rows
 and queue state in one IndexedDB transaction. `sync.enabled` is a validated setting with
-default `false`; it alone permits startup or lifecycle synchronization. Deleting an
-unsent upsert removes its local intent; deleting a previously synchronized track retains
-only a minimal delete retry record, never local geometry or metadata. The worker stores
-the authoritative used/reserved/limit quota only after validated remote merge. Canonical
-geometry excludes elevations and derived elevation metrics; opening a downloaded track
-recalculates those browser-local values without changing its hash, timestamp, or pending
-state.
+default `false`; it alone permits startup or lifecycle synchronization.
+
+`sync.user-id` stores the bounded opaque account identifier that owns the local
+preparation state; it is coordination metadata, never an authorization credential. On a
+missing, malformed, or changed owner, preparation retains every valid local
+summary/content pair, collapses duplicate content through the normal canonical rule,
+removes stale sync states and delete tombstones, and writes pending upserts with null
+revisions. That transaction also stores the new owner and resets `sync.usage`.
+
+When a same-account remote deletion needs a decision, one IndexedDB transaction removes
+the selected summary/content/state rows and clears `local-tracks.latest-opened` only
+when it names a selected track. Still-present unselected pairs receive null-revision
+pending upserts; an already absent pair only loses its stale state and is never
+resurrected. Deleting an unsent upsert removes its local intent; deleting a previously
+synchronized track retains only a minimal delete retry record, never local geometry or
+metadata. The worker stores the authoritative used/reserved/limit quota only after
+validated remote merge. Canonical geometry excludes elevations and derived elevation
+metrics; opening a downloaded track recalculates those browser-local values without
+changing its hash, timestamp, or pending state.
 
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not

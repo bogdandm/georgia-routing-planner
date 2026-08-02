@@ -54,6 +54,15 @@ export interface TrackSyncState {
   readonly pendingKind: 'upsert' | 'metadata' | 'delete' | null;
 }
 
+function equalTrackSyncStates(left: TrackSyncState, right: TrackSyncState): boolean {
+  return (
+    left.trackId === right.trackId &&
+    left.contentHash === right.contentHash &&
+    left.remoteRevision === right.remoteRevision &&
+    left.pendingKind === right.pendingKind
+  );
+}
+
 export interface LocalTrackSyncPair {
   readonly summary: LocalTrackSummary;
   readonly content: LocalTrackContent;
@@ -63,6 +72,9 @@ export interface RemoteTrackMergeBatch {
   readonly put: readonly LocalTrackSyncPair[];
   readonly deleteTrackIds: readonly string[];
   readonly states: readonly TrackSyncState[];
+  readonly expectedStates?: readonly TrackSyncState[];
+  readonly expectedUserId?: string;
+  readonly signal?: AbortSignal;
   readonly usage: TrackSyncUsage;
 }
 
@@ -968,8 +980,17 @@ export class AppDatabase
    * before the worker makes a server mutation.
    */
   public async backfillAndDeduplicateTrackSync(
+    userId: string,
     contentHashes: readonly LocalTrackSyncHash[],
+    signal?: AbortSignal,
   ): Promise<void> {
+    if (userId.length === 0 || userId.length > 200) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The synchronization account identifier is invalid.',
+      );
+    }
+    signal?.throwIfAborted();
     const hashesByTrackId = new Map(
       contentHashes.map((entry) => [entry.trackId, entry.contentHash]),
     );
@@ -1005,10 +1026,14 @@ export class AppDatabase
           pairs.push({ summary: { ...summary, contentHash }, content });
         }
 
-        const states = (await this.trackSyncStates.toArray()).flatMap((candidate) => {
-          const state = parseTrackSyncState(candidate);
-          return state === null ? [] : [state];
-        });
+        const owner = await this.settings.get('sync.user-id');
+        const sameAccount = owner?.value === userId;
+        const states = sameAccount
+          ? (await this.trackSyncStates.toArray()).flatMap((candidate) => {
+              const state = parseTrackSyncState(candidate);
+              return state === null ? [] : [state];
+            })
+          : [];
         const groups = new Map<
           string,
           { pairs: LocalTrackSyncPair[]; states: TrackSyncState[] }
@@ -1047,7 +1072,7 @@ export class AppDatabase
               state.remoteRevision !== null &&
               !group.pairs.some((pair) => pair.summary.id === state.trackId),
           );
-          if (deletion !== undefined) {
+          if (sameAccount && deletion !== undefined) {
             for (const pair of group.pairs) deleteTrackIds.add(pair.summary.id);
             for (const state of group.states) {
               if (state.trackId !== deletion.trackId) deleteTrackIds.add(state.trackId);
@@ -1103,8 +1128,9 @@ export class AppDatabase
           nextStates.push({
             trackId: canonical.summary.id,
             contentHash,
-            remoteRevision: remoteRevision === 0 ? null : remoteRevision,
+            remoteRevision: sameAccount && remoteRevision !== 0 ? remoteRevision : null,
             pendingKind:
+              !sameAccount ||
               group.states.length === 0 ||
               (remoteRevision === 0 && pendingKind === null)
                 ? 'upsert'
@@ -1137,11 +1163,26 @@ export class AppDatabase
           await this.localTrackContents.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
+        if (!sameAccount) await this.trackSyncStates.clear();
         for (const pair of nextPairs) {
           await this.localTracks.put(pair.summary);
           await this.localTrackContents.put(pair.content);
         }
         for (const state of nextStates) await this.trackSyncStates.put(state);
+        signal?.throwIfAborted();
+        if (!sameAccount) {
+          const updatedAt = new Date().toISOString();
+          await this.settings.put({
+            key: 'sync.user-id',
+            value: userId,
+            updatedAt,
+          });
+          await this.settings.put({
+            key: 'sync.usage',
+            value: defaultTrackSyncUsage,
+            updatedAt,
+          });
+        }
       },
     );
   }
@@ -1166,6 +1207,9 @@ export class AppDatabase
       }
       states.push(state);
     }
+    const expectedStates = new Map(
+      (batch.expectedStates ?? []).map((state) => [state.trackId, state]),
+    );
     const pairs: LocalTrackSyncPair[] = [];
     for (const pair of batch.put) {
       const summary = parseLocalTrackSummary(pair.summary);
@@ -1197,20 +1241,56 @@ export class AppDatabase
       this.localTrackContents,
       this.trackSyncStates,
       async () => {
+        if (batch.expectedUserId !== undefined) {
+          const owner = await this.settings.get('sync.user-id');
+          if (owner?.value !== batch.expectedUserId) return;
+        }
         const concurrentDeletions = new Map<string, TrackSyncState>();
+        const concurrentUpdates = new Set<string>();
+        batch.signal?.throwIfAborted();
         for (const state of states) {
           const [currentSummary, currentStateRecord] = await Promise.all([
             this.localTracks.get(state.trackId),
             this.trackSyncStates.get(state.trackId),
           ]);
           const currentState = parseTrackSyncState(currentStateRecord);
+          const expectedState = expectedStates.get(state.trackId);
           if (
             currentSummary === undefined &&
             currentState?.pendingKind === 'delete' &&
             currentState.contentHash === state.contentHash
           ) {
             concurrentDeletions.set(state.trackId, currentState);
+          } else if (
+            currentSummary !== undefined &&
+            currentState?.pendingKind !== null &&
+            currentState?.pendingKind !== undefined &&
+            expectedState !== undefined &&
+            !equalTrackSyncStates(currentState, expectedState)
+          ) {
+            concurrentUpdates.add(state.trackId);
           }
+        }
+        for (const trackId of deletedTrackIds) {
+          if (states.some((state) => state.trackId === trackId)) continue;
+          const [currentSummary, currentStateRecord] = await Promise.all([
+            this.localTracks.get(trackId),
+            this.trackSyncStates.get(trackId),
+          ]);
+          const currentState = parseTrackSyncState(currentStateRecord);
+          const expectedState = expectedStates.get(trackId);
+          if (
+            currentSummary !== undefined &&
+            currentState?.pendingKind !== null &&
+            currentState?.pendingKind !== undefined &&
+            expectedState !== undefined &&
+            !equalTrackSyncStates(currentState, expectedState)
+          ) {
+            concurrentUpdates.add(trackId);
+          }
+        }
+        for (const trackId of deletedTrackIds) {
+          if (concurrentUpdates.has(trackId)) deletedTrackIds.delete(trackId);
         }
         const latestOpened = await this.settings.get('local-tracks.latest-opened');
         if (
@@ -1219,18 +1299,28 @@ export class AppDatabase
           !pairs.some((pair) => pair.summary.id === latestOpened.value)
         ) {
           await this.settings.delete('local-tracks.latest-opened');
+          batch.signal?.throwIfAborted();
         }
+        batch.signal?.throwIfAborted();
         for (const trackId of deletedTrackIds) {
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
+        batch.signal?.throwIfAborted();
         for (const pair of pairs) {
-          if (concurrentDeletions.has(pair.summary.id)) continue;
+          if (
+            concurrentDeletions.has(pair.summary.id) ||
+            concurrentUpdates.has(pair.summary.id)
+          ) {
+            continue;
+          }
           await this.localTracks.put(pair.summary);
           await this.localTrackContents.put(pair.content);
         }
+        batch.signal?.throwIfAborted();
         for (const state of states) {
+          if (concurrentUpdates.has(state.trackId)) continue;
           const deletion = concurrentDeletions.get(state.trackId);
           if (deletion === undefined) {
             await this.trackSyncStates.put(state);
@@ -1250,6 +1340,57 @@ export class AppDatabase
           value: usage.data,
           updatedAt: new Date().toISOString(),
         });
+      },
+    );
+  }
+
+  public async resolveRemoteTrackDeletions(
+    deleteTrackIds: readonly string[],
+    restoreTrackIds: readonly string[],
+  ): Promise<void> {
+    const deleted = new Set(deleteTrackIds);
+    const restored = new Set(restoreTrackIds);
+    if ([...deleted].some((trackId) => restored.has(trackId))) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'A track cannot be both deleted and restored.',
+      );
+    }
+    await this.transaction(
+      'rw',
+      this.settings,
+      this.localTracks,
+      this.localTrackContents,
+      this.trackSyncStates,
+      async () => {
+        const latestOpened = await this.settings.get('local-tracks.latest-opened');
+        if (
+          typeof latestOpened?.value === 'string' &&
+          deleted.has(latestOpened.value)
+        ) {
+          await this.settings.delete('local-tracks.latest-opened');
+        }
+        for (const trackId of deleted) {
+          await this.localTracks.delete(trackId);
+          await this.localTrackContents.delete(trackId);
+          await this.trackSyncStates.delete(trackId);
+        }
+        for (const trackId of restored) {
+          const summary = parseLocalTrackSummary(await this.localTracks.get(trackId));
+          const content = parseLocalTrackContent(
+            await this.localTrackContents.get(trackId),
+          );
+          if (summary?.contentHash === undefined || content?.trackId !== summary.id) {
+            await this.trackSyncStates.delete(trackId);
+            continue;
+          }
+          await this.trackSyncStates.put({
+            trackId,
+            contentHash: summary.contentHash,
+            remoteRevision: null,
+            pendingKind: 'upsert',
+          });
+        }
       },
     );
   }

@@ -115,6 +115,10 @@ export function WorkspaceRail({
         userLabel = 'User synchronization failed';
         syncIndicatorColor = appColors.status.error;
         break;
+      case 'needs-action':
+        userLabel = 'User synchronization needs a deletion decision';
+        syncIndicatorColor = appColors.brand.tigerOrange;
+        break;
       case 'success':
         userLabel = 'User synchronization successful';
         syncIndicatorColor = appColors.status.success;

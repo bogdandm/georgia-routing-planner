@@ -511,7 +511,6 @@ Keep stable system documentation independent from work breakdown and delivery pr
 | `README.md`       | Stable project overview, current capabilities, setup, and commands                                                                  | Feature stages, task IDs, estimates, branch/commit/PR status, or progress tracking              |
 | `docs/`           | Stable feature concepts, implemented behavior, architecture, and operation                                                          | Task ordering, estimates, branch/commit/PR status, or delivery history                          |
 | `AGENTS.md` files | Repository-wide or directory-specific agent workflow and engineering constraints                                                    | Product roadmap, duplicated feature specifications, or detailed design documentation            |
-| `TOP_LVL_PLAN.md` | TO-BE product roadmap, feature ordering, dependencies, broad acceptance, and high-level progress                                    | Detailed durable technical contracts that belong in `docs/`, code, or tests                     |
 | `PLAN.md`         | Optional branch-local tasks, work splits, commit sequence, verification plan, and detailed progress for substantive multi-step work | The only explanation of a feature's meaning, runtime contract, ownership, or operating behavior |
 
 Rules:
@@ -520,7 +519,7 @@ Rules:
   reviewed system concept, but must not say when, in which stage, or through which task
   or branch they will be implemented.
 - Roadmap sequencing, estimates, branch tracking, approval progress, and implementation
-  history belong only in `TOP_LVL_PLAN.md` or in a temporary `PLAN.md` when one is used.
+  history belong only in a temporary `PLAN.md` when one is used.
 - Stable documentation must not depend on a planning section, task number, or
   implementation split to explain a lasting contract.
 - Move durable facts discovered during implementation into `README.md`, `docs/`, code

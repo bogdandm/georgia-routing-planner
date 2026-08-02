@@ -47,6 +47,51 @@ interface PersistedDiagnosticRecord {
   readonly level: string;
 }
 
+export interface TrackSyncState {
+  readonly trackId: string;
+  readonly contentHash: string;
+  readonly remoteRevision: number | null;
+  readonly pendingKind: 'upsert' | 'metadata' | 'delete' | null;
+}
+
+export interface LocalTrackSyncPair {
+  readonly summary: LocalTrackSummary;
+  readonly content: LocalTrackContent;
+}
+
+export interface RemoteTrackMergeBatch {
+  readonly put: readonly LocalTrackSyncPair[];
+  readonly deleteTrackIds: readonly string[];
+  readonly states: readonly TrackSyncState[];
+  readonly usage: TrackSyncUsage;
+}
+
+export interface LocalTrackSyncHash {
+  readonly trackId: string;
+  readonly contentHash: string;
+}
+
+export interface TrackSyncUsage {
+  readonly usedBytes: number;
+  readonly reservedBytes: number;
+  readonly limitBytes: number;
+}
+
+const defaultTrackSyncUsage: TrackSyncUsage = {
+  usedBytes: 0,
+  reservedBytes: 0,
+  limitBytes: 8_388_608,
+};
+
+const trackSyncEnabledSchema = z.boolean();
+const trackSyncUsageSchema: z.ZodType<TrackSyncUsage> = z
+  .object({
+    usedBytes: z.number().int().nonnegative().max(8_388_608),
+    reservedBytes: z.number().int().nonnegative().max(8_388_608),
+    limitBytes: z.literal(8_388_608),
+  })
+  .strict();
+
 const uiPreferencesSchema = z
   .object({
     developerMode: z.boolean(),
@@ -381,14 +426,18 @@ function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
     typeof value !== 'object' ||
     value === null ||
     !('schemaVersion' in value) ||
-    value.schemaVersion !== 1
+    (value.schemaVersion !== 1 && value.schemaVersion !== 2)
   ) {
     return value;
   }
-  return {
+  const migrated = {
     ...value,
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
   };
+  if ('savedAt' in migrated && !('updatedAt' in migrated)) {
+    return { ...migrated, updatedAt: migrated.savedAt };
+  }
+  return migrated;
 }
 
 const currentLocalTrackSummarySchema = z
@@ -398,6 +447,11 @@ const currentLocalTrackSummarySchema = z
     name: z.string().trim().min(1).max(200),
     normalizedName: z.string().min(1).max(200),
     savedAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    contentHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
     sourceFilename: z.string().min(1).max(500),
     sourceFormat: z.enum(['gpx', 'fit', 'kml']).default('gpx'),
     favorite: z.boolean().default(false),
@@ -422,6 +476,7 @@ const currentLocalTrackSummarySchema = z
       name: value.name,
       normalizedName: value.normalizedName,
       savedAt: value.savedAt,
+      updatedAt: value.updatedAt,
       sourceFilename: value.sourceFilename,
       sourceFormat: value.sourceFormat,
       favorite: value.favorite,
@@ -440,6 +495,7 @@ const currentLocalTrackSummarySchema = z
     if (value.middlePoi !== undefined) result.middlePoi = value.middlePoi;
     if (value.endPoi !== undefined) result.endPoi = value.endPoi;
     if (value.fallbackPoi !== undefined) result.fallbackPoi = value.fallbackPoi;
+    if (value.contentHash !== undefined) result.contentHash = value.contentHash;
     return result;
   });
 
@@ -512,6 +568,47 @@ function parseLocalTrackContent(value: unknown): LocalTrackContent | null {
   return result.success ? result.data : null;
 }
 
+const trackSyncStateSchema: z.ZodType<TrackSyncState> = z
+  .object({
+    trackId: z.string().min(1).max(200),
+    contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+    remoteRevision: z.number().int().positive().nullable(),
+    pendingKind: z.enum(['upsert', 'metadata', 'delete']).nullable(),
+  })
+  .strict();
+
+function pendingKindWithHighestPrecedence(
+  states: readonly TrackSyncState[],
+): TrackSyncState['pendingKind'] {
+  if (states.some((state) => state.pendingKind === 'upsert')) return 'upsert';
+  if (states.some((state) => state.pendingKind === 'metadata')) return 'metadata';
+  return null;
+}
+
+function parseTrackSyncState(value: unknown): TrackSyncState | null {
+  const result = trackSyncStateSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+export function validateLocalTrackSyncPair(value: unknown): LocalTrackSyncPair {
+  if (typeof value !== 'object' || value === null) {
+    throw new LocalTrackStorageError(
+      'record-invalid',
+      'The local track record is invalid.',
+    );
+  }
+  const candidate = value as Record<string, unknown>;
+  const summary = parseLocalTrackSummary(candidate.summary);
+  const content = parseLocalTrackContent(candidate.content);
+  if (summary?.contentHash === undefined || content?.trackId !== summary.id) {
+    throw new LocalTrackStorageError(
+      'record-invalid',
+      'The local track record is invalid.',
+    );
+  }
+  return { summary, content };
+}
+
 /** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */
 export class AppDatabase
   extends Dexie
@@ -521,6 +618,7 @@ export class AppDatabase
   public readonly diagnostics!: EntityTable<PersistedDiagnosticRecord, 'id'>;
   public readonly localTracks!: EntityTable<LocalTrackSummary, 'id'>;
   public readonly localTrackContents!: EntityTable<LocalTrackContent, 'trackId'>;
+  public readonly trackSyncStates!: EntityTable<TrackSyncState, 'trackId'>;
 
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
@@ -561,6 +659,28 @@ export class AppDatabase
           if (parsed !== null) await contentTable.put(parsed);
         }
       });
+    this.version(5)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      })
+      .upgrade(async (transaction) => {
+        const summaryTable = transaction.table('localTracks');
+        const summaries: unknown[] = await summaryTable.toArray();
+        for (const summary of summaries) {
+          const parsed = parseLocalTrackSummary(summary);
+          if (parsed !== null) await summaryTable.put(parsed);
+        }
+        const contentTable = transaction.table('localTrackContents');
+        const contents: unknown[] = await contentTable.toArray();
+        for (const content of contents) {
+          const parsed = parseLocalTrackContent(content);
+          if (parsed !== null) await contentTable.put(parsed);
+        }
+      });
   }
 
   public async saveLocalTrack(
@@ -570,19 +690,27 @@ export class AppDatabase
     const validSummary = parseLocalTrackSummary(summary);
     const validContent = parseLocalTrackContent(content);
     const idsMatch = validSummary?.id === validContent?.trackId;
-    if (validSummary === null || validContent === null || !idsMatch) {
+    if (validSummary?.contentHash === undefined || validContent === null || !idsMatch) {
       throw new LocalTrackStorageError(
         'record-invalid',
         'The local track record is invalid.',
       );
     }
+    const state: TrackSyncState = {
+      trackId: validSummary.id,
+      contentHash: validSummary.contentHash,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    };
     await this.transaction(
       'rw',
       this.localTracks,
       this.localTrackContents,
+      this.trackSyncStates,
       async () => {
         await this.localTracks.put(validSummary);
         await this.localTrackContents.put(validContent);
+        await this.trackSyncStates.put(state);
       },
     );
   }
@@ -683,29 +811,44 @@ export class AppDatabase
     trackId: string,
     name: string,
   ): Promise<LocalTrackSummary> {
-    const existing = await this.localTracks.get(trackId);
-    const parsed = parseLocalTrackSummary(existing);
-    if (parsed === null) {
-      throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
-    }
     const normalized = normalizeLocalTrackName(name);
-    const updated = { ...parsed, ...normalized };
-    await this.localTracks.put(updated);
-    return updated;
+    return this.updateLocalTrackMetadata(trackId, normalized, undefined);
   }
 
   public async setLocalTrackFavorite(
     trackId: string,
     favorite: boolean,
   ): Promise<LocalTrackSummary> {
-    const existing = await this.localTracks.get(trackId);
-    const parsed = parseLocalTrackSummary(existing);
-    if (parsed === null) {
-      throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
-    }
-    const updated: LocalTrackSummary = { ...parsed, favorite };
-    await this.localTracks.put(updated);
-    return updated;
+    return this.updateLocalTrackMetadata(trackId, undefined, favorite);
+  }
+
+  private async updateLocalTrackMetadata(
+    trackId: string,
+    name: ReturnType<typeof normalizeLocalTrackName> | undefined,
+    favorite: boolean | undefined,
+  ): Promise<LocalTrackSummary> {
+    return this.transaction('rw', this.localTracks, this.trackSyncStates, async () => {
+      const existing = await this.localTracks.get(trackId);
+      const summary = parseLocalTrackSummary(existing);
+      if (summary === null) {
+        throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
+      }
+      const updated: LocalTrackSummary = {
+        ...summary,
+        ...name,
+        ...(favorite === undefined ? {} : { favorite }),
+        updatedAt: new Date().toISOString(),
+      };
+      await this.localTracks.put(updated);
+      const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
+      if (state !== null) {
+        await this.trackSyncStates.put({
+          ...state,
+          pendingKind: state.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+        });
+      }
+      return updated;
+    });
   }
 
   public async loadLatestOpenedTrackId(): Promise<string | null> {
@@ -742,15 +885,417 @@ export class AppDatabase
       this.settings,
       this.localTracks,
       this.localTrackContents,
+      this.trackSyncStates,
       async () => {
+        const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
         await this.localTrackContents.delete(trackId);
         await this.localTracks.delete(trackId);
+        if (state !== null) {
+          await this.trackSyncStates.put({
+            trackId,
+            contentHash: state.contentHash,
+            remoteRevision: state.remoteRevision,
+            pendingKind: 'delete',
+          });
+        } else {
+          await this.trackSyncStates.delete(trackId);
+        }
         const latest = await this.settings.get('local-tracks.latest-opened');
         if (latest?.value === trackId) {
           await this.settings.delete('local-tracks.latest-opened');
         }
       },
     );
+  }
+
+  public async loadTrackSyncState(trackId: string): Promise<TrackSyncState | null> {
+    const state = await this.trackSyncStates.get(trackId);
+    if (state === undefined) return null;
+    const parsed = parseTrackSyncState(state);
+    if (parsed === null) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The track synchronization state is invalid.',
+      );
+    }
+    return parsed;
+  }
+
+  public async saveTrackSyncState(state: TrackSyncState): Promise<void> {
+    const parsed = parseTrackSyncState(state);
+    if (parsed === null) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The track synchronization state is invalid.',
+      );
+    }
+    await this.trackSyncStates.put(parsed);
+  }
+
+  public async listLocalTrackPairsWithoutSyncState(): Promise<
+    readonly LocalTrackSyncPair[]
+  > {
+    return this.transaction(
+      'r',
+      this.localTracks,
+      this.localTrackContents,
+      this.trackSyncStates,
+      async () => {
+        const summaries = await this.localTracks.toArray();
+        const pairs: LocalTrackSyncPair[] = [];
+        for (const record of summaries) {
+          const summary = parseLocalTrackSummary(record);
+          if (summary === null) continue;
+          if ((await this.trackSyncStates.get(summary.id)) !== undefined) continue;
+          const content = parseLocalTrackContent(
+            await this.localTrackContents.get(summary.id),
+          );
+          if (content?.trackId !== summary.id) {
+            throw new LocalTrackStorageError(
+              'content-missing',
+              'The saved track content is unavailable.',
+            );
+          }
+          pairs.push({ summary, content });
+        }
+        return pairs;
+      },
+    );
+  }
+
+  /**
+   * Backfills legacy hashes and reduces every hash to one local synchronization entity
+   * before the worker makes a server mutation.
+   */
+  public async backfillAndDeduplicateTrackSync(
+    contentHashes: readonly LocalTrackSyncHash[],
+  ): Promise<void> {
+    const hashesByTrackId = new Map(
+      contentHashes.map((entry) => [entry.trackId, entry.contentHash]),
+    );
+    for (const entry of contentHashes) {
+      if (!/^[0-9a-f]{64}$/.test(entry.contentHash)) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The local track content hash is invalid.',
+        );
+      }
+    }
+    await this.transaction(
+      'rw',
+      this.settings,
+      this.localTracks,
+      this.localTrackContents,
+      this.trackSyncStates,
+      async () => {
+        const pairs: LocalTrackSyncPair[] = [];
+        for (const candidate of await this.localTracks.toArray()) {
+          const summary = parseLocalTrackSummary(candidate);
+          const content = parseLocalTrackContent(
+            await this.localTrackContents.get(candidate.id),
+          );
+          if (summary === null || content?.trackId !== candidate.id) continue;
+          const contentHash = summary.contentHash ?? hashesByTrackId.get(summary.id);
+          if (contentHash === undefined) {
+            throw new LocalTrackStorageError(
+              'record-invalid',
+              'The local track content hash is unavailable.',
+            );
+          }
+          pairs.push({ summary: { ...summary, contentHash }, content });
+        }
+
+        const states = (await this.trackSyncStates.toArray()).flatMap((candidate) => {
+          const state = parseTrackSyncState(candidate);
+          return state === null ? [] : [state];
+        });
+        const groups = new Map<
+          string,
+          { pairs: LocalTrackSyncPair[]; states: TrackSyncState[] }
+        >();
+        for (const pair of pairs) {
+          const contentHash = pair.summary.contentHash;
+          if (contentHash === undefined) continue;
+          const group = groups.get(contentHash);
+          if (group === undefined) {
+            groups.set(contentHash, { pairs: [pair], states: [] });
+          } else {
+            group.pairs.push(pair);
+          }
+        }
+        for (const state of states) {
+          const group = groups.get(state.contentHash);
+          if (group === undefined) {
+            groups.set(state.contentHash, { pairs: [], states: [state] });
+          } else {
+            group.states.push(state);
+          }
+        }
+
+        const latestOpened = await this.settings.get('local-tracks.latest-opened');
+        const latestOpenedTrackId =
+          typeof latestOpened?.value === 'string' ? latestOpened.value : null;
+        const deleteTrackIds = new Set<string>();
+        const nextPairs: LocalTrackSyncPair[] = [];
+        const nextStates: TrackSyncState[] = [];
+
+        for (const [contentHash, group] of groups) {
+          if (group.pairs.length === 0) continue;
+          const deletion = group.states.find(
+            (state) =>
+              state.pendingKind === 'delete' &&
+              state.remoteRevision !== null &&
+              !group.pairs.some((pair) => pair.summary.id === state.trackId),
+          );
+          if (deletion !== undefined) {
+            for (const pair of group.pairs) deleteTrackIds.add(pair.summary.id);
+            for (const state of group.states) {
+              if (state.trackId !== deletion.trackId) deleteTrackIds.add(state.trackId);
+            }
+            const remoteRevision = Math.max(
+              ...group.states.flatMap((state) =>
+                state.remoteRevision === null ? [] : [state.remoteRevision],
+              ),
+            );
+            nextStates.push({
+              trackId: deletion.trackId,
+              contentHash,
+              remoteRevision,
+              pendingKind: 'delete',
+            });
+            if (
+              latestOpenedTrackId === deletion.trackId ||
+              group.pairs.some((pair) => pair.summary.id === latestOpenedTrackId)
+            ) {
+              await this.settings.delete('local-tracks.latest-opened');
+            }
+            continue;
+          }
+
+          const [canonical] = [...group.pairs].sort((left, right) => {
+            if (left.summary.updatedAt !== right.summary.updatedAt) {
+              return right.summary.updatedAt.localeCompare(left.summary.updatedAt);
+            }
+            if (left.summary.savedAt !== right.summary.savedAt) {
+              return right.summary.savedAt.localeCompare(left.summary.savedAt);
+            }
+            return left.summary.id.localeCompare(right.summary.id);
+          });
+          if (canonical === undefined) continue;
+          const remoteRevision = Math.max(
+            0,
+            ...group.states.flatMap((state) =>
+              state.remoteRevision === null ? [] : [state.remoteRevision],
+            ),
+          );
+          const pendingKind = pendingKindWithHighestPrecedence(group.states);
+          const summary = {
+            ...canonical.summary,
+            contentHash,
+            favorite: group.pairs.some((pair) => pair.summary.favorite),
+            savedAt: group.pairs.reduce(
+              (earliest, pair) =>
+                pair.summary.savedAt < earliest ? pair.summary.savedAt : earliest,
+              canonical.summary.savedAt,
+            ),
+          };
+          nextPairs.push({ summary, content: canonical.content });
+          nextStates.push({
+            trackId: canonical.summary.id,
+            contentHash,
+            remoteRevision: remoteRevision === 0 ? null : remoteRevision,
+            pendingKind:
+              group.states.length === 0 ||
+              (remoteRevision === 0 && pendingKind === null)
+                ? 'upsert'
+                : pendingKind,
+          });
+          for (const pair of group.pairs) {
+            if (pair.summary.id !== canonical.summary.id) {
+              deleteTrackIds.add(pair.summary.id);
+            }
+          }
+          for (const state of group.states) {
+            if (state.trackId !== canonical.summary.id)
+              deleteTrackIds.add(state.trackId);
+          }
+          if (
+            latestOpenedTrackId !== null &&
+            group.pairs.some((pair) => pair.summary.id === latestOpenedTrackId) &&
+            latestOpenedTrackId !== canonical.summary.id
+          ) {
+            await this.settings.put({
+              key: 'local-tracks.latest-opened',
+              value: canonical.summary.id,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+
+        for (const trackId of deleteTrackIds) {
+          await this.localTracks.delete(trackId);
+          await this.localTrackContents.delete(trackId);
+          await this.trackSyncStates.delete(trackId);
+        }
+        for (const pair of nextPairs) {
+          await this.localTracks.put(pair.summary);
+          await this.localTrackContents.put(pair.content);
+        }
+        for (const state of nextStates) await this.trackSyncStates.put(state);
+      },
+    );
+  }
+
+  /** Validates and atomically applies one fully validated remote synchronization merge. */
+  public async applyRemoteTrackMergeBatch(batch: RemoteTrackMergeBatch): Promise<void> {
+    const usage = trackSyncUsageSchema.safeParse(batch.usage);
+    if (!usage.success) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The track synchronization usage is invalid.',
+      );
+    }
+    const states: TrackSyncState[] = [];
+    for (const candidate of batch.states) {
+      const state = parseTrackSyncState(candidate);
+      if (state === null) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The track synchronization state is invalid.',
+        );
+      }
+      states.push(state);
+    }
+    const pairs: LocalTrackSyncPair[] = [];
+    for (const pair of batch.put) {
+      const summary = parseLocalTrackSummary(pair.summary);
+      const content = parseLocalTrackContent(pair.content);
+      const state = states.find((candidate) => candidate.trackId === pair.summary.id);
+      if (
+        summary?.contentHash === undefined ||
+        content?.trackId !== summary.id ||
+        state?.contentHash !== summary.contentHash
+      ) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The local track record is invalid.',
+        );
+      }
+      pairs.push({ summary, content });
+    }
+    const deletedTrackIds = new Set(batch.deleteTrackIds);
+    if (pairs.some((pair) => deletedTrackIds.has(pair.summary.id))) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'A remote merge cannot delete and replace the same local track.',
+      );
+    }
+    await this.transaction(
+      'rw',
+      this.settings,
+      this.localTracks,
+      this.localTrackContents,
+      this.trackSyncStates,
+      async () => {
+        const concurrentDeletions = new Map<string, TrackSyncState>();
+        for (const state of states) {
+          const [currentSummary, currentStateRecord] = await Promise.all([
+            this.localTracks.get(state.trackId),
+            this.trackSyncStates.get(state.trackId),
+          ]);
+          const currentState = parseTrackSyncState(currentStateRecord);
+          if (
+            currentSummary === undefined &&
+            currentState?.pendingKind === 'delete' &&
+            currentState.contentHash === state.contentHash
+          ) {
+            concurrentDeletions.set(state.trackId, currentState);
+          }
+        }
+        const latestOpened = await this.settings.get('local-tracks.latest-opened');
+        if (
+          typeof latestOpened?.value === 'string' &&
+          deletedTrackIds.has(latestOpened.value) &&
+          !pairs.some((pair) => pair.summary.id === latestOpened.value)
+        ) {
+          await this.settings.delete('local-tracks.latest-opened');
+        }
+        for (const trackId of deletedTrackIds) {
+          await this.localTracks.delete(trackId);
+          await this.localTrackContents.delete(trackId);
+          await this.trackSyncStates.delete(trackId);
+        }
+        for (const pair of pairs) {
+          if (concurrentDeletions.has(pair.summary.id)) continue;
+          await this.localTracks.put(pair.summary);
+          await this.localTrackContents.put(pair.content);
+        }
+        for (const state of states) {
+          const deletion = concurrentDeletions.get(state.trackId);
+          if (deletion === undefined) {
+            await this.trackSyncStates.put(state);
+            continue;
+          }
+          const remoteRevision = Math.max(
+            deletion.remoteRevision ?? 0,
+            state.remoteRevision ?? 0,
+          );
+          await this.trackSyncStates.put({
+            ...deletion,
+            remoteRevision: remoteRevision === 0 ? null : remoteRevision,
+          });
+        }
+        await this.settings.put({
+          key: 'sync.usage',
+          value: usage.data,
+          updatedAt: new Date().toISOString(),
+        });
+      },
+    );
+  }
+
+  public async loadTrackSyncEnabled(): Promise<boolean> {
+    const record = await this.settings.get('sync.enabled');
+    if (record === undefined) return false;
+    const parsed = trackSyncEnabledSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+    await this.settings.delete('sync.enabled');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.sync-preferences.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return false;
+  }
+
+  public async saveTrackSyncEnabled(enabled: boolean): Promise<void> {
+    await this.settings.put({
+      key: 'sync.enabled',
+      value: trackSyncEnabledSchema.parse(enabled),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async loadTrackSyncUsage(): Promise<TrackSyncUsage> {
+    const record = await this.settings.get('sync.usage');
+    if (record === undefined) return defaultTrackSyncUsage;
+    const parsed = trackSyncUsageSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+    await this.settings.delete('sync.usage');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.sync-usage.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultTrackSyncUsage;
+  }
+
+  public async saveTrackSyncUsage(usage: TrackSyncUsage): Promise<void> {
+    await this.settings.put({
+      key: 'sync.usage',
+      value: trackSyncUsageSchema.parse(usage),
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   public async loadUiPreferences(): Promise<UiPreferences> {

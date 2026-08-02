@@ -6,7 +6,7 @@ import type {
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
-export const LOCAL_TRACK_SCHEMA_VERSION = 2;
+export const LOCAL_TRACK_SCHEMA_VERSION = 3;
 
 export interface LocalTrackSummary {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
@@ -14,6 +14,9 @@ export interface LocalTrackSummary {
   readonly name: string;
   readonly normalizedName: string;
   readonly savedAt: string;
+  readonly updatedAt: string;
+  /** Absent only on rows migrated from local schema v2 or earlier. */
+  readonly contentHash?: string;
   readonly sourceFilename: string;
   readonly sourceFormat: 'gpx' | 'fit' | 'kml';
   readonly favorite: boolean;

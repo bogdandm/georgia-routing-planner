@@ -6,8 +6,17 @@ import type { MapCameraRepository } from '@/application/ports/MapCameraRepositor
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
+import type { TrackContentHasher } from '@/application/ports/TrackContentHasher';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
+import {
+  createUnconfiguredUserDataService,
+  type UserDataService,
+} from '@/application/user/UserDataService';
+import {
+  loadSupabaseConfiguration,
+  type SupabaseConfigurationResult,
+} from '@/bootstrap/configuration/SupabaseConfiguration';
 import {
   loadMapProviderConfiguration,
   summarizeMapProviderConfiguration,
@@ -30,11 +39,14 @@ import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/Terrai
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
+import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { MapLibreSatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
+import { createClient } from '@supabase/supabase-js';
+import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
 export interface RuntimeServices {
@@ -43,6 +55,7 @@ export interface RuntimeServices {
   readonly database: AppDatabase;
   readonly diagnostics: DiagnosticsService;
   readonly dispose: () => void;
+  readonly trackContentHasher: TrackContentHasher;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
@@ -57,6 +70,8 @@ export interface RuntimeServices {
   readonly searchPlaces: SearchPlaces | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
   readonly storageUsage: StorageUsageReader;
+  readonly supabaseConfiguration: SupabaseConfigurationResult;
+  readonly userData: UserDataService;
 }
 
 /**
@@ -79,6 +94,28 @@ export function createRuntimeServices(): RuntimeServices {
     buildInfo.mode !== 'production' || developerFlag === '1',
   );
   const database = new AppDatabase(logger);
+  const trackContentHasher = new WebCryptoTrackContentHasher();
+  const supabaseConfiguration = loadSupabaseConfiguration(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  );
+  const userData =
+    supabaseConfiguration.status === 'configured'
+      ? new SupabaseUserDataService(
+          createClient(
+            supabaseConfiguration.value.url,
+            supabaseConfiguration.value.publishableKey,
+            {
+              auth: {
+                autoRefreshToken: true,
+                detectSessionInUrl: false,
+                persistSession: true,
+              },
+            },
+          ),
+          database,
+        )
+      : createUnconfiguredUserDataService();
   const storageUsage = new BrowserStorageUsageReader();
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
@@ -229,8 +266,10 @@ export function createRuntimeServices(): RuntimeServices {
     diagnostics,
     dispose: () => {
       mapLayers?.dispose();
+      userData.dispose();
       database.close();
     },
+    trackContentHasher,
     idGenerator,
     logger,
     elevationProvider,
@@ -245,5 +284,7 @@ export function createRuntimeServices(): RuntimeServices {
     searchPlaces,
     sentinelQueryDiagnostics,
     storageUsage,
+    supabaseConfiguration,
+    userData,
   };
 }

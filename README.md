@@ -51,6 +51,15 @@ uses the public provider defaults unless `VITE_MAP_PROVIDER_CONFIGURATION` or
 integration, and browser tests use controlled local fixtures and never depend on a
 public provider.
 
+The optional account shell uses the public build-time `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` settings. A signed-in user must explicitly enable **Sync
+across devices** before any synchronization network request starts; disabled is the
+durable default, including startup. The worker receives only the current access token,
+never the refresh token, and transfers elevation-free canonical geometry. Local saves
+remain available offline; remote quota/conflict errors retain local data and retry
+state. Missing or invalid settings leave it unconfigured without creating a network
+client; local tracks remain available.
+
 Playwright uses its own pinned Chromium build. Install it before the first local browser
 test:
 
@@ -255,7 +264,8 @@ The reviewed system concept includes:
 ## System boundaries
 
 - Automatic routing along trails or roads.
-- Accounts, cloud synchronization, or collaborative editing.
+- Collaborative editing, automatic synchronization without explicit enablement, or cloud
+  synchronization of elevation data.
 - Komoot, Wikiloc, or Strava integrations.
 - An always-running application server.
 - Offline map-region downloads.

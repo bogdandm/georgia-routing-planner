@@ -5,6 +5,7 @@ const hashByTab: Readonly<Record<WorkspaceTab, string>> = {
   satellite: '#satellite',
   markers: '#markers',
   layers: '#layers',
+  user: '#user',
 };
 
 /** Returns the workspace destination encoded by a URL hash, if it is recognized. */

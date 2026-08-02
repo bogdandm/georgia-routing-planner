@@ -273,14 +273,23 @@ tracks, `addedAt` comes from reviewed curation metadata rather than the build cl
 local tracks, it is the completed retention/import time.
 
 The executable local-track schema keeps listable summaries separate from normalized
-track points. Both rows share the opaque local track ID. The summary owns source-format
-identity, source filename, favorite state, and import time; content remains on demand.
-The content row owns exactly one normalized source-point projection. Original file bytes
-are discarded after parsing. Saving and deleting use one IndexedDB transaction, while
-rename and favorite updates change only the validated summary. A setting stores the
-latest opened local-track ID and is cleared atomically when that track is deleted. A
-missing or invalid content row is surfaced as a bounded storage-integrity error; it
-never becomes an empty geometry or a partially successful save.
+track points. Both rows share the opaque local track ID. A newly saved summary records
+its local modification time and the lowercase SHA-256 of elevation-free canonical GRPT
+geometry; migrated rows may temporarily lack that hash. The content row owns exactly one
+normalized source-point projection and may retain local derived elevation, which is not
+part of the canonical identity. Original file bytes are discarded after parsing.
+
+`trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
+stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,
+or `delete` intent. A save, metadata change, or deletion updates the affected track rows
+and queue state in one IndexedDB transaction. `sync.enabled` is a validated setting with
+default `false`; it alone permits startup or lifecycle synchronization. Deleting an
+unsent upsert removes its local intent; deleting a previously synchronized track retains
+only a minimal delete retry record, never local geometry or metadata. The worker stores
+the authoritative used/reserved/limit quota only after validated remote merge. Canonical
+geometry excludes elevations and derived elevation metrics; opening a downloaded track
+recalculates those browser-local values without changing its hash, timestamp, or pending
+state.
 
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not

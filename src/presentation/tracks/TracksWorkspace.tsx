@@ -249,8 +249,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     clock,
     database,
     elevationProvider,
+    trackContentHasher,
     idGenerator,
     logger,
+    userData,
     mapLayers,
     searchPlaces,
   } = useRuntimeServices();
@@ -326,6 +328,30 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       recalculationAbort.current?.abort();
     };
   }, [reloadSummaries]);
+
+  useEffect(
+    () =>
+      userData.subscribeTracksChanged(() => {
+        void reloadSummaries();
+        if (active?.kind !== 'saved') return;
+        void (async () => {
+          const summary = await database.localTracks.get(active.summary.id);
+          if (summary === undefined) {
+            setActive(null);
+            return;
+          }
+          const content = await database.loadLocalTrackContent(summary.id);
+          setActive((current) =>
+            current?.kind === 'saved' && current.summary.id === summary.id
+              ? { kind: 'saved', summary, content, draftName: summary.name }
+              : current,
+          );
+        })().catch(() => {
+          setActive(null);
+        });
+      }),
+    [active, database, reloadSummaries, userData],
+  );
 
   useEffect(() => {
     if (active?.kind !== 'preview') return undefined;
@@ -671,11 +697,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const previewNamingAbort = namingAbort.current;
     try {
       const normalizedName = normalizeLocalTrackName(active.name);
+      const savedAt = clock.now().toISOString();
+      const content: LocalTrackContent = {
+        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+        trackId: active.id,
+        trackPoints: active.preparedSegments.map((segment) => segment.points),
+      };
       const summary: LocalTrackSummaryBuilder = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         id: active.id,
         ...normalizedName,
-        savedAt: clock.now().toISOString(),
+        savedAt,
+        updatedAt: savedAt,
+        contentHash: await trackContentHasher.hash(content),
         sourceFilename: active.file.name,
         sourceFormat: active.sourceFormat,
         favorite: false,
@@ -698,12 +732,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
       if (active.fallbackPoi !== undefined) summary.fallbackPoi = active.fallbackPoi;
-      const content: LocalTrackContent = {
-        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-        trackId: active.id,
-        trackPoints: active.preparedSegments.map((segment) => segment.points),
-      };
       await database.saveLocalTrack(summary, content);
+      void userData.trackSaved(summary.id);
       if (generation !== importGeneration.current) return;
       await saveLatestOpenedTrackId(summary.id);
       if (generation !== importGeneration.current) return;
@@ -735,6 +765,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     recalculationState,
     reloadSummaries,
     saveLatestOpenedTrackId,
+    trackContentHasher,
+    userData,
   ]);
 
   const recalculateElevation = useCallback(async () => {
@@ -902,6 +934,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : current,
       );
       await reloadSummaries();
+      void userData.trackMetadataChanged(activeId);
       if (generation === importGeneration.current) setError(null);
       return true;
     } catch (renameError) {
@@ -914,7 +947,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       }
       return false;
     }
-  }, [active, database, reloadSummaries]);
+  }, [active, database, reloadSummaries, userData]);
 
   const toggleFavorite = useCallback(
     async (summary: LocalTrackSummary) => {
@@ -929,12 +962,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             : current,
         );
         await reloadSummaries();
+        void userData.trackMetadataChanged(updated.id);
         setError(null);
       } catch {
         setError('The favorite could not be updated.');
       }
     },
-    [database, reloadSummaries],
+    [database, reloadSummaries, userData],
   );
 
   const deleteSaved = useCallback(
@@ -954,12 +988,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             : current,
         );
         await reloadSummaries();
+        void userData.trackDeleted(summary.id);
         setError(null);
       } catch {
         setError('The track could not be deleted.');
       }
     },
-    [active, database, reloadSummaries, saveLatestOpenedTrackId],
+    [active, database, reloadSummaries, saveLatestOpenedTrackId, userData],
   );
 
   const applyGeneratedName = useCallback(() => {

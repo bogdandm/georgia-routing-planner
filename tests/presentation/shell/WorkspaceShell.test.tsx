@@ -16,6 +16,10 @@ import {
   type SatelliteCatalogGateway,
   type SatelliteCatalogResult,
 } from '@/application/ports/SatelliteCatalogGateway';
+import type {
+  UserDataService,
+  UserDataSnapshot,
+} from '@/application/user/UserDataService';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -396,6 +400,7 @@ describe('WorkspaceShell', () => {
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
     ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );
@@ -974,6 +979,7 @@ describe('WorkspaceShell', () => {
       services.database,
       'replaceLocalTrackElevation',
     );
+    const trackMetadataChanged = vi.spyOn(services.userData, 'trackMetadataChanged');
     const user = userEvent.setup();
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -1044,6 +1050,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(replaceLocalTrackElevation).toHaveBeenCalledOnce();
     });
+    expect(trackMetadataChanged).not.toHaveBeenCalled();
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -1117,9 +1124,12 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Delete race.gpx'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+      },
+      { timeout: 5_000 },
+    );
     const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });
@@ -1171,12 +1181,15 @@ describe('WorkspaceShell', () => {
 
   it('imports, saves, closes, reopens, renames, and deletes a local GPX track', async () => {
     const user = userEvent.setup();
+    const trackSaved = vi.spyOn(services.userData, 'trackSaved');
+    const trackMetadataChanged = vi.spyOn(services.userData, 'trackMetadataChanged');
+    const trackDeleted = vi.spyOn(services.userData, 'trackDeleted');
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();
     if (mapLayers === null) return;
     const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
-      schemaVersion: 2,
+      schemaVersion: 3,
       trackId: 'local:test-1',
       trackPoints: [
         [
@@ -1275,6 +1288,9 @@ describe('WorkspaceShell', () => {
         }),
       ).toBeVisible();
     });
+    await waitFor(() => {
+      expect(trackSaved).toHaveBeenCalledOnce();
+    });
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('list', { name: 'Saved tracks' })).getByLabelText(
@@ -1295,6 +1311,9 @@ describe('WorkspaceShell', () => {
       await screen.findByRole('menuitem', { name: 'Add to favorites' }),
     ).toBeVisible();
     await user.click(screen.getByRole('menuitem', { name: 'Add to favorites' }));
+    await waitFor(() => {
+      expect(trackMetadataChanged).toHaveBeenCalledOnce();
+    });
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(
       await screen.findByRole('menuitem', { name: 'Remove from favorites' }),
@@ -1328,6 +1347,9 @@ describe('WorkspaceShell', () => {
     expect(
       await within(details).findByRole('heading', { name: 'Final trail' }),
     ).toBeVisible();
+    await waitFor(() => {
+      expect(trackMetadataChanged).toHaveBeenCalledTimes(2);
+    });
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
@@ -1398,6 +1420,9 @@ describe('WorkspaceShell', () => {
       expect(
         screen.queryByRole('list', { name: 'Saved tracks' }),
       ).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(trackDeleted).toHaveBeenCalledOnce();
     });
   }, 30_000);
 
@@ -2785,5 +2810,78 @@ describe('WorkspaceShell', () => {
       'The browser lost the WebGL context.',
     );
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('places User before Settings and activates it without an unmatched Tabs value', async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    useUiStore.setState({ developerMode: true });
+    renderWorkspaceShell();
+
+    const userButton = screen.getByRole('button', { name: 'User' });
+    const settingsButton = screen.getByRole('button', { name: 'Open settings' });
+    expect(
+      userButton.compareDocumentPosition(settingsButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    const diagnosticsButton = screen.getByRole('button', {
+      name: 'Developer diagnostics',
+    });
+    expect(
+      diagnosticsButton.compareDocumentPosition(userButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(userButton);
+    expect(userButton).toHaveAttribute('aria-pressed', 'true');
+
+    expect(window.location.hash).toBe('#user');
+    expect(screen.getByText(/Account features are not configured/)).toBeVisible();
+    expect(consoleError).not.toHaveBeenCalledWith(
+      expect.stringContaining('The `value` provided to the Tabs component is invalid'),
+    );
+  });
+
+  it('shows error, active, and successful synchronization colors on User', () => {
+    let snapshot: UserDataSnapshot = {
+      busy: false,
+      email: 'sync@example.test',
+      errorMessage: 'Synchronization failed.',
+      noticeMessage: null,
+      status: 'signed-in',
+      syncEnabled: true,
+      syncStatus: 'error',
+      syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+    };
+    let notify: () => void = () => undefined;
+    const userData = {
+      ...services.userData,
+      getSnapshot: () => snapshot,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => undefined;
+      },
+    } satisfies UserDataService;
+    services = { ...services, userData };
+    renderWorkspaceShell();
+
+    const expectIndicator = (label: string, color: string) => {
+      const button = screen.getByRole('button', { name: label });
+      const indicator = button.querySelector('.MuiBadge-badge');
+      expect(indicator).not.toBeNull();
+      expect(indicator).toHaveStyle({ backgroundColor: color });
+    };
+    const setSyncStatus = (syncStatus: UserDataSnapshot['syncStatus']) => {
+      act(() => {
+        snapshot = { ...snapshot, syncStatus };
+        notify();
+      });
+    };
+
+    expectIndicator('User synchronization failed', appColors.status.error);
+    setSyncStatus('syncing');
+    expectIndicator('User synchronization in progress', appColors.brand.tigerOrange);
+    setSyncStatus('success');
+    expectIndicator('User synchronization successful', appColors.status.success);
   });
 });

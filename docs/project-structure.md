@@ -3,9 +3,12 @@
 ## System shape
 
 The application is a static React client. GitHub Pages serves the build; the browser
-talks directly to public map providers and stores durable local state in IndexedDB.
-There is no application server, account, secret-bearing frontend configuration, or
-automatic telemetry upload.
+talks directly to public map providers and stores durable local state in IndexedDB. The
+project operates no application server. With valid public Supabase configuration, a user
+may explicitly enable cross-device synchronization; the browser worker receives only an
+access token and communicates with user-scoped PostgREST, private Storage, and the Edge
+Function. Frontend configuration contains no secrets, and diagnostics or telemetry are
+never uploaded automatically.
 
 ```mermaid
 flowchart LR
@@ -82,8 +85,13 @@ location or acquisition metadata is sent to a time-zone service.
 
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It creates the clock, ID generator, bounded
-logger, Dexie database, validated provider configuration, map snapshot store, Sentinel
-query timeline store, HTTP client, and health/diagnostics services.
+logger, Dexie database, validated provider and optional public Supabase configuration,
+map snapshot store, Sentinel query timeline store, HTTP client, and health/diagnostics
+services. When Supabase is configured, it also owns the official browser client's
+persistent session lifecycle and ordinary email/password registration; confirmation is
+performed by Supabase before the user signs in. Otherwise it supplies a deterministic
+local-only user service without creating a client. Password reset is intentionally
+unavailable.
 
 [`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
 this order: runtime services, MUI theme, error boundary, and workspace shell. Tests
@@ -110,6 +118,7 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Current/last Sentinel step status and duration                  | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                     |
 | Submitted Sentinel criteria and derived grouped results         | `SatelliteBrowser` React state                        | Disposable, not persisted                               |
 | Selected/applied Sentinel scene                                 | `MapLibreLayerController` plus `mapLayerStore`        | Transient selection/rendering state, never persisted    |
+| Persistent account session and registration                     | Official Supabase client via `UserDataService`        | Optional email/password auth outside Zustand/Dexie      |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
@@ -124,12 +133,12 @@ lifetime. `MapLibreLayerController` owns both the active track line and the tran
 chart-hover marker so React never owns native map objects.
 
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
-`WorkspaceRail` owns the Tracks, Satellite, Markers, and Layers destinations plus global
-Diagnostics and Settings actions. `WorkspaceSidebar` owns each section's implemented,
-disabled, or empty presentation. Create GPX is currently a disabled Tracks action and is
-never a rail section. Shared palette values live in `appColors.ts` so the MUI theme and
-pure MapLibre style use the same visual vocabulary without introducing a second styling
-system.
+`WorkspaceRail` owns the Tracks, Satellite, Markers, Layers, and User destinations plus
+global Diagnostics and Settings actions. `WorkspaceSidebar` owns each section's
+implemented, disabled, or empty presentation. Create GPX is currently a disabled Tracks
+action and is never a rail section. Shared palette values live in `appColors.ts` so the
+MUI theme and pure MapLibre style use the same visual vocabulary without introducing a
+second styling system.
 
 `BrowserStorageUsageReader` implements the small `StorageUsageReader` application port.
 It combines the origin storage estimate, Chromium's optional per-category details,

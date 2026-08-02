@@ -297,6 +297,18 @@ perimeter derived from provider-tagged military geometry.
   to the user. A restoration event refreshes capabilities and returns the snapshot to
   ready.
 
+## Explicit cross-device synchronization
+
+Startup restores the local `sync.enabled` preference and account session independently.
+Only an authenticated user with that preference set to `true` starts one coalesced
+worker run; disabling sync or signing out aborts it. The main thread supplies the
+current access token only. The worker validates remote records and private GZIP objects,
+performs pending deletes before other mutations, then merges the second full snapshot
+atomically. Known remote revisions absent from that snapshot are hard-deleted locally;
+no server tombstone is retained. A conflict retries one explicit action against the
+current revision, while invalid/network failures preserve valid local data and pending
+work.
+
 ## Track synchronization trust boundary
 
 The repository defines one authenticated `track-sync` Edge Function. Supabase performs

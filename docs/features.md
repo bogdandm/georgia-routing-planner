@@ -14,9 +14,9 @@ longer describes the reviewed interface.
 
 - **Feature rail:** `Satellite`, `Tracks`, `Layers`, and `Markers` are the primary
   top-level feature sections.
-- **Global rail actions:** `Diagnostics` is available when developer mode is enabled;
-  `Settings` is always available. The `About this site` action sits below Settings and
-  opens public author, repository, API, and data-source information.
+- **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
+  available when developer mode is enabled. The `About this site` action sits below
+  Settings and opens public author, repository, API, and data-source information.
 - **Create GPX workflow:** manual waypoint planning begins from `Create GPX` in Tracks.
   “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
   item, or independent planning destination.
@@ -56,7 +56,7 @@ profile-and-stats summary sits between the fixed GR mark and the navigation expa
 affordance. Without an active track summary, the GR mark and expansion affordance remain
 the compact collapsed control.
 
-The current shell exposes Tracks, Satellite, and Layers as interactive rail
+The current shell exposes Tracks, Satellite, Layers, and User as interactive rail
 destinations. Markers remains visible but disabled until that feature surface has
 working behavior. It has no full-width app bar, empty global elevation placeholder, or
 generic always-visible privacy notice.
@@ -71,6 +71,18 @@ generic always-visible privacy notice.
   in megabytes.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
+
+### User
+
+**User** is a standalone lower-rail action. With valid public Supabase configuration, an
+ordinary user can create an email/password account and enable **Sync across devices**.
+Synchronization is disabled by default and remains local-first: a full remote snapshot
+propagates hard deletions, conflicts rebase one explicit local action, and failures keep
+local tracks and pending work. The panel shows exact compressed usage, reservation-aware
+quota progress, and bounded errors without hiding local controls. The lower-rail User
+icon shows an orange dot while synchronization is active, red after failure, and green
+after success. Three HTTP 500 responses exhaust the page-lifetime server-error budget;
+the worker sends no further synchronization requests until the page reloads.
 
 ## Feature surfaces
 
@@ -268,8 +280,8 @@ automatic month requests. The same load-more button remains available for furthe
 archive traversal.
 
 Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
-`#markers`, or `#layers`. Loading an anchored URL restores that tab, and changing tabs
-updates the anchor.
+`#markers`, `#layers`, or `#user`. Loading an anchored URL restores that tab, and
+changing tabs updates the anchor.
 
 Regular map sharing is always available and encodes a 2D center and zoom; context-menu
 point links follow the same flat-camera contract and do not include satellite imagery.
@@ -569,9 +581,11 @@ configuration must never contain secrets.
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, Create GPX
-editing/export, saved-marker management, offline-region downloads, accounts, or cloud
-synchronization. Satellite provides live viewport search for L2A scenes with a
-scene-cloud control. Successful results are grouped by UTC acquisition day and show a
-thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
-sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
-its footprint; Layers can hide or restore the raster and related logical map groups.
+editing/export, saved-marker management, or offline-region downloads. Optional
+email/password accounts can explicitly synchronize elevation-free track copies when
+public Supabase configuration is present. Satellite provides live viewport search for
+L2A scenes with a scene-cloud control. Successful results are grouped by UTC acquisition
+day and show a thumbnail, local acquisition time, processing level, cloud, viewport
+coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
+true-color scene and its footprint; Layers can hide or restore the raster and related
+logical map groups.

@@ -1,3 +1,4 @@
+import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
@@ -8,6 +9,7 @@ import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import {
+  Badge,
   Box,
   ButtonBase,
   IconButton,
@@ -17,9 +19,16 @@ import {
   type TabProps,
   Tooltip,
 } from '@mui/material';
-import type { ReactNode, RefObject, SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+  type SyntheticEvent,
+} from 'react';
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { appColors } from '@/presentation/theme/appColors';
 
 const unavailableTabSx = {
@@ -83,6 +92,37 @@ export function WorkspaceRail({
   onSectionChange,
   onToggleNavigation,
 }: WorkspaceRailProps) {
+  const { userData } = useRuntimeServices();
+  const subscribeUser = useCallback(
+    (listener: () => void) => userData.subscribe(listener),
+    [userData],
+  );
+  const getUserSnapshot = useCallback(() => userData.getSnapshot(), [userData]);
+  const userSnapshot = useSyncExternalStore(
+    subscribeUser,
+    getUserSnapshot,
+    getUserSnapshot,
+  );
+  let userLabel = 'User';
+  let syncIndicatorColor: string | null = null;
+  if (userSnapshot.status === 'signed-in' && userSnapshot.syncEnabled) {
+    switch (userSnapshot.syncStatus) {
+      case 'syncing':
+        userLabel = 'User synchronization in progress';
+        syncIndicatorColor = appColors.brand.tigerOrange;
+        break;
+      case 'error':
+        userLabel = 'User synchronization failed';
+        syncIndicatorColor = appColors.status.error;
+        break;
+      case 'success':
+        userLabel = 'User synchronization successful';
+        syncIndicatorColor = appColors.status.success;
+        break;
+      case 'idle':
+        break;
+    }
+  }
   const handleSectionChange = (_event: SyntheticEvent, value: WorkspaceTab) => {
     onSectionChange(value);
   };
@@ -293,7 +333,7 @@ export function WorkspaceRail({
       <Tabs
         aria-label="Workspace sections"
         orientation="vertical"
-        value={activeTab}
+        value={activeTab === 'user' ? false : activeTab}
         onChange={handleSectionChange}
         sx={{
           visibility: collapsed ? 'hidden' : 'visible',
@@ -361,6 +401,38 @@ export function WorkspaceRail({
             </IconButton>
           </Tooltip>
         ) : null}
+        <Tooltip title={userLabel} placement="right">
+          <IconButton
+            aria-busy={userSnapshot.syncStatus === 'syncing'}
+            aria-label={userLabel}
+            aria-pressed={activeTab === 'user'}
+            onClick={() => {
+              onSectionChange('user');
+            }}
+            sx={{
+              color: 'rgba(255,255,255,0.84)',
+              bgcolor: activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
+            }}
+          >
+            <Badge
+              aria-hidden="true"
+              invisible={syncIndicatorColor === null}
+              overlap="circular"
+              variant="dot"
+              sx={{
+                '& .MuiBadge-badge': {
+                  width: 8,
+                  height: 8,
+                  minWidth: 8,
+                  bgcolor: syncIndicatorColor ?? 'transparent',
+                  boxShadow: `0 0 0 2px ${appColors.brand.deepSpace}`,
+                },
+              }}
+            >
+              <AccountCircleOutlinedIcon />
+            </Badge>
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Settings" placement="right">
           <IconButton
             aria-label="Open settings"

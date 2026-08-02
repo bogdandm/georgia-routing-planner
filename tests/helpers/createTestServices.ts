@@ -1,5 +1,7 @@
 import type { KyInstance } from 'ky';
 
+import { createUnconfiguredUserDataService } from '@/application/user/UserDataService';
+import type { UserDataService } from '@/application/user/UserDataService';
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import {
@@ -20,6 +22,7 @@ import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
+import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
@@ -49,6 +52,7 @@ class TestIdGenerator implements IdGenerator {
 
 interface CreateTestServicesOptions {
   readonly satelliteCatalogGateway?: SatelliteCatalogGateway;
+  readonly userData?: UserDataService;
 }
 
 export function createTestServices(
@@ -67,6 +71,7 @@ export function createTestServices(
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const mapViewport = new MapViewportSnapshotStore();
+  const userData = options.userData ?? createUnconfiguredUserDataService();
   const httpClient = createHttpClient(logger, clock, idGenerator);
   const parsedMapProviderConfiguration = parseMapProviderConfiguration(
     defaultMapProviderConfigurationInput,
@@ -142,8 +147,10 @@ export function createTestServices(
     dispose: () => {
       mapLayers.dispose();
       database.close();
+      userData.dispose();
     },
     httpClient,
+    trackContentHasher: new WebCryptoTrackContentHasher(),
     idGenerator,
     logger,
     elevationProvider: {
@@ -196,5 +203,7 @@ export function createTestServices(
       localStorageEntries: () => [['test', 'value']],
       now: () => new Date('2026-07-19T12:00:00.000Z'),
     }),
+    supabaseConfiguration: { status: 'unconfigured' },
+    userData,
   };
 }

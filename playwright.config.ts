@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const repositoryBasePath = '/georgia-routing-planner/';
+const repositoryBasePath = '/';
 const previewPort = process.env.E2E_PORT ?? '4173';
 
 export default defineConfig({

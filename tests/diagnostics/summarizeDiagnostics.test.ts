@@ -38,7 +38,7 @@ describe('summarizeDiagnostics', () => {
   it('prints a deterministic safe troubleshooting summary', () => {
     expect(summarizeDiagnostics(validBundle)).toBe(
       [
-        'Georgia Routing Planner diagnostics v3 (migrated from v1)',
+        'Trail Planner diagnostics v3 (migrated from v1)',
         'Build: 0.0.0 (abc123, production)',
         'Browser: Synthetic Chrome',
         'Exported: 2026-07-18T00:00:00.000Z',
@@ -102,7 +102,7 @@ describe('summarizeDiagnostics', () => {
     } as const;
 
     const summary = summarizeDiagnostics(v2Bundle);
-    expect(summary).toContain('Georgia Routing Planner diagnostics v3\n');
+    expect(summary).toContain('Trail Planner diagnostics v3\n');
     expect(summary).toContain('Map: degraded, flat, 1 recoverable failure category(s)');
     expect(summary).toContain(
       'Map style: Georgia hiking basemap v1; 1 source(s), 2 layer(s)',

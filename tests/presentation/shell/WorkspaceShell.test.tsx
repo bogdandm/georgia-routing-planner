@@ -264,7 +264,7 @@ describe('WorkspaceShell', () => {
     await user.click(aboutButton);
 
     const about = screen.getByRole('dialog', {
-      name: 'About Georgia Routing Planner',
+      name: 'About Trail Planner',
     });
     expect(about).toBeVisible();
     expect(within(about).getByText('Bogdan Kalashnikov')).toBeVisible();
@@ -680,7 +680,9 @@ describe('WorkspaceShell', () => {
       expect(screen.getByRole('complementary', { name: 'Tracks tools' })).toBeVisible();
       if (width === 1900) {
         await user.click(
-          screen.getByRole('button', { name: 'Hide navigation from GR logo' }),
+          screen.getByRole('button', {
+            name: 'Hide navigation from Trail Planner logo',
+          }),
         );
         expect(adjacentDetails).not.toBeVisible();
         expect(
@@ -2244,7 +2246,7 @@ describe('WorkspaceShell', () => {
 
     const navigation = screen.getByRole('navigation');
     const projectLogo = screen.getByRole('button', {
-      name: 'Hide navigation from GR logo',
+      name: 'Hide navigation from Trail Planner logo',
     });
     expect(navigation).toHaveStyle({ width: '64px' });
     expect(projectLogo).toHaveStyle({
@@ -2263,9 +2265,7 @@ describe('WorkspaceShell', () => {
       height: '52px',
     });
     await user.hover(projectLogo);
-    expect(
-      await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
-    ).toBeVisible();
+    expect(await screen.findByRole('tooltip', { name: 'Trail Planner' })).toBeVisible();
     await user.unhover(projectLogo);
 
     const collapseToggle = screen.getByTestId('navigation-collapse-toggle');
@@ -2283,7 +2283,7 @@ describe('WorkspaceShell', () => {
 
     const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
     const collapsedProjectLogo = screen.getByRole('button', {
-      name: 'Show navigation from GR logo',
+      name: 'Show navigation from Trail Planner logo',
     });
     const collapsedLogoImage =
       within(collapsedProjectLogo).getByTestId('project-logo-image');
@@ -2304,9 +2304,7 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByTestId('compact-elevation-profile')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
     await user.hover(collapsedProjectLogo);
-    expect(
-      await screen.findByRole('tooltip', { name: 'Georgia Routing Planner' }),
-    ).toBeVisible();
+    expect(await screen.findByRole('tooltip', { name: 'Trail Planner' })).toBeVisible();
     await user.unhover(collapsedProjectLogo);
     await user.hover(showNavigation);
     expect(
@@ -2363,7 +2361,7 @@ describe('WorkspaceShell', () => {
       const trackSummary = screen.getByRole('button', { name: 'Open tracks' });
       const showNavigation = screen.getByRole('button', { name: 'Show navigation' });
       const collapsedProjectLogo = screen.getByRole('button', {
-        name: 'Show navigation from GR logo',
+        name: 'Show navigation from Trail Planner logo',
       });
       const navigation = screen.getByRole('navigation');
       const compactProfile = within(trackSummary).getByTestId(
@@ -2419,7 +2417,7 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
     await user.click(
-      screen.getByRole('button', { name: 'Show navigation from GR logo' }),
+      screen.getByRole('button', { name: 'Show navigation from Trail Planner logo' }),
     );
     expect(screen.getByRole('tab', { name: 'Satellite' })).toHaveAttribute(
       'aria-selected',

@@ -31,9 +31,9 @@ longer describes the reviewed interface.
 
 Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals the
 full-height feature rail and contextual tools without remounting the map; **Show map**
-and the GR logo return to the same map. An active track appears over the map as a
-collapsed disclosure containing the same distance, recorded-time, ascent, and descent
-statistics used by the full editor. When the active track has a usable elevation
+and the Trail Planner logo return to the same map. An active track appears over the map
+as a collapsed disclosure containing the same distance, recorded-time, ascent, and
+descent statistics used by the full editor. When the active track has a usable elevation
 profile, its grade-colored graph is drawn decoratively behind these compact stats
 without chart interaction. Expanding the disclosure reveals the full editor; collapsing
 preserves the active track, while closing clears it. Selecting Sentinel imagery closes
@@ -52,9 +52,9 @@ sits directly below it. The shell uses the shared sky-blue, blue-green, deep-spa
 amber, and orange palette with derived surface, border, status, and tag colors.
 
 When navigation is collapsed on desktop with an active track, the same decorative
-profile-and-stats summary sits between the fixed GR mark and the navigation expansion
-affordance. Without an active track summary, the GR mark and expansion affordance remain
-the compact collapsed control.
+profile-and-stats summary sits between the fixed Trail Planner logo and the navigation
+expansion affordance. Without an active track summary, the Trail Planner logo and
+expansion affordance remain the compact collapsed control.
 
 The current shell exposes Tracks, Satellite, Layers, and User as interactive rail
 destinations. Markers remains visible but disabled until that feature surface has
@@ -363,9 +363,9 @@ URL requests a scene.
   geographic tags enter the default list and unknown tags stay in other results.
 - A lightweight line below search reports readiness, pending work, or safe failures;
   selecting an error opens its complete safe detail.
-- Navigation collapses with a short transition to only the clickable GR mark. The GR
-  square keeps the exact same size and viewport position in both states so the remaining
-  navigation appears to retract into that fixed anchor.
+- Navigation collapses with a short transition to only the clickable Trail Planner logo.
+  The Trail Planner square keeps the exact same size and viewport position in both
+  states so the remaining navigation appears to retract into that fixed anchor.
 - Settings is non-modal and does not dim or block the map.
 - Layers exposes default-enabled invalid DEM repair and minor contour spacing under the
   terrain provider. Satellite owns the imagery stretch and the switch that moves relief

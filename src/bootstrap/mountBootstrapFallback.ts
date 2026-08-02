@@ -38,7 +38,7 @@ function downloadEmergencyBootstrapBundle(error: unknown): void {
   const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'georgia-routing-planner-bootstrap-diagnostics.json';
+  link.download = 'trail-planner-bootstrap-diagnostics.json';
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -51,7 +51,7 @@ export function mountBootstrapFallback(
   container.style.cssText =
     'font:16px system-ui;max-width:42rem;margin:4rem auto;padding:2rem;color:#17231b';
   const heading = document.createElement('h1');
-  heading.textContent = 'Georgia Routing Planner could not start';
+  heading.textContent = 'Trail Planner could not start';
   const description = document.createElement('p');
   description.textContent =
     'Download a privacy-safe diagnostics bundle and include it with the issue report.';

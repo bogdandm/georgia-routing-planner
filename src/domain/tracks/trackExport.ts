@@ -22,7 +22,7 @@ export function exportTrackAsGpx(
   const segments = content.trackPoints
     .map((segment) => `<trkseg>${segment.map(gpxPoint).join('')}</trkseg>`)
     .join('');
-  return `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Georgia Routing Planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapeXml(summary.name)}</name></metadata><trk><name>${escapeXml(summary.name)}</name>${segments}</trk></gpx>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Trail Planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapeXml(summary.name)}</name></metadata><trk><name>${escapeXml(summary.name)}</name>${segments}</trk></gpx>`;
 }
 
 export function exportTrackAsKml(

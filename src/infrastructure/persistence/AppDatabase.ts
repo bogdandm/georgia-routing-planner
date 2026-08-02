@@ -1195,6 +1195,7 @@ export class AppDatabase
       this.localTrackContents,
       this.trackSyncStates,
       async () => {
+
         const latestOpened = await this.settings.get('local-tracks.latest-opened');
         if (
           typeof latestOpened?.value === 'string' &&

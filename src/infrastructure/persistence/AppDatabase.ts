@@ -731,6 +731,7 @@ export class AppDatabase
     trackId: string,
     metrics: TrackMetrics,
     content: LocalTrackContent,
+    options: { readonly expectedContentHash?: string } = {},
   ): Promise<LocalTrackSummary> {
     const validContent = parseLocalTrackContent(content);
     if (validContent?.trackId !== trackId) {
@@ -751,6 +752,12 @@ export class AppDatabase
             'not-found',
             'The saved track was not found.',
           );
+        }
+        if (
+          options.expectedContentHash !== undefined &&
+          summary.contentHash !== options.expectedContentHash
+        ) {
+          return summary;
         }
         const updated = {
           ...summary,

@@ -300,8 +300,8 @@ resurrected. Deleting an unsent upsert removes its local intent; deleting a prev
 synchronized track retains only a minimal delete retry record, never local geometry or
 metadata. The worker stores the authoritative used/reserved/limit quota only after
 validated remote merge. Canonical geometry excludes elevations and derived elevation
-metrics; opening a downloaded track recalculates those browser-local values without
-changing its hash, timestamp, or pending state.
+metrics; tracks downloaded without an elevation profile recalculate those browser-local
+values immediately without changing their hash, timestamp, or pending state.
 
 Catalog search first intersects `GeoBounds` with the current viewport. Simplified
 preview geometry can remove bounding-box false positives. An OSM-style tile index is not

@@ -14,7 +14,6 @@ export default tseslint.config(
       'playwright-report/**',
       'test-results/**',
       'supabase/functions/**',
-      'supabase/tests/**/*.ts',
     ],
   },
   js.configs.recommended,

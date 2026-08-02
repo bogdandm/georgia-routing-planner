@@ -59,6 +59,7 @@ export class SupabaseTrackSyncGateway {
       typeof reservation.objectPath !== 'string' ||
       !this.isExpectedObjectPath(reservation.objectPath, command.contentHash)
     ) {
+      await this.releaseUpload(command.contentHash);
       throw new Error('Track reservation returned an invalid object path.');
     }
     return reservation;
@@ -87,11 +88,10 @@ export class SupabaseTrackSyncGateway {
     });
   }
 
-  async releaseUpload(contentHash: string, objectPath: string): Promise<void> {
+  async releaseUpload(contentHash: string): Promise<void> {
     await this.executeRpc('release_track_upload', {
       p_user_id: this.userId,
       p_content_hash: contentHash,
-      p_object_path: objectPath,
     });
   }
 

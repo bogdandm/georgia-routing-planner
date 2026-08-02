@@ -1197,6 +1197,21 @@ export class AppDatabase
       this.localTrackContents,
       this.trackSyncStates,
       async () => {
+        const concurrentDeletions = new Map<string, TrackSyncState>();
+        for (const state of states) {
+          const [currentSummary, currentStateRecord] = await Promise.all([
+            this.localTracks.get(state.trackId),
+            this.trackSyncStates.get(state.trackId),
+          ]);
+          const currentState = parseTrackSyncState(currentStateRecord);
+          if (
+            currentSummary === undefined &&
+            currentState?.pendingKind === 'delete' &&
+            currentState.contentHash === state.contentHash
+          ) {
+            concurrentDeletions.set(state.trackId, currentState);
+          }
+        }
         const latestOpened = await this.settings.get('local-tracks.latest-opened');
         if (
           typeof latestOpened?.value === 'string' &&
@@ -1211,10 +1226,25 @@ export class AppDatabase
           await this.trackSyncStates.delete(trackId);
         }
         for (const pair of pairs) {
+          if (concurrentDeletions.has(pair.summary.id)) continue;
           await this.localTracks.put(pair.summary);
           await this.localTrackContents.put(pair.content);
         }
-        for (const state of states) await this.trackSyncStates.put(state);
+        for (const state of states) {
+          const deletion = concurrentDeletions.get(state.trackId);
+          if (deletion === undefined) {
+            await this.trackSyncStates.put(state);
+            continue;
+          }
+          const remoteRevision = Math.max(
+            deletion.remoteRevision ?? 0,
+            state.remoteRevision ?? 0,
+          );
+          await this.trackSyncStates.put({
+            ...deletion,
+            remoteRevision: remoteRevision === 0 ? null : remoteRevision,
+          });
+        }
         await this.settings.put({
           key: 'sync.usage',
           value: usage.data,

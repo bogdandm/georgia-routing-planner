@@ -247,6 +247,39 @@ describe('local track persistence', () => {
     await expect(database.listLocalTracks()).resolves.toEqual([]);
   });
 
+  it('preserves a deletion committed after a remote merge was prepared', async () => {
+    const track = summary('local:deleted-before-merge', 'Local');
+    await database.saveLocalTrack(track, content(track.id));
+    await database.deleteLocalTrack(track.id);
+
+    await database.applyRemoteTrackMergeBatch({
+      put: [
+        {
+          summary: { ...track, name: 'Remote', updatedAt: '2026-07-22T12:00:00.000Z' },
+          content: content(track.id),
+        },
+      ],
+      deleteTrackIds: [],
+      states: [
+        {
+          trackId: track.id,
+          contentHash: 'a'.repeat(64),
+          remoteRevision: 1,
+          pendingKind: null,
+        },
+      ],
+      usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
+    });
+
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
+      trackId: track.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 1,
+      pendingKind: 'delete',
+    });
+  });
+
   it('collapses duplicate hashes before sync with canonical metadata and precedence', async () => {
     const older = {
       ...summary('local:older', 'Older'),

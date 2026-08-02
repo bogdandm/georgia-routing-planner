@@ -213,6 +213,7 @@ describe('local track persistence', () => {
           pendingKind: null,
         },
       ],
+      usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
     });
 
     await expect(database.loadLocalTrackContent(record.id)).resolves.toEqual(geometry);
@@ -223,6 +224,82 @@ describe('local track persistence', () => {
       pendingKind: null,
     });
     await expect(database.listLocalTrackPairsWithoutSyncState()).resolves.toEqual([]);
+  });
+
+  it('collapses duplicate hashes before sync with canonical metadata and precedence', async () => {
+    const older = {
+      ...summary('local:older', 'Older'),
+      savedAt: '2026-07-22T09:00:00.000Z',
+      updatedAt: '2026-07-22T10:00:00.000Z',
+    };
+    const newer = {
+      ...summary('local:newer', 'Newer'),
+      savedAt: '2026-07-22T11:00:00.000Z',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+      favorite: true,
+    };
+    await database.saveLocalTrack(older, content(older.id));
+    await database.saveLocalTrack(newer, content(newer.id));
+    await database.saveTrackSyncState({
+      trackId: older.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 3,
+      pendingKind: 'metadata',
+    });
+    await database.saveTrackSyncState({
+      trackId: newer.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 5,
+      pendingKind: 'upsert',
+    });
+    await database.saveLatestOpenedTrackId(older.id);
+
+    await database.backfillAndDeduplicateTrackSync([]);
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({
+        id: newer.id,
+        name: 'Newer',
+        favorite: true,
+        savedAt: older.savedAt,
+      }),
+    ]);
+    await expect(database.loadLatestOpenedTrackId()).resolves.toBe(newer.id);
+    await expect(database.loadTrackSyncState(newer.id)).resolves.toEqual({
+      trackId: newer.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 5,
+      pendingKind: 'upsert',
+    });
+    await expect(database.loadTrackSyncState(older.id)).resolves.toBeNull();
+    await expect(database.loadLocalTrackContent(older.id)).rejects.toMatchObject({
+      code: 'content-missing',
+    });
+  });
+
+  it('gives a pair-less known remote deletion precedence over duplicate geometry', async () => {
+    const deleted = summary('local:deleted', 'Deleted');
+    const duplicate = summary('local:duplicate', 'Duplicate');
+    await database.saveLocalTrack(deleted, content(deleted.id));
+    await database.saveLocalTrack(duplicate, content(duplicate.id));
+    await database.saveTrackSyncState({
+      trackId: deleted.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 7,
+      pendingKind: null,
+    });
+    await database.deleteLocalTrack(deleted.id);
+
+    await database.backfillAndDeduplicateTrackSync([]);
+
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
+    await expect(database.loadTrackSyncState(deleted.id)).resolves.toEqual({
+      trackId: deleted.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: 7,
+      pendingKind: 'delete',
+    });
+    await expect(database.loadTrackSyncState(duplicate.id)).resolves.toBeNull();
   });
 
   it('saves track rows and the pending upsert atomically', async () => {

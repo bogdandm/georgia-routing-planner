@@ -4,7 +4,10 @@ import {
   Button,
   ButtonGroup,
   CircularProgress,
+  FormControlLabel,
+  LinearProgress,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -149,28 +152,70 @@ export function UserPanel() {
     );
   }
   if (snapshot.email !== null) {
+    const usedMiB = snapshot.syncUsage.usedBytes / (1024 * 1024);
+    const reservedMiB = snapshot.syncUsage.reservedBytes / (1024 * 1024);
+    const progress = Math.min(
+      100,
+      ((snapshot.syncUsage.usedBytes + snapshot.syncUsage.reservedBytes) /
+        snapshot.syncUsage.limitBytes) *
+        100,
+    );
     return (
       <Stack spacing={2} sx={{ p: 2 }}>
         <Typography variant="body2" color="text.secondary">
           Signed in as
         </Typography>
         <Typography>{snapshot.email}</Typography>
-        <Typography variant="body2" color="success.main">
-          Connected
-        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={snapshot.syncEnabled}
+              disabled={snapshot.busy && snapshot.syncStatus !== 'syncing'}
+              onChange={(_, checked) => {
+                void userData.setSyncEnabled(checked);
+              }}
+            />
+          }
+          label="Sync across devices"
+        />
+        {snapshot.syncEnabled ? (
+          <Stack spacing={0.5}>
+            <Typography
+              color={snapshot.syncStatus === 'error' ? 'error.main' : 'text.secondary'}
+              variant="body2"
+            >
+              {snapshot.syncStatus === 'syncing'
+                ? 'Synchronizing…'
+                : snapshot.syncStatus === 'error'
+                  ? 'Synchronization needs attention'
+                  : 'Connected'}
+            </Typography>
+            <Typography variant="body2">
+              {usedMiB.toFixed(2)} MiB / 8 MiB
+              {reservedMiB > 0 ? ` (${reservedMiB.toFixed(2)} MiB reserved)` : ''}
+            </Typography>
+            <LinearProgress
+              aria-label="Cloud track quota"
+              variant="determinate"
+              value={progress}
+            />
+          </Stack>
+        ) : null}
         {snapshot.errorMessage === null ? null : (
           <Alert role="alert" severity="error">
             {snapshot.errorMessage}
           </Alert>
         )}
         <Button
-          disabled={snapshot.busy}
+          disabled={snapshot.busy && snapshot.syncStatus !== 'syncing'}
           onClick={() => {
             void userData.signOut();
           }}
           variant="outlined"
         >
-          {snapshot.busy ? 'Signing out…' : 'Sign out'}
+          {snapshot.busy && snapshot.syncStatus !== 'syncing'
+            ? 'Signing out…'
+            : 'Sign out'}
         </Button>
       </Stack>
     );

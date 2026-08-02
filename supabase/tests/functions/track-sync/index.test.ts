@@ -405,7 +405,7 @@ Deno.test(
 );
 
 Deno.test(
-  'a reservation path for another user is rejected and released without storage access',
+  'a reservation path for another user is rejected without storage access',
   async () => {
     const state = makeState();
     state.rpcResults.set('reserve_track_upload', [
@@ -421,7 +421,7 @@ Deno.test(
     assertEquals(response.status, 500);
     assertEquals(
       state.calls.filter((call) => call.kind === 'rpc').map((call) => call.name),
-      ['reserve_track_upload', 'release_track_upload'],
+      ['reserve_track_upload'],
     );
     assertEquals(
       state.calls.some((call) => call.kind === 'upload'),

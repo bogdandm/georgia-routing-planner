@@ -13,7 +13,16 @@ import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
-  return { busy: false, email: null, errorMessage: null, noticeMessage: null, status };
+  return {
+    busy: false,
+    email: null,
+    errorMessage: null,
+    noticeMessage: null,
+    status,
+    syncEnabled: false,
+    syncStatus: 'idle',
+    syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+  };
 }
 
 function createService(initial: UserDataSnapshot) {
@@ -27,6 +36,12 @@ function createService(initial: UserDataSnapshot) {
     signIn,
     signOut: vi.fn().mockResolvedValue(undefined),
     signUp,
+    setSyncEnabled: vi.fn().mockResolvedValue(undefined),
+    subscribeTracksChanged: () => () => undefined,
+    synchronizeNow: vi.fn().mockResolvedValue(undefined),
+    trackDeleted: vi.fn().mockResolvedValue(undefined),
+    trackMetadataChanged: vi.fn().mockResolvedValue(undefined),
+    trackSaved: vi.fn().mockResolvedValue(undefined),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -132,11 +147,9 @@ describe('UserPanel', () => {
   it('announces a busy registration error', () => {
     renderPanel(
       createService({
+        ...snapshot('error'),
         busy: true,
-        email: null,
         errorMessage: 'Unable to create an account. Try again.',
-        noticeMessage: null,
-        status: 'error',
       }).service,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to create an account');

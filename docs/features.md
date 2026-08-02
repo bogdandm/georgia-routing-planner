@@ -74,11 +74,12 @@ generic always-visible privacy notice.
 
 ### User
 
-**User** is optional. When the deployable build has valid public Supabase configuration,
-an ordinary user can create an email/password account, confirm the address by email, and
-then sign in to restore a persistent session. Password reset and track synchronization
-are not offered. Without configuration, the section explains that browser-local tracks
-remain available and does not issue an account request.
+**User** is a standalone lower-rail action. With valid public Supabase configuration, an
+ordinary user can create an email/password account and enable **Sync across devices**.
+Synchronization is disabled by default and remains local-first: a full remote snapshot
+propagates hard deletions, conflicts rebase one explicit local action, and failures keep
+local tracks and pending work. The panel shows exact compressed usage, reservation-aware
+quota progress, and bounded errors without hiding local controls.
 
 ## Feature surfaces
 
@@ -577,10 +578,11 @@ configuration must never contain secrets.
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, Create GPX
-editing/export, saved-marker management, offline-region downloads, or cloud track
-synchronization. Optional email/password accounts are available when public Supabase
-configuration is present. Satellite provides live viewport search for L2A scenes with a
-scene-cloud control. Successful results are grouped by UTC acquisition day and show a
-thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
-sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
-its footprint; Layers can hide or restore the raster and related logical map groups.
+editing/export, saved-marker management, or offline-region downloads. Optional
+email/password accounts can explicitly synchronize elevation-free track copies when
+public Supabase configuration is present. Satellite provides live viewport search for
+L2A scenes with a scene-cloud control. Successful results are grouped by UTC acquisition
+day and show a thumbnail, local acquisition time, processing level, cloud, viewport
+coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
+true-color scene and its footprint; Layers can hide or restore the raster and related
+logical map groups.

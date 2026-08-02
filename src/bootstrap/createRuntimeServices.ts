@@ -113,6 +113,7 @@ export function createRuntimeServices(): RuntimeServices {
               },
             },
           ),
+          database,
         )
       : createUnconfiguredUserDataService();
   const storageUsage = new BrowserStorageUsageReader();

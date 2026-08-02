@@ -34,13 +34,15 @@ export class TrackSyncService {
     await this.gateway.cleanupOrphans();
     const reservation = await this.gateway.reserveUpload(command);
     if (reservation.outcome !== 'upload') return reservation;
-
-    const objectPath = reservation.objectPath!;
+    const objectPath = reservation.objectPath;
+    if (objectPath === undefined) {
+      throw new Error('Track reservation returned no object path.');
+    }
     let uploadResult: 'created' | 'existing';
     try {
       uploadResult = await this.gateway.uploadGeometry(objectPath, command.geometry);
     } catch (uploadError) {
-      await this.gateway.releaseUpload(command.contentHash);
+      await this.gateway.releaseUpload(command.contentHash, objectPath);
       throw uploadError;
     }
     try {
@@ -58,7 +60,7 @@ export class TrackSyncService {
           );
         }
         try {
-          await this.gateway.releaseUpload(command.contentHash);
+          await this.gateway.releaseUpload(command.contentHash, objectPath);
         } catch (releaseError) {
           compensationError = new AggregateError(
             compensationError === undefined

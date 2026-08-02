@@ -11,6 +11,7 @@ import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import {
   Box,
   ButtonBase,
+  CircularProgress,
   IconButton,
   Stack,
   Tab,
@@ -18,9 +19,16 @@ import {
   type TabProps,
   Tooltip,
 } from '@mui/material';
-import type { ReactNode, RefObject, SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+  type SyntheticEvent,
+} from 'react';
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { appColors } from '@/presentation/theme/appColors';
 
 const unavailableTabSx = {
@@ -84,6 +92,17 @@ export function WorkspaceRail({
   onSectionChange,
   onToggleNavigation,
 }: WorkspaceRailProps) {
+  const { userData } = useRuntimeServices();
+  const subscribeUser = useCallback(
+    (listener: () => void) => userData.subscribe(listener),
+    [userData],
+  );
+  const getUserSnapshot = useCallback(() => userData.getSnapshot(), [userData]);
+  const userSnapshot = useSyncExternalStore(
+    subscribeUser,
+    getUserSnapshot,
+    getUserSnapshot,
+  );
   const handleSectionChange = (_event: SyntheticEvent, value: WorkspaceTab) => {
     onSectionChange(value);
   };
@@ -362,21 +381,39 @@ export function WorkspaceRail({
             </IconButton>
           </Tooltip>
         ) : null}
-        <Tooltip title="User" placement="right">
-          <IconButton
-            aria-label="User"
-            aria-pressed={activeTab === 'user'}
-            onClick={() => {
-              onSectionChange('user');
-            }}
-            sx={{
-              color: 'rgba(255,255,255,0.84)',
-              bgcolor: activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
-            }}
-          >
-            <AccountCircleOutlinedIcon />
-          </IconButton>
-        </Tooltip>
+        {(() => {
+          const syncing = userSnapshot.syncStatus === 'syncing';
+          const label = syncing ? 'User synchronization in progress' : 'User';
+          return (
+            <Tooltip title="User" placement="right">
+              <IconButton
+                aria-busy={syncing}
+                aria-label={label}
+                aria-pressed={activeTab === 'user'}
+                onClick={() => {
+                  onSectionChange('user');
+                }}
+                sx={{
+                  color: 'rgba(255,255,255,0.84)',
+                  bgcolor:
+                    activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
+                  '@media (prefers-reduced-motion: reduce)': {
+                    '& .MuiCircularProgress-root': { animation: 'none' },
+                  },
+                }}
+              >
+                <AccountCircleOutlinedIcon />
+                {syncing ? (
+                  <CircularProgress
+                    aria-hidden="true"
+                    size={15}
+                    sx={{ position: 'absolute' }}
+                  />
+                ) : null}
+              </IconButton>
+            </Tooltip>
+          );
+        })()}
         <Tooltip title="Settings" placement="right">
           <IconButton
             aria-label="Open settings"

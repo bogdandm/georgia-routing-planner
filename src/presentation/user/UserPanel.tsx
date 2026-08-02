@@ -1,3 +1,5 @@
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import {
   Alert,
   Box,
@@ -5,6 +7,8 @@ import {
   ButtonGroup,
   CircularProgress,
   FormControlLabel,
+  IconButton,
+  InputAdornment,
   LinearProgress,
   Stack,
   Switch,
@@ -46,6 +50,7 @@ function AccountForm({
   const [email, setEmail] = useState('');
   const [mode, setMode] = useState<AccountMode>('sign-in');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const isSignUp = mode === 'sign-up';
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
@@ -113,7 +118,31 @@ function AccountForm({
             setPassword(event.target.value);
           }}
           required
-          type="password"
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                    disabled={snapshot.busy}
+                    edge="end"
+                    onClick={() => {
+                      setPasswordVisible((visible) => !visible);
+                    }}
+                    size="small"
+                    type="button"
+                  >
+                    {passwordVisible ? (
+                      <VisibilityOffOutlinedIcon fontSize="small" />
+                    ) : (
+                      <VisibilityOutlinedIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
+          }}
+          type={passwordVisible ? 'text' : 'password'}
           value={password}
         />
         <Button disabled={snapshot.busy} type="submit" variant="contained">

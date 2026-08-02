@@ -62,6 +62,7 @@ describe('track export', () => {
     const kml = exportTrackAsKml(summary, content);
 
     expect(gpx).toContain('<name>Ridge &lt;loop&gt;</name>');
+    expect(gpx).toContain('creator="Trail Planner"');
     expect(gpx).not.toContain('<desc>');
     expect(gpx).toContain('<ele>100</ele>');
     expect(gpx).toContain('<time>2026-07-01T10:00:00.000Z</time>');

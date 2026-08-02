@@ -65,7 +65,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
         env:
-          BASE_PATH: /georgia-routing-planner/
+          BASE_PATH: /
       - name: Install Chromium for end-to-end tests
         if: steps.changes.outputs.docs_only != 'true'
         run: pnpm exec playwright install --with-deps chromium
@@ -80,7 +80,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: pnpm build:app
         env:
-          BASE_PATH: /georgia-routing-planner/
+          BASE_PATH: /
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Upload deployable Pages artifact

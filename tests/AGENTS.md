@@ -140,9 +140,10 @@ record that the first result was an orchestration timeout, not a test failure.
 
 The complete non-coverage suite can make the `WorkspaceShell` interactions
 `navigates the contextual feature panels without covering the map` or
-`collapses from the GR logo and restores from the remaining logo` exceed the five-second
-default when many JSDOM workers contend on the shared workstation. If either exact test
-passes under a focused run, validate the complete non-coverage suite once with:
+`collapses from the Trail Planner logo and restores from the remaining logo` exceed the
+five-second default when many JSDOM workers contend on the shared workstation. If either
+exact test passes under a focused run, validate the complete non-coverage suite once
+with:
 
 ```bash
 pnpm test --maxWorkers=4

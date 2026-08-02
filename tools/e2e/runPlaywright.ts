@@ -8,7 +8,7 @@ const viteCli = fileURLToPath(
 const playwrightCli = fileURLToPath(
   new URL('../../node_modules/@playwright/test/cli.js', import.meta.url),
 );
-const basePath = '/georgia-routing-planner/';
+const basePath = '/';
 const previewPort = process.env.E2E_PORT ?? '4173';
 const previewUrl = `http://127.0.0.1:${previewPort}${basePath}`;
 const playwrightArguments = process.argv.slice(2);

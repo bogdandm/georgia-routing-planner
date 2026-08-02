@@ -16,7 +16,7 @@ interface DiagnosticsBundle {
 }
 
 const productionTerrainWorkerUrlPattern =
-  /\/georgia-routing-planner\/assets\/terrainCompute\.worker-[^/?]+\.js(?:\?.*)?$/u;
+  /\/assets\/terrainCompute\.worker-[^/?]+\.js(?:\?.*)?$/u;
 
 async function readStoredMapView(page: Page) {
   return page.evaluate(

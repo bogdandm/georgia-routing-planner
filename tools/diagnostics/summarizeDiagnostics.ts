@@ -68,7 +68,7 @@ export function summarizeDiagnostics(input: unknown): string {
         (failure) => failure.recoveryState !== 'recovered',
       ));
   const lines = [
-    `Georgia Routing Planner diagnostics v3${sourceVersion === 3 ? '' : ` (migrated from v${String(sourceVersion)})`}`,
+    `Trail Planner diagnostics v3${sourceVersion === 3 ? '' : ` (migrated from v${String(sourceVersion)})`}`,
     `Build: ${bundle.build.appVersion} (${bundle.build.commit}, ${bundle.build.mode})`,
     `Browser: ${bundle.runtime.userAgent}`,
     `Exported: ${bundle.exportedAt}`,

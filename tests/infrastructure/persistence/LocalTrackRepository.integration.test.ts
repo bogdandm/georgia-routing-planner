@@ -323,6 +323,28 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(duplicate.id)).resolves.toBeNull();
   });
 
+  it('uploads a surviving legacy duplicate after an unsent duplicate is deleted', async () => {
+    const deleted = summary('local:deleted-unsent', 'Deleted');
+    const survivor = summary('local:legacy-survivor', 'Survivor');
+    await database.saveLocalTrack(deleted, content(deleted.id));
+    await database.saveLocalTrack(survivor, content(survivor.id));
+    await database.deleteLocalTrack(deleted.id);
+    await database.trackSyncStates.delete(survivor.id);
+
+    await database.backfillAndDeduplicateTrackSync([]);
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: survivor.id }),
+    ]);
+    await expect(database.loadTrackSyncState(survivor.id)).resolves.toEqual({
+      trackId: survivor.id,
+      contentHash: 'a'.repeat(64),
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    });
+    await expect(database.loadTrackSyncState(deleted.id)).resolves.toBeNull();
+  });
+
   it('saves track rows and the pending upsert atomically', async () => {
     await database.saveLocalTrack(summary('local:1', 'ბილიკი'), content('local:1'));
     await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({

@@ -1088,6 +1088,7 @@ export class AppDatabase
               state.remoteRevision === null ? [] : [state.remoteRevision],
             ),
           );
+          const pendingKind = pendingKindWithHighestPrecedence(group.states);
           const summary = {
             ...canonical.summary,
             contentHash,
@@ -1104,9 +1105,10 @@ export class AppDatabase
             contentHash,
             remoteRevision: remoteRevision === 0 ? null : remoteRevision,
             pendingKind:
-              group.states.length === 0
+              group.states.length === 0 ||
+              (remoteRevision === 0 && pendingKind === null)
                 ? 'upsert'
-                : pendingKindWithHighestPrecedence(group.states),
+                : pendingKind,
           });
           for (const pair of group.pairs) {
             if (pair.summary.id !== canonical.summary.id) {

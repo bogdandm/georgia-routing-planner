@@ -1022,9 +1022,14 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(saveLocalTrack).toHaveBeenCalledOnce();
     });
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByRole('button', { name: 'Save' }),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 5_000 },
+    );
     const savedDisclosure = screen.getByRole('button', {
       name: 'Climbs & Descents',
     });

@@ -79,6 +79,8 @@ export class SupabaseTrackSyncGateway {
         502,
         'storage_upload_failed',
         'Track geometry storage is unavailable.',
+        undefined,
+        error,
       );
     }
     return error === null ? 'created' : 'existing';

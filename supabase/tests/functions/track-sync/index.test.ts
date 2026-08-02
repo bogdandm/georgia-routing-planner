@@ -225,6 +225,21 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
   return (await response.json()) as Record<string, unknown>;
 }
 
+async function captureConsoleErrors(
+  run: () => Promise<Response>,
+): Promise<{ readonly response: Response; readonly messages: readonly string[] }> {
+  const messages: string[] = [];
+  const original = console.error;
+  console.error = (...values: unknown[]) => {
+    messages.push(values.map(String).join(' '));
+  };
+  try {
+    return { response: await run(), messages };
+  } finally {
+    console.error = original;
+  }
+}
+
 Deno.test(
   'the shared fixture is a valid version 1 GRPT envelope with its declared hash',
   async () => {
@@ -386,18 +401,22 @@ Deno.test(
 );
 
 Deno.test(
-  'storage upload failures return a bounded stage code and release the reservation',
+  'storage upload failures are logged safely, return a bounded code, and release',
   async () => {
     const state = makeState();
     state.uploadError = {
-      message: 'private storage provider detail',
+      message:
+        `provider rejected ${USER_ID}/${CONTENT_HASH} for user@example.test ` +
+        'Bearer private-token',
       statusCode: 500,
     };
     state.rpcResults.set('reserve_track_upload', [
       { data: { outcome: 'upload', objectPath: OBJECT_PATH }, error: null },
     ]);
 
-    const response = await handleTrackSync(uploadRequest(), makeContext(state));
+    const { response, messages } = await captureConsoleErrors(
+      async () => await handleTrackSync(uploadRequest(), makeContext(state)),
+    );
     const body = await responseJson(response);
 
     assertEquals(response.status, 502);
@@ -407,11 +426,73 @@ Deno.test(
         message: 'Track geometry storage is unavailable.',
       },
     });
+    assertEquals(messages.length, 1);
+    assertEquals(JSON.parse(messages[0]!), {
+      event: 'track_sync_failure',
+      method: 'POST',
+      action: 'upload',
+      status: 502,
+      code: 'storage_upload_failed',
+      cause: {
+        message:
+          'provider rejected [redacted-uuid]/[redacted-hash] for [redacted-email] [redacted-token]',
+        statusCode: 500,
+      },
+    });
     const release = state.calls.find((call) => call.name === 'release_track_upload');
     assertEquals(release?.value, {
       p_user_id: USER_ID,
       p_content_hash: CONTENT_HASH,
       p_object_path: OBJECT_PATH,
+    });
+  },
+);
+
+Deno.test(
+  'unexpected RPC failures are logged safely without exposing details',
+  async () => {
+    const state = makeState();
+    state.rpcResults.set('apply_track_metadata', [
+      {
+        data: null,
+        error: {
+          message: `database rejected ${USER_ID}/${CONTENT_HASH} for user@example.test`,
+        },
+      },
+    ]);
+
+    const { response, messages } = await captureConsoleErrors(
+      async () =>
+        await handleTrackSync(
+          jsonRequest({
+            action: 'metadata',
+            contentHash: CONTENT_HASH,
+            baseRevision: 7,
+            metadata: { name: 'Updated' },
+          }),
+          makeContext(state),
+        ),
+    );
+
+    assertEquals(response.status, 500);
+    assertEquals(await responseJson(response), {
+      error: {
+        code: 'internal_error',
+        message: 'Track synchronization failed.',
+      },
+    });
+    assertEquals(messages.length, 1);
+    assertEquals(JSON.parse(messages[0]!), {
+      event: 'track_sync_failure',
+      method: 'POST',
+      action: 'metadata',
+      status: 500,
+      code: 'internal_error',
+      cause: {
+        name: 'Error',
+        message:
+          'apply_track_metadata failed: database rejected [redacted-uuid]/[redacted-hash] for [redacted-email]',
+      },
     });
   },
 );
@@ -537,10 +618,35 @@ Deno.test(
     state.rpcResults.set('finalize_track_upload', [
       { data: null, error: { message: 'finalize failed' } },
     ]);
-    const response = await handleTrackSync(uploadRequest(), makeContext(state));
+    const { response, messages } = await captureConsoleErrors(
+      async () => await handleTrackSync(uploadRequest(), makeContext(state)),
+    );
     assertEquals(response.status, 500);
     assert(state.objects.has(OBJECT_PATH));
     assert(state.calls.some((call) => call.name === 'release_track_upload'));
+    assertEquals(messages.length, 1);
+    assertEquals(JSON.parse(messages[0]!), {
+      event: 'track_sync_failure',
+      method: 'POST',
+      action: 'upload',
+      status: 500,
+      code: 'internal_error',
+      cause: {
+        name: 'AggregateError',
+        message: 'Track upload finalization failed.',
+        errors: [
+          {
+            name: 'Error',
+            message: 'finalize_track_upload failed: finalize failed',
+          },
+          {
+            name: 'Error',
+            message:
+              'Uploaded object cleanup failed: Unable to delete track geometry: storage unavailable',
+          },
+        ],
+      },
+    });
   },
 );
 

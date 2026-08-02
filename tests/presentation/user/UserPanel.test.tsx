@@ -226,6 +226,17 @@ describe('UserPanel', () => {
       });
     });
     expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
+
+    act(() => {
+      userData.set({
+        ...snapshot('signed-in'),
+        busy: true,
+        email: 'user@example.test',
+        userId: 'user-id',
+        syncEnabled: true,
+      });
+    });
+    expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
   });
 
   it('hides synchronization controls after sign-out', () => {

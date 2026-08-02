@@ -696,8 +696,13 @@ describe('SupabaseUserDataService', () => {
       completedTracks: 3,
       totalTracks: 10,
     });
-    await service.setSyncEnabled(false);
+    fake.emit('SIGNED_IN', session('replacement@example.test', 'replacement-id'));
     await manual;
+    expect(service.getSnapshot()).toMatchObject({
+      syncStatus: 'idle',
+      syncProgress: null,
+      userId: 'replacement-id',
+    });
     emitProgress?.({ completedTracks: 4, totalTracks: 10 });
     expect(service.getSnapshot().syncProgress).toBeNull();
     service.dispose();

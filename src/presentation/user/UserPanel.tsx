@@ -218,7 +218,9 @@ export function UserPanel() {
           </Stack>
         ) : null}
         <Button
-          disabled={!snapshot.syncEnabled || snapshot.syncStatus === 'syncing'}
+          disabled={
+            !snapshot.syncEnabled || snapshot.busy || snapshot.syncStatus === 'syncing'
+          }
           onClick={() => {
             void userData.synchronizeNow();
           }}

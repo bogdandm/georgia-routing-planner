@@ -224,6 +224,7 @@ export class SupabaseUserDataService implements UserDataService {
     this.#setSnapshot({
       ...this.#snapshot,
       busy: true,
+      syncStatus: 'idle',
       errorMessage: null,
       noticeMessage: null,
       syncProgress: null,
@@ -378,6 +379,11 @@ export class SupabaseUserDataService implements UserDataService {
         this.#syncAbort?.abort(
           new DOMException('Authentication account changed.', 'AbortError'),
         );
+        this.#setSnapshot({
+          ...this.#snapshot,
+          syncStatus: 'idle',
+          syncProgress: null,
+        });
       }
       this.#setSignedIn(session);
       this.#sessionRestored = true;
@@ -390,6 +396,11 @@ export class SupabaseUserDataService implements UserDataService {
         new DOMException('Authentication account changed.', 'AbortError'),
       );
       this.#sessionRevision += 1;
+      this.#setSnapshot({
+        ...this.#snapshot,
+        syncStatus: 'idle',
+        syncProgress: null,
+      });
       this.#setSignedIn(session);
       return;
     }

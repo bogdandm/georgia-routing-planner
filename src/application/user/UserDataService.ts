@@ -2,15 +2,21 @@ export type UserDataStatus =
   'unconfigured' | 'loading' | 'signed-out' | 'signed-in' | 'error';
 
 export type UserDataSyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+export interface UserDataSyncProgress {
+  readonly completedTracks: number;
+  readonly totalTracks: number;
+}
 
 export interface UserDataSnapshot {
   readonly busy: boolean;
   readonly email: string | null;
+  readonly userId: string | null;
   readonly errorMessage: string | null;
   readonly noticeMessage: string | null;
   readonly status: UserDataStatus;
   readonly syncEnabled: boolean;
   readonly syncStatus: UserDataSyncStatus;
+  readonly syncProgress: UserDataSyncProgress | null;
   readonly syncUsage: {
     readonly limitBytes: number;
     readonly reservedBytes: number;
@@ -37,11 +43,13 @@ export interface UserDataService {
 export const unconfiguredUserDataSnapshot: UserDataSnapshot = {
   busy: false,
   email: null,
+  userId: null,
   errorMessage: null,
   noticeMessage: null,
   status: 'unconfigured',
   syncEnabled: false,
   syncStatus: 'idle',
+  syncProgress: null,
   syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
 };
 

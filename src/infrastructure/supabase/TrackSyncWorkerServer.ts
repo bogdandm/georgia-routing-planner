@@ -456,7 +456,27 @@ export class TrackSyncWorkerServer {
     const local = await this.backfillAndDeduplicate();
     signal.throwIfAborted();
     let usage = await gateway.status(signal);
-    await gateway.snapshot(signal);
+    const firstSnapshot = await gateway.snapshot(signal);
+    const localByHash = new Map(local.map((entry) => [entry.state.contentHash, entry]));
+    let completedTracks = 0;
+    let totalTracks =
+      local.filter((entry) => entry.state.pendingKind !== null).length +
+      firstSnapshot.filter((remote) => {
+        const localEntry = localByHash.get(remote.content_hash);
+        return (
+          remote.state === 'ready' &&
+          (localEntry === undefined ||
+            (localEntry.state.pendingKind === null &&
+              localEntry.state.remoteRevision !== remote.revision))
+        );
+      }).length;
+    const publishProgress = () => {
+      this.#rpc.publishEvent(trackSyncWorkerEventNames.progress, {
+        completedTracks,
+        totalTracks,
+      });
+    };
+    if (totalTracks > 0) publishProgress();
     const mutationStates = new Map<string, TrackSyncState | null>();
     const mutationDeleted = new Set<string>();
     for (const entry of [...local].sort(
@@ -468,6 +488,8 @@ export class TrackSyncWorkerServer {
       const outcome = await this.applyPending(entry, gateway, signal);
       mutationStates.set(entry.state.trackId, outcome.state);
       if (outcome.deleteLocal) mutationDeleted.add(entry.state.trackId);
+      completedTracks += 1;
+      publishProgress();
     }
     if (mutationStates.size > 0) usage = await gateway.status(signal);
     const secondSnapshot = await gateway.snapshot(signal);
@@ -477,6 +499,14 @@ export class TrackSyncWorkerServer {
     const initialEntryByTrackId = new Map(
       local.map((entry) => [entry.state.trackId, entry]),
     );
+    type DownloadSelection =
+      | {
+          readonly kind: 'existing';
+          readonly remote: RemoteRecord;
+          readonly localId: string;
+        }
+      | { readonly kind: 'new'; readonly remote: RemoteRecord };
+    const downloads: DownloadSelection[] = [];
     const put: LocalTrackSyncPair[] = [];
     const states: TrackSyncState[] = [];
     const deleted = new Set(mutationDeleted);
@@ -528,26 +558,40 @@ export class TrackSyncWorkerServer {
         if (!syncStatesEqual(effective, entry.state)) states.push(effective);
         continue;
       }
-      const pair = await this.downloadPair(remote, effective.trackId, gateway, signal);
-      put.push(pair);
-      states.push({
-        trackId: pair.summary.id,
-        contentHash: remote.content_hash,
-        remoteRevision: remote.revision,
-        pendingKind: null,
+      downloads.push({
+        kind: 'existing',
+        localId: effective.trackId,
+        remote,
       });
-      if (pair.summary.id !== effective.trackId) deleted.add(effective.trackId);
     }
     for (const remote of secondSnapshot) {
       if (remote.state !== 'ready' || currentHashes.has(remote.content_hash)) continue;
-      const pair = await this.downloadPair(remote, undefined, gateway, signal);
+      downloads.push({ kind: 'new', remote });
+    }
+    const reconciledTotalTracks = completedTracks + downloads.length;
+    if (reconciledTotalTracks !== totalTracks) {
+      totalTracks = reconciledTotalTracks;
+      publishProgress();
+    }
+    for (const download of downloads) {
+      const pair = await this.downloadPair(
+        download.remote,
+        download.kind === 'existing' ? download.localId : undefined,
+        gateway,
+        signal,
+      );
       put.push(pair);
       states.push({
         trackId: pair.summary.id,
-        contentHash: remote.content_hash,
-        remoteRevision: remote.revision,
+        contentHash: download.remote.content_hash,
+        remoteRevision: download.remote.revision,
         pendingKind: null,
       });
+      if (download.kind === 'existing' && pair.summary.id !== download.localId) {
+        deleted.add(download.localId);
+      }
+      completedTracks += 1;
+      publishProgress();
     }
     signal.throwIfAborted();
     await this.database.applyRemoteTrackMergeBatch({

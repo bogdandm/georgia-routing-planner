@@ -3,12 +3,14 @@ import {
   type WorkerRpcEndpoint,
   type WorkerRpcRemoteError,
 } from '@/infrastructure/runtime/WorkerRpc';
+import type { UserDataSyncProgress } from '@/application/user/UserDataService';
 
 export const trackSyncWorkerMethods = {
   synchronize: 'track-sync.synchronize',
 } as const;
 
 export const trackSyncWorkerEventNames = {
+  progress: 'track-sync.progress',
   tracksChanged: 'track-sync.tracks-changed',
 } as const;
 
@@ -43,6 +45,23 @@ function defaultWorkerFactory(): WorkerRpcEndpoint {
     name: 'track-sync',
   });
 }
+function isSyncProgress(value: unknown): value is UserDataSyncProgress {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'completedTracks' in value &&
+    typeof value.completedTracks === 'number' &&
+    Number.isFinite(value.completedTracks) &&
+    Number.isInteger(value.completedTracks) &&
+    value.completedTracks >= 0 &&
+    'totalTracks' in value &&
+    typeof value.totalTracks === 'number' &&
+    Number.isFinite(value.totalTracks) &&
+    Number.isInteger(value.totalTracks) &&
+    value.totalTracks >= 0 &&
+    value.completedTracks <= value.totalTracks
+  );
+}
 
 /** Owns the one worker channel used by the existing user-data service. */
 export class TrackSyncWorkerClient {
@@ -66,6 +85,14 @@ export class TrackSyncWorkerClient {
   public subscribeTracksChanged(listener: () => void): () => void {
     return this.#rpc.subscribeEvent(trackSyncWorkerEventNames.tracksChanged, () => {
       listener();
+    });
+  }
+
+  public subscribeProgress(
+    listener: (progress: UserDataSyncProgress) => void,
+  ): () => void {
+    return this.#rpc.subscribeEvent(trackSyncWorkerEventNames.progress, (payload) => {
+      if (isSyncProgress(payload)) listener(payload);
     });
   }
 

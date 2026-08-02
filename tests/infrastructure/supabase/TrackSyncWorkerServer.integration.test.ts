@@ -165,6 +165,81 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
+  it('publishes reconciled progress for pending uploads and remote downloads', async () => {
+    const fixture = JSON.parse(
+      await readFile('tests/fixtures/track-sync/geometry-v1.json', 'utf8'),
+    ) as { readonly gzipHex: string; readonly sha256: string };
+    const track = summary('local:pending');
+    await database.saveLocalTrack(track, content(track.id));
+    const compressed = bytesFromHex(fixture.gzipHex);
+    vi.stubGlobal('Blob', NodeBlob);
+    const remote = {
+      content_hash: fixture.sha256,
+      revision: 2,
+      state: 'ready' as const,
+      object_path: `user/${fixture.sha256}/upload.grpt.gz`,
+      compressed_bytes: compressed.byteLength,
+      metadata: {
+        name: 'Remote track',
+        savedAt: '2026-07-22T10:00:00.000Z',
+        updatedAt: '2026-07-22T10:00:00.000Z',
+        sourceFilename: 'remote.gpx',
+        sourceFormat: 'gpx',
+        favorite: false,
+        geometryKind: 'track',
+        metadata: { version: '1.1', links: [] },
+        warnings: [],
+      },
+    };
+    const localRemote = {
+      content_hash: contentHash,
+      revision: 1,
+      state: 'reserved' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: {},
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({
+          usedBytes: compressed.byteLength,
+          reservedBytes: 0,
+          limitBytes: 8_388_608,
+        }),
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([localRemote, remote]),
+      mutate: vi.fn().mockResolvedValue({ outcome: 'applied' as const, revision: 1 }),
+      download: vi.fn().mockResolvedValue(compressed),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+    const progress: { completedTracks: number; totalTracks: number }[] = [];
+    client.subscribeEvent(trackSyncWorkerEventNames.progress, (payload) => {
+      progress.push(payload as { completedTracks: number; totalTracks: number });
+    });
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+    });
+
+    await vi.waitFor(() => {
+      expect(progress).toEqual([
+        { completedTracks: 0, totalTracks: 1 },
+        { completedTracks: 1, totalTracks: 1 },
+        { completedTracks: 1, totalTracks: 2 },
+        { completedTracks: 2, totalTracks: 2 },
+      ]);
+    });
+    await expect(database.listLocalTracks()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: track.id }),
+        expect.objectContaining({ contentHash: fixture.sha256 }),
+      ]),
+    );
+    client.dispose();
+  });
   it('hard-deletes a known remote track absent from the second snapshot', async () => {
     const track = summary('local:known');
     await database.saveLocalTrack(track, content(track.id));

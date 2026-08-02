@@ -78,11 +78,12 @@ generic always-visible privacy notice.
 ordinary user can create an email/password account and enable **Sync across devices**.
 Synchronization is disabled by default and remains local-first: a full remote snapshot
 propagates hard deletions, conflicts rebase one explicit local action, and failures keep
-local tracks and pending work. The panel shows exact compressed usage, reservation-aware
-quota progress, and bounded errors without hiding local controls. The lower-rail User
-icon shows an orange dot while synchronization is active, red after failure, and green
-after success. Three HTTP 500 responses exhaust the page-lifetime server-error budget;
-the worker sends no further synchronization requests until the page reloads.
+local tracks and pending work. The signed-in panel exposes the full support User ID,
+exact compressed usage, reservation-aware quota progress, a **Sync now** action, and
+per-track transfer progress while synchronization runs. The lower-rail User icon shows
+an orange dot while synchronization is active, red after failure, and green after
+success. Three HTTP 500 responses exhaust the page-lifetime server-error budget; the
+worker sends no further synchronization requests until the page reloads.
 
 ## Feature surfaces
 

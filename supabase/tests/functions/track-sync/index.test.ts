@@ -1,11 +1,14 @@
 import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
-import fixture from '../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
-import { TRACK_GEOMETRY_BUCKET, TRACK_QUOTA_BYTES } from './internal/contracts.ts';
-import { validateCanonicalGeometry } from './internal/geometry.ts';
-import { SupabaseTrackSyncGateway } from './internal/supabase-track-sync-gateway.ts';
-import { handleTrackSync } from './track-sync.ts';
+import fixture from '../../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
+import {
+  TRACK_GEOMETRY_BUCKET,
+  TRACK_QUOTA_BYTES,
+} from '../../../functions/track-sync/internal/contracts.ts';
+import { validateCanonicalGeometry } from '../../../functions/track-sync/internal/geometry.ts';
+import { SupabaseTrackSyncGateway } from '../../../functions/track-sync/internal/supabase-track-sync-gateway.ts';
+import { handleTrackSync } from '../../../functions/track-sync/track-sync.ts';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
@@ -93,8 +96,8 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
         error: null,
       };
     },
-    async upload(path: string) {
-      state.calls.push({ kind: 'upload', name: path });
+    async upload(path: string, body: Blob, options: { readonly contentType: string }) {
+      state.calls.push({ kind: 'upload', name: path, value: { body, options } });
       if (state.uploadError !== null) return { data: null, error: state.uploadError };
       state.objects.add(path);
       return { data: { path }, error: null };
@@ -364,6 +367,18 @@ Deno.test(
     const response = await handleTrackSync(uploadRequest(), makeContext(state));
     assertEquals((await responseJson(response)).outcome, 'applied');
     assert(state.objects.has(OBJECT_PATH));
+    const uploadCall = state.calls.find((call) => call.kind === 'upload');
+    const uploadValue = uploadCall?.value as
+      | { readonly body: Blob; readonly options: { readonly contentType: string } }
+      | undefined;
+    assert(uploadValue !== undefined);
+    assert(uploadValue.body instanceof Blob);
+    assertEquals(uploadValue.body.type, 'application/gzip');
+    assertEquals(uploadValue.options.contentType, 'application/gzip');
+    assertEquals(
+      new Uint8Array(await uploadValue.body.arrayBuffer()),
+      bytesFromHex(fixture.gzipHex),
+    );
   },
 );
 
@@ -402,7 +417,7 @@ Deno.test(
 );
 
 Deno.test(
-  'a reservation path for another user is rejected and released without storage access',
+  'a reservation path for another user is rejected without storage access',
   async () => {
     const state = makeState();
     state.rpcResults.set('reserve_track_upload', [
@@ -418,7 +433,7 @@ Deno.test(
     assertEquals(response.status, 500);
     assertEquals(
       state.calls.filter((call) => call.kind === 'rpc').map((call) => call.name),
-      ['reserve_track_upload', 'release_track_upload'],
+      ['reserve_track_upload'],
     );
     assertEquals(
       state.calls.some((call) => call.kind === 'upload'),

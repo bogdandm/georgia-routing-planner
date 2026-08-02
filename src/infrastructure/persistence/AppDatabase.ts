@@ -890,7 +890,7 @@ export class AppDatabase
         const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
         await this.localTrackContents.delete(trackId);
         await this.localTracks.delete(trackId);
-        if (state !== null && state.remoteRevision !== null) {
+        if (state !== null) {
           await this.trackSyncStates.put({
             trackId,
             contentHash: state.contentHash,

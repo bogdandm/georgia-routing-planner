@@ -32,6 +32,8 @@ const syncErrorMessage =
   'Synchronization could not finish. Your local tracks remain available.';
 const syncQuotaErrorMessage =
   'Cloud track storage is full. Delete a synchronized track and try again.';
+const syncPreferenceErrorMessage =
+  'Unable to update synchronization. Your previous setting is unchanged.';
 
 /** Bridges session lifecycle and one cancellable worker run to the serializable UI snapshot. */
 export class SupabaseUserDataService implements UserDataService {
@@ -45,6 +47,8 @@ export class SupabaseUserDataService implements UserDataService {
   #resyncRequested = false;
   #disposed = false;
   #sessionRevision = 0;
+  #syncPreferenceRevision = 0;
+  #syncPreferenceRun: Promise<void> = Promise.resolve();
 
   public constructor(
     private readonly client: Pick<SupabaseClient, 'auth'>,
@@ -81,7 +85,23 @@ export class SupabaseUserDataService implements UserDataService {
 
   public async setSyncEnabled(enabled: boolean): Promise<void> {
     if (this.#disposed) return;
-    await this.database.saveTrackSyncEnabled(enabled);
+    const revision = ++this.#syncPreferenceRevision;
+    const save = this.#syncPreferenceRun.then(() =>
+      this.database.saveTrackSyncEnabled(enabled),
+    );
+    this.#syncPreferenceRun = save.catch(() => undefined);
+    try {
+      await save;
+    } catch {
+      if (revision === this.#syncPreferenceRevision) {
+        this.#setSnapshot({
+          ...this.#snapshot,
+          errorMessage: syncPreferenceErrorMessage,
+        });
+      }
+      return;
+    }
+    if (this.#disposed || revision !== this.#syncPreferenceRevision) return;
     this.#setSnapshot({
       ...this.#snapshot,
       syncEnabled: enabled,

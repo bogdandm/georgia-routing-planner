@@ -485,6 +485,7 @@ export class TrackSyncWorkerServer {
     for (const entry of current) {
       const initial = initialEntryByTrackId.get(entry.state.trackId);
       const hasMutation = mutationStates.has(entry.state.trackId);
+      const mutationState = mutationStates.get(entry.state.trackId);
       const stateUnchangedSinceScan =
         initial !== undefined && syncStatesEqual(initial.state, entry.state);
       const pairUnchangedSinceScan =
@@ -492,8 +493,21 @@ export class TrackSyncWorkerServer {
         initial?.pair?.summary.name === entry.pair?.summary.name &&
         initial?.pair?.summary.favorite === entry.pair?.summary.favorite;
       let effective: TrackSyncState | null = entry.state;
-      if (stateUnchangedSinceScan && pairUnchangedSinceScan && hasMutation) {
-        effective = mutationStates.get(entry.state.trackId) ?? null;
+      if (
+        entry.pair === null &&
+        entry.state.pendingKind === 'delete' &&
+        entry.state.remoteRevision === null &&
+        mutationState !== undefined &&
+        mutationState !== null &&
+        mutationState.contentHash === entry.state.contentHash &&
+        mutationState.remoteRevision !== null
+      ) {
+        effective = {
+          ...entry.state,
+          remoteRevision: mutationState.remoteRevision,
+        };
+      } else if (stateUnchangedSinceScan && pairUnchangedSinceScan && hasMutation) {
+        effective = mutationState ?? null;
       }
       if (effective === null) {
         if (entry.pair === null) deleted.add(entry.state.trackId);

@@ -387,6 +387,76 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
+  it('keeps an in-flight upload deleted and removes its remote revision next', async () => {
+    const track = summary('local:deleted-during-upload');
+    await database.saveLocalTrack(track, content(track.id));
+    const mutation = deferred<{ outcome: 'applied'; revision: number }>();
+    let markMutationStarted: (() => void) | null = null;
+    const mutationStarted = new Promise<void>((resolve) => {
+      markMutationStarted = resolve;
+    });
+    const mutate = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        markMutationStarted?.();
+        return mutation.promise;
+      })
+      .mockResolvedValue({ outcome: 'applied' as const, revision: 0 });
+    const remoteRecord = {
+      content_hash: contentHash,
+      revision: 1,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: {},
+    };
+    const snapshot = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([remoteRecord])
+      .mockResolvedValueOnce([remoteRecord])
+      .mockResolvedValueOnce([]);
+    const download = vi.fn();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot,
+      mutate,
+      download,
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+    const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+    });
+
+    await mutationStarted;
+    await database.deleteLocalTrack(track.id);
+    mutation.resolve({ outcome: 'applied', revision: 1 });
+    await synchronization;
+
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
+      trackId: track.id,
+      contentHash,
+      remoteRevision: 1,
+      pendingKind: 'delete',
+    });
+    expect(download).not.toHaveBeenCalled();
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+    });
+    await expect(database.loadTrackSyncState(track.id)).resolves.toBeNull();
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate.mock.calls[1]?.[0]).toMatchObject({
+      remoteRevision: 1,
+      pendingKind: 'delete',
+    });
+    client.dispose();
+  });
+
   it('preserves a rename made while an upsert mutation is active', async () => {
     const track = summary('local:renamed');
     await database.saveLocalTrack(track, content(track.id));

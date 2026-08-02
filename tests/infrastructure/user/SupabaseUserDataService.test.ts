@@ -226,6 +226,45 @@ describe('SupabaseUserDataService', () => {
     service.dispose();
   });
 
+  it('serializes rapid synchronization preference changes in user order', async () => {
+    const fake = createClient({ restoredSession: session('toggle@example.test') });
+    let resolveFirstSave: (() => void) | null = null;
+    const firstSave = new Promise<void>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+    database.saveTrackSyncEnabled = vi
+      .fn()
+      .mockReturnValueOnce(firstSave)
+      .mockResolvedValueOnce(undefined);
+    const synchronize = vi.fn();
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    const enabling = service.setSyncEnabled(true);
+    const disabling = service.setSyncEnabled(false);
+    await vi.waitFor(() => {
+      expect(database.saveTrackSyncEnabled).toHaveBeenCalledTimes(1);
+    });
+    resolveFirstSave?.();
+    await Promise.all([enabling, disabling]);
+
+    expect(database.saveTrackSyncEnabled).toHaveBeenNthCalledWith(1, true);
+    expect(database.saveTrackSyncEnabled).toHaveBeenNthCalledWith(2, false);
+    expect(service.getSnapshot()).toMatchObject({
+      syncEnabled: false,
+      syncStatus: 'idle',
+    });
+    expect(synchronize).not.toHaveBeenCalled();
+    service.dispose();
+  });
+
   it('aborts an active synchronization when synchronization is disabled', async () => {
     const fake = createClient({ restoredSession: session('abort@example.test') });
     const synchronize = vi.fn(

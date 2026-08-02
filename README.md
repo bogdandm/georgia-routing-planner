@@ -8,9 +8,9 @@ Automatic routing along trails or roads is not currently available.
 
 _This project was built 100% with LLMs._
 
-![Track details with an elevation profile and grade-colored route](./docs/assets/track-details.png)
+![Track details with an elevation profile and grade-colored route](./docs/assets/3.png)
 
-![Sentinel-2 satellite imagery over 3D terrain](./docs/assets/satellite-imagery.png)
+![Sentinel-2 satellite imagery over 3D terrain](./docs/assets/2.png)
 
 ## Features
 

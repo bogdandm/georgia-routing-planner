@@ -101,7 +101,7 @@ export class SupabaseUserDataService implements UserDataService {
       }
       return;
     }
-    if (this.#disposed || revision !== this.#syncPreferenceRevision) return;
+    if (revision !== this.#syncPreferenceRevision) return;
     this.#setSnapshot({
       ...this.#snapshot,
       syncEnabled: enabled,
@@ -293,14 +293,17 @@ export class SupabaseUserDataService implements UserDataService {
         if (!this.#isRunCurrent(controller, sessionRevision)) return;
         const refreshed = await this.client.auth.getSession();
         const refreshedSession = refreshed.data.session;
-        if (
-          refreshed.error !== null ||
-          !this.#isRunCurrent(controller, sessionRevision)
-        ) {
-          return;
+        if (!this.#isRunCurrent(controller, sessionRevision)) return;
+        if (refreshed.error !== null) {
+          throw new Error('Unable to refresh the synchronization session.', {
+            cause: error,
+          });
         }
-        if (refreshedSession === null) return;
-        if (refreshedSession.user.id !== initialSession.user.id) return;
+        if (refreshedSession?.user.id !== initialSession.user.id) {
+          throw new Error('Unable to refresh the synchronization session.', {
+            cause: error,
+          });
+        }
         result = await worker.synchronize(
           refreshedSession.access_token,
           controller.signal,

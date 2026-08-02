@@ -497,9 +497,7 @@ export class TrackSyncWorkerServer {
         entry.pair === null &&
         entry.state.pendingKind === 'delete' &&
         entry.state.remoteRevision === null &&
-        mutationState !== undefined &&
-        mutationState !== null &&
-        mutationState.contentHash === entry.state.contentHash &&
+        mutationState?.contentHash === entry.state.contentHash &&
         mutationState.remoteRevision !== null
       ) {
         effective = {

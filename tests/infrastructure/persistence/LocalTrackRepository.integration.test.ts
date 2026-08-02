@@ -360,13 +360,18 @@ describe('local track persistence', () => {
     });
   });
 
-  it('deletes unsent upserts and retains only sent deletion retry state', async () => {
+  it('retains deletion intent for both unsent and synchronized tracks', async () => {
     await database.saveLocalTrack(
       summary('local:unsent', 'Unsent'),
       content('local:unsent'),
     );
     await database.deleteLocalTrack('local:unsent');
-    await expect(database.loadTrackSyncState('local:unsent')).resolves.toBeNull();
+    await expect(database.loadTrackSyncState('local:unsent')).resolves.toEqual({
+      trackId: 'local:unsent',
+      contentHash: 'a'.repeat(64),
+      remoteRevision: null,
+      pendingKind: 'delete',
+    });
 
     await database.saveLocalTrack(summary('local:sent', 'Sent'), content('local:sent'));
     await database.saveTrackSyncState({

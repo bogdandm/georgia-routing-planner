@@ -228,14 +228,15 @@ describe('SupabaseUserDataService', () => {
 
   it('serializes rapid synchronization preference changes in user order', async () => {
     const fake = createClient({ restoredSession: session('toggle@example.test') });
-    let resolveFirstSave: (() => void) | null = null;
+    let resolveFirstSave: () => void = () => undefined;
     const firstSave = new Promise<void>((resolve) => {
       resolveFirstSave = resolve;
     });
-    database.saveTrackSyncEnabled = vi
+    const saveTrackSyncEnabled = vi
       .fn()
       .mockReturnValueOnce(firstSave)
       .mockResolvedValueOnce(undefined);
+    database.saveTrackSyncEnabled = saveTrackSyncEnabled;
     const synchronize = vi.fn();
     const worker = {
       synchronize,
@@ -250,13 +251,13 @@ describe('SupabaseUserDataService', () => {
     const enabling = service.setSyncEnabled(true);
     const disabling = service.setSyncEnabled(false);
     await vi.waitFor(() => {
-      expect(database.saveTrackSyncEnabled).toHaveBeenCalledTimes(1);
+      expect(saveTrackSyncEnabled).toHaveBeenCalledTimes(1);
     });
-    resolveFirstSave?.();
+    resolveFirstSave();
     await Promise.all([enabling, disabling]);
 
-    expect(database.saveTrackSyncEnabled).toHaveBeenNthCalledWith(1, true);
-    expect(database.saveTrackSyncEnabled).toHaveBeenNthCalledWith(2, false);
+    expect(saveTrackSyncEnabled).toHaveBeenNthCalledWith(1, true);
+    expect(saveTrackSyncEnabled).toHaveBeenNthCalledWith(2, false);
     expect(service.getSnapshot()).toMatchObject({
       syncEnabled: false,
       syncStatus: 'idle',
@@ -436,6 +437,38 @@ describe('SupabaseUserDataService', () => {
     );
     expect(fake.getSession).toHaveBeenCalledTimes(3);
     expect(service.getSnapshot().syncStatus).toBe('success');
+    service.dispose();
+  });
+
+  it('fails synchronization when an expired token has no refreshed session', async () => {
+    const initialSession = session('expired-sync@example.test');
+    const fake = createClient({ restoredSession: initialSession });
+    fake.getSession
+      .mockResolvedValueOnce({ data: { session: initialSession }, error: null })
+      .mockResolvedValueOnce({ data: { session: initialSession }, error: null })
+      .mockResolvedValueOnce({ data: { session: null }, error: null });
+    const synchronize = vi
+      .fn()
+      .mockRejectedValue(new TrackSyncWorkerError('Expired.', 'auth-expired'));
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    await service.setSyncEnabled(true);
+
+    expect(synchronize).toHaveBeenCalledOnce();
+    expect(service.getSnapshot()).toMatchObject({
+      busy: false,
+      syncStatus: 'error',
+      errorMessage:
+        'Synchronization could not finish. Your local tracks remain available.',
+    });
     service.dispose();
   });
 

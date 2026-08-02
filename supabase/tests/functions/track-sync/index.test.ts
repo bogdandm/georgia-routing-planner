@@ -124,6 +124,7 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
       },
     },
     async rpc(name: string, parameters: Record<string, unknown>) {
+      assertEquals(this, admin);
       state.calls.push({ kind: 'rpc', name, value: parameters });
       state.rpcEffects.get(name)?.();
       return queuedRpc(state, name);

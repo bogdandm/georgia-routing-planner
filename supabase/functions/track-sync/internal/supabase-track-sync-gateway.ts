@@ -132,14 +132,16 @@ export class SupabaseTrackSyncGateway {
     name: string,
     parameters: Record<string, unknown>,
   ): Promise<unknown> {
-    const rpc = this.context.supabaseAdmin.rpc as unknown as (
-      rpcName: string,
-      rpcParameters: Record<string, unknown>,
-    ) => Promise<{
-      readonly data: unknown;
-      readonly error: { readonly message: string } | null;
-    }>;
-    const { data, error } = await rpc(name, parameters);
+    const admin = this.context.supabaseAdmin as unknown as {
+      readonly rpc: (
+        rpcName: string,
+        rpcParameters: Record<string, unknown>,
+      ) => Promise<{
+        readonly data: unknown;
+        readonly error: { readonly message: string } | null;
+      }>;
+    };
+    const { data, error } = await admin.rpc(name, parameters);
     if (error) {
       if (/quota exceeded/i.test(error.message)) {
         throw new TrackSyncFailure(

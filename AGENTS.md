@@ -14,8 +14,8 @@ Write chat responses in the language used by the user. Write plans in English.
 
 ## Scope
 
-These instructions apply to the entire Georgia Routing Planner repository.
-Directory-specific instructions live in:
+These instructions apply to the entire Trail Planner repository. Directory-specific
+instructions live in:
 
 - [`src/AGENTS.md`](src/AGENTS.md) for production architecture, source-code boundaries,
   TypeScript, React, state, persistence, diagnostics, MapLibre, and imported-data rules.

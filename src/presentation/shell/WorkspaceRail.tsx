@@ -195,7 +195,7 @@ export function WorkspaceRail({
           }}
         >
           <Tooltip
-            title="Georgia Routing Planner"
+            title="Trail Planner"
             placement="bottom-start"
             slotProps={{
               popper: {
@@ -204,7 +204,7 @@ export function WorkspaceRail({
             }}
           >
             <ButtonBase
-              aria-label="Show navigation from GR logo"
+              aria-label="Show navigation from Trail Planner logo"
               className="collapsed-navigation-segment"
               onClick={onToggleNavigation}
               sx={{
@@ -270,7 +270,7 @@ export function WorkspaceRail({
         </Box>
       ) : (
         <Tooltip
-          title="Georgia Routing Planner"
+          title="Trail Planner"
           placement="bottom-start"
           slotProps={{
             popper: {
@@ -279,7 +279,7 @@ export function WorkspaceRail({
           }}
         >
           <ButtonBase
-            aria-label="Hide navigation from GR logo"
+            aria-label="Hide navigation from Trail Planner logo"
             onClick={onToggleNavigation}
             sx={{
               position: 'relative',

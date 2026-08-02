@@ -1,15 +1,14 @@
-# Georgia Routing Planner
+# Trail Planner
 
-[Open Georgia Routing Planner](https://bogdandm.github.io/georgia-routing-planner/)
+[Open Trail Planner](https://trail-planner.bogdandm.com/)
 
-Georgia Routing Planner is a local-first web application for exploring Georgia. The
-complete system concept combines OpenStreetMap data, Sentinel-2 imagery, terrain relief
-and contours, 3D terrain, a curated GPX track library, saved markers, layer controls,
-and straight-line GPX creation.
+Trail Planner is a local-first web application for exploring Georgia. The complete
+system concept combines OpenStreetMap data, Sentinel-2 imagery, terrain relief and
+contours, 3D terrain, a curated GPX track library, saved markers, layer controls, and
+straight-line GPX creation.
 
-The project name is provisional. In the MVP, "routing" means placing waypoints and
-connecting them with straight segments. It does not mean automatic trail-following or
-turn-by-turn routing.
+Planning connects waypoints with straight segments. It does not perform automatic
+trail-following or turn-by-turn routing.
 
 ## Current application
 
@@ -82,7 +81,7 @@ pnpm e2e
 | `pnpm test <test-file>`                     | Run exactly one unit or component test file.                             |
 | `pnpm test:integration`                     | Run controlled HTTP/IndexedDB adapter tests.                             |
 | `pnpm test:coverage`                        | Enforce the repository coverage thresholds.                              |
-| `pnpm e2e`                                  | Build and test the Pages-like subpath in Chromium with axe.              |
+| `pnpm e2e`                                  | Build and test the Pages-like root build in Chromium with axe.           |
 | `pnpm diagnostics:inspect -- <bundle.json>` | Validate and summarize an exported diagnostics bundle.                   |
 | `pnpm build`                                | Type-check and produce static assets in `dist/`.                         |
 | `pnpm check`                                | Run all non-browser CI checks; CI invokes `pnpm e2e` separately.         |
@@ -222,16 +221,10 @@ Known operating limits:
 - Sentinel imagery is one scene at a time; mosaics, cloud masking, false color, and
   offline imagery are unavailable.
 
-## GitHub Pages base paths
+## GitHub Pages custom domain
 
-Development uses `/`. CI and Playwright set `BASE_PATH=/georgia-routing-planner/` so
-Vite emits repository-relative static asset URLs. On PowerShell, an equivalent manual
-build is:
-
-```powershell
-$env:BASE_PATH='/georgia-routing-planner/'
-pnpm build
-```
+Development, checks, Playwright, and deployment all use `/`, so Vite emits root-relative
+static asset URLs for the custom domain.
 
 The checks workflow runs the frozen install, non-browser checks, production build,
 Chromium smoke flows, and axe checks. For a successful `main` run, it also uploads the
@@ -360,7 +353,7 @@ pipeline that installs the frozen lockfile and executes:
 1. Formatting, ESLint, and strict TypeScript checks.
 2. Domain, application, infrastructure, and React component tests.
 3. Controlled HTTP and IndexedDB infrastructure tests.
-4. A production build using the GitHub Pages base path.
+4. A production build using the GitHub Pages custom-domain root.
 5. Playwright shell, diagnostics, and accessibility tests in Chromium against the built
    application.
 

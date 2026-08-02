@@ -31,9 +31,9 @@ longer describes the reviewed interface.
 
 Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals the
 full-height feature rail and contextual tools without remounting the map; **Show map**
-and the GR logo return to the same map. An active track appears over the map as a
-collapsed disclosure containing the same distance, recorded-time, ascent, and descent
-statistics used by the full editor. When the active track has a usable elevation
+and the Trail Planner logo return to the same map. An active track appears over the map
+as a collapsed disclosure containing the same distance, recorded-time, ascent, and
+descent statistics used by the full editor. When the active track has a usable elevation
 profile, its grade-colored graph is drawn decoratively behind these compact stats
 without chart interaction. Expanding the disclosure reveals the full editor; collapsing
 preserves the active track, while closing clears it. Selecting Sentinel imagery closes

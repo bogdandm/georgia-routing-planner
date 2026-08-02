@@ -185,7 +185,7 @@ export function AboutDialog({
         id="about-panel-title"
         sx={{ px: 2, py: 1.5, position: 'relative', pr: 6 }}
       >
-        About Georgia Routing Planner
+        About Trail Planner
         <IconButton
           aria-label="Close site information"
           onClick={handleClose}

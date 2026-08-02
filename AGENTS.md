@@ -22,6 +22,8 @@ Directory-specific instructions live in:
 - [`tests/AGENTS.md`](tests/AGENTS.md) for Vitest unit, component, and integration
   tests.
 - [`e2e/AGENTS.md`](e2e/AGENTS.md) for Playwright Chromium and accessibility workflows.
+- [`supabase/AGENTS.md`](supabase/AGENTS.md) for migrations, RLS, Storage, Edge
+  Functions, Deno, and local Postgres verification.
 
 Within those directories, the nested file supplements this root file and takes
 precedence where it is more specific.

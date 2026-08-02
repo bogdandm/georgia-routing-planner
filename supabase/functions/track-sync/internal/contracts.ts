@@ -23,7 +23,7 @@ export interface UploadTrackCommand {
   readonly compressedBytes: number;
   readonly baseRevision: number;
   readonly metadata: Record<string, unknown>;
-  readonly geometry: Uint8Array;
+  readonly geometry: Uint8Array<ArrayBuffer>;
 }
 
 export interface MetadataTrackCommand {

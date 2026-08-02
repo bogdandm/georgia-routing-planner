@@ -83,3 +83,17 @@ export function isAuthExpiredWorkerError(error: unknown): boolean {
 export function isQuotaWorkerError(error: unknown): boolean {
   return error instanceof Error && (error as WorkerRpcRemoteError).code === 'quota';
 }
+
+export function syncWorkerErrorMessage(error: unknown): string | null {
+  if (!(error instanceof Error)) return null;
+  const code = (error as WorkerRpcRemoteError).code;
+  if (
+    code !== 'auth-expired' &&
+    code !== 'invalid-remote' &&
+    code !== 'network' &&
+    code !== 'quota'
+  ) {
+    return null;
+  }
+  return error.message.length <= 200 ? error.message : null;
+}

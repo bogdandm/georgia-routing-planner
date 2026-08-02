@@ -328,6 +328,35 @@ describe('SupabaseUserDataService', () => {
     service.dispose();
   });
 
+  it('surfaces the bounded worker reason for a server failure', async () => {
+    const fake = createClient({ restoredSession: session('server@example.test') });
+    const synchronize = vi
+      .fn()
+      .mockRejectedValue(
+        new TrackSyncWorkerError(
+          'Cloud synchronization request failed (500/internal_error).',
+          'network',
+        ),
+      );
+    const worker = {
+      synchronize,
+      subscribeTracksChanged: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as TrackSyncWorkerClient;
+    const service = new SupabaseUserDataService(fake.client, database, worker);
+    await vi.waitFor(() => {
+      expect(service.getSnapshot().status).toBe('signed-in');
+    });
+
+    await service.setSyncEnabled(true);
+
+    expect(service.getSnapshot()).toMatchObject({
+      syncStatus: 'error',
+      errorMessage: 'Cloud synchronization request failed (500/internal_error).',
+    });
+    service.dispose();
+  });
+
   it('refreshes an expired worker token exactly once', async () => {
     const initialSession = session('refresh-sync@example.test');
     const refreshedSession = {
@@ -367,6 +396,7 @@ describe('SupabaseUserDataService', () => {
       expect.any(AbortSignal),
     );
     expect(fake.getSession).toHaveBeenCalledTimes(3);
+    expect(service.getSnapshot().syncStatus).toBe('success');
     service.dispose();
   });
 

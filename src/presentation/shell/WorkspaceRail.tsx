@@ -9,9 +9,9 @@ import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import {
+  Badge,
   Box,
   ButtonBase,
-  CircularProgress,
   IconButton,
   Stack,
   Tab,
@@ -103,6 +103,26 @@ export function WorkspaceRail({
     getUserSnapshot,
     getUserSnapshot,
   );
+  let userLabel = 'User';
+  let syncIndicatorColor: string | null = null;
+  if (userSnapshot.status === 'signed-in' && userSnapshot.syncEnabled) {
+    switch (userSnapshot.syncStatus) {
+      case 'syncing':
+        userLabel = 'User synchronization in progress';
+        syncIndicatorColor = appColors.brand.tigerOrange;
+        break;
+      case 'error':
+        userLabel = 'User synchronization failed';
+        syncIndicatorColor = appColors.status.error;
+        break;
+      case 'success':
+        userLabel = 'User synchronization successful';
+        syncIndicatorColor = appColors.status.success;
+        break;
+      case 'idle':
+        break;
+    }
+  }
   const handleSectionChange = (_event: SyntheticEvent, value: WorkspaceTab) => {
     onSectionChange(value);
   };
@@ -381,39 +401,38 @@ export function WorkspaceRail({
             </IconButton>
           </Tooltip>
         ) : null}
-        {(() => {
-          const syncing = userSnapshot.syncStatus === 'syncing';
-          const label = syncing ? 'User synchronization in progress' : 'User';
-          return (
-            <Tooltip title="User" placement="right">
-              <IconButton
-                aria-busy={syncing}
-                aria-label={label}
-                aria-pressed={activeTab === 'user'}
-                onClick={() => {
-                  onSectionChange('user');
-                }}
-                sx={{
-                  color: 'rgba(255,255,255,0.84)',
-                  bgcolor:
-                    activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
-                  '@media (prefers-reduced-motion: reduce)': {
-                    '& .MuiCircularProgress-root': { animation: 'none' },
-                  },
-                }}
-              >
-                <AccountCircleOutlinedIcon />
-                {syncing ? (
-                  <CircularProgress
-                    aria-hidden="true"
-                    size={15}
-                    sx={{ position: 'absolute' }}
-                  />
-                ) : null}
-              </IconButton>
-            </Tooltip>
-          );
-        })()}
+        <Tooltip title={userLabel} placement="right">
+          <IconButton
+            aria-busy={userSnapshot.syncStatus === 'syncing'}
+            aria-label={userLabel}
+            aria-pressed={activeTab === 'user'}
+            onClick={() => {
+              onSectionChange('user');
+            }}
+            sx={{
+              color: 'rgba(255,255,255,0.84)',
+              bgcolor: activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
+            }}
+          >
+            <Badge
+              aria-hidden="true"
+              invisible={syncIndicatorColor === null}
+              overlap="circular"
+              variant="dot"
+              sx={{
+                '& .MuiBadge-badge': {
+                  width: 8,
+                  height: 8,
+                  minWidth: 8,
+                  bgcolor: syncIndicatorColor ?? 'transparent',
+                  boxShadow: `0 0 0 2px ${appColors.brand.deepSpace}`,
+                },
+              }}
+            >
+              <AccountCircleOutlinedIcon />
+            </Badge>
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Settings" placement="right">
           <IconButton
             aria-label="Open settings"

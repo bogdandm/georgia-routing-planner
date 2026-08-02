@@ -1,7 +1,7 @@
 export type UserDataStatus =
   'unconfigured' | 'loading' | 'signed-out' | 'signed-in' | 'error';
 
-export type UserDataSyncStatus = 'idle' | 'syncing' | 'error';
+export type UserDataSyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
 export interface UserDataSnapshot {
   readonly busy: boolean;

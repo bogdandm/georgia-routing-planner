@@ -79,7 +79,10 @@ ordinary user can create an email/password account and enable **Sync across devi
 Synchronization is disabled by default and remains local-first: a full remote snapshot
 propagates hard deletions, conflicts rebase one explicit local action, and failures keep
 local tracks and pending work. The panel shows exact compressed usage, reservation-aware
-quota progress, and bounded errors without hiding local controls.
+quota progress, and bounded errors without hiding local controls. The lower-rail User
+icon shows an orange dot while synchronization is active, red after failure, and green
+after success. Three HTTP 500 responses exhaust the page-lifetime server-error budget;
+the worker sends no further synchronization requests until the page reloads.
 
 ## Feature surfaces
 

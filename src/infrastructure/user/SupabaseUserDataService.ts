@@ -9,6 +9,7 @@ import {
   isAuthExpiredWorkerError,
   isQuotaWorkerError,
   TrackSyncWorkerClient,
+  syncWorkerErrorMessage,
 } from '@/infrastructure/supabase/TrackSyncWorkerClient';
 
 const emptyUsage = { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 };
@@ -292,7 +293,7 @@ export class SupabaseUserDataService implements UserDataService {
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
-        syncStatus: 'idle',
+        syncStatus: 'success',
         syncUsage: result.usage,
       });
     } catch (error) {
@@ -306,7 +307,7 @@ export class SupabaseUserDataService implements UserDataService {
         syncStatus: 'error',
         errorMessage: isQuotaWorkerError(error)
           ? syncQuotaErrorMessage
-          : syncErrorMessage,
+          : (syncWorkerErrorMessage(error) ?? syncErrorMessage),
       });
     }
   }
@@ -360,6 +361,7 @@ export class SupabaseUserDataService implements UserDataService {
       errorMessage: null,
       noticeMessage: null,
       status: email === null ? 'signed-out' : 'signed-in',
+      syncStatus: email === null ? 'idle' : this.#snapshot.syncStatus,
     });
     if (email !== null && this.#snapshot.syncEnabled) void this.synchronizeNow();
   }

@@ -166,4 +166,54 @@ describe('FetchRemoteGateway', () => {
     expect(new Headers(firstCall[1].headers).get('Range')).toBe('0-999');
     expect(new Headers(secondCall[1].headers).get('Range')).toBe('1000-1999');
   });
+  it('reports a bounded server status and error code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            { error: { code: 'internal_error', message: 'private server detail' } },
+            { status: 500 },
+          ),
+        ),
+    );
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+
+    await expect(gateway.status(signal)).rejects.toMatchObject({
+      code: 'network',
+      message: 'Cloud synchronization request failed (500/internal_error).',
+    });
+  });
+  it('stops issuing requests after three HTTP 500 responses until reload', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          Response.json({ error: { code: 'internal_error' } }, { status: 500 }),
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const serverErrorBudget = { failures: 0 };
+    const gateway = () =>
+      new FetchRemoteGateway(
+        'https://example.test',
+        'publishable-key',
+        'access-token',
+        serverErrorBudget,
+      );
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(gateway().status(signal)).rejects.toThrow(
+        'Cloud synchronization request failed (500/internal_error).',
+      );
+    }
+    await expect(gateway().status(signal)).rejects.toThrow(
+      'Cloud synchronization stopped after 3 server failures. Reload the page to try again.',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
 });

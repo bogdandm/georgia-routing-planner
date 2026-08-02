@@ -16,6 +16,10 @@ import {
   type SatelliteCatalogGateway,
   type SatelliteCatalogResult,
 } from '@/application/ports/SatelliteCatalogGateway';
+import type {
+  UserDataService,
+  UserDataSnapshot,
+} from '@/application/user/UserDataService';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -2833,5 +2837,48 @@ describe('WorkspaceShell', () => {
     expect(consoleError).not.toHaveBeenCalledWith(
       expect.stringContaining('The `value` provided to the Tabs component is invalid'),
     );
+  });
+
+  it('shows error, active, and successful synchronization colors on User', () => {
+    let snapshot: UserDataSnapshot = {
+      busy: false,
+      email: 'sync@example.test',
+      errorMessage: 'Synchronization failed.',
+      noticeMessage: null,
+      status: 'signed-in',
+      syncEnabled: true,
+      syncStatus: 'error',
+      syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+    };
+    let notify: () => void = () => undefined;
+    const userData = {
+      ...services.userData,
+      getSnapshot: () => snapshot,
+      subscribe: (listener: () => void) => {
+        notify = listener;
+        return () => undefined;
+      },
+    } satisfies UserDataService;
+    services = { ...services, userData };
+    renderWorkspaceShell();
+
+    const expectIndicator = (label: string, color: string) => {
+      const button = screen.getByRole('button', { name: label });
+      const indicator = button.querySelector('.MuiBadge-badge');
+      expect(indicator).not.toBeNull();
+      expect(indicator).toHaveStyle({ backgroundColor: color });
+    };
+    const setSyncStatus = (syncStatus: UserDataSnapshot['syncStatus']) => {
+      act(() => {
+        snapshot = { ...snapshot, syncStatus };
+        notify();
+      });
+    };
+
+    expectIndicator('User synchronization failed', appColors.status.error);
+    setSyncStatus('syncing');
+    expectIndicator('User synchronization in progress', appColors.brand.tigerOrange);
+    setSyncStatus('success');
+    expectIndicator('User synchronization successful', appColors.status.success);
   });
 });

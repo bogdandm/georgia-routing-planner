@@ -29,10 +29,16 @@ import {
 const hashPattern = /^[0-9a-f]{64}$/;
 const snapshotPageSize = 1_000;
 const maximumSnapshotRecords = 10_000;
+const maximumServerErrorAttempts = 3;
+const exhaustedServerErrorMessage =
+  'Cloud synchronization stopped after 3 server failures. Reload the page to try again.';
 const usageSchema = z.object({
   usedBytes: z.number().int().nonnegative().max(8_388_608),
   reservedBytes: z.number().int().nonnegative().max(8_388_608),
   limitBytes: z.literal(8_388_608),
+});
+const errorResponseSchema = z.object({
+  error: z.object({ code: z.string().regex(/^[a-z0-9_]{1,64}$/) }),
 });
 const remoteRecordSchema = z
   .object({
@@ -74,6 +80,12 @@ type RemoteMutation =
   | { readonly outcome: 'missing' }
   | { readonly outcome: 'reserved' };
 
+interface ServerErrorBudget {
+  failures: number;
+}
+
+type RemoteGatewayFactory = (accessToken: string) => RemoteGateway;
+
 function syncStatesEqual(left: TrackSyncState, right: TrackSyncState): boolean {
   return (
     left.trackId === right.trackId &&
@@ -107,15 +119,22 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-function errorForResponse(response: Response): TrackSyncWorkerError {
+async function errorForResponse(response: Response): Promise<TrackSyncWorkerError> {
   if (response.status === 401) {
     return new TrackSyncWorkerError('Your account session expired.', 'auth-expired');
   }
   if (response.status === 413) {
     return new TrackSyncWorkerError('Track geometry quota exceeded.', 'quota');
   }
+  let detail = String(response.status);
+  try {
+    const parsed = errorResponseSchema.safeParse(await response.json());
+    if (parsed.success) detail += `/${parsed.data.error.code}`;
+  } catch {
+    // The HTTP status remains actionable when an intermediary returns a non-JSON body.
+  }
   return new TrackSyncWorkerError(
-    'Synchronization could not reach the server.',
+    `Cloud synchronization request failed (${detail}).`,
     'network',
   );
 }
@@ -125,6 +144,7 @@ export class FetchRemoteGateway implements RemoteGateway {
     private readonly origin: string,
     private readonly publishableKey: string,
     private readonly accessToken: string,
+    private readonly serverErrorBudget: ServerErrorBudget = { failures: 0 },
   ) {}
 
   public async status(signal: AbortSignal): Promise<TrackSyncUsage> {
@@ -133,7 +153,7 @@ export class FetchRemoteGateway implements RemoteGateway {
       body: JSON.stringify({ action: 'status' }),
       signal,
     });
-    if (!response.ok) throw errorForResponse(response);
+    if (!response.ok) throw await errorForResponse(response);
     const parsed = usageSchema.safeParse(await response.json());
     if (!parsed.success)
       throw new TrackSyncWorkerError(
@@ -156,7 +176,7 @@ export class FetchRemoteGateway implements RemoteGateway {
           signal,
         },
       );
-      if (!response.ok) throw errorForResponse(response);
+      if (!response.ok) throw await errorForResponse(response);
       const parsed = z.array(remoteRecordSchema).safeParse(await response.json());
       if (!parsed.success) {
         throw new TrackSyncWorkerError(
@@ -226,7 +246,7 @@ export class FetchRemoteGateway implements RemoteGateway {
         signal,
       });
     }
-    if (!response.ok) throw errorForResponse(response);
+    if (!response.ok) throw await errorForResponse(response);
     const value: unknown = await response.json();
     if (typeof value !== 'object' || value === null || !('outcome' in value)) {
       throw new TrackSyncWorkerError(
@@ -271,17 +291,22 @@ export class FetchRemoteGateway implements RemoteGateway {
       `/storage/v1/object/track-geometries/${encodeURIComponent(path).replaceAll('%2F', '/')}`,
       { signal },
     );
-    if (!response.ok) throw errorForResponse(response);
+    if (!response.ok) throw await errorForResponse(response);
     return new Uint8Array(await response.arrayBuffer());
   }
 
-  private request(path: string, init: RequestInit): Promise<Response> {
+  private async request(path: string, init: RequestInit): Promise<Response> {
+    if (this.serverErrorBudget.failures >= maximumServerErrorAttempts) {
+      throw new TrackSyncWorkerError(exhaustedServerErrorMessage, 'network');
+    }
     const headers = new Headers(init.headers);
     headers.set('apikey', this.publishableKey);
     headers.set('Authorization', `Bearer ${this.accessToken}`);
     if (!(init.body instanceof FormData))
       headers.set('Content-Type', 'application/json');
-    return fetch(new URL(path, this.origin), { ...init, headers });
+    const response = await fetch(new URL(path, this.origin), { ...init, headers });
+    if (response.status === 500) this.serverErrorBudget.failures += 1;
+    return response;
   }
 }
 
@@ -380,26 +405,34 @@ function localFromRemote(
 /** Worker-side owner of scan, network validation, and one atomic local merge. */
 export class TrackSyncWorkerServer {
   readonly #rpc: WorkerRpcServer;
+  readonly #serverErrorBudget: ServerErrorBudget = { failures: 0 };
+  readonly #gatewayFactory: RemoteGatewayFactory;
 
   public constructor(
     endpoint: WorkerRpcEndpoint,
     private readonly database: AppDatabase,
-    private readonly gatewayFactory: (accessToken: string) => RemoteGateway = (
-      accessToken,
-    ) => {
-      const configuration = loadSupabaseConfiguration(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      );
-      if (configuration.status !== 'configured')
-        throw new TrackSyncWorkerError('Synchronization is not configured.', 'network');
-      return new FetchRemoteGateway(
-        configuration.value.url,
-        configuration.value.publishableKey,
-        accessToken,
-      );
-    },
+    gatewayFactory?: RemoteGatewayFactory,
   ) {
+    this.#gatewayFactory =
+      gatewayFactory ??
+      ((accessToken) => {
+        const configuration = loadSupabaseConfiguration(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        );
+        if (configuration.status !== 'configured') {
+          throw new TrackSyncWorkerError(
+            'Synchronization is not configured.',
+            'network',
+          );
+        }
+        return new FetchRemoteGateway(
+          configuration.value.url,
+          configuration.value.publishableKey,
+          accessToken,
+          this.#serverErrorBudget,
+        );
+      });
     this.#rpc = new WorkerRpcServer(endpoint, {
       [trackSyncWorkerMethods.synchronize]: async (payload, { signal }) => {
         const request = z
@@ -407,8 +440,9 @@ export class TrackSyncWorkerServer {
           .strict()
           .parse(payload) as TrackSyncWorkerRequest;
         const result = await this.synchronize(request.accessToken, signal);
-        if (result.changed)
+        if (result.changed) {
           this.#rpc.publishEvent(trackSyncWorkerEventNames.tracksChanged, null);
+        }
         return result;
       },
     });
@@ -418,7 +452,7 @@ export class TrackSyncWorkerServer {
     accessToken: string,
     signal: AbortSignal,
   ): Promise<TrackSyncWorkerResult> {
-    const gateway = this.gatewayFactory(accessToken);
+    const gateway = this.#gatewayFactory(accessToken);
     const local = await this.backfillAndDeduplicate();
     signal.throwIfAborted();
     let usage = await gateway.status(signal);

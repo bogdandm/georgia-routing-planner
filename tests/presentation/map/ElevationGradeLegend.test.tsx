@@ -25,7 +25,7 @@ const profile: ElevationProfile = {
 };
 
 describe('ElevationGradeLegend', () => {
-  it('replaces a dismissed legend with a control that restores it', async () => {
+  it('hides the legend after it is dismissed', async () => {
     const user = userEvent.setup();
     const onDismissedChange = vi.fn();
     const { rerender } = render(
@@ -53,7 +53,5 @@ describe('ElevationGradeLegend', () => {
     expect(
       screen.queryByRole('heading', { name: 'Track grade' }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Show track grade legend' }));
-    expect(onDismissedChange).toHaveBeenLastCalledWith(false);
   });
 });

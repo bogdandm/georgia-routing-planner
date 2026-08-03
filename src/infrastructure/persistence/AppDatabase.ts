@@ -1478,6 +1478,16 @@ export class AppDatabase
     });
   }
 
+  public async saveElevationGradeLegendDismissed(
+    elevationGradeLegendDismissed: boolean,
+  ): Promise<void> {
+    const preferences = await this.loadUiPreferences();
+    await this.saveUiPreferences({
+      ...preferences,
+      elevationGradeLegendDismissed,
+    });
+  }
+
   public async loadMaximumCloudCoverPercent(): Promise<number> {
     const record = await this.settings.get('satellite.maximum-cloud-cover');
     if (record === undefined) return defaultMaximumCloudCoverPercent;

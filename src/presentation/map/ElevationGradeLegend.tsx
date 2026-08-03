@@ -1,5 +1,4 @@
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
-import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import { Box, IconButton, Paper, Tooltip, Typography } from '@mui/material';
 import { useId } from 'react';
 
@@ -87,22 +86,7 @@ export function ElevationGradeLegend({
   if (!visible || profile === null || profile.gradeSubsegments.length === 0)
     return null;
 
-  if (dismissed) {
-    return (
-      <Tooltip title="Show track grade legend">
-        <IconButton
-          aria-label="Show track grade legend"
-          onClick={() => {
-            onDismissedChange(false);
-          }}
-          size="small"
-          sx={{ position: 'absolute', right: 8, bottom: 32, zIndex: 1 }}
-        >
-          <HelpOutlineOutlinedIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-    );
-  }
+  if (dismissed) return null;
 
   return (
     <Paper

@@ -45,6 +45,13 @@ describe('AppDatabase', () => {
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
     });
+
+    await database.saveElevationGradeLegendDismissed(false);
+    await expect(database.loadUiPreferences()).resolves.toEqual({
+      developerMode: true,
+      navigationCollapsed: true,
+      elevationGradeLegendDismissed: false,
+    });
   });
 
   it('repairs invalid persisted preferences', async () => {

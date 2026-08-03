@@ -60,7 +60,7 @@ function WorkspaceRailIconButton({
         aria-pressed={selected}
         onClick={onClick}
         sx={{
-          color: appColors.text.inverse,
+          color: selected ? appColors.text.inverse : appColors.text.inverseMuted,
           bgcolor: selected
             ? appColors.interaction.navigationSelectedBackground
             : 'transparent',

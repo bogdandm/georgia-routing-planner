@@ -36,6 +36,7 @@ export const appColors = {
     primary: '#062C3D',
     secondary: '#547481',
     inverse: '#FFFFFF',
+    inverseMuted: 'rgba(255, 255, 255, 0.72)',
   },
   status: {
     success: '#16786A',

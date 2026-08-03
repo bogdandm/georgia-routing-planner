@@ -2843,15 +2843,14 @@ describe('WorkspaceShell', () => {
     );
   });
 
-  it('renders available rail controls with one visual treatment', async () => {
+  it('renders muted default rail controls and white selected controls', async () => {
     const user = userEvent.setup();
     useUiStore.setState({ developerMode: true });
     renderWorkspaceShell();
 
     const userButton = screen.getByRole('button', { name: 'User' });
     const satelliteTab = screen.getByRole('tab', { name: 'Satellite' });
-    const availableControls = [
-      satelliteTab,
+    const mutedControls = [
       screen.getByRole('tab', { name: 'Tracks' }),
       screen.getByRole('tab', { name: 'Layers' }),
       screen.getByRole('button', { name: 'Share map view' }),
@@ -2861,8 +2860,8 @@ describe('WorkspaceShell', () => {
       screen.getByRole('button', { name: 'About this site' }),
     ];
 
-    for (const control of availableControls) {
-      expect(control).toHaveStyle({ color: appColors.text.inverse });
+    for (const control of mutedControls) {
+      expect(control).toHaveStyle({ color: appColors.text.inverseMuted });
     }
 
     expect(screen.getByRole('tab', { name: 'Markers' })).toHaveStyle({
@@ -2870,13 +2869,16 @@ describe('WorkspaceShell', () => {
     });
     expect(satelliteTab).toHaveStyle({
       backgroundColor: appColors.interaction.navigationSelectedBackground,
+      color: appColors.text.inverse,
     });
 
     await user.click(userButton);
 
+    expect(satelliteTab).toHaveStyle({ color: appColors.text.inverseMuted });
     expect(userButton).toHaveAttribute('aria-pressed', 'true');
     expect(userButton).toHaveStyle({
       backgroundColor: appColors.interaction.navigationSelectedBackground,
+      color: appColors.text.inverse,
     });
   });
 

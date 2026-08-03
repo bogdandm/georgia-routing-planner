@@ -104,7 +104,7 @@ export function createAppTheme() {
             marginBottom: 4,
             padding: '6px 4px',
             borderRadius: 10,
-            color: appColors.text.inverse,
+            color: appColors.text.inverseMuted,
             fontSize: '0.625rem',
             lineHeight: 1.1,
             textTransform: 'none',

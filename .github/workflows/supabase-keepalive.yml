@@ -1,0 +1,49 @@
+name: Keep Supabase Active
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * *'
+
+permissions: {}
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - name: Call read-only database RPC
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SUPABASE_URL}" ]]; then
+            echo "Missing repository variable: VITE_SUPABASE_URL" >&2
+            exit 1
+          fi
+
+          if [[ -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "Missing repository variable: VITE_SUPABASE_PUBLISHABLE_KEY" >&2
+            exit 1
+          fi
+
+          response="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url "${SUPABASE_URL%/}/rest/v1/rpc/keep_project_alive" \
+            --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+            --header "Content-Type: application/json" \
+            --data '{}')"
+
+          if [[ "${response}" != "true" ]]; then
+            printf '%s\n' "${response}"
+            exit 1
+          fi
+
+          echo "Supabase database keep-alive succeeded."

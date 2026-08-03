@@ -437,9 +437,7 @@ order:
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` for every code change, state
-  `Maintainer-controlled; agents do not launch Vite.` Include the real WSL worktree path
-  and manual command
+- `Test path:` for every code change, include only
   `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`;
   otherwise `Not applicable` only for documentation-only or non-code changes, with the
   reason.
@@ -447,11 +445,10 @@ order:
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-Replace the `Test path:` placeholder with the real path; it is an instruction for the
-maintainer, not an agent action. Do not start a server, browser, or E2E. The final
-response contains only the `Completed work:` account and these fields, with blockers
-inside `Verification:` or `Status:` and no additional preamble, headings, todos,
-reminders, or trailing content.
+Replace the `Test path:` placeholder with the real path. Do not start a server, browser,
+or E2E. The final response contains only the `Completed work:` account and these fields,
+with blockers inside `Verification:` or `Status:` and no additional preamble, headings,
+todos, reminders, or trailing content.
 
 ### Pull request title and description
 

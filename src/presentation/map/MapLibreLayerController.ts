@@ -1737,6 +1737,17 @@ export class MapLibreLayerController {
       importedTrackLayerIds.highlight,
       importedTrackLayerIds.trace,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
+    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const labelIndex = layerIds.indexOf(
+      mapInsertionPoints.importedTracksBeforeLayerId,
+    );
+    const orderIsCorrect =
+      labelIndex >= orderedLayerIds.length &&
+      orderedLayerIds.every(
+        (layerId, index) =>
+          layerIds[labelIndex - orderedLayerIds.length + index] === layerId,
+      );
+    if (orderIsCorrect) return;
     for (const layerId of orderedLayerIds) {
       map.moveLayer(layerId, mapInsertionPoints.importedTracksBeforeLayerId);
     }

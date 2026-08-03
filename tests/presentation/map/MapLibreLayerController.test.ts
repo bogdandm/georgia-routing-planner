@@ -488,6 +488,9 @@ describe('MapLibreLayerController', () => {
         [...map.layers.keys()].indexOf(labelLayerId),
       );
     }
+    const moveCount = map.moves.length;
+    map.fire('styledata', {});
+    expect(map.moves).toHaveLength(moveCount);
     expect(controller.setImportedTrackOpacity(0.45)).toEqual({ status: 'success' });
     expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
       0.45,

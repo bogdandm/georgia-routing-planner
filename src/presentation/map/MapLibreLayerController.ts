@@ -1738,9 +1738,7 @@ export class MapLibreLayerController {
       importedTrackLayerIds.trace,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getStyle().layers.map((layer) => layer.id);
-    const labelIndex = layerIds.indexOf(
-      mapInsertionPoints.importedTracksBeforeLayerId,
-    );
+    const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
     const orderIsCorrect =
       labelIndex >= orderedLayerIds.length &&
       orderedLayerIds.every(

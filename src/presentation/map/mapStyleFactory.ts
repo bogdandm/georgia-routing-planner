@@ -144,6 +144,20 @@ function createBasemapLayers(
       },
     },
     {
+      id: mapLayerIds.ridges,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.peaks,
+      minzoom: 13,
+      filter: ['==', ['get', 'class'], 'ridge'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': mapVisualPalette.terrain.ridge,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1],
+        ...mapVisualModePaint.vector[mapLayerIds.ridges],
+      },
+    },
+    {
       id: mapLayerIds.water,
       type: 'fill',
       source,
@@ -324,6 +338,7 @@ function createBasemapLayers(
       source,
       'source-layer': sourceLayers.peaks,
       minzoom: 10,
+      filter: ['in', ['get', 'class'], ['literal', ['peak', 'volcano', 'saddle']]],
       layout: {
         ...labelLayout,
         'text-field': [
@@ -377,6 +392,26 @@ function createBasemapLayers(
       },
       paint: {
         'text-color': mapVisualPalette.water.label,
+        'text-halo-color': mapVisualPalette.text.haloVector,
+        'text-halo-width': 1,
+      },
+    },
+    {
+      id: mapLayerIds.ridgeLabels,
+      type: 'symbol',
+      source,
+      'source-layer': sourceLayers.peaks,
+      minzoom: 13,
+      filter: ['==', ['get', 'class'], 'ridge'],
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 250,
+        'text-field': englishFirstLabelExpression,
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+      paint: {
+        'text-color': mapVisualPalette.terrain.ridge,
         'text-halo-color': mapVisualPalette.text.haloVector,
         'text-halo-width': 1,
       },

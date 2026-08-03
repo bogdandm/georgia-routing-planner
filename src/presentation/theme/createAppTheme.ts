@@ -57,6 +57,7 @@ export function createAppTheme() {
         styleOverrides: {
           root: {
             color: appColors.text.secondary,
+            opacity: 1,
           },
         },
       },

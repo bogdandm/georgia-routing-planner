@@ -245,6 +245,7 @@ export function WorkspaceRail({
           }}
         >
           <Tooltip
+            disableInteractive
             title="Trail Planner"
             placement="bottom-start"
             slotProps={{
@@ -320,6 +321,7 @@ export function WorkspaceRail({
         </Box>
       ) : (
         <Tooltip
+          disableInteractive
           title="Trail Planner"
           placement="bottom-start"
           slotProps={{

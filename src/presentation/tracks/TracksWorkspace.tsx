@@ -940,6 +940,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return;
       }
       initiallyRestoredTrackId.current = null;
+      renderedTrackId.current = null;
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
       setRecalculationState('idle');

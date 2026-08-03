@@ -1261,6 +1261,11 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     useUiStore.setState({ activeTab: 'tracks' });
 
+    const expectedFitBoundsRequest = {
+      bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
+      maxZoom: 15,
+      padding: undefined,
+    };
     renderWorkspaceShell(
       <MapWorkspace
         facade={fakeFacade}
@@ -1291,17 +1296,17 @@ describe('WorkspaceShell', () => {
       expect(fakeFacade.fitBoundsRequests).toEqual([]);
     });
 
+    await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
+    await waitFor(() => {
+      expect(fakeFacade.fitBoundsRequests).toEqual([expectedFitBoundsRequest]);
+    });
+
+    fakeFacade.fitBoundsRequests.splice(0);
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
 
     await waitFor(() => {
-      expect(fakeFacade.fitBoundsRequests).toEqual([
-        {
-          bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
-          maxZoom: 15,
-          padding: undefined,
-        },
-      ]);
+      expect(fakeFacade.fitBoundsRequests).toEqual([expectedFitBoundsRequest]);
     });
   });
 

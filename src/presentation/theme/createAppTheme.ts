@@ -104,13 +104,13 @@ export function createAppTheme() {
             marginBottom: 4,
             padding: '6px 4px',
             borderRadius: 10,
-            color: 'rgba(255,255,255,0.72)',
+            color: appColors.text.inverse,
             fontSize: '0.625rem',
             lineHeight: 1.1,
             textTransform: 'none',
             '&.Mui-selected': {
               color: appColors.text.inverse,
-              backgroundColor: 'rgba(33,158,188,0.34)',
+              backgroundColor: appColors.interaction.navigationSelectedBackground,
             },
             '& .MuiTab-iconWrapper': {
               marginBottom: '2px !important',

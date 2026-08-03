@@ -16,6 +16,7 @@ import {
   Stack,
   Tab,
   Tabs,
+  type IconButtonProps,
   type TabProps,
   Tooltip,
 } from '@mui/material';
@@ -30,6 +31,51 @@ import {
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { appColors } from '@/presentation/theme/appColors';
+
+interface WorkspaceRailIconButtonProps {
+  readonly label: string;
+  readonly tooltip: string;
+  readonly selected?: boolean;
+  readonly busy?: boolean;
+  readonly buttonRef?: RefObject<HTMLButtonElement | null>;
+  readonly onClick: NonNullable<IconButtonProps['onClick']>;
+  readonly children: ReactNode;
+}
+
+function WorkspaceRailIconButton({
+  label,
+  tooltip,
+  selected,
+  busy,
+  buttonRef,
+  onClick,
+  children,
+}: WorkspaceRailIconButtonProps) {
+  return (
+    <Tooltip title={tooltip} placement="right">
+      <IconButton
+        ref={buttonRef}
+        aria-busy={busy}
+        aria-label={label}
+        aria-pressed={selected}
+        onClick={onClick}
+        sx={{
+          color: appColors.text.inverse,
+          bgcolor: selected
+            ? appColors.interaction.navigationSelectedBackground
+            : 'transparent',
+          '&:hover': {
+            bgcolor: selected
+              ? appColors.interaction.navigationSelectedBackground
+              : 'transparent',
+          },
+        }}
+      >
+        {children}
+      </IconButton>
+    </Tooltip>
+  );
+}
 
 const unavailableTabSx = {
   pointerEvents: 'auto !important',
@@ -364,20 +410,21 @@ export function WorkspaceRail({
         />
       </Tabs>
 
-      <Tooltip title="Share map view" placement="right">
-        <IconButton
-          aria-label="Share map view"
+      <Box
+        sx={{
+          mx: 'auto',
+          mt: 0.5,
+          visibility: collapsed ? 'hidden' : 'visible',
+        }}
+      >
+        <WorkspaceRailIconButton
+          label="Share map view"
+          tooltip="Share map view"
           onClick={onShare}
-          sx={{
-            mx: 'auto',
-            mt: 0.5,
-            color: 'rgba(255,255,255,0.84)',
-            visibility: collapsed ? 'hidden' : 'visible',
-          }}
         >
           <ShareOutlinedIcon />
-        </IconButton>
-      </Tooltip>
+        </WorkspaceRailIconButton>
+      </Box>
 
       <Stack
         spacing={0.5}
@@ -391,71 +438,57 @@ export function WorkspaceRail({
         }}
       >
         {developerMode ? (
-          <Tooltip title="Developer diagnostics" placement="right">
-            <IconButton
-              aria-label="Developer diagnostics"
-              aria-pressed={developerToolsOpen}
-              onClick={onToggleDeveloperTools}
-              sx={{
-                color: 'rgba(255,255,255,0.84)',
-                bgcolor: developerToolsOpen ? 'rgba(33,158,188,0.34)' : 'transparent',
-              }}
-            >
-              <BugReportOutlinedIcon />
-            </IconButton>
-          </Tooltip>
+          <WorkspaceRailIconButton
+            label="Developer diagnostics"
+            tooltip="Developer diagnostics"
+            selected={developerToolsOpen}
+            onClick={onToggleDeveloperTools}
+          >
+            <BugReportOutlinedIcon />
+          </WorkspaceRailIconButton>
         ) : null}
-        <Tooltip title={userLabel} placement="right">
-          <IconButton
-            aria-busy={userSnapshot.syncStatus === 'syncing'}
-            aria-label={userLabel}
-            aria-pressed={activeTab === 'user'}
-            onClick={() => {
-              onSectionChange('user');
-            }}
+        <WorkspaceRailIconButton
+          busy={userSnapshot.syncStatus === 'syncing'}
+          label={userLabel}
+          tooltip={userLabel}
+          selected={activeTab === 'user'}
+          onClick={() => {
+            onSectionChange('user');
+          }}
+        >
+          <Badge
+            aria-hidden="true"
+            invisible={syncIndicatorColor === null}
+            overlap="circular"
+            variant="dot"
             sx={{
-              color: 'rgba(255,255,255,0.84)',
-              bgcolor: activeTab === 'user' ? 'rgba(33,158,188,0.34)' : 'transparent',
+              '& .MuiBadge-badge': {
+                width: 8,
+                height: 8,
+                minWidth: 8,
+                bgcolor: syncIndicatorColor ?? 'transparent',
+                boxShadow: `0 0 0 2px ${appColors.brand.deepSpace}`,
+              },
             }}
           >
-            <Badge
-              aria-hidden="true"
-              invisible={syncIndicatorColor === null}
-              overlap="circular"
-              variant="dot"
-              sx={{
-                '& .MuiBadge-badge': {
-                  width: 8,
-                  height: 8,
-                  minWidth: 8,
-                  bgcolor: syncIndicatorColor ?? 'transparent',
-                  boxShadow: `0 0 0 2px ${appColors.brand.deepSpace}`,
-                },
-              }}
-            >
-              <AccountCircleOutlinedIcon />
-            </Badge>
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Settings" placement="right">
-          <IconButton
-            aria-label="Open settings"
-            onClick={onOpenSettings}
-            sx={{ color: 'rgba(255,255,255,0.84)' }}
-          >
-            <SettingsOutlinedIcon />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="About this site" placement="right">
-          <IconButton
-            ref={aboutButtonRef}
-            aria-label="About this site"
-            onClick={onOpenAbout}
-            sx={{ color: 'rgba(255,255,255,0.84)' }}
-          >
-            <InfoOutlinedIcon />
-          </IconButton>
-        </Tooltip>
+            <AccountCircleOutlinedIcon />
+          </Badge>
+        </WorkspaceRailIconButton>
+        <WorkspaceRailIconButton
+          label="Open settings"
+          tooltip="Settings"
+          onClick={onOpenSettings}
+        >
+          <SettingsOutlinedIcon />
+        </WorkspaceRailIconButton>
+        <WorkspaceRailIconButton
+          buttonRef={aboutButtonRef}
+          label="About this site"
+          tooltip="About this site"
+          onClick={onOpenAbout}
+        >
+          <InfoOutlinedIcon />
+        </WorkspaceRailIconButton>
       </Stack>
     </Box>
   );

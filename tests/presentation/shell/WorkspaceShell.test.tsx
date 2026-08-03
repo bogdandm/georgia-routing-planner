@@ -2843,6 +2843,43 @@ describe('WorkspaceShell', () => {
     );
   });
 
+  it('renders available rail controls with one visual treatment', async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({ developerMode: true });
+    renderWorkspaceShell();
+
+    const userButton = screen.getByRole('button', { name: 'User' });
+    const satelliteTab = screen.getByRole('tab', { name: 'Satellite' });
+    const availableControls = [
+      satelliteTab,
+      screen.getByRole('tab', { name: 'Tracks' }),
+      screen.getByRole('tab', { name: 'Layers' }),
+      screen.getByRole('button', { name: 'Share map view' }),
+      screen.getByRole('button', { name: 'Developer diagnostics' }),
+      userButton,
+      screen.getByRole('button', { name: 'Open settings' }),
+      screen.getByRole('button', { name: 'About this site' }),
+    ];
+
+    for (const control of availableControls) {
+      expect(control).toHaveStyle({ color: appColors.text.inverse });
+    }
+
+    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveStyle({
+      color: 'rgba(255, 255, 255, 0.42)',
+    });
+    expect(satelliteTab).toHaveStyle({
+      backgroundColor: appColors.interaction.navigationSelectedBackground,
+    });
+
+    await user.click(userButton);
+
+    expect(userButton).toHaveAttribute('aria-pressed', 'true');
+    expect(userButton).toHaveStyle({
+      backgroundColor: appColors.interaction.navigationSelectedBackground,
+    });
+  });
+
   it('shows error, active, and successful synchronization colors on User', async () => {
     let snapshot: UserDataSnapshot = {
       busy: false,

@@ -69,6 +69,7 @@ interface MapWorkspaceProps {
   readonly cameraRestoreTimeoutMs?: number;
   readonly terrainRetryDelaysMs?: readonly number[];
   readonly getNavigationPadding?: () => MapFitPadding | undefined;
+  readonly onElevationGradeLegendDismissedChange?: (dismissed: boolean) => void;
 }
 
 const unavailableMapStyle: StyleSpecification = {
@@ -124,6 +125,7 @@ export function MapWorkspace({
   cameraRestoreTimeoutMs: restoreTimeoutMs = cameraRestoreTimeoutMs,
   terrainRetryDelaysMs: retryDelaysMs = terrainRetryDelaysMs,
   getNavigationPadding,
+  onElevationGradeLegendDismissedChange,
 }: MapWorkspaceProps) {
   const {
     logger,
@@ -182,6 +184,12 @@ export function MapWorkspace({
     (state) => state.fitBoundsCommand,
   );
   const developerMode = useUiStore((state) => state.developerMode);
+  const elevationGradeLegendDismissed = useUiStore(
+    (state) => state.elevationGradeLegendDismissed,
+  );
+  const setElevationGradeLegendDismissed = useUiStore(
+    (state) => state.setElevationGradeLegendDismissed,
+  );
   const mapDebugOptions = useUiStore((state) => state.mapDebugOptions);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
@@ -654,6 +662,14 @@ export function MapWorkspace({
         />
       ) : null}
       <ElevationGradeLegend
+        dismissed={elevationGradeLegendDismissed}
+        onDismissedChange={(dismissed) => {
+          if (onElevationGradeLegendDismissedChange === undefined) {
+            setElevationGradeLegendDismissed(dismissed);
+            return;
+          }
+          onElevationGradeLegendDismissedChange(dismissed);
+        }}
         profile={activeProfile}
         visible={
           !smartphoneViewport &&

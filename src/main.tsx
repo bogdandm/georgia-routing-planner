@@ -17,16 +17,22 @@ void runApplicationBootstrap(async (rootElement, services) => {
     new URLSearchParams(window.location.search).get('developer') === '1';
   let developerMode = developerModeFromUrl;
   let navigationCollapsed = false;
+  let elevationGradeLegendDismissed = false;
 
   try {
     const preferences = await services.database.loadUiPreferences();
     developerMode = developerModeFromUrl || preferences.developerMode;
     navigationCollapsed = preferences.navigationCollapsed;
+    elevationGradeLegendDismissed = preferences.elevationGradeLegendDismissed;
   } catch {
     services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
   }
 
-  useUiStore.setState({ developerMode, navigationCollapsed });
+  useUiStore.setState({
+    developerMode,
+    navigationCollapsed,
+    elevationGradeLegendDismissed,
+  });
   const root = createRoot(rootElement);
   const dispose = registerPageLifecycleDisposal(() => {
     root.unmount();

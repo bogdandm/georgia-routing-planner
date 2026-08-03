@@ -63,12 +63,18 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
   const developerMode = useUiStore((state) => state.developerMode);
+  const elevationGradeLegendDismissed = useUiStore(
+    (state) => state.elevationGradeLegendDismissed,
+  );
   const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setDeveloperDrawerOpen = useUiStore((state) => state.setDeveloperDrawerOpen);
   const setDeveloperMode = useUiStore((state) => state.setDeveloperMode);
+  const setElevationGradeLegendDismissed = useUiStore(
+    (state) => state.setElevationGradeLegendDismissed,
+  );
   const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
@@ -97,9 +103,6 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     if (left === 0) return undefined;
     return { top, right: mapCameraMargin, bottom: top, left };
   }, [smartphoneViewport]);
-  const renderedMapSurface = mapSurface ?? (
-    <MapWorkspace getNavigationPadding={getNavigationPadding} />
-  );
   const [shareOpen, setShareOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
@@ -170,11 +173,13 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const persistUiPreferences = async (
     nextDeveloperMode: boolean,
     nextNavigationCollapsed: boolean,
+    nextElevationGradeLegendDismissed: boolean,
   ) => {
     try {
       await database.saveUiPreferences({
         developerMode: nextDeveloperMode,
         navigationCollapsed: nextNavigationCollapsed,
+        elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
       });
     } catch {
       logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
@@ -190,13 +195,29 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         showTileBoundaries: false,
       });
     }
-    void persistUiPreferences(value, navigationCollapsed);
+    void persistUiPreferences(
+      value,
+      navigationCollapsed,
+      elevationGradeLegendDismissed,
+    );
   };
 
   const handleNavigationCollapsedChange = (value: boolean) => {
     setNavigationCollapsed(value);
-    void persistUiPreferences(developerMode, value);
+    void persistUiPreferences(developerMode, value, elevationGradeLegendDismissed);
   };
+
+  const handleElevationGradeLegendDismissedChange = (value: boolean) => {
+    setElevationGradeLegendDismissed(value);
+    void persistUiPreferences(developerMode, navigationCollapsed, value);
+  };
+
+  const renderedMapSurface = mapSurface ?? (
+    <MapWorkspace
+      getNavigationPadding={getNavigationPadding}
+      onElevationGradeLegendDismissedChange={handleElevationGradeLegendDismissedChange}
+    />
+  );
 
   const handleSectionChange = (section: WorkspaceTab) => {
     setActiveTab(section);

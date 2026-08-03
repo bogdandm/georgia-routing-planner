@@ -1,4 +1,6 @@
-import { Paper, Typography } from '@mui/material';
+import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
+import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
+import { Box, IconButton, Paper, Tooltip, Typography } from '@mui/material';
 import { useId } from 'react';
 
 import {
@@ -9,6 +11,8 @@ import {
 import { appColors } from '@/presentation/theme/appColors';
 
 interface ElevationGradeLegendProps {
+  readonly dismissed: boolean;
+  readonly onDismissedChange: (dismissed: boolean) => void;
   readonly profile: ElevationProfile | null;
   readonly visible: boolean;
 }
@@ -72,11 +76,33 @@ function formatGradeThreshold(threshold: number): string {
 }
 
 /** Explains the colors of the active track's grade overlay without duplicating its state. */
-export function ElevationGradeLegend({ profile, visible }: ElevationGradeLegendProps) {
+export function ElevationGradeLegend({
+  dismissed,
+  onDismissedChange,
+  profile,
+  visible,
+}: ElevationGradeLegendProps) {
   const gradientId = `elevation-grade-legend-${useId().replaceAll(':', '')}`;
 
   if (!visible || profile === null || profile.gradeSubsegments.length === 0)
     return null;
+
+  if (dismissed) {
+    return (
+      <Tooltip title="Show track grade legend">
+        <IconButton
+          aria-label="Show track grade legend"
+          onClick={() => {
+            onDismissedChange(false);
+          }}
+          size="small"
+          sx={{ position: 'absolute', right: 8, bottom: 32, zIndex: 1 }}
+        >
+          <HelpOutlineOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    );
+  }
 
   return (
     <Paper
@@ -93,9 +119,25 @@ export function ElevationGradeLegend({ profile, visible }: ElevationGradeLegendP
         maxWidth: 'calc(100% - 16px)',
       }}
     >
-      <Typography component="h2" variant="caption" sx={{ fontWeight: 700 }}>
-        Track grade
-      </Typography>
+      <Box
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+      >
+        <Typography component="h2" variant="caption" sx={{ fontWeight: 700 }}>
+          Track grade
+        </Typography>
+        <Tooltip title="Hide track grade legend">
+          <IconButton
+            aria-label="Hide track grade legend"
+            onClick={() => {
+              onDismissedChange(true);
+            }}
+            size="small"
+            sx={{ mr: -0.75, my: -0.75 }}
+          >
+            <CloseOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <svg
         aria-label="Track grade color thresholds"
         height={62}

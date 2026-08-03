@@ -275,6 +275,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const latestOpenedTrackId = useRef<string | null>(null);
   const latestOpenedTrackWrite = useRef<Promise<void>>(Promise.resolve());
   const renderedTrackId = useRef<string | null>(null);
+  const initiallyRestoredTrackId = useRef<string | null>(null);
   const restorationAttempted = useRef(false);
 
   const saveLatestOpenedTrackId = useCallback(
@@ -301,6 +302,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         if (latestSummary !== undefined) {
           try {
             const content = await database.loadLocalTrackContent(latestSummary.id);
+            initiallyRestoredTrackId.current = latestSummary.id;
             setActive({
               kind: 'saved',
               summary: latestSummary,
@@ -452,17 +454,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const result = mapLayers?.setImportedTrackGeometry(segments);
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
-    requestMapFitBounds(
-      {
-        west: metrics.bounds.west,
-        south: metrics.bounds.south,
-        east: metrics.bounds.crossesAntimeridian
-          ? metrics.bounds.east + 360
-          : metrics.bounds.east,
-        north: metrics.bounds.north,
-      },
-      15,
-    );
+    if (initiallyRestoredTrackId.current !== trackId) {
+      requestMapFitBounds(
+        {
+          west: metrics.bounds.west,
+          south: metrics.bounds.south,
+          east: metrics.bounds.crossesAntimeridian
+            ? metrics.bounds.east + 360
+            : metrics.bounds.east,
+          north: metrics.bounds.north,
+        },
+        15,
+      );
+    }
   }, [active, mapLayers]);
 
   const generateName = useCallback(
@@ -643,6 +647,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       ) {
         return;
       }
+      initiallyRestoredTrackId.current = null;
       namingAbort.current?.abort();
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
@@ -829,6 +834,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
+    initiallyRestoredTrackId.current = null;
     recalculationAbort.current?.abort();
     const controller = new AbortController();
     recalculationAbort.current = controller;
@@ -900,6 +906,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [active, database, elevationProvider, recalculationState, reloadSummaries]);
 
   const discardPreview = useCallback(() => {
+    initiallyRestoredTrackId.current = null;
     preparationAbort.current?.abort();
     recalculationAbort.current?.abort();
     setRecalculationState('idle');
@@ -914,6 +921,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (active?.kind === 'preview' && !window.confirm('Discard this unsaved track?')) {
       return false;
     }
+    initiallyRestoredTrackId.current = null;
     preparationAbort.current?.abort();
     recalculationAbort.current?.abort();
     setRecalculationState('idle');
@@ -932,6 +940,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       ) {
         return;
       }
+      initiallyRestoredTrackId.current = null;
+      renderedTrackId.current = null;
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
       setRecalculationState('idle');

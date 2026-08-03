@@ -11,7 +11,6 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-
 import type { ElevationSample } from '@/application/ports/ElevationProvider';
 import {
   SatelliteCatalogError,
@@ -1257,10 +1256,7 @@ describe('WorkspaceShell', () => {
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();
     if (mapLayers === null) return;
-    const setImportedTrackGeometry = vi.spyOn(
-      mapLayers,
-      'setImportedTrackGeometry',
-    );
+    const setImportedTrackGeometry = vi.spyOn(mapLayers, 'setImportedTrackGeometry');
     const fakeFacade = new FakeMapFacade();
     const user = userEvent.setup();
     useUiStore.setState({ activeTab: 'tracks' });

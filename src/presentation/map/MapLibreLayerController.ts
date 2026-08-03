@@ -1731,20 +1731,28 @@ export class MapLibreLayerController {
   }
 
   private ensureImportedTrackLayerOrder(map: MapLibreMap): void {
-    const orderedLayerIds = [
+    const orderedTrackLayerIds = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
-      importedTrackLayerIds.trace,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
-    for (let index = orderedLayerIds.length - 2; index >= 0; index -= 1) {
-      const layerId = orderedLayerIds[index];
-      const aboveLayerId = orderedLayerIds[index + 1];
-      if (layerId === undefined || aboveLayerId === undefined) continue;
-      const layerIds = map.getStyle().layers.map((layer) => layer.id);
-      if (layerIds.indexOf(layerId) > layerIds.indexOf(aboveLayerId)) {
-        map.moveLayer(layerId, aboveLayerId);
+    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
+    const trackOrderIsCorrect =
+      labelIndex >= orderedTrackLayerIds.length &&
+      orderedTrackLayerIds.every(
+        (layerId, index) =>
+          layerIds[labelIndex - orderedTrackLayerIds.length + index] === layerId,
+      );
+    if (!trackOrderIsCorrect) {
+      for (const layerId of orderedTrackLayerIds) {
+        map.moveLayer(layerId, mapInsertionPoints.importedTracksBeforeLayerId);
       }
+    }
+
+    const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
+    if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
+      map.moveLayer(importedTrackLayerIds.trace);
     }
   }
 

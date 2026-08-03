@@ -466,18 +466,34 @@ describe('MapLibreLayerController', () => {
       'paint.line-width',
       4,
     );
-    expect([...map.layers.keys()].indexOf(importedTrackLayerIds.line)).toBeGreaterThan(
-      [...map.layers.keys()].indexOf(mapLayerIds.placeLabels),
-    );
-    const importedTrackLayerIdsInOrder = [
+    const importedTrackLineLayerIdsInOrder = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
-      importedTrackLayerIds.trace,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
-    expect(importedTrackLayerIdsInOrder).toEqual(
-      [...importedTrackLayerIdsInOrder].sort((left, right) => left - right),
+    expect(importedTrackLineLayerIdsInOrder).toEqual(
+      [...importedTrackLineLayerIdsInOrder].sort((left, right) => left - right),
     );
+    const labelLayerIds = [
+      mapLayerIds.hikingPoiLabels,
+      mapLayerIds.peakLabels,
+      mapLayerIds.roadLabels,
+      mapLayerIds.riverLabels,
+      mapLayerIds.waterLabels,
+      mapLayerIds.placeLabels,
+    ];
+    const labelLayerIndices = labelLayerIds.map((layerId) =>
+      [...map.layers.keys()].indexOf(layerId),
+    );
+    expect(Math.max(...importedTrackLineLayerIdsInOrder)).toBeLessThan(
+      Math.min(...labelLayerIndices),
+    );
+    expect([...map.layers.keys()].indexOf(importedTrackLayerIds.trace)).toBeGreaterThan(
+      Math.max(...labelLayerIndices),
+    );
+    const moveCount = map.moves.length;
+    map.fire('styledata', {});
+    expect(map.moves).toHaveLength(moveCount);
     expect(controller.setImportedTrackOpacity(0.45)).toEqual({ status: 'success' });
     expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
       0.45,

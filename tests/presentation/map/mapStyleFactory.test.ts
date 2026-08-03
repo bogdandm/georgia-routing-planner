@@ -207,7 +207,7 @@ describe('createHikingMapStyle', () => {
       filter: ['==', ['get', 'class'], 'ridge'],
       layout: {
         'symbol-placement': 'line',
-        'symbol-spacing': 750,
+        'symbol-spacing': 250,
         'text-field': englishFirstLabelExpression,
         'text-font': ['Noto Sans Regular'],
         'text-size': 12,

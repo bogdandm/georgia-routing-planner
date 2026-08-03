@@ -50,6 +50,7 @@ export const mapVisualPalette = {
     shadow: '#565A5C',
     highlight: '#F5F4EF',
     accent: '#898D8F',
+    ridge: '#565A5C',
   },
   restricted: {
     line: '#C95050',
@@ -95,6 +96,7 @@ export const mapVisualModePaint = {
       'circle-stroke-opacity': 1,
     },
     [mapLayerIds.peaks]: { 'circle-opacity': 1, 'circle-stroke-opacity': 1 },
+    [mapLayerIds.ridges]: { 'line-opacity': 0.48 },
     [terrainOverlayLayerIds.reliefShade]: { 'hillshade-exaggeration': 0.2 },
     [terrainOverlayLayerIds.contourMinor]: { 'line-opacity': 0.5 },
     [terrainOverlayLayerIds.contourIndex]: { 'line-opacity': 0.74 },
@@ -107,6 +109,10 @@ export const mapVisualModePaint = {
       'text-halo-color': mapVisualPalette.text.haloVector,
     },
     [mapLayerIds.peakLabels]: {
+      'text-opacity': 1,
+      'text-halo-color': mapVisualPalette.text.haloVector,
+    },
+    [mapLayerIds.ridgeLabels]: {
       'text-opacity': 1,
       'text-halo-color': mapVisualPalette.text.haloVector,
     },
@@ -142,6 +148,7 @@ export const mapVisualModePaint = {
     },
     [mapLayerIds.peaks]: { 'circle-opacity': 1, 'circle-stroke-opacity': 1 },
     [terrainOverlayLayerIds.reliefShade]: { 'hillshade-exaggeration': 0.14 },
+    [mapLayerIds.ridges]: { 'line-opacity': 0.56 },
     [terrainOverlayLayerIds.contourMinor]: { 'line-opacity': 0.72 },
     [terrainOverlayLayerIds.contourIndex]: { 'line-opacity': 0.9 },
     [terrainOverlayLayerIds.contourLabels]: {
@@ -153,6 +160,10 @@ export const mapVisualModePaint = {
       'text-halo-color': mapVisualPalette.text.haloSatellite,
     },
     [mapLayerIds.peakLabels]: {
+      'text-opacity': 1,
+      'text-halo-color': mapVisualPalette.text.haloSatellite,
+    },
+    [mapLayerIds.ridgeLabels]: {
       'text-opacity': 1,
       'text-halo-color': mapVisualPalette.text.haloSatellite,
     },

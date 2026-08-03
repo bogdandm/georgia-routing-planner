@@ -48,6 +48,7 @@ describe('createHikingMapStyle', () => {
     ).toEqual([
       mapLayerIds.roadLabels,
       mapLayerIds.riverLabels,
+      mapLayerIds.ridgeLabels,
       mapLayerIds.waterLabels,
     ]);
   });
@@ -173,6 +174,44 @@ describe('createHikingMapStyle', () => {
     });
   });
 
+  it('renders ridge geometry and places English-first labels along it', () => {
+    const style = createHikingMapStyle(configuration);
+    const ridges = style.layers.find((layer) => layer.id === mapLayerIds.ridges);
+    const ridgeLabels = style.layers.find(
+      (layer) => layer.id === mapLayerIds.ridgeLabels,
+    );
+
+    expect(ridges).toMatchObject({
+      id: mapLayerIds.ridges,
+      type: 'line',
+      source: mapSourceIds.basemapVector,
+      'source-layer': 'mountain_peak',
+      minzoom: 13,
+      filter: ['==', ['get', 'class'], 'ridge'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': mapVisualPalette.terrain.ridge,
+        'line-opacity': 0.48,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1],
+      },
+    });
+    expect(ridgeLabels).toMatchObject({
+      id: mapLayerIds.ridgeLabels,
+      type: 'symbol',
+      source: mapSourceIds.basemapVector,
+      'source-layer': 'mountain_peak',
+      minzoom: 13,
+      filter: ['==', ['get', 'class'], 'ridge'],
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': 750,
+        'text-field': englishFirstLabelExpression,
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+      },
+    });
+  });
+
   it('keeps labels readable across nearby and distant map detail', () => {
     const style = createHikingMapStyle(configuration);
 
@@ -219,8 +258,10 @@ describe('createHikingMapStyle', () => {
       (layer) => layer.id === mapLayerIds.hikingPaths,
     );
     const peaks = style.layers.find((layer) => layer.id === mapLayerIds.peaks);
+    const ridges = style.layers.find((layer) => layer.id === mapLayerIds.ridges);
 
     expect(hikingPaths).toHaveProperty('source-layer', 'fixture_transport');
     expect(peaks).toHaveProperty('source-layer', 'fixture_peaks');
+    expect(ridges).toHaveProperty('source-layer', 'fixture_peaks');
   });
 });

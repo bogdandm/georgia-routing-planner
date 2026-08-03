@@ -38,6 +38,7 @@ export const mapLayerIds = {
   restrictedAreas: 'basemap-restricted-areas',
   parks: 'basemap-parks',
   waterways: 'basemap-waterways',
+  ridges: 'basemap-ridges',
   water: 'basemap-water',
   boundaries: 'basemap-boundaries',
   roadCasings: 'basemap-road-casings',
@@ -50,6 +51,7 @@ export const mapLayerIds = {
   peakLabels: 'basemap-peak-labels',
   roadLabels: 'basemap-road-labels',
   riverLabels: 'basemap-river-labels',
+  ridgeLabels: 'basemap-ridge-labels',
   waterLabels: 'basemap-water-labels',
   placeLabels: 'basemap-place-labels',
 } as const;

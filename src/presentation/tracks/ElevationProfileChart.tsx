@@ -308,9 +308,7 @@ export function ElevationProfileChart({
 
   return (
     <Stack spacing={1.5}>
-      <Box
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-      >
+      <Box sx={{ position: 'relative' }}>
         <Typography component="h3" variant="subtitle2">
           Elevation profile
         </Typography>
@@ -322,6 +320,12 @@ export function ElevationProfileChart({
                 onTrackGradeLegendDismissedChange(false);
               }}
               size="small"
+              sx={{
+                position: 'absolute',
+                right: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+              }}
             >
               <HelpOutlineOutlinedIcon fontSize="small" />
             </IconButton>

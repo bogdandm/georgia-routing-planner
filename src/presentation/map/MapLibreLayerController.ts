@@ -1731,23 +1731,28 @@ export class MapLibreLayerController {
   }
 
   private ensureImportedTrackLayerOrder(map: MapLibreMap): void {
-    const orderedLayerIds = [
+    const orderedTrackLayerIds = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
-      importedTrackLayerIds.trace,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getStyle().layers.map((layer) => layer.id);
     const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
-    const orderIsCorrect =
-      labelIndex >= orderedLayerIds.length &&
-      orderedLayerIds.every(
+    const trackOrderIsCorrect =
+      labelIndex >= orderedTrackLayerIds.length &&
+      orderedTrackLayerIds.every(
         (layerId, index) =>
-          layerIds[labelIndex - orderedLayerIds.length + index] === layerId,
+          layerIds[labelIndex - orderedTrackLayerIds.length + index] === layerId,
       );
-    if (orderIsCorrect) return;
-    for (const layerId of orderedLayerIds) {
-      map.moveLayer(layerId, mapInsertionPoints.importedTracksBeforeLayerId);
+    if (!trackOrderIsCorrect) {
+      for (const layerId of orderedTrackLayerIds) {
+        map.moveLayer(layerId, mapInsertionPoints.importedTracksBeforeLayerId);
+      }
+    }
+
+    const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
+    if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
+      map.moveLayer(importedTrackLayerIds.trace);
     }
   }
 

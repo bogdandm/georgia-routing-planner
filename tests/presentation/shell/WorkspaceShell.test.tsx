@@ -9,6 +9,8 @@ import {
 } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+
 
 import type { ElevationSample } from '@/application/ports/ElevationProvider';
 import {
@@ -23,7 +25,13 @@ import type {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import {
+  LOCAL_TRACK_SCHEMA_VERSION,
+  type LocalTrackContent,
+  type LocalTrackSummary,
+} from '@/domain/tracks/localTrack';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import {
   mapInteractionStore,
   resetMapInteractionStore,
@@ -120,14 +128,65 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function renderWorkspaceShell() {
+function renderWorkspaceShell(
+  mapSurface: ReactNode = <div aria-label="Fake map">Local map ready</div>,
+) {
   return render(
     <RuntimeServicesProvider services={services}>
       <ThemeProvider theme={createAppTheme()}>
-        <WorkspaceShell mapSurface={<div aria-label="Fake map">Local map ready</div>} />
+        <WorkspaceShell mapSurface={mapSurface} />
       </ThemeProvider>
     </RuntimeServicesProvider>,
   );
+}
+
+function savedTrackSummary(id: string, name: string): LocalTrackSummary {
+  return {
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    id,
+    name,
+    normalizedName: name.toLocaleLowerCase('en'),
+    savedAt: '2026-07-22T10:00:00.000Z',
+    updatedAt: '2026-07-22T10:00:00.000Z',
+    contentHash: 'a'.repeat(64),
+    sourceFilename: 'fixture.gpx',
+    sourceFormat: 'gpx',
+    favorite: false,
+    geometryKind: 'track',
+    pointCount: 2,
+    segmentCount: 1,
+    metrics: {
+      distanceMeters: 1_000,
+      distanceAlgorithmVersion: 1,
+      startCoordinate: [44, 42],
+      endCoordinate: [44.01, 42.01],
+      bounds: {
+        west: 44,
+        south: 42,
+        east: 44.01,
+        north: 42.01,
+        crossesAntimeridian: false,
+      },
+      center: [44.005, 42.005],
+      elevationSource: 'dem-assisted',
+      elevationAlgorithmVersion: 3,
+    },
+    metadata: { version: '1.1', links: [] },
+    warnings: [],
+  };
+}
+
+function savedTrackContent(trackId: string): LocalTrackContent {
+  return {
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    trackId,
+    trackPoints: [
+      [
+        { coordinate: [44, 42], elevationMeters: 1_000 },
+        { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+      ],
+    ],
+  };
 }
 
 const testViewport = {
@@ -1181,6 +1240,72 @@ describe('WorkspaceShell', () => {
       expect(highlightedSegments?.[0]?.coordinates.length).toBeGreaterThan(16);
       expect(highlightedSegments?.[0]?.coordinates[0]).toEqual([44, 42]);
       expect(highlightedSegments?.[0]?.coordinates.at(-1)).toEqual([44.015, 42]);
+    });
+  });
+
+  it('restores the last opened track without overriding the restored camera', async () => {
+    const summary = savedTrackSummary('local:restored', 'Restored trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    await services.mapCameraRepository.save({
+      longitude: 45.2,
+      latitude: 42.4,
+      zoom: 10,
+      bearing: 0,
+      pitch: 0,
+    });
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackGeometry = vi.spyOn(
+      mapLayers,
+      'setImportedTrackGeometry',
+    );
+    const fakeFacade = new FakeMapFacade();
+    const user = userEvent.setup();
+    useUiStore.setState({ activeTab: 'tracks' });
+
+    renderWorkspaceShell(
+      <MapWorkspace
+        facade={fakeFacade}
+        mapCanvas={(initialCamera) => (
+          <div>
+            Restored camera {initialCamera.longitude}/{initialCamera.latitude}/
+            {initialCamera.zoom}
+          </div>
+        )}
+      />,
+    );
+
+    expect(await screen.findByText('Restored camera 45.2/42.4/10')).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Restored trail' }),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(setImportedTrackGeometry).toHaveBeenCalled();
+    });
+    expect(mapInteractionStore.getState().fitBoundsCommand).toBeNull();
+
+    act(() => {
+      fakeFacade.setSnapshot({ lifecycle: 'ready' });
+    });
+
+    await waitFor(() => {
+      expect(mapInteractionStore.getState().fitBoundsCommand).toBeNull();
+      expect(fakeFacade.fitBoundsRequests).toEqual([]);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
+    await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
+
+    await waitFor(() => {
+      expect(fakeFacade.fitBoundsRequests).toEqual([
+        {
+          bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
+          maxZoom: 15,
+          padding: undefined,
+        },
+      ]);
     });
   });
 

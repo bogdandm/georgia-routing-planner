@@ -240,10 +240,11 @@ lockfile as a shortcut.
 
 ### Live development servers
 
-Start Vite only when requested or when verification cannot otherwise be completed. Use
-`--port 5173 --strictPort`, stop it after the check, and never reserve, probe,
-substitute, or auto-fallback the port. Report an occupied port instead of terminating
-its listener.
+Agents MUST NOT start Vite or any live development server. Live verification is
+maintainer-controlled: the maintainer may run it manually when needed. Do not reserve,
+probe, substitute, auto-fallback, stop, or otherwise interact with its port or process.
+This does not change the E2E policy; it remains governed by
+[`e2e/AGENTS.md`](e2e/AGENTS.md).
 
 ### CI failure authorization
 
@@ -436,18 +437,18 @@ order:
 - `Branch:` the exact branch name.
 - `Worktree path:` the absolute path to the worktree that owns the branch.
 - `Commits:` every workstream commit as a short hash and subject, oldest first.
-- `Test path:` for every code change, always include
-  `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`,
-  even when live-server review was not requested; otherwise `Not applicable` only for
-  documentation-only or non-code changes, with the reason.
+- `Test path:` for every code change, include only
+  `cd "<real-WSL-worktree-path>" && ./node_modules/.bin/vite --port 5173 --strictPort`;
+  otherwise `Not applicable` only for documentation-only or non-code changes, with the
+  reason.
 - `Verification:` every command run and its result, plus checks skipped as
   `Not applicable` with the reason.
 - `Status:` current mergeability and whether the branch is awaiting maintainer approval.
 
-Replace the `Test path:` placeholder with the real path; do not start the server,
-browser, or E2E. The final response contains only the `Completed work:` account and
-these fields, with blockers inside `Verification:` or `Status:` and no additional
-preamble, headings, todos, reminders, or trailing content.
+Replace the `Test path:` placeholder with the real path. Do not start a server, browser,
+or E2E. The final response contains only the `Completed work:` account and these fields,
+with blockers inside `Verification:` or `Status:` and no additional preamble, headings,
+todos, reminders, or trailing content.
 
 ### Pull request title and description
 

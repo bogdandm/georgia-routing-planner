@@ -466,9 +466,6 @@ describe('MapLibreLayerController', () => {
       'paint.line-width',
       4,
     );
-    expect([...map.layers.keys()].indexOf(importedTrackLayerIds.line)).toBeGreaterThan(
-      [...map.layers.keys()].indexOf(mapLayerIds.placeLabels),
-    );
     const importedTrackLayerIdsInOrder = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
@@ -478,6 +475,19 @@ describe('MapLibreLayerController', () => {
     expect(importedTrackLayerIdsInOrder).toEqual(
       [...importedTrackLayerIdsInOrder].sort((left, right) => left - right),
     );
+    const labelLayerIds = [
+      mapLayerIds.hikingPoiLabels,
+      mapLayerIds.peakLabels,
+      mapLayerIds.roadLabels,
+      mapLayerIds.riverLabels,
+      mapLayerIds.waterLabels,
+      mapLayerIds.placeLabels,
+    ];
+    for (const labelLayerId of labelLayerIds) {
+      expect(Math.max(...importedTrackLayerIdsInOrder)).toBeLessThan(
+        [...map.layers.keys()].indexOf(labelLayerId),
+      );
+    }
     expect(controller.setImportedTrackOpacity(0.45)).toEqual({ status: 'success' });
     expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
       0.45,

@@ -61,5 +61,5 @@ export const mapInsertionPoints = {
   // Water polygons mask generated terrain contours while waterways remain visible.
   contoursBeforeLayerId: mapLayerIds.water,
   satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
-  userOverlaysAfterLayerId: mapLayerIds.placeLabels,
+  importedTracksBeforeLayerId: mapLayerIds.hikingPoiLabels,
 } as const;

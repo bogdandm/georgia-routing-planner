@@ -31,16 +31,26 @@ describe('AppDatabase', () => {
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: false,
       navigationCollapsed: false,
+      elevationGradeLegendDismissed: false,
     });
 
     await database.saveUiPreferences({
       developerMode: true,
       navigationCollapsed: true,
+      elevationGradeLegendDismissed: true,
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: true,
       navigationCollapsed: true,
+      elevationGradeLegendDismissed: true,
+    });
+
+    await database.saveElevationGradeLegendDismissed(false);
+    await expect(database.loadUiPreferences()).resolves.toEqual({
+      developerMode: true,
+      navigationCollapsed: true,
+      elevationGradeLegendDismissed: false,
     });
   });
 
@@ -54,6 +64,7 @@ describe('AppDatabase', () => {
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: false,
       navigationCollapsed: false,
+      elevationGradeLegendDismissed: false,
     });
     await expect(database.settings.get('ui.preferences')).resolves.toBeUndefined();
   });

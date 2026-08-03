@@ -8,6 +8,7 @@ interface UiState {
   readonly activeTab: WorkspaceTab;
   readonly developerDrawerOpen: boolean;
   readonly developerMode: boolean;
+  readonly elevationGradeLegendDismissed: boolean;
   readonly mapDebugOptions: MapDebugOptions;
   readonly mobileWorkspaceOpen: boolean;
   readonly navigationCollapsed: boolean;
@@ -15,6 +16,7 @@ interface UiState {
   readonly setActiveTab: (value: WorkspaceTab) => void;
   readonly setDeveloperDrawerOpen: (value: boolean) => void;
   readonly setDeveloperMode: (value: boolean) => void;
+  readonly setElevationGradeLegendDismissed: (value: boolean) => void;
   readonly setMapDebugOptions: (value: MapDebugOptions) => void;
   readonly setMobileWorkspaceOpen: (value: boolean) => void;
   readonly setNavigationCollapsed: (value: boolean) => void;
@@ -25,6 +27,7 @@ export const useUiStore = create<UiState>()((set) => ({
   activeTab: 'satellite',
   developerDrawerOpen: false,
   developerMode: false,
+  elevationGradeLegendDismissed: false,
   mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
   mobileWorkspaceOpen: false,
   navigationCollapsed: false,
@@ -37,6 +40,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setDeveloperMode: (developerMode) => {
     set({ developerMode });
+  },
+  setElevationGradeLegendDismissed: (elevationGradeLegendDismissed) => {
+    set({ elevationGradeLegendDismissed });
   },
   setMapDebugOptions: (mapDebugOptions) => {
     set({ mapDebugOptions });

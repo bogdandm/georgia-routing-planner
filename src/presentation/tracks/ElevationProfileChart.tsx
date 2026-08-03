@@ -1,9 +1,18 @@
 import ChangeHistoryOutlinedIcon from '@mui/icons-material/ChangeHistoryOutlined';
+import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
 import TerrainOutlinedIcon from '@mui/icons-material/TerrainOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { Box, Paper, Stack, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  IconButton,
+  Paper,
+  Stack,
+  Tooltip as MuiTooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { useId, type ReactElement } from 'react';
 import {
   Area,
@@ -34,9 +43,11 @@ interface ElevationProfileChartProps {
   readonly profile: ElevationProfile;
   readonly activeSegmentIndex: number | null;
   readonly selectedSegmentIndex: number | null;
+  readonly trackGradeLegendDismissed: boolean;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onSegmentHoverChange: (index: number | null) => void;
   readonly onSegmentSelectionChange: (index: number | null) => void;
+  readonly onTrackGradeLegendDismissedChange: (dismissed: boolean) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
@@ -266,9 +277,11 @@ export function ElevationProfileChart({
   profile,
   activeSegmentIndex,
   selectedSegmentIndex,
+  trackGradeLegendDismissed,
   onActivePointChange,
   onSegmentHoverChange,
   onSegmentSelectionChange,
+  onTrackGradeLegendDismissedChange,
   onPointClick,
 }: ElevationProfileChartProps): ReactElement {
   const theme = useTheme();
@@ -295,9 +308,30 @@ export function ElevationProfileChart({
 
   return (
     <Stack spacing={1.5}>
-      <Typography component="h3" variant="subtitle2">
-        Elevation profile
-      </Typography>
+      <Box sx={{ position: 'relative' }}>
+        <Typography component="h3" variant="subtitle2">
+          Elevation profile
+        </Typography>
+        {trackGradeLegendDismissed ? (
+          <MuiTooltip title="Show track grade legend">
+            <IconButton
+              aria-label="Show track grade legend"
+              onClick={() => {
+                onTrackGradeLegendDismissedChange(false);
+              }}
+              size="small"
+              sx={{
+                position: 'absolute',
+                right: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+              }}
+            >
+              <HelpOutlineOutlinedIcon fontSize="small" />
+            </IconButton>
+          </MuiTooltip>
+        ) : null}
+      </Box>
       <Box
         role="img"
         aria-label={`Elevation profile from ${String(Math.round(profile.minimumMeters))} to ${String(Math.round(profile.maximumMeters))} metres`}

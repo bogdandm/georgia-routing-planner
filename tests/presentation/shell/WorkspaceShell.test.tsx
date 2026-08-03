@@ -2236,6 +2236,7 @@ describe('WorkspaceShell', () => {
       await expect(services.database.loadUiPreferences()).resolves.toEqual({
         developerMode: true,
         navigationCollapsed: false,
+        elevationGradeLegendDismissed: false,
       });
     });
   });

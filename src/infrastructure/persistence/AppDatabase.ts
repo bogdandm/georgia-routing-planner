@@ -108,17 +108,20 @@ const uiPreferencesSchema = z
   .object({
     developerMode: z.boolean(),
     navigationCollapsed: z.boolean().default(false),
+    elevationGradeLegendDismissed: z.boolean().default(false),
   })
   .strict();
 
 interface UiPreferences {
   readonly developerMode: boolean;
   readonly navigationCollapsed: boolean;
+  readonly elevationGradeLegendDismissed: boolean;
 }
 
 const defaultUiPreferences: UiPreferences = {
   developerMode: false,
   navigationCollapsed: false,
+  elevationGradeLegendDismissed: false,
 };
 
 const mapCameraKey = 'map.camera';
@@ -1472,6 +1475,16 @@ export class AppDatabase
       key: 'ui.preferences',
       value: parsed,
       updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async saveElevationGradeLegendDismissed(
+    elevationGradeLegendDismissed: boolean,
+  ): Promise<void> {
+    const preferences = await this.loadUiPreferences();
+    await this.saveUiPreferences({
+      ...preferences,
+      elevationGradeLegendDismissed,
     });
   }
 

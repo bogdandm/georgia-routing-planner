@@ -1,5 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -132,9 +133,11 @@ interface ElevationProfileChartCallbacks {
   readonly activeSegmentIndex?: number | null;
   readonly selectedSegmentIndex?: number | null;
   readonly profile?: ElevationProfile;
+  readonly trackGradeLegendDismissed?: boolean;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onSegmentHoverChange?: (index: number | null) => void;
   readonly onSegmentSelectionChange?: (index: number | null) => void;
+  readonly onTrackGradeLegendDismissedChange?: (dismissed: boolean) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
@@ -142,25 +145,31 @@ function renderElevationProfileChart({
   profile: chartProfile = profile,
   activeSegmentIndex,
   selectedSegmentIndex,
+  trackGradeLegendDismissed = false,
   onActivePointChange,
   onSegmentHoverChange,
   onSegmentSelectionChange,
+  onTrackGradeLegendDismissedChange,
   onPointClick,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
     profile: ElevationProfile;
     activeSegmentIndex: number | null;
     selectedSegmentIndex: number | null;
+    trackGradeLegendDismissed: boolean;
     onSegmentHoverChange: (index: number | null) => void;
     onSegmentSelectionChange: (index: number | null) => void;
+    onTrackGradeLegendDismissedChange: (dismissed: boolean) => void;
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
   } = {
     profile: chartProfile,
     activeSegmentIndex: activeSegmentIndex ?? null,
     selectedSegmentIndex: selectedSegmentIndex ?? null,
+    trackGradeLegendDismissed,
     onSegmentHoverChange: onSegmentHoverChange ?? vi.fn(),
     onSegmentSelectionChange: onSegmentSelectionChange ?? vi.fn(),
+    onTrackGradeLegendDismissedChange: onTrackGradeLegendDismissedChange ?? vi.fn(),
   };
   if (onActivePointChange !== undefined) {
     chartProps.onActivePointChange = onActivePointChange;
@@ -193,6 +202,17 @@ describe('ElevationProfileChart', () => {
     },
   );
 
+  it('restores the track grade legend from the profile header', async () => {
+    const user = userEvent.setup();
+    const onTrackGradeLegendDismissedChange = vi.fn();
+    renderElevationProfileChart({
+      trackGradeLegendDismissed: true,
+      onTrackGradeLegendDismissedChange,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Show track grade legend' }));
+    expect(onTrackGradeLegendDismissedChange).toHaveBeenCalledWith(false);
+  });
   it('colors local grades without a rectangular active overlay', () => {
     const { container } = renderElevationProfileChart({ activeSegmentIndex: 0 });
 
@@ -255,6 +275,8 @@ describe('ElevationProfileChart', () => {
           onSegmentHoverChange={vi.fn()}
           selectedSegmentIndex={null}
           onSegmentSelectionChange={vi.fn()}
+          trackGradeLegendDismissed={false}
+          onTrackGradeLegendDismissedChange={vi.fn()}
         />
       </ThemeProvider>,
     );

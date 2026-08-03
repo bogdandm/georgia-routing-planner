@@ -99,6 +99,7 @@ import {
   requestMapNavigation,
 } from '@/presentation/map/mapInteractionStore';
 import { appColors } from '@/presentation/theme/appColors';
+import { useUiStore } from '@/presentation/shell/uiStore';
 
 interface PreviewTrackBase {
   readonly kind: 'preview';
@@ -1646,7 +1647,13 @@ function TrackElevationAnalysis() {
     recalculateElevation,
     recalculationState,
   } = useTracksWorkspace();
-  const { mapLayers } = useRuntimeServices();
+  const { database, logger, mapLayers } = useRuntimeServices();
+  const trackGradeLegendDismissed = useUiStore(
+    (state) => state.elevationGradeLegendDismissed,
+  );
+  const setTrackGradeLegendDismissed = useUiStore(
+    (state) => state.setElevationGradeLegendDismissed,
+  );
   const [hoveredSegment, setHoveredSegment] = useState<{
     readonly profile: ElevationProfile;
     readonly index: number;
@@ -1709,6 +1716,13 @@ function TrackElevationAnalysis() {
               longitude: point.coordinate[0],
               latitude: point.coordinate[1],
               zoom: 13,
+            });
+          }}
+          trackGradeLegendDismissed={trackGradeLegendDismissed}
+          onTrackGradeLegendDismissedChange={(dismissed) => {
+            setTrackGradeLegendDismissed(dismissed);
+            void database.saveElevationGradeLegendDismissed(dismissed).catch(() => {
+              logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
             });
           }}
         />

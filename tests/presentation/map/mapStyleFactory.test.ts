@@ -177,6 +177,9 @@ describe('createHikingMapStyle', () => {
   it('renders ridge geometry and places English-first labels along it', () => {
     const style = createHikingMapStyle(configuration);
     const ridges = style.layers.find((layer) => layer.id === mapLayerIds.ridges);
+    const peakLabels = style.layers.find(
+      (layer) => layer.id === mapLayerIds.peakLabels,
+    );
     const ridgeLabels = style.layers.find(
       (layer) => layer.id === mapLayerIds.ridgeLabels,
     );
@@ -210,6 +213,11 @@ describe('createHikingMapStyle', () => {
         'text-size': 12,
       },
     });
+    expect(peakLabels).toHaveProperty('filter', [
+      'in',
+      ['get', 'class'],
+      ['literal', ['peak', 'volcano', 'saddle']],
+    ]);
   });
 
   it('keeps labels readable across nearby and distant map detail', () => {

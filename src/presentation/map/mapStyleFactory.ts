@@ -338,6 +338,7 @@ function createBasemapLayers(
       source,
       'source-layer': sourceLayers.peaks,
       minzoom: 10,
+      filter: ['in', ['get', 'class'], ['literal', ['peak', 'volcano', 'saddle']]],
       layout: {
         ...labelLayout,
         'text-field': [

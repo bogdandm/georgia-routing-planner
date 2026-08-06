@@ -156,7 +156,7 @@ interface TracksWorkspaceValue {
   readonly query: string;
   readonly summaries: readonly LocalTrackSummary[];
   readonly applyGeneratedName: () => void;
-  readonly closeActive: () => boolean;
+  readonly closeActive: () => Promise<boolean>;
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
   readonly recalculateElevation: () => Promise<void>;
@@ -917,9 +917,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setError(null);
   }, []);
 
-  const closeActive = useCallback(() => {
+  const closeActive = useCallback(async () => {
     if (active?.kind === 'preview' && !window.confirm('Discard this unsaved track?')) {
       return false;
+    }
+    if (active?.kind === 'saved') {
+      try {
+        await saveLatestOpenedTrackId(null);
+      } catch {
+        setError('The track could not be closed.');
+        return false;
+      }
     }
     initiallyRestoredTrackId.current = null;
     preparationAbort.current?.abort();
@@ -929,8 +937,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setImportState('idle');
     namingAbort.current?.abort();
     setActive(null);
+    setError(null);
     return true;
-  }, [active?.kind]);
+  }, [active?.kind, saveLatestOpenedTrackId]);
 
   const selectSaved = useCallback(
     async (summary: LocalTrackSummary) => {
@@ -1851,8 +1860,8 @@ export function TrackDetailsPane({
   const confirmingDelete =
     savedTrackId !== null && confirmingDeleteTrackId === savedTrackId;
   const deleting = savedTrackId !== null && deletingTrackId === savedTrackId;
-  const handleClose = () => {
-    if (closeActive()) onClosed();
+  const handleClose = async () => {
+    if (await closeActive()) onClosed();
   };
   return (
     <Box
@@ -1895,7 +1904,9 @@ export function TrackDetailsPane({
           <IconButton
             size="small"
             aria-label="Back to tracks"
-            onClick={closeActive}
+            onClick={() => {
+              void closeActive();
+            }}
             sx={{ mr: 1 }}
           >
             <ArrowBackOutlinedIcon fontSize="small" />
@@ -2085,7 +2096,13 @@ export function TrackDetailsPane({
           </ClickAwayListener>
         ) : null}
         {mode !== 'overlay' ? (
-          <IconButton size="small" aria-label="Close track" onClick={handleClose}>
+          <IconButton
+            size="small"
+            aria-label="Close track"
+            onClick={() => {
+              void handleClose();
+            }}
+          >
             <CloseIcon fontSize="small" />
           </IconButton>
         ) : null}

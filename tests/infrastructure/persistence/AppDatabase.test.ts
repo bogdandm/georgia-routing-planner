@@ -161,6 +161,24 @@ describe('AppDatabase', () => {
     );
   });
 
+  it('persists the Google default into otherwise valid older layer preferences', async () => {
+    const preferences = await database.loadMapLayerPreferences();
+    const { 'google-satellite': _googleSatellite, ...visibility } =
+      preferences.visibility;
+    await database.settings.put({
+      key: 'map.layers',
+      value: { ...preferences, visibility },
+      updatedAt: '2026-08-06T00:00:00.000Z',
+    });
+
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: { 'google-satellite': false },
+    });
+    await expect(database.settings.get('map.layers')).resolves.toMatchObject({
+      value: { visibility: { 'google-satellite': false } },
+    });
+  });
+
   it('repairs unsupported persisted terrain overlay values to safe defaults', async () => {
     await database.settings.put({
       key: 'map.layers',

@@ -1519,15 +1519,22 @@ export class AppDatabase
     const record = await this.settings.get('map.layers');
     if (record === undefined) return defaultMapLayerPreferences;
 
+    const storedValue =
+      typeof record.value === 'object' && record.value !== null
+        ? (record.value as Record<string, unknown>)
+        : null;
+    const storedVisibility = storedValue?.visibility;
     const hadLegacyScene =
-      typeof record.value === 'object' &&
-      record.value !== null &&
-      Object.hasOwn(record.value, 'appliedScene');
+      storedValue !== null && Object.hasOwn(storedValue, 'appliedScene');
+    const missingGoogleSatellitePreference =
+      typeof storedVisibility !== 'object' ||
+      storedVisibility === null ||
+      !Object.hasOwn(storedVisibility, 'google-satellite');
     const parsed = mapLayerPreferencesSchema.safeParse(
       withoutLegacyAppliedScene(record.value),
     );
     if (parsed.success) {
-      if (hadLegacyScene) {
+      if (hadLegacyScene || missingGoogleSatellitePreference) {
         await this.saveMapLayerPreferences(parsed.data);
       }
       return parsed.data;

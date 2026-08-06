@@ -478,6 +478,7 @@ export class MapLibreLayerController {
       }
       visibility['satellite-imagery'] = false;
       appliedImagery = this.withRasterVisibility(state.appliedImagery, false);
+      this.#progressiveRasterSourceId = null;
     }
     if (layerId === 'satellite-imagery' && visible) {
       map.setLayoutProperty(satelliteBasemapLayerIds.imagery, 'visibility', 'none');
@@ -1888,11 +1889,11 @@ export class MapLibreLayerController {
   private currentMapVisualMode(): MapVisualMode {
     const state = mapLayerStore.getState();
     const sentinelReadyAndVisible =
-      this.#progressiveRasterSourceId !== null ||
-      (this.#activeSlot !== null &&
-        state.visibility['satellite-imagery'] &&
-        !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
-        state.appliedImagery.status !== 'hidden');
+      state.visibility['satellite-imagery'] &&
+      (this.#progressiveRasterSourceId !== null ||
+        (this.#activeSlot !== null &&
+          !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
+          state.appliedImagery.status !== 'hidden'));
     const googleReadyAndVisible =
       state.visibility['google-satellite'] && this.#satelliteBasemapReady;
     return sentinelReadyAndVisible || googleReadyAndVisible ? 'satellite' : 'vector';

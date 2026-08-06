@@ -1307,6 +1307,60 @@ describe('WorkspaceShell', () => {
     await expect(services.database.loadLatestOpenedTrackId()).resolves.toBe(summary.id);
   });
 
+  it('keeps a newer selection when closing the previous saved track is pending', async () => {
+    const closingSummary = savedTrackSummary('local:closing', 'Closing trail');
+    const replacementSummary = savedTrackSummary(
+      'local:replacement',
+      'Replacement trail',
+    );
+    await services.database.saveLocalTrack(
+      closingSummary,
+      savedTrackContent(closingSummary.id),
+    );
+    await services.database.saveLocalTrack(
+      replacementSummary,
+      savedTrackContent(replacementSummary.id),
+    );
+    await services.database.saveLatestOpenedTrackId(closingSummary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    const clear = deferred<undefined>();
+    const saveLatestOpenedTrackId = services.database.saveLatestOpenedTrackId.bind(
+      services.database,
+    );
+    vi.spyOn(services.database, 'saveLatestOpenedTrackId').mockImplementation(
+      (trackId) =>
+        trackId === null ? clear.promise : saveLatestOpenedTrackId(trackId),
+    );
+    const loadLocalTrackContent = vi.spyOn(services.database, 'loadLocalTrackContent');
+
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Replacement trail/u,
+      }),
+    );
+    await waitFor(() => {
+      expect(loadLocalTrackContent).toHaveBeenCalledWith(replacementSummary.id);
+    });
+
+    clear.resolve(undefined);
+
+    await waitFor(() => {
+      expect(
+        within(details).getByRole('heading', { name: 'Replacement trail' }),
+      ).toBeVisible();
+    });
+    await expect(services.database.loadLatestOpenedTrackId()).resolves.toBe(
+      replacementSummary.id,
+    );
+  });
+
   it('restores the last opened track without overriding the restored camera', async () => {
     const summary = savedTrackSummary('local:restored', 'Restored trail');
     await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));

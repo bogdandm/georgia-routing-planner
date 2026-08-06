@@ -922,12 +922,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return false;
     }
     if (active?.kind === 'saved') {
+      const closingGeneration = importGeneration.current;
       try {
         await saveLatestOpenedTrackId(null);
       } catch {
-        setError('The track could not be closed.');
+        if (closingGeneration === importGeneration.current) {
+          setError('The track could not be closed.');
+        }
         return false;
       }
+      if (closingGeneration !== importGeneration.current) return false;
     }
     initiallyRestoredTrackId.current = null;
     preparationAbort.current?.abort();

@@ -28,7 +28,7 @@ describe('MapSearchPlaceholder', () => {
       </RuntimeServicesProvider>,
     );
 
-  it('navigates locally for labelled coordinates without contacting a provider', async () => {
+  it('navigates locally for unlabeled latitude/longitude coordinates without contacting a provider', async () => {
     const services = createTestServices();
     if (services.searchPlaces === null) return;
     const execute = vi.spyOn(services.searchPlaces, 'execute');
@@ -37,9 +37,10 @@ describe('MapSearchPlaceholder', () => {
     const input = screen.getByRole('textbox', {
       name: 'Search places or coordinates',
     });
-    await user.type(input, 'lat: 41.7, lon: 44.8{Enter}');
+    await user.type(input, '41.7, 44.8{Enter}');
 
     expect(execute).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
       latitude: 41.7,
       longitude: 44.8,
@@ -258,17 +259,5 @@ describe('MapSearchPlaceholder', () => {
       'Enter at least two characters',
     );
     expect(screen.queryByText('Oni, Georgia')).not.toBeInTheDocument();
-  });
-
-  it('explains ambiguous coordinate order instead of guessing', async () => {
-    const user = userEvent.setup();
-    renderSearch(createTestServices());
-    await user.type(
-      screen.getByRole('textbox', { name: 'Search places or coordinates' }),
-      '41.7, 44.8{Enter}',
-    );
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Coordinate order is ambiguous',
-    );
   });
 });

@@ -358,7 +358,9 @@ URL requests a scene.
   radius from the original viewport center. Results from every area are appended as they
   arrive and deduplicated, so a nearby street name does not hide a more distant
   settlement with the same name. Direct coordinates remain local and do not contact the
-  place provider. The result list shows each match's geodesic distance from that center.
+  place provider. Unlabeled decimal pairs use `latitude, longitude`, matching the map's
+  **Copy coordinates** output; explicit latitude/longitude labels remain accepted in
+  either order. The result list shows each match's geodesic distance from that center.
   It shows settlements, administrative place boundaries, mountains, and water features
   by default. Squares, streets, businesses, and other POIs remain behind an explicit
   **Show other results** action. A fixed-height, full-width progress bar shows outward

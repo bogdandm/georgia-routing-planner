@@ -41,17 +41,5 @@ export function parseCoordinateQuery(raw: string): CoordinateQueryResult {
   if (!Number.isFinite(first) || !Number.isFinite(second)) {
     return { status: 'invalid', message: 'Enter two finite coordinate values.' };
   }
-  if (Math.abs(first) > 90 && Math.abs(first) <= 180 && Math.abs(second) <= 90) {
-    return coordinate(first, second);
-  }
-  if (Math.abs(second) > 90 && Math.abs(second) <= 180 && Math.abs(first) <= 90) {
-    return coordinate(second, first);
-  }
-  if (Math.abs(first) <= 90 && Math.abs(second) <= 90) {
-    return {
-      status: 'invalid',
-      message: 'Coordinate order is ambiguous. Use “lat: …, lon: …” labels.',
-    };
-  }
-  return { status: 'invalid', message: 'Coordinates are outside valid map bounds.' };
+  return coordinate(second, first);
 }

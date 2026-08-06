@@ -14,19 +14,26 @@ describe('parseCoordinateQuery', () => {
     });
   });
 
-  it('accepts only unambiguous unlabeled order', () => {
-    expect(parseCoordinateQuery('120, 41')).toMatchObject({
+  it('interprets unlabeled pairs as latitude, longitude', () => {
+    expect(parseCoordinateQuery('41.7, 44.8')).toMatchObject({
       status: 'valid',
-      coordinate: { longitude: 120, latitude: 41 },
+      coordinate: { latitude: 41.7, longitude: 44.8 },
     });
     expect(parseCoordinateQuery('41, 120')).toMatchObject({
       status: 'valid',
-      coordinate: { longitude: 120, latitude: 41 },
+      coordinate: { latitude: 41, longitude: 120 },
+    });
+    expect(parseCoordinateQuery('120, 41')).toMatchObject({
+      status: 'invalid',
+      message: 'Coordinates are outside valid map bounds.',
+    });
+    expect(parseCoordinateQuery('lon: 120, lat: 41')).toMatchObject({
+      status: 'valid',
+      coordinate: { latitude: 41, longitude: 120 },
     });
   });
 
-  it('rejects ambiguous and out-of-range coordinate-shaped input', () => {
-    expect(parseCoordinateQuery('41.7, 44.8')).toMatchObject({ status: 'invalid' });
+  it('rejects out-of-range coordinate-shaped input', () => {
     expect(parseCoordinateQuery('lat: 91, lon: 44')).toMatchObject({
       status: 'invalid',
     });

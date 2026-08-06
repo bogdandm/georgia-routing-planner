@@ -61,6 +61,14 @@ export function createAppTheme() {
           },
         },
       },
+      MuiInputLabel: {
+        styleOverrides: {
+          root: {
+            color: appColors.text.secondary,
+            opacity: 1,
+          },
+        },
+      },
       MuiAppBar: {
         styleOverrides: { root: { backgroundImage: 'none' } },
       },

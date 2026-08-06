@@ -945,6 +945,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     return true;
   }, [active?.kind, saveLatestOpenedTrackId]);
 
+  const activeSavedTrackId = active?.kind === 'saved' ? active.summary.id : null;
+
   const selectSaved = useCallback(
     async (summary: LocalTrackSummary) => {
       if (
@@ -980,9 +982,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? loadError.message
             : 'The track could not be opened.',
         );
+        if (activeSavedTrackId !== null && latestOpenedTrackId.current === null) {
+          try {
+            await saveLatestOpenedTrackId(activeSavedTrackId);
+          } catch {
+            // The active saved track remains visible; preserve the open failure.
+          }
+        }
       }
     },
-    [active?.kind, database, saveLatestOpenedTrackId],
+    [active?.kind, activeSavedTrackId, database, saveLatestOpenedTrackId],
   );
 
   const setActiveName = useCallback((name: string) => {

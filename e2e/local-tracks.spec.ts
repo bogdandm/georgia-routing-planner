@@ -401,7 +401,9 @@ test('clears saved-track hovers after favorite sorting', async ({ page }) => {
     await chooser.setFiles(trackFixturePath);
     await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
     await page.getByLabel('Track name').fill(name);
-    await page.getByRole('button', { name: 'Save' }).click();
+    const save = page.getByRole('button', { name: 'Save' });
+    await expect(save).toBeEnabled();
+    await save.click();
     await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
 
     if (name === 'Pinned track') {

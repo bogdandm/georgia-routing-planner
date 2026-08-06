@@ -2,6 +2,7 @@ export const mapSourceIds = {
   basemapVector: 'basemap-vector',
   terrainDem: 'terrain-dem',
   terrainContours: 'terrain-contours',
+  satelliteBasemap: 'satellite-basemap',
   sentinelRasterA: 'sentinel-raster-a',
   sentinelRasterB: 'sentinel-raster-b',
   sentinelFootprint: 'sentinel-footprint',
@@ -21,6 +22,10 @@ export const sentinelMapLayerIds = {
   rasterA: 'sentinel-raster-a',
   rasterB: 'sentinel-raster-b',
   footprint: 'sentinel-footprint',
+} as const;
+
+export const satelliteBasemapLayerIds = {
+  imagery: 'satellite-basemap-imagery',
 } as const;
 
 export const importedTrackLayerIds = {

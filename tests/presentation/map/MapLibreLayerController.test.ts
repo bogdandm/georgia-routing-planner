@@ -7,6 +7,8 @@ import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerControl
 import {
   importedTrackLayerIds,
   mapLayerIds,
+  mapSourceIds,
+  satelliteBasemapLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
@@ -40,6 +42,14 @@ class FakeLayerMap {
 
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
+    this.sources.set(mapSourceIds.satelliteBasemap, { type: 'raster' });
+    const layers = [...this.layers.entries()];
+    layers.splice(1, 0, [
+      satelliteBasemapLayerIds.imagery,
+      { id: satelliteBasemapLayerIds.imagery },
+    ]);
+    this.layers.clear();
+    for (const [id, layer] of layers) this.layers.set(id, layer);
   }
 
   public on(type: string, listener: Listener): this {
@@ -423,6 +433,109 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
+  });
+
+  it('keeps Google and Sentinel imagery mutually exclusive and persists the active choice', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(
+      scene('sentinel-before-google'),
+      new AbortController().signal,
+    );
+
+    expect(controller.setLayerVisibility('google-satellite', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: { 'google-satellite': true, 'satellite-imagery': false },
+      appliedImagery: { status: 'hidden', visible: false },
+    });
+
+    expect(controller.setLayerVisibility('satellite-imagery', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'google-satellite': false,
+      'satellite-imagery': true,
+    });
+
+    expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'google-satellite': false,
+      'satellite-imagery': false,
+    });
+    expect(controller.setLayerVisibility('google-satellite', true)).toEqual({
+      status: 'success',
+    });
+    expect(controller.setLayerVisibility('google-satellite', false)).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'google-satellite': false,
+      'satellite-imagery': false,
+    });
+
+    expect(controller.setLayerVisibility('google-satellite', true)).toEqual({
+      status: 'success',
+    });
+    await controller.applyScene(
+      scene('sentinel-replaces-google'),
+      new AbortController().signal,
+    );
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        visibility: { 'google-satellite': false, 'satellite-imagery': true },
+      });
+    });
+  });
+
+  it('preserves vector paints until Google source content arrives and orders relief around it', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(controller.setLayerVisibility('google-satellite', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(1);
+
+    map.fire('sourcedata', {
+      sourceId: mapSourceIds.satelliteBasemap,
+      sourceDataType: 'content',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+    const belowOrder = [...map.layers.keys()];
+    expect(belowOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      belowOrder.indexOf(satelliteBasemapLayerIds.imagery),
+    );
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 50,
+        filterInvalidDemPixels: true,
+        shadeAboveSatellite: true,
+      }),
+    ).toEqual({ status: 'success' });
+    const aboveOrder = [...map.layers.keys()];
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeGreaterThan(
+      aboveOrder.indexOf(satelliteBasemapLayerIds.imagery),
+    );
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      aboveOrder.indexOf(terrainOverlayLayerIds.contourMinor),
+    );
   });
 
   it('renders independent imported-track lines with shared visibility and opacity', async () => {
@@ -1512,6 +1625,7 @@ describe('MapLibreLayerController', () => {
     if (controller === null) return;
     await services.database.saveMapLayerPreferences({
       visibility: {
+        'google-satellite': false,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,
@@ -1563,6 +1677,39 @@ describe('MapLibreLayerController', () => {
       contourIntervalMeters: 25,
       filterInvalidDemPixels: false,
       shadeAboveSatellite: true,
+    });
+  });
+
+  it('normalizes persisted Google and Sentinel visibility to Google-only', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    await services.database.saveMapLayerPreferences({
+      visibility: {
+        ...mapLayerStore.getState().visibility,
+        'google-satellite': true,
+        'satellite-imagery': true,
+      },
+      openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
+      importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
+      satelliteRenderingMode: controller.getRenderingMode(),
+      renderingTuning: controller.getRenderingTuning(),
+      terrainOverlays: controller.getTerrainOverlayPreferences(),
+    });
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    await controller.restorePersistedState();
+
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'google-satellite': true,
+      'satellite-imagery': false,
+    });
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        visibility: { 'google-satellite': true, 'satellite-imagery': false },
+      });
     });
   });
 

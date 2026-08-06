@@ -321,6 +321,34 @@ contour density and cache bounds.
 - MapLibre demo vector/terrain endpoints: useful for examples and tests, but rejected as
   production defaults because they are demo infrastructure without a product SLA.
 
+## Google satellite basemap
+
+The optional anonymous Google satellite basemap uses these static tile templates:
+
+- `https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+- `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+- `https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+- `https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+
+A bounded probe of `https://mt0.google.com/vt/lyrs=s&x=2412&y=1517&z=12` on
+**2026-08-06** observed `200`, `content-type: image/jpeg`, and
+`access-control-allow-origin: *`. This is endpoint evidence only, not a stability or
+availability guarantee. The raster declares the static attribution
+`<a href="https://www.google.com/maps" target="_blank">© Google</a>`.
+
+Google imagery is disabled by default and persists only after an explicit choice in this
+browser. It is mutually exclusive with an applied Sentinel-2 raster: enabling one
+disables the other, and disabling the active raster leaves both off. The vector map
+remains opaque until the first Google source-content event, then shares the existing
+OpenStreetMap-opacity and terrain ordering behavior with the active Sentinel raster. A
+Google failure has no application-level retry or COG fallback; the selected preference
+remains checked while the opaque vector map stays usable.
+
+`mt*.google.com/vt` is undocumented. It is not the official Google Map Tiles API and has
+no supported API or SLA guarantee. The application intentionally sends no API key,
+billing credential, session token, or viewport-attribution request, and must not claim
+official Google Maps Platform compliance.
+
 ## Sentinel-2 catalog and raster feasibility
 
 The evidence below was revalidated on **2026-07-19** against Earth Search v1 and public

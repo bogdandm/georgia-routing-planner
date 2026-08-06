@@ -27,6 +27,13 @@ interface LayerControl {
   readonly requiresScene: boolean;
 }
 
+const googleSatelliteControl = {
+  id: 'google-satellite',
+  label: 'Google satellite imagery',
+  description: 'Google satellite tiles for the current map view.',
+  requiresScene: false,
+} as const satisfies LayerControl;
+
 const sentinelControls = [
   {
     id: 'satellite-imagery',
@@ -129,10 +136,10 @@ export function LayersPanel() {
       controls: importedTrackControls,
     },
     {
-      id: 'sentinel',
-      title: `Copernicus Sentinel-2 via ${provider?.satellite.label ?? 'satellite catalog'}`,
-      description: `Raster rendering by ${provider?.satellite.renderer.id ?? 'configured renderer'}.`,
-      controls: sentinelControls,
+      id: 'satellites',
+      title: 'Satellites',
+      description: 'Satellite basemaps and applied observation scenes.',
+      controls: [googleSatelliteControl, ...sentinelControls],
     },
     {
       id: 'terrain',
@@ -234,7 +241,11 @@ export function LayersPanel() {
                   </Typography>
                   <Slider
                     aria-labelledby="openstreetmap-opacity-label"
-                    disabled={mapLayers === null || !satelliteImageryVisible}
+                    disabled={
+                      mapLayers === null ||
+                      (!state.visibility['google-satellite'] &&
+                        !satelliteImageryVisible)
+                    }
                     min={0}
                     max={100}
                     step={5}
@@ -289,6 +300,16 @@ export function LayersPanel() {
                     mapLayers === null || (control.requiresScene && !sceneAvailable);
                   return (
                     <Box key={control.id}>
+                      {group.id === 'satellites' &&
+                      control.id === 'satellite-imagery' ? (
+                        <Typography
+                          component="h4"
+                          variant="body2"
+                          sx={{ mt: 2, mb: 1, fontWeight: 600 }}
+                        >
+                          {`Copernicus Sentinel-2 via ${provider?.satellite.label ?? 'satellite catalog'}`}
+                        </Typography>
+                      ) : null}
                       <FormControlLabel
                         sx={{ m: 0 }}
                         slotProps={{ typography: { variant: 'body2' } }}

@@ -38,6 +38,18 @@ describe('MapProviderConfiguration', () => {
       maximumPages: 10,
       renderer: { maxZoom: 14 },
     });
+    expect(configuration.satelliteBasemap).toEqual({
+      id: 'google-satellite',
+      label: 'Google satellite imagery',
+      tileUrls: [
+        'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      ],
+      tileSize: 256,
+      attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
+    });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
       schemaVersion: 1,
       vectorId: 'openfreemap-openmaptiles',
@@ -48,6 +60,13 @@ describe('MapProviderConfiguration', () => {
       satelliteOrigin: 'https://earth-search.aws.element84.com',
       satelliteRendererId: 'titiler-demo-stac-rgb',
       satelliteRendererOrigin: 'https://titiler.xyz',
+      satelliteBasemapId: 'google-satellite',
+      satelliteBasemapOrigins: [
+        'https://mt0.google.com',
+        'https://mt1.google.com',
+        'https://mt2.google.com',
+        'https://mt3.google.com',
+      ],
     });
   });
 
@@ -64,6 +83,18 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.terrain.filter.negativeSpikeThresholdMeters).toBe(300);
   });
 
+  it('defaults the satellite basemap for existing external configuration', () => {
+    const input = structuredClone(
+      defaultMapProviderConfigurationInput,
+    ) as unknown as Record<string, unknown>;
+    delete input.satelliteBasemap;
+
+    const configuration = parseMapProviderConfiguration(input, baseUrl);
+
+    expect(configuration.satelliteBasemap.tileUrls).toHaveLength(4);
+    expect(configuration.satelliteBasemap.id).toBe('google-satellite');
+  });
+
   it('resolves fixture endpoints under a GitHub Pages-style base path', () => {
     const input = structuredClone(defaultMapProviderConfigurationInput) as unknown as {
       vector: {
@@ -72,11 +103,16 @@ describe('MapProviderConfiguration', () => {
       };
       terrain: { tileUrl: string };
       satellite: { searchUrl: string };
+      satelliteBasemap: { tileUrls: string[] };
     };
     input.vector.tileJsonUrl = './fixtures/vector/tiles.json';
     input.vector.glyphsUrl = './fixtures/fonts/{fontstack}/{range}.pbf';
     input.terrain.tileUrl = './fixtures/terrain/{z}/{x}/{y}.png';
     input.satellite.searchUrl = './fixtures/stac/search';
+    input.satelliteBasemap.tileUrls = [
+      './fixtures/satellite/{z}/{x}/{y}.jpg',
+      './fixtures/satellite/{z}/{x}/{y}.jpg',
+    ];
 
     const configuration = parseMapProviderConfiguration(input, baseUrl);
 
@@ -89,6 +125,10 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.satellite.searchUrl).toBe(
       'https://example.test/georgia-routing-planner/fixtures/stac/search',
     );
+    expect(configuration.satelliteBasemap.tileUrls).toEqual([
+      'https://example.test/georgia-routing-planner/fixtures/satellite/{z}/{x}/{y}.jpg',
+      'https://example.test/georgia-routing-planner/fixtures/satellite/{z}/{x}/{y}.jpg',
+    ]);
   });
 
   it.each([
@@ -170,6 +210,13 @@ describe('MapProviderConfiguration', () => {
       mutate: (input: Record<string, unknown>) => {
         const satellite = input.satellite as Record<string, unknown>;
         satellite.searchUrl = 'http://earth-search.example.test/search';
+      },
+    },
+    {
+      name: 'satellite basemap endpoint missing map tokens',
+      mutate: (input: Record<string, unknown>) => {
+        const satelliteBasemap = input.satelliteBasemap as Record<string, unknown>;
+        satelliteBasemap.tileUrls = ['https://tiles.example.test/{z}/{x}/tile.jpg'];
       },
     },
   ])('rejects $name', ({ mutate }) => {

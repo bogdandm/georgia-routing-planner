@@ -121,9 +121,11 @@ function categorizeMapError(
   if (sourceId === mapSourceIds.basemapVector) return 'base-vector';
   if (
     sourceId === mapSourceIds.sentinelRasterA ||
-    sourceId === mapSourceIds.sentinelRasterB
-  )
+    sourceId === mapSourceIds.sentinelRasterB ||
+    sourceId === mapSourceIds.satelliteBasemap
+  ) {
     return 'satellite-raster';
+  }
 
   const message = event.error.message.toLowerCase();
   if (message.includes('glyph') || message.includes('sprite')) return 'glyph-sprite';
@@ -691,7 +693,7 @@ export class MapLibreFacade implements MapFacade {
     if (category !== 'style') {
       if (sourceId !== null) this.cancelSourceRecovery(sourceId);
       const recovery =
-        category === 'satellite-raster'
+        sourceId !== null && isSatelliteSourceId(sourceId)
           ? (this.layerController?.handleRasterSourceFailure(event) ?? {
               state: 'not-applicable' as const,
               retryAttempt: 0,

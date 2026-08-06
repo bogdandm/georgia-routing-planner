@@ -86,9 +86,13 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('persists layer visibility and imagery presentation choices without scene data', async () => {
+  it('persists Google-only layer visibility and imagery presentation choices without scene data', async () => {
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: { 'google-satellite': false },
+    });
     const preferences = {
       visibility: {
+        'google-satellite': true,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,
@@ -135,6 +139,7 @@ describe('AppDatabase', () => {
 
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: {
+        'google-satellite': false,
         'terrain-relief': true,
         'elevation-isolines': true,
         'natural-features': true,

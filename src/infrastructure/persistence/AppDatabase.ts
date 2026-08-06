@@ -154,6 +154,7 @@ const mapLayerPreferencesSchema = z
   .object({
     visibility: z
       .object({
+        'google-satellite': z.boolean().default(false),
         'satellite-imagery': z.boolean(),
         'scene-footprint': z.boolean(),
         'terrain-relief': z.boolean().default(true),
@@ -210,6 +211,7 @@ function withoutLegacyAppliedScene(value: unknown): unknown {
 
 const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   visibility: {
+    'google-satellite': false,
     'satellite-imagery': true,
     'scene-footprint': true,
     'terrain-relief': true,

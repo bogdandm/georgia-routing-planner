@@ -80,6 +80,7 @@ const initialMapLayerState: MapLayerState = {
     queueCapacity: defaultTerrainContourQueueCapacity,
   },
   visibility: {
+    'google-satellite': false,
     'satellite-imagery': true,
     'scene-footprint': true,
     'terrain-relief': true,

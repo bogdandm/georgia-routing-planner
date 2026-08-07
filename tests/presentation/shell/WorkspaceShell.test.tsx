@@ -1251,6 +1251,179 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('does not restore a closed saved track after remount', async () => {
+    const summary = savedTrackSummary('local:closed', 'Closed trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    const firstRender = renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    expect(
+      within(details).getByRole('heading', { name: 'Closed trail' }),
+    ).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('complementary', { name: 'Track details' }),
+      ).not.toBeInTheDocument();
+    });
+    await expect(services.database.loadLatestOpenedTrackId()).resolves.toBeNull();
+
+    firstRender.unmount();
+    renderWorkspaceShell();
+
+    const savedTracks = await screen.findByRole('list', { name: 'Saved tracks' });
+    expect(
+      within(savedTracks).getByRole('button', { name: /^Closed trail/u }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps a saved track open when its restoration marker cannot be cleared', async () => {
+    const summary = savedTrackSummary('local:clear-failure', 'Unclosed trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    expect(
+      within(details).getByRole('heading', { name: 'Unclosed trail' }),
+    ).toBeVisible();
+    const saveLatestOpenedTrackId = vi
+      .spyOn(services.database, 'saveLatestOpenedTrackId')
+      .mockRejectedValueOnce(new Error('Storage unavailable'));
+
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+
+    expect(saveLatestOpenedTrackId).toHaveBeenCalledWith(null);
+    expect(screen.getByRole('complementary', { name: 'Track details' })).toBeVisible();
+    const tracksTools = await screen.findByRole('complementary', {
+      name: 'Tracks tools',
+    });
+    expect(
+      within(tracksTools).getByText('The track could not be closed.'),
+    ).toBeVisible();
+    await expect(services.database.loadLatestOpenedTrackId()).resolves.toBe(summary.id);
+  });
+
+  it('keeps a newer selection when closing the previous saved track is pending', async () => {
+    const closingSummary = savedTrackSummary('local:closing', 'Closing trail');
+    const replacementSummary = savedTrackSummary(
+      'local:replacement',
+      'Replacement trail',
+    );
+    await services.database.saveLocalTrack(
+      closingSummary,
+      savedTrackContent(closingSummary.id),
+    );
+    await services.database.saveLocalTrack(
+      replacementSummary,
+      savedTrackContent(replacementSummary.id),
+    );
+    await services.database.saveLatestOpenedTrackId(closingSummary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    const clear = deferred<undefined>();
+    const saveLatestOpenedTrackId = services.database.saveLatestOpenedTrackId.bind(
+      services.database,
+    );
+    vi.spyOn(services.database, 'saveLatestOpenedTrackId').mockImplementation(
+      (trackId) =>
+        trackId === null ? clear.promise : saveLatestOpenedTrackId(trackId),
+    );
+    const loadLocalTrackContent = vi.spyOn(services.database, 'loadLocalTrackContent');
+
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Replacement trail/u,
+      }),
+    );
+    await waitFor(() => {
+      expect(loadLocalTrackContent).toHaveBeenCalledWith(replacementSummary.id);
+    });
+
+    clear.resolve(undefined);
+
+    await waitFor(() => {
+      expect(
+        within(details).getByRole('heading', { name: 'Replacement trail' }),
+      ).toBeVisible();
+    });
+    await expect(services.database.loadLatestOpenedTrackId()).resolves.toBe(
+      replacementSummary.id,
+    );
+  });
+
+  it('restores the open marker when a pending replacement selection fails', async () => {
+    const closingSummary = savedTrackSummary('local:closing', 'Closing trail');
+    const replacementSummary = savedTrackSummary(
+      'local:replacement',
+      'Replacement trail',
+    );
+    await services.database.saveLocalTrack(
+      closingSummary,
+      savedTrackContent(closingSummary.id),
+    );
+    await services.database.saveLocalTrack(
+      replacementSummary,
+      savedTrackContent(replacementSummary.id),
+    );
+    await services.database.saveLatestOpenedTrackId(closingSummary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    const clear = deferred<undefined>();
+    const saveLatestOpenedTrackId = services.database.saveLatestOpenedTrackId.bind(
+      services.database,
+    );
+    vi.spyOn(services.database, 'saveLatestOpenedTrackId').mockImplementation(
+      (trackId) =>
+        trackId === null ? clear.promise : saveLatestOpenedTrackId(trackId),
+    );
+    vi.spyOn(services.database, 'loadLocalTrackContent').mockRejectedValueOnce(
+      new Error('Replacement unavailable'),
+    );
+
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Replacement trail/u,
+      }),
+    );
+    expect(await screen.findByText('Replacement unavailable')).toBeVisible();
+
+    clear.resolve(undefined);
+
+    await waitFor(async () => {
+      await expect(services.database.loadLatestOpenedTrackId()).resolves.toBe(
+        closingSummary.id,
+      );
+    });
+    expect(
+      within(details).getByRole('heading', { name: 'Closing trail' }),
+    ).toBeVisible();
+  });
+
   it('restores the last opened track without overriding the restored camera', async () => {
     const summary = savedTrackSummary('local:restored', 'Restored trail');
     await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
@@ -1312,6 +1485,11 @@ describe('WorkspaceShell', () => {
 
     fakeFacade.fitBoundsRequests.splice(0);
     await user.click(screen.getByRole('button', { name: 'Close track' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('complementary', { name: 'Track details' }),
+      ).not.toBeInTheDocument();
+    });
     await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
 
     await waitFor(() => {
@@ -1503,9 +1681,11 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Close track' }));
-    expect(
-      screen.queryByRole('complementary', { name: 'Track details' }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('complementary', { name: 'Track details' }),
+      ).not.toBeInTheDocument();
+    });
     const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
     const deleteTrack = within(savedTracks).getByRole('button', {
       name: 'Delete Final trail',

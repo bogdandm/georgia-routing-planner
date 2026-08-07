@@ -68,6 +68,18 @@
       "attribution": "Copernicus Sentinel data · Earth Search / Element 84"
     }
   },
+  "satelliteBasemap": {
+    "id": "google-satellite",
+    "label": "Google satellite imagery",
+    "tileUrls": [
+      "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+      "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+      "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+      "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+    ],
+    "tileSize": 256,
+    "attribution": "<a href=\"https://www.google.com/maps\" target=\"_blank\">© Google</a>"
+  },
   "policy": {
     "requestTimeoutMs": 15000,
     "equivalentErrorWindowMs": 10000

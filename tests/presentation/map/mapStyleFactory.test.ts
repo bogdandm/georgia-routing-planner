@@ -8,6 +8,7 @@ import {
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
+  satelliteBasemapLayerIds,
 } from '@/presentation/map/mapIds';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { englishFirstLabelExpression } from '@/presentation/map/mapStyleFactory';
@@ -27,7 +28,30 @@ describe('createHikingMapStyle', () => {
       type: 'vector',
       url: 'https://tiles.openfreemap.org/planet',
     });
-    expect(layerIds).toEqual(Object.values(mapLayerIds));
+    expect(style.sources[mapSourceIds.satelliteBasemap]).toEqual({
+      type: 'raster',
+      tiles: [
+        'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+      ],
+      tileSize: 256,
+      attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
+    });
+    expect(layerIds).toEqual([
+      mapLayerIds.background,
+      satelliteBasemapLayerIds.imagery,
+      ...Object.values(mapLayerIds).slice(1),
+    ]);
+    expect(
+      style.layers.find((layer) => layer.id === satelliteBasemapLayerIds.imagery),
+    ).toMatchObject({
+      type: 'raster',
+      source: mapSourceIds.satelliteBasemap,
+      layout: { visibility: 'none' },
+      paint: { 'raster-fade-duration': 0 },
+    });
     expect(layerIds.indexOf(mapInsertionPoints.satelliteBeforeLayerId)).toBeLessThan(
       layerIds.indexOf(mapLayerIds.water),
     );
@@ -59,6 +83,7 @@ describe('createHikingMapStyle', () => {
 
     expect(serialized).toContain('OpenFreeMap');
     expect(serialized).toContain('OpenStreetMap');
+    expect(serialized).toContain('© Google');
     expect(serialized).not.toContain('access_token');
     expect(serialized).not.toContain('api_key');
     expect(serialized).not.toContain('token=');

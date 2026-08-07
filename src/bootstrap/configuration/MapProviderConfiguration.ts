@@ -24,6 +24,19 @@ const safeAttributionSchema = z
     'Attribution contains unsafe markup.',
   );
 
+const defaultSatelliteBasemap = {
+  id: 'google-satellite',
+  label: 'Google satellite imagery',
+  tileUrls: [
+    'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    'https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    'https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+  ],
+  tileSize: 256 as const,
+  attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
+};
+
 const sourceLayerMappingSchema = z
   .object({
     landcover: z.string().min(1),
@@ -180,6 +193,25 @@ const mapProviderConfigurationInputSchema = z
           }),
       })
       .strict(),
+    satelliteBasemap: z
+      .object({
+        id: z.string().regex(/^[a-z0-9-]+$/u),
+        label: z.string().min(1).max(80),
+        tileUrls: z
+          .array(
+            endpointSchema.refine(
+              (value) =>
+                value.includes('{z}') && value.includes('{x}') && value.includes('{y}'),
+              'Satellite basemap endpoint must contain {z}, {x}, and {y}.',
+            ),
+          )
+          .min(1)
+          .max(4),
+        tileSize: z.union([z.literal(256), z.literal(512)]),
+        attribution: safeAttributionSchema,
+      })
+      .strict()
+      .default(defaultSatelliteBasemap),
     policy: z
       .object({
         requestTimeoutMs: z.number().int().min(1_000).max(30_000),
@@ -262,6 +294,13 @@ interface MapProviderConfigurationInput {
       readonly attribution: string;
     };
   };
+  readonly satelliteBasemap: {
+    readonly id: string;
+    readonly label: string;
+    readonly tileUrls: readonly string[];
+    readonly tileSize: 256 | 512;
+    readonly attribution: string;
+  };
   readonly policy: {
     readonly requestTimeoutMs: number;
     readonly equivalentErrorWindowMs: number;
@@ -284,6 +323,8 @@ interface MapProviderConfigurationSummary {
   readonly satelliteOrigin: string;
   readonly satelliteRendererId: string;
   readonly satelliteRendererOrigin: string;
+  readonly satelliteBasemapId: string;
+  readonly satelliteBasemapOrigins: readonly string[];
 }
 
 /** Anonymous, credential-free provider defaults used when no public override is supplied. */
@@ -362,6 +403,7 @@ export const defaultMapProviderConfigurationInput = {
       attribution: 'Copernicus Sentinel data · Earth Search / Element 84',
     },
   },
+  satelliteBasemap: defaultSatelliteBasemap,
   policy: {
     requestTimeoutMs: 15_000,
     equivalentErrorWindowMs: 10_000,
@@ -402,6 +444,12 @@ export function parseMapProviderConfiguration(
           baseUrl,
         ),
       },
+    },
+    satelliteBasemap: {
+      ...parsed.satelliteBasemap,
+      tileUrls: parsed.satelliteBasemap.tileUrls.map((tileUrl) =>
+        resolveEndpoint(tileUrl, baseUrl),
+      ),
     },
   };
 }
@@ -444,5 +492,13 @@ export function summarizeMapProviderConfiguration(
     satelliteRendererId: configuration.satellite.renderer.id,
     satelliteRendererOrigin: new URL(configuration.satellite.renderer.tileUrlTemplate)
       .origin,
+    satelliteBasemapId: configuration.satelliteBasemap.id,
+    satelliteBasemapOrigins: [
+      ...new Set(
+        configuration.satelliteBasemap.tileUrls.map(
+          (tileUrl) => new URL(tileUrl).origin,
+        ),
+      ),
+    ],
   };
 }

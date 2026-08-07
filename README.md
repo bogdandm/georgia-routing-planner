@@ -46,6 +46,8 @@ optional 3D terrain. Place and coordinate search moves directly to an area of in
 while layer controls adjust map detail, terrain overlays, satellite imagery, and active
 track visibility.
 
+Layers offers an optional, browser-persisted Google satellite basemap alongside applied
+Sentinel-2 scenes; the two raster products are mutually exclusive and either can be off.
 The Satellite workspace searches recent Sentinel-2 scenes around the selected point.
 Results show acquisition time, cloud cover, and scene coverage before true-color imagery
 is applied to the map. The selected imagery remains aligned with terrain in both 2D and

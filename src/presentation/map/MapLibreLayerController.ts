@@ -36,10 +36,11 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 import {
-  mapInsertionPoints,
   importedTrackLayerIds,
+  mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
+  satelliteBasemapLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
@@ -116,6 +117,7 @@ const logicalNativeLayerGroups: Readonly<
     readonly string[]
   >
 > = {
+  'google-satellite': [satelliteBasemapLayerIds.imagery],
   'terrain-relief': [terrainOverlayLayerIds.reliefShade],
   'elevation-isolines': [
     terrainOverlayLayerIds.contourMinor,
@@ -324,6 +326,8 @@ export class MapLibreLayerController {
   #appliedDemTileUrl: string | null = null;
   #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
+  #satelliteBasemapSource: Source | null = null;
+  #satelliteBasemapReady = false;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
@@ -373,6 +377,7 @@ export class MapLibreLayerController {
 
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
+      this.reconcileSatelliteBasemapSource();
       this.reconcileTerrainOverlays();
       this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
@@ -382,9 +387,12 @@ export class MapLibreLayerController {
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
+    this.#map?.off('sourcedata', this.handleSatelliteBasemapSourceData);
     this.#map = map;
     map.on('styledata', this.handleStyleData);
     map.on('error', this.handleTerrainOverlayError);
+    map.on('sourcedata', this.handleSatelliteBasemapSourceData);
+    this.reconcileSatelliteBasemapSource();
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
@@ -406,6 +414,7 @@ export class MapLibreLayerController {
     this.contourTiles.setInteractionActive(false);
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
+    map.off('sourcedata', this.handleSatelliteBasemapSourceData);
     this.cancelRasterRecovery();
     this.#activeApplyController?.abort();
     this.#activeApplyController = null;
@@ -418,6 +427,8 @@ export class MapLibreLayerController {
     this.#openStreetMapOpacityLayerAnchors.clear();
     this.#appliedImportedTrackOpacity = null;
     this.#importedTrackLayerAnchors.clear();
+    this.#satelliteBasemapSource = null;
+    this.#satelliteBasemapReady = false;
     this.#applySequence += 1;
   }
 
@@ -457,6 +468,22 @@ export class MapLibreLayerController {
     }
 
     const visibility = { ...state.visibility, [layerId]: visible };
+    let appliedImagery = state.appliedImagery;
+    if (layerId === 'google-satellite' && visible) {
+      const sentinelLayerIds = this.nativeLayerIds('satellite-imagery');
+      for (const sentinelLayerId of sentinelLayerIds) {
+        if (map.getLayer(sentinelLayerId) !== undefined) {
+          map.setLayoutProperty(sentinelLayerId, 'visibility', 'none');
+        }
+      }
+      visibility['satellite-imagery'] = false;
+      appliedImagery = this.withRasterVisibility(state.appliedImagery, false);
+      this.#progressiveRasterSourceId = null;
+    }
+    if (layerId === 'satellite-imagery' && visible) {
+      map.setLayoutProperty(satelliteBasemapLayerIds.imagery, 'visibility', 'none');
+      visibility['google-satellite'] = false;
+    }
     const highlightVisible = this.importedTrackHighlightVisible(visibility);
     for (const nativeId of nativeLayerIds) {
       const nativeVisible =
@@ -473,13 +500,12 @@ export class MapLibreLayerController {
         highlightVisible ? 'visible' : 'none',
       );
     }
-    const appliedImagery =
-      layerId !== 'satellite-imagery'
-        ? state.appliedImagery
-        : this.withRasterVisibility(state.appliedImagery, visible);
+    if (layerId === 'satellite-imagery') {
+      appliedImagery = this.withRasterVisibility(state.appliedImagery, visible);
+    }
     mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
     let terrainResult: TerrainOverlayCommandResult | null = null;
-    if (layerId === 'satellite-imagery') {
+    if (layerId === 'google-satellite' || layerId === 'satellite-imagery') {
       this.applyMapVisualMode();
       terrainResult = this.reconcileTerrainOverlays();
     }
@@ -785,10 +811,18 @@ export class MapLibreLayerController {
     const sourceId = sourceIdFromError(event);
     return sourceId === null || rasterSlots.some((slot) => slot.sourceId === sourceId);
   }
-
   public async restorePersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
+      const visibility =
+        persisted.visibility['google-satellite'] &&
+        persisted.visibility['satellite-imagery']
+          ? {
+              ...persisted.visibility,
+              'google-satellite': true,
+              'satellite-imagery': false,
+            }
+          : persisted.visibility;
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
@@ -796,7 +830,7 @@ export class MapLibreLayerController {
         persisted.terrainOverlays.filterInvalidDemPixels,
       );
       mapLayerStore.setState({
-        visibility: persisted.visibility,
+        visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
         importedTrackOpacity: persisted.importedTrackOpacity,
         satelliteRenderingMode: persisted.satelliteRenderingMode,
@@ -805,9 +839,11 @@ export class MapLibreLayerController {
       });
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
+      this.applyMapVisualMode();
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
+      if (visibility !== persisted.visibility) this.persistStableState();
     } catch {
       this.logger.log({
         level: 'warn',
@@ -1090,7 +1126,11 @@ export class MapLibreLayerController {
           this.#directFallbackSources.has(slot.sourceId)
             ? 'active'
             : 'inactive',
-        visibility: { ...state.visibility, 'satellite-imagery': true },
+        visibility: {
+          ...state.visibility,
+          'google-satellite': false,
+          'satellite-imagery': true,
+        },
         errorMessage: null,
       });
       this.reconcileTerrainOverlays();
@@ -1131,6 +1171,20 @@ export class MapLibreLayerController {
     persist: boolean,
     replaceCurrentScene: boolean,
   ): Promise<SatelliteImageryCommandResult> {
+    if (mapLayerStore.getState().visibility['google-satellite']) {
+      const map = this.#map;
+      if (map?.getLayer(satelliteBasemapLayerIds.imagery) !== undefined) {
+        map.setLayoutProperty(satelliteBasemapLayerIds.imagery, 'visibility', 'none');
+      }
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': false,
+          'satellite-imagery': true,
+        },
+      });
+      this.persistStableState();
+    }
     this.#activeApplyController?.abort();
     const controller = new AbortController();
     this.#activeApplyController = controller;
@@ -1237,8 +1291,8 @@ export class MapLibreLayerController {
         });
       });
   }
-
   private readonly handleStyleData = (): void => {
+    this.reconcileSatelliteBasemapSource();
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
@@ -1246,6 +1300,35 @@ export class MapLibreLayerController {
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
   };
+
+  private readonly handleSatelliteBasemapSourceData = (
+    event: MapSourceDataEvent,
+  ): void => {
+    if (
+      event.sourceId !== mapSourceIds.satelliteBasemap ||
+      event.sourceDataType !== 'content'
+    ) {
+      return;
+    }
+    const map = this.#map;
+    const source = map?.getSource(mapSourceIds.satelliteBasemap);
+    if (map === null || source === undefined) return;
+    if (this.#satelliteBasemapSource !== source) {
+      this.#satelliteBasemapSource = source;
+      this.#satelliteBasemapReady = false;
+    }
+    if (this.#satelliteBasemapReady) return;
+    this.#satelliteBasemapReady = true;
+    this.applyMapVisualMode();
+    this.reconcileTerrainOverlays();
+  };
+
+  private reconcileSatelliteBasemapSource(): void {
+    const source = this.#map?.getSource(mapSourceIds.satelliteBasemap) ?? null;
+    if (this.#satelliteBasemapSource === source) return;
+    this.#satelliteBasemapSource = source;
+    this.#satelliteBasemapReady = false;
+  }
 
   private readonly handleTerrainOverlayError = (event: MapLibreErrorEvent): void => {
     if (
@@ -1341,13 +1424,11 @@ export class MapLibreLayerController {
       }
       this.ensureContourLayers(map);
       this.ensureContourOrder(map);
-      const activeRasterLayerId = this.#activeSlot?.layerId;
-      const satelliteVisible =
-        activeRasterLayerId !== undefined &&
-        map.getLayer(activeRasterLayerId) !== undefined &&
-        mapLayerStore.getState().visibility['satellite-imagery'];
+      const activeRasterLayerId = this.currentVisibleRasterLayerId();
+      const satelliteVisible = activeRasterLayerId !== null;
       const beforeId =
-        !this.#terrainOverlayPreferences.shadeAboveSatellite && satelliteVisible
+        !this.#terrainOverlayPreferences.shadeAboveSatellite &&
+        activeRasterLayerId !== null
           ? activeRasterLayerId
           : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
             ? mapInsertionPoints.terrainOverlaysBeforeLayerId
@@ -1356,7 +1437,7 @@ export class MapLibreLayerController {
       const reliefIndex = layerIds.indexOf(terrainOverlayLayerIds.reliefShade);
       const beforeIndex = layerIds.indexOf(beforeId);
       const activeRasterIndex =
-        this.#activeSlot === null ? -1 : layerIds.indexOf(this.#activeSlot.layerId);
+        activeRasterLayerId === null ? -1 : layerIds.indexOf(activeRasterLayerId);
       const orderIsCorrect = this.#terrainOverlayPreferences.shadeAboveSatellite
         ? activeRasterIndex < 0 ||
           (reliefIndex > activeRasterIndex && reliefIndex < beforeIndex)
@@ -1489,9 +1570,10 @@ export class MapLibreLayerController {
   }
 
   private ensureContourOrder(map: MapLibreMap): void {
-    if (this.#activeSlot === null) return;
+    const activeRasterLayerId = this.currentVisibleRasterLayerId();
+    if (activeRasterLayerId === null) return;
     const layerIds = map.getStyle().layers.map((layer) => layer.id);
-    const rasterIndex = layerIds.indexOf(this.#activeSlot.layerId);
+    const rasterIndex = layerIds.indexOf(activeRasterLayerId);
     const minorIndex = layerIds.indexOf(terrainOverlayLayerIds.contourMinor);
     const indexIndex = layerIds.indexOf(terrainOverlayLayerIds.contourIndex);
     const labelIndex = layerIds.indexOf(terrainOverlayLayerIds.contourLabels);
@@ -1539,6 +1621,26 @@ export class MapLibreLayerController {
     return visibility['imported-tracks'] && visibility['track-elevation-gradient'];
   }
 
+  private currentVisibleRasterLayerId(): string | null {
+    const map = this.#map;
+    if (map === null) return null;
+    const { visibility } = mapLayerStore.getState();
+    if (
+      this.#activeSlot !== null &&
+      visibility['satellite-imagery'] &&
+      map.getLayer(this.#activeSlot.layerId) !== undefined
+    ) {
+      return this.#activeSlot.layerId;
+    }
+    if (
+      visibility['google-satellite'] &&
+      map.getLayer(satelliteBasemapLayerIds.imagery) !== undefined
+    ) {
+      return satelliteBasemapLayerIds.imagery;
+    }
+    return null;
+  }
+
   private nativeLayerIds(layerId: LogicalMapLayerId): readonly string[] {
     if (layerId === 'satellite-imagery') {
       return this.#activeSlot === null ? [] : [this.#activeSlot.layerId];
@@ -1552,6 +1654,7 @@ export class MapLibreLayerController {
     if (map === null) return;
     const { visibility } = mapLayerStore.getState();
     for (const layerId of [
+      'google-satellite',
       'terrain-relief',
       'elevation-isolines',
       'natural-features',
@@ -1783,17 +1886,23 @@ export class MapLibreLayerController {
     this.#appliedImportedTrackOpacity = opacity;
   }
 
+  private currentMapVisualMode(): MapVisualMode {
+    const state = mapLayerStore.getState();
+    const sentinelReadyAndVisible =
+      state.visibility['satellite-imagery'] &&
+      (this.#progressiveRasterSourceId !== null ||
+        (this.#activeSlot !== null &&
+          !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
+          state.appliedImagery.status !== 'hidden'));
+    const googleReadyAndVisible =
+      state.visibility['google-satellite'] && this.#satelliteBasemapReady;
+    return sentinelReadyAndVisible || googleReadyAndVisible ? 'satellite' : 'vector';
+  }
+
   private applyMapVisualMode(): void {
     const map = this.#map;
     if (map === null) return;
-    const imagery = mapLayerStore.getState().appliedImagery;
-    const mode: MapVisualMode =
-      this.#progressiveRasterSourceId !== null ||
-      (this.#activeSlot !== null &&
-        !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
-        imagery.status !== 'hidden')
-        ? 'satellite'
-        : 'vector';
+    const mode = this.currentMapVisualMode();
     const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
     const layers = Object.entries(modePaint);
     const modeChanged = this.#appliedVisualMode !== mode;
@@ -1830,14 +1939,7 @@ export class MapLibreLayerController {
       return;
     this.#appliedOpenStreetMapOpacity = opacity;
     this.#openStreetMapOpacityLayerAnchors.clear();
-    const imagery = mapLayerStore.getState().appliedImagery;
-    const mode: MapVisualMode =
-      this.#progressiveRasterSourceId !== null ||
-      (this.#activeSlot !== null &&
-        !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
-        imagery.status !== 'hidden')
-        ? 'satellite'
-        : 'vector';
+    const mode = this.currentMapVisualMode();
     const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
     const effectiveOpacity = mode === 'satellite' ? opacity : 1;
     for (const [layerId, properties] of Object.entries(

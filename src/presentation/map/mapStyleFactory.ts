@@ -6,7 +6,11 @@ import type {
 } from 'maplibre-gl';
 
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
-import { mapLayerIds, mapSourceIds } from '@/presentation/map/mapIds';
+import {
+  mapLayerIds,
+  mapSourceIds,
+  satelliteBasemapLayerIds,
+} from '@/presentation/map/mapIds';
 import {
   mapVisualModePaint,
   mapVisualPalette,
@@ -38,6 +42,13 @@ function createBasemapLayers(
       id: mapLayerIds.background,
       type: 'background',
       paint: { 'background-color': mapVisualPalette.base.background },
+    },
+    {
+      id: satelliteBasemapLayerIds.imagery,
+      type: 'raster',
+      source: mapSourceIds.satelliteBasemap,
+      layout: { visibility: 'none' },
+      paint: { 'raster-fade-duration': 0 },
     },
     {
       id: mapLayerIds.landcover,
@@ -471,6 +482,12 @@ export function createHikingMapStyle(
         type: 'vector',
         url: configuration.vector.tileJsonUrl,
         attribution: configuration.vector.attribution,
+      },
+      [mapSourceIds.satelliteBasemap]: {
+        type: 'raster',
+        tiles: [...configuration.satelliteBasemap.tileUrls],
+        tileSize: configuration.satelliteBasemap.tileSize,
+        attribution: configuration.satelliteBasemap.attribution,
       },
     },
     layers: [...createBasemapLayers(configuration.vector.sourceLayers)],

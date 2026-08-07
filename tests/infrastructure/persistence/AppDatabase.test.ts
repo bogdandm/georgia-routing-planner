@@ -86,9 +86,13 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('persists layer visibility and imagery presentation choices without scene data', async () => {
+  it('persists Google-only layer visibility and imagery presentation choices without scene data', async () => {
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: { 'google-satellite': false },
+    });
     const preferences = {
       visibility: {
+        'google-satellite': true,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,
@@ -135,6 +139,7 @@ describe('AppDatabase', () => {
 
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: {
+        'google-satellite': false,
         'terrain-relief': true,
         'elevation-isolines': true,
         'natural-features': true,
@@ -154,6 +159,24 @@ describe('AppDatabase', () => {
     await expect(database.settings.get('map.layers')).resolves.not.toHaveProperty(
       'value.appliedScene',
     );
+  });
+
+  it('persists the Google default into otherwise valid older layer preferences', async () => {
+    const preferences = await database.loadMapLayerPreferences();
+    const { 'google-satellite': _googleSatellite, ...visibility } =
+      preferences.visibility;
+    await database.settings.put({
+      key: 'map.layers',
+      value: { ...preferences, visibility },
+      updatedAt: '2026-08-06T00:00:00.000Z',
+    });
+
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      visibility: { 'google-satellite': false },
+    });
+    await expect(database.settings.get('map.layers')).resolves.toMatchObject({
+      value: { visibility: { 'google-satellite': false } },
+    });
   });
 
   it('repairs unsupported persisted terrain overlay values to safe defaults', async () => {

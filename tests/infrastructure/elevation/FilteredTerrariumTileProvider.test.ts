@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -11,6 +14,7 @@ import {
 import type { TerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
 import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
+import { locateDemPixel } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import {
   encodeTerrariumElevation,
   type DecodedTerrariumTile,
@@ -160,39 +164,141 @@ describe('FilteredTerrariumTileProvider', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
-  it('enforces the configured request timeout', async () => {
-    const log = vi.fn<(input: DiagnosticInput) => void>();
-    const timeoutLogger: DiagnosticLogger = {
-      log,
-      getEvents: () => [],
-    };
-    const fetchImplementation = vi.fn(
-      (_input: RequestInfo | URL, init?: RequestInit) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            'abort',
-            () => {
-              reject(new DOMException('Timed out', 'AbortError'));
-            },
-            { once: true },
-          );
-        }),
+  it('allows decoding to outlive the source request timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const log = vi.fn<(input: DiagnosticInput) => void>();
+      const decoding = deferred<DecodedTerrariumTile>();
+      const decode = vi.fn(() => decoding.promise);
+      const provider = new FilteredTerrariumTileProvider(
+        configuration(10),
+        { log, getEvents: () => [] },
+        { decode, encode: () => Promise.resolve(new Blob(['filtered'])) },
+        () => Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
+      );
+
+      const pending = provider.getTile(4, 8, 8, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(decode).toHaveBeenCalledTimes(9);
+      await vi.advanceTimersByTimeAsync(10);
+      decoding.resolve(decodedTile());
+
+      const result = await pending;
+      expect(result.data).toBeInstanceOf(Blob);
+      expect(log.mock.calls.some(([event]) => event.data?.status === 'timed-out')).toBe(
+        false,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('constrains the reported Svaneti workload to browser-like source-fetch capacity', async () => {
+    const xml = await readFile(
+      join(
+        process.cwd(),
+        'tests',
+        'fixtures',
+        'tracks',
+        'real-world',
+        'svaneti-loop-4.gpx',
+      ),
+      'utf8',
     );
+    const outputTiles = new Map<
+      string,
+      { readonly zoom: number; readonly x: number; readonly y: number }
+    >();
+    for (const match of xml.matchAll(/<trkpt lat="([^"]+)" lon="([^"]+)"/gu)) {
+      const latitude = Number(match[1]);
+      const longitude = Number(match[2]);
+      const location = locateDemPixel({ longitude, latitude }, 15, 256);
+      if (location === null) continue;
+      outputTiles.set(
+        `${String(location.z)}/${String(location.x)}/${String(location.y)}`,
+        { zoom: location.z, x: location.x, y: location.y },
+      );
+    }
+    expect(outputTiles.size).toBe(181);
+    const log = vi.fn<(input: DiagnosticInput) => void>();
+    let activeSourceRequests = 0;
+    let maximumActiveSourceRequests = 0;
+    const fetchImplementation = vi.fn(() => {
+      activeSourceRequests += 1;
+      maximumActiveSourceRequests = Math.max(
+        maximumActiveSourceRequests,
+        activeSourceRequests,
+      );
+      return Promise.resolve(new Response(new Blob(['tile']), { status: 200 })).finally(
+        () => {
+          activeSourceRequests -= 1;
+        },
+      );
+    });
     const provider = new FilteredTerrariumTileProvider(
-      configuration(0),
-      timeoutLogger,
+      configuration(),
+      { log, getEvents: () => [] },
       codec,
       fetchImplementation,
     );
+    provider.setEnabled(false);
 
-    await expect(
-      provider.getTile(4, 8, 8, new AbortController().signal),
-    ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(log).toHaveBeenCalledOnce();
-    const event = log.mock.calls[0]?.[0];
-    expect(event?.name).toBe('map.dem.tiles-processed');
-    expect(event?.data?.count).toBe(1);
-    expect(event?.data?.status).toBe('timed-out');
+    const responses = await Promise.all(
+      [...outputTiles.values()].map(({ zoom, x, y }) =>
+        provider.getTile(zoom, x, y, new AbortController().signal),
+      ),
+    );
+
+    expect(responses).toHaveLength(181);
+    expect(maximumActiveSourceRequests).toBe(6);
+    expect(log.mock.calls.some(([event]) => event.data?.status === 'timed-out')).toBe(
+      false,
+    );
+  });
+
+  it('reports a source-fetch timeout with its original timeout error', async () => {
+    vi.useFakeTimers();
+    try {
+      const log = vi.fn<(input: DiagnosticInput) => void>();
+      const timeoutLogger: DiagnosticLogger = {
+        log,
+        getEvents: () => [],
+      };
+      const fetchImplementation = vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('Timed out', 'AbortError'));
+              },
+              { once: true },
+            );
+          }),
+      );
+      const provider = new FilteredTerrariumTileProvider(
+        configuration(10),
+        timeoutLogger,
+        codec,
+        fetchImplementation,
+      );
+
+      const pending = provider.getTile(4, 8, 8, new AbortController().signal);
+      const rejection = expect(pending).rejects.toMatchObject({
+        name: 'TimeoutError',
+        message: 'Terrarium tile request timed out.',
+      });
+      await vi.advanceTimersByTimeAsync(10);
+
+      await rejection;
+      expect(log).toHaveBeenCalledOnce();
+      const event = log.mock.calls[0]?.[0];
+      expect(event?.name).toBe('map.dem.tiles-processed');
+      expect(event?.data?.count).toBe(1);
+      expect(event?.data?.status).toBe('timed-out');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('coalesces overlapping source-tile requests across adjacent neighborhoods', async () => {
@@ -364,7 +470,7 @@ describe('FilteredTerrariumTileProvider', () => {
     canceled.abort(reason);
 
     await expect(first).rejects.toBe(reason);
-    expect(producerSignals).toHaveLength(9);
+    expect(producerSignals).toHaveLength(6);
     expect(producerSignals.every((signal) => !signal.aborted)).toBe(true);
     gate.resolve(undefined);
     const retainedResult = await second;
@@ -407,7 +513,7 @@ describe('FilteredTerrariumTileProvider', () => {
 
     const results = await Promise.allSettled([first, second]);
     expect(results.every((result) => result.status === 'rejected')).toBe(true);
-    expect(producerSignals).toHaveLength(9);
+    expect(producerSignals).toHaveLength(6);
     expect(producerSignals.every((signal) => signal.aborted)).toBe(true);
   });
 
@@ -445,7 +551,7 @@ describe('FilteredTerrariumTileProvider', () => {
     const current = await provider.getTile(5, 8, 9, new AbortController().signal);
     const cached = await provider.getTile(5, 8, 9, new AbortController().signal);
     expect(cached).toBe(current);
-    expect(fetchImplementation).toHaveBeenCalledTimes(10);
+    expect(fetchImplementation).toHaveBeenCalledTimes(7);
   });
 
   it('degrades optional fetch, HTTP, and decode failures to retryable null halo', async () => {

@@ -361,4 +361,154 @@ describe('prepareImportedTrack', () => {
     });
     expect(prepared.metrics.recordedEndAt).toBe('2026-07-30T10:02:00.000Z');
   });
+  it('publishes bounded, unfiltered preview elevations as DEM tiles complete', async () => {
+    const progress: {
+      readonly completedTiles: number;
+      readonly totalTiles: number;
+      readonly points: readonly {
+        readonly distanceMeters: number;
+        readonly elevationMeters: number | null;
+      }[];
+    }[] = [];
+    const provider: ElevationProvider = {
+      sample: () => Promise.resolve({ status: 'available', meters: 200 }),
+      sampleMany: (coordinates, _signal, onProgress) => {
+        onProgress?.({
+          completedTiles: 0,
+          totalTiles: 2,
+          indices: [],
+          samples: [],
+        });
+        onProgress?.({
+          completedTiles: 1,
+          totalTiles: 2,
+          indices: [1],
+          samples: [{ status: 'available', meters: 250 }],
+        });
+        onProgress?.({
+          completedTiles: 2,
+          totalTiles: 2,
+          indices: [0, 2],
+          samples: [
+            { status: 'available', meters: 200 },
+            { status: 'available', meters: 300 },
+          ],
+        });
+        return Promise.resolve(
+          coordinates.map((_, index) => ({
+            status: 'available' as const,
+            meters: [200, 250, 300][index] ?? 300,
+          })),
+        );
+      },
+    };
+
+    await prepareImportedTrack(
+      [
+        {
+          points: [
+            { coordinate: equatorCoordinate(0), elevationMeters: 100 },
+            { coordinate: equatorCoordinate(20) },
+          ],
+        },
+      ],
+      provider,
+      signal,
+      {
+        onProgress: (event) => {
+          progress.push(event);
+        },
+      },
+    );
+
+    expect(progress.map((event) => event.completedTiles)).toEqual([0, 1, 2]);
+    const partial = progress[1];
+    if (partial === undefined) throw new Error('Expected partial elevation progress.');
+    expect(partial.points.map((point) => point.elevationMeters)).toEqual([
+      100,
+      250,
+      null,
+    ]);
+    expect(partial.points.map((point) => point.distanceMeters)).toEqual([
+      0,
+      expect.closeTo(10, 6),
+      expect.closeTo(20, 6),
+    ]);
+    const completed = progress[2];
+    if (completed === undefined)
+      throw new Error('Expected complete elevation progress.');
+    expect(completed.points.map((point) => point.elevationMeters)).toEqual([
+      100, 250, 300,
+    ]);
+    const demPreferredProgress: (readonly (number | null)[])[] = [];
+    await prepareImportedTrack(
+      [
+        {
+          points: [
+            { coordinate: equatorCoordinate(0), elevationMeters: 100 },
+            { coordinate: equatorCoordinate(20) },
+          ],
+        },
+      ],
+      provider,
+      signal,
+      {
+        preferDemElevations: true,
+        onProgress: (event) => {
+          demPreferredProgress.push(event.points.map((point) => point.elevationMeters));
+        },
+      },
+    );
+    expect(demPreferredProgress).toEqual([
+      [100, null, null],
+      [100, 250, null],
+      [200, 250, 300],
+    ]);
+  });
+
+  it('caps a long temporary profile at 1,200 points', async () => {
+    const progressPointCounts: number[] = [];
+    const provider: ElevationProvider = {
+      sample: () => Promise.resolve({ status: 'available', meters: 300 }),
+      sampleMany: (coordinates, _signal, onProgress) => {
+        const samples = coordinates.map(() => ({
+          status: 'available' as const,
+          meters: 300,
+        }));
+        onProgress?.({
+          completedTiles: 0,
+          totalTiles: 1,
+          indices: [],
+          samples: [],
+        });
+        onProgress?.({
+          completedTiles: 1,
+          totalTiles: 1,
+          indices: coordinates.map((_, index) => index),
+          samples,
+        });
+        return Promise.resolve(samples);
+      },
+    };
+
+    await prepareImportedTrack(
+      [
+        {
+          points: [
+            { coordinate: equatorCoordinate(0) },
+            { coordinate: equatorCoordinate(12_000) },
+          ],
+        },
+      ],
+      provider,
+      signal,
+      {
+        onProgress: (event) => {
+          progressPointCounts.push(event.points.length);
+        },
+      },
+    );
+
+    expect(progressPointCounts).toEqual([1_200, 1_200]);
+  });
 });

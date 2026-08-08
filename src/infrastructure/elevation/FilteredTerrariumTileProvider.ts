@@ -30,6 +30,12 @@ interface SharedTileRequest<T> {
   consumers: number;
 }
 
+interface SourceFetchWaiter {
+  readonly signal: AbortSignal;
+  readonly resolve: () => void;
+  readonly cancel: () => void;
+}
+
 type DemProcessingStatus =
   'success' | 'partial' | 'disabled' | 'canceled' | 'timed-out' | 'failed';
 
@@ -85,6 +91,9 @@ const diagnosticStatusPriority: Readonly<Record<DemProcessingStatus, number>> = 
   failed: 5,
 };
 
+// Keep browser transport queuing outside the timeout for each active source request.
+const maximumConcurrentSourceFetches = 6;
+
 /**
  * Fetches a 3x3 tile neighborhood, repairs only rejected center pixels, and retains a
  * bounded LRU of completed PNGs. Coordinates and URLs never cross the diagnostics port.
@@ -97,6 +106,9 @@ export class FilteredTerrariumTileProvider {
     string,
     SharedTileRequest<FilteredTerrariumResponse>
   >();
+  readonly #sourceFetchTimeouts = new WeakSet<DOMException>();
+  readonly #pendingSourceFetches: SourceFetchWaiter[] = [];
+  #activeSourceFetches = 0;
   #enabled = true;
   #revision = 0;
   #disposed = false;
@@ -186,12 +198,6 @@ export class FilteredTerrariumTileProvider {
     controller: AbortController,
   ): Promise<FilteredTerrariumResponse> {
     const startedAt = this.monotonicNow();
-    const timeout = setTimeout(() => {
-      controller.abort(
-        new DOMException('Terrarium tile request timed out.', 'TimeoutError'),
-      );
-    }, this.configuration.requestTimeoutMs);
-
     try {
       if (!filterEnabled) {
         const sourceTile = await this.fetchSourceTile(zoom, x, y, controller.signal);
@@ -249,20 +255,14 @@ export class FilteredTerrariumTileProvider {
       return response;
     } catch (error) {
       const timedOut =
-        controller.signal.reason instanceof DOMException &&
-        controller.signal.reason.name === 'TimeoutError';
+        error instanceof DOMException && this.#sourceFetchTimeouts.has(error);
       const canceled = !timedOut && (isAbortError(error) || controller.signal.aborted);
       this.recordDiagnostic(
         timedOut ? 'timed-out' : canceled ? 'canceled' : 'failed',
         this.monotonicNow() - startedAt,
         emptyRepairCounts,
       );
-      if (timedOut) {
-        throw new DOMException('Terrarium tile request timed out.', 'AbortError');
-      }
       throw error;
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
@@ -425,25 +425,90 @@ export class FilteredTerrariumTileProvider {
     });
   }
 
+  private acquireSourceFetchSlot(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) {
+      return Promise.reject(
+        requestError(signal.reason, 'Terrarium tile request canceled.'),
+      );
+    }
+    if (this.#activeSourceFetches < maximumConcurrentSourceFetches) {
+      this.#activeSourceFetches += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const waiter: SourceFetchWaiter = {
+        signal,
+        resolve,
+        cancel: () => {
+          const index = this.#pendingSourceFetches.indexOf(waiter);
+          if (index >= 0) this.#pendingSourceFetches.splice(index, 1);
+          reject(requestError(signal.reason, 'Terrarium tile request canceled.'));
+        },
+      };
+      signal.addEventListener('abort', waiter.cancel, { once: true });
+      this.#pendingSourceFetches.push(waiter);
+    });
+  }
+
+  private releaseSourceFetchSlot(): void {
+    this.#activeSourceFetches -= 1;
+    const waiter = this.#pendingSourceFetches.shift();
+    if (waiter === undefined) return;
+    waiter.signal.removeEventListener('abort', waiter.cancel);
+    this.#activeSourceFetches += 1;
+    waiter.resolve();
+  }
+
   private async fetchSourceTile(
     zoom: number,
     x: number,
     y: number,
     signal: AbortSignal,
   ): Promise<SourceTile> {
+    await this.acquireSourceFetchSlot(signal);
     const url = this.configuration.tileUrl
       .replace('{z}', String(zoom))
       .replace('{x}', String(x))
       .replace('{y}', String(y));
-    const response = await this.fetchImplementation(url, { signal });
-    if (!response.ok)
-      throw new Error(`Terrarium provider returned HTTP ${String(response.status)}.`);
-    const blob = await response.blob();
-    return {
-      blob,
-      cacheControl: response.headers.get('cache-control'),
-      expires: response.headers.get('expires'),
+    const controller = new AbortController();
+    const timeoutError = new DOMException(
+      'Terrarium tile request timed out.',
+      'TimeoutError',
+    );
+    const forwardAbort = () => {
+      controller.abort(signal.reason);
     };
+    if (signal.aborted) {
+      forwardAbort();
+    } else {
+      signal.addEventListener('abort', forwardAbort, { once: true });
+    }
+    const timeout = setTimeout(() => {
+      controller.abort(timeoutError);
+    }, this.configuration.requestTimeoutMs);
+    try {
+      const response = await this.fetchImplementation(url, {
+        signal: controller.signal,
+      });
+      if (!response.ok)
+        throw new Error(`Terrarium provider returned HTTP ${String(response.status)}.`);
+      const blob = await response.blob();
+      return {
+        blob,
+        cacheControl: response.headers.get('cache-control'),
+        expires: response.headers.get('expires'),
+      };
+    } catch (error) {
+      if (controller.signal.reason === timeoutError) {
+        this.#sourceFetchTimeouts.add(timeoutError);
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', forwardAbort);
+      this.releaseSourceFetchSlot();
+    }
   }
 
   private putCache(key: string, value: FilteredTerrariumResponse): void {

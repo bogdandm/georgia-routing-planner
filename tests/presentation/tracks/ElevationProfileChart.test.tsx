@@ -10,6 +10,7 @@ import {
 } from '@/domain/tracks/elevationProfile';
 import {
   CompactElevationProfile,
+  ElevationPreparationChart,
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -183,6 +184,60 @@ function renderElevationProfileChart({
     </ThemeProvider>,
   );
 }
+
+describe('ElevationPreparationChart', () => {
+  it('renders an indeterminate terrain preparation state before tile totals are known', () => {
+    render(
+      <ThemeProvider theme={createAppTheme()}>
+        <ElevationPreparationChart progress={null} />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(
+      screen.getByRole('img', { name: 'Elevation profile loading' }),
+    ).toBeVisible();
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+  });
+
+  it('renders neutral, determinate tile progress without profile interactions', () => {
+    const { container } = render(
+      <ThemeProvider theme={createAppTheme()}>
+        <ElevationPreparationChart
+          progress={{
+            completedTiles: 1,
+            totalTiles: 3,
+            points: [
+              { distanceMeters: 0, elevationMeters: 1_000 },
+              { distanceMeters: 100, elevationMeters: null },
+              { distanceMeters: 200, elevationMeters: 1_100 },
+            ],
+          }}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText('Loading elevation tiles: 1 of 3')).toBeVisible();
+    expect(
+      screen.getByRole('img', {
+        name: 'Elevation profile loading: 1 of 3 tiles',
+      }),
+    ).toBeVisible();
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '33.33333333333333',
+    );
+    expect(container.querySelector('.recharts-area-curve')).toHaveAttribute(
+      'stroke',
+      '#667085',
+    );
+    expect(
+      container.querySelector('.recharts-area-curve')?.getAttribute('d')?.match(/M/g),
+    ).toHaveLength(2);
+    expect(container.querySelectorAll('stop')).toHaveLength(0);
+    expect(container.querySelectorAll('.recharts-tooltip-wrapper')).toHaveLength(0);
+  });
+});
 
 describe('ElevationProfileChart', () => {
   it.each([420, 760])(

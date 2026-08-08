@@ -3,6 +3,8 @@ import {
   Box,
   CircularProgress,
   Menu,
+  ListItemIcon,
+  ListItemText,
   MenuItem,
   Paper,
   ToggleButton,
@@ -165,34 +167,29 @@ export function MapViewControls({
           setMenuButton(null);
         }}
         open={menuOpen}
-        slotProps={{
-          list: {
-            sx: {
-              display: 'grid',
-              gap: 2,
-              p: 1.5,
-            },
-          },
-        }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        variant="menu"
       >
         {layerPresets.map((preset) => (
           <MenuItem
-            aria-current={activeLayerPreset === preset.value ? 'true' : undefined}
+            aria-checked={activeLayerPreset === preset.value}
             key={preset.value}
             onClick={() => {
               onLayerPresetChange(preset.value);
             }}
+            role="menuitemradio"
             selected={activeLayerPreset === preset.value}
-            sx={{ gap: 1.5, minWidth: 300, p: 0 }}
+            sx={{ minWidth: 300 }}
           >
-            <Box
-              alt=""
-              component="img"
-              src={preset.preview}
-              sx={{ borderRadius: 1, flex: '0 0 auto', height: 96, width: 96 }}
-            />
-            {preset.label}
+            <ListItemIcon sx={{ minWidth: 96, mr: 2 }}>
+              <Box
+                alt=""
+                component="img"
+                src={preset.preview}
+                sx={{ borderRadius: 1, height: 96, width: 96 }}
+              />
+            </ListItemIcon>
+            <ListItemText primary={preset.label} />
           </MenuItem>
         ))}
       </Menu>

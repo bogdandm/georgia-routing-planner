@@ -59,7 +59,7 @@ describe('MapViewControls', () => {
     await user.click(button);
 
     const menu = await screen.findByRole('menu');
-    const choices = screen.getAllByRole('menuitem');
+    const choices = screen.getAllByRole('menuitemradio');
     expect(choices.map((choice) => choice.textContent)).toEqual([
       'Vector OSM',
       'Google Satellite Hybrid',
@@ -68,8 +68,8 @@ describe('MapViewControls', () => {
     ]);
     expect(menu.querySelectorAll('img')).toHaveLength(4);
     expect(
-      screen.getByRole('menuitem', { name: 'Google Satellite Hybrid' }),
-    ).toHaveAttribute('aria-current', 'true');
+      screen.getByRole('menuitemradio', { name: 'Google Satellite Hybrid' }),
+    ).toHaveAttribute('aria-checked', 'true');
     expect(button).toHaveAttribute('aria-expanded', 'true');
   });
 
@@ -87,7 +87,7 @@ describe('MapViewControls', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Google Satellite' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Google Satellite' }));
 
     expect(onLayerPresetChange).toHaveBeenCalledWith('google-satellite');
     expect(screen.getByRole('menu')).toBeVisible();

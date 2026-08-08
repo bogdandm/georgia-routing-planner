@@ -529,8 +529,6 @@ test('persists valid public GPX exports and rejects zero-length geometry', async
   });
 
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
-  await page.getByRole('button', { name: 'Back to tracks' }).click();
   await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
   await page
     .getByRole('button', { name: new RegExp(`^${garminSummary.name}`, 'u') })

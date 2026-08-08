@@ -14,10 +14,13 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import type { MarkerSort } from '@/domain/markers/savedMarker';
 import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import { cancelMarkerPlacement } from '@/presentation/map/mapInteractionStore';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
+import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
@@ -66,6 +69,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const elevationGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
   );
+  const markerSort = useUiStore((state) => state.markerSort);
   const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
@@ -76,6 +80,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     (state) => state.setElevationGradeLegendDismissed,
   );
   const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
+  const setMarkerSort = useUiStore((state) => state.setMarkerSort);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
@@ -153,6 +158,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   }, [activeTab, smartphoneViewport]);
 
   useEffect(() => {
+    if (activeTab !== 'markers') cancelMarkerPlacement();
+  }, [activeTab]);
+
+  useEffect(() => {
     const restoreTabFromUrl = () => {
       const tab = workspaceTabFromHash(window.location.hash);
       if (tab !== null) setActiveTab(tab);
@@ -174,15 +183,19 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     nextDeveloperMode: boolean,
     nextNavigationCollapsed: boolean,
     nextElevationGradeLegendDismissed: boolean,
-  ) => {
+    nextMarkerSort: typeof markerSort,
+  ): Promise<boolean> => {
     try {
       await database.saveUiPreferences({
         developerMode: nextDeveloperMode,
         navigationCollapsed: nextNavigationCollapsed,
         elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
+        markerSort: nextMarkerSort,
       });
+      return true;
     } catch {
       logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+      return false;
     }
   };
 
@@ -199,17 +212,33 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       value,
       navigationCollapsed,
       elevationGradeLegendDismissed,
+      markerSort,
     );
   };
 
   const handleNavigationCollapsedChange = (value: boolean) => {
     setNavigationCollapsed(value);
-    void persistUiPreferences(developerMode, value, elevationGradeLegendDismissed);
+    void persistUiPreferences(
+      developerMode,
+      value,
+      elevationGradeLegendDismissed,
+      markerSort,
+    );
   };
 
   const handleElevationGradeLegendDismissedChange = (value: boolean) => {
     setElevationGradeLegendDismissed(value);
-    void persistUiPreferences(developerMode, navigationCollapsed, value);
+    void persistUiPreferences(developerMode, navigationCollapsed, value, markerSort);
+  };
+
+  const handleMarkerSortChange = async (value: MarkerSort): Promise<boolean> => {
+    setMarkerSort(value);
+    return persistUiPreferences(
+      developerMode,
+      navigationCollapsed,
+      elevationGradeLegendDismissed,
+      value,
+    );
   };
 
   const renderedMapSurface = mapSurface ?? (
@@ -474,6 +503,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             activeTab={activeTab}
             auxiliaryOverlay={auxiliaryOverlay}
             fullWidth={smartphoneViewport}
+            onMarkerSortChange={handleMarkerSortChange}
             onSatellitePaneOpenChange={setSatellitePaneOpen}
             onShowMap={() => {
               setMobileWorkspaceOpen(false);
@@ -654,7 +684,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
 export function WorkspaceShell(props: WorkspaceShellProps) {
   return (
     <TracksWorkspaceProvider>
-      <WorkspaceShellContent {...props} />
+      <MarkersWorkspaceProvider>
+        <WorkspaceShellContent {...props} />
+      </MarkersWorkspaceProvider>
     </TracksWorkspaceProvider>
   );
 }

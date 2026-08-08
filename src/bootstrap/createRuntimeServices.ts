@@ -3,6 +3,7 @@ import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
+import type { SavedMarkerRepository } from '@/application/ports/SavedMarkerRepository';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
@@ -65,6 +66,7 @@ export interface RuntimeServices {
   readonly mapDiagnostics: MapDiagnosticsSnapshotStore;
   readonly mapViewport: MapViewportSnapshotStore;
   readonly mapLayers: MapLibreLayerController | null;
+  readonly savedMarkers: SavedMarkerRepository;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
   readonly searchPlaces: SearchPlaces | null;
@@ -282,6 +284,7 @@ export function createRuntimeServices(): RuntimeServices {
     satelliteCatalogGateway,
     searchSatelliteScenes,
     searchPlaces,
+    savedMarkers: database,
     sentinelQueryDiagnostics,
     storageUsage,
     supabaseConfiguration,

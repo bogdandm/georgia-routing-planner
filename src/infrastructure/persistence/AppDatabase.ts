@@ -3,6 +3,10 @@ import { z } from 'zod';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import {
+  SavedMarkerStorageError,
+  type SavedMarkerRepository,
+} from '@/application/ports/SavedMarkerRepository';
+import {
   LocalTrackStorageError,
   type LocalTrackRepository,
 } from '@/application/ports/LocalTrackRepository';
@@ -26,6 +30,15 @@ import type {
   GpxValidationWarning,
   TrackPoint,
 } from '@/domain/tracks/gpx';
+import {
+  SAVED_MARKER_SCHEMA_VERSION,
+  markerColorKeys,
+  markerIconKeys,
+  markerSorts,
+  normalizeSavedMarkerName,
+  type MarkerSort,
+  type SavedMarker,
+} from '@/domain/markers/savedMarker';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   normalizeLocalTrackName,
@@ -109,6 +122,7 @@ const uiPreferencesSchema = z
     developerMode: z.boolean(),
     navigationCollapsed: z.boolean().default(false),
     elevationGradeLegendDismissed: z.boolean().default(false),
+    markerSort: z.enum(markerSorts).default('created'),
   })
   .strict();
 
@@ -116,12 +130,14 @@ interface UiPreferences {
   readonly developerMode: boolean;
   readonly navigationCollapsed: boolean;
   readonly elevationGradeLegendDismissed: boolean;
+  readonly markerSort: MarkerSort;
 }
 
 const defaultUiPreferences: UiPreferences = {
   developerMode: false,
   navigationCollapsed: false,
   elevationGradeLegendDismissed: false,
+  markerSort: 'created',
 };
 
 const mapCameraKey = 'map.camera';
@@ -607,6 +623,72 @@ function parseTrackSyncState(value: unknown): TrackSyncState | null {
   return result.success ? result.data : null;
 }
 
+const markerNameSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => value.trim() === value, 'Marker names must be trimmed.');
+
+const savedMarkerSchema: z.ZodType<SavedMarker> = z
+  .object({
+    schemaVersion: z.literal(SAVED_MARKER_SCHEMA_VERSION),
+    id: z.string().min(1).max(200),
+    name: markerNameSchema,
+    normalizedName: z.string().min(1).max(200),
+    coordinate: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+    iconKey: z.enum(markerIconKeys),
+    colorKey: z.enum(markerColorKeys),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const normalized = normalizeSavedMarkerName(value.name);
+    if (value.normalizedName !== normalized.normalizedName) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Marker normalized name does not match its name.',
+        path: ['normalizedName'],
+      });
+    }
+  });
+
+const savedMarkerUpdateSchema = z
+  .object({
+    name: markerNameSchema,
+    normalizedName: z.string().min(1).max(200),
+    iconKey: z.enum(markerIconKeys),
+    colorKey: z.enum(markerColorKeys),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const normalized = normalizeSavedMarkerName(value.name);
+    if (value.normalizedName !== normalized.normalizedName) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Marker normalized name does not match its name.',
+        path: ['normalizedName'],
+      });
+    }
+  });
+
+const savedMarkerIdSchema = z.string().min(1).max(200);
+
+function parseSavedMarker(value: unknown): SavedMarker | null {
+  const result = savedMarkerSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+function parseSavedMarkerUpdate(
+  value: unknown,
+): Readonly<
+  Pick<SavedMarker, 'name' | 'normalizedName' | 'iconKey' | 'colorKey' | 'updatedAt'>
+> | null {
+  const result = savedMarkerUpdateSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
 export function validateLocalTrackSyncPair(value: unknown): LocalTrackSyncPair {
   if (typeof value !== 'object' || value === null) {
     throw new LocalTrackStorageError(
@@ -629,14 +711,18 @@ export function validateLocalTrackSyncPair(value: unknown): LocalTrackSyncPair {
 /** Owns the versioned IndexedDB schema and validates values crossing storage boundaries. */
 export class AppDatabase
   extends Dexie
-  implements MapLayerPreferencesRepository, MapCameraRepository, LocalTrackRepository
+  implements
+    MapLayerPreferencesRepository,
+    MapCameraRepository,
+    LocalTrackRepository,
+    SavedMarkerRepository
 {
   public readonly settings!: EntityTable<SettingRecord, 'key'>;
   public readonly diagnostics!: EntityTable<PersistedDiagnosticRecord, 'id'>;
   public readonly localTracks!: EntityTable<LocalTrackSummary, 'id'>;
   public readonly localTrackContents!: EntityTable<LocalTrackContent, 'trackId'>;
   public readonly trackSyncStates!: EntityTable<TrackSyncState, 'trackId'>;
-
+  public readonly savedMarkers!: EntityTable<SavedMarker, 'id'>;
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
     this.version(1).stores({
@@ -698,6 +784,14 @@ export class AppDatabase
           if (parsed !== null) await contentTable.put(parsed);
         }
       });
+    this.version(6).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+    });
   }
 
   public async saveLocalTrack(
@@ -810,6 +904,119 @@ export class AppDatabase
       if (left.favorite !== right.favorite) return left.favorite ? -1 : 1;
       const bySavedAt = right.savedAt.localeCompare(left.savedAt, 'en');
       return bySavedAt === 0 ? left.id.localeCompare(right.id, 'en') : bySavedAt;
+    });
+  }
+
+  public async listSavedMarkers(): Promise<readonly SavedMarker[]> {
+    const records = await this.savedMarkers.toArray();
+    const valid: SavedMarker[] = [];
+    let invalidCount = 0;
+    for (const record of records) {
+      const parsed = parseSavedMarker(record);
+      if (parsed === null) {
+        invalidCount += 1;
+      } else {
+        valid.push(parsed);
+      }
+    }
+    if (invalidCount > 0) {
+      this.logger.log({
+        level: 'warn',
+        name: 'storage.saved-markers.invalid-record',
+        data: { invalidCount },
+      });
+    }
+    return valid;
+  }
+
+  public async saveSavedMarker(marker: SavedMarker): Promise<void> {
+    const parsed = parseSavedMarker(marker);
+    if (parsed === null) {
+      throw new SavedMarkerStorageError(
+        'record-invalid',
+        'The saved marker record is invalid.',
+      );
+    }
+    try {
+      await this.savedMarkers.add(parsed);
+    } catch (error) {
+      if (error instanceof Dexie.ConstraintError) {
+        throw new SavedMarkerStorageError(
+          'record-invalid',
+          'A saved marker with this identifier already exists.',
+        );
+      }
+      throw error;
+    }
+  }
+
+  public async updateSavedMarker(
+    markerId: string,
+    changes: Readonly<
+      Pick<
+        SavedMarker,
+        'name' | 'normalizedName' | 'iconKey' | 'colorKey' | 'updatedAt'
+      >
+    >,
+  ): Promise<SavedMarker> {
+    const validMarkerId = savedMarkerIdSchema.safeParse(markerId);
+    const validChanges = parseSavedMarkerUpdate(changes);
+    if (!validMarkerId.success || validChanges === null) {
+      throw new SavedMarkerStorageError(
+        'record-invalid',
+        'The saved marker update is invalid.',
+      );
+    }
+    return this.transaction('rw', this.savedMarkers, async () => {
+      const existing = await this.savedMarkers.get(validMarkerId.data);
+      if (existing === undefined) {
+        throw new SavedMarkerStorageError(
+          'not-found',
+          'The saved marker was not found.',
+        );
+      }
+      const marker = parseSavedMarker(existing);
+      if (marker === null) {
+        throw new SavedMarkerStorageError(
+          'record-invalid',
+          'The saved marker record is invalid.',
+        );
+      }
+      const updated = parseSavedMarker({ ...marker, ...validChanges });
+      if (updated === null) {
+        throw new SavedMarkerStorageError(
+          'record-invalid',
+          'The saved marker update is invalid.',
+        );
+      }
+      await this.savedMarkers.put(updated);
+      return updated;
+    });
+  }
+
+  public async deleteSavedMarker(markerId: string): Promise<void> {
+    const validMarkerId = savedMarkerIdSchema.safeParse(markerId);
+    if (!validMarkerId.success) {
+      throw new SavedMarkerStorageError(
+        'record-invalid',
+        'The saved marker identifier is invalid.',
+      );
+    }
+    await this.transaction('rw', this.savedMarkers, async () => {
+      const existing = await this.savedMarkers.get(validMarkerId.data);
+      if (existing === undefined) {
+        throw new SavedMarkerStorageError(
+          'not-found',
+          'The saved marker was not found.',
+        );
+      }
+      if (parseSavedMarker(existing) === null) {
+        throw new SavedMarkerStorageError(
+          'record-invalid',
+          'The saved marker record is invalid.',
+        );
+      }
+      await this.savedMarkers.delete(validMarkerId.data);
     });
   }
 

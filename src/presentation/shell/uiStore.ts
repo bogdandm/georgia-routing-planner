@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import type { MarkerSort } from '@/domain/markers/savedMarker';
+
 import type { MapDebugOptions } from '@/presentation/map/mapTypes';
 
 export type WorkspaceTab = 'tracks' | 'satellite' | 'markers' | 'layers' | 'user';
@@ -10,6 +12,7 @@ interface UiState {
   readonly developerMode: boolean;
   readonly elevationGradeLegendDismissed: boolean;
   readonly mapDebugOptions: MapDebugOptions;
+  readonly markerSort: MarkerSort;
   readonly mobileWorkspaceOpen: boolean;
   readonly navigationCollapsed: boolean;
   readonly settingsOpen: boolean;
@@ -18,6 +21,7 @@ interface UiState {
   readonly setDeveloperMode: (value: boolean) => void;
   readonly setElevationGradeLegendDismissed: (value: boolean) => void;
   readonly setMapDebugOptions: (value: MapDebugOptions) => void;
+  readonly setMarkerSort: (value: MarkerSort) => void;
   readonly setMobileWorkspaceOpen: (value: boolean) => void;
   readonly setNavigationCollapsed: (value: boolean) => void;
   readonly setSettingsOpen: (value: boolean) => void;
@@ -29,6 +33,7 @@ export const useUiStore = create<UiState>()((set) => ({
   developerMode: false,
   elevationGradeLegendDismissed: false,
   mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+  markerSort: 'created',
   mobileWorkspaceOpen: false,
   navigationCollapsed: false,
   settingsOpen: false,
@@ -46,6 +51,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setMapDebugOptions: (mapDebugOptions) => {
     set({ mapDebugOptions });
+  },
+  setMarkerSort: (markerSort) => {
+    set({ markerSort });
   },
   setMobileWorkspaceOpen: (mobileWorkspaceOpen) => {
     set({ mobileWorkspaceOpen });

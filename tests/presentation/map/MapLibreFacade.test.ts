@@ -1013,6 +1013,11 @@ describe('MapLibreFacade', () => {
     );
     facade.attach(nativeMap as unknown as MapLibreMap);
 
+    expect(
+      facade.getNearestPoi({ longitude: 43.67592, latitude: 42.70227 }),
+    ).toMatchObject({ name: 'Lake Shovi', category: 'lake' });
+    nativeMap.queriedSourceLayers.length = 0;
+
     nativeMap.fire('click', { lngLat: { lng: 43.67592, lat: 42.70227 } });
 
     expect(nativeMap.queriedSourceLayers).toEqual([
@@ -1099,5 +1104,43 @@ describe('MapLibreFacade', () => {
     facade.destroy();
     nativeMap.getCanvas().dispatchEvent(new Event('webglcontextlost'));
     expect(facade.getDiagnosticsSnapshot()).toEqual(snapshotBeforeDestroy);
+  });
+
+  it('suppresses generic point inspection while marker placement is active', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    facade.setInteractionMode('marker-placement');
+    expect(nativeMap.getCanvas().style.cursor).toBe('crosshair');
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+
+    facade.setInteractionMode('default');
+    expect(nativeMap.getCanvas().style.cursor).toBe('');
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+    expect(facade.getPointInspection()).toMatchObject({
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+    });
+
+    facade.detachMap();
+    expect(nativeMap.getCanvas().style.cursor).toBe('');
   });
 });

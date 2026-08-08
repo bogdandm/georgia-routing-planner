@@ -10,7 +10,7 @@ import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
-import type { MapFacade } from '@/presentation/map/MapFacade';
+import type { MapFacade, MapInteractionMode } from '@/presentation/map/MapFacade';
 import { mapLayerIds, mapSourceIds } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -23,12 +23,14 @@ import {
 import { selectNearestPoi } from '@/presentation/map/selectNearestPoi';
 import {
   defaultGeorgiaCamera,
+  type MapCoordinate,
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapFailureCategory,
   type MapFitPadding,
   type MapPointInspection,
+  type NearbyPoi,
   type MapSourceFailure,
   type MapViewportBounds,
   type MapViewportSnapshot,
@@ -208,6 +210,7 @@ export class MapLibreFacade implements MapFacade {
   #pointInspectionAbort: AbortController | null = null;
   readonly #pointInspector: PointInspectorPopup;
   readonly #cameraOrbit = new CameraOrbitControl();
+  #interactionMode: MapInteractionMode = 'default';
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -233,6 +236,7 @@ export class MapLibreFacade implements MapFacade {
     }
     this.detach();
     this.#map = map;
+    this.applyInteractionCursor();
     this.#cameraOrbit.attach(map.getCanvasContainer(), map);
     this.#cameraOrbit.setEnabled(this.#snapshot.terrainMode === 'terrain');
     this.#pointInspector.attach(map);
@@ -298,6 +302,16 @@ export class MapLibreFacade implements MapFacade {
 
   public getPointInspection(): MapPointInspection {
     return this.#pointInspection;
+  }
+
+  public getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null {
+    const map = this.#map;
+    if (map === null) return null;
+    try {
+      return this.queryNearestPoi(map, coordinate);
+    } catch {
+      return null;
+    }
   }
 
   public closePointInspection(): void {
@@ -422,6 +436,12 @@ export class MapLibreFacade implements MapFacade {
     map.showCollisionBoxes = options.showCollisionBoxes;
   }
 
+  public setInteractionMode(mode: MapInteractionMode): void {
+    if (this.#interactionMode === mode) return;
+    this.#interactionMode = mode;
+    this.applyInteractionCursor();
+  }
+
   /**
    * Releases only the current native map attachment. Subscribers remain registered so
    * React Strict Mode can replay the ref lifecycle and attach the same facade again.
@@ -541,7 +561,7 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMapClick = (event: MapMouseEvent): void => {
     const map = this.#map;
-    if (map === null) return;
+    if (map === null || this.#interactionMode === 'marker-placement') return;
     if (this.#pointInspection.status === 'open') {
       const visible = this.#pointInspector.isVisible();
       this.closePointInspection();
@@ -566,6 +586,34 @@ export class MapLibreFacade implements MapFacade {
     void this.inspectPoint(map, coordinate, sequence, abortController.signal);
   };
 
+  private queryNearestPoi(
+    map: MapLibreMap,
+    coordinate: MapCoordinate,
+  ): NearbyPoi | null {
+    const sourceLayers = this.provider?.sourceLayers;
+    if (
+      sourceLayers === undefined ||
+      map.getSource(mapSourceIds.basemapVector) === undefined
+    ) {
+      return null;
+    }
+    const features = [
+      ...map.querySourceFeatures(mapSourceIds.basemapVector, {
+        sourceLayer: sourceLayers.pois,
+      }),
+      ...map.querySourceFeatures(mapSourceIds.basemapVector, {
+        sourceLayer: sourceLayers.peaks,
+      }),
+      ...map.querySourceFeatures(mapSourceIds.basemapVector, {
+        sourceLayer: sourceLayers.places,
+      }),
+      ...map.querySourceFeatures(mapSourceIds.basemapVector, {
+        sourceLayer: sourceLayers.waterNames,
+      }),
+    ];
+    return selectNearestPoi(features, coordinate);
+  }
+
   private async inspectPoint(
     map: MapLibreMap,
     coordinate: { readonly longitude: number; readonly latitude: number },
@@ -575,31 +623,9 @@ export class MapLibreFacade implements MapFacade {
     const startedAt = performance.now();
     let nearbyPoi: Exclude<MapPointInspection, { status: 'closed' }>['nearbyPoi'];
     try {
-      const sourceLayers = this.provider?.sourceLayers;
-      if (
-        sourceLayers === undefined ||
-        map.getSource(mapSourceIds.basemapVector) === undefined
-      ) {
-        nearbyPoi = { status: 'error' };
-      } else {
-        const features = [
-          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
-            sourceLayer: sourceLayers.pois,
-          }),
-          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
-            sourceLayer: sourceLayers.peaks,
-          }),
-          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
-            sourceLayer: sourceLayers.places,
-          }),
-          ...map.querySourceFeatures(mapSourceIds.basemapVector, {
-            sourceLayer: sourceLayers.waterNames,
-          }),
-        ];
-        const feature = selectNearestPoi(features, coordinate);
-        nearbyPoi =
-          feature === null ? { status: 'none' } : { status: 'found', poi: feature };
-      }
+      const feature = this.queryNearestPoi(map, coordinate);
+      nearbyPoi =
+        feature === null ? { status: 'none' } : { status: 'found', poi: feature };
     } catch {
       nearbyPoi = { status: 'error' };
     }
@@ -1154,6 +1180,13 @@ export class MapLibreFacade implements MapFacade {
     for (const listener of this.#listeners) listener();
   }
 
+  private applyInteractionCursor(): void {
+    const map = this.#map;
+    if (map === null) return;
+    map.getCanvas().style.cursor =
+      this.#interactionMode === 'marker-placement' ? 'crosshair' : '';
+  }
+
   private detach(): void {
     this.cancelAllSourceRecoveries();
     const map = this.#map;
@@ -1173,6 +1206,7 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
+    map.getCanvas().style.cursor = '';
     this.#cameraOrbit.detach();
     this.layerController?.detach(map);
     this.#pointInspectionSequence += 1;

@@ -119,6 +119,7 @@ import type { SvgIconComponent } from '@mui/icons-material';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { MarkerColorKey, MarkerIconKey } from '@/domain/markers/savedMarker';
+import { appColors } from '@/presentation/theme/appColors';
 
 export const markerIconCategories = [
   'Places',
@@ -326,16 +327,16 @@ export interface MarkerColorCatalogEntry {
 }
 
 export const markerColorCatalog = [
-  { key: 'blue', label: 'Blue', value: '#0288D1' },
-  { key: 'teal', label: 'Teal', value: '#00A896' },
-  { key: 'purple', label: 'Purple', value: '#8E44AD' },
-  { key: 'olive', label: 'Olive', value: '#84A900' },
-  { key: 'orange', label: 'Orange', value: '#F57C00' },
-  { key: 'rose', label: 'Rose', value: '#E91E63' },
-  { key: 'navy', label: 'Navy', value: '#1E40AF' },
-  { key: 'blue-green', label: 'Blue-green', value: '#008C95' },
-  { key: 'green', label: 'Green', value: '#2EAD5B' },
-  { key: 'red', label: 'Red', value: '#E53935' },
+  { key: 'blue', label: 'Blue', value: appColors.marker.blue },
+  { key: 'teal', label: 'Teal', value: appColors.marker.teal },
+  { key: 'purple', label: 'Purple', value: appColors.marker.purple },
+  { key: 'olive', label: 'Olive', value: appColors.marker.olive },
+  { key: 'orange', label: 'Orange', value: appColors.marker.orange },
+  { key: 'rose', label: 'Rose', value: appColors.marker.rose },
+  { key: 'navy', label: 'Navy', value: appColors.marker.navy },
+  { key: 'blue-green', label: 'Blue-green', value: appColors.marker.blueGreen },
+  { key: 'green', label: 'Green', value: appColors.marker.green },
+  { key: 'red', label: 'Red', value: appColors.marker.red },
 ] as const satisfies readonly MarkerColorCatalogEntry[];
 
 export const markerColorOrder: Readonly<Record<MarkerColorKey, number>> = {

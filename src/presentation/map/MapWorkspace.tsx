@@ -38,14 +38,15 @@ import type { MapFacade } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
-  TerrainModeControl,
+  MapViewControls,
   type TerrainControlState,
-} from '@/presentation/map/TerrainModeControl';
+} from '@/presentation/map/MapViewControls';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
   type MapFitPadding,
+  type MapLayerPreset,
 } from '@/presentation/map/mapTypes';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
@@ -168,6 +169,7 @@ export function MapWorkspace({
   } | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [copyError, setCopyError] = useState(false);
+  const [presetErrorMessage, setPresetErrorMessage] = useState<string | null>(null);
   const smartphoneViewport = useMediaQuery('(width < 900px)');
   const navigationCommand = useStore(
     mapInteractionStore,
@@ -187,6 +189,19 @@ export function MapWorkspace({
       state.visibility['imported-tracks'] &&
       state.visibility['track-elevation-gradient'],
   );
+  const googleSatelliteVisible = useStore(
+    mapLayerStore,
+    (state) => state.visibility['google-satellite'],
+  );
+  const satelliteImagerySelected = useStore(
+    mapLayerStore,
+    (state) => state.visibility['satellite-imagery'],
+  );
+  const openStreetMapOpacity = useStore(
+    mapLayerStore,
+    (state) => state.openStreetMapOpacity,
+  );
+  const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const activeProfile = useOptionalTracksWorkspace()?.activeProfile ?? null;
   const fitBoundsCommand = useStore(
     mapInteractionStore,
@@ -264,6 +279,30 @@ export function MapWorkspace({
     snapshot.lifecycle === 'loading'
       ? 'terrain'
       : snapshot.terrainMode);
+  const satelliteImageryVisible =
+    appliedImagery.status === 'preview' || appliedImagery.status === 'ready'
+      ? true
+      : (appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
+        appliedImagery.previousSceneKey !== null;
+  let activeLayerPreset: MapLayerPreset | null = null;
+  if (!googleSatelliteVisible && !satelliteImageryVisible) {
+    activeLayerPreset = 'vector-osm';
+  } else if (googleSatelliteVisible && openStreetMapOpacity === 1) {
+    activeLayerPreset = 'google-satellite-hybrid';
+  } else if (googleSatelliteVisible && openStreetMapOpacity === 0) {
+    activeLayerPreset = 'google-satellite';
+  } else if (
+    !googleSatelliteVisible &&
+    satelliteImagerySelected &&
+    satelliteImageryVisible &&
+    openStreetMapOpacity === 1
+  ) {
+    activeLayerPreset = 'sentinel-2-hybrid';
+  }
+  const layerPresetDisabled =
+    mapLayers === null ||
+    snapshot.lifecycle === 'loading' ||
+    snapshot.lifecycle === 'fatal';
 
   useEffect(() => {
     const publishViewport = () => {
@@ -658,6 +697,25 @@ export function MapWorkspace({
     );
     closeContextMenu();
   };
+  const handleLayerPresetChange = useCallback(
+    (preset: MapLayerPreset): boolean => {
+      if (mapLayers === null) return false;
+      if (preset === 'sentinel-2-hybrid' && mapLayers.getAppliedScene() === null) {
+        setActiveTab('satellite');
+        setMobileWorkspaceOpen(true);
+        setNavigationCollapsed(false);
+        const nextUrl = new URL(window.location.href);
+        nextUrl.hash = workspaceHashForTab('satellite');
+        window.history.pushState(window.history.state, '', nextUrl);
+        return true;
+      }
+      const result = mapLayers.setMapLayerPreset(preset);
+      if (result.status === 'success') return true;
+      setPresetErrorMessage(result.message);
+      return false;
+    },
+    [mapLayers, setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed],
+  );
 
   return (
     <Box
@@ -723,9 +781,12 @@ export function MapWorkspace({
         </Alert>
       ) : null}
       {restoredView !== null && mapProviderConfiguration.status === 'valid' ? (
-        <TerrainModeControl
-          state={terrainState}
-          onModeChange={handleTerrainControlChange}
+        <MapViewControls
+          activeLayerPreset={activeLayerPreset}
+          layerPresetDisabled={layerPresetDisabled}
+          onLayerPresetChange={handleLayerPresetChange}
+          onTerrainModeChange={handleTerrainControlChange}
+          terrainState={terrainState}
         />
       ) : null}
       <ElevationGradeLegend
@@ -818,6 +879,14 @@ export function MapWorkspace({
         onClose={() => {
           setCopyError(false);
         }}
+      />
+      <Snackbar
+        autoHideDuration={4_000}
+        message={presetErrorMessage}
+        onClose={() => {
+          setPresetErrorMessage(null);
+        }}
+        open={presetErrorMessage !== null}
       />
     </Box>
   );

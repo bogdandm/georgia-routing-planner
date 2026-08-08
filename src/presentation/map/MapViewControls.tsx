@@ -1,0 +1,193 @@
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import {
+  Box,
+  CircularProgress,
+  Menu,
+  MenuItem,
+  Paper,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+} from '@mui/material';
+import { useId, useState, type MouseEvent } from 'react';
+
+import googleSatelliteHybridPreview from '@/presentation/map/layer-previews/google-satellite-hybrid.png';
+import googleSatellitePreview from '@/presentation/map/layer-previews/google-satellite.png';
+import sentinel2HybridPreview from '@/presentation/map/layer-previews/sentinel-2-hybrid.png';
+import type { MapLayerPreset, TerrainMode } from '@/presentation/map/mapTypes';
+import vectorOsmPreview from '@/presentation/map/layer-previews/vector-osm.png';
+
+export type TerrainControlState =
+  'flat' | 'enabling' | 'terrain' | 'disabling' | 'failed';
+
+interface MapViewControlsProps {
+  readonly terrainState: TerrainControlState;
+  readonly activeLayerPreset: MapLayerPreset | null;
+  readonly layerPresetDisabled: boolean;
+  readonly onTerrainModeChange: (mode: TerrainMode) => void;
+  readonly onLayerPresetChange: (preset: MapLayerPreset) => boolean;
+}
+
+const layerPresets: readonly {
+  readonly label: string;
+  readonly preview: string;
+  readonly value: MapLayerPreset;
+}[] = [
+  {
+    label: 'Vector OSM',
+    preview: vectorOsmPreview,
+    value: 'vector-osm',
+  },
+  {
+    label: 'Google Satellite Hybrid',
+    preview: googleSatelliteHybridPreview,
+    value: 'google-satellite-hybrid',
+  },
+  {
+    label: 'Google Satellite',
+    preview: googleSatellitePreview,
+    value: 'google-satellite',
+  },
+  {
+    label: 'Sentinel-2 Hybrid',
+    preview: sentinel2HybridPreview,
+    value: 'sentinel-2-hybrid',
+  },
+];
+
+export function MapViewControls({
+  terrainState,
+  activeLayerPreset,
+  layerPresetDisabled,
+  onTerrainModeChange,
+  onLayerPresetChange,
+}: MapViewControlsProps) {
+  const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  const pending = terrainState === 'enabling' || terrainState === 'disabling';
+  const selectedMode =
+    terrainState === 'terrain' || terrainState === 'enabling' ? 'terrain' : 'flat';
+  const menuOpen = menuButton !== null;
+
+  const handleTerrainModeChange = (
+    _event: MouseEvent<HTMLElement>,
+    value: TerrainMode | null,
+  ) => {
+    if (value !== null && !pending && value !== selectedMode) {
+      onTerrainModeChange(value);
+    }
+  };
+
+  return (
+    <>
+      <Paper
+        elevation={2}
+        sx={{ position: 'absolute', top: 135, right: 6, width: 40, zIndex: 1 }}
+      >
+        <ToggleButtonGroup
+          exclusive
+          orientation="vertical"
+          size="small"
+          aria-label="Map dimension"
+          value={selectedMode}
+          onChange={handleTerrainModeChange}
+        >
+          <ToggleButton
+            value="flat"
+            aria-label="Show flat 2D map"
+            disabled={pending}
+            sx={{ width: 40, height: 36, p: 0 }}
+          >
+            <Tooltip title="Flat map">
+              <span>
+                {terrainState === 'disabling' ? (
+                  <CircularProgress size={18} aria-hidden />
+                ) : (
+                  '2D'
+                )}
+              </span>
+            </Tooltip>
+          </ToggleButton>
+          <ToggleButton
+            value="terrain"
+            aria-label="Show 3D terrain map"
+            disabled={pending}
+            sx={{ width: 40, height: 36, p: 0 }}
+          >
+            <Tooltip title="3D terrain">
+              <span>
+                {terrainState === 'enabling' ? (
+                  <CircularProgress size={18} aria-hidden />
+                ) : (
+                  '3D'
+                )}
+              </span>
+            </Tooltip>
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <Tooltip title="Choose map layer preset">
+          <span>
+            <ToggleButton
+              aria-controls={menuOpen ? menuId : undefined}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label="Choose map layer preset"
+              disabled={layerPresetDisabled}
+              onClick={(event) => {
+                setMenuButton(event.currentTarget);
+              }}
+              sx={{ width: 40, height: 36, p: 0 }}
+              value="layer-preset"
+            >
+              <LayersOutlinedIcon fontSize="small" />
+            </ToggleButton>
+          </span>
+        </Tooltip>
+      </Paper>
+      <Menu
+        anchorEl={menuButton}
+        anchorOrigin={{ vertical: 'center', horizontal: 'left' }}
+        id={menuId}
+        onClose={() => {
+          setMenuButton(null);
+        }}
+        open={menuOpen}
+        slotProps={{
+          list: {
+            sx: {
+              display: 'grid',
+              gap: 2,
+              p: 1.5,
+            },
+          },
+          paper: {
+            sx: {
+              ml: -1.5,
+            },
+          },
+        }}
+        transformOrigin={{ vertical: 'center', horizontal: 'right' }}
+      >
+        {layerPresets.map((preset) => (
+          <MenuItem
+            aria-current={activeLayerPreset === preset.value ? 'true' : undefined}
+            key={preset.value}
+            onClick={() => {
+              if (onLayerPresetChange(preset.value)) setMenuButton(null);
+            }}
+            selected={activeLayerPreset === preset.value}
+            sx={{ gap: 1.5, minWidth: 300, p: 0 }}
+          >
+            <Box
+              alt=""
+              component="img"
+              src={preset.preview}
+              sx={{ flex: '0 0 auto', height: 96, width: 96 }}
+            />
+            {preset.label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}

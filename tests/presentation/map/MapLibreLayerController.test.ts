@@ -498,6 +498,106 @@ describe('MapLibreLayerController', () => {
     });
   });
 
+  it('applies each map layer preset atomically without resetting independent layers', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.applyScene(scene('preset-scene'), new AbortController().signal);
+    expect(controller.setLayerVisibility('roads', false)).toEqual({
+      status: 'success',
+    });
+    const savePreferences = vi
+      .spyOn(services.database, 'saveMapLayerPreferences')
+      .mockResolvedValue(undefined);
+    const log = vi.spyOn(services.logger, 'log');
+
+    expect(controller.setMapLayerPreset('vector-osm')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 1,
+      appliedImagery: { status: 'hidden', sceneId: 'preset-scene', visible: false },
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+
+    expect(controller.setMapLayerPreset('google-satellite-hybrid')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': true,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 1,
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+
+    expect(controller.setMapLayerPreset('google-satellite')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': true,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 0,
+    });
+
+    expect(controller.setMapLayerPreset('sentinel-2-hybrid')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'satellite-imagery': true,
+        roads: false,
+      },
+      openStreetMapOpacity: 1,
+      appliedImagery: { status: 'ready', sceneId: 'preset-scene', visible: true },
+    });
+    expect(controller.getAppliedScene()).toMatchObject({ id: 'preset-scene' });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
+    expect(savePreferences).toHaveBeenCalledTimes(4);
+    expect(log).toHaveBeenLastCalledWith({
+      level: 'info',
+      name: 'map.layer-preset.changed',
+      data: { preset: 'sentinel-2-hybrid' },
+    });
+  });
+
+  it('rejects the Sentinel preset without an applied scene or native changes', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const visibility = mapLayerStore.getState().visibility;
+    const nativeVisibility = new Map(map.visibility);
+    const savePreferences = vi
+      .spyOn(services.database, 'saveMapLayerPreferences')
+      .mockResolvedValue(undefined);
+
+    expect(controller.setMapLayerPreset('sentinel-2-hybrid')).toEqual({
+      status: 'failed',
+      message: 'Apply a Sentinel scene before choosing this preset.',
+    });
+    expect(mapLayerStore.getState().visibility).toBe(visibility);
+    expect(map.visibility).toEqual(nativeVisibility);
+    expect(savePreferences).not.toHaveBeenCalled();
+  });
+
   it('preserves vector paints until Google source content arrives and orders relief around it', () => {
     const services = createTestServices();
     const controller = services.mapLayers;

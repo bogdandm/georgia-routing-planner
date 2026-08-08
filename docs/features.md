@@ -47,9 +47,10 @@ At widths from 900 CSS pixels through 1899 pixels, a selected track or imagery r
 overlays only the contextual sidebar while the rail stays interactive. At 1900 CSS
 pixels and above, the rail, contextual sidebar, and detail pane form one floating
 surface above the full-viewport map. Changing sections or opening a pane never changes
-the map viewport. Native map navigation remains on the right, and the 2D/3D selector
-sits directly below it. The shell uses the shared sky-blue, blue-green, deep-space,
-amber, and orange palette with derived surface, border, status, and tag colors.
+the map viewport. Native map navigation remains on the right. Directly below it, one
+vertical control contains 2D, 3D, and a quick map-layer preset chooser. The shell uses
+the shared sky-blue, blue-green, deep-space, amber, and orange palette with derived
+surface, border, status, and tag colors.
 
 When navigation is collapsed on desktop with an active track, the same decorative
 profile-and-stats summary sits between the fixed Trail Planner logo and the navigation
@@ -329,6 +330,14 @@ preferences. The shared OpenStreetMap opacity slider enables whenever either ras
 selected and scales every OpenStreetMap reference layer and elevation isoline once
 active raster content has switched the map into satellite visual mode; vector paints
 remain fully opaque while Google tiles first load.
+
+The quick chooser presents **Vector OSM** (no raster and opaque vectors), **Google
+Satellite Hybrid** (Google imagery with opaque vectors), **Google Satellite** (Google
+imagery without vectors), and **Sentinel-2 Hybrid** (an applied Sentinel scene with
+opaque vectors). A preset changes only the Google/Sentinel raster selection and shared
+OpenStreetMap opacity: all independent Layers toggles, imported-track opacity, terrain
+preferences, and an applied Sentinel scene remain intact. Choosing Sentinel-2 Hybrid
+without an applied scene opens the Satellite workspace so the user can select one.
 
 The remaining checkboxes cover Imported tracks, its default-on **Elevation gradient**,
 Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs, plus

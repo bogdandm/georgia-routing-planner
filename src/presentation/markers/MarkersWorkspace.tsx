@@ -28,7 +28,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type PropsWithChildren,
@@ -170,10 +169,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const [notice, setNotice] = useState<string | null>(null);
   const [distanceAnchor, setDistanceAnchor] = useState<MapCoordinate | null>(null);
   const [editorDraft, setEditorDraft] = useState<MarkerEditorDraft | null>(null);
-  const loadStateRef = useRef(loadState);
-  useEffect(() => {
-    loadStateRef.current = loadState;
-  }, [loadState]);
 
   const loadMarkers = useCallback(async () => {
     setLoadState('loading');
@@ -210,15 +205,10 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   }, [distanceAnchor, markerSort, viewport]);
 
   useEffect(() => {
-    if (markerCreationCommand === null) return;
+    if (markerCreationCommand === null || loadState !== 'ready') return;
     const command = markerCreationCommand;
-    const wasReady = loadStateRef.current === 'ready';
     const timer = window.setTimeout(() => {
       consumeMarkerCreationCommand(command.id);
-      if (!wasReady) {
-        setNotice('Saved markers are not ready');
-        return;
-      }
       setNotice(null);
       setEditorDraft({
         mode: 'create',
@@ -229,7 +219,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [markerCreationCommand]);
+  }, [loadState, markerCreationCommand]);
 
   useEffect(() => {
     if (loadState === 'ready') mapLayers?.setSavedMarkers(markers);

@@ -634,7 +634,7 @@ const savedMarkerSchema: z.ZodType<SavedMarker> = z
     schemaVersion: z.literal(SAVED_MARKER_SCHEMA_VERSION),
     id: z.string().min(1).max(200),
     name: markerNameSchema,
-    normalizedName: z.string().min(1).max(200),
+    normalizedName: z.string().min(1),
     coordinate: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
     iconKey: z.enum(markerIconKeys),
     colorKey: z.enum(markerColorKeys),
@@ -656,7 +656,7 @@ const savedMarkerSchema: z.ZodType<SavedMarker> = z
 const savedMarkerUpdateSchema = z
   .object({
     name: markerNameSchema,
-    normalizedName: z.string().min(1).max(200),
+    normalizedName: z.string().min(1),
     iconKey: z.enum(markerIconKeys),
     colorKey: z.enum(markerColorKeys),
     updatedAt: z.iso.datetime(),

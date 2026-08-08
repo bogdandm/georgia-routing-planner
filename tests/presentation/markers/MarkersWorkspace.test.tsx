@@ -127,6 +127,20 @@ describe('MarkersWorkspace', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('defers an early creation command until saved markers finish loading', async () => {
+    act(() => {
+      requestMarkerCreationAt({ longitude: 44.8, latitude: 41.7 }, 'Early marker');
+    });
+
+    renderMarkers();
+
+    expect(await screen.findByRole('heading', { name: 'Create marker' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Marker name' })).toHaveValue(
+      'Early marker',
+    );
+    expect(mapInteractionStore.getState().markerCreationCommand).toBeNull();
+  });
+
   it('cancels an unconfirmed creation without writing a marker', async () => {
     const user = userEvent.setup();
     renderMarkers();

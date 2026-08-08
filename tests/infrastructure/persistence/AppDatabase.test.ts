@@ -205,6 +205,17 @@ describe('AppDatabase', () => {
     await expect(database.listSavedMarkers()).resolves.toEqual([]);
   });
 
+  it('persists a bounded Unicode name when normalization expands it', async () => {
+    const name = 'İ'.repeat(200);
+    const normalizedName = name.toLocaleLowerCase('en');
+    expect(normalizedName.length).toBeGreaterThan(name.length);
+    const saved = marker({ name, normalizedName });
+
+    await database.saveSavedMarker(saved);
+
+    await expect(database.listSavedMarkers()).resolves.toEqual([saved]);
+  });
+
   it('omits malformed saved-marker rows and reports their count without deleting them', async () => {
     const valid = marker();
     await database.saveSavedMarker(valid);

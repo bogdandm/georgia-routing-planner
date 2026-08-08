@@ -113,6 +113,52 @@ steps of the theme's 8 px unit when 4 px precision is necessary.
 - Keep provider and capability wording concrete; avoid generic labels when the data
   source matters.
 
+## Capture map-layer preset previews reproducibly
+
+Layer preset previews are committed presentation assets under
+`src/presentation/map/layer-previews/`. Keep every preview on one identical map viewport
+so the images compare layer content rather than different geography.
+
+1. Start the application from the owning worktree:
+   `./node_modules/.bin/vite --port 5173 --strictPort`.
+2. Open `http://127.0.0.1:5173/?map=2&lat=43.043&lon=42.720&z=12&view=2d` in Chromium
+   with a 1440×1000 CSS-pixel viewport and device scale factor 2. This fixed Mestia view
+   centers the river confluence and the mountain contours that separate its valleys.
+3. Apply the required layer combination through the running application's Layers
+   controls. Wait until the visible raster and vector sources have finished loading; for
+   Sentinel, wait until scene application and 100% full-coverage rendering have
+   completed.
+4. Capture the center 96×96 CSS-pixel map square as PNG. At the fixed viewport, the
+   browser screenshot clip is `{ x: 672, y: 452, width: 96, height: 96 }`; more
+   generally, center it with `x = (viewportWidth - 96) / 2` and
+   `y = (viewportHeight - 96) / 2`. Resolve the output path inside
+   `src/presentation/map/layer-previews/`. Device scale factor 2 produces the required
+   192×192 asset without upscaling.
+5. Stop Vite after the capture run.
+
+Use these current combinations:
+
+| Asset                         | Google | Sentinel | OpenStreetMap opacity |
+| ----------------------------- | ------ | -------- | --------------------- |
+| `vector-osm.png`              | Off    | Hidden   | 100%                  |
+| `google-satellite-hybrid.png` | On     | Off      | 100%                  |
+| `google-satellite.png`        | On     | Off      | 0%                    |
+| `sentinel-2-hybrid.png`       | Off    | On       | 100%                  |
+
+For a new preset, use the same URL, viewport, device scale, center crop, output format,
+and loading checks. Add only the layer-state combination and filename needed by that
+preset. If a previously used Sentinel scene is unavailable, run the existing Satellite
+search and apply the first enabled result in the application's newest-first order; use
+that one scene throughout the capture run.
+
+Verify each committed file is a 192×192 RGB PNG and inspect it at native resolution. The
+square must contain map pixels only: no controls, sidebar, search field, attribution,
+blank or unloaded tile strip, border, or baked-in rounded corners. Rounded corners
+remain CSS presentation so the source image retains all pixels. Do not resize a
+lower-resolution screenshot or fabricate missing imagery. Runtime provider attribution
+remains authoritative; the preview is decorative and always appears beside its text
+label.
+
 ## Review presentation changes
 
 For a changed contextual panel:

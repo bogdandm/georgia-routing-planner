@@ -82,7 +82,14 @@ export function MapViewControls({
     <>
       <Paper
         elevation={2}
-        sx={{ position: 'absolute', top: 135, right: 6, width: 40, zIndex: 1 }}
+        sx={{
+          overflow: 'hidden',
+          position: 'absolute',
+          top: 135,
+          right: 6,
+          width: 40,
+          zIndex: 1,
+        }}
       >
         <ToggleButtonGroup
           exclusive
@@ -91,6 +98,12 @@ export function MapViewControls({
           aria-label="Map dimension"
           value={selectedMode}
           onChange={handleTerrainModeChange}
+          sx={{
+            '& .MuiToggleButtonGroup-lastButton': {
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+            },
+          }}
         >
           <ToggleButton
             value="flat"
@@ -136,7 +149,7 @@ export function MapViewControls({
               onClick={(event) => {
                 setMenuButton(event.currentTarget);
               }}
-              sx={{ width: 40, height: 36, p: 0 }}
+              sx={{ borderRadius: 0, mt: '-1px', width: 40, height: 36, p: 0 }}
               value="layer-preset"
             >
               <LayersOutlinedIcon fontSize="small" />
@@ -146,7 +159,7 @@ export function MapViewControls({
       </Paper>
       <Menu
         anchorEl={menuButton}
-        anchorOrigin={{ vertical: 'center', horizontal: 'left' }}
+        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
         id={menuId}
         onClose={() => {
           setMenuButton(null);
@@ -160,20 +173,15 @@ export function MapViewControls({
               p: 1.5,
             },
           },
-          paper: {
-            sx: {
-              ml: -1.5,
-            },
-          },
         }}
-        transformOrigin={{ vertical: 'center', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         {layerPresets.map((preset) => (
           <MenuItem
             aria-current={activeLayerPreset === preset.value ? 'true' : undefined}
             key={preset.value}
             onClick={() => {
-              if (onLayerPresetChange(preset.value)) setMenuButton(null);
+              onLayerPresetChange(preset.value);
             }}
             selected={activeLayerPreset === preset.value}
             sx={{ gap: 1.5, minWidth: 300, p: 0 }}
@@ -182,7 +190,7 @@ export function MapViewControls({
               alt=""
               component="img"
               src={preset.preview}
-              sx={{ flex: '0 0 auto', height: 96, width: 96 }}
+              sx={{ borderRadius: 1, flex: '0 0 auto', height: 96, width: 96 }}
             />
             {preset.label}
           </MenuItem>

@@ -73,12 +73,9 @@ describe('MapViewControls', () => {
     expect(button).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('keeps the chooser open on failure and closes it after a successful choice', async () => {
+  it('keeps the chooser open after applying a preset', async () => {
     const user = userEvent.setup();
-    const onLayerPresetChange = vi
-      .fn()
-      .mockReturnValueOnce(false)
-      .mockReturnValue(true);
+    const onLayerPresetChange = vi.fn().mockReturnValue(true);
     render(
       <MapViewControls
         activeLayerPreset={null}
@@ -91,11 +88,9 @@ describe('MapViewControls', () => {
 
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
     await user.click(screen.getByRole('menuitem', { name: 'Google Satellite' }));
-    expect(onLayerPresetChange).toHaveBeenLastCalledWith('google-satellite');
-    expect(screen.getByRole('menu')).toBeVisible();
 
-    await user.click(screen.getByRole('menuitem', { name: 'Google Satellite' }));
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(onLayerPresetChange).toHaveBeenCalledWith('google-satellite');
+    expect(screen.getByRole('menu')).toBeVisible();
   });
 
   it('closes the chooser and restores button focus on Escape', async () => {

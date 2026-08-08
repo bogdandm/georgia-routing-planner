@@ -875,7 +875,7 @@ describe('MapWorkspace', () => {
 
     await screen.findByText('Hidden Sentinel map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Sentinel-2 Hybrid' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
 
     expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
   });
@@ -902,7 +902,7 @@ describe('MapWorkspace', () => {
 
     await screen.findByText('Empty Sentinel map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Sentinel-2 Hybrid' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
 
     expect(setMapLayerPreset).not.toHaveBeenCalled();
     expect(useUiStore.getState()).toMatchObject({
@@ -932,7 +932,7 @@ describe('MapWorkspace', () => {
 
     await screen.findByText('Preset failure map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Google Satellite' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Google Satellite' }));
 
     expect(screen.getByText('The map is not ready yet.')).toBeVisible();
     expect(screen.getByRole('menu')).toBeVisible();

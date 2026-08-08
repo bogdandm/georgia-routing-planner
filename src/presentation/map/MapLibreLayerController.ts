@@ -55,7 +55,7 @@ import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTi
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
-import type { MapRecoveryState } from '@/presentation/map/mapTypes';
+import type { MapLayerPreset, MapRecoveryState } from '@/presentation/map/mapTypes';
 
 const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
@@ -516,6 +516,73 @@ export class MapLibreLayerController {
       data: { category: layerId, status: visible ? 'visible' : 'hidden' },
     });
     return terrainResult ?? { status: 'success' };
+  }
+
+  public setMapLayerPreset(preset: MapLayerPreset): MapLayerVisibilityResult {
+    const map = this.#map;
+    if (map === null) {
+      return this.visibilityFailure('The map is not ready yet.');
+    }
+    if (preset === 'sentinel-2-hybrid' && this.getAppliedScene() === null) {
+      return this.visibilityFailure(
+        'Apply a Sentinel scene before choosing this preset.',
+      );
+    }
+
+    const state = mapLayerStore.getState();
+    const visibility = { ...state.visibility };
+    let openStreetMapOpacity = 1;
+    let sentinelVisible = false;
+
+    switch (preset) {
+      case 'vector-osm':
+        visibility['google-satellite'] = false;
+        break;
+      case 'google-satellite-hybrid':
+        visibility['google-satellite'] = true;
+        break;
+      case 'google-satellite':
+        visibility['google-satellite'] = true;
+        openStreetMapOpacity = 0;
+        break;
+      case 'sentinel-2-hybrid':
+        visibility['google-satellite'] = false;
+        sentinelVisible = true;
+        break;
+    }
+
+    visibility['satellite-imagery'] = sentinelVisible;
+    const appliedImagery = this.withRasterVisibility(
+      state.appliedImagery,
+      sentinelVisible,
+    );
+    if (!sentinelVisible) this.#progressiveRasterSourceId = null;
+
+    mapLayerStore.setState({
+      visibility,
+      openStreetMapOpacity,
+      appliedImagery,
+      errorMessage: null,
+    });
+    this.applyBaseLayerVisibility();
+    for (const sentinelLayerId of this.nativeLayerIds('satellite-imagery')) {
+      if (map.getLayer(sentinelLayerId) !== undefined) {
+        map.setLayoutProperty(
+          sentinelLayerId,
+          'visibility',
+          sentinelVisible ? 'visible' : 'none',
+        );
+      }
+    }
+    this.applyMapVisualMode();
+    const terrainResult = this.reconcileTerrainOverlays();
+    this.persistStableState();
+    this.logger.log({
+      level: 'info',
+      name: 'map.layer-preset.changed',
+      data: { preset },
+    });
+    return terrainResult;
   }
 
   public setOpenStreetMapOpacity(opacity: number): MapLayerVisibilityResult {

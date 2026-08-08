@@ -56,7 +56,7 @@ export function createAppTheme() {
       MuiFormLabel: {
         styleOverrides: {
           root: {
-            color: appColors.text.secondary,
+            color: appColors.text.formLabel,
             opacity: 1,
           },
         },
@@ -64,7 +64,7 @@ export function createAppTheme() {
       MuiInputLabel: {
         styleOverrides: {
           root: {
-            color: appColors.text.secondary,
+            color: appColors.text.formLabel,
             opacity: 1,
           },
         },

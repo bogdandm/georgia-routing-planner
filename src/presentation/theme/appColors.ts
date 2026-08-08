@@ -35,6 +35,7 @@ export const appColors = {
   text: {
     primary: '#062C3D',
     secondary: '#547481',
+    formLabel: '#456673',
     inverse: '#FFFFFF',
     inverseMuted: 'rgba(255, 255, 255, 0.72)',
   },

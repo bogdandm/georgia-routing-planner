@@ -140,6 +140,11 @@ describe('MapWorkspace', () => {
     window.history.replaceState(null, '', '/');
     tracksWorkspaceMock.activeProfile = null;
     mockViewportWidth(900);
+    useUiStore.setState({
+      activeTab: 'satellite',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: false,
+    });
   });
 
   it('uses a valid explicit share view over local camera persistence', async () => {
@@ -839,5 +844,97 @@ describe('MapWorkspace', () => {
     expect(
       screen.queryByRole('region', { name: 'Elevation grade legend' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('applies the Sentinel preset when an applied scene is hidden', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(sharedScene);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    act(() => {
+      mapLayerStore.setState({
+        appliedImagery: {
+          status: 'hidden',
+          sceneId: sharedScene.id,
+          sceneKey: `${sharedScene.collection}:${sharedScene.id}`,
+          visible: false,
+        },
+      });
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Hidden Sentinel map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Hidden Sentinel map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+
+    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
+  });
+
+  it('opens Satellite instead of applying the Sentinel preset without an applied scene', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi.spyOn(mapLayers, 'setMapLayerPreset');
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({
+      activeTab: 'layers',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Empty Sentinel map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Empty Sentinel map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+
+    expect(setMapLayerPreset).not.toHaveBeenCalled();
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'satellite',
+      mobileWorkspaceOpen: true,
+      navigationCollapsed: false,
+    });
+    expect(window.location.hash).toBe('#satellite');
+  });
+
+  it('shows a preset failure message without closing the chooser', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    vi.spyOn(mapLayers, 'setMapLayerPreset').mockReturnValue({
+      status: 'failed',
+      message: 'The map is not ready yet.',
+    });
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Preset failure map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Preset failure map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Google Satellite' }));
+
+    expect(screen.getByText('The map is not ready yet.')).toBeVisible();
+    expect(screen.getByRole('menu')).toBeVisible();
   });
 });

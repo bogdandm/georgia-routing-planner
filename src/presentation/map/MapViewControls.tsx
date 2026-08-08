@@ -167,6 +167,7 @@ export function MapViewControls({
           setMenuButton(null);
         }}
         open={menuOpen}
+        slotProps={{ paper: { sx: { ml: -1 } } }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         variant="menu"
       >

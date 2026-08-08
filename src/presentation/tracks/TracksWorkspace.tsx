@@ -47,7 +47,10 @@ import {
 } from 'react';
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
-import { prepareImportedTrack } from '@/application/tracks/prepareImportedTrack';
+import {
+  prepareImportedTrack,
+  type TrackElevationPreparationProgress,
+} from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ParsedGpx, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 import {
@@ -83,7 +86,10 @@ import {
   type ElevationProfileInputPoint,
 } from '@/domain/tracks/elevationProfile';
 import { formatDateTime } from '@/presentation/formatDateTime';
-import { ElevationProfileChart } from '@/presentation/tracks/ElevationProfileChart';
+import {
+  ElevationPreparationChart,
+  ElevationProfileChart,
+} from '@/presentation/tracks/ElevationProfileChart';
 import {
   formatTrackDuration,
   TrackStat,
@@ -147,6 +153,7 @@ type ActiveTrack = PreviewTrack | SavedTrackSelection;
 interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
   readonly activeProfile: ElevationProfile | null;
+  readonly elevationProgress: TrackElevationPreparationProgress | null;
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
   readonly importError: string | null;
@@ -266,6 +273,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [recalculationState, setRecalculationState] = useState<
     'idle' | 'recalculating'
   >('idle');
+  const [elevationProgress, setElevationProgress] =
+    useState<TrackElevationPreparationProgress | null>(null);
   const namingAbort = useRef<AbortController | null>(null);
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
@@ -652,6 +661,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
       setRecalculationState('idle');
+      setElevationProgress(null);
       const generation = importGeneration.current + 1;
       importGeneration.current = generation;
       setActive(null);
@@ -679,6 +689,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             parsed.segments,
             elevationProvider,
             controller.signal,
+            {
+              onProgress: (progress) => {
+                if (importIsStale()) return;
+                setElevationProgress(progress);
+              },
+            },
           );
           if (importIsStale()) return;
           const preview: PreparedPreviewTrack = {
@@ -694,6 +710,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               ? { ...preview, name: current.name }
               : current,
           );
+          setElevationProgress(null);
           const namingController = new AbortController();
           namingAbort.current = namingController;
           void generateName(preview, namingController);
@@ -717,6 +734,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 }
               : current,
           );
+          setElevationProgress(null);
         }
       } catch (importFailure) {
         if (controller.signal.aborted || generation !== importGeneration.current)
@@ -727,9 +745,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? importFailure.message
             : 'The track file could not be imported.',
         );
+        setElevationProgress(null);
       } finally {
         if (generation === importGeneration.current) {
           preparationAbort.current = null;
+          setElevationProgress(null);
           setImportState('idle');
         }
       }
@@ -839,8 +859,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const controller = new AbortController();
     recalculationAbort.current = controller;
     setRecalculationState('recalculating');
+    setElevationProgress(null);
     setError(null);
     const activeId = active.kind === 'preview' ? active.id : active.summary.id;
+    const generation = importGeneration.current;
     try {
       const sourceSegments =
         active.kind === 'preview'
@@ -850,9 +872,28 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceSegments,
         elevationProvider,
         controller.signal,
-        { preferDemElevations: active.kind === 'saved' },
+        {
+          preferDemElevations: active.kind === 'saved',
+          onProgress: (progress) => {
+            if (
+              controller.signal.aborted ||
+              recalculationAbort.current !== controller ||
+              generation !== importGeneration.current
+            ) {
+              return;
+            }
+            setElevationProgress(progress);
+          },
+        },
       );
       controller.signal.throwIfAborted();
+      if (
+        recalculationAbort.current !== controller ||
+        generation !== importGeneration.current
+      ) {
+        return;
+      }
+      setElevationProgress(null);
       renderedTrackId.current = null;
       if (active.kind === 'preview') {
         setActive((current) => {
@@ -901,6 +942,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (recalculationAbort.current === controller) {
         recalculationAbort.current = null;
         setRecalculationState('idle');
+        setElevationProgress(null);
       }
     }
   }, [active, database, elevationProvider, recalculationState, reloadSummaries]);
@@ -910,6 +952,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     preparationAbort.current?.abort();
     recalculationAbort.current?.abort();
     setRecalculationState('idle');
+    setElevationProgress(null);
     importGeneration.current += 1;
     namingAbort.current?.abort();
     setImportState('idle');
@@ -937,6 +980,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     preparationAbort.current?.abort();
     recalculationAbort.current?.abort();
     setRecalculationState('idle');
+    setElevationProgress(null);
     importGeneration.current += 1;
     setImportState('idle');
     namingAbort.current?.abort();
@@ -960,6 +1004,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
       setRecalculationState('idle');
+      setElevationProgress(null);
       const generation = importGeneration.current + 1;
       importGeneration.current = generation;
       setImportState('idle');
@@ -1060,6 +1105,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         if (active?.kind === 'saved' && active.summary.id === summary.id) {
           recalculationAbort.current?.abort();
           setRecalculationState('idle');
+          setElevationProgress(null);
         }
         await database.deleteLocalTrack(summary.id);
         if (latestOpenedTrackId.current === summary.id) {
@@ -1124,6 +1170,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () => ({
       active,
       activeProfile,
+      elevationProgress,
       error,
       filteredSummaries,
       importError: importError?.message ?? null,
@@ -1148,6 +1195,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       active,
       activeProfile,
       applyGeneratedName,
+      elevationProgress,
       closeActive,
       deleteSaved,
       discardPreview,
@@ -1676,6 +1724,7 @@ function TrackElevationAnalysis() {
   const {
     active,
     activeProfile: profile,
+    elevationProgress,
     recalculateElevation,
     recalculationState,
   } = useTracksWorkspace();
@@ -1733,7 +1782,10 @@ function TrackElevationAnalysis() {
   if (active === null) return null;
   return (
     <Stack spacing={1.5}>
-      {profile === null ? null : (
+      {(active.kind === 'preview' && active.preparationStatus === 'preparing') ||
+      recalculationState === 'recalculating' ? (
+        <ElevationPreparationChart progress={elevationProgress} />
+      ) : profile === null ? null : (
         <ElevationProfileChart
           profile={profile}
           activeSegmentIndex={activeSegmentIndex}

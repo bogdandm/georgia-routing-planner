@@ -4,6 +4,7 @@ import type {
   ElevationCoordinate,
   ElevationProvider,
   ElevationSample,
+  ElevationSamplingProgressListener,
 } from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
@@ -100,6 +101,7 @@ export class RasterDemElevationProvider implements ElevationProvider {
   public async sampleMany(
     coordinates: readonly ElevationCoordinate[],
     signal: AbortSignal,
+    onProgress?: ElevationSamplingProgressListener,
   ): Promise<readonly ElevationSample[]> {
     const samples: ElevationSample[] = coordinates.map(() => ({
       status: 'unavailable',
@@ -120,6 +122,15 @@ export class RasterDemElevationProvider implements ElevationProvider {
         tile.indices.push(index);
       }
     }
+    if (!signal.aborted) {
+      onProgress?.({
+        completedTiles: 0,
+        totalTiles: tiles.size,
+        indices: [],
+        samples: [],
+      });
+    }
+    let completedTiles = 0;
     await Promise.all(
       [...tiles.values()].map(async ({ location, indices }) => {
         const blob =
@@ -176,6 +187,14 @@ export class RasterDemElevationProvider implements ElevationProvider {
           }
           samples[index] = { status: 'available', meters };
         }
+        signal.throwIfAborted();
+        completedTiles += 1;
+        onProgress?.({
+          completedTiles,
+          totalTiles: tiles.size,
+          indices,
+          samples: indices.map((index) => samples[index] ?? { status: 'unavailable' }),
+        });
       }),
     );
     return samples;

@@ -874,10 +874,24 @@ describe('WorkspaceShell', () => {
     expect(provider).not.toBeNull();
     if (provider === null) return;
     const signals: AbortSignal[] = [];
-    vi.spyOn(provider, 'sampleMany').mockImplementation((_coordinates, signal) => {
-      signals.push(signal);
-      return deferred<readonly ElevationSample[]>().promise;
-    });
+    vi.spyOn(provider, 'sampleMany').mockImplementation(
+      (_coordinates, signal, onProgress) => {
+        signals.push(signal);
+        onProgress?.({
+          completedTiles: 0,
+          totalTiles: 3,
+          indices: [],
+          samples: [],
+        });
+        onProgress?.({
+          completedTiles: 1,
+          totalTiles: 3,
+          indices: [0],
+          samples: [{ status: 'available', meters: 1_000 }],
+        });
+        return deferred<readonly ElevationSample[]>().promise;
+      },
+    );
     const user = userEvent.setup();
     const rendered = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -890,8 +904,13 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
       within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
-        'Preparing terrain and elevation…',
+        'Loading elevation tiles: 1 of 3',
       ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('img', {
+        name: 'Elevation profile loading: 1 of 3 tiles',
+      }),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Discard' }));
@@ -965,10 +984,10 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('First.gpx'));
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
-      within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
+      within(screen.getByRole('complementary', { name: 'Track details' })).getAllByText(
         'Preparing terrain and elevation…',
       ),
-    ).toBeVisible();
+    ).not.toHaveLength(0);
     await user.upload(input, gpxFile('Second.gpx'));
     expect(pending).toHaveLength(2);
     act(() => {
@@ -1029,20 +1048,34 @@ describe('WorkspaceShell', () => {
       readonly resolve: (samples: readonly ElevationSample[]) => void;
     }[] = [];
     let requestCount = 0;
-    vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates) => {
-      requestCount += 1;
-      if (requestCount === 1) {
-        return Promise.resolve(
-          coordinates.map(() => ({ status: 'unavailable' as const })),
-        );
-      }
-      const pending = deferred<readonly ElevationSample[]>();
-      pendingRecalculations.push({
-        count: coordinates.length,
-        resolve: pending.resolve,
-      });
-      return pending.promise;
-    });
+    vi.spyOn(provider, 'sampleMany').mockImplementation(
+      (coordinates, _signal, onProgress) => {
+        requestCount += 1;
+        if (requestCount === 1) {
+          return Promise.resolve(
+            coordinates.map(() => ({ status: 'unavailable' as const })),
+          );
+        }
+        onProgress?.({
+          completedTiles: 0,
+          totalTiles: 3,
+          indices: [],
+          samples: [],
+        });
+        onProgress?.({
+          completedTiles: 1,
+          totalTiles: 3,
+          indices: [0],
+          samples: [{ status: 'available', meters: 1_000 }],
+        });
+        const pending = deferred<readonly ElevationSample[]>();
+        pendingRecalculations.push({
+          count: coordinates.length,
+          resolve: pending.resolve,
+        });
+        return pending.promise;
+      },
+    );
     const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
     const replaceLocalTrackElevation = vi.spyOn(
       services.database,
@@ -1073,6 +1106,7 @@ describe('WorkspaceShell', () => {
     expect(previewRecalculate).toContainElement(
       within(previewRecalculate).getByRole('progressbar'),
     );
+    expect(await screen.findByText('Loading elevation tiles: 1 of 3')).toBeVisible();
     expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     const previewPending = pendingRecalculations[0];
     expect(previewPending).toBeDefined();
@@ -1110,6 +1144,7 @@ describe('WorkspaceShell', () => {
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
 
     await user.click(savedRecalculate);
+    expect(await screen.findByText('Loading elevation tiles: 1 of 3')).toBeVisible();
     const savedPending = pendingRecalculations[1];
     expect(savedPending).toBeDefined();
     act(() => {

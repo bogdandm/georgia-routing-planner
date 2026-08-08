@@ -1,6 +1,7 @@
 import type {
   ElevationProvider,
   ElevationSample,
+  ElevationSamplingProgress,
 } from '@/application/ports/ElevationProvider';
 import {
   calculateElevationProfile,
@@ -25,6 +26,17 @@ interface ResampledStation {
   readonly sourceSegmentIndex: number;
 }
 
+export interface TrackElevationProgressPoint {
+  readonly distanceMeters: number;
+  readonly elevationMeters: number | null;
+}
+
+export interface TrackElevationPreparationProgress {
+  readonly completedTiles: number;
+  readonly totalTiles: number;
+  readonly points: readonly TrackElevationProgressPoint[];
+}
+
 interface PrepareImportedTrackOptions {
   readonly preferDemElevations?: boolean;
   /**
@@ -32,6 +44,7 @@ interface PrepareImportedTrackOptions {
    * Imported tracks use the default resampling behavior.
    */
   readonly preserveGeometry?: boolean;
+  readonly onProgress?: (progress: TrackElevationPreparationProgress) => void;
 }
 
 export interface PreparedImportedTrack {
@@ -225,6 +238,16 @@ function availableMeters(sample: ElevationSample | undefined): number | undefine
     : undefined;
 }
 
+function selectedElevationMeters(
+  demMeters: number | undefined,
+  sourceElevationMeters: number | undefined,
+  preferDemElevations: boolean | undefined,
+): number | undefined {
+  return preferDemElevations
+    ? (demMeters ?? sourceElevationMeters)
+    : (sourceElevationMeters ?? demMeters);
+}
+
 function fillMissingElevations(
   values: (number | undefined)[],
   distances: readonly number[],
@@ -315,6 +338,56 @@ export async function prepareImportedTrack(
       )
     : routableSegments.map((segment, index) => resampleSegment(segment, index, signal));
   const stations = resampled.flat();
+  const distancesBySegment = resampled.map((segment) => stationDistances(segment));
+  const stationDistanceMeters: number[] = [];
+  let distanceOffset = 0;
+  for (const distances of distancesBySegment) {
+    for (const distanceMeters of distances) {
+      stationDistanceMeters.push(distanceOffset + distanceMeters);
+    }
+    distanceOffset += distances.at(-1) ?? 0;
+  }
+  const onProgress = options.onProgress;
+  const shouldPublishProgress = elevationProvider !== null && onProgress !== undefined;
+  const previewIndices = shouldPublishProgress
+    ? stations.length > 1_200
+      ? Array.from({ length: 1_200 }, (_, slot) =>
+          Math.round((slot * (stations.length - 1)) / 1_199),
+        )
+      : stations.map((_, index) => index)
+    : [];
+  const previewSlotsByStationIndex = new Map(
+    previewIndices.map((stationIndex, slot) => [stationIndex, slot]),
+  );
+  const previewDemElevations: (number | undefined)[] = previewIndices.map(
+    () => undefined,
+  );
+  const publishProgress = (progress: ElevationSamplingProgress): void => {
+    if (!shouldPublishProgress) return;
+    for (const [sampleOffset, stationIndex] of progress.indices.entries()) {
+      const previewSlot = previewSlotsByStationIndex.get(stationIndex);
+      if (previewSlot === undefined) continue;
+      previewDemElevations[previewSlot] = availableMeters(
+        progress.samples[sampleOffset],
+      );
+    }
+    onProgress({
+      completedTiles: progress.completedTiles,
+      totalTiles: progress.totalTiles,
+      points: previewIndices.map((stationIndex, slot) => {
+        const station = stations[stationIndex];
+        const elevationMeters = selectedElevationMeters(
+          previewDemElevations[slot],
+          station?.sourceElevationMeters,
+          options.preferDemElevations,
+        );
+        return {
+          distanceMeters: stationDistanceMeters[stationIndex] ?? 0,
+          elevationMeters: elevationMeters ?? null,
+        };
+      }),
+    });
+  };
   const samples =
     elevationProvider === null
       ? stations.map(() => ({ status: 'unavailable' }) as const)
@@ -324,6 +397,7 @@ export async function prepareImportedTrack(
             latitude: station.coordinate[1],
           })),
           signal,
+          shouldPublishProgress ? publishProgress : undefined,
         );
   signal.throwIfAborted();
   let sampleOffset = 0;
@@ -334,13 +408,14 @@ export async function prepareImportedTrack(
       sampleOffset + stationSegment.length,
     );
     sampleOffset += stationSegment.length;
-    const distances = stationDistances(stationSegment);
-    const values = stationSegment.map((station, index) => {
-      const demMeters = availableMeters(segmentSamples[index]);
-      return options.preferDemElevations
-        ? (demMeters ?? station.sourceElevationMeters)
-        : (station.sourceElevationMeters ?? demMeters);
-    });
+    const distances = distancesBySegment[assembled.length] ?? [];
+    const values = stationSegment.map((station, index) =>
+      selectedElevationMeters(
+        availableMeters(segmentSamples[index]),
+        station.sourceElevationMeters,
+        options.preferDemElevations,
+      ),
+    );
     for (let index = 1; index < stationSegment.length - 1; index += 1) {
       const source = stationSegment[index]?.sourceElevationMeters;
       const previous = values[index - 1];

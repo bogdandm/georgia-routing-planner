@@ -121,6 +121,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     styleId: 'Georgia hiking basemap v1',
     sourceIds: [
       'basemap-vector',
+      'satellite-basemap',
       'terrain-dem',
       'terrain-contours',
       'imported-track',

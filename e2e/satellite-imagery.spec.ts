@@ -187,7 +187,10 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
     .click();
 
   await page.getByRole('tab', { name: 'Layers' }).click();
-  const imagery = page.getByRole('checkbox', { name: 'Satellite imagery' });
+  const imagery = page.getByRole('checkbox', {
+    name: 'Satellite imagery',
+    exact: true,
+  });
   const footprint = page.getByRole('checkbox', { name: 'Scene footprint' });
   await expect(imagery).toBeEnabled();
   await expect(footprint).toBeEnabled();
@@ -221,12 +224,10 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
   const requestsBeforeReload = rendererRequests.length;
   await page.getByRole('tab', { name: 'Layers' }).click();
   await page.reload();
-  await expect(page.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
+  await expect(imagery).toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Roads' })).not.toBeChecked();
   await expect.poll(() => rendererRequests.length).toBe(requestsBeforeReload);
-  await expect(
-    page.getByRole('checkbox', { name: 'Satellite imagery' }),
-  ).toBeDisabled();
+  await expect(imagery).toBeDisabled();
   await expect(page.getByRole('slider', { name: 'Isolines distance' })).toHaveValue(
     '1',
   );

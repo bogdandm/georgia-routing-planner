@@ -1,5 +1,15 @@
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  SAVED_MARKER_SCHEMA_VERSION,
+  type SavedMarker,
+} from '@/domain/markers/savedMarker';
+import {
+  LOCAL_TRACK_SCHEMA_VERSION,
+  type LocalTrackContent,
+  type LocalTrackSummary,
+} from '@/domain/tracks/localTrack';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { createTestServices } from '@test/helpers/createTestServices';
 
@@ -13,6 +23,70 @@ const camera = {
   bearing: 12,
   pitch: 35,
 };
+
+function marker(overrides: Partial<SavedMarker> = {}): SavedMarker {
+  return {
+    schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+    id: 'marker:1',
+    name: 'Tbilisi view',
+    normalizedName: 'tbilisi view',
+    coordinate: [44.8, 41.7],
+    iconKey: 'place',
+    colorKey: 'blue',
+    createdAt: '2026-08-08T10:00:00.000Z',
+    updatedAt: '2026-08-08T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function localTrackSummary(): LocalTrackSummary {
+  return {
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    id: 'local:legacy',
+    name: 'Legacy ridge',
+    normalizedName: 'legacy ridge',
+    savedAt: '2026-08-08T10:00:00.000Z',
+    updatedAt: '2026-08-08T10:00:00.000Z',
+    contentHash: 'a'.repeat(64),
+    sourceFilename: 'legacy.gpx',
+    sourceFormat: 'gpx',
+    favorite: false,
+    geometryKind: 'track',
+    pointCount: 2,
+    segmentCount: 1,
+    metrics: {
+      distanceMeters: 1_000,
+      distanceAlgorithmVersion: 1,
+      startCoordinate: [44, 42],
+      endCoordinate: [44.01, 42.01],
+      bounds: {
+        west: 44,
+        south: 42,
+        east: 44.01,
+        north: 42.01,
+        crossesAntimeridian: false,
+      },
+      center: [44.005, 42.005],
+      elevationSource: 'dem-assisted',
+      elevationAlgorithmVersion: 3,
+    },
+    metadata: { version: '1.1', links: [] },
+    warnings: [],
+  };
+}
+
+function localTrackContent(): LocalTrackContent {
+  return {
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    trackId: 'local:legacy',
+    trackPoints: [
+      [
+        { coordinate: [44, 42], elevationMeters: 1_000 },
+        { coordinate: [44.01, 42.01], elevationMeters: 1_100 },
+      ],
+    ],
+  };
+}
 
 beforeEach(async () => {
   services = createTestServices();
@@ -32,18 +106,21 @@ describe('AppDatabase', () => {
       developerMode: false,
       navigationCollapsed: false,
       elevationGradeLegendDismissed: false,
+      markerSort: 'created',
     });
 
     await database.saveUiPreferences({
       developerMode: true,
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
+      markerSort: 'distance',
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: true,
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
+      markerSort: 'distance',
     });
 
     await database.saveElevationGradeLegendDismissed(false);
@@ -51,22 +128,122 @@ describe('AppDatabase', () => {
       developerMode: true,
       navigationCollapsed: true,
       elevationGradeLegendDismissed: false,
+      markerSort: 'distance',
     });
   });
 
-  it('repairs invalid persisted preferences', async () => {
+  it('adds the default marker sort to persisted earlier UI preferences', async () => {
     await database.settings.put({
       key: 'ui.preferences',
-      value: { developerMode: 'yes' },
-      updatedAt: '2026-07-18T00:00:00.000Z',
+      value: {
+        developerMode: true,
+        navigationCollapsed: true,
+        elevationGradeLegendDismissed: false,
+      },
+      updatedAt: '2026-08-08T10:00:00.000Z',
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
-      developerMode: false,
-      navigationCollapsed: false,
+      developerMode: true,
+      navigationCollapsed: true,
       elevationGradeLegendDismissed: false,
+      markerSort: 'created',
     });
-    await expect(database.settings.get('ui.preferences')).resolves.toBeUndefined();
+  });
+
+  it('persists markers atomically and validates storage boundaries', async () => {
+    const original = marker();
+    await database.saveSavedMarker(original);
+    const updated = await database.updateSavedMarker(original.id, {
+      name: 'Updated view',
+      normalizedName: 'updated view',
+      iconKey: 'hiking',
+      colorKey: 'teal',
+      updatedAt: '2026-08-08T11:00:00.000Z',
+    });
+    expect(updated).toEqual({
+      ...original,
+      name: 'Updated view',
+      normalizedName: 'updated view',
+      iconKey: 'hiking',
+      colorKey: 'teal',
+      updatedAt: '2026-08-08T11:00:00.000Z',
+    });
+    await expect(database.listSavedMarkers()).resolves.toEqual([updated]);
+
+    await expect(
+      database.saveSavedMarker({ ...updated, id: original.id }),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+    await expect(
+      database.saveSavedMarker({ ...updated, coordinate: [181, 41.7] }),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+    await expect(
+      database.updateSavedMarker(original.id, {
+        name: 'Not normalized ',
+        normalizedName: 'not normalized',
+        iconKey: 'hiking',
+        colorKey: 'teal',
+        updatedAt: '2026-08-08T12:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+    await expect(database.listSavedMarkers()).resolves.toEqual([updated]);
+
+    await expect(
+      database.updateSavedMarker('missing', {
+        name: 'Missing',
+        normalizedName: 'missing',
+        iconKey: 'place',
+        colorKey: 'blue',
+        updatedAt: '2026-08-08T12:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ code: 'not-found' });
+    await expect(database.deleteSavedMarker('missing')).rejects.toMatchObject({
+      code: 'not-found',
+    });
+
+    await database.deleteSavedMarker(original.id);
+    await expect(database.listSavedMarkers()).resolves.toEqual([]);
+  });
+
+  it('persists a bounded Unicode name when normalization expands it', async () => {
+    const name = 'İ'.repeat(200);
+    const normalizedName = name.toLocaleLowerCase('en');
+    expect(normalizedName.length).toBeGreaterThan(name.length);
+    const saved = marker({ name, normalizedName });
+
+    await database.saveSavedMarker(saved);
+
+    await expect(database.listSavedMarkers()).resolves.toEqual([saved]);
+  });
+
+  it('omits malformed saved-marker rows and reports their count without deleting them', async () => {
+    const valid = marker();
+    await database.saveSavedMarker(valid);
+    await database.table('savedMarkers').put({
+      id: 'malformed',
+      schemaVersion: 1,
+      name: 'Malformed',
+      normalizedName: 'different',
+      coordinate: [44.8, 41.7],
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-08-08T10:00:00.000Z',
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+
+    await expect(database.listSavedMarkers()).resolves.toEqual([valid]);
+    expect(
+      services.logger
+        .getEvents()
+        .filter((event) => event.name === 'storage.saved-markers.invalid-record'),
+    ).toEqual([
+      expect.objectContaining({
+        data: { invalidCount: 1 },
+      }),
+    ]);
+    await expect(
+      database.table('savedMarkers').get('malformed'),
+    ).resolves.toBeDefined();
   });
 
   it('persists and repairs the satellite maximum cloud-cover preference', async () => {
@@ -297,5 +474,58 @@ describe('AppDatabase', () => {
       new Error('write unavailable'),
     );
     await expect(database.save(camera)).rejects.toThrow('write unavailable');
+  });
+
+  it('upgrades version 5 without changing existing rows and creates savedMarkers', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(5).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+    });
+    const summary = localTrackSummary();
+    const content = localTrackContent();
+    const syncState = {
+      trackId: summary.id,
+      contentHash: summary.contentHash ?? '',
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    };
+    const settings = {
+      key: 'ui.preferences',
+      value: {
+        developerMode: false,
+        navigationCollapsed: true,
+        elevationGradeLegendDismissed: false,
+      },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    };
+    await legacy.table('settings').put(settings);
+    await legacy.table('localTracks').put(summary);
+    await legacy.table('localTrackContents').put(content);
+    await legacy.table('trackSyncStates').put(syncState);
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    await expect(database.settings.get(settings.key)).resolves.toEqual(settings);
+    await expect(database.localTracks.get(summary.id)).resolves.toEqual(summary);
+    await expect(database.localTrackContents.get(content.trackId)).resolves.toEqual(
+      content,
+    );
+    await expect(database.trackSyncStates.get(syncState.trackId)).resolves.toEqual(
+      syncState,
+    );
+    expect(database.tables.map((table) => table.name)).toContain('savedMarkers');
+    await expect(database.listSavedMarkers()).resolves.toEqual([]);
+
+    const saved = marker();
+    await database.saveSavedMarker(saved);
+    await expect(database.listSavedMarkers()).resolves.toEqual([saved]);
   });
 });

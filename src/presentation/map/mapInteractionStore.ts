@@ -26,11 +26,23 @@ interface SatelliteSearchRequest {
   readonly id: number;
 }
 
+interface MarkerPlacement {
+  readonly id: number;
+}
+
+interface MarkerCreationCommand {
+  readonly id: number;
+  readonly coordinate: MapCoordinate;
+  readonly suggestedName?: string;
+}
+
 interface MapInteractionState {
   readonly navigationCommand: MapNavigationCommand | null;
   readonly fitBoundsCommand: MapFitBoundsCommand | null;
   readonly satelliteSearchAnchor: MapCoordinate | null;
   readonly satelliteSearchRequest: SatelliteSearchRequest | null;
+  readonly markerPlacement: MarkerPlacement | null;
+  readonly markerCreationCommand: MarkerCreationCommand | null;
 }
 
 export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
@@ -38,10 +50,13 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   fitBoundsCommand: null,
   satelliteSearchAnchor: null,
   satelliteSearchRequest: null,
+  markerPlacement: null,
+  markerCreationCommand: null,
 }));
 
 let nextCommandId = 0;
 let nextSatelliteSearchRequestId = 0;
+let nextMarkerCommandId = 0;
 
 export function requestMapNavigation(target: MapNavigationTarget): void {
   nextCommandId += 1;
@@ -97,13 +112,75 @@ export function consumeSatelliteSearchRequest(requestId: number): void {
   mapInteractionStore.setState({ satelliteSearchRequest: null });
 }
 
+export function requestMarkerPlacement(): void {
+  nextMarkerCommandId += 1;
+  mapInteractionStore.setState({
+    markerPlacement: { id: nextMarkerCommandId },
+    markerCreationCommand: null,
+  });
+}
+
+export function cancelMarkerPlacement(): void {
+  if (mapInteractionStore.getState().markerPlacement === null) return;
+  mapInteractionStore.setState({ markerPlacement: null });
+}
+
+export function requestMarkerCreationAt(
+  coordinate: MapCoordinate,
+  suggestedName?: string,
+): void {
+  nextMarkerCommandId += 1;
+  const command: {
+    id: number;
+    coordinate: MapCoordinate;
+    suggestedName?: string;
+  } = {
+    id: nextMarkerCommandId,
+    coordinate: { ...coordinate },
+  };
+  if (suggestedName !== undefined) command.suggestedName = suggestedName;
+  mapInteractionStore.setState({
+    markerPlacement: null,
+    markerCreationCommand: command,
+  });
+}
+
+export function completeMarkerPlacement(
+  coordinate: MapCoordinate,
+  suggestedName?: string,
+): void {
+  if (mapInteractionStore.getState().markerPlacement === null) return;
+  nextMarkerCommandId += 1;
+  const command: {
+    id: number;
+    coordinate: MapCoordinate;
+    suggestedName?: string;
+  } = {
+    id: nextMarkerCommandId,
+    coordinate: { ...coordinate },
+  };
+  if (suggestedName !== undefined) command.suggestedName = suggestedName;
+  mapInteractionStore.setState({
+    markerPlacement: null,
+    markerCreationCommand: command,
+  });
+}
+
+export function consumeMarkerCreationCommand(commandId: number): void {
+  if (mapInteractionStore.getState().markerCreationCommand?.id !== commandId) return;
+  mapInteractionStore.setState({ markerCreationCommand: null });
+}
+
 export function resetMapInteractionStore(): void {
   nextCommandId = 0;
   nextSatelliteSearchRequestId = 0;
+  nextMarkerCommandId = 0;
   mapInteractionStore.setState({
     navigationCommand: null,
     fitBoundsCommand: null,
     satelliteSearchAnchor: null,
     satelliteSearchRequest: null,
+    markerPlacement: null,
+    markerCreationCommand: null,
   });
 }

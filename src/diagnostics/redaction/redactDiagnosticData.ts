@@ -20,6 +20,7 @@ const exportableFieldNames = new Set([
   'operation',
   'origin',
   'impossibleCount',
+  'invalidCount',
   'noDataCount',
   'quotaBytes',
   'queueDurationMs',

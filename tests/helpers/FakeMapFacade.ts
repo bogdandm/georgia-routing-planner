@@ -1,11 +1,14 @@
 import type { MapFacade } from '@/presentation/map/MapFacade';
+import type { MapInteractionMode } from '@/presentation/map/MapFacade';
 import {
   defaultGeorgiaCamera,
+  type MapCoordinate,
   type MapCamera,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapFitPadding,
   type MapPointInspection,
+  type NearbyPoi,
   type MapViewportBounds,
   type MapViewportSnapshot,
   type TerrainMode,
@@ -17,6 +20,7 @@ export class FakeMapFacade implements MapFacade {
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
+  public interactionModes: MapInteractionMode[] = [];
   public navigationRequests: {
     readonly longitude: number;
     readonly latitude: number;
@@ -29,6 +33,7 @@ export class FakeMapFacade implements MapFacade {
     readonly padding: MapFitPadding | undefined;
   }[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
+  public nearestPoi: NearbyPoi | null = null;
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
   public snapshot: MapDiagnosticsSnapshot = {
@@ -79,6 +84,10 @@ export class FakeMapFacade implements MapFacade {
     return this.pointInspection;
   }
 
+  public getNearestPoi(_coordinate: MapCoordinate): NearbyPoi | null {
+    return this.nearestPoi;
+  }
+
   public closePointInspection(): void {
     this.pointInspection = { status: 'closed' };
     this.notify();
@@ -120,6 +129,10 @@ export class FakeMapFacade implements MapFacade {
 
   public setDebugOptions(options: MapDebugOptions): void {
     this.debugOptions = options;
+  }
+
+  public setInteractionMode(mode: MapInteractionMode): void {
+    this.interactionModes.push(mode);
   }
 
   public destroy(): void {

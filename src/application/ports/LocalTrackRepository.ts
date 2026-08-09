@@ -1,11 +1,12 @@
 import type { LocalTrackContent, LocalTrackSummary } from '@/domain/tracks/localTrack';
+import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
 
 export interface LocalTrackRepository {
   saveLocalTrack(summary: LocalTrackSummary, content: LocalTrackContent): Promise<void>;
-  replaceLocalTrackElevation(
+  replaceCalculatedTrackElevation(
     trackId: string,
-    metrics: LocalTrackSummary['metrics'],
-    content: LocalTrackContent,
+    calculatedMetrics: TrackMetrics | null,
+    calculatedTrackPoints: LocalTrackContent['calculatedTrackPoints'],
     options?: { readonly expectedContentHash?: string },
   ): Promise<LocalTrackSummary>;
   listLocalTracks(): Promise<readonly LocalTrackSummary[]>;

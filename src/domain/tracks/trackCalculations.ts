@@ -1,7 +1,9 @@
 import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 
 export const DISTANCE_ALGORITHM_VERSION = 1;
-export const ELEVATION_ALGORITHM_VERSION = 3;
+export const RECORDED_ELEVATION_ALGORITHM_VERSION = 3;
+export const CALCULATED_ELEVATION_ALGORITHM_VERSION = 4;
+export const CALCULATED_ELEVATION_HYSTERESIS_METERS = 10;
 export const ROUTE_SHAPE_ALGORITHM_VERSION = 1;
 export const DOMINANT_SUMMIT_ALGORITHM_VERSION = 1;
 
@@ -32,7 +34,11 @@ export interface TrackMetrics {
   readonly minimumElevationMeters?: number;
   readonly maximumElevationMeters?: number;
   readonly elevationSource?: 'gpx' | 'dem-assisted';
-  readonly elevationAlgorithmVersion?: 1 | 2 | typeof ELEVATION_ALGORITHM_VERSION;
+  readonly elevationAlgorithmVersion?:
+    | 1
+    | 2
+    | typeof RECORDED_ELEVATION_ALGORITHM_VERSION
+    | typeof CALCULATED_ELEVATION_ALGORITHM_VERSION;
 }
 
 type ElevationSource = NonNullable<TrackMetrics['elevationSource']>;
@@ -85,7 +91,7 @@ interface SegmentChanges {
  * sub-station GPS noise. Runs and GPX segments stay independent; missing elevations
  * are never bridged.
  */
-function calculateSegmentChanges(segment: TrackSegment): SegmentChanges {
+function calculateRecordedSegmentChanges(segment: TrackSegment): SegmentChanges {
   let distanceMeters = 0;
   let ascentMeters = 0;
   let descentMeters = 0;
@@ -201,6 +207,92 @@ function calculateSegmentChanges(segment: TrackSegment): SegmentChanges {
   return { distanceMeters, ascentMeters, descentMeters, hasElevationPairs };
 }
 
+/**
+ * Aggregates an already smoothed DEM projection with 10 m hysteresis. Each
+ * completed elevation run appends its terminal residual so net ascent minus
+ * descent remains identical to the run's endpoint elevation change.
+ */
+function calculateCalculatedSegmentChanges(segment: TrackSegment): SegmentChanges {
+  let distanceMeters = 0;
+  let ascentMeters = 0;
+  let descentMeters = 0;
+  let hasElevationPairs = false;
+  let acceptedReferenceMeters: number | undefined;
+  let endpointMeters: number | undefined;
+  let runHasElevationPair = false;
+
+  const appendChange = (changeMeters: number): void => {
+    if (changeMeters > 0) ascentMeters += changeMeters;
+    if (changeMeters < 0) descentMeters -= changeMeters;
+  };
+  const startRun = (elevationMeters: number): void => {
+    acceptedReferenceMeters = elevationMeters;
+    endpointMeters = elevationMeters;
+  };
+  const appendPoint = (elevationMeters: number): void => {
+    endpointMeters = elevationMeters;
+    runHasElevationPair = true;
+    if (acceptedReferenceMeters === undefined) return;
+    const changeMeters = elevationMeters - acceptedReferenceMeters;
+    if (Math.abs(changeMeters) < CALCULATED_ELEVATION_HYSTERESIS_METERS) return;
+    appendChange(changeMeters);
+    acceptedReferenceMeters = elevationMeters;
+  };
+  const finishRun = (): void => {
+    if (
+      runHasElevationPair &&
+      acceptedReferenceMeters !== undefined &&
+      endpointMeters !== undefined
+    ) {
+      appendChange(endpointMeters - acceptedReferenceMeters);
+      hasElevationPairs = true;
+    }
+    acceptedReferenceMeters = undefined;
+    endpointMeters = undefined;
+    runHasElevationPair = false;
+  };
+
+  let previousDistinctElevationMeters = segment.points[0]?.elevationMeters;
+  if (previousDistinctElevationMeters !== undefined) {
+    startRun(previousDistinctElevationMeters);
+  }
+  for (let index = 1; index < segment.points.length; index += 1) {
+    const previous = segment.points[index - 1];
+    const current = segment.points[index];
+    if (previous === undefined || current === undefined) continue;
+    const legDistanceMeters = geodesicDistanceMeters(
+      previous.coordinate,
+      current.coordinate,
+    );
+    distanceMeters += legDistanceMeters;
+    const currentElevationMeters = current.elevationMeters;
+    if (legDistanceMeters <= stationDistanceEpsilonMeters) {
+      if (currentElevationMeters === undefined) {
+        if (previousDistinctElevationMeters !== undefined) {
+          finishRun();
+          previousDistinctElevationMeters = undefined;
+        }
+      } else if (previousDistinctElevationMeters === undefined) {
+        previousDistinctElevationMeters = currentElevationMeters;
+        startRun(currentElevationMeters);
+      }
+      continue;
+    }
+    if (
+      previousDistinctElevationMeters !== undefined &&
+      currentElevationMeters !== undefined
+    ) {
+      appendPoint(currentElevationMeters);
+    } else {
+      if (previousDistinctElevationMeters !== undefined) finishRun();
+      if (currentElevationMeters !== undefined) startRun(currentElevationMeters);
+    }
+    previousDistinctElevationMeters = currentElevationMeters;
+  }
+  if (previousDistinctElevationMeters !== undefined) finishRun();
+  return { distanceMeters, ascentMeters, descentMeters, hasElevationPairs };
+}
+
 export function geodesicDistanceMeters(
   start: TrackCoordinate,
   end: TrackCoordinate,
@@ -291,7 +383,10 @@ export function calculateTrackMetrics(
         previousTimestamp = timestamp;
       }
     }
-    const changes = calculateSegmentChanges(segment);
+    const changes =
+      elevationSource === 'dem-assisted'
+        ? calculateCalculatedSegmentChanges(segment)
+        : calculateRecordedSegmentChanges(segment);
     distanceMeters += changes.distanceMeters;
     ascentMeters += changes.ascentMeters;
     descentMeters += changes.descentMeters;
@@ -324,7 +419,10 @@ export function calculateTrackMetrics(
     result.minimumElevationMeters = Math.min(...elevationValues);
     result.maximumElevationMeters = Math.max(...elevationValues);
     result.elevationSource = elevationSource;
-    result.elevationAlgorithmVersion = ELEVATION_ALGORITHM_VERSION;
+    result.elevationAlgorithmVersion =
+      elevationSource === 'dem-assisted'
+        ? CALCULATED_ELEVATION_ALGORITHM_VERSION
+        : RECORDED_ELEVATION_ALGORITHM_VERSION;
   }
   if (elevationPairCount > 0) {
     result.ascentMeters = ascentMeters;

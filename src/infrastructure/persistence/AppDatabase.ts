@@ -291,7 +291,7 @@ const trackMetricsSchema = z
     maximumElevationMeters: z.number().optional(),
     elevationSource: z.enum(['gpx', 'dem-assisted']).optional(),
     elevationAlgorithmVersion: z
-      .union([z.literal(1), z.literal(2), z.literal(3)])
+      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
       .optional(),
   })
   .strict()
@@ -303,7 +303,9 @@ const trackMetricsSchema = z
       (value.elevationSource === 'dem-assisted' &&
         value.elevationAlgorithmVersion === 2) ||
       ((value.elevationSource === 'gpx' || value.elevationSource === 'dem-assisted') &&
-        value.elevationAlgorithmVersion === 3);
+        value.elevationAlgorithmVersion === 3) ||
+      (value.elevationSource === 'dem-assisted' &&
+        value.elevationAlgorithmVersion === 4);
     if (!provenanceIsValid) {
       context.addIssue({
         code: 'custom',
@@ -342,6 +344,12 @@ const trackMetricsSchema = z
     }
     return result;
   });
+
+const calculatedTrackMetricsSchema = trackMetricsSchema.refine(
+  (value) =>
+    value.elevationSource === 'dem-assisted' && value.elevationAlgorithmVersion === 4,
+  { message: 'Calculated elevation metrics require algorithm version 4.' },
+);
 
 type GpxWarningBuilder = {
   -readonly [Key in keyof GpxValidationWarning]: GpxValidationWarning[Key];
@@ -437,13 +445,18 @@ const metadataSchema = z
 type LocalTrackSummaryBuilder = {
   -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
 };
+type LocalTrackContentBuilder = {
+  -readonly [Key in keyof LocalTrackContent]: LocalTrackContent[Key];
+};
 
 function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
   if (
     typeof value !== 'object' ||
     value === null ||
     !('schemaVersion' in value) ||
-    (value.schemaVersion !== 1 && value.schemaVersion !== 2)
+    (value.schemaVersion !== 1 &&
+      value.schemaVersion !== 2 &&
+      value.schemaVersion !== 3)
   ) {
     return value;
   }
@@ -455,6 +468,13 @@ function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
     return { ...migrated, updatedAt: migrated.savedAt };
   }
   return migrated;
+}
+function withoutCalculatedElevation(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) return value;
+  const sourceRecord: Record<string, unknown> = { ...value };
+  delete sourceRecord.calculatedMetrics;
+  delete sourceRecord.calculatedTrackPoints;
+  return sourceRecord;
 }
 
 const currentLocalTrackSummarySchema = z
@@ -476,6 +496,7 @@ const currentLocalTrackSummarySchema = z
     pointCount: z.number().int().min(2).max(100_000),
     segmentCount: z.number().int().min(1).max(512),
     metrics: trackMetricsSchema,
+    calculatedMetrics: calculatedTrackMetricsSchema.optional(),
     metadata: metadataSchema,
     warnings: z.array(warningSchema).max(50),
     generatedName: z.string().trim().min(1).max(200).optional(),
@@ -504,6 +525,9 @@ const currentLocalTrackSummarySchema = z
       metadata: value.metadata,
       warnings: value.warnings,
     };
+    if (value.calculatedMetrics !== undefined) {
+      result.calculatedMetrics = value.calculatedMetrics;
+    }
     if (value.generatedName !== undefined) result.generatedName = value.generatedName;
     if (value.middleAnchorKind !== undefined) {
       result.middleAnchorKind = value.middleAnchorKind;
@@ -546,13 +570,27 @@ const storedTrackSegmentsSchema = z
   .min(1)
   .max(512);
 
-const currentLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
+const storedCalculatedTrackSegmentsSchema = storedTrackSegmentsSchema.optional();
+
+const currentLocalTrackContentSchema = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     trackId: z.string().min(1).max(200),
     trackPoints: storedTrackSegmentsSchema,
+    calculatedTrackPoints: storedCalculatedTrackSegmentsSchema,
   })
-  .strict();
+  .strict()
+  .transform((value): LocalTrackContent => {
+    const content: LocalTrackContentBuilder = {
+      schemaVersion: value.schemaVersion,
+      trackId: value.trackId,
+      trackPoints: value.trackPoints,
+    };
+    if (value.calculatedTrackPoints !== undefined) {
+      content.calculatedTrackPoints = value.calculatedTrackPoints;
+    }
+    return content;
+  });
 
 const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
   .object({
@@ -698,6 +736,28 @@ export class AppDatabase
           if (parsed !== null) await contentTable.put(parsed);
         }
       });
+    this.version(6)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      })
+      .upgrade(async (transaction) => {
+        const summaryTable = transaction.table('localTracks');
+        const summaries: unknown[] = await summaryTable.toArray();
+        for (const summary of summaries) {
+          const parsed = parseLocalTrackSummary(withoutCalculatedElevation(summary));
+          if (parsed !== null) await summaryTable.put(parsed);
+        }
+        const contentTable = transaction.table('localTrackContents');
+        const contents: unknown[] = await contentTable.toArray();
+        for (const content of contents) {
+          const parsed = parseLocalTrackContent(withoutCalculatedElevation(content));
+          if (parsed !== null) await contentTable.put(parsed);
+        }
+      });
   }
 
   public async saveLocalTrack(
@@ -732,17 +792,26 @@ export class AppDatabase
     );
   }
 
-  public async replaceLocalTrackElevation(
+  public async replaceCalculatedTrackElevation(
     trackId: string,
-    metrics: TrackMetrics,
-    content: LocalTrackContent,
+    calculatedMetrics: TrackMetrics | null,
+    calculatedTrackPoints: LocalTrackContent['calculatedTrackPoints'],
     options: { readonly expectedContentHash?: string } = {},
   ): Promise<LocalTrackSummary> {
-    const validContent = parseLocalTrackContent(content);
-    if (validContent?.trackId !== trackId) {
+    const validCalculatedMetrics =
+      calculatedMetrics === null
+        ? null
+        : calculatedTrackMetricsSchema.safeParse(calculatedMetrics);
+    const validCalculatedTrackPoints =
+      storedCalculatedTrackSegmentsSchema.safeParse(calculatedTrackPoints);
+    if (
+      (validCalculatedMetrics !== null && !validCalculatedMetrics.success) ||
+      !validCalculatedTrackPoints.success ||
+      (calculatedMetrics === null) !== (calculatedTrackPoints === undefined)
+    ) {
       throw new LocalTrackStorageError(
         'record-invalid',
-        'The local track content is invalid.',
+        'The calculated track elevation is invalid.',
       );
     }
     return this.transaction(
@@ -750,12 +819,20 @@ export class AppDatabase
       this.localTracks,
       this.localTrackContents,
       async () => {
-        const existing = await this.localTracks.get(trackId);
-        const summary = parseLocalTrackSummary(existing);
+        const existingSummary = await this.localTracks.get(trackId);
+        const summary = parseLocalTrackSummary(existingSummary);
         if (summary === null) {
           throw new LocalTrackStorageError(
             'not-found',
             'The saved track was not found.',
+          );
+        }
+        const existingContent = await this.localTrackContents.get(trackId);
+        const content = parseLocalTrackContent(existingContent);
+        if (content === null) {
+          throw new LocalTrackStorageError(
+            'content-missing',
+            'The saved track content is missing.',
           );
         }
         if (
@@ -764,25 +841,29 @@ export class AppDatabase
         ) {
           return summary;
         }
-        const updated = {
-          ...summary,
-          pointCount: validContent.trackPoints.reduce(
-            (count, segment) => count + segment.length,
-            0,
-          ),
-          segmentCount: validContent.trackPoints.length,
-          metrics,
-        };
-        const validSummary = parseLocalTrackSummary(updated);
-        if (validSummary === null) {
+        const updatedSummary: LocalTrackSummaryBuilder = { ...summary };
+        const updatedContent: LocalTrackContentBuilder = { ...content };
+        if (validCalculatedTrackPoints.data === undefined) {
+          delete updatedContent.calculatedTrackPoints;
+        } else {
+          updatedContent.calculatedTrackPoints = validCalculatedTrackPoints.data;
+        }
+        if (validCalculatedMetrics === null) {
+          delete updatedSummary.calculatedMetrics;
+        } else {
+          updatedSummary.calculatedMetrics = validCalculatedMetrics.data;
+        }
+        const summaryResult = parseLocalTrackSummary(updatedSummary);
+        const contentResult = parseLocalTrackContent(updatedContent);
+        if (summaryResult === null || contentResult === null) {
           throw new LocalTrackStorageError(
             'record-invalid',
-            'The local track summary is invalid.',
+            'The calculated track elevation is invalid.',
           );
         }
-        await this.localTracks.put(validSummary);
-        await this.localTrackContents.put(validContent);
-        return validSummary;
+        await this.localTracks.put(summaryResult);
+        await this.localTrackContents.put(contentResult);
+        return summaryResult;
       },
     );
   }

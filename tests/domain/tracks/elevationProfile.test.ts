@@ -5,6 +5,7 @@ import {
   DEFAULT_ELEVATION_ANALYSIS_OPTIONS,
   elevationSegmentIndexForSample,
   gradeBandForGrade,
+  filterDemElevationSamples,
   sampleElevationProfilePoints,
   GRADE_BANDS_ASCENDING,
   GRADE_BAND_THRESHOLDS_PCT,
@@ -12,6 +13,18 @@ import {
   type ElevationProfile,
   type ElevationProfileInputPoint,
 } from '@/domain/tracks/elevationProfile';
+
+function demInputs(
+  elevations: readonly number[],
+  intervalMeters = 50,
+  sourceSegmentIndex = 0,
+) {
+  return elevations.map((elevationMeters, index) => ({
+    coordinate: [index * (intervalMeters / 111_195), 0] as const,
+    elevationMeters,
+    sourceSegmentIndex,
+  }));
+}
 
 function profileInputs(
   elevations: readonly number[],
@@ -78,6 +91,78 @@ describe('calculateElevationProfile', () => {
       [110, 110],
     ]);
     expect(filtered[0]?.[1]?.recordedAt).toBe('2026-07-30T10:00:00.000Z');
+  });
+
+  describe('filterDemElevationSamples', () => {
+    it('keeps a flat profile flat', () => {
+      const filtered = filterDemElevationSamples([
+        demInputs([100, 100, 100, 100, 100]),
+      ]);
+
+      expect(filtered[0]?.map((point) => point.elevationMeters)).toEqual([
+        100, 100, 100, 100, 100,
+      ]);
+    });
+
+    it('retains linear-climb endpoints and net rise', () => {
+      const filtered = filterDemElevationSamples([demInputs([0, 25, 50, 75, 100])]);
+      const elevations = filtered[0]?.map((point) => point.elevationMeters) ?? [];
+
+      expect(elevations[0]).toBe(0);
+      expect(elevations.at(-1)).toBe(100);
+      expect((elevations.at(-1) ?? 0) - (elevations[0] ?? 0)).toBe(100);
+      expect(elevations[2]).toBeCloseTo(50, 8);
+    });
+
+    it('removes a one-point spike before moving-average smoothing', () => {
+      const filtered = filterDemElevationSamples([demInputs([0, 0, 100, 0, 0])]);
+
+      expect(filtered[0]?.map((point) => point.elevationMeters)).toEqual([
+        0, 0, 0, 0, 0,
+      ]);
+    });
+
+    it('weights uneven point spacing by metres rather than sample count', () => {
+      const positionsMeters = [0, 10, 20, 120, 220];
+      const elevations = [0, 0, 100, 100, 100];
+      const filtered = filterDemElevationSamples([
+        positionsMeters.map((distanceMeters, index) => ({
+          coordinate: [distanceMeters / 111_195, 0] as const,
+          elevationMeters: elevations[index] ?? 0,
+          sourceSegmentIndex: 0,
+        })),
+      ]);
+
+      expect(filtered[0]?.[2]?.elevationMeters).toBeCloseTo(62.5, 1);
+    });
+
+    it('keeps duplicate coordinates finite', () => {
+      const filtered = filterDemElevationSamples([
+        [
+          { coordinate: [0, 0], elevationMeters: 0, sourceSegmentIndex: 0 },
+          { coordinate: [0.001, 0], elevationMeters: 10, sourceSegmentIndex: 0 },
+          { coordinate: [0.001, 0], elevationMeters: 20, sourceSegmentIndex: 0 },
+          { coordinate: [0.001, 0], elevationMeters: 30, sourceSegmentIndex: 0 },
+          { coordinate: [0.002, 0], elevationMeters: 40, sourceSegmentIndex: 0 },
+        ],
+      ]);
+
+      expect(
+        filtered[0]?.every((point) => Number.isFinite(point.elevationMeters)),
+      ).toBe(true);
+    });
+
+    it('never shares a smoothing window across source segments', () => {
+      const filtered = filterDemElevationSamples([
+        demInputs([0, 0, 0], 50, 0),
+        demInputs([1_000, 1_000, 1_000], 50, 1),
+      ]);
+
+      expect(filtered[0]?.map((point) => point.elevationMeters)).toEqual([0, 0, 0]);
+      expect(filtered[1]?.map((point) => point.elevationMeters)).toEqual([
+        1_000, 1_000, 1_000,
+      ]);
+    });
   });
 
   it('keeps a short negative local grade inside one macro climb', () => {

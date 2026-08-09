@@ -7,6 +7,7 @@ export type LogicalMapLayerId =
   | 'elevation-isolines'
   | 'natural-features'
   | 'restricted-areas'
+  | 'detail-context'
   | 'hiking-paths'
   | 'roads'
   | 'places-and-pois'

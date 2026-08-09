@@ -325,19 +325,22 @@ and cross-feature actions are unavailable.
 ### Layers
 
 Layers groups durable controls under explicit source headings: Local GPX, Satellites,
-the configured terrain provider, and OpenStreetMap. Satellites starts with optional
-**Google satellite imagery** and **NAPR Orthophoto** basemaps, followed by **Copernicus
-Sentinel-2 via Earth Search**, whose **Satellite imagery** and **Scene footprint**
-controls remain disabled until a scene is applied. NAPR is one logical multi-year
-orthophoto mosaic: newest available aerial pixels render from 2025, then 2020, then
-nationwide 2016–2017 coverage. Google, NAPR, and Sentinel imagery are mutually exclusive
-checkboxes: choosing one immediately clears the other two, while every imagery source
-may be off. Google and NAPR are disabled by default, and each explicit choice is
-retained in this browser's IndexedDB preferences. The shared OpenStreetMap opacity
-slider enables whenever any raster is selected and scales every OpenStreetMap reference
-layer and elevation isoline once active raster content has switched the map into
-satellite visual mode; vector paints remain fully opaque while static raster tiles first
-load.
+the configured terrain provider, and **OpenStreetMap via OpenFreeMap + OSM Shortbread**.
+OpenFreeMap supplies hiking-specific map layers and labels. The default-on **OSM
+detail** checkbox controls Shortbread brownfield and building context; Shortbread roads
+and detailed paths remain under the existing Roads and Hiking paths controls. Satellites
+starts with optional **Google satellite imagery** and **NAPR Orthophoto** basemaps,
+followed by **Copernicus Sentinel-2 via Earth Search**, whose **Satellite imagery** and
+**Scene footprint** controls remain disabled until a scene is applied. NAPR is one
+logical multi-year orthophoto mosaic: newest available aerial pixels render from 2025,
+then 2020, then nationwide 2016–2017 coverage. Google, NAPR, and Sentinel imagery are
+mutually exclusive checkboxes: choosing one immediately clears the other two, while
+every imagery source may be off. Google and NAPR are disabled by default, and each
+explicit choice is retained in this browser's IndexedDB preferences. The shared
+OpenStreetMap opacity slider enables whenever any raster is selected and scales every
+OpenStreetMap reference layer and elevation isoline once active raster content has
+switched the map into satellite visual mode; vector paints remain fully opaque while
+static raster tiles first load.
 
 The quick chooser presents **Vector OSM** (no raster and opaque vectors), **Google
 Satellite Hybrid** (Google imagery with opaque vectors), **Google Satellite** (Google
@@ -462,10 +465,12 @@ Military polygons are shown with a medium red perimeter and no fill. The current
 OpenMapTiles land-use schema does not expose a general private-access or ownership
 field, so the map does not claim to identify every private or otherwise closed property.
 
-- Default vector source: OpenFreeMap TileJSON; attribution stays visible.
+- Default vector sources: OpenFreeMap TileJSON for hiking-specific layers and OSM
+  Shortbread TileJSON for land, building, and street detail; their combined attribution
+  stays visible.
 - Invalid configuration: MapLibre does not mount; a safe fatal message is shown.
-- Vector/glyph failures: the existing canvas remains usable and the aggregated safe
-  failure appears only in the shared status below search.
+- Either vector-source failure is recoverable when an existing map canvas remains
+  usable; the aggregated safe failure appears only in the shared status below search.
 - Tests: pure style assertions plus synthetic MVT/glyph Chromium coverage.
 
 ## Map-view persistence

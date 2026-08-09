@@ -129,6 +129,8 @@ export function createRuntimeServices(): RuntimeServices {
       data: {
         vectorId: summary.vectorId,
         vectorOrigin: summary.vectorOrigin,
+        detailVectorId: summary.detailVectorId,
+        detailVectorOrigin: summary.detailVectorOrigin,
         terrainId: summary.terrainId,
         terrainOrigin: summary.terrainOrigin,
         satelliteId: summary.satelliteId,

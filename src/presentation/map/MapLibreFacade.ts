@@ -122,7 +122,12 @@ function categorizeMapError(
 ): MapFailureCategory {
   const sourceId = resolvedSourceId;
   if (sourceId === mapSourceIds.terrainDem) return 'terrain';
-  if (sourceId === mapSourceIds.basemapVector) return 'base-vector';
+  if (
+    sourceId === mapSourceIds.basemapVector ||
+    sourceId === mapSourceIds.basemapDetailVector
+  ) {
+    return 'base-vector';
+  }
   if (
     sourceId === mapSourceIds.sentinelRasterA ||
     sourceId === mapSourceIds.sentinelRasterB ||

@@ -100,6 +100,28 @@ export function AboutDialog({
     mapProviders === null
       ? null
       : mapProviders.vector.attribution.replace(/<[^>]*>/gu, '');
+  const detailVectorAttribution =
+    mapProviders === null
+      ? null
+      : mapProviders.detailVector.attribution.replace(/<[^>]*>/gu, '');
+  const vectorAttributionDetails: string[] = [];
+  const displayedAttributionCredits = new Set<string>();
+  for (const attribution of [vectorAttribution, detailVectorAttribution]) {
+    if (attribution === null) continue;
+    for (const part of attribution.split('·')) {
+      const detail = part.trim();
+      const normalizedCredit = detail
+        .toLocaleLowerCase()
+        .replace(/^data from\s+/iu, '')
+        .replace(/^©\s*/u, '');
+      const credit = normalizedCredit.includes('openstreetmap')
+        ? 'openstreetmap'
+        : normalizedCredit;
+      if (credit.length === 0 || displayedAttributionCredits.has(credit)) continue;
+      displayedAttributionCredits.add(credit);
+      vectorAttributionDetails.push(detail);
+    }
+  }
   const terrainAttribution =
     mapProviders === null
       ? null
@@ -140,9 +162,9 @@ export function AboutDialog({
     dataEntries.push(
       {
         description: 'Vector map',
-        details: vectorAttribution ?? undefined,
+        details: vectorAttributionDetails.join(' · '),
         href: originFor(mapProviders.vector.tileJsonUrl),
-        title: mapProviders.vector.label,
+        title: `${mapProviders.vector.label} + ${mapProviders.detailVector.label}`,
       },
       {
         description: 'Elevation data',

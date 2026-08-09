@@ -342,7 +342,9 @@ describe('WorkspaceShell', () => {
       within(about).getByRole('link', { name: 'nominatim.openstreetmap.org' }),
     ).toBeVisible();
     expect(
-      within(about).getByText('OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap'),
+      within(about).getByText(
+        'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors',
+      ),
     ).toBeVisible();
     expect(
       within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
@@ -509,10 +511,13 @@ describe('WorkspaceShell', () => {
       }),
     ).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
+      screen.getByRole('heading', {
+        name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread',
+      }),
     ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'OSM detail' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
     expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();

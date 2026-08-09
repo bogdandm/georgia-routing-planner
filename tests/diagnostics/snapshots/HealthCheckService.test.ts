@@ -47,7 +47,7 @@ describe('HealthCheckService', () => {
     );
   });
 
-  it('probes configured vector, terrain, and Sentinel endpoints only on request', async () => {
+  it('probes configured vector, detail vector, terrain, and Sentinel endpoints only on request', async () => {
     const requests: { url: string; method: string; range: string | null }[] = [];
     mswServer.use(
       http.get('https://tiles.openfreemap.org/planet', ({ request }) => {
@@ -58,6 +58,17 @@ describe('HealthCheckService', () => {
         });
         return HttpResponse.json({ tilejson: '3.0.0', tiles: [] });
       }),
+      http.get(
+        'https://vector.openstreetmap.org/shortbread_v1/tilejson.json',
+        ({ request }) => {
+          requests.push({
+            url: request.url,
+            method: request.method,
+            range: request.headers.get('range'),
+          });
+          return HttpResponse.json({ tilejson: '3.0.0', tiles: [] });
+        },
+      ),
       http.get(
         'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/0/0/0.png',
         ({ request }) => {
@@ -97,10 +108,21 @@ describe('HealthCheckService', () => {
       new AbortController().signal,
     );
 
-    expect(results.map((result) => result.status)).toEqual(['pass', 'pass', 'pass']);
-    expect(requests).toHaveLength(3);
-    expect(requests[1]?.range).toBe('bytes=0-1023');
-    expect(requests[2]?.method).toBe('POST');
+    expect(results.map((result) => result.name)).toEqual([
+      'Vector provider reachability',
+      'Detail vector provider reachability',
+      'Terrain provider reachability',
+      'Satellite catalog reachability',
+    ]);
+    expect(results.map((result) => result.status)).toEqual([
+      'pass',
+      'pass',
+      'pass',
+      'pass',
+    ]);
+    expect(requests).toHaveLength(4);
+    expect(requests[2]?.range).toBe('bytes=0-1023');
+    expect(requests[3]?.method).toBe('POST');
     expect(JSON.stringify(services.logger.getEvents())).not.toContain(
       'elevation-tiles-prod',
     );

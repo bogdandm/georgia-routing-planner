@@ -5,15 +5,18 @@
 - Evidence date: **2026-07-18**.
 - Scope: anonymous static browser client hosted on GitHub Pages and local development
   origins.
-- Decision: use the OpenFreeMap public OpenMapTiles vector source and the AWS Open Data
-  Mapzen Terrain Tiles bucket as replaceable defaults.
-- Credentials: neither default requires an API key, cookie, account, signed request, or
-  referrer-restricted secret. No provider credential is included in the bundle.
+- Decision: use a hybrid anonymous vector basemap: OpenFreeMap/OpenMapTiles for
+  hiking-specific layers and labels, plus OSM Foundation Shortbread v1 for land,
+  buildings, and street detail. AWS Open Data Mapzen Terrain Tiles remain the
+  replaceable terrain default.
+- Credentials: neither vector default requires an API key, cookie, account, signed
+  request, or referrer-restricted secret. No provider credential is included in the
+  bundle.
 
 Provider behavior and policy are time-sensitive. Recheck this record before a public
 traffic increase or whenever the defaults change.
 
-## Vector basemap: OpenFreeMap
+## Hiking vector: OpenFreeMap/OpenMapTiles
 
 The production default is the TileJSON endpoint `https://tiles.openfreemap.org/planet`.
 The official [quick-start guide](https://openfreemap.org/quick_start/) documents
@@ -32,19 +35,19 @@ coupling. Hiking points are rendered with simple circles and text. The source is
 unmodified [OpenMapTiles schema](https://openmaptiles.org/schema/), which gives this
 configuration mapping:
 
-| Application concept | Source layer          | Relevant fields/values                                                       |
-| ------------------- | --------------------- | ---------------------------------------------------------------------------- |
-| Land cover          | `landcover`           | `class` (`wood`, `grass`, `farmland`, `wetland`, `ice`, etc.) and `subclass` |
-| Human land use      | `landuse`             | `class` (`military`, residential, and other uses)                            |
-| Protected land      | `park`                | `class`, names                                                               |
-| Water               | `water`, `waterway`   | geometry and `class`                                                         |
-| Boundaries          | `boundary`            | `admin_level`, `disputed`, `maritime`                                        |
-| Roads and paths     | `transportation`      | `class`, `subclass`, `brunnel`                                               |
-| Road/path labels    | `transportation_name` | names, `class`, `subclass`                                                   |
-| Peaks and passes    | `mountain_peak`       | `class` (`peak`, `saddle`, etc.), names, `ele`                               |
-| Hiking POIs         | `poi`                 | `class`, `subclass`, names, `rank`                                           |
-| Settlements         | `place`               | `class`, names, `rank`, `capital`                                            |
-| Water labels        | `water_name`          | names and geometry-specific fields                                           |
+| Application concept           | Source layer          | Relevant fields/values                                                       |
+| ----------------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| Land cover                    | `landcover`           | `class` (`wood`, `grass`, `farmland`, `wetland`, `ice`, etc.) and `subclass` |
+| Human land use                | `landuse`             | `class` (`military`, residential, and other uses)                            |
+| Protected land                | `park`                | `class`, names                                                               |
+| Water                         | `water`, `waterway`   | geometry and `class`                                                         |
+| Boundaries                    | `boundary`            | `admin_level`, `disputed`, `maritime`                                        |
+| Overview paths and bridleways | `transportation`      | `class`, `subclass`, `brunnel`; overview paths stop at z13                   |
+| Road/path labels              | `transportation_name` | names, `class`, `subclass`                                                   |
+| Peaks and passes              | `mountain_peak`       | `class` (`peak`, `saddle`, etc.), names, `ele`                               |
+| Hiking POIs                   | `poi`                 | `class`, `subclass`, names, `rank`                                           |
+| Settlements                   | `place`               | `class`, names, `rank`, `capital`                                            |
+| Water labels                  | `water_name`          | names and geometry-specific fields                                           |
 
 The transportation schema explicitly includes `path`, `track`, `footway`, `steps`,
 `bridleway`, and `cycleway` classifications. OpenMapTiles does not expose hiking route
@@ -73,14 +76,15 @@ Waterways and water bodies share one blue. The `waterway` layer is ordered below
 
 At desktop widths, attribution remains visible in MapLibre's attribution control:
 
-> OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap
+> OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors
 
 The smartphone map omits the attribution control to preserve the map-first interaction
-surface. Each desktop name links to the provider/license page supplied by the TileJSON.
-OpenFreeMap's [attribution section](https://openfreemap.org/#attribution) requires
-OpenMapTiles and OpenStreetMap credit; OpenFreeMap credit itself is encouraged. The
-OpenMapTiles schema is CC-BY and its implementation is BSD-licensed. OSM data remains
-subject to ODbL and the OSM attribution guidance.
+surface. OpenFreeMap and OpenMapTiles are credited by the OpenFreeMap source; OSM
+contributors are credited once by the Shortbread source. OpenFreeMap's
+[attribution section](https://openfreemap.org/#attribution) requires OpenMapTiles and
+OpenStreetMap credit; OpenFreeMap credit itself is encouraged. The OpenMapTiles schema
+is CC-BY and its implementation is BSD-licensed. OSM data remains subject to ODbL and
+the OSM attribution guidance.
 
 ### Browser evidence and replacement
 
@@ -93,6 +97,33 @@ Pages uses the same anonymous CORS request model.
 The base source, support endpoints, layer mapping, and attribution are parsed
 configuration. Replacing OpenFreeMap therefore requires a compatible TileJSON/schema
 configuration and style-mapping review, not changes to React workflows.
+
+## Detail vector: OSM Shortbread v1
+
+The production detail source is the OSM Foundation TileJSON endpoint
+`https://vector.openstreetmap.org/shortbread_v1/tilejson.json`. It is deliberately a
+second vector source, not a replacement for OpenFreeMap: Shortbread supplies `land`,
+`buildings`, and `streets`, while OpenFreeMap remains authoritative for peaks, saddles,
+ridges, hiking POIs, water/place labels, glyphs, and z10–12 overview paths.
+
+The verified mappings are `land.kind = brownfield`, unfiltered `buildings`, and
+`streets.kind`. The road style allows `motorway`, `trunk`, `primary`, `secondary`,
+`tertiary`, `unclassified`, `residential`, `living_street`, and `service`. At z13 and
+above, Shortbread additionally supplies `track`, `footway`, `path`, `cycleway`, and
+`pedestrian`; `steps` also come from Shortbread. OpenMapTiles remains the bridleway
+source because Shortbread v1 does not publish that distinction.
+
+The inspected endpoint is anonymous, keyless HTTPS with browser CORS for ordinary
+interactive requests. Its TileJSON supplies detail through z14; MapLibre overzooms z14
+at higher map zooms rather than issuing a different source level. It is best-effort
+public infrastructure with no application SLA and no retry or provider failover.
+
+OSM Foundation tile use requires normal attributed interactive use: preserve the
+browser's Referer and User-Agent behavior, permit ordinary browser/CDN caching, and do
+not add cache-busting wrappers or synthetic request headers. Bulk retrieval,
+prefetching, archive creation, and offline downloads are prohibited. The application
+therefore requests only MapLibre-visible tiles and has no custom profile build, hosted
+archive, proxy, or fallback provider.
 
 ## Place search: public Nominatim
 

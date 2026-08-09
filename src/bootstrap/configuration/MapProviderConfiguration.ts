@@ -105,6 +105,24 @@ const sourceLayerMappingSchema = z
   })
   .strict();
 
+const detailVectorSourceLayerMappingSchema = z
+  .object({
+    land: z.string().min(1),
+    buildings: z.string().min(1),
+    streets: z.string().min(1),
+  })
+  .strict();
+
+const detailVectorSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9-]+$/u),
+    label: z.string().min(1).max(80),
+    tileJsonUrl: endpointSchema,
+    attribution: safeAttributionSchema,
+    sourceLayers: detailVectorSourceLayerMappingSchema,
+  })
+  .strict();
+
 const naprOrthophotoRasterSourceSchema = z
   .object({
     tileUrls: z
@@ -156,7 +174,7 @@ const naprOrthophotoRasterSourceSchema = z
 
 const mapProviderConfigurationInputSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     vector: z
       .object({
         id: z.string().regex(/^[a-z0-9-]+$/u),
@@ -170,6 +188,7 @@ const mapProviderConfigurationInputSchema = z
         sourceLayers: sourceLayerMappingSchema,
       })
       .strict(),
+    detailVector: detailVectorSchema,
     terrain: z
       .object({
         id: z.string().regex(/^[a-z0-9-]+$/u),
@@ -345,8 +364,20 @@ interface NaprOrthophotoRasterSource {
   readonly bounds: readonly [number, number, number, number];
 }
 
+interface DetailVectorConfiguration {
+  readonly id: string;
+  readonly label: string;
+  readonly tileJsonUrl: string;
+  readonly attribution: string;
+  readonly sourceLayers: {
+    readonly land: string;
+    readonly buildings: string;
+    readonly streets: string;
+  };
+}
+
 interface MapProviderConfigurationInput {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly vector: {
     readonly id: string;
     readonly label: string;
@@ -368,6 +399,7 @@ interface MapProviderConfigurationInput {
       readonly waterNames: string;
     };
   };
+  readonly detailVector: DetailVectorConfiguration;
   readonly terrain: {
     readonly id: string;
     readonly label: string;
@@ -449,9 +481,11 @@ export type MapProviderConfigurationResult =
   | { readonly status: 'invalid'; readonly message: string };
 
 interface MapProviderConfigurationSummary {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly vectorId: string;
   readonly vectorOrigin: string;
+  readonly detailVectorId: string;
+  readonly detailVectorOrigin: string;
   readonly terrainId: string;
   readonly terrainOrigin: string;
   readonly satelliteId: string;
@@ -466,14 +500,14 @@ interface MapProviderConfigurationSummary {
 
 /** Anonymous, credential-free provider defaults used when no public override is supplied. */
 export const defaultMapProviderConfigurationInput = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   vector: {
     id: 'openfreemap-openmaptiles',
     label: 'OpenFreeMap',
     tileJsonUrl: 'https://tiles.openfreemap.org/planet',
     glyphsUrl: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     attribution:
-      '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> · <a href="https://www.openmaptiles.org/" target="_blank">© OpenMapTiles</a> · Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+      '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> · <a href="https://www.openmaptiles.org/" target="_blank">© OpenMapTiles</a>',
     sourceLayers: {
       landcover: 'landcover',
       landuse: 'landuse',
@@ -487,6 +521,18 @@ export const defaultMapProviderConfigurationInput = {
       pois: 'poi',
       places: 'place',
       waterNames: 'water_name',
+    },
+  },
+  detailVector: {
+    id: 'osm-shortbread-v1',
+    label: 'OSM Shortbread',
+    tileJsonUrl: 'https://vector.openstreetmap.org/shortbread_v1/tilejson.json',
+    attribution:
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>',
+    sourceLayers: {
+      land: 'land',
+      buildings: 'buildings',
+      streets: 'streets',
     },
   },
   terrain: {
@@ -567,6 +613,10 @@ export function parseMapProviderConfiguration(
       ...parsed.vector,
       tileJsonUrl: resolveEndpoint(parsed.vector.tileJsonUrl, baseUrl),
       glyphsUrl: resolveEndpoint(parsed.vector.glyphsUrl, baseUrl),
+    },
+    detailVector: {
+      ...parsed.detailVector,
+      tileJsonUrl: resolveEndpoint(parsed.detailVector.tileJsonUrl, baseUrl),
     },
     terrain: {
       ...parsed.terrain,
@@ -649,9 +699,11 @@ export function summarizeMapProviderConfiguration(
   configuration: MapProviderConfiguration,
 ): MapProviderConfigurationSummary {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     vectorId: configuration.vector.id,
     vectorOrigin: new URL(configuration.vector.tileJsonUrl).origin,
+    detailVectorId: configuration.detailVector.id,
+    detailVectorOrigin: new URL(configuration.detailVector.tileJsonUrl).origin,
     terrainId: configuration.terrain.id,
     terrainOrigin: new URL(configuration.terrain.tileUrl).origin,
     satelliteId: configuration.satellite.id,

@@ -100,6 +100,7 @@ describe('AppDatabase', () => {
         'elevation-isolines': true,
         'natural-features': true,
         'restricted-areas': true,
+        'detail-context': true,
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,

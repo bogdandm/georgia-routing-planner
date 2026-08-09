@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "vector": {
     "id": "openfreemap-openmaptiles",
     "label": "OpenFreeMap",
     "tileJsonUrl": "https://tiles.openfreemap.org/planet",
     "glyphsUrl": "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
-    "attribution": "<a href=\"https://openfreemap.org\" target=\"_blank\">OpenFreeMap</a> · <a href=\"https://www.openmaptiles.org/\" target=\"_blank\">© OpenMapTiles</a> · Data from <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\">OpenStreetMap</a>",
+    "attribution": "<a href=\"https://openfreemap.org\" target=\"_blank\">OpenFreeMap</a> · <a href=\"https://www.openmaptiles.org/\" target=\"_blank\">© OpenMapTiles</a>",
     "sourceLayers": {
       "landcover": "landcover",
       "landuse": "landuse",
@@ -19,6 +19,17 @@
       "pois": "poi",
       "places": "place",
       "waterNames": "water_name"
+    }
+  },
+  "detailVector": {
+    "id": "osm-shortbread-v1",
+    "label": "OSM Shortbread",
+    "tileJsonUrl": "https://vector.openstreetmap.org/shortbread_v1/tilejson.json",
+    "attribution": "<a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\">© OpenStreetMap contributors</a>",
+    "sourceLayers": {
+      "land": "land",
+      "buildings": "buildings",
+      "streets": "streets"
     }
   },
   "terrain": {

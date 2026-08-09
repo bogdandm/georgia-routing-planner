@@ -308,8 +308,8 @@ the others behind the map's loading state.
 Markers is a browser-local library of named map points. **New marker** starts placement
 mode, and **Create marker here** is also available from the map context menu. A map
 click opens the editor with the nearest inspected POI name when available; the user
-confirms the name, one of 116 Material UI icons, and one of ten shared-theme colors
-before anything is stored.
+confirms the name, one of 117 Pinhead map icons organized in category tabs, and one of
+ten shared-theme colors before anything is stored.
 
 The contextual sidebar lists saved markers using the same row interaction pattern as
 Tracks. It sorts by newest, name, color, or distance from a captured map center; shows

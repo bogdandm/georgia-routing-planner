@@ -98,12 +98,22 @@ describe('MarkersWorkspace', () => {
     expect(screen.getByRole('textbox', { name: 'Marker name' })).toHaveValue(
       'Trailhead',
     );
-    await user.click(
-      screen.getByRole('button', { name: 'Choose marker icon. Current: Place' }),
+    const iconButton = screen.getByRole('button', {
+      name: 'Choose marker icon. Current: Place',
+    });
+    expect(iconButton.querySelector('svg')).toHaveAttribute('viewBox', '0 0 15 15');
+    await user.click(iconButton);
+    expect(screen.getByRole('tab', { name: 'Places' })).toHaveAttribute(
+      'aria-selected',
+      'true',
     );
-    expect(screen.getByRole('option', { name: 'Choose Hiking icon' })).toBeVisible();
-    expect(screen.getAllByRole('option').length).toBeGreaterThanOrEqual(100);
+    expect(screen.getByRole('option', { name: 'Choose Place icon' })).toBeVisible();
+    expect(
+      screen.queryByRole('option', { name: 'Choose Hiking icon' }),
+    ).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole('tab', { name: 'Activities' }));
+    expect(screen.getByRole('option', { name: 'Choose Hiking icon' })).toBeVisible();
     await user.click(screen.getByRole('option', { name: 'Choose Hiking icon' }));
     expect(
       screen.getAllByRole('button', { name: /Choose .+ marker color/ }),
@@ -215,6 +225,7 @@ describe('MarkersWorkspace', () => {
     await user.click(
       screen.getByRole('button', { name: 'Choose marker icon. Current: Place' }),
     );
+    await user.click(screen.getByRole('tab', { name: 'Activities' }));
     await user.click(screen.getByRole('option', { name: 'Choose Hiking icon' }));
     await user.click(screen.getByRole('button', { name: 'Choose teal marker color' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));

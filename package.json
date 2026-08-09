@@ -47,6 +47,7 @@
     "@turf/helpers": "7.3.5",
     "@turf/intersect": "7.3.5",
     "@turf/point-to-line-distance": "7.3.5",
+    "@waysidemapping/pinhead": "15.25.0",
     "dexie": "4.4.4",
     "geotiff": "3.0.5",
     "ky": "2.0.2",

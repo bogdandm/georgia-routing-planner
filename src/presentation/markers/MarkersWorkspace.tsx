@@ -54,6 +54,7 @@ import {
   markerColorOrder,
   markerIconFor,
 } from '@/presentation/markers/markerCatalog';
+import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
 import {
   MarkerEditorDialog,
   type MarkerAppearance,
@@ -589,7 +590,7 @@ export function MarkersPanel() {
                 </Paper>
               );
             }
-            const { Icon } = markerIconFor(marker.iconKey);
+            const icon = markerIconFor(marker.iconKey);
             const color = markerColorFor(marker.colorKey);
             const pending = pendingDeleteId === marker.id;
             const deleting = deletingId === marker.id;
@@ -679,7 +680,7 @@ export function MarkersPanel() {
                           placeItems: 'center',
                         }}
                       >
-                        <Icon sx={{ color: color.value, fontSize: 28 }} />
+                        <PinheadIcon svg={icon.svg} color={color.value} size={28} />
                       </Box>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" noWrap>

@@ -44,9 +44,9 @@ When usable elevation is available, the track view adds:
 ## Markers
 
 Place a marker from the Markers workspace or the map context menu. When a nearby point
-of interest is available, Trail Planner suggests its name before saving. Choose from 116
-icons and ten colors; saved markers render on the map and remain available after
-reopening the application.
+of interest is available, Trail Planner suggests its name before saving. Choose from 117
+Pinhead map icons grouped by category and ten colors; saved markers render on the map
+and remain available after reopening the application.
 
 The marker library sorts by creation time, name, color, or distance from the current map
 area. Marker search, grouping, remote synchronization, Satellite targeting, and copying

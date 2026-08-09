@@ -13,6 +13,8 @@ import {
   InputAdornment,
   Popover,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -29,8 +31,11 @@ import {
 import {
   markerColorCatalog,
   markerIconCatalog,
+  markerIconCategories,
   markerIconFor,
+  type MarkerIconCategory,
 } from '@/presentation/markers/markerCatalog';
+import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
 import { appColors } from '@/presentation/theme/appColors';
 
 export interface MarkerAppearance {
@@ -81,19 +86,23 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
   );
   const [iconAnchor, setIconAnchor] = useState<HTMLElement | null>(null);
   const [iconQuery, setIconQuery] = useState('');
+  const [iconCategory, setIconCategory] = useState<MarkerIconCategory>(
+    () => markerIconFor(iconKey).category,
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const selectedIcon = markerIconFor(iconKey);
   const filteredIcons = useMemo(() => {
     const query = iconQuery.trim().toLocaleLowerCase('en');
-    if (query.length === 0) return markerIconCatalog;
     return markerIconCatalog.filter(
       (entry) =>
-        entry.label.toLocaleLowerCase('en').includes(query) ||
-        entry.category.toLocaleLowerCase('en').includes(query),
+        (query.length > 0 || entry.category === iconCategory) &&
+        (query.length === 0 ||
+          entry.label.toLocaleLowerCase('en').includes(query) ||
+          entry.category.toLocaleLowerCase('en').includes(query)),
     );
-  }, [iconQuery]);
+  }, [iconCategory, iconQuery]);
 
   const openIconPicker = (event: MouseEvent<HTMLElement>) => {
     setIconAnchor(event.currentTarget);
@@ -159,24 +168,38 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
             />
           ) : null}
           {submitError !== null ? <Alert severity="error">{submitError}</Alert> : null}
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: '1fr',
+              alignItems: 'center',
+              gap: 1,
+              '@media (min-width: 420px)': {
+                gridTemplateColumns: 'auto minmax(0, 1fr)',
+              },
+            }}
+          >
             <Button
               aria-label={`Choose marker icon. Current: ${selectedIcon.label}`}
               onClick={openIconPicker}
               variant="outlined"
               size="small"
-              startIcon={<selectedIcon.Icon />}
+              startIcon={<PinheadIcon svg={selectedIcon.svg} size={18} />}
               endIcon={<ExpandMoreIcon />}
-              sx={{ minWidth: 0, px: 1.25 }}
+              sx={{ minWidth: 0, px: 1.25, justifySelf: 'start' }}
             >
               {selectedIcon.label}
             </Button>
-            <Stack
-              direction="row"
-              spacing={0.5}
+            <Box
               role="group"
               aria-label="Marker color"
-              sx={{ flexWrap: 'wrap' }}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(10, minmax(24px, 1fr))',
+                alignItems: 'center',
+                justifyItems: 'center',
+                minWidth: 0,
+              }}
             >
               {markerColorCatalog.map((color) => {
                 const selected = color.key === colorKey;
@@ -190,15 +213,15 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                         setColorKey(color.key);
                         setSubmitError(null);
                       }}
-                      sx={{ p: 0.25 }}
+                      sx={{ width: 26, height: 26, p: 0.25 }}
                     >
                       <Box
                         aria-hidden
                         sx={{
                           display: 'grid',
                           placeItems: 'center',
-                          width: 22,
-                          height: 22,
+                          width: 20,
+                          height: 20,
                           borderRadius: '50%',
                           bgcolor: color.value,
                           border: '1px solid',
@@ -209,15 +232,15 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                         }}
                       >
                         {selected ? (
-                          <CheckIcon sx={{ color: 'common.white', fontSize: 15 }} />
+                          <CheckIcon sx={{ color: 'common.white', fontSize: 14 }} />
                         ) : null}
                       </Box>
                     </IconButton>
                   </Tooltip>
                 );
               })}
-            </Stack>
-          </Stack>
+            </Box>
+          </Box>
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -237,7 +260,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Box sx={{ width: 320, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
+        <Box sx={{ width: 420, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
           <TextField
             autoFocus
             fullWidth
@@ -258,19 +281,38 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
               },
             }}
           />
+          <Tabs
+            value={iconCategory}
+            onChange={(_event, category: MarkerIconCategory) => {
+              setIconCategory(category);
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+            aria-label="Marker icon categories"
+            sx={{ mt: 0.5, minHeight: 40 }}
+          >
+            {markerIconCategories.map((category) => (
+              <Tab
+                key={category}
+                value={category}
+                label={category}
+                sx={{ minHeight: 40, minWidth: 'auto', px: 1.5 }}
+              />
+            ))}
+          </Tabs>
           <Box
             role="listbox"
             aria-label="Marker icons"
             sx={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(6, 1fr)',
+              gridTemplateColumns: 'repeat(7, 1fr)',
               gap: 0.5,
               maxHeight: 280,
               overflowY: 'auto',
               mt: 1,
             }}
           >
-            {filteredIcons.map(({ Icon, key, label }) => {
+            {filteredIcons.map(({ key, label, svg }) => {
               const selected = key === iconKey;
               return (
                 <Tooltip key={key} title={label}>
@@ -281,6 +323,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                     color={selected ? 'primary' : 'default'}
                     onClick={() => {
                       setIconKey(key);
+                      setIconCategory(markerIconFor(key).category);
                       setSubmitError(null);
                       setIconAnchor(null);
                       setIconQuery('');
@@ -291,7 +334,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                       borderRadius: 1,
                     }}
                   >
-                    <Icon />
+                    <PinheadIcon svg={svg} size={24} />
                   </IconButton>
                 </Tooltip>
               );

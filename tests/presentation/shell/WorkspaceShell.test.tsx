@@ -2221,13 +2221,13 @@ describe('WorkspaceShell', () => {
     const google = screen.getByRole('checkbox', { name: 'Google satellite imagery' });
     const sentinel = screen.getByRole('checkbox', { name: 'Satellite imagery' });
     await user.click(google);
-    expect(setVisibility).toHaveBeenLastCalledWith('google-satellite', true);
+    expect(setVisibility).toHaveBeenCalledWith('google-satellite', true);
     expect(google).toBeChecked();
     expect(sentinel).not.toBeChecked();
     expect(screen.getByRole('slider', { name: 'Opacity' })).toBeEnabled();
 
     await user.click(sentinel);
-    expect(setVisibility).toHaveBeenLastCalledWith('satellite-imagery', true);
+    expect(setVisibility).toHaveBeenCalledWith('satellite-imagery', true);
     expect(google).not.toBeChecked();
     expect(sentinel).toBeChecked();
   });

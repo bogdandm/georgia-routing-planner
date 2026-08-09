@@ -8,6 +8,7 @@ import {
   importedTrackLayerIds,
   mapLayerIds,
   mapSourceIds,
+  naprOrthophoto2025LayerIds,
   satelliteBasemapLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
@@ -43,11 +44,14 @@ class FakeLayerMap {
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
     this.sources.set(mapSourceIds.satelliteBasemap, { type: 'raster' });
+    this.sources.set(mapSourceIds.naprOrthophoto2025, { type: 'raster' });
     const layers = [...this.layers.entries()];
-    layers.splice(1, 0, [
-      satelliteBasemapLayerIds.imagery,
-      { id: satelliteBasemapLayerIds.imagery },
-    ]);
+    layers.splice(
+      1,
+      0,
+      [satelliteBasemapLayerIds.imagery, { id: satelliteBasemapLayerIds.imagery }],
+      [naprOrthophoto2025LayerIds.imagery, { id: naprOrthophoto2025LayerIds.imagery }],
+    );
     this.layers.clear();
     for (const [id, layer] of layers) this.layers.set(id, layer);
   }
@@ -456,6 +460,21 @@ describe('MapLibreLayerController', () => {
       appliedImagery: { status: 'hidden', visible: false },
     });
 
+    expect(controller.setLayerVisibility('napr-orthophoto-2025', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    expect(map.visibility.get(naprOrthophoto2025LayerIds.imagery)).toBe('visible');
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'napr-orthophoto-2025': true,
+        'satellite-imagery': false,
+      },
+      appliedImagery: { status: 'hidden', visible: false },
+    });
+
     expect(controller.setLayerVisibility('satellite-imagery', true)).toEqual({
       status: 'success',
     });
@@ -464,6 +483,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().visibility).toMatchObject({
       'google-satellite': false,
       'satellite-imagery': true,
+      'napr-orthophoto-2025': false,
     });
 
     expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
@@ -482,6 +502,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().visibility).toMatchObject({
       'google-satellite': false,
       'satellite-imagery': false,
+      'napr-orthophoto-2025': false,
     });
 
     expect(controller.setLayerVisibility('google-satellite', true)).toEqual({
@@ -493,7 +514,11 @@ describe('MapLibreLayerController', () => {
     );
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        visibility: { 'google-satellite': false, 'satellite-imagery': true },
+        visibility: {
+          'google-satellite': false,
+          'napr-orthophoto-2025': false,
+          'satellite-imagery': true,
+        },
       });
     });
   });
@@ -542,6 +567,33 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
 
+    expect(controller.setMapLayerPreset('napr-orthophoto-2025-hybrid')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'napr-orthophoto-2025': true,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 1,
+    });
+    expect(map.visibility.get(naprOrthophoto2025LayerIds.imagery)).toBe('visible');
+
+    expect(controller.setMapLayerPreset('napr-orthophoto-2025')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'napr-orthophoto-2025': true,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 0,
+    });
+
     expect(controller.setMapLayerPreset('google-satellite')).toEqual({
       status: 'success',
     });
@@ -560,6 +612,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: {
         'google-satellite': false,
+        'napr-orthophoto-2025': false,
         'satellite-imagery': true,
         roads: false,
       },
@@ -569,7 +622,7 @@ describe('MapLibreLayerController', () => {
     expect(controller.getAppliedScene()).toMatchObject({ id: 'preset-scene' });
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
-    expect(savePreferences).toHaveBeenCalledTimes(4);
+    expect(savePreferences).toHaveBeenCalledTimes(6);
     expect(log).toHaveBeenLastCalledWith({
       level: 'info',
       name: 'map.layer-preset.changed',
@@ -635,6 +688,41 @@ describe('MapLibreLayerController', () => {
     );
     expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
       aboveOrder.indexOf(terrainOverlayLayerIds.contourMinor),
+    );
+  });
+
+  it('uses each selected static basemap source readiness and clears it after recreation', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(controller.setLayerVisibility('napr-orthophoto-2025', true)).toEqual({
+      status: 'success',
+    });
+    map.fire('sourcedata', {
+      sourceId: mapSourceIds.naprOrthophoto2025,
+      sourceDataType: 'content',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+
+    map.removeSource(mapSourceIds.naprOrthophoto2025);
+    map.fire('styledata', {});
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(1);
+
+    map.addSource(mapSourceIds.naprOrthophoto2025, { type: 'raster' });
+    map.fire('styledata', {});
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(1);
+
+    map.fire('sourcedata', {
+      sourceId: mapSourceIds.naprOrthophoto2025,
+      sourceDataType: 'content',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
     );
   });
 
@@ -1726,6 +1814,7 @@ describe('MapLibreLayerController', () => {
     await services.database.saveMapLayerPreferences({
       visibility: {
         'google-satellite': false,
+        'napr-orthophoto-2025': false,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,
@@ -1789,6 +1878,7 @@ describe('MapLibreLayerController', () => {
         ...mapLayerStore.getState().visibility,
         'google-satellite': true,
         'satellite-imagery': true,
+        'napr-orthophoto-2025': true,
       },
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
@@ -1799,11 +1889,13 @@ describe('MapLibreLayerController', () => {
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
 
+    const savePreferences = vi.spyOn(services.database, 'saveMapLayerPreferences');
     await controller.restorePersistedState();
 
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
     expect(mapLayerStore.getState().visibility).toMatchObject({
       'google-satellite': true,
+      'napr-orthophoto-2025': false,
       'satellite-imagery': false,
     });
     await waitFor(async () => {
@@ -1811,6 +1903,7 @@ describe('MapLibreLayerController', () => {
         visibility: { 'google-satellite': true, 'satellite-imagery': false },
       });
     });
+    expect(savePreferences).toHaveBeenCalledTimes(1);
   });
 
   it('does not restore legacy persisted imagery after the map style becomes ready', async () => {

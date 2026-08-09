@@ -9,6 +9,7 @@ import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProv
 import {
   mapLayerIds,
   mapSourceIds,
+  naprOrthophoto2025LayerIds,
   satelliteBasemapLayerIds,
 } from '@/presentation/map/mapIds';
 import {
@@ -47,6 +48,13 @@ function createBasemapLayers(
       id: satelliteBasemapLayerIds.imagery,
       type: 'raster',
       source: mapSourceIds.satelliteBasemap,
+      layout: { visibility: 'none' },
+      paint: { 'raster-fade-duration': 0 },
+    },
+    {
+      id: naprOrthophoto2025LayerIds.imagery,
+      type: 'raster',
+      source: mapSourceIds.naprOrthophoto2025,
       layout: { visibility: 'none' },
       paint: { 'raster-fade-duration': 0 },
     },
@@ -488,6 +496,15 @@ export function createHikingMapStyle(
         tiles: [...configuration.satelliteBasemap.tileUrls],
         tileSize: configuration.satelliteBasemap.tileSize,
         attribution: configuration.satelliteBasemap.attribution,
+      },
+      [mapSourceIds.naprOrthophoto2025]: {
+        type: 'raster',
+        tiles: [...configuration.naprOrthophoto2025.tileUrls],
+        tileSize: configuration.naprOrthophoto2025.tileSize,
+        minzoom: configuration.naprOrthophoto2025.minZoom,
+        maxzoom: configuration.naprOrthophoto2025.maxZoom,
+        bounds: [...configuration.naprOrthophoto2025.bounds],
+        attribution: configuration.naprOrthophoto2025.attribution,
       },
     },
     layers: [...createBasemapLayers(configuration.vector.sourceLayers)],

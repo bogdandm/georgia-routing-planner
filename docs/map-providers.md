@@ -349,6 +349,32 @@ no supported API or SLA guarantee. The application intentionally sends no API ke
 billing credential, session token, or viewport-attribution request, and must not claim
 official Google Maps Platform compliance.
 
+## NAPR Orthophoto 2025
+
+The optional NAPR Orthophoto 2025 raster is a bounded, anonymous Web Mercator WMTS
+source for published Racha coverage, not a claim of nationwide 2025 imagery. The
+validated tile template is
+`https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
+It declares 256-pixel tiles, zoom matrices 0 through 19, and MapLibre bounds
+`[41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931]` in west,
+south, east, north order. MapLibre prevents requests outside those bounds; the map
+camera remains unrestricted and may show no NAPR imagery outside the published block.
+
+Evidence was captured on **2026-08-08** from the
+[WMTS capabilities document](https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/1.0.0/WMTSCapabilities.xml).
+It identifies `ORTHO_2025_BLK4` as an anonymous, fee-free layer, advertises `image/png`,
+and has no advertised access constraints or SLA. A bounded HTTPS tile request in the
+published coverage returned `200`, browser-permissive `access-control-allow-origin: *`,
+and an `image/jpeg` response payload behind the `.png` resource path. This is endpoint
+evidence, not an availability guarantee.
+
+The runtime attribution is
+`Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), Orthophoto 2025</a>`.
+NAPR is disabled by default, mutually exclusive with Google and Sentinel imagery, and
+uses the existing OpenStreetMap-opacity and terrain ordering once its own source content
+is ready. It has no application retry or fallback: failures remain best-effort and the
+vector basemap stays usable.
+
 ## Sentinel-2 catalog and raster feasibility
 
 The evidence below was revalidated on **2026-07-19** against Earth Search v1 and public

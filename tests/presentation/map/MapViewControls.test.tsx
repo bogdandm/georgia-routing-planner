@@ -64,9 +64,11 @@ describe('MapViewControls', () => {
       'Vector OSM',
       'Google Satellite Hybrid',
       'Google Satellite',
+      'NAPR Orthophoto 2025 Hybrid',
+      'NAPR Orthophoto 2025',
       'Sentinel-2 Hybrid',
     ]);
-    expect(menu.querySelectorAll('img')).toHaveLength(4);
+    expect(menu.querySelectorAll('img')).toHaveLength(6);
     expect(
       screen.getByRole('menuitemradio', { name: 'Google Satellite Hybrid' }),
     ).toHaveAttribute('aria-checked', 'true');
@@ -87,9 +89,18 @@ describe('MapViewControls', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitemradio', { name: 'Google Satellite' }));
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto 2025 Hybrid' }),
+    );
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto 2025' }),
+    );
 
-    expect(onLayerPresetChange).toHaveBeenCalledWith('google-satellite');
+    expect(onLayerPresetChange).toHaveBeenNthCalledWith(
+      1,
+      'napr-orthophoto-2025-hybrid',
+    );
+    expect(onLayerPresetChange).toHaveBeenNthCalledWith(2, 'napr-orthophoto-2025');
     expect(screen.getByRole('menu')).toBeVisible();
   });
 

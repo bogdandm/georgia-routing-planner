@@ -138,12 +138,14 @@ so the images compare layer content rather than different geography.
 
 Use these current combinations:
 
-| Asset                         | Google | Sentinel | OpenStreetMap opacity |
-| ----------------------------- | ------ | -------- | --------------------- |
-| `vector-osm.png`              | Off    | Hidden   | 100%                  |
-| `google-satellite-hybrid.png` | On     | Off      | 100%                  |
-| `google-satellite.png`        | On     | Off      | 0%                    |
-| `sentinel-2-hybrid.png`       | Off    | On       | 100%                  |
+| Asset                             | Google | NAPR | Sentinel | OpenStreetMap opacity |
+| --------------------------------- | ------ | ---- | -------- | --------------------- |
+| `vector-osm.png`                  | Off    | Off  | Hidden   | 100%                  |
+| `google-satellite-hybrid.png`     | On     | Off  | Off      | 100%                  |
+| `google-satellite.png`            | On     | Off  | Off      | 0%                    |
+| `napr-orthophoto-2025-hybrid.png` | Off    | On   | Off      | 100%                  |
+| `napr-orthophoto-2025.png`        | Off    | On   | Off      | 0%                    |
+| `sentinel-2-hybrid.png`           | Off    | Off  | On       | 100%                  |
 
 For a new preset, use the same URL, viewport, device scale, center crop, output format,
 and loading checks. Add only the layer-state combination and filename needed by that

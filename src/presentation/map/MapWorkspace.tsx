@@ -184,6 +184,10 @@ export function MapWorkspace({
     mapLayerStore,
     (state) => state.visibility['google-satellite'],
   );
+  const naprOrthophoto2025Visible = useStore(
+    mapLayerStore,
+    (state) => state.visibility['napr-orthophoto-2025'],
+  );
   const satelliteImagerySelected = useStore(
     mapLayerStore,
     (state) => state.visibility['satellite-imagery'],
@@ -276,14 +280,23 @@ export function MapWorkspace({
       : (appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
         appliedImagery.previousSceneKey !== null;
   let activeLayerPreset: MapLayerPreset | null = null;
-  if (!googleSatelliteVisible && !satelliteImageryVisible) {
+  if (
+    !googleSatelliteVisible &&
+    !naprOrthophoto2025Visible &&
+    !satelliteImageryVisible
+  ) {
     activeLayerPreset = 'vector-osm';
   } else if (googleSatelliteVisible && openStreetMapOpacity === 1) {
     activeLayerPreset = 'google-satellite-hybrid';
   } else if (googleSatelliteVisible && openStreetMapOpacity === 0) {
     activeLayerPreset = 'google-satellite';
+  } else if (naprOrthophoto2025Visible && openStreetMapOpacity === 1) {
+    activeLayerPreset = 'napr-orthophoto-2025-hybrid';
+  } else if (naprOrthophoto2025Visible && openStreetMapOpacity === 0) {
+    activeLayerPreset = 'napr-orthophoto-2025';
   } else if (
     !googleSatelliteVisible &&
+    !naprOrthophoto2025Visible &&
     satelliteImagerySelected &&
     satelliteImageryVisible &&
     openStreetMapOpacity === 1

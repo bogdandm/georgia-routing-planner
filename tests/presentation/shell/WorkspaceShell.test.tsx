@@ -513,6 +513,15 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
     ).not.toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'NAPR Orthophoto 2025' }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('checkbox', { name: 'NAPR Orthophoto 2025' }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByText('2025 aerial orthophoto for the published Racha coverage.'),
+    ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();

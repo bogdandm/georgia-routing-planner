@@ -3,6 +3,7 @@ export const mapSourceIds = {
   terrainDem: 'terrain-dem',
   terrainContours: 'terrain-contours',
   satelliteBasemap: 'satellite-basemap',
+  naprOrthophoto2025: 'napr-orthophoto-2025',
   sentinelRasterA: 'sentinel-raster-a',
   sentinelRasterB: 'sentinel-raster-b',
   sentinelFootprint: 'sentinel-footprint',
@@ -26,6 +27,10 @@ export const sentinelMapLayerIds = {
 
 export const satelliteBasemapLayerIds = {
   imagery: 'satellite-basemap-imagery',
+} as const;
+
+export const naprOrthophoto2025LayerIds = {
+  imagery: 'napr-orthophoto-2025-imagery',
 } as const;
 
 export const importedTrackLayerIds = {

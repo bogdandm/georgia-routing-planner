@@ -8,6 +8,7 @@ import {
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
+  naprOrthophoto2025LayerIds,
   satelliteBasemapLayerIds,
 } from '@/presentation/map/mapIds';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
@@ -39,9 +40,24 @@ describe('createHikingMapStyle', () => {
       tileSize: 256,
       attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
     });
+    expect(style.sources[mapSourceIds.naprOrthophoto2025]).toEqual({
+      type: 'raster',
+      tiles: [
+        'https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      minzoom: 0,
+      maxzoom: 19,
+      bounds: [
+        41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931,
+      ],
+      attribution:
+        'Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), Orthophoto 2025</a>',
+    });
     expect(layerIds).toEqual([
       mapLayerIds.background,
       satelliteBasemapLayerIds.imagery,
+      naprOrthophoto2025LayerIds.imagery,
       ...Object.values(mapLayerIds).slice(1),
     ]);
     expect(
@@ -49,6 +65,14 @@ describe('createHikingMapStyle', () => {
     ).toMatchObject({
       type: 'raster',
       source: mapSourceIds.satelliteBasemap,
+      layout: { visibility: 'none' },
+      paint: { 'raster-fade-duration': 0 },
+    });
+    expect(
+      style.layers.find((layer) => layer.id === naprOrthophoto2025LayerIds.imagery),
+    ).toMatchObject({
+      type: 'raster',
+      source: mapSourceIds.naprOrthophoto2025,
       layout: { visibility: 'none' },
       paint: { 'raster-fade-duration': 0 },
     });

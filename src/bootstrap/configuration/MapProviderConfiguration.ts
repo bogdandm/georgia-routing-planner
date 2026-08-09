@@ -37,6 +37,22 @@ const defaultSatelliteBasemap = {
   attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
 };
 
+const defaultNaprOrthophoto2025 = {
+  id: 'napr-orthophoto-2025',
+  label: 'NAPR Orthophoto 2025',
+  tileUrls: [
+    'https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
+  ],
+  tileSize: 256 as const,
+  minZoom: 0,
+  maxZoom: 19,
+  bounds: [
+    41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931,
+  ] as [number, number, number, number],
+  attribution:
+    'Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), Orthophoto 2025</a>',
+};
+
 const sourceLayerMappingSchema = z
   .object({
     landcover: z.string().min(1),
@@ -212,6 +228,58 @@ const mapProviderConfigurationInputSchema = z
       })
       .strict()
       .default(defaultSatelliteBasemap),
+    naprOrthophoto2025: z
+      .object({
+        id: z.string().regex(/^[a-z0-9-]+$/u),
+        label: z.string().min(1).max(80),
+        tileUrls: z
+          .array(
+            endpointSchema.refine(
+              (value) =>
+                value.includes('{z}') && value.includes('{x}') && value.includes('{y}'),
+              'NAPR orthophoto endpoint must contain {z}, {x}, and {y}.',
+            ),
+          )
+          .min(1)
+          .max(4),
+        tileSize: z.union([z.literal(256), z.literal(512)]),
+        minZoom: z.number().int().min(0).max(22),
+        maxZoom: z.number().int().min(0).max(22),
+        bounds: z.tuple([
+          z.number().min(-180).max(180),
+          z.number().min(-90).max(90),
+          z.number().min(-180).max(180),
+          z.number().min(-90).max(90),
+        ]),
+        attribution: safeAttributionSchema,
+      })
+      .strict()
+      .superRefine((orthophoto, context) => {
+        if (orthophoto.maxZoom <= orthophoto.minZoom) {
+          context.addIssue({
+            code: 'custom',
+            message: 'NAPR orthophoto maxZoom must be greater than minZoom.',
+            path: ['maxZoom'],
+          });
+        }
+
+        const [west, south, east, north] = orthophoto.bounds;
+        if (west >= east) {
+          context.addIssue({
+            code: 'custom',
+            message: 'NAPR orthophoto bounds west must be less than east.',
+            path: ['bounds'],
+          });
+        }
+        if (south >= north) {
+          context.addIssue({
+            code: 'custom',
+            message: 'NAPR orthophoto bounds south must be less than north.',
+            path: ['bounds'],
+          });
+        }
+      })
+      .default(defaultNaprOrthophoto2025),
     policy: z
       .object({
         requestTimeoutMs: z.number().int().min(1_000).max(30_000),
@@ -301,6 +369,16 @@ interface MapProviderConfigurationInput {
     readonly tileSize: 256 | 512;
     readonly attribution: string;
   };
+  readonly naprOrthophoto2025: {
+    readonly id: string;
+    readonly label: string;
+    readonly tileUrls: readonly string[];
+    readonly tileSize: 256 | 512;
+    readonly minZoom: number;
+    readonly maxZoom: number;
+    readonly bounds: readonly [number, number, number, number];
+    readonly attribution: string;
+  };
   readonly policy: {
     readonly requestTimeoutMs: number;
     readonly equivalentErrorWindowMs: number;
@@ -325,6 +403,8 @@ interface MapProviderConfigurationSummary {
   readonly satelliteRendererOrigin: string;
   readonly satelliteBasemapId: string;
   readonly satelliteBasemapOrigins: readonly string[];
+  readonly naprOrthophoto2025Id: string;
+  readonly naprOrthophoto2025Origins: readonly string[];
 }
 
 /** Anonymous, credential-free provider defaults used when no public override is supplied. */
@@ -404,6 +484,7 @@ export const defaultMapProviderConfigurationInput = {
     },
   },
   satelliteBasemap: defaultSatelliteBasemap,
+  naprOrthophoto2025: defaultNaprOrthophoto2025,
   policy: {
     requestTimeoutMs: 15_000,
     equivalentErrorWindowMs: 10_000,
@@ -448,6 +529,12 @@ export function parseMapProviderConfiguration(
     satelliteBasemap: {
       ...parsed.satelliteBasemap,
       tileUrls: parsed.satelliteBasemap.tileUrls.map((tileUrl) =>
+        resolveEndpoint(tileUrl, baseUrl),
+      ),
+    },
+    naprOrthophoto2025: {
+      ...parsed.naprOrthophoto2025,
+      tileUrls: parsed.naprOrthophoto2025.tileUrls.map((tileUrl) =>
         resolveEndpoint(tileUrl, baseUrl),
       ),
     },
@@ -496,6 +583,14 @@ export function summarizeMapProviderConfiguration(
     satelliteBasemapOrigins: [
       ...new Set(
         configuration.satelliteBasemap.tileUrls.map(
+          (tileUrl) => new URL(tileUrl).origin,
+        ),
+      ),
+    ],
+    naprOrthophoto2025Id: configuration.naprOrthophoto2025.id,
+    naprOrthophoto2025Origins: [
+      ...new Set(
+        configuration.naprOrthophoto2025.tileUrls.map(
           (tileUrl) => new URL(tileUrl).origin,
         ),
       ),

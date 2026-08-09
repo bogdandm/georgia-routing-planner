@@ -122,7 +122,8 @@ function categorizeMapError(
   if (
     sourceId === mapSourceIds.sentinelRasterA ||
     sourceId === mapSourceIds.sentinelRasterB ||
-    sourceId === mapSourceIds.satelliteBasemap
+    sourceId === mapSourceIds.satelliteBasemap ||
+    sourceId === mapSourceIds.naprOrthophoto2025
   ) {
     return 'satellite-raster';
   }

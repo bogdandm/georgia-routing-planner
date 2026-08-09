@@ -6,7 +6,7 @@ import type {
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
-export const LOCAL_TRACK_SCHEMA_VERSION = 3;
+export const LOCAL_TRACK_SCHEMA_VERSION = 4;
 
 export interface LocalTrackSummary {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
@@ -24,6 +24,7 @@ export interface LocalTrackSummary {
   readonly pointCount: number;
   readonly segmentCount: number;
   readonly metrics: TrackMetrics;
+  readonly calculatedMetrics?: TrackMetrics;
   readonly metadata: GpxMetadataProjection;
   readonly warnings: readonly GpxValidationWarning[];
   readonly generatedName?: string;
@@ -38,6 +39,7 @@ export interface LocalTrackContent {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly trackId: string;
   readonly trackPoints: readonly (readonly TrackPoint[])[];
+  readonly calculatedTrackPoints?: readonly (readonly TrackPoint[])[];
 }
 
 export function localTrackSegments(

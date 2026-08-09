@@ -123,26 +123,29 @@ the editable track-name field and the adjacent read-only **English place name** 
 For a track with a dominant interior summit, that candidate uses the nearest named OSM
 feature across supported POI, natural, and place categories rather than a hard-coded
 feature type. Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an
-`Mt.` prefix when the source name does not already include one. Save retains normalized
-points, independent line segments, source filename/format metadata, and versioned
-metrics in this browser; the original file bytes are discarded after parsing. Unsaved
-previews activate the native leave-site guard. Saved track cards show icon-led recorded
-duration, distance, and elevation gain when available. The detail pane presents
-duration, distance, derived average speed, elevation gain, and elevation loss in a
-wrapping stats grid, with missing measurements omitted; source file, point, segment, and
-save metadata, including a `DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved
-tracks are searchable by name, reopen after close, and rename only from the detail
-header's **Rename** action. That action replaces the saved title with a bounded name
-editor; the preview retains its body **Track name** field and English-name application
-flow. Each saved-track row keeps favorite and icon-only delete controls in the DOM,
-revealing inactive controls on pointer hover or keyboard focus; active favorites remain
-visible. Row selection and hover color cover the entire row, including its action
-column. Deletion uses two-stage inline confirmation: the row delete icon becomes a
-destructive confirmation icon, while **Delete track** in the detail action menu replaces
-that menu trigger with **Confirm delete**. Pointer exit, Escape, and click-away cancel
-either confirmation without mutation. Users can favorite a track from its list row or
-detail header; downloads remain in the detail header's compact action menu. Favorites
-sort before other tracks, with newest imports first inside each group. The latest opened
+`Mt.` prefix when the source name does not already include one. Save retains the exact
+normalized source points and a separate browser-calculated Terrarium projection,
+independent line segments, source filename/format metadata, and versioned metrics in
+this browser; the original file bytes are discarded after parsing. Unsaved previews
+activate the native leave-site guard. Saved track cards show icon-led recorded duration,
+distance, and source elevation gain when available. The detail pane's primary stats grid
+presents duration, distance, derived average speed, and authoritative source **Elevation
+gain**/**Elevation loss** only. Separate text rows for **Elevation gain (calculated)**
+and **Elevation loss (calculated)** appear below the point/segment count, outside that
+grid. Missing measurements are omitted; source file, point, segment, and save metadata,
+including a `DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved tracks are
+searchable by name, reopen after close, and rename only from the detail header's
+**Rename** action. That action replaces the saved title with a bounded name editor; the
+preview retains its body **Track name** field and English-name application flow. Each
+saved-track row keeps favorite and icon-only delete controls in the DOM, revealing
+inactive controls on pointer hover or keyboard focus; active favorites remain visible.
+Row selection and hover color cover the entire row, including its action column.
+Deletion uses two-stage inline confirmation: the row delete icon becomes a destructive
+confirmation icon, while **Delete track** in the detail action menu replaces that menu
+trigger with **Confirm delete**. Pointer exit, Escape, and click-away cancel either
+confirmation without mutation. Users can favorite a track from its list row or detail
+header; downloads remain in the detail header's compact action menu. Favorites sort
+before other tracks, with newest imports first inside each group. The latest opened
 saved track reopens after restart when its content is still valid. A compact
 local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
 filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
@@ -158,9 +161,11 @@ timestamps without writing GPX or KML description elements; conversion never upl
 source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
-grid, axis tooltip, and a map marker synchronized to the highlighted chart point. The
-profile is calculated from the retained source points and does not repeat the
-ascent/descent metrics already shown in the stats grid.
+grid, axis tooltip, and a map marker synchronized to the highlighted chart point. Parsed
+source elevation remains authoritative for that profile, grades, and climb/descent
+analysis; the calculated Terrarium profile is used only when the source has no complete
+elevation run. The profile does not repeat the ascent/descent metrics already shown in
+the stats grid.
 
 From 900 through 1899 CSS pixels, an open track detail pane overlays Tracks tools and
 **Back to tracks** restores the prior import, search, and list state. At 1900 CSS pixels

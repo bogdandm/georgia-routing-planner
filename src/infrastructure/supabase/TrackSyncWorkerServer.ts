@@ -6,6 +6,7 @@ import {
   decodeTrackSyncGeometry,
   encodeTrackSyncGeometry,
 } from '@/domain/tracks/trackSyncGeometry';
+import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
 import type { RemoteTrackDeletionCandidate } from '@/application/user/UserDataService';
 import {
   validateLocalTrackSyncPair,
@@ -316,6 +317,7 @@ function remoteMetadata(
 ): Record<string, unknown> {
   const {
     metrics: _metrics,
+    calculatedMetrics: _calculatedMetrics,
     startPoi: _startPoi,
     middlePoi: _middlePoi,
     endPoi: _endPoi,
@@ -368,7 +370,7 @@ function localFromRemote(
     const decoded = decodeTrackSyncGeometry(geometry);
     const id = localId ?? `local:sync:${record.content_hash}`;
     const summary: Record<string, unknown> = {
-      schemaVersion: 3,
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       id,
       name,
       normalizedName: name.toLocaleLowerCase('en'),
@@ -393,7 +395,11 @@ function localFromRemote(
     }
     return validateLocalTrackSyncPair({
       summary,
-      content: { schemaVersion: 3, trackId: id, trackPoints: decoded },
+      content: {
+        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+        trackId: id,
+        trackPoints: decoded,
+      },
     });
   } catch {
     throw new TrackSyncWorkerError(

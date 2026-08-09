@@ -516,14 +516,17 @@ test('persists valid public GPX exports and rejects zero-length geometry', async
   }
 
   await expect(page.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
-  const expectedPreparedPointCount = 10_148;
+  const expectedSourcePointCount = realWorldTrackFixtures.reduce(
+    (total, fixture) => total + ('zeroLength' in fixture ? 0 : fixture.pointCount),
+    0,
+  );
   const garminSummary = await readStoredTrackSummary(
     page,
     'garmin-connect-activity.gpx',
   );
   expect(await readStoredTrackState(page)).toEqual({
     contentCount: 6,
-    pointCount: expectedPreparedPointCount,
+    pointCount: expectedSourcePointCount,
     summaryCount: 6,
     sourceBlobCount: 0,
   });

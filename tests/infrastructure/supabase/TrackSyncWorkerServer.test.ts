@@ -1,4 +1,10 @@
+import { Blob as NodeBlob } from 'node:buffer';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
+import { decodeTrackSyncGeometry } from '@/domain/tracks/trackSyncGeometry';
+import type { LocalTrackSyncPair } from '@/infrastructure/persistence/AppDatabase';
 
 import { FetchRemoteGateway } from '@/infrastructure/supabase/TrackSyncWorkerServer';
 
@@ -7,7 +13,7 @@ const signal = new AbortController().signal;
 
 const pair = {
   summary: {
-    schemaVersion: 3 as const,
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     id: 'local:track',
     name: 'Track',
     normalizedName: 'track',
@@ -38,13 +44,13 @@ const pair = {
     warnings: [],
   },
   content: {
-    schemaVersion: 3 as const,
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId: 'local:track',
     trackPoints: [
       [{ coordinate: [44, 42] as const }, { coordinate: [44.01, 42.01] as const }],
     ],
   },
-};
+} satisfies LocalTrackSyncPair;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -77,6 +83,81 @@ describe('FetchRemoteGateway', () => {
         signal,
       ),
     ).resolves.toEqual({ outcome: 'applied', revision: 4 });
+  });
+  it('excludes browser-calculated elevation from cloud metadata and geometry', async () => {
+    class CapturingFormData {
+      readonly #values = new Map<string, unknown>();
+
+      public set(name: string, value: unknown): void {
+        this.#values.set(name, value);
+      }
+
+      public get(name: string): unknown {
+        return this.#values.get(name) ?? null;
+      }
+    }
+    vi.stubGlobal('FormData', CapturingFormData);
+    vi.stubGlobal('Blob', NodeBlob);
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        outcome: 'applied',
+        record: { contentHash, revision: 1, state: 'ready' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const calculatedMetrics = {
+      ...pair.summary.metrics,
+      ascentMeters: 125,
+      descentMeters: 110,
+      minimumElevationMeters: 900,
+      maximumElevationMeters: 1_025,
+      elevationSource: 'dem-assisted' as const,
+      elevationAlgorithmVersion: 4 as const,
+    };
+    const pairWithCalculatedElevation: LocalTrackSyncPair = {
+      summary: { ...pair.summary, calculatedMetrics },
+      content: {
+        ...pair.content,
+        calculatedTrackPoints: [
+          [
+            { coordinate: [44, 42], elevationMeters: 9_000 },
+            { coordinate: [44.01, 42.01], elevationMeters: 9_100 },
+          ],
+        ],
+      },
+    };
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+
+    await gateway.mutate(
+      {
+        trackId: pair.summary.id,
+        contentHash,
+        remoteRevision: null,
+        pendingKind: 'upsert',
+      },
+      pairWithCalculatedElevation,
+      signal,
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const form = request.body as FormData;
+    const metadataValue = form.get('metadata');
+    expect(typeof metadataValue).toBe('string');
+    if (typeof metadataValue !== 'string') return;
+    const metadata = JSON.parse(metadataValue) as Record<string, unknown>;
+    expect(metadata).not.toHaveProperty('calculatedMetrics');
+    const geometry = form.get('geometry');
+    expect(geometry).toBeInstanceOf(Blob);
+    const decompressed = await new Response(
+      (geometry as Blob).stream().pipeThrough(new DecompressionStream('gzip')),
+    ).arrayBuffer();
+    expect(decodeTrackSyncGeometry(new Uint8Array(decompressed))).toEqual(
+      pair.content.trackPoints,
+    );
   });
 
   it('accepts a successful delete response without a record', async () => {

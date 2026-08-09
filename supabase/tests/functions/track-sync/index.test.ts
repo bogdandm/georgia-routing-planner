@@ -1,19 +1,23 @@
 import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
-import fixture from '../../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
+import fixtureV1 from '../../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
+import fixtureV2 from '../../../../tests/fixtures/track-sync/geometry-v2.json' with { type: 'json' };
 import {
   TRACK_GEOMETRY_BUCKET,
   TRACK_QUOTA_BYTES,
 } from '../../../functions/track-sync/internal/contracts.ts';
-import { validateCanonicalGeometry } from '../../../functions/track-sync/internal/geometry.ts';
+import {
+  validateCanonicalGeometry,
+  validateGeometryUpload,
+} from '../../../functions/track-sync/internal/geometry.ts';
 import { SupabaseTrackSyncGateway } from '../../../functions/track-sync/internal/supabase-track-sync-gateway.ts';
 import { handleTrackSync } from '../../../functions/track-sync/track-sync.ts';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_USER_ID = '22222222-2222-4222-8222-222222222222';
 const UPLOAD_ID = '33333333-3333-4333-8333-333333333333';
-const CONTENT_HASH = fixture.sha256;
+const CONTENT_HASH = fixtureV1.sha256;
 const OBJECT_PATH = `${USER_ID}/${CONTENT_HASH}/${UPLOAD_ID}.grpt.gz`;
 
 type RpcResult =
@@ -42,6 +46,25 @@ interface FakeState {
 
 function bytesFromHex(hex: string): Uint8Array {
   return Uint8Array.from(hex.match(/../g) ?? [], (value) => Number.parseInt(value, 16));
+}
+
+function varUint(value: number): number[] {
+  const bytes: number[] = [];
+  do {
+    let byte = value & 0x7f;
+    value = Math.floor(value / 128);
+    if (value !== 0) byte |= 0x80;
+    bytes.push(byte);
+  } while (value !== 0);
+  return bytes;
+}
+
+function v2ElevationEnvelope(elevationMeters: number): Uint8Array {
+  const bytes = Uint8Array.from([
+    0x47, 0x52, 0x50, 0x54, 2, 0x02, 1, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+  new DataView(bytes.buffer).setFloat64(11, elevationMeters, false);
+  return bytes;
 }
 
 function queuedRpc(state: FakeState, name: string): RpcResult {
@@ -204,15 +227,19 @@ function uploadRequest(
     readonly baseRevision?: number;
     readonly compressedBytes?: number;
     readonly gzipHex?: string;
+    readonly metadata?: unknown;
   } = {},
 ): Request {
-  const geometry = bytesFromHex(overrides.gzipHex ?? fixture.gzipHex);
+  const geometry = bytesFromHex(overrides.gzipHex ?? fixtureV1.gzipHex);
   const form = new FormData();
   form.set('action', 'upload');
   form.set('baseRevision', String(overrides.baseRevision ?? 0));
   form.set('contentHash', overrides.contentHash ?? CONTENT_HASH);
   form.set('compressedBytes', String(overrides.compressedBytes ?? geometry.byteLength));
-  form.set('metadata', JSON.stringify({ name: 'Synthetic track' }));
+  form.set(
+    'metadata',
+    JSON.stringify(overrides.metadata ?? { name: 'Synthetic track' }),
+  );
   form.set(
     'geometry',
     new File([new Uint8Array(geometry).buffer], 'geometry.grpt.gz', {
@@ -241,11 +268,13 @@ async function captureConsoleErrors(
   }
 }
 
-Deno.test(
-  'the shared fixture is a valid version 1 GRPT envelope with its declared hash',
-  async () => {
+Deno.test('both shared GRPT fixtures match their envelope and hash', async () => {
+  for (const [fixture, version] of [
+    [fixtureV1, 1],
+    [fixtureV2, 2],
+  ] as const) {
     const canonical = bytesFromHex(fixture.canonicalHex);
-    validateCanonicalGeometry(canonical);
+    assertEquals(validateCanonicalGeometry(canonical), version);
     const digest = new Uint8Array(
       await crypto.subtle.digest('SHA-256', new Uint8Array(canonical).buffer),
     );
@@ -253,23 +282,140 @@ Deno.test(
       '',
     );
     assertEquals(hash, fixture.sha256);
-  },
-);
+    assertEquals(
+      await validateGeometryUpload(bytesFromHex(fixture.gzipHex), fixture.sha256),
+      version,
+    );
+  }
+});
 
 Deno.test(
   'unsupported codecs and malformed envelopes are rejected deterministically',
   () => {
-    const unsupported = bytesFromHex(fixture.canonicalHex);
-    unsupported[4] = 2;
+    const unsupported = bytesFromHex(fixtureV1.canonicalHex);
+    unsupported[4] = 3;
     assertThrows(
       () => validateCanonicalGeometry(unsupported),
       Error,
-      'Only GRPT codec version 1',
+      'Only GRPT codec versions 1 and 2',
     );
+    for (const [fixture, unknownFlag] of [
+      [fixtureV1, 0x02],
+      [fixtureV2, 0x04],
+    ] as const) {
+      const unsupportedFlags = bytesFromHex(fixture.canonicalHex);
+      unsupportedFlags[5] = unknownFlag;
+      assertThrows(
+        () => validateCanonicalGeometry(unsupportedFlags),
+        Error,
+        'unsupported flags',
+      );
+    }
     assertThrows(
-      () => validateCanonicalGeometry(bytesFromHex(`${fixture.canonicalHex}00`)),
+      () => validateCanonicalGeometry(bytesFromHex(`${fixtureV1.canonicalHex}00`)),
       Error,
       'trailing bytes',
+    );
+  },
+);
+
+Deno.test('v2 elevations and browser geometry limits are enforced', () => {
+  const invalidTag = Uint8Array.from([0x47, 0x52, 0x50, 0x54, 2, 0x02, 1, 2, 0, 0, 2]);
+  const truncatedValue = Uint8Array.from([
+    0x47, 0x52, 0x50, 0x54, 2, 0x02, 1, 2, 0, 0, 1, 0, 0,
+  ]);
+  for (const malformed of [
+    invalidTag,
+    truncatedValue,
+    v2ElevationEnvelope(Number.NaN),
+    v2ElevationEnvelope(Number.POSITIVE_INFINITY),
+    v2ElevationEnvelope(Number.NEGATIVE_INFINITY),
+  ]) {
+    assertThrows(
+      () => validateCanonicalGeometry(malformed),
+      Error,
+      'invalid elevation',
+    );
+  }
+
+  for (const version of [1, 2]) {
+    assertThrows(
+      () =>
+        validateCanonicalGeometry(
+          Uint8Array.from([0x47, 0x52, 0x50, 0x54, version, 0, ...varUint(513)]),
+        ),
+      Error,
+      'invalid segment count',
+    );
+    assertThrows(
+      () =>
+        validateCanonicalGeometry(
+          Uint8Array.from([0x47, 0x52, 0x50, 0x54, version, 0, 1, ...varUint(100_001)]),
+        ),
+      Error,
+      'too many points',
+    );
+  }
+});
+
+Deno.test(
+  'lineage metadata and envelope versions are validated before backend access',
+  async () => {
+    const invalidUploads = [
+      uploadRequest({
+        metadata: { lineageHash: 'A'.repeat(64), geometryVersion: 1 },
+      }),
+      uploadRequest({
+        metadata: { lineageHash: CONTENT_HASH, geometryVersion: 3 },
+      }),
+      uploadRequest({
+        metadata: { lineageHash: CONTENT_HASH, geometryVersion: 2 },
+      }),
+      uploadRequest({
+        contentHash: fixtureV2.sha256,
+        gzipHex: fixtureV2.gzipHex,
+        metadata: { lineageHash: CONTENT_HASH },
+      }),
+      uploadRequest({
+        contentHash: fixtureV2.sha256,
+        gzipHex: fixtureV2.gzipHex,
+        metadata: { lineageHash: CONTENT_HASH, geometryVersion: 1 },
+      }),
+    ];
+
+    for (const request of invalidUploads) {
+      const state = makeState();
+      const response = await handleTrackSync(request, makeContext(state));
+      assertEquals(response.status, 400);
+      assertEquals(
+        ((await responseJson(response)).error as Record<string, unknown>).code,
+        'invalid_metadata',
+      );
+      assertEquals(state.calls.length, 0);
+    }
+
+    const state = makeState();
+    state.rpcResults.set('reserve_track_upload', [
+      {
+        data: {
+          outcome: 'conflict',
+          record: { content_hash: fixtureV2.sha256, revision: 1 },
+        },
+        error: null,
+      },
+    ]);
+    const validV2 = await handleTrackSync(
+      uploadRequest({
+        contentHash: fixtureV2.sha256,
+        gzipHex: fixtureV2.gzipHex,
+        metadata: { lineageHash: CONTENT_HASH, geometryVersion: 2 },
+      }),
+      makeContext(state),
+    );
+    assertEquals(validV2.status, 200);
+    assertEquals(
+      state.calls.filter((call) => call.kind === 'rpc').map((call) => call.name),
+      ['reserve_track_upload'],
     );
   },
 );
@@ -397,7 +543,7 @@ Deno.test(
     assert(uploadValue !== undefined);
     assert(uploadValue.body instanceof ArrayBuffer);
     assertEquals(uploadValue.options.contentType, 'application/gzip');
-    assertEquals(new Uint8Array(uploadValue.body), bytesFromHex(fixture.gzipHex));
+    assertEquals(new Uint8Array(uploadValue.body), bytesFromHex(fixtureV1.gzipHex));
   },
 );
 

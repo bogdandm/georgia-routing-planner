@@ -80,19 +80,56 @@
     "tileSize": 256,
     "attribution": "<a href=\"https://www.google.com/maps\" target=\"_blank\">© Google</a>"
   },
-  "naprOrthophoto2025": {
-    "id": "napr-orthophoto-2025",
-    "label": "NAPR Orthophoto 2025",
-    "tileUrls": [
-      "https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png"
-    ],
-    "tileSize": 256,
-    "minZoom": 0,
-    "maxZoom": 19,
-    "bounds": [
-      41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931
-    ],
-    "attribution": "Imagery: <a href=\"https://maps.gov.ge/\" target=\"_blank\">National Agency of Public Registry (NAPR), Orthophoto 2025</a>"
+  "naprOrthophoto": {
+    "id": "napr-orthophoto",
+    "label": "NAPR orthophoto mosaic",
+    "sources": {
+      "national2016To2017": {
+        "tileUrls": [
+          "https://nt0.napr.gov.ge/NGCache?x={x}&y={y}&z={z}&l=ORTHO_GEORGIA_4"
+        ],
+        "tileSize": 256,
+        "minZoom": 0,
+        "maxZoom": 19,
+        "bounds": [
+          39.854887835932935, 40.95043078335194, 46.811064678938735, 43.68599206966364
+        ]
+      },
+      "westernGeorgia2020": {
+        "tileUrls": [
+          "https://mp.napr.gov.ge/ORTHO_2020_DASAVLETI/wmts/ORTHO_2020_DASAVLETI/GLOBAL_MERCATOR/{z}/{x}/{y}.png"
+        ],
+        "tileSize": 256,
+        "minZoom": 0,
+        "maxZoom": 19,
+        "bounds": [
+          41.397448792721505, 41.5288960450433, 43.455051840654676, 42.815072774303644
+        ]
+      },
+      "kutaisi2020": {
+        "tileUrls": [
+          "https://mp.napr.gov.ge/ORTHO_2020_KUTAISI/wmts/ORTHO_2020_KUTAISI/GLOBAL_MERCATOR/{z}/{x}/{y}.png"
+        ],
+        "tileSize": 256,
+        "minZoom": 0,
+        "maxZoom": 20,
+        "bounds": [
+          42.598257144482105, 42.211097128103006, 42.74659092533837, 42.29503776969293
+        ]
+      },
+      "racha2025": {
+        "tileUrls": [
+          "https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png"
+        ],
+        "tileSize": 256,
+        "minZoom": 0,
+        "maxZoom": 19,
+        "bounds": [
+          41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931
+        ]
+      }
+    },
+    "attribution": "Imagery: <a href=\"https://maps.gov.ge/\" target=\"_blank\">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>"
   },
   "policy": {
     "requestTimeoutMs": 15000,

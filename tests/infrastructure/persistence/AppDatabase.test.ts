@@ -93,7 +93,7 @@ describe('AppDatabase', () => {
     const preferences = {
       visibility: {
         'google-satellite': true,
-        'napr-orthophoto-2025': false,
+        'napr-orthophoto': false,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,
@@ -164,7 +164,7 @@ describe('AppDatabase', () => {
 
   it('repairs otherwise valid older layer preferences missing NAPR visibility', async () => {
     const preferences = await database.loadMapLayerPreferences();
-    const { 'napr-orthophoto-2025': _naprOrthophoto2025, ...visibility } =
+    const { 'napr-orthophoto': _naprOrthophoto, ...visibility } =
       preferences.visibility;
     await database.settings.put({
       key: 'map.layers',
@@ -175,11 +175,11 @@ describe('AppDatabase', () => {
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: {
         'google-satellite': false,
-        'napr-orthophoto-2025': false,
+        'napr-orthophoto': false,
       },
     });
     await expect(database.settings.get('map.layers')).resolves.toMatchObject({
-      value: { visibility: { 'napr-orthophoto-2025': false } },
+      value: { visibility: { 'napr-orthophoto': false } },
     });
   });
 

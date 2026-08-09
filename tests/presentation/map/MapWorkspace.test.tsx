@@ -900,7 +900,7 @@ describe('MapWorkspace', () => {
       mapLayerStore.setState({
         visibility: {
           ...mapLayerStore.getState().visibility,
-          'napr-orthophoto-2025': true,
+          'napr-orthophoto': true,
         },
         openStreetMapOpacity: 1,
       });
@@ -914,17 +914,15 @@ describe('MapWorkspace', () => {
     await screen.findByText('NAPR map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
     expect(
-      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto 2025 Hybrid' }),
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
     ).toHaveAttribute('aria-checked', 'true');
     await user.click(
-      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto 2025 Hybrid' }),
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
     );
-    await user.click(
-      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto 2025' }),
-    );
+    await user.click(screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }));
 
-    expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'napr-orthophoto-2025-hybrid');
-    expect(setMapLayerPreset).toHaveBeenNthCalledWith(2, 'napr-orthophoto-2025');
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'napr-orthophoto-hybrid');
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(2, 'napr-orthophoto');
     expect(useUiStore.getState()).toMatchObject({
       activeTab: 'layers',
       mobileWorkspaceOpen: false,

@@ -8,8 +8,8 @@ export type MapLayerPreset =
   | 'vector-osm'
   | 'google-satellite-hybrid'
   | 'google-satellite'
-  | 'napr-orthophoto-2025-hybrid'
-  | 'napr-orthophoto-2025'
+  | 'napr-orthophoto-hybrid'
+  | 'napr-orthophoto'
   | 'sentinel-2-hybrid';
 
 export interface MapCoordinate {

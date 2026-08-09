@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import { naprOrthophotoSourceIds } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
@@ -681,7 +682,10 @@ describe('MapLibreFacade', () => {
 
   it.each([
     { name: 'Google', sourceId: 'satellite-basemap' },
-    { name: 'NAPR', sourceId: 'napr-orthophoto-2025' },
+    ...Object.values(naprOrthophotoSourceIds).map((sourceId) => ({
+      name: `NAPR ${sourceId}`,
+      sourceId,
+    })),
   ])(
     'classifies $name static basemap tiles as satellite raster failures',
     ({ sourceId }) => {

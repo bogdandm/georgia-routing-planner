@@ -15,8 +15,8 @@ import { useId, useState, type MouseEvent } from 'react';
 
 import googleSatelliteHybridPreview from '@/presentation/map/layer-previews/google-satellite-hybrid.png';
 import googleSatellitePreview from '@/presentation/map/layer-previews/google-satellite.png';
-import naprOrthophoto2025HybridPreview from '@/presentation/map/layer-previews/napr-orthophoto-2025-hybrid.png';
-import naprOrthophoto2025Preview from '@/presentation/map/layer-previews/napr-orthophoto-2025.png';
+import naprOrthophotoHybridPreview from '@/presentation/map/layer-previews/napr-orthophoto-hybrid.png';
+import naprOrthophotoPreview from '@/presentation/map/layer-previews/napr-orthophoto.png';
 import sentinel2HybridPreview from '@/presentation/map/layer-previews/sentinel-2-hybrid.png';
 import type { MapLayerPreset, TerrainMode } from '@/presentation/map/mapTypes';
 import vectorOsmPreview from '@/presentation/map/layer-previews/vector-osm.png';
@@ -53,14 +53,14 @@ const layerPresets: readonly {
     value: 'google-satellite',
   },
   {
-    label: 'NAPR Orthophoto 2025 Hybrid',
-    preview: naprOrthophoto2025HybridPreview,
-    value: 'napr-orthophoto-2025-hybrid',
+    label: 'NAPR Orthophoto Hybrid',
+    preview: naprOrthophotoHybridPreview,
+    value: 'napr-orthophoto-hybrid',
   },
   {
-    label: 'NAPR Orthophoto 2025',
-    preview: naprOrthophoto2025Preview,
-    value: 'napr-orthophoto-2025',
+    label: 'NAPR Orthophoto',
+    preview: naprOrthophotoPreview,
+    value: 'napr-orthophoto',
   },
   {
     label: 'Sentinel-2 Hybrid',

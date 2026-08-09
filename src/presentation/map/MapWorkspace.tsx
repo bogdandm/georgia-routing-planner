@@ -184,9 +184,9 @@ export function MapWorkspace({
     mapLayerStore,
     (state) => state.visibility['google-satellite'],
   );
-  const naprOrthophoto2025Visible = useStore(
+  const naprOrthophotoVisible = useStore(
     mapLayerStore,
-    (state) => state.visibility['napr-orthophoto-2025'],
+    (state) => state.visibility['napr-orthophoto'],
   );
   const satelliteImagerySelected = useStore(
     mapLayerStore,
@@ -280,23 +280,19 @@ export function MapWorkspace({
       : (appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
         appliedImagery.previousSceneKey !== null;
   let activeLayerPreset: MapLayerPreset | null = null;
-  if (
-    !googleSatelliteVisible &&
-    !naprOrthophoto2025Visible &&
-    !satelliteImageryVisible
-  ) {
+  if (!googleSatelliteVisible && !naprOrthophotoVisible && !satelliteImageryVisible) {
     activeLayerPreset = 'vector-osm';
   } else if (googleSatelliteVisible && openStreetMapOpacity === 1) {
     activeLayerPreset = 'google-satellite-hybrid';
   } else if (googleSatelliteVisible && openStreetMapOpacity === 0) {
     activeLayerPreset = 'google-satellite';
-  } else if (naprOrthophoto2025Visible && openStreetMapOpacity === 1) {
-    activeLayerPreset = 'napr-orthophoto-2025-hybrid';
-  } else if (naprOrthophoto2025Visible && openStreetMapOpacity === 0) {
-    activeLayerPreset = 'napr-orthophoto-2025';
+  } else if (naprOrthophotoVisible && openStreetMapOpacity === 1) {
+    activeLayerPreset = 'napr-orthophoto-hybrid';
+  } else if (naprOrthophotoVisible && openStreetMapOpacity === 0) {
+    activeLayerPreset = 'napr-orthophoto';
   } else if (
     !googleSatelliteVisible &&
-    !naprOrthophoto2025Visible &&
+    !naprOrthophotoVisible &&
     satelliteImagerySelected &&
     satelliteImageryVisible &&
     openStreetMapOpacity === 1

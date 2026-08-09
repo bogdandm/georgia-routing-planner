@@ -34,10 +34,10 @@ const googleSatelliteControl = {
   requiresScene: false,
 } as const satisfies LayerControl;
 
-const naprOrthophoto2025Control = {
-  id: 'napr-orthophoto-2025',
-  label: 'NAPR Orthophoto 2025',
-  description: '2025 aerial orthophoto for the published Racha coverage.',
+const naprOrthophotoControl = {
+  id: 'napr-orthophoto',
+  label: 'NAPR Orthophoto',
+  description: 'Newest available NAPR orthophoto: 2025, then 2020, then 2016–2017.',
   requiresScene: false,
 } as const satisfies LayerControl;
 
@@ -146,11 +146,7 @@ export function LayersPanel() {
       id: 'satellites',
       title: 'Satellites',
       description: 'Satellite basemaps and applied observation scenes.',
-      controls: [
-        googleSatelliteControl,
-        naprOrthophoto2025Control,
-        ...sentinelControls,
-      ],
+      controls: [googleSatelliteControl, naprOrthophotoControl, ...sentinelControls],
     },
     {
       id: 'terrain',
@@ -255,7 +251,7 @@ export function LayersPanel() {
                     disabled={
                       mapLayers === null ||
                       (!state.visibility['google-satellite'] &&
-                        !state.visibility['napr-orthophoto-2025'] &&
+                        !state.visibility['napr-orthophoto'] &&
                         !satelliteImageryVisible)
                     }
                     min={0}

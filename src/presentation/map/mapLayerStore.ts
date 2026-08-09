@@ -81,7 +81,7 @@ const initialMapLayerState: MapLayerState = {
   },
   visibility: {
     'google-satellite': false,
-    'napr-orthophoto-2025': false,
+    'napr-orthophoto': false,
     'satellite-imagery': true,
     'scene-footprint': true,
     'terrain-relief': true,

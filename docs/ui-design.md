@@ -121,9 +121,11 @@ so the images compare layer content rather than different geography.
 
 1. Start the application from the owning worktree:
    `./node_modules/.bin/vite --port 5173 --strictPort`.
-2. Open `http://127.0.0.1:5173/?map=2&lat=43.043&lon=42.720&z=12&view=2d` in Chromium
-   with a 1440×1000 CSS-pixel viewport and device scale factor 2. This fixed Mestia view
-   centers the river confluence and the mountain contours that separate its valleys.
+2. Open the documented provider camera in Chromium with a 1440×1000 CSS-pixel viewport
+   and device scale factor 2. The default camera is
+   `?map=2&lat=43.043&lon=42.720&z=12&view=2d`, which centers Mestia's river confluence
+   and mountain contours. A provider pair must share one camera; a provider with bounded
+   imagery may instead define its own documented camera.
 3. Apply the required layer combination through the running application's Layers
    controls. Wait until the visible raster and vector sources have finished loading; for
    Sentinel, wait until scene application and 100% full-coverage rendering have
@@ -138,14 +140,18 @@ so the images compare layer content rather than different geography.
 
 Use these current combinations:
 
-| Asset                             | Google | NAPR | Sentinel | OpenStreetMap opacity |
-| --------------------------------- | ------ | ---- | -------- | --------------------- |
-| `vector-osm.png`                  | Off    | Off  | Hidden   | 100%                  |
-| `google-satellite-hybrid.png`     | On     | Off  | Off      | 100%                  |
-| `google-satellite.png`            | On     | Off  | Off      | 0%                    |
-| `napr-orthophoto-2025-hybrid.png` | Off    | On   | Off      | 100%                  |
-| `napr-orthophoto-2025.png`        | Off    | On   | Off      | 0%                    |
-| `sentinel-2-hybrid.png`           | Off    | Off  | On       | 100%                  |
+| Asset                         | Google | NAPR | Sentinel | OpenStreetMap opacity |
+| ----------------------------- | ------ | ---- | -------- | --------------------- |
+| `vector-osm.png`              | Off    | Off  | Hidden   | 100%                  |
+| `google-satellite-hybrid.png` | On     | Off  | Off      | 100%                  |
+| `google-satellite.png`        | On     | Off  | Off      | 0%                    |
+| `napr-orthophoto-hybrid.png`  | Off    | On   | Off      | 100%                  |
+| `napr-orthophoto.png`         | Off    | On   | Off      | 0%                    |
+| `sentinel-2-hybrid.png`       | Off    | Off  | On       | 100%                  |
+
+The NAPR pair uses its bounded-imagery camera:
+`?map=2&lat=42.27116&lon=42.70271&z=12&view=2d` in 2D. Both assets must use that same
+longitude, latitude, zoom, viewport, device scale, and center crop.
 
 For a new preset, use the same URL, viewport, device scale, center crop, output format,
 and loading checks. Add only the layer-state combination and filename needed by that

@@ -40,7 +40,8 @@ import {
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
-  naprOrthophoto2025LayerIds,
+  naprOrthophotoLayerIds,
+  naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
@@ -65,7 +66,10 @@ const rasterSlots = [
 
 const satelliteBasemapSourceIds = [
   mapSourceIds.satelliteBasemap,
-  mapSourceIds.naprOrthophoto2025,
+  naprOrthophotoSourceIds.national2016To2017,
+  naprOrthophotoSourceIds.westernGeorgia2020,
+  naprOrthophotoSourceIds.kutaisi2020,
+  naprOrthophotoSourceIds.racha2025,
 ] as const;
 
 function isSatelliteBasemapSourceId(
@@ -132,7 +136,12 @@ const logicalNativeLayerGroups: Readonly<
   >
 > = {
   'google-satellite': [satelliteBasemapLayerIds.imagery],
-  'napr-orthophoto-2025': [naprOrthophoto2025LayerIds.imagery],
+  'napr-orthophoto': [
+    naprOrthophotoLayerIds.national2016To2017,
+    naprOrthophotoLayerIds.westernGeorgia2020,
+    naprOrthophotoLayerIds.kutaisi2020,
+    naprOrthophotoLayerIds.racha2025,
+  ],
   'terrain-relief': [terrainOverlayLayerIds.reliefShade],
   'elevation-isolines': [
     terrainOverlayLayerIds.contourMinor,
@@ -485,7 +494,7 @@ export class MapLibreLayerController {
     const visibility = { ...state.visibility, [layerId]: visible };
     let appliedImagery = state.appliedImagery;
     const staticBasemapSelected =
-      layerId === 'google-satellite' || layerId === 'napr-orthophoto-2025';
+      layerId === 'google-satellite' || layerId === 'napr-orthophoto';
 
     if (staticBasemapSelected && visible) {
       const sentinelLayerIds = this.nativeLayerIds('satellite-imagery');
@@ -495,14 +504,14 @@ export class MapLibreLayerController {
         }
       }
       visibility['google-satellite'] = layerId === 'google-satellite';
-      visibility['napr-orthophoto-2025'] = layerId === 'napr-orthophoto-2025';
+      visibility['napr-orthophoto'] = layerId === 'napr-orthophoto';
       visibility['satellite-imagery'] = false;
       appliedImagery = this.withRasterVisibility(state.appliedImagery, false);
       this.#progressiveRasterSourceId = null;
     }
     if (layerId === 'satellite-imagery' && visible) {
       visibility['google-satellite'] = false;
-      visibility['napr-orthophoto-2025'] = false;
+      visibility['napr-orthophoto'] = false;
     }
 
     const highlightVisible = this.importedTrackHighlightVisible(visibility);
@@ -559,29 +568,29 @@ export class MapLibreLayerController {
     switch (preset) {
       case 'vector-osm':
         visibility['google-satellite'] = false;
-        visibility['napr-orthophoto-2025'] = false;
+        visibility['napr-orthophoto'] = false;
         break;
       case 'google-satellite-hybrid':
         visibility['google-satellite'] = true;
-        visibility['napr-orthophoto-2025'] = false;
+        visibility['napr-orthophoto'] = false;
         break;
       case 'google-satellite':
         visibility['google-satellite'] = true;
-        visibility['napr-orthophoto-2025'] = false;
+        visibility['napr-orthophoto'] = false;
         openStreetMapOpacity = 0;
         break;
-      case 'napr-orthophoto-2025-hybrid':
+      case 'napr-orthophoto-hybrid':
         visibility['google-satellite'] = false;
-        visibility['napr-orthophoto-2025'] = true;
+        visibility['napr-orthophoto'] = true;
         break;
-      case 'napr-orthophoto-2025':
+      case 'napr-orthophoto':
         visibility['google-satellite'] = false;
-        visibility['napr-orthophoto-2025'] = true;
+        visibility['napr-orthophoto'] = true;
         openStreetMapOpacity = 0;
         break;
       case 'sentinel-2-hybrid':
         visibility['google-satellite'] = false;
-        visibility['napr-orthophoto-2025'] = false;
+        visibility['napr-orthophoto'] = false;
         sentinelVisible = true;
         break;
     }
@@ -1224,7 +1233,7 @@ export class MapLibreLayerController {
           ...state.visibility,
           'google-satellite': false,
           'satellite-imagery': true,
-          'napr-orthophoto-2025': false,
+          'napr-orthophoto': false,
         },
         errorMessage: null,
       });
@@ -1268,12 +1277,12 @@ export class MapLibreLayerController {
     replaceCurrentScene: boolean,
   ): Promise<SatelliteImageryCommandResult> {
     const visibility = mapLayerStore.getState().visibility;
-    if (visibility['google-satellite'] || visibility['napr-orthophoto-2025']) {
+    if (visibility['google-satellite'] || visibility['napr-orthophoto']) {
       mapLayerStore.setState({
         visibility: {
           ...visibility,
           'google-satellite': false,
-          'napr-orthophoto-2025': false,
+          'napr-orthophoto': false,
           'satellite-imagery': true,
         },
       });
@@ -1723,20 +1732,20 @@ export class MapLibreLayerController {
   ): Readonly<Record<LogicalMapLayerId, boolean>> {
     if (
       visibility['google-satellite'] &&
-      (visibility['napr-orthophoto-2025'] || visibility['satellite-imagery'])
+      (visibility['napr-orthophoto'] || visibility['satellite-imagery'])
     ) {
       return {
         ...visibility,
         'google-satellite': true,
-        'napr-orthophoto-2025': false,
+        'napr-orthophoto': false,
         'satellite-imagery': false,
       };
     }
-    if (visibility['napr-orthophoto-2025'] && visibility['satellite-imagery']) {
+    if (visibility['napr-orthophoto'] && visibility['satellite-imagery']) {
       return {
         ...visibility,
         'google-satellite': false,
-        'napr-orthophoto-2025': true,
+        'napr-orthophoto': true,
         'satellite-imagery': false,
       };
     }
@@ -1767,10 +1776,10 @@ export class MapLibreLayerController {
       return satelliteBasemapLayerIds.imagery;
     }
     if (
-      visibility['napr-orthophoto-2025'] &&
-      map.getLayer(naprOrthophoto2025LayerIds.imagery) !== undefined
+      visibility['napr-orthophoto'] &&
+      map.getLayer(naprOrthophotoLayerIds.racha2025) !== undefined
     ) {
-      return naprOrthophoto2025LayerIds.imagery;
+      return naprOrthophotoLayerIds.racha2025;
     }
     return null;
   }
@@ -1789,7 +1798,7 @@ export class MapLibreLayerController {
     const { visibility } = mapLayerStore.getState();
     for (const layerId of [
       'google-satellite',
-      'napr-orthophoto-2025',
+      'napr-orthophoto',
       'terrain-relief',
       'elevation-isolines',
       'natural-features',
@@ -2032,8 +2041,10 @@ export class MapLibreLayerController {
     const staticBasemapReadyAndVisible =
       (state.visibility['google-satellite'] &&
         this.#readySatelliteBasemapSourceIds.has(mapSourceIds.satelliteBasemap)) ||
-      (state.visibility['napr-orthophoto-2025'] &&
-        this.#readySatelliteBasemapSourceIds.has(mapSourceIds.naprOrthophoto2025));
+      (state.visibility['napr-orthophoto'] &&
+        satelliteBasemapSourceIds
+          .filter((sourceId) => sourceId !== mapSourceIds.satelliteBasemap)
+          .some((sourceId) => this.#readySatelliteBasemapSourceIds.has(sourceId)));
     return sentinelReadyAndVisible || staticBasemapReadyAndVisible
       ? 'satellite'
       : 'vector';

@@ -8,7 +8,8 @@ import {
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
-  naprOrthophoto2025LayerIds,
+  naprOrthophotoLayerIds,
+  naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
 } from '@/presentation/map/mapIds';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
@@ -40,42 +41,52 @@ describe('createHikingMapStyle', () => {
       tileSize: 256,
       attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
     });
-    expect(style.sources[mapSourceIds.naprOrthophoto2025]).toEqual({
-      type: 'raster',
-      tiles: [
-        'https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
-      ],
-      tileSize: 256,
-      minzoom: 0,
-      maxzoom: 19,
-      bounds: [
-        41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931,
-      ],
-      attribution:
-        'Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), Orthophoto 2025</a>',
-    });
+    const naprSourceEntries = [
+      ['national2016To2017', naprOrthophotoSourceIds.national2016To2017],
+      ['westernGeorgia2020', naprOrthophotoSourceIds.westernGeorgia2020],
+      ['kutaisi2020', naprOrthophotoSourceIds.kutaisi2020],
+      ['racha2025', naprOrthophotoSourceIds.racha2025],
+    ] as const;
+    for (const [name, sourceId] of naprSourceEntries) {
+      const source = configuration.naprOrthophoto.sources[name];
+      expect(style.sources[sourceId]).toEqual({
+        type: 'raster',
+        tiles: source.tileUrls,
+        tileSize: source.tileSize,
+        minzoom: source.minZoom,
+        maxzoom: source.maxZoom,
+        bounds: source.bounds,
+        attribution: configuration.naprOrthophoto.attribution,
+      });
+      const layerId = naprOrthophotoLayerIds[name];
+      expect(style.layers.find((layer) => layer.id === layerId)).toMatchObject({
+        type: 'raster',
+        source: sourceId,
+        layout: { visibility: 'none' },
+        paint: { 'raster-fade-duration': 0 },
+      });
+    }
     expect(layerIds).toEqual([
       mapLayerIds.background,
       satelliteBasemapLayerIds.imagery,
-      naprOrthophoto2025LayerIds.imagery,
+      naprOrthophotoLayerIds.national2016To2017,
+      naprOrthophotoLayerIds.westernGeorgia2020,
+      naprOrthophotoLayerIds.kutaisi2020,
+      naprOrthophotoLayerIds.racha2025,
       ...Object.values(mapLayerIds).slice(1),
     ]);
-    expect(
-      style.layers.find((layer) => layer.id === satelliteBasemapLayerIds.imagery),
-    ).toMatchObject({
-      type: 'raster',
-      source: mapSourceIds.satelliteBasemap,
-      layout: { visibility: 'none' },
-      paint: { 'raster-fade-duration': 0 },
-    });
-    expect(
-      style.layers.find((layer) => layer.id === naprOrthophoto2025LayerIds.imagery),
-    ).toMatchObject({
-      type: 'raster',
-      source: mapSourceIds.naprOrthophoto2025,
-      layout: { visibility: 'none' },
-      paint: { 'raster-fade-duration': 0 },
-    });
+    expect(layerIds.indexOf(naprOrthophotoLayerIds.national2016To2017)).toBeLessThan(
+      layerIds.indexOf(naprOrthophotoLayerIds.westernGeorgia2020),
+    );
+    expect(layerIds.indexOf(naprOrthophotoLayerIds.westernGeorgia2020)).toBeLessThan(
+      layerIds.indexOf(naprOrthophotoLayerIds.kutaisi2020),
+    );
+    expect(layerIds.indexOf(naprOrthophotoLayerIds.kutaisi2020)).toBeLessThan(
+      layerIds.indexOf(naprOrthophotoLayerIds.racha2025),
+    );
+    expect(layerIds.indexOf(naprOrthophotoLayerIds.racha2025)).toBeLessThan(
+      layerIds.indexOf(mapLayerIds.landcover),
+    );
     expect(layerIds.indexOf(mapInsertionPoints.satelliteBeforeLayerId)).toBeLessThan(
       layerIds.indexOf(mapLayerIds.water),
     );

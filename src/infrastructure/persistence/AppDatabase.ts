@@ -155,7 +155,7 @@ const mapLayerPreferencesSchema = z
     visibility: z
       .object({
         'google-satellite': z.boolean().default(false),
-        'napr-orthophoto-2025': z.boolean().default(false),
+        'napr-orthophoto': z.boolean().default(false),
         'satellite-imagery': z.boolean(),
         'scene-footprint': z.boolean(),
         'terrain-relief': z.boolean().default(true),
@@ -213,7 +213,7 @@ function withoutLegacyAppliedScene(value: unknown): unknown {
 const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   visibility: {
     'google-satellite': false,
-    'napr-orthophoto-2025': false,
+    'napr-orthophoto': false,
     'satellite-imagery': true,
     'scene-footprint': true,
     'terrain-relief': true,
@@ -1613,7 +1613,7 @@ export class AppDatabase
       typeof storedVisibility !== 'object' ||
       storedVisibility === null ||
       !Object.hasOwn(storedVisibility, 'google-satellite') ||
-      !Object.hasOwn(storedVisibility, 'napr-orthophoto-2025');
+      !Object.hasOwn(storedVisibility, 'napr-orthophoto');
     const parsed = mapLayerPreferencesSchema.safeParse(
       withoutLegacyAppliedScene(record.value),
     );

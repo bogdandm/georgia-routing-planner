@@ -1957,7 +1957,7 @@ describe('WorkspaceShell', () => {
     }
   });
 
-  it('accepts a GPX drop only inside the import zone and exposes discard confirmation', async () => {
+  it('shows the track drop target over another tab and opens the imported track', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { container } = renderWorkspaceShell();
     const workspace = container.firstElementChild;
@@ -1965,45 +1965,72 @@ describe('WorkspaceShell', () => {
     if (workspace === null) return;
     const file = gpxFile('Dropped.gpx');
 
-    fireEvent.drop(workspace, {
-      dataTransfer: { types: ['Files'], files: [file] },
-    });
-    expect(
-      screen.queryByRole('heading', { name: 'New track' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
-    ).toBeVisible();
-
-    await userEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
-    const importZone = screen.getByRole('region', { name: 'Import track file' });
     fireEvent.dragEnter(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
-    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
+    const dropTarget = screen.getByRole('region', { name: 'Drop track file' });
+    expect(dropTarget).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Fake map')).toBeVisible();
+
+    fireEvent.drop(dropTarget, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close track' }));
+    expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
+  });
+
+  it('shows the track drop target while navigation is collapsed and expands for the imported track', async () => {
+    useUiStore.setState({ navigationCollapsed: true });
+    const { container } = renderWorkspaceShell();
+    const workspace = container.firstElementChild;
+    expect(workspace).not.toBeNull();
+    if (workspace === null) return;
+    const file = gpxFile('Collapsed.gpx');
+
+    fireEvent.dragEnter(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    const dropTarget = screen.getByRole('region', { name: 'Drop track file' });
+    expect(dropTarget).toBeVisible();
+
+    fireEvent.drop(dropTarget, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeVisible();
+  });
+
+  it('ignores a file drop outside the track drop target', () => {
+    useUiStore.setState({ navigationCollapsed: true });
+    const { container } = renderWorkspaceShell();
+    const workspace = container.firstElementChild;
+    expect(workspace).not.toBeNull();
+    if (workspace === null) return;
+    const file = gpxFile('Outside.gpx');
+
+    fireEvent.dragEnter(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByRole('region', { name: 'Drop track file' })).toBeVisible();
+
     fireEvent.drop(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
     expect(
-      screen.queryByRole('heading', { name: 'New track' }),
+      screen.queryByRole('region', { name: 'Drop track file' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
-
-    fireEvent.dragEnter(importZone, {
-      dataTransfer: { types: ['Files'], files: [file] },
-    });
-    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
-    fireEvent.drop(importZone, {
-      dataTransfer: { types: ['Files'], files: [file] },
-    });
-    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Close track' }));
-    expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
     expect(
       screen.queryByRole('heading', { name: 'New track' }),
     ).not.toBeInTheDocument();
+    expect(useUiStore.getState().activeTab).toBe('satellite');
+    expect(useUiStore.getState().navigationCollapsed).toBe(true);
   });
 
   it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {

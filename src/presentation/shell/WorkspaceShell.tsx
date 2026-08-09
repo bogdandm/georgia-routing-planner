@@ -114,7 +114,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
     string | null
   >(null);
-  const { active: activeTrack, activeProfile } = useTracksWorkspace();
+  const importPreparingRef = useRef(false);
+  const { active: activeTrack, activeProfile, importState } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
@@ -175,29 +176,57 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     };
   }, [setActiveTab]);
 
-  if (controlledFailure) {
-    return <ControlledFailure />;
-  }
+  const persistUiPreferences = useCallback(
+    async (
+      nextDeveloperMode: boolean,
+      nextNavigationCollapsed: boolean,
+      nextElevationGradeLegendDismissed: boolean,
+      nextMarkerSort: typeof markerSort,
+    ): Promise<boolean> => {
+      try {
+        await database.saveUiPreferences({
+          developerMode: nextDeveloperMode,
+          navigationCollapsed: nextNavigationCollapsed,
+          elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
+          markerSort: nextMarkerSort,
+        });
+        return true;
+      } catch {
+        logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+        return false;
+      }
+    },
+    [database, logger],
+  );
 
-  const persistUiPreferences = async (
-    nextDeveloperMode: boolean,
-    nextNavigationCollapsed: boolean,
-    nextElevationGradeLegendDismissed: boolean,
-    nextMarkerSort: typeof markerSort,
-  ): Promise<boolean> => {
-    try {
-      await database.saveUiPreferences({
-        developerMode: nextDeveloperMode,
-        navigationCollapsed: nextNavigationCollapsed,
-        elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
-        markerSort: nextMarkerSort,
-      });
-      return true;
-    } catch {
-      logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
-      return false;
-    }
-  };
+  const handleSectionChange = useCallback(
+    (section: WorkspaceTab) => {
+      setActiveTab(section);
+      const nextUrl = new URL(window.location.href);
+      nextUrl.hash = workspaceHashForTab(section);
+      window.history.pushState(window.history.state, '', nextUrl);
+    },
+    [setActiveTab],
+  );
+
+  const handleNavigationCollapsedChange = useCallback(
+    (value: boolean) => {
+      setNavigationCollapsed(value);
+      void persistUiPreferences(
+        developerMode,
+        value,
+        elevationGradeLegendDismissed,
+        markerSort,
+      );
+    },
+    [
+      developerMode,
+      elevationGradeLegendDismissed,
+      markerSort,
+      persistUiPreferences,
+      setNavigationCollapsed,
+    ],
+  );
 
   const handleDeveloperModeChange = (value: boolean) => {
     setDeveloperMode(value);
@@ -211,16 +240,6 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     void persistUiPreferences(
       value,
       navigationCollapsed,
-      elevationGradeLegendDismissed,
-      markerSort,
-    );
-  };
-
-  const handleNavigationCollapsedChange = (value: boolean) => {
-    setNavigationCollapsed(value);
-    void persistUiPreferences(
-      developerMode,
-      value,
       elevationGradeLegendDismissed,
       markerSort,
     );
@@ -241,19 +260,40 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     );
   };
 
+  useEffect(() => {
+    if (importState !== 'preparing') {
+      importPreparingRef.current = false;
+      return;
+    }
+    if (importPreparingRef.current) return;
+    importPreparingRef.current = true;
+
+    if (activeTab !== 'tracks') handleSectionChange('tracks');
+    if (smartphoneViewport) {
+      setMobileWorkspaceOpen(true);
+    } else if (navigationCollapsed) {
+      handleNavigationCollapsedChange(false);
+    }
+  }, [
+    activeTab,
+    handleNavigationCollapsedChange,
+    handleSectionChange,
+    importState,
+    navigationCollapsed,
+    setMobileWorkspaceOpen,
+    smartphoneViewport,
+  ]);
+
+  if (controlledFailure) {
+    return <ControlledFailure />;
+  }
+
   const renderedMapSurface = mapSurface ?? (
     <MapWorkspace
       getNavigationPadding={getNavigationPadding}
       onElevationGradeLegendDismissedChange={handleElevationGradeLegendDismissedChange}
     />
   );
-
-  const handleSectionChange = (section: WorkspaceTab) => {
-    setActiveTab(section);
-    const nextUrl = new URL(window.location.href);
-    nextUrl.hash = workspaceHashForTab(section);
-    window.history.pushState(window.history.state, '', nextUrl);
-  };
   const auxiliaryOverlay = smartphoneViewport || auxiliaryOverlayViewport;
   const activeTrackExists = activeTrack !== null;
   const activeTrackOpen = activeTab === 'tracks' && activeTrackExists;

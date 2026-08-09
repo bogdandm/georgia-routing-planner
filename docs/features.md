@@ -105,31 +105,33 @@ elevation profile. Curated source GPX is loaded only when requested. Import rete
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
 permanent workspace banner.
 
-The implemented local workflow imports one `.gpx`, `.fit`, or `.kml` file from a
-contained drag-and-drop row or that row's browse button. FIT Activity and Course files
-must pass Garmin SDK integrity validation and contain geographic records. KML accepts
-line-based `LineString`, `MultiGeometry`, `gx:Track`, and `gx:MultiTrack` content
-without fetching external resources; KMZ and geometry-free files remain unsupported. A
-file drag anywhere inside the application expands the row as an opaque elevated overlay
-without moving the search and library below; only a drop inside that target imports the
-file. Import validates and previews the file's metadata and opens a fixed adjacent
-detail pane. The editable embedded or filename-derived name is never replaced
-automatically. File-selection and parsing errors appear inside the import zone and
-dismiss after five seconds; persistent track/storage errors remain in the panel. The
-stored source filename remains visible after rename, and structured validation warnings
-show their parser code, explanation, and available point/segment context. An optional
-English place candidate appears separately and requires an explicit apply action between
-the editable track-name field and the adjacent read-only **English place name** field.
-For a track with a dominant interior summit, that candidate uses the nearest named OSM
-feature across supported POI, natural, and place categories rather than a hard-coded
-feature type. Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an
-`Mt.` prefix when the source name does not already include one. Save retains the exact
-normalized source points and a separate browser-calculated Terrarium projection,
-independent line segments, source filename/format metadata, and versioned metrics in
-this browser; the original file bytes are discarded after parsing. Unsaved previews
-activate the native leave-site guard. Saved track cards show icon-led recorded duration,
-distance, and source elevation gain when available. The detail pane's primary stats grid
-presents duration, distance, derived average speed, and authoritative source **Elevation
+The implemented local workflow imports one `.gpx`, `.fit`, or `.kml` file from the
+contained picker row or its browse button. FIT Activity and Course files must pass
+Garmin SDK integrity validation and contain geographic records. KML accepts line-based
+`LineString`, `MultiGeometry`, `gx:Track`, and `gx:MultiTrack` content without fetching
+external resources; KMZ and geometry-free files remain unsupported. During a file drag
+anywhere in the application, an opaque elevated drop card appears above the current
+workspace content, including non-Tracks tabs and collapsed desktop navigation. It has no
+full-screen dimming or map-covering hit area; only a drop on the card imports the file.
+An accepted import opens Tracks, expands desktop navigation, and exposes the **New
+track** detail pane. Import validates and previews the file's metadata in that pane. The
+editable embedded or filename-derived name is never replaced automatically.
+File-selection and parsing errors appear inside the import zone and dismiss after five
+seconds; persistent track/storage errors remain in the panel. The stored source filename
+remains visible after rename, and structured validation warnings show their parser code,
+explanation, and available point/segment context. An optional English place candidate
+appears separately and requires an explicit apply action between the editable track-name
+field and the adjacent read-only **English place name** field. For a track with a
+dominant interior summit, that candidate uses the nearest named OSM feature across
+supported POI, natural, and place categories rather than a hard-coded feature type.
+Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an `Mt.` prefix
+when the source name does not already include one. Save retains the exact normalized
+source points and a separate browser-calculated Terrarium projection, independent line
+segments, source filename/format metadata, and versioned metrics in this browser; the
+original file bytes are discarded after parsing. Unsaved previews activate the native
+leave-site guard. Saved track cards show icon-led recorded duration, distance, and
+source elevation gain when available. The detail pane's primary stats grid presents
+duration, distance, derived average speed, and authoritative source **Elevation
 gain**/**Elevation loss** only. Separate text rows for **Elevation gain (calculated)**
 and **Elevation loss (calculated)** appear below the point/segment count, outside that
 grid. Missing measurements are omitted; source file, point, segment, and save metadata,

@@ -2,6 +2,10 @@ import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'mapli
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  SAVED_MARKER_SCHEMA_VERSION,
+  type SavedMarker,
+} from '@/domain/markers/savedMarker';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
@@ -11,9 +15,11 @@ import {
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  savedMarkerLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
+import * as markerCatalog from '@/presentation/markers/markerCatalog';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { mapVisualModePaint } from '@/presentation/map/mapVisualPalette';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -23,6 +29,7 @@ type Listener = (event: never) => void;
 class FakeLayerMap {
   readonly #listeners = new Map<string, Set<Listener>>();
   readonly sources = new Map<string, unknown>();
+  readonly images = new Map<string, unknown>();
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
@@ -104,6 +111,18 @@ class FakeLayerMap {
     reordered.splice(beforeIndex < 0 ? reordered.length : beforeIndex, 0, [id, layer]);
     this.layers.clear();
     for (const [layerId, value] of reordered) this.layers.set(layerId, value);
+  }
+
+  public hasImage(id: string): boolean {
+    return this.images.has(id);
+  }
+
+  public addImage(id: string, image: unknown): void {
+    this.images.set(id, image);
+  }
+
+  public removeImage(id: string): void {
+    this.images.delete(id);
   }
 
   public getStyle(): {
@@ -1974,5 +1993,97 @@ describe('MapLibreLayerController', () => {
         renderingTuning: { reflectanceMax: 6_250, gamma: 1.55, saturation: 1.25 },
       });
     });
+  });
+
+  it('renders deterministic saved-marker symbols with unique generated images', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const createIcon = vi
+      .spyOn(markerCatalog, 'createMarkerIconImage')
+      .mockResolvedValue({} as HTMLImageElement);
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const markers: readonly SavedMarker[] = [
+      {
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: 'bravo',
+        name: 'Bravo',
+        normalizedName: 'bravo',
+        coordinate: [44.9, 41.8],
+        iconKey: 'hiking',
+        colorKey: 'red',
+        createdAt: '2026-07-20T00:00:00.000Z',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+      {
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: 'alpha',
+        name: 'Alpha',
+        normalizedName: 'alpha',
+        coordinate: [44.8, 41.7],
+        iconKey: 'place',
+        colorKey: 'blue',
+        createdAt: '2026-07-19T00:00:00.000Z',
+        updatedAt: '2026-07-19T00:00:00.000Z',
+      },
+      {
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: 'charlie',
+        name: 'Charlie',
+        normalizedName: 'charlie',
+        coordinate: [44.7, 41.6],
+        iconKey: 'hiking',
+        colorKey: 'red',
+        createdAt: '2026-07-18T00:00:00.000Z',
+        updatedAt: '2026-07-18T00:00:00.000Z',
+      },
+    ];
+
+    controller.setSavedMarkers(markers);
+    await waitFor(() => {
+      expect(createIcon).toHaveBeenCalledTimes(2);
+      expect(map.images.size).toBe(2);
+    });
+    const source = map.sources.get(mapSourceIds.savedMarkers) as {
+      readonly data: { readonly features: readonly { readonly properties: unknown }[] };
+    };
+    expect(source.data.features.map((feature) => feature.properties)).toEqual([
+      { id: 'alpha', name: 'Alpha', iconKey: 'place', colorKey: 'blue' },
+      { id: 'bravo', name: 'Bravo', iconKey: 'hiking', colorKey: 'red' },
+      { id: 'charlie', name: 'Charlie', iconKey: 'hiking', colorKey: 'red' },
+    ]);
+    expect(map.layers.get(savedMarkerLayerIds.symbols)).toMatchObject({
+      layout: {
+        'icon-image': [
+          'concat',
+          'saved-marker-',
+          ['get', 'iconKey'],
+          '-',
+          ['get', 'colorKey'],
+        ],
+        'icon-size': 0.7,
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+        'text-anchor': 'top',
+        'text-offset': [0, 0.2],
+        'text-allow-overlap': true,
+      },
+      paint: {
+        'text-halo-color': '#FFFFFF',
+        'text-halo-width': 2,
+        'text-halo-blur': 0.5,
+      },
+    });
+    expect(map.getStyle().layers.at(-1)?.id).toBe(savedMarkerLayerIds.symbols);
+
+    controller.setSavedMarkers([]);
+    const emptySource = map.sources.get(mapSourceIds.savedMarkers) as {
+      readonly data: { readonly features: readonly unknown[] };
+    };
+    expect(emptySource.data.features).toEqual([]);
   });
 });

@@ -43,6 +43,9 @@ importers:
       '@turf/point-to-line-distance':
         specifier: 7.3.5
         version: 7.3.5
+      '@waysidemapping/pinhead':
+        specifier: 15.25.0
+        version: 15.25.0
       dexie:
         specifier: 4.4.4
         version: 4.4.4
@@ -1951,6 +1954,12 @@ packages:
     resolution:
       {
         integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==,
+      }
+
+  '@waysidemapping/pinhead@15.25.0':
+    resolution:
+      {
+        integrity: sha512-iI9jxqgIPDBcS3m16oCHdxTsJiqyBDmDaPQoi/F4EOxPVaYPCpSYptGA4EAgd92GyL8rqHtOtgHOZDaTxvzwxQ==,
       }
 
   acorn-jsx@5.3.2:
@@ -5487,6 +5496,8 @@ snapshots:
       '@vitest/pretty-format': 4.1.10
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
+
+  '@waysidemapping/pinhead@15.25.0': {}
 
   acorn-jsx@5.3.2(acorn@8.17.0):
     dependencies:

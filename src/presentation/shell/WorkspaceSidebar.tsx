@@ -1,22 +1,29 @@
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
-import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
+import type { MarkerSort } from '@/domain/markers/savedMarker';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
-import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
+import { requestMarkerPlacement } from '@/presentation/map/mapInteractionStore';
+import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
+import {
+  MarkersPanel,
+  MarkerSortControl,
+  useMarkersWorkspace,
+} from '@/presentation/markers/MarkersWorkspace';
+import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
-import { UserPanel } from '@/presentation/user/UserPanel';
 import { appColors } from '@/presentation/theme/appColors';
 import { TracksPanel } from '@/presentation/tracks/TracksWorkspace';
+import { UserPanel } from '@/presentation/user/UserPanel';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
   readonly auxiliaryOverlay: boolean;
   readonly fullWidth: boolean;
+  readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
   readonly onSatellitePaneOpenChange: (open: boolean) => void;
   readonly onShowMap: () => void;
 }
@@ -24,46 +31,6 @@ interface WorkspaceSidebarProps {
 interface SidebarDefinition {
   readonly actions: ReactNode;
   readonly title: string;
-}
-
-interface EmptyStateProps {
-  readonly icon: ReactNode;
-  readonly title: string;
-  readonly description: string;
-}
-
-function EmptyState({ description, icon, title }: EmptyStateProps) {
-  return (
-    <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
-      <Box aria-hidden sx={{ mb: 1, color: 'primary.main' }}>
-        {icon}
-      </Box>
-      <Typography component="h2" variant="subtitle1" color="text.primary">
-        {title}
-      </Typography>
-      <Typography variant="body2">{description}</Typography>
-    </Box>
-  );
-}
-
-function MarkersContent() {
-  return (
-    <Box sx={{ p: 2 }}>
-      <EmptyState
-        icon={<PlaceOutlinedIcon fontSize="large" />}
-        title="No saved markers"
-        description="Saved map markers arrive in a later phase."
-      />
-    </Box>
-  );
-}
-
-function disabledAction(title: string, child: ReactNode) {
-  return (
-    <Tooltip title={title}>
-      <span>{child}</span>
-    </Tooltip>
-  );
 }
 
 const definitions: Record<WorkspaceTab, SidebarDefinition> = {
@@ -77,12 +44,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
   markers: {
     title: 'Markers',
-    actions: disabledAction(
-      'Marker creation arrives in a later phase',
-      <Button disabled size="small" variant="contained" startIcon={<AddIcon />}>
-        New marker
-      </Button>,
-    ),
+    actions: null,
   },
   layers: {
     title: 'Layers',
@@ -98,10 +60,11 @@ export function WorkspaceSidebar({
   activeTab,
   auxiliaryOverlay,
   fullWidth,
+  onMarkerSortChange,
   onSatellitePaneOpenChange,
   onShowMap,
 }: WorkspaceSidebarProps) {
-  const { mapDiagnostics } = useRuntimeServices();
+  const { mapDiagnostics, mapViewport } = useRuntimeServices();
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
     [mapDiagnostics],
@@ -115,10 +78,35 @@ export function WorkspaceSidebar({
     getMapSnapshot,
     getMapSnapshot,
   );
+  const subscribeToViewport = useCallback(
+    (listener: () => void) => mapViewport.subscribe(listener),
+    [mapViewport],
+  );
+  const getViewportSnapshot = useCallback(
+    () => mapViewport.getViewportSnapshot(),
+    [mapViewport],
+  );
+  const mapViewportSnapshot = useSyncExternalStore(
+    subscribeToViewport,
+    getViewportSnapshot,
+    getViewportSnapshot,
+  );
   const definition = definitions[activeTab];
   const camera = mapSnapshot?.camera ?? defaultGeorgiaCamera;
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
   const onSceneSelected = fullWidth ? onShowMap : undefined;
+  const { loadState } = useMarkersWorkspace();
+  const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
+  const markerCreationMessage =
+    mapViewportSnapshot === null
+      ? 'Map is unavailable'
+      : loadState === 'failed'
+        ? 'Saved markers are unavailable'
+        : 'Saved markers are loading';
+  const startMarkerPlacement = () => {
+    if (fullWidth) onShowMap();
+    requestMarkerPlacement();
+  };
 
   return (
     <Box
@@ -157,7 +145,30 @@ export function WorkspaceSidebar({
             {definition.title}
           </Typography>
         </Box>
-        {definition.actions}
+        {activeTab === 'markers' ? (
+          <>
+            <Tooltip
+              title={
+                canCreateMarkers ? 'Place a marker on the map' : markerCreationMessage
+              }
+            >
+              <span>
+                <Button
+                  disabled={!canCreateMarkers}
+                  size="small"
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={startMarkerPlacement}
+                >
+                  New marker
+                </Button>
+              </span>
+            </Tooltip>
+            <MarkerSortControl onMarkerSortChange={onMarkerSortChange} />
+          </>
+        ) : (
+          definition.actions
+        )}
         {fullWidth ? (
           <IconButton aria-label="Show map" onClick={onShowMap}>
             <ChevronLeftOutlinedIcon />
@@ -190,7 +201,7 @@ export function WorkspaceSidebar({
           />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
-          <MarkersContent />
+          <MarkersPanel />
         </Box>
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
           <LayersPanel />

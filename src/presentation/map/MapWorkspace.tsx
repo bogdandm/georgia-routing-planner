@@ -1,9 +1,11 @@
+import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import {
   Alert,
   Box,
+  Button,
   ListItemIcon,
   Menu,
   MenuItem,
@@ -48,9 +50,12 @@ import {
 } from '@/presentation/map/mapTypes';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
+  cancelMarkerPlacement,
+  completeMarkerPlacement,
   consumeMapFitBoundsCommand,
   consumeMapNavigationCommand,
   mapInteractionStore,
+  requestMarkerCreationAt,
   requestSatelliteSearch,
 } from '@/presentation/map/mapInteractionStore';
 import {
@@ -169,6 +174,10 @@ export function MapWorkspace({
   const navigationCommand = useStore(
     mapInteractionStore,
     (state) => state.navigationCommand,
+  );
+  const markerPlacement = useStore(
+    mapInteractionStore,
+    (state) => state.markerPlacement,
   );
   const terrainComputeStatus = useStore(
     mapLayerStore,
@@ -337,6 +346,34 @@ export function MapWorkspace({
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
   }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
+
+  useEffect(() => {
+    facade.setInteractionMode(
+      markerPlacement === null ? 'default' : 'marker-placement',
+    );
+    return () => {
+      facade.setInteractionMode('default');
+    };
+  }, [facade, markerPlacement]);
+
+  useEffect(() => {
+    return () => {
+      cancelMarkerPlacement();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (markerPlacement === null) return;
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      cancelMarkerPlacement();
+    };
+    window.addEventListener('keydown', cancelOnEscape);
+    return () => {
+      window.removeEventListener('keydown', cancelOnEscape);
+    };
+  }, [markerPlacement]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
     return createHikingMapStyle(mapProviderConfiguration.value);
@@ -586,15 +623,31 @@ export function MapWorkspace({
   const closeContextMenu = () => {
     setContextMenu(null);
   };
-
   const handleContextMenu = (event: MapLayerMouseEvent) => {
     event.originalEvent.preventDefault();
+    if (markerPlacement !== null) {
+      cancelMarkerPlacement();
+      return;
+    }
     setContextMenu({
       mouseX: event.originalEvent.clientX,
       mouseY: event.originalEvent.clientY,
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
     });
+  };
+
+  const handleMapClick = (event: MapLayerMouseEvent) => {
+    if (markerPlacement === null) return;
+    event.originalEvent.preventDefault();
+    const coordinate = {
+      longitude: event.lngLat.lng,
+      latitude: event.lngLat.lat,
+    };
+    completeMarkerPlacement(
+      coordinate,
+      facade.getNearestPoi(coordinate)?.name ?? undefined,
+    );
   };
 
   const copyText = async (value: string, message: string) => {
@@ -641,6 +694,18 @@ export function MapWorkspace({
     closeContextMenu();
   };
 
+  const createMarkerAtPoint = () => {
+    if (contextMenu === null) return;
+    const coordinate = {
+      longitude: contextMenu.longitude,
+      latitude: contextMenu.latitude,
+    };
+    requestMarkerCreationAt(
+      coordinate,
+      facade.getNearestPoi(coordinate)?.name ?? undefined,
+    );
+    closeContextMenu();
+  };
   const handleLayerPresetChange = useCallback(
     (preset: MapLayerPreset): boolean => {
       if (mapLayers === null) return false;
@@ -684,6 +749,7 @@ export function MapWorkspace({
             mapStyle={mapStyle}
             maxPitch={75}
             onContextMenu={handleContextMenu}
+            onClick={handleMapClick}
             boxZoom={false}
             doubleClickZoom
             dragPan
@@ -776,6 +842,12 @@ export function MapWorkspace({
           </ListItemIcon>
           Copy coordinates
         </MenuItem>
+        <MenuItem onClick={createMarkerAtPoint}>
+          <ListItemIcon>
+            <AddLocationAltOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          Create marker here
+        </MenuItem>
         <MenuItem onClick={copyPointLink}>
           <ListItemIcon>
             <ShareOutlinedIcon fontSize="small" />
@@ -795,6 +867,18 @@ export function MapWorkspace({
         message={copyMessage}
         onClose={() => {
           setCopyMessage(null);
+        }}
+      />
+      <Snackbar
+        open={markerPlacement !== null}
+        message="Click the map to place the marker"
+        action={
+          <Button color="inherit" size="small" onClick={cancelMarkerPlacement}>
+            Cancel
+          </Button>
+        }
+        onClose={(_event, reason) => {
+          if (reason !== 'clickaway') cancelMarkerPlacement();
         }}
       />
       <Snackbar

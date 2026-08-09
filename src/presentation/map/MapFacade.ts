@@ -3,12 +3,16 @@ import type {
   MapDebugOptions,
   MapFitPadding,
   MapDiagnosticsSnapshot,
+  MapCoordinate,
   MapPointInspection,
+  NearbyPoi,
   MapViewportBounds,
   MapViewportSnapshot,
   TerrainMode,
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
+
+export type MapInteractionMode = 'default' | 'marker-placement';
 
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
@@ -20,6 +24,7 @@ export interface MapFacade {
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;
   getPointInspection(): MapPointInspection;
+  getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null;
   closePointInspection(): void;
 
   /** Moves the native camera without exposing MapLibre to callers. */
@@ -38,6 +43,7 @@ export interface MapFacade {
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
   setDebugOptions(options: MapDebugOptions): void;
+  setInteractionMode(mode: MapInteractionMode): void;
 
   /** Cancels pending transitions and removes every native listener owned by the facade. */
   destroy(): void;

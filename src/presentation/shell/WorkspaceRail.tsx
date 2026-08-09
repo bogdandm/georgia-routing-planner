@@ -17,7 +17,6 @@ import {
   Tab,
   Tabs,
   type IconButtonProps,
-  type TabProps,
   Tooltip,
 } from '@mui/material';
 import {
@@ -73,34 +72,6 @@ function WorkspaceRailIconButton({
       >
         {children}
       </IconButton>
-    </Tooltip>
-  );
-}
-
-const unavailableTabSx = {
-  pointerEvents: 'auto !important',
-  cursor: 'not-allowed',
-  opacity: '1 !important',
-  color: 'rgba(255, 255, 255, 0.42) !important',
-} as const;
-
-type UnavailableWorkspaceTabProps = Omit<TabProps, 'component' | 'disabled'> & {
-  readonly reason: string;
-};
-
-function UnavailableWorkspaceTab({
-  reason,
-  ...tabProps
-}: UnavailableWorkspaceTabProps) {
-  return (
-    <Tooltip describeChild title={reason} placement="right">
-      <Tab
-        {...tabProps}
-        aria-description={reason}
-        component="div"
-        disabled
-        sx={unavailableTabSx}
-      />
     </Tooltip>
   );
 }
@@ -392,6 +363,26 @@ export function WorkspaceRail({
           opacity: collapsed ? 0 : 1,
           transition: (theme) => theme.transitions.create('opacity'),
           mt: 1.5,
+          '& .MuiTab-root': {
+            minWidth: 52,
+            minHeight: 58,
+            mx: 0.75,
+            mb: 0.5,
+            px: 0.5,
+            py: 0.75,
+            borderRadius: 1.25,
+            color: appColors.text.inverseMuted,
+            fontSize: '0.625rem',
+            lineHeight: 1.1,
+            textTransform: 'none',
+          },
+          '& .MuiTab-root.Mui-selected': {
+            color: appColors.text.inverse,
+            bgcolor: appColors.interaction.navigationSelectedBackground,
+          },
+          '& .MuiTab-iconWrapper': {
+            mb: '2px !important',
+          },
           '& .MuiTabs-indicator': {
             left: 0,
             right: 'auto',
@@ -404,12 +395,7 @@ export function WorkspaceRail({
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
         <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
-        <UnavailableWorkspaceTab
-          icon={<PlaceOutlinedIcon />}
-          label="Markers"
-          reason="Saved markers are not available yet"
-          value="markers"
-        />
+        <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
       </Tabs>
 
       <Box

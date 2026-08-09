@@ -168,17 +168,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
             />
           ) : null}
           {submitError !== null ? <Alert severity="error">{submitError}</Alert> : null}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: '1fr',
-              alignItems: 'center',
-              gap: 1,
-              '@media (min-width: 420px)': {
-                gridTemplateColumns: 'auto minmax(0, 1fr)',
-              },
-            }}
-          >
+          <Stack spacing={1}>
             <Button
               aria-label={`Choose marker icon. Current: ${selectedIcon.label}`}
               onClick={openIconPicker}
@@ -186,19 +176,26 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
               size="small"
               startIcon={<PinheadIcon svg={selectedIcon.svg} size={18} />}
               endIcon={<ExpandMoreIcon />}
-              sx={{ minWidth: 0, px: 1.25, justifySelf: 'start' }}
+              sx={{
+                minWidth: 0,
+                maxWidth: '100%',
+                px: 1.25,
+                justifyContent: 'start',
+                '& .MuiButton-startIcon, & .MuiButton-endIcon': { flexShrink: 0 },
+              }}
             >
-              {selectedIcon.label}
+              <Typography component="span" variant="inherit" noWrap>
+                {selectedIcon.label}
+              </Typography>
             </Button>
             <Box
               role="group"
               aria-label="Marker color"
               sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(10, minmax(24px, 1fr))',
-                alignItems: 'center',
-                justifyItems: 'center',
-                minWidth: 0,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 0.5,
+                justifyContent: 'flex-start',
               }}
             >
               {markerColorCatalog.map((color) => {
@@ -240,7 +237,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                 );
               })}
             </Box>
-          </Box>
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -260,7 +257,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Box sx={{ width: 420, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
+        <Box sx={{ width: 560, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
           <TextField
             autoFocus
             fullWidth
@@ -286,8 +283,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
             onChange={(_event, category: MarkerIconCategory) => {
               setIconCategory(category);
             }}
-            variant="scrollable"
-            scrollButtons="auto"
+            variant="fullWidth"
             aria-label="Marker icon categories"
             sx={{ mt: 0.5, minHeight: 40 }}
           >
@@ -296,7 +292,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                 key={category}
                 value={category}
                 label={category}
-                sx={{ minHeight: 40, minWidth: 'auto', px: 1.5 }}
+                sx={{ minHeight: 40, minWidth: 0, px: 0.75, fontSize: '0.75rem' }}
               />
             ))}
           </Tabs>

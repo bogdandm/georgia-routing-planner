@@ -108,6 +108,7 @@ describe('MarkersWorkspace', () => {
       'true',
     );
     expect(screen.getByRole('option', { name: 'Choose Place icon' })).toBeVisible();
+    expect(screen.getAllByRole('tab')).toHaveLength(7);
     expect(
       screen.queryByRole('option', { name: 'Choose Hiking icon' }),
     ).not.toBeInTheDocument();
@@ -207,7 +208,11 @@ describe('MarkersWorkspace', () => {
     renderMarkers();
     await screen.findByRole('button', { name: /^Alpha/ });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Marker actions for Alpha' }));
+    const actionButton = screen.getByRole('button', {
+      name: 'Marker actions for Alpha',
+    });
+    fireEvent.click(actionButton, { detail: 1 });
+    expect(actionButton).toBeInTheDocument();
     await user.click(screen.getByRole('menuitem', { name: /Rename/ }));
     const renameInput = screen.getByRole('textbox', { name: 'Marker name' });
     await user.clear(renameInput);

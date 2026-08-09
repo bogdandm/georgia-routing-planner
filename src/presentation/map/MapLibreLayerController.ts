@@ -1892,6 +1892,7 @@ export class MapLibreLayerController {
             '-',
             ['get', 'colorKey'],
           ],
+          'icon-size': 0.7,
           'icon-anchor': 'bottom',
           'icon-allow-overlap': true,
           'text-field': ['get', 'name'],

@@ -482,7 +482,6 @@ export function MarkersPanel() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
-  const [markerHoverEpoch, setMarkerHoverEpoch] = useState(0);
   const [markerHoverSuppressed, setMarkerHoverSuppressed] = useState(false);
 
   const startRename = (marker: SavedMarker) => {
@@ -693,7 +692,6 @@ export function MarkersPanel() {
                     </Stack>
                   </ListItemButton>
                   <Stack
-                    key={`marker-actions:${marker.id}:${String(markerHoverEpoch)}`}
                     direction="row"
                     spacing={0.5}
                     sx={{ alignItems: 'center', px: 1 }}
@@ -710,7 +708,6 @@ export function MarkersPanel() {
                           if (event.detail > 0) {
                             setMarkerHoverSuppressed(true);
                             setHoveredMarkerId(null);
-                            setMarkerHoverEpoch((current) => current + 1);
                           }
                           setActionAnchor(event.currentTarget);
                           setActionMarker(marker);
@@ -781,6 +778,8 @@ export function MarkersPanel() {
           setActionAnchor(null);
           setActionMarker(null);
         }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <MenuItem
           onClick={() => {

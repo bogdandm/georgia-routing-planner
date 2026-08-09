@@ -11,7 +11,11 @@ import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import type { MapFacade } from '@/presentation/map/MapFacade';
-import { mapLayerIds, mapSourceIds } from '@/presentation/map/mapIds';
+import {
+  mapLayerIds,
+  mapSourceIds,
+  naprOrthophotoSourceIds,
+} from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -122,7 +126,10 @@ function categorizeMapError(
   if (
     sourceId === mapSourceIds.sentinelRasterA ||
     sourceId === mapSourceIds.sentinelRasterB ||
-    sourceId === mapSourceIds.satelliteBasemap
+    sourceId === mapSourceIds.satelliteBasemap ||
+    Object.values(naprOrthophotoSourceIds).includes(
+      sourceId as (typeof naprOrthophotoSourceIds)[keyof typeof naprOrthophotoSourceIds],
+    )
   ) {
     return 'satellite-raster';
   }

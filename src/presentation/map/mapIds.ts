@@ -11,6 +11,13 @@ export const mapSourceIds = {
   importedTrackTrace: 'imported-track-trace',
 } as const;
 
+export const naprOrthophotoSourceIds = {
+  national2016To2017: 'napr-orthophoto-2016-2017',
+  westernGeorgia2020: 'napr-orthophoto-2020-west',
+  kutaisi2020: 'napr-orthophoto-2020-kutaisi',
+  racha2025: 'napr-orthophoto-2025-racha',
+} as const;
+
 export const terrainOverlayLayerIds = {
   reliefShade: 'terrain-relief-shade',
   contourMinor: 'terrain-contour-minor',
@@ -26,6 +33,13 @@ export const sentinelMapLayerIds = {
 
 export const satelliteBasemapLayerIds = {
   imagery: 'satellite-basemap-imagery',
+} as const;
+
+export const naprOrthophotoLayerIds = {
+  national2016To2017: 'napr-orthophoto-2016-2017-imagery',
+  westernGeorgia2020: 'napr-orthophoto-2020-west-imagery',
+  kutaisi2020: 'napr-orthophoto-2020-kutaisi-imagery',
+  racha2025: 'napr-orthophoto-2025-racha-imagery',
 } as const;
 
 export const importedTrackLayerIds = {

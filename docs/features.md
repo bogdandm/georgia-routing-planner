@@ -325,24 +325,29 @@ and cross-feature actions are unavailable.
 ### Layers
 
 Layers groups durable controls under explicit source headings: Local GPX, Satellites,
-the configured terrain provider, and OpenStreetMap. Satellites starts with an optional
-**Google satellite imagery** basemap, followed by **Copernicus Sentinel-2 via Earth
-Search**, whose **Satellite imagery** and **Scene footprint** controls remain disabled
-until a scene is applied. Google and Sentinel imagery are mutually exclusive checkboxes:
-choosing either immediately clears the other, while either may be off. Google is
-disabled by default, and its explicit choice is retained in this browser's IndexedDB
-preferences. The shared OpenStreetMap opacity slider enables whenever either raster is
-selected and scales every OpenStreetMap reference layer and elevation isoline once
-active raster content has switched the map into satellite visual mode; vector paints
-remain fully opaque while Google tiles first load.
+the configured terrain provider, and OpenStreetMap. Satellites starts with optional
+**Google satellite imagery** and **NAPR Orthophoto** basemaps, followed by **Copernicus
+Sentinel-2 via Earth Search**, whose **Satellite imagery** and **Scene footprint**
+controls remain disabled until a scene is applied. NAPR is one logical multi-year
+orthophoto mosaic: newest available aerial pixels render from 2025, then 2020, then
+nationwide 2016–2017 coverage. Google, NAPR, and Sentinel imagery are mutually exclusive
+checkboxes: choosing one immediately clears the other two, while every imagery source
+may be off. Google and NAPR are disabled by default, and each explicit choice is
+retained in this browser's IndexedDB preferences. The shared OpenStreetMap opacity
+slider enables whenever any raster is selected and scales every OpenStreetMap reference
+layer and elevation isoline once active raster content has switched the map into
+satellite visual mode; vector paints remain fully opaque while static raster tiles first
+load.
 
 The quick chooser presents **Vector OSM** (no raster and opaque vectors), **Google
 Satellite Hybrid** (Google imagery with opaque vectors), **Google Satellite** (Google
-imagery without vectors), and **Sentinel-2 Hybrid** (an applied Sentinel scene with
-opaque vectors). A preset changes only the Google/Sentinel raster selection and shared
-OpenStreetMap opacity: all independent Layers toggles, imported-track opacity, terrain
-preferences, and an applied Sentinel scene remain intact. Choosing Sentinel-2 Hybrid
-without an applied scene opens the Satellite workspace so the user can select one.
+imagery without vectors), **NAPR Orthophoto Hybrid** (NAPR imagery with opaque vectors),
+**NAPR Orthophoto** (NAPR imagery without vectors), and **Sentinel-2 Hybrid** (an
+applied Sentinel scene with opaque vectors). A preset changes only the
+Google/NAPR/Sentinel raster selection and shared OpenStreetMap opacity: all independent
+Layers toggles, imported-track opacity, terrain preferences, and an applied Sentinel
+scene remain intact. Choosing Sentinel-2 Hybrid without an applied scene opens the
+Satellite workspace so the user can select one; NAPR presets do not require a scene.
 
 The remaining checkboxes cover Imported tracks, its default-on **Elevation gradient**,
 Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs, plus

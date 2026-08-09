@@ -349,6 +349,72 @@ no supported API or SLA guarantee. The application intentionally sends no API ke
 billing credential, session token, or viewport-attribution request, and must not claim
 official Google Maps Platform compliance.
 
+## NAPR orthophoto mosaic
+
+The optional NAPR basemap is one anonymous Web Mercator orthophoto mosaic. It loads four
+fixed raster sources bottom-to-top, so transparent newer imagery exposes the next older
+source:
+
+1. `national2016To2017` (`ORTHO_GEORGIA_4`): nationwide fallback, z0–19, 256 pixels,
+   bounds
+   `[39.854887835932935, 40.95043078335194, 46.811064678938735, 43.68599206966364]`,
+   tile template `https://nt0.napr.gov.ge/NGCache?x={x}&y={y}&z={z}&l=ORTHO_GEORGIA_4`.
+2. `westernGeorgia2020` (`ORTHO_2020_DASAVLETI`): z0–19, 256 pixels, bounds
+   `[41.397448792721505, 41.5288960450433, 43.455051840654676, 42.815072774303644]`,
+   tile template
+   `https://mp.napr.gov.ge/ORTHO_2020_DASAVLETI/wmts/ORTHO_2020_DASAVLETI/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
+3. `kutaisi2020` (`ORTHO_2020_KUTAISI`): z0–20, 256 pixels, bounds
+   `[42.598257144482105, 42.211097128103006, 42.74659092533837, 42.29503776969293]`,
+   tile template
+   `https://mp.napr.gov.ge/ORTHO_2020_KUTAISI/wmts/ORTHO_2020_KUTAISI/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
+   It renders above western Georgia as the fixed same-year higher-resolution
+   tie-breaker.
+4. `racha2025` (`ORTHO_2025_BLK4`): z0–19, 256 pixels, bounds
+   `[41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931]`, tile
+   template
+   `https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
+
+The two 2020 services and the 2025 service return fully transparent PNG tiles outside
+their real footprints. MapLibre's ordinary alpha composition therefore exposes the next
+raster without clipping or runtime year selection. `ORTHO_GEORGIA_4` is an opaque JPEG
+base fallback. It has no public capabilities document; z19 and the conservative national
+envelope are the documented operating limits.
+
+Browser evidence revalidated on **2026-08-09**: z12 requests at longitude `42.70271`,
+latitude `42.27116` returned HTTP `200`, decodable 256-pixel imagery, and
+`access-control-allow-origin: *` from all four sources. An out-of-coverage Tbilisi tile
+from the 2020 western and 2025 Racha services was a fully transparent PNG. Nationwide
+fallback samples returned non-blank JPEG payloads at Sukhumi, Zugdidi, Batumi,
+Akhaltsikhe, Kutaisi, Mestia, Kazbegi, Tbilisi, Telavi, and Lagodekhi. This is
+best-effort endpoint evidence, not an availability guarantee.
+
+The common capabilities convention is
+`https://mp.napr.gov.ge/<SERVICE>/wmts/1.0.0/WMTSCapabilities.xml`. Historical live
+services are retained as research inventory, not runtime layers:
+
+| Service                | Catalogued imagery            | Zoom | Bounds `[west, south, east, north]`                                               |
+| ---------------------- | ----------------------------- | ---- | --------------------------------------------------------------------------------- |
+| `ORTHO_2015_VERE`      | 2015, 10 cm/px                | 0–20 | `[44.43731070936169, 41.650138053759356, 44.793390537886914, 41.767209615523754]` |
+| `ORTHO_2015_SAMEGRELO` | 2015, 50 cm/px                | 0–19 | `[41.50098353204594, 42.24033331738053, 42.15437065434703, 42.78374675464939]`    |
+| `ORTHO_2015_ADJARA`    | 2015, 25 cm/px                | 0–19 | `[41.45515263821117, 41.36025675480494, 42.64497174055761, 41.95771004140832]`    |
+| `ORTHO_2014_TBILISI`   | 2014, 6 cm/px                 | 0–20 | `[44.5896451701308, 41.61342123997876, 45.023369288656426, 41.84760074991676]`    |
+| `ORTHO_2014_DASAVLETI` | 2014, 25 cm/px                | 0–20 | `[41.4702432447368, 41.51772126826586, 43.49762473282109, 42.71563396253005]`     |
+| `ORTHO_2000_10_SATEL`  | catalogued as 2010, 100 cm/px | 0–17 | `[39.854887835932935, 40.95043078335194, 46.811064678938735, 43.68599206966364]`  |
+| `ORTHO_2006_07_SATKEO` | 2006–2007 forestry, 80 cm/px  | 0–19 | `[41.89631284744207, 41.14805627900728, 46.26640395241099, 42.93631847201833]`    |
+| `ORTHO_2005_JICA`      | 2005 JICA, 80 cm/px           | 0–18 | `[41.60446047410022, 41.27190884858784, 46.028288342204974, 42.69945825334009]`   |
+| `ORTHO_2000_KFW`       | 2000 KFW, 100 cm/px           | 0–18 | `[41.43142153513101, 41.05698962018753, 46.75954685638646, 42.86999920915596]`    |
+
+These older layers are intentionally not loaded: the newer nationwide fallback supplied
+non-blank imagery across the sampled locations, while additional overlapping sources
+would add requests without improving newest-available selection. `ORTHO_net` is excluded
+because it is a Bing mirror, not a NAPR orthophoto.
+
+The runtime attribution is
+`Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>`.
+NAPR is disabled by default, mutually exclusive with Google and Sentinel imagery, and
+uses existing OpenStreetMap-opacity and terrain ordering after any mosaic source reports
+content. Failures remain best-effort and the vector basemap stays usable.
+
 ## Sentinel-2 catalog and raster feasibility
 
 The evidence below was revalidated on **2026-07-19** against Earth Search v1 and public

@@ -240,11 +240,12 @@ lockfile as a shortcut.
 
 ### Live development servers
 
-Agents MUST NOT start Vite or any live development server. Live verification is
-maintainer-controlled: the maintainer may run it manually when needed. Do not reserve,
-probe, substitute, auto-fallback, stop, or otherwise interact with its port or process.
-This does not change the E2E policy; it remains governed by
-[`e2e/AGENTS.md`](e2e/AGENTS.md).
+Agents MUST NOT start Vite or any live development server, or perform live verification,
+without a direct user instruction to start the server (for example, `запусти сервер`).
+That instruction authorizes a live server and bounded live verification for the
+requested work. Otherwise, do not reserve, probe, substitute, auto-fallback, stop, or
+otherwise interact with its port or process. This does not change the E2E policy; it
+remains governed by [`e2e/AGENTS.md`](e2e/AGENTS.md).
 
 ### CI failure authorization
 

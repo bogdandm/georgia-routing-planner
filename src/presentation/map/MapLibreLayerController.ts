@@ -35,6 +35,7 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
+import type { SavedMarker } from '@/domain/markers/savedMarker';
 import {
   importedTrackLayerIds,
   mapInsertionPoints,
@@ -43,6 +44,8 @@ import {
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  savedMarkerImageId,
+  savedMarkerLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
@@ -54,6 +57,7 @@ import {
   type MapVisualModePaint,
 } from '@/presentation/map/mapVisualPalette';
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
+import { createMarkerIconImage } from '@/presentation/markers/markerCatalog';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -209,6 +213,18 @@ interface RasterRecoveryRequest {
   readonly state: MapRecoveryState;
   readonly retryAttempt: number;
   readonly retryDelayMs: number;
+}
+
+interface SavedMarkerImageState {
+  readonly status: 'pending' | 'ready' | 'failed';
+  readonly generation: number;
+}
+
+interface SavedMarkerFeatureProperties {
+  readonly id: string;
+  readonly name: string;
+  readonly iconKey: SavedMarker['iconKey'];
+  readonly colorKey: SavedMarker['colorKey'];
 }
 
 function sceneBounds(scene: SatelliteScene): [number, number, number, number] {
@@ -374,6 +390,10 @@ export class MapLibreLayerController {
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
+  #savedMarkers: readonly SavedMarker[] = [];
+  #savedMarkerGeneration = 0;
+  readonly #savedMarkerImages = new Map<string, SavedMarkerImageState>();
+  readonly #savedMarkerImageIds = new Set<string>();
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
   readonly #directFallbackUrls = new Map<string, string>();
@@ -418,6 +438,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
+      this.reconcileSavedMarkers();
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
@@ -433,6 +454,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+    this.reconcileSavedMarkers();
   }
 
   public createDemTileUrl(): string {
@@ -461,6 +483,9 @@ export class MapLibreLayerController {
     this.#openStreetMapOpacityLayerAnchors.clear();
     this.#appliedImportedTrackOpacity = null;
     this.#importedTrackLayerAnchors.clear();
+    this.#savedMarkerGeneration += 1;
+    this.#savedMarkerImages.clear();
+    this.#savedMarkerImageIds.clear();
     this.#satelliteBasemapSources.clear();
     this.#readySatelliteBasemapSourceIds.clear();
     this.#applySequence += 1;
@@ -733,6 +758,18 @@ export class MapLibreLayerController {
   ): void {
     this.#importedTrackTraceCoordinate = coordinate;
     this.reconcileImportedTrackTrace();
+  }
+
+  public setSavedMarkers(markers: readonly SavedMarker[]): void {
+    this.#savedMarkers = markers
+      .map((marker) => ({
+        ...marker,
+        coordinate: [...marker.coordinate] as readonly [number, number],
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id, 'en'));
+    this.#savedMarkerGeneration += 1;
+    this.#savedMarkerImages.clear();
+    this.reconcileSavedMarkers();
   }
 
   public async applyScene(
@@ -1412,6 +1449,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+    this.reconcileSavedMarkers();
   };
 
   private readonly handleSatelliteBasemapSourceData = (
@@ -1836,6 +1874,141 @@ export class MapLibreLayerController {
     }
   }
 
+  private reconcileSavedMarkers(): void {
+    const map = this.#map;
+    if (map?.getLayer(mapLayerIds.background) === undefined) return;
+
+    const source = map.getSource(mapSourceIds.savedMarkers);
+    if (source === undefined) {
+      this.#savedMarkerGeneration += 1;
+      this.#savedMarkerImages.clear();
+      this.#savedMarkerImageIds.clear();
+    } else if (!isGeoJsonSource(source)) {
+      this.logger.log({
+        level: 'warn',
+        name: 'map.saved-marker-source.invalid',
+      });
+      return;
+    }
+
+    const generation = this.#savedMarkerGeneration;
+    const combinations = new Map<string, Pick<SavedMarker, 'iconKey' | 'colorKey'>>();
+    for (const marker of this.#savedMarkers) {
+      const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
+      combinations.set(imageId, {
+        iconKey: marker.iconKey,
+        colorKey: marker.colorKey,
+      });
+    }
+    for (const imageId of this.#savedMarkerImageIds) {
+      if (combinations.has(imageId)) continue;
+      if (map.hasImage(imageId)) map.removeImage(imageId);
+      this.#savedMarkerImageIds.delete(imageId);
+      this.#savedMarkerImages.delete(imageId);
+    }
+
+    for (const [imageId, combination] of combinations) {
+      if (map.hasImage(imageId)) {
+        this.#savedMarkerImageIds.add(imageId);
+        this.#savedMarkerImages.set(imageId, { status: 'ready', generation });
+        continue;
+      }
+      const imageState = this.#savedMarkerImages.get(imageId);
+      if (imageState?.generation === generation) continue;
+      this.#savedMarkerImages.set(imageId, { status: 'pending', generation });
+      void createMarkerIconImage(combination.iconKey, combination.colorKey)
+        .then((image) => {
+          if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
+          if (!map.hasImage(imageId)) map.addImage(imageId, image);
+          this.#savedMarkerImageIds.add(imageId);
+          this.#savedMarkerImages.set(imageId, { status: 'ready', generation });
+          this.reconcileSavedMarkers();
+        })
+        .catch(() => {
+          if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
+          this.#savedMarkerImages.set(imageId, { status: 'failed', generation });
+          this.logger.log({
+            level: 'warn',
+            name: 'map.saved-marker-icon.failed',
+            data: {
+              iconKey: combination.iconKey,
+              colorKey: combination.colorKey,
+            },
+          });
+          this.reconcileSavedMarkers();
+        });
+    }
+
+    const features: Feature<Point, SavedMarkerFeatureProperties>[] = this.#savedMarkers
+      .filter((marker) => {
+        const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
+        return this.#savedMarkerImages.get(imageId)?.status === 'ready';
+      })
+      .map((marker) => ({
+        type: 'Feature',
+        id: marker.id,
+        properties: {
+          id: marker.id,
+          name: marker.name,
+          iconKey: marker.iconKey,
+          colorKey: marker.colorKey,
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [...marker.coordinate],
+        },
+      }));
+    const data: FeatureCollection<Point, SavedMarkerFeatureProperties> = {
+      type: 'FeatureCollection',
+      features,
+    };
+    if (source === undefined) {
+      map.addSource(mapSourceIds.savedMarkers, { type: 'geojson', data });
+    } else {
+      source.setData(data);
+    }
+    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
+      map.addLayer({
+        id: savedMarkerLayerIds.symbols,
+        type: 'symbol',
+        source: mapSourceIds.savedMarkers,
+        layout: {
+          'icon-image': [
+            'concat',
+            'saved-marker-',
+            ['get', 'iconKey'],
+            '-',
+            ['get', 'colorKey'],
+          ],
+          'icon-size': 0.7,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'text-field': ['get', 'name'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 12,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.2],
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': mapVisualPalette.text.primary,
+          'text-halo-color': '#FFFFFF',
+          'text-halo-width': 2,
+          'text-halo-blur': 0.5,
+        },
+      });
+    }
+    this.ensureSavedMarkerLayerOrder(map);
+  }
+
+  private ensureSavedMarkerLayerOrder(map: MapLibreMap): void {
+    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) return;
+    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    if (layerIds.at(-1) !== savedMarkerLayerIds.symbols) {
+      map.moveLayer(savedMarkerLayerIds.symbols);
+    }
+  }
+
   private reconcileImportedTrack(): MapLayerVisibilityResult {
     const map = this.#map;
     if (map === null) return { status: 'success' };
@@ -2012,10 +2185,13 @@ export class MapLibreLayerController {
       }
     }
 
-    const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
-    if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
-      map.moveLayer(importedTrackLayerIds.trace);
+    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
+      const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
+      if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
+        map.moveLayer(importedTrackLayerIds.trace);
+      }
     }
+    this.ensureSavedMarkerLayerOrder(map);
   }
 
   private applyImportedTrackPaint(): void {

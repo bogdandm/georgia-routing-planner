@@ -1,3 +1,5 @@
+import type { MarkerColorKey, MarkerIconKey } from '@/domain/markers/savedMarker';
+
 export const mapSourceIds = {
   basemapVector: 'basemap-vector',
   basemapDetailVector: 'basemap-detail-vector',
@@ -10,6 +12,7 @@ export const mapSourceIds = {
   importedTrack: 'imported-track',
   importedTrackHighlight: 'imported-track-highlight',
   importedTrackTrace: 'imported-track-trace',
+  savedMarkers: 'saved-markers',
 } as const;
 
 export const naprOrthophotoSourceIds = {
@@ -49,6 +52,17 @@ export const importedTrackLayerIds = {
   highlight: 'imported-track-highlight',
   trace: 'imported-track-trace',
 } as const;
+
+export const savedMarkerLayerIds = {
+  symbols: 'saved-marker-symbols',
+} as const;
+
+export function savedMarkerImageId(
+  iconKey: MarkerIconKey,
+  colorKey: MarkerColorKey,
+): string {
+  return `saved-marker-${iconKey}-${colorKey}`;
+}
 
 export const mapLayerIds = {
   background: 'basemap-background',

@@ -44,6 +44,18 @@ export const appColors = {
     warning: '#A65A00',
     error: '#B33A3A',
   },
+  marker: {
+    blue: '#0288D1',
+    teal: '#00A896',
+    purple: '#8E44AD',
+    olive: '#84A900',
+    orange: '#F57C00',
+    rose: '#E91E63',
+    navy: '#1E40AF',
+    blueGreen: '#008C95',
+    green: '#2EAD5B',
+    red: '#E53935',
+  },
   tag: {
     blue: { background: '#E3F3FA', foreground: '#075E7A' },
     teal: { background: '#DDF3EF', foreground: '#0B6E69' },

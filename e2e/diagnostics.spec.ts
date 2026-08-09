@@ -122,11 +122,16 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     sourceIds: [
       'basemap-vector',
       'satellite-basemap',
+      'napr-orthophoto-2016-2017',
+      'napr-orthophoto-2020-west',
+      'napr-orthophoto-2020-kutaisi',
+      'napr-orthophoto-2025-racha',
       'terrain-dem',
       'terrain-contours',
       'imported-track',
       'imported-track-highlight',
       'imported-track-trace',
+      'saved-markers',
     ],
     webGlCapabilities: { contextType: 'webgl2' },
   });

@@ -471,13 +471,8 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
     );
-    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Markers' })).not.toHaveAttribute(
       'aria-disabled',
-      'true',
-    );
-    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
-      'aria-description',
-      'Saved markers are not available yet',
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
@@ -486,11 +481,10 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByRole('button', { name: 'Create GPX' }),
     ).not.toBeInTheDocument();
-    await user.hover(screen.getByRole('tab', { name: 'Markers' }));
+    await user.click(screen.getByRole('tab', { name: 'Markers' }));
+    expect(await screen.findByRole('heading', { name: 'Markers' })).toBeVisible();
     expect(
-      await screen.findByRole('tooltip', {
-        name: 'Saved markers are not available yet',
-      }),
+      screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(
@@ -522,6 +516,13 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
     ).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'NAPR Orthophoto' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'NAPR Orthophoto' })).not.toBeChecked();
+    expect(
+      screen.getByText(
+        'Newest available NAPR orthophoto: 2025, then 2020, then 2016–2017.',
+      ),
+    ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
@@ -2233,9 +2234,7 @@ describe('WorkspaceShell', () => {
     window.history.replaceState(null, '', '/#markers');
     renderWorkspaceShell();
 
-    expect(
-      await screen.findByRole('heading', { name: 'No saved markers' }),
-    ).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Markers' })).toBeVisible();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
     expect(window.location.hash).toBe('#layers');
     expect(
@@ -2267,25 +2266,13 @@ describe('WorkspaceShell', () => {
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
 
-  it('reflects mutually exclusive satellite checkbox changes in Layers', async () => {
+  it('sends satellite checkbox changes and reflects mutually exclusive state', async () => {
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
+    vi.spyOn(mapLayers, 'restorePersistedState').mockResolvedValue(undefined);
     const setVisibility = vi
       .spyOn(mapLayers, 'setLayerVisibility')
-      .mockImplementation((layerId, visible) => {
-        const visibility = {
-          ...mapLayerStore.getState().visibility,
-          [layerId]: visible,
-        };
-        if (visible && layerId === 'google-satellite') {
-          visibility['satellite-imagery'] = false;
-        }
-        if (visible && layerId === 'satellite-imagery') {
-          visibility['google-satellite'] = false;
-        }
-        mapLayerStore.setState({ visibility });
-        return { status: 'success' };
-      });
+      .mockReturnValue({ status: 'success' });
     mapLayerStore.setState({
       appliedImagery: {
         status: 'ready',
@@ -2299,17 +2286,44 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
 
     const google = screen.getByRole('checkbox', { name: 'Google satellite imagery' });
-    const sentinel = screen.getByRole('checkbox', { name: 'Satellite imagery' });
     await user.click(google);
-    expect(setVisibility).toHaveBeenLastCalledWith('google-satellite', true);
-    expect(google).toBeChecked();
-    expect(sentinel).not.toBeChecked();
+    expect(setVisibility).toHaveBeenCalledWith('google-satellite', true);
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': true,
+          'satellite-imagery': false,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
+      ).toBeChecked();
+    });
+    expect(
+      screen.getByRole('checkbox', { name: 'Satellite imagery' }),
+    ).not.toBeChecked();
     expect(screen.getByRole('slider', { name: 'Opacity' })).toBeEnabled();
 
-    await user.click(sentinel);
-    expect(setVisibility).toHaveBeenLastCalledWith('satellite-imagery', true);
-    expect(google).not.toBeChecked();
-    expect(sentinel).toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
+    expect(setVisibility).toHaveBeenCalledWith('satellite-imagery', true);
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': false,
+          'satellite-imagery': true,
+        },
+      });
+    });
+    expect(
+      screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
+    ).not.toBeChecked();
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
+    });
   });
 
   it('controls all imported tracks and their elevation gradient through Layers', async () => {
@@ -2839,6 +2853,7 @@ describe('WorkspaceShell', () => {
         developerMode: true,
         navigationCollapsed: false,
         elevationGradeLegendDismissed: false,
+        markerSort: 'created',
       });
     });
   });
@@ -3456,6 +3471,7 @@ describe('WorkspaceShell', () => {
     const mutedControls = [
       screen.getByRole('tab', { name: 'Tracks' }),
       screen.getByRole('tab', { name: 'Layers' }),
+      screen.getByRole('tab', { name: 'Markers' }),
       screen.getByRole('button', { name: 'Share map view' }),
       screen.getByRole('button', { name: 'Developer diagnostics' }),
       userButton,
@@ -3467,9 +3483,6 @@ describe('WorkspaceShell', () => {
       expect(control).toHaveStyle({ color: appColors.text.inverseMuted });
     }
 
-    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveStyle({
-      color: 'rgba(255, 255, 255, 0.42)',
-    });
     expect(satelliteTab).toHaveStyle({
       backgroundColor: appColors.interaction.navigationSelectedBackground,
       color: appColors.text.inverse,
@@ -3532,6 +3545,28 @@ describe('WorkspaceShell', () => {
     setSyncStatus('success');
     await waitFor(() => {
       expectIndicator('User synchronization successful', appColors.status.success);
+    });
+  });
+
+  it('returns to the map before beginning mobile marker placement and cancels on tab change', async () => {
+    mockViewportWidth(899);
+    services.mapViewport.update(testViewport);
+    useUiStore.setState({ activeTab: 'markers', mobileWorkspaceOpen: true });
+    renderWorkspaceShell();
+
+    const createMarker = await screen.findByRole('button', { name: 'New marker' });
+    await waitFor(() => {
+      expect(createMarker).toBeEnabled();
+    });
+    fireEvent.click(createMarker);
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
+    expect(mapInteractionStore.getState().markerPlacement).not.toBeNull();
+
+    act(() => {
+      useUiStore.getState().setActiveTab('satellite');
+    });
+    await waitFor(() => {
+      expect(mapInteractionStore.getState().markerPlacement).toBeNull();
     });
   });
 });

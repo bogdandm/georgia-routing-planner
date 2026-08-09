@@ -166,6 +166,7 @@ export function createTestServices(
     mapDiagnostics,
     mapViewport,
     mapLayers,
+    savedMarkers: database,
     mapProviderConfiguration: {
       status: 'valid',
       value: parsedMapProviderConfiguration,

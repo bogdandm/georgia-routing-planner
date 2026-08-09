@@ -15,6 +15,8 @@ import { useId, useState, type MouseEvent } from 'react';
 
 import googleSatelliteHybridPreview from '@/presentation/map/layer-previews/google-satellite-hybrid.png';
 import googleSatellitePreview from '@/presentation/map/layer-previews/google-satellite.png';
+import naprOrthophotoHybridPreview from '@/presentation/map/layer-previews/napr-orthophoto-hybrid.png';
+import naprOrthophotoPreview from '@/presentation/map/layer-previews/napr-orthophoto.png';
 import sentinel2HybridPreview from '@/presentation/map/layer-previews/sentinel-2-hybrid.png';
 import type { MapLayerPreset, TerrainMode } from '@/presentation/map/mapTypes';
 import vectorOsmPreview from '@/presentation/map/layer-previews/vector-osm.png';
@@ -49,6 +51,16 @@ const layerPresets: readonly {
     label: 'Google Satellite',
     preview: googleSatellitePreview,
     value: 'google-satellite',
+  },
+  {
+    label: 'NAPR Orthophoto Hybrid',
+    preview: naprOrthophotoHybridPreview,
+    value: 'napr-orthophoto-hybrid',
+  },
+  {
+    label: 'NAPR Orthophoto',
+    preview: naprOrthophotoPreview,
+    value: 'napr-orthophoto',
   },
   {
     label: 'Sentinel-2 Hybrid',

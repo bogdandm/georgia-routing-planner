@@ -20,6 +20,8 @@ _This project was built 100% with LLMs._
 - Review distance, duration, speed, ascent, descent, elevation profile, and route
   grades.
 - Save, search, favorite, rename, reopen, delete, and download personal tracks.
+- Save named map markers with custom icons and colors, then sort, edit, navigate to, or
+  delete them.
 - Choose which tracks, imagery, terrain, contours, and map details are visible.
 - Optionally sign in and explicitly enable synchronization across devices.
 
@@ -39,6 +41,17 @@ When usable elevation is available, the track view adds:
 - A climbs-and-descents breakdown.
 - Grade colors along non-flat parts of the route.
 
+## Markers
+
+Place a marker from the Markers workspace or the map context menu. When a nearby point
+of interest is available, Trail Planner suggests its name before saving. Choose from 117
+Pinhead map icons grouped by category and ten colors; saved markers render on the map
+and remain available after reopening the application.
+
+The marker library sorts by creation time, name, color, or distance from the current map
+area. Marker search, grouping, remote synchronization, Satellite targeting, and copying
+markers into a manually created GPX route are not currently available.
+
 ## Maps and satellite imagery
 
 The map combines hiking-focused OpenStreetMap data with relief, elevation contours, and
@@ -55,8 +68,8 @@ is applied to the map. The selected imagery remains aligned with terrain in both
 
 ## Local-first data
 
-Imported tracks, saved tracks, and map preferences use browser storage and remain
-available without an account.
+Imported tracks, saved tracks, saved markers, and map preferences use browser storage
+and remain available without an account.
 
 Cross-device synchronization is optional and disabled by default. It starts only after
 the user signs in and explicitly enables **Sync across devices**. Local track operations
@@ -73,10 +86,10 @@ Planner does not upload diagnostics or usage telemetry automatically.
 ## Developer overview
 
 Trail Planner is a static TypeScript application built with React, Vite, Material UI,
-and MapLibre GL JS. IndexedDB stores local tracks and preferences, while Supabase
-supports optional accounts and synchronization. The production build is deployed to
-GitHub Pages, and the core map and local track workflows do not require an
-always-running application server.
+and MapLibre GL JS. IndexedDB stores local tracks, saved markers, and preferences, while
+Supabase supports optional accounts and track synchronization. The production build is
+deployed to GitHub Pages, and the core map, saved-marker, and local-track workflows do
+not require an always-running application server.
 
 ### Local development
 

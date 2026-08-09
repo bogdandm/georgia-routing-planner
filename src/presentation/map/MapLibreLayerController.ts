@@ -35,12 +35,17 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
+import type { SavedMarker } from '@/domain/markers/savedMarker';
 import {
   importedTrackLayerIds,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
+  naprOrthophotoLayerIds,
+  naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  savedMarkerImageId,
+  savedMarkerLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
@@ -52,6 +57,7 @@ import {
   type MapVisualModePaint,
 } from '@/presentation/map/mapVisualPalette';
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
+import { createMarkerIconImage } from '@/presentation/markers/markerCatalog';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -61,6 +67,22 @@ const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
   { sourceId: mapSourceIds.sentinelRasterB, layerId: sentinelMapLayerIds.rasterB },
 ] as const;
+
+const satelliteBasemapSourceIds = [
+  mapSourceIds.satelliteBasemap,
+  naprOrthophotoSourceIds.national2016To2017,
+  naprOrthophotoSourceIds.westernGeorgia2020,
+  naprOrthophotoSourceIds.kutaisi2020,
+  naprOrthophotoSourceIds.racha2025,
+] as const;
+
+function isSatelliteBasemapSourceId(
+  sourceId: string,
+): sourceId is (typeof satelliteBasemapSourceIds)[number] {
+  return satelliteBasemapSourceIds.includes(
+    sourceId as (typeof satelliteBasemapSourceIds)[number],
+  );
+}
 
 const openStreetMapOpacityProperties = {
   [mapLayerIds.landcover]: ['fill-opacity'],
@@ -118,6 +140,12 @@ const logicalNativeLayerGroups: Readonly<
   >
 > = {
   'google-satellite': [satelliteBasemapLayerIds.imagery],
+  'napr-orthophoto': [
+    naprOrthophotoLayerIds.national2016To2017,
+    naprOrthophotoLayerIds.westernGeorgia2020,
+    naprOrthophotoLayerIds.kutaisi2020,
+    naprOrthophotoLayerIds.racha2025,
+  ],
   'terrain-relief': [terrainOverlayLayerIds.reliefShade],
   'elevation-isolines': [
     terrainOverlayLayerIds.contourMinor,
@@ -175,6 +203,18 @@ interface RasterRecoveryRequest {
   readonly state: MapRecoveryState;
   readonly retryAttempt: number;
   readonly retryDelayMs: number;
+}
+
+interface SavedMarkerImageState {
+  readonly status: 'pending' | 'ready' | 'failed';
+  readonly generation: number;
+}
+
+interface SavedMarkerFeatureProperties {
+  readonly id: string;
+  readonly name: string;
+  readonly iconKey: SavedMarker['iconKey'];
+  readonly colorKey: SavedMarker['colorKey'];
 }
 
 function sceneBounds(scene: SatelliteScene): [number, number, number, number] {
@@ -326,8 +366,8 @@ export class MapLibreLayerController {
   #appliedDemTileUrl: string | null = null;
   #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
-  #satelliteBasemapSource: Source | null = null;
-  #satelliteBasemapReady = false;
+  readonly #satelliteBasemapSources = new Map<string, Source>();
+  readonly #readySatelliteBasemapSourceIds = new Set<string>();
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
@@ -340,6 +380,10 @@ export class MapLibreLayerController {
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
+  #savedMarkers: readonly SavedMarker[] = [];
+  #savedMarkerGeneration = 0;
+  readonly #savedMarkerImages = new Map<string, SavedMarkerImageState>();
+  readonly #savedMarkerImageIds = new Set<string>();
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
   readonly #directFallbackUrls = new Map<string, string>();
@@ -384,6 +428,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
+      this.reconcileSavedMarkers();
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
@@ -399,6 +444,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+    this.reconcileSavedMarkers();
   }
 
   public createDemTileUrl(): string {
@@ -427,8 +473,11 @@ export class MapLibreLayerController {
     this.#openStreetMapOpacityLayerAnchors.clear();
     this.#appliedImportedTrackOpacity = null;
     this.#importedTrackLayerAnchors.clear();
-    this.#satelliteBasemapSource = null;
-    this.#satelliteBasemapReady = false;
+    this.#savedMarkerGeneration += 1;
+    this.#savedMarkerImages.clear();
+    this.#savedMarkerImageIds.clear();
+    this.#satelliteBasemapSources.clear();
+    this.#readySatelliteBasemapSourceIds.clear();
     this.#applySequence += 1;
   }
 
@@ -469,21 +518,27 @@ export class MapLibreLayerController {
 
     const visibility = { ...state.visibility, [layerId]: visible };
     let appliedImagery = state.appliedImagery;
-    if (layerId === 'google-satellite' && visible) {
+    const staticBasemapSelected =
+      layerId === 'google-satellite' || layerId === 'napr-orthophoto';
+
+    if (staticBasemapSelected && visible) {
       const sentinelLayerIds = this.nativeLayerIds('satellite-imagery');
       for (const sentinelLayerId of sentinelLayerIds) {
         if (map.getLayer(sentinelLayerId) !== undefined) {
           map.setLayoutProperty(sentinelLayerId, 'visibility', 'none');
         }
       }
+      visibility['google-satellite'] = layerId === 'google-satellite';
+      visibility['napr-orthophoto'] = layerId === 'napr-orthophoto';
       visibility['satellite-imagery'] = false;
       appliedImagery = this.withRasterVisibility(state.appliedImagery, false);
       this.#progressiveRasterSourceId = null;
     }
     if (layerId === 'satellite-imagery' && visible) {
-      map.setLayoutProperty(satelliteBasemapLayerIds.imagery, 'visibility', 'none');
       visibility['google-satellite'] = false;
+      visibility['napr-orthophoto'] = false;
     }
+
     const highlightVisible = this.importedTrackHighlightVisible(visibility);
     for (const nativeId of nativeLayerIds) {
       const nativeVisible =
@@ -505,7 +560,8 @@ export class MapLibreLayerController {
     }
     mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
     let terrainResult: TerrainOverlayCommandResult | null = null;
-    if (layerId === 'google-satellite' || layerId === 'satellite-imagery') {
+    if (staticBasemapSelected || layerId === 'satellite-imagery') {
+      this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
       terrainResult = this.reconcileTerrainOverlays();
     }
@@ -537,16 +593,29 @@ export class MapLibreLayerController {
     switch (preset) {
       case 'vector-osm':
         visibility['google-satellite'] = false;
+        visibility['napr-orthophoto'] = false;
         break;
       case 'google-satellite-hybrid':
         visibility['google-satellite'] = true;
+        visibility['napr-orthophoto'] = false;
         break;
       case 'google-satellite':
         visibility['google-satellite'] = true;
+        visibility['napr-orthophoto'] = false;
+        openStreetMapOpacity = 0;
+        break;
+      case 'napr-orthophoto-hybrid':
+        visibility['google-satellite'] = false;
+        visibility['napr-orthophoto'] = true;
+        break;
+      case 'napr-orthophoto':
+        visibility['google-satellite'] = false;
+        visibility['napr-orthophoto'] = true;
         openStreetMapOpacity = 0;
         break;
       case 'sentinel-2-hybrid':
         visibility['google-satellite'] = false;
+        visibility['napr-orthophoto'] = false;
         sentinelVisible = true;
         break;
     }
@@ -679,6 +748,18 @@ export class MapLibreLayerController {
   ): void {
     this.#importedTrackTraceCoordinate = coordinate;
     this.reconcileImportedTrackTrace();
+  }
+
+  public setSavedMarkers(markers: readonly SavedMarker[]): void {
+    this.#savedMarkers = markers
+      .map((marker) => ({
+        ...marker,
+        coordinate: [...marker.coordinate] as readonly [number, number],
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id, 'en'));
+    this.#savedMarkerGeneration += 1;
+    this.#savedMarkerImages.clear();
+    this.reconcileSavedMarkers();
   }
 
   public async applyScene(
@@ -881,15 +962,7 @@ export class MapLibreLayerController {
   public async restorePersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
-      const visibility =
-        persisted.visibility['google-satellite'] &&
-        persisted.visibility['satellite-imagery']
-          ? {
-              ...persisted.visibility,
-              'google-satellite': true,
-              'satellite-imagery': false,
-            }
-          : persisted.visibility;
+      const visibility = this.normalizeImageryVisibility(persisted.visibility);
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
@@ -1197,9 +1270,11 @@ export class MapLibreLayerController {
           ...state.visibility,
           'google-satellite': false,
           'satellite-imagery': true,
+          'napr-orthophoto': false,
         },
         errorMessage: null,
       });
+      this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
       this.applyMapVisualMode();
       operation.complete();
@@ -1238,19 +1313,17 @@ export class MapLibreLayerController {
     persist: boolean,
     replaceCurrentScene: boolean,
   ): Promise<SatelliteImageryCommandResult> {
-    if (mapLayerStore.getState().visibility['google-satellite']) {
-      const map = this.#map;
-      if (map?.getLayer(satelliteBasemapLayerIds.imagery) !== undefined) {
-        map.setLayoutProperty(satelliteBasemapLayerIds.imagery, 'visibility', 'none');
-      }
+    const visibility = mapLayerStore.getState().visibility;
+    if (visibility['google-satellite'] || visibility['napr-orthophoto']) {
       mapLayerStore.setState({
         visibility: {
-          ...mapLayerStore.getState().visibility,
+          ...visibility,
           'google-satellite': false,
+          'napr-orthophoto': false,
           'satellite-imagery': true,
         },
       });
-      this.persistStableState();
+      this.applyBaseLayerVisibility();
     }
     this.#activeApplyController?.abort();
     const controller = new AbortController();
@@ -1366,35 +1439,50 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+    this.reconcileSavedMarkers();
   };
 
   private readonly handleSatelliteBasemapSourceData = (
     event: MapSourceDataEvent,
   ): void => {
     if (
-      event.sourceId !== mapSourceIds.satelliteBasemap ||
-      event.sourceDataType !== 'content'
+      event.sourceDataType !== 'content' ||
+      !isSatelliteBasemapSourceId(event.sourceId)
     ) {
       return;
     }
     const map = this.#map;
-    const source = map?.getSource(mapSourceIds.satelliteBasemap);
+    const source = map?.getSource(event.sourceId);
     if (map === null || source === undefined) return;
-    if (this.#satelliteBasemapSource !== source) {
-      this.#satelliteBasemapSource = source;
-      this.#satelliteBasemapReady = false;
+    if (this.#satelliteBasemapSources.get(event.sourceId) !== source) {
+      this.#satelliteBasemapSources.set(event.sourceId, source);
+      this.#readySatelliteBasemapSourceIds.delete(event.sourceId);
     }
-    if (this.#satelliteBasemapReady) return;
-    this.#satelliteBasemapReady = true;
+    if (this.#readySatelliteBasemapSourceIds.has(event.sourceId)) return;
+    this.#readySatelliteBasemapSourceIds.add(event.sourceId);
     this.applyMapVisualMode();
     this.reconcileTerrainOverlays();
   };
 
   private reconcileSatelliteBasemapSource(): void {
-    const source = this.#map?.getSource(mapSourceIds.satelliteBasemap) ?? null;
-    if (this.#satelliteBasemapSource === source) return;
-    this.#satelliteBasemapSource = source;
-    this.#satelliteBasemapReady = false;
+    const map = this.#map;
+    if (map === null) {
+      this.#satelliteBasemapSources.clear();
+      this.#readySatelliteBasemapSourceIds.clear();
+      return;
+    }
+    for (const sourceId of satelliteBasemapSourceIds) {
+      const source = map.getSource(sourceId);
+      if (source === undefined) {
+        this.#satelliteBasemapSources.delete(sourceId);
+        this.#readySatelliteBasemapSourceIds.delete(sourceId);
+        continue;
+      }
+      if (this.#satelliteBasemapSources.get(sourceId) !== source) {
+        this.#satelliteBasemapSources.set(sourceId, source);
+        this.#readySatelliteBasemapSourceIds.delete(sourceId);
+      }
+    }
   }
 
   private readonly handleTerrainOverlayError = (event: MapLibreErrorEvent): void => {
@@ -1674,12 +1762,32 @@ export class MapLibreLayerController {
         message,
       },
     });
-    this.logger.log({
-      level: 'warn',
-      name: 'map.terrain-overlays.failed',
-      message,
-    });
     return { status: 'failed', message };
+  }
+
+  private normalizeImageryVisibility(
+    visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+  ): Readonly<Record<LogicalMapLayerId, boolean>> {
+    if (
+      visibility['google-satellite'] &&
+      (visibility['napr-orthophoto'] || visibility['satellite-imagery'])
+    ) {
+      return {
+        ...visibility,
+        'google-satellite': true,
+        'napr-orthophoto': false,
+        'satellite-imagery': false,
+      };
+    }
+    if (visibility['napr-orthophoto'] && visibility['satellite-imagery']) {
+      return {
+        ...visibility,
+        'google-satellite': false,
+        'napr-orthophoto': true,
+        'satellite-imagery': false,
+      };
+    }
+    return visibility;
   }
 
   private importedTrackHighlightVisible(
@@ -1705,6 +1813,12 @@ export class MapLibreLayerController {
     ) {
       return satelliteBasemapLayerIds.imagery;
     }
+    if (
+      visibility['napr-orthophoto'] &&
+      map.getLayer(naprOrthophotoLayerIds.racha2025) !== undefined
+    ) {
+      return naprOrthophotoLayerIds.racha2025;
+    }
     return null;
   }
 
@@ -1722,6 +1836,7 @@ export class MapLibreLayerController {
     const { visibility } = mapLayerStore.getState();
     for (const layerId of [
       'google-satellite',
+      'napr-orthophoto',
       'terrain-relief',
       'elevation-isolines',
       'natural-features',
@@ -1745,6 +1860,141 @@ export class MapLibreLayerController {
           );
         }
       }
+    }
+  }
+
+  private reconcileSavedMarkers(): void {
+    const map = this.#map;
+    if (map?.getLayer(mapLayerIds.background) === undefined) return;
+
+    const source = map.getSource(mapSourceIds.savedMarkers);
+    if (source === undefined) {
+      this.#savedMarkerGeneration += 1;
+      this.#savedMarkerImages.clear();
+      this.#savedMarkerImageIds.clear();
+    } else if (!isGeoJsonSource(source)) {
+      this.logger.log({
+        level: 'warn',
+        name: 'map.saved-marker-source.invalid',
+      });
+      return;
+    }
+
+    const generation = this.#savedMarkerGeneration;
+    const combinations = new Map<string, Pick<SavedMarker, 'iconKey' | 'colorKey'>>();
+    for (const marker of this.#savedMarkers) {
+      const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
+      combinations.set(imageId, {
+        iconKey: marker.iconKey,
+        colorKey: marker.colorKey,
+      });
+    }
+    for (const imageId of this.#savedMarkerImageIds) {
+      if (combinations.has(imageId)) continue;
+      if (map.hasImage(imageId)) map.removeImage(imageId);
+      this.#savedMarkerImageIds.delete(imageId);
+      this.#savedMarkerImages.delete(imageId);
+    }
+
+    for (const [imageId, combination] of combinations) {
+      if (map.hasImage(imageId)) {
+        this.#savedMarkerImageIds.add(imageId);
+        this.#savedMarkerImages.set(imageId, { status: 'ready', generation });
+        continue;
+      }
+      const imageState = this.#savedMarkerImages.get(imageId);
+      if (imageState?.generation === generation) continue;
+      this.#savedMarkerImages.set(imageId, { status: 'pending', generation });
+      void createMarkerIconImage(combination.iconKey, combination.colorKey)
+        .then((image) => {
+          if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
+          if (!map.hasImage(imageId)) map.addImage(imageId, image);
+          this.#savedMarkerImageIds.add(imageId);
+          this.#savedMarkerImages.set(imageId, { status: 'ready', generation });
+          this.reconcileSavedMarkers();
+        })
+        .catch(() => {
+          if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
+          this.#savedMarkerImages.set(imageId, { status: 'failed', generation });
+          this.logger.log({
+            level: 'warn',
+            name: 'map.saved-marker-icon.failed',
+            data: {
+              iconKey: combination.iconKey,
+              colorKey: combination.colorKey,
+            },
+          });
+          this.reconcileSavedMarkers();
+        });
+    }
+
+    const features: Feature<Point, SavedMarkerFeatureProperties>[] = this.#savedMarkers
+      .filter((marker) => {
+        const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
+        return this.#savedMarkerImages.get(imageId)?.status === 'ready';
+      })
+      .map((marker) => ({
+        type: 'Feature',
+        id: marker.id,
+        properties: {
+          id: marker.id,
+          name: marker.name,
+          iconKey: marker.iconKey,
+          colorKey: marker.colorKey,
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [...marker.coordinate],
+        },
+      }));
+    const data: FeatureCollection<Point, SavedMarkerFeatureProperties> = {
+      type: 'FeatureCollection',
+      features,
+    };
+    if (source === undefined) {
+      map.addSource(mapSourceIds.savedMarkers, { type: 'geojson', data });
+    } else {
+      source.setData(data);
+    }
+    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
+      map.addLayer({
+        id: savedMarkerLayerIds.symbols,
+        type: 'symbol',
+        source: mapSourceIds.savedMarkers,
+        layout: {
+          'icon-image': [
+            'concat',
+            'saved-marker-',
+            ['get', 'iconKey'],
+            '-',
+            ['get', 'colorKey'],
+          ],
+          'icon-size': 0.7,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true,
+          'text-field': ['get', 'name'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 12,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.2],
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': mapVisualPalette.text.primary,
+          'text-halo-color': '#FFFFFF',
+          'text-halo-width': 2,
+          'text-halo-blur': 0.5,
+        },
+      });
+    }
+    this.ensureSavedMarkerLayerOrder(map);
+  }
+
+  private ensureSavedMarkerLayerOrder(map: MapLibreMap): void {
+    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) return;
+    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    if (layerIds.at(-1) !== savedMarkerLayerIds.symbols) {
+      map.moveLayer(savedMarkerLayerIds.symbols);
     }
   }
 
@@ -1924,16 +2174,19 @@ export class MapLibreLayerController {
       }
     }
 
-    const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
-    if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
-      map.moveLayer(importedTrackLayerIds.trace);
+    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
+      const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
+      if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
+        map.moveLayer(importedTrackLayerIds.trace);
+      }
     }
+    this.ensureSavedMarkerLayerOrder(map);
   }
 
   private applyImportedTrackPaint(): void {
     const map = this.#map;
     if (map === null) return;
-    const opacity = mapLayerStore.getState().importedTrackOpacity;
+    const { importedTrackOpacity: opacity } = mapLayerStore.getState();
     const layerIds = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
@@ -1961,9 +2214,16 @@ export class MapLibreLayerController {
         (this.#activeSlot !== null &&
           !this.#waitingForRasterData.has(this.#activeSlot.sourceId) &&
           state.appliedImagery.status !== 'hidden'));
-    const googleReadyAndVisible =
-      state.visibility['google-satellite'] && this.#satelliteBasemapReady;
-    return sentinelReadyAndVisible || googleReadyAndVisible ? 'satellite' : 'vector';
+    const staticBasemapReadyAndVisible =
+      (state.visibility['google-satellite'] &&
+        this.#readySatelliteBasemapSourceIds.has(mapSourceIds.satelliteBasemap)) ||
+      (state.visibility['napr-orthophoto'] &&
+        satelliteBasemapSourceIds
+          .filter((sourceId) => sourceId !== mapSourceIds.satelliteBasemap)
+          .some((sourceId) => this.#readySatelliteBasemapSourceIds.has(sourceId)));
+    return sentinelReadyAndVisible || staticBasemapReadyAndVisible
+      ? 'satellite'
+      : 'vector';
   }
 
   private applyMapVisualMode(): void {

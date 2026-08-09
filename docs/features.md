@@ -57,15 +57,14 @@ profile-and-stats summary sits between the fixed Trail Planner logo and the navi
 expansion affordance. Without an active track summary, the Trail Planner logo and
 expansion affordance remain the compact collapsed control.
 
-The current shell exposes Tracks, Satellite, Layers, and User as interactive rail
-destinations. Markers remains visible but disabled until that feature surface has
-working behavior. It has no full-width app bar, empty global elevation placeholder, or
+The current shell exposes Tracks, Satellite, Markers, Layers, and User as interactive
+rail destinations. It has no full-width app bar, empty global elevation placeholder, or
 generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable preferences: developer mode, collapsed navigation, Sentinel imagery rendering,
-  and terrain overlays in Dexie.
+- Durable preferences: developer mode, collapsed navigation, marker sorting, Sentinel
+  imagery rendering, and terrain overlays in Dexie.
 - Settings uses compact `General` and `Storage` tabs. Storage shows only the
   measurements the browser supplies: origin usage and quota, IndexedDB, Cache Storage,
   localStorage, residual origin data, and Chromium's optional JavaScript heap estimate
@@ -191,11 +190,12 @@ calculation, persistence, and export are unavailable.
 Satellite uses a compact `Point | <coordinates>` search-area selector. Point uses the
 submitted viewport center. Choosing **Search satellite images** from the map context
 menu sets a read-only Custom point as the search center until the map moves or the user
-chooses Point. Marker remains unavailable until a saved marker can supply the search
-target. The catalog returns only scenes whose footprint intersects that immutable point,
-while the full submitted viewport is retained for client-side coverage. The sidebar
-shows a read-only acquisition calendar, an L2A scene-cloud slider, and the latest-images
-action. Users do not construct a date range. L1C is not exposed in the current MVP UI.
+chooses Point. Marker remains unavailable as a Satellite target; saved markers currently
+support map navigation but do not feed Satellite criteria. The catalog returns only
+scenes whose footprint intersects that immutable point, while the full submitted
+viewport is retained for client-side coverage. The sidebar shows a read-only acquisition
+calendar, an L2A scene-cloud slider, and the latest-images action. Users do not
+construct a date range. L1C is not exposed in the current MVP UI.
 
 Results live in an adjacent right pane and compare acquisition date, platform, product
 level, cloud cover, and coverage. Cards within one acquisition day sort by acquisition
@@ -266,7 +266,7 @@ when a later server render succeeds, the user explicitly changes rendering mode,
 imagery is removed. A mode change removes both provider raster slots, restores the full
 vector basemap, and reapplies the same selected scene through only the newly selected
 provider. The mode choice is stored immediately, including during a pending or failed
-render. Marker targeting remains unavailable.
+render. Saved-marker targeting remains unavailable in Satellite.
 
 Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
 exposed through the web storage APIs, so the application neither claims their size nor
@@ -311,39 +311,49 @@ the others behind the map's loading state.
 
 ### Markers
 
-Markers supports adding, searching, sorting, grouping, and filtering saved markers,
-including a current-view subset. Selected marker details edit name, icon, color,
-coordinates, terrain-derived elevation, and preferred map scale.
+Markers is a browser-local library of named map points. **New marker** starts placement
+mode, and **Create marker here** is also available from the map context menu. A map
+click opens the editor with the nearest inspected POI name when available; the user
+confirms the name, one of 117 Pinhead map icons organized in category tabs, and one of
+ten shared-theme colors before anything is stored.
 
-A marker can become a Satellite search target or be copied into Create GPX. Copying
-transfers coordinates and supported appearance/provenance values; marker and waypoint
-identities remain separate, so subsequent marker edits do not mutate the waypoint.
+The contextual sidebar lists saved markers using the same row interaction pattern as
+Tracks. It sorts by newest, name, color, or distance from the current map center; shows
+the current distance; navigates the map from a row; and supports rename, appearance
+changes, and two-step inline deletion. Markers remain in IndexedDB across browser
+restarts and render as MapLibre symbols with their selected icon, color, and name.
+Malformed stored rows are omitted and reported through bounded local diagnostics.
 
-The current implementation retains the Markers empty state for direct anchored URLs, but
-its rail action is disabled because marker creation, persistence, organization, editing,
-and cross-feature actions are unavailable.
+Marker search, grouping, filtering, coordinate/elevation/scale editing, remote
+synchronization, Satellite targeting, and copying into Create GPX are not currently
+available.
 
 ### Layers
 
 Layers groups durable controls under explicit source headings: Local GPX, Satellites,
-the configured terrain provider, and OpenStreetMap. Satellites starts with an optional
-**Google satellite imagery** basemap, followed by **Copernicus Sentinel-2 via Earth
-Search**, whose **Satellite imagery** and **Scene footprint** controls remain disabled
-until a scene is applied. Google and Sentinel imagery are mutually exclusive checkboxes:
-choosing either immediately clears the other, while either may be off. Google is
-disabled by default, and its explicit choice is retained in this browser's IndexedDB
-preferences. The shared OpenStreetMap opacity slider enables whenever either raster is
-selected and scales every OpenStreetMap reference layer and elevation isoline once
-active raster content has switched the map into satellite visual mode; vector paints
-remain fully opaque while Google tiles first load.
+the configured terrain provider, and OpenStreetMap. Satellites starts with optional
+**Google satellite imagery** and **NAPR Orthophoto** basemaps, followed by **Copernicus
+Sentinel-2 via Earth Search**, whose **Satellite imagery** and **Scene footprint**
+controls remain disabled until a scene is applied. NAPR is one logical multi-year
+orthophoto mosaic: newest available aerial pixels render from 2025, then 2020, then
+nationwide 2016–2017 coverage. Google, NAPR, and Sentinel imagery are mutually exclusive
+checkboxes: choosing one immediately clears the other two, while every imagery source
+may be off. Google and NAPR are disabled by default, and each explicit choice is
+retained in this browser's IndexedDB preferences. The shared OpenStreetMap opacity
+slider enables whenever any raster is selected and scales every OpenStreetMap reference
+layer and elevation isoline once active raster content has switched the map into
+satellite visual mode; vector paints remain fully opaque while static raster tiles first
+load.
 
 The quick chooser presents **Vector OSM** (no raster and opaque vectors), **Google
 Satellite Hybrid** (Google imagery with opaque vectors), **Google Satellite** (Google
-imagery without vectors), and **Sentinel-2 Hybrid** (an applied Sentinel scene with
-opaque vectors). A preset changes only the Google/Sentinel raster selection and shared
-OpenStreetMap opacity: all independent Layers toggles, imported-track opacity, terrain
-preferences, and an applied Sentinel scene remain intact. Choosing Sentinel-2 Hybrid
-without an applied scene opens the Satellite workspace so the user can select one.
+imagery without vectors), **NAPR Orthophoto Hybrid** (NAPR imagery with opaque vectors),
+**NAPR Orthophoto** (NAPR imagery without vectors), and **Sentinel-2 Hybrid** (an
+applied Sentinel scene with opaque vectors). A preset changes only the
+Google/NAPR/Sentinel raster selection and shared OpenStreetMap opacity: all independent
+Layers toggles, imported-track opacity, terrain preferences, and an applied Sentinel
+scene remain intact. Choosing Sentinel-2 Hybrid without an applied scene opens the
+Satellite workspace so the user can select one; NAPR presets do not require a scene.
 
 The remaining checkboxes cover Imported tracks, its default-on **Elevation gradient**,
 Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs, plus
@@ -609,11 +619,12 @@ configuration must never contain secrets.
 ## Current capability boundary
 
 The application does not currently provide GPX catalog loading, Create GPX
-editing/export, saved-marker management, or offline-region downloads. Optional
-email/password accounts can explicitly synchronize elevation-free track copies when
-public Supabase configuration is present. Satellite provides live viewport search for
-L2A scenes with a scene-cloud control. Successful results are grouped by UTC acquisition
-day and show a thumbnail, local acquisition time, processing level, cloud, viewport
-coverage, and sub-5-km edge warning. Selecting a card renders one georeferenced
-true-color scene and its footprint; Layers can hide or restore the raster and related
-logical map groups.
+editing/export, marker search/grouping/cross-feature targeting, or offline-region
+downloads. Saved-marker creation, local persistence, sorting, map rendering, navigation,
+rename, appearance editing, and deletion are available. Optional email/password accounts
+can explicitly synchronize elevation-free track copies when public Supabase
+configuration is present. Satellite provides live viewport search for L2A scenes with a
+scene-cloud control. Successful results are grouped by UTC acquisition day and show a
+thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
+sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
+its footprint; Layers can hide or restore the raster and related logical map groups.

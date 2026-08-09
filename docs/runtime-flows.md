@@ -39,9 +39,20 @@ teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot
 and shows the settled viewport center inside the compact `Viewport | <coordinates>`
-selector. Viewport is the current source; Marker is visible but disabled until
-saved-marker behavior exists. The sidebar never receives the native MapLibre object and
-falls back to `defaultGeorgiaCamera` before the first snapshot is available.
+selector. Viewport is the current source; Marker remains disabled because Satellite does
+not yet accept saved markers as search targets. The sidebar never receives the native
+MapLibre object and falls back to `defaultGeorgiaCamera` before the first snapshot is
+available.
+
+`MarkersWorkspaceProvider` loads validated saved markers from the IndexedDB repository
+and sends the ready collection to `MapLibreLayerController`. **New marker** changes the
+map interaction mode until the next map click; the context-menu action supplies a point
+directly. Both paths query the facade's nearest inspected POI for an initial name and
+queue one creation command until marker loading is ready. Confirmation writes the
+marker, then the controller reconciles GeoJSON features and generated MUI icon images.
+Row navigation changes the shared map camera without remounting the map. Rename,
+appearance changes, deletion, and the persisted sort preference stay local to this
+browser.
 
 Changing sections changes floating contextual content, not the full-viewport map owner
 or its dimensions. Collapsing navigation keeps only the Trail Planner logo above the

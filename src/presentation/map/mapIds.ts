@@ -1,3 +1,5 @@
+import type { MarkerColorKey, MarkerIconKey } from '@/domain/markers/savedMarker';
+
 export const mapSourceIds = {
   basemapVector: 'basemap-vector',
   terrainDem: 'terrain-dem',
@@ -9,6 +11,14 @@ export const mapSourceIds = {
   importedTrack: 'imported-track',
   importedTrackHighlight: 'imported-track-highlight',
   importedTrackTrace: 'imported-track-trace',
+  savedMarkers: 'saved-markers',
+} as const;
+
+export const naprOrthophotoSourceIds = {
+  national2016To2017: 'napr-orthophoto-2016-2017',
+  westernGeorgia2020: 'napr-orthophoto-2020-west',
+  kutaisi2020: 'napr-orthophoto-2020-kutaisi',
+  racha2025: 'napr-orthophoto-2025-racha',
 } as const;
 
 export const terrainOverlayLayerIds = {
@@ -28,12 +38,30 @@ export const satelliteBasemapLayerIds = {
   imagery: 'satellite-basemap-imagery',
 } as const;
 
+export const naprOrthophotoLayerIds = {
+  national2016To2017: 'napr-orthophoto-2016-2017-imagery',
+  westernGeorgia2020: 'napr-orthophoto-2020-west-imagery',
+  kutaisi2020: 'napr-orthophoto-2020-kutaisi-imagery',
+  racha2025: 'napr-orthophoto-2025-racha-imagery',
+} as const;
+
 export const importedTrackLayerIds = {
   casing: 'imported-track-casing',
   line: 'imported-track-line',
   highlight: 'imported-track-highlight',
   trace: 'imported-track-trace',
 } as const;
+
+export const savedMarkerLayerIds = {
+  symbols: 'saved-marker-symbols',
+} as const;
+
+export function savedMarkerImageId(
+  iconKey: MarkerIconKey,
+  colorKey: MarkerColorKey,
+): string {
+  return `saved-marker-${iconKey}-${colorKey}`;
+}
 
 export const mapLayerIds = {
   background: 'basemap-background',

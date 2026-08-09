@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import { naprOrthophotoSourceIds } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
@@ -679,45 +680,54 @@ describe('MapLibreFacade', () => {
     expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
   });
 
-  it('classifies Google tiles as satellite raster failures without Sentinel recovery', () => {
-    const services = createTestServices();
-    const nativeMap = new FakeNativeMap();
-    const handleRasterSourceFailure = vi.fn();
-    const layerController = {
-      attach: vi.fn(),
-      detach: vi.fn(),
-      handleRasterSourceFailure,
-      handleRasterSourceData: vi.fn(() => false),
-      isRasterSourceRecoveryComplete: vi.fn(() => false),
-      handleRasterSourceRecovered: vi.fn(),
-    } as unknown as MapLibreLayerController;
-    const facade = new MapLibreFacade(
-      services.logger,
-      undefined,
-      undefined,
-      undefined,
-      layerController,
-    );
-    facade.attach(nativeMap as unknown as MapLibreMap);
-    nativeMap.fire('load');
-    nativeMap.addSource('satellite-basemap', { type: 'raster' });
+  it.each([
+    { name: 'Google', sourceId: 'satellite-basemap' },
+    ...Object.values(naprOrthophotoSourceIds).map((sourceId) => ({
+      name: `NAPR ${sourceId}`,
+      sourceId,
+    })),
+  ])(
+    'classifies $name static basemap tiles as satellite raster failures',
+    ({ sourceId }) => {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      const handleRasterSourceFailure = vi.fn();
+      const layerController = {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        handleRasterSourceFailure,
+        handleRasterSourceData: vi.fn(() => false),
+        isRasterSourceRecoveryComplete: vi.fn(() => false),
+        handleRasterSourceRecovered: vi.fn(),
+      } as unknown as MapLibreLayerController;
+      const facade = new MapLibreFacade(
+        services.logger,
+        undefined,
+        undefined,
+        undefined,
+        layerController,
+      );
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      nativeMap.fire('load');
+      nativeMap.addSource(sourceId, { type: 'raster' });
 
-    nativeMap.fire('error', {
-      error: { message: 'AJAXError: Service Unavailable', status: 503 },
-      sourceId: 'satellite-basemap',
-    });
+      nativeMap.fire('error', {
+        error: { message: 'AJAXError: Service Unavailable', status: 503 },
+        sourceId,
+      });
 
-    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
-      recoverableFailures: [
-        {
-          category: 'satellite-raster',
-          sourceId: 'satellite-basemap',
-          recoveryState: 'not-applicable',
-        },
-      ],
-    });
-    expect(handleRasterSourceFailure).not.toHaveBeenCalled();
-  });
+      expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+        recoverableFailures: [
+          {
+            category: 'satellite-raster',
+            sourceId,
+            recoveryState: 'not-applicable',
+          },
+        ],
+      });
+      expect(handleRasterSourceFailure).not.toHaveBeenCalled();
+    },
+  );
 
   it('clears a cancelled source failure instead of leaving the map degraded', () => {
     const services = createTestServices();
@@ -1013,6 +1023,11 @@ describe('MapLibreFacade', () => {
     );
     facade.attach(nativeMap as unknown as MapLibreMap);
 
+    expect(
+      facade.getNearestPoi({ longitude: 43.67592, latitude: 42.70227 }),
+    ).toMatchObject({ name: 'Lake Shovi', category: 'lake' });
+    nativeMap.queriedSourceLayers.length = 0;
+
     nativeMap.fire('click', { lngLat: { lng: 43.67592, lat: 42.70227 } });
 
     expect(nativeMap.queriedSourceLayers).toEqual([
@@ -1099,5 +1114,43 @@ describe('MapLibreFacade', () => {
     facade.destroy();
     nativeMap.getCanvas().dispatchEvent(new Event('webglcontextlost'));
     expect(facade.getDiagnosticsSnapshot()).toEqual(snapshotBeforeDestroy);
+  });
+
+  it('suppresses generic point inspection while marker placement is active', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    facade.setInteractionMode('marker-placement');
+    expect(nativeMap.getCanvas().style.cursor).toBe('crosshair');
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+
+    facade.setInteractionMode('default');
+    expect(nativeMap.getCanvas().style.cursor).toBe('');
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+    expect(facade.getPointInspection()).toMatchObject({
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+    });
+
+    facade.detachMap();
+    expect(nativeMap.getCanvas().style.cursor).toBe('');
   });
 });

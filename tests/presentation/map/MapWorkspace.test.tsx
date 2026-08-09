@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,8 +16,10 @@ import {
   mapInteractionStore,
   requestMapFitBounds,
   requestMapNavigation,
+  requestMarkerPlacement,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
 import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -27,14 +29,36 @@ vi.mock('react-map-gl/maplibre', () => ({
   default: ({
     boxZoom,
     dragRotate,
+    onClick,
+    onContextMenu,
   }: {
     readonly boxZoom?: boolean;
     readonly dragRotate?: boolean;
+    readonly onClick?: (event: {
+      readonly originalEvent: MouseEvent;
+      readonly lngLat: { readonly lng: number; readonly lat: number };
+    }) => void;
+    readonly onContextMenu?: (event: {
+      readonly originalEvent: MouseEvent;
+      readonly lngLat: { readonly lng: number; readonly lat: number };
+    }) => void;
   }) => (
     <div
       data-box-zoom={String(boxZoom)}
       data-drag-rotate={String(dragRotate)}
       data-testid="native-map"
+      onClick={(event) => {
+        onClick?.({
+          originalEvent: event.nativeEvent,
+          lngLat: { lng: 44.8, lat: 41.7 },
+        });
+      }}
+      onContextMenu={(event) => {
+        onContextMenu?.({
+          originalEvent: event.nativeEvent,
+          lngLat: { lng: 44.8, lat: 41.7 },
+        });
+      }}
     />
   ),
   GeolocateControl: () => null,
@@ -846,6 +870,56 @@ describe('MapWorkspace', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('translates map placement and context-menu commands into transactional marker drafts', async () => {
+    const services = createTestServices();
+    const facade = new FakeMapFacade();
+    facade.nearestPoi = {
+      name: 'Mtatsminda',
+      category: 'peak',
+      distanceMeters: 24,
+    };
+    const user = userEvent.setup();
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MarkersWorkspaceProvider>
+          <MapWorkspace facade={facade} />
+        </MarkersWorkspaceProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    const nativeMap = await screen.findByTestId('native-map');
+    act(() => {
+      requestMarkerPlacement();
+    });
+    expect(await screen.findByText('Click the map to place the marker')).toBeVisible();
+    await waitFor(() => {
+      expect(facade.interactionModes).toContain('marker-placement');
+    });
+
+    fireEvent.click(nativeMap);
+    expect(await screen.findByRole('heading', { name: 'Create marker' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Marker name' })).toHaveValue(
+      'Mtatsminda',
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('default');
+    });
+
+    fireEvent.contextMenu(nativeMap);
+    await user.click(screen.getByRole('menuitem', { name: 'Create marker here' }));
+    const contextName = screen.getByRole('textbox', { name: 'Marker name' });
+    expect(contextName).toHaveValue('Mtatsminda');
+    await user.clear(contextName);
+    await user.type(contextName, 'Context marker');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await waitFor(async () => {
+      await expect(services.database.listSavedMarkers()).resolves.toEqual([
+        expect.objectContaining({ coordinate: [44.8, 41.7] }),
+      ]);
+    });
+  });
+
   it('applies the Sentinel preset when an applied scene is hidden', async () => {
     const user = userEvent.setup();
     const services = createTestServices();
@@ -878,6 +952,56 @@ describe('MapWorkspace', () => {
     await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
 
     expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
+  });
+
+  it('applies NAPR quick presets without opening the Satellite workspace', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({
+      activeTab: 'layers',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'napr-orthophoto': true,
+        },
+        openStreetMapOpacity: 1,
+      });
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>NAPR map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('NAPR map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    expect(
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
+    );
+    await user.click(screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }));
+
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'napr-orthophoto-hybrid');
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(2, 'napr-orthophoto');
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'layers',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
   });
 
   it('opens Satellite instead of applying the Sentinel preset without an applied scene', async () => {

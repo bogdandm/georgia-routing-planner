@@ -104,29 +104,6 @@ export function createAppTheme() {
           root: { borderRadius: 8 },
         },
       },
-      MuiTab: {
-        styleOverrides: {
-          root: {
-            minWidth: 52,
-            minHeight: 58,
-            marginInline: 6,
-            marginBottom: 4,
-            padding: '6px 4px',
-            borderRadius: 10,
-            color: appColors.text.inverseMuted,
-            fontSize: '0.625rem',
-            lineHeight: 1.1,
-            textTransform: 'none',
-            '&.Mui-selected': {
-              color: appColors.text.inverse,
-              backgroundColor: appColors.interaction.navigationSelectedBackground,
-            },
-            '& .MuiTab-iconWrapper': {
-              marginBottom: '2px !important',
-            },
-          },
-        },
-      },
       MuiPaper: {
         styleOverrides: {
           root: { backgroundImage: 'none' },

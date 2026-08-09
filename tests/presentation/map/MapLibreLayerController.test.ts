@@ -2,16 +2,24 @@ import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'mapli
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  SAVED_MARKER_SCHEMA_VERSION,
+  type SavedMarker,
+} from '@/domain/markers/savedMarker';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   importedTrackLayerIds,
   mapLayerIds,
   mapSourceIds,
+  naprOrthophotoLayerIds,
+  naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  savedMarkerLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
+import * as markerCatalog from '@/presentation/markers/markerCatalog';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { mapVisualModePaint } from '@/presentation/map/mapVisualPalette';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -21,6 +29,7 @@ type Listener = (event: never) => void;
 class FakeLayerMap {
   readonly #listeners = new Map<string, Set<Listener>>();
   readonly sources = new Map<string, unknown>();
+  readonly images = new Map<string, unknown>();
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
@@ -43,11 +52,18 @@ class FakeLayerMap {
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
     this.sources.set(mapSourceIds.satelliteBasemap, { type: 'raster' });
+    for (const sourceId of Object.values(naprOrthophotoSourceIds)) {
+      this.sources.set(sourceId, { type: 'raster' });
+    }
     const layers = [...this.layers.entries()];
-    layers.splice(1, 0, [
-      satelliteBasemapLayerIds.imagery,
-      { id: satelliteBasemapLayerIds.imagery },
-    ]);
+    layers.splice(
+      1,
+      0,
+      [satelliteBasemapLayerIds.imagery, { id: satelliteBasemapLayerIds.imagery }],
+      ...Object.values(naprOrthophotoLayerIds).map(
+        (id): [string, Record<string, unknown>] => [id, { id }],
+      ),
+    );
     this.layers.clear();
     for (const [id, layer] of layers) this.layers.set(id, layer);
   }
@@ -95,6 +111,18 @@ class FakeLayerMap {
     reordered.splice(beforeIndex < 0 ? reordered.length : beforeIndex, 0, [id, layer]);
     this.layers.clear();
     for (const [layerId, value] of reordered) this.layers.set(layerId, value);
+  }
+
+  public hasImage(id: string): boolean {
+    return this.images.has(id);
+  }
+
+  public addImage(id: string, image: unknown): void {
+    this.images.set(id, image);
+  }
+
+  public removeImage(id: string): void {
+    this.images.delete(id);
   }
 
   public getStyle(): {
@@ -456,6 +484,23 @@ describe('MapLibreLayerController', () => {
       appliedImagery: { status: 'hidden', visible: false },
     });
 
+    expect(controller.setLayerVisibility('napr-orthophoto', true)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    for (const layerId of Object.values(naprOrthophotoLayerIds)) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'napr-orthophoto': true,
+        'satellite-imagery': false,
+      },
+      appliedImagery: { status: 'hidden', visible: false },
+    });
+
     expect(controller.setLayerVisibility('satellite-imagery', true)).toEqual({
       status: 'success',
     });
@@ -464,6 +509,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().visibility).toMatchObject({
       'google-satellite': false,
       'satellite-imagery': true,
+      'napr-orthophoto': false,
     });
 
     expect(controller.setLayerVisibility('satellite-imagery', false)).toEqual({
@@ -482,6 +528,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().visibility).toMatchObject({
       'google-satellite': false,
       'satellite-imagery': false,
+      'napr-orthophoto': false,
     });
 
     expect(controller.setLayerVisibility('google-satellite', true)).toEqual({
@@ -493,7 +540,11 @@ describe('MapLibreLayerController', () => {
     );
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        visibility: { 'google-satellite': false, 'satellite-imagery': true },
+        visibility: {
+          'google-satellite': false,
+          'napr-orthophoto': false,
+          'satellite-imagery': true,
+        },
       });
     });
   });
@@ -542,6 +593,35 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
 
+    expect(controller.setMapLayerPreset('napr-orthophoto-hybrid')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'napr-orthophoto': true,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 1,
+    });
+    for (const layerId of Object.values(naprOrthophotoLayerIds)) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+
+    expect(controller.setMapLayerPreset('napr-orthophoto')).toEqual({
+      status: 'success',
+    });
+    expect(mapLayerStore.getState()).toMatchObject({
+      visibility: {
+        'google-satellite': false,
+        'napr-orthophoto': true,
+        'satellite-imagery': false,
+        roads: false,
+      },
+      openStreetMapOpacity: 0,
+    });
+
     expect(controller.setMapLayerPreset('google-satellite')).toEqual({
       status: 'success',
     });
@@ -560,6 +640,7 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: {
         'google-satellite': false,
+        'napr-orthophoto': false,
         'satellite-imagery': true,
         roads: false,
       },
@@ -569,7 +650,7 @@ describe('MapLibreLayerController', () => {
     expect(controller.getAppliedScene()).toMatchObject({ id: 'preset-scene' });
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
-    expect(savePreferences).toHaveBeenCalledTimes(4);
+    expect(savePreferences).toHaveBeenCalledTimes(6);
     expect(log).toHaveBeenLastCalledWith({
       level: 'info',
       name: 'map.layer-preset.changed',
@@ -637,6 +718,44 @@ describe('MapLibreLayerController', () => {
       aboveOrder.indexOf(terrainOverlayLayerIds.contourMinor),
     );
   });
+
+  it.each(Object.values(naprOrthophotoSourceIds))(
+    'uses NAPR source %s readiness and clears it after recreation',
+    (sourceId) => {
+      const services = createTestServices();
+      const controller = services.mapLayers;
+      if (controller === null) return;
+      const map = new FakeLayerMap();
+      controller.attach(map as unknown as MapLibreMap);
+
+      expect(controller.setLayerVisibility('napr-orthophoto', true)).toEqual({
+        status: 'success',
+      });
+      map.fire('sourcedata', {
+        sourceId,
+        sourceDataType: 'content',
+      });
+      expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+        mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+      );
+
+      map.removeSource(sourceId);
+      map.fire('styledata', {});
+      expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(1);
+
+      map.addSource(sourceId, { type: 'raster' });
+      map.fire('styledata', {});
+      expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(1);
+
+      map.fire('sourcedata', {
+        sourceId,
+        sourceDataType: 'content',
+      });
+      expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+        mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+      );
+    },
+  );
 
   it('renders independent imported-track lines with shared visibility and opacity', async () => {
     const services = createTestServices();
@@ -1726,6 +1845,7 @@ describe('MapLibreLayerController', () => {
     await services.database.saveMapLayerPreferences({
       visibility: {
         'google-satellite': false,
+        'napr-orthophoto': false,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,
@@ -1789,6 +1909,7 @@ describe('MapLibreLayerController', () => {
         ...mapLayerStore.getState().visibility,
         'google-satellite': true,
         'satellite-imagery': true,
+        'napr-orthophoto': true,
       },
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
@@ -1799,11 +1920,13 @@ describe('MapLibreLayerController', () => {
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
 
+    const savePreferences = vi.spyOn(services.database, 'saveMapLayerPreferences');
     await controller.restorePersistedState();
 
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
     expect(mapLayerStore.getState().visibility).toMatchObject({
       'google-satellite': true,
+      'napr-orthophoto': false,
       'satellite-imagery': false,
     });
     await waitFor(async () => {
@@ -1811,6 +1934,7 @@ describe('MapLibreLayerController', () => {
         visibility: { 'google-satellite': true, 'satellite-imagery': false },
       });
     });
+    expect(savePreferences).toHaveBeenCalledTimes(1);
   });
 
   it('does not restore legacy persisted imagery after the map style becomes ready', async () => {
@@ -1869,5 +1993,97 @@ describe('MapLibreLayerController', () => {
         renderingTuning: { reflectanceMax: 6_250, gamma: 1.55, saturation: 1.25 },
       });
     });
+  });
+
+  it('renders deterministic saved-marker symbols with unique generated images', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const createIcon = vi
+      .spyOn(markerCatalog, 'createMarkerIconImage')
+      .mockResolvedValue({} as HTMLImageElement);
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const markers: readonly SavedMarker[] = [
+      {
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: 'bravo',
+        name: 'Bravo',
+        normalizedName: 'bravo',
+        coordinate: [44.9, 41.8],
+        iconKey: 'hiking',
+        colorKey: 'red',
+        createdAt: '2026-07-20T00:00:00.000Z',
+        updatedAt: '2026-07-20T00:00:00.000Z',
+      },
+      {
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: 'alpha',
+        name: 'Alpha',
+        normalizedName: 'alpha',
+        coordinate: [44.8, 41.7],
+        iconKey: 'place',
+        colorKey: 'blue',
+        createdAt: '2026-07-19T00:00:00.000Z',
+        updatedAt: '2026-07-19T00:00:00.000Z',
+      },
+      {
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: 'charlie',
+        name: 'Charlie',
+        normalizedName: 'charlie',
+        coordinate: [44.7, 41.6],
+        iconKey: 'hiking',
+        colorKey: 'red',
+        createdAt: '2026-07-18T00:00:00.000Z',
+        updatedAt: '2026-07-18T00:00:00.000Z',
+      },
+    ];
+
+    controller.setSavedMarkers(markers);
+    await waitFor(() => {
+      expect(createIcon).toHaveBeenCalledTimes(2);
+      expect(map.images.size).toBe(2);
+    });
+    const source = map.sources.get(mapSourceIds.savedMarkers) as {
+      readonly data: { readonly features: readonly { readonly properties: unknown }[] };
+    };
+    expect(source.data.features.map((feature) => feature.properties)).toEqual([
+      { id: 'alpha', name: 'Alpha', iconKey: 'place', colorKey: 'blue' },
+      { id: 'bravo', name: 'Bravo', iconKey: 'hiking', colorKey: 'red' },
+      { id: 'charlie', name: 'Charlie', iconKey: 'hiking', colorKey: 'red' },
+    ]);
+    expect(map.layers.get(savedMarkerLayerIds.symbols)).toMatchObject({
+      layout: {
+        'icon-image': [
+          'concat',
+          'saved-marker-',
+          ['get', 'iconKey'],
+          '-',
+          ['get', 'colorKey'],
+        ],
+        'icon-size': 0.7,
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': 12,
+        'text-anchor': 'top',
+        'text-offset': [0, 0.2],
+        'text-allow-overlap': true,
+      },
+      paint: {
+        'text-halo-color': '#FFFFFF',
+        'text-halo-width': 2,
+        'text-halo-blur': 0.5,
+      },
+    });
+    expect(map.getStyle().layers.at(-1)?.id).toBe(savedMarkerLayerIds.symbols);
+
+    controller.setSavedMarkers([]);
+    const emptySource = map.sources.get(mapSourceIds.savedMarkers) as {
+      readonly data: { readonly features: readonly unknown[] };
+    };
+    expect(emptySource.data.features).toEqual([]);
   });
 });

@@ -2187,25 +2187,13 @@ describe('WorkspaceShell', () => {
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
 
-  it('reflects mutually exclusive satellite checkbox changes in Layers', async () => {
+  it('sends satellite checkbox changes and reflects mutually exclusive state', async () => {
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
+    vi.spyOn(mapLayers, 'restorePersistedState').mockResolvedValue();
     const setVisibility = vi
       .spyOn(mapLayers, 'setLayerVisibility')
-      .mockImplementation((layerId, visible) => {
-        const visibility = {
-          ...mapLayerStore.getState().visibility,
-          [layerId]: visible,
-        };
-        if (visible && layerId === 'google-satellite') {
-          visibility['satellite-imagery'] = false;
-        }
-        if (visible && layerId === 'satellite-imagery') {
-          visibility['google-satellite'] = false;
-        }
-        mapLayerStore.setState({ visibility });
-        return { status: 'success' };
-      });
+      .mockReturnValue({ status: 'success' });
     mapLayerStore.setState({
       appliedImagery: {
         status: 'ready',
@@ -2219,17 +2207,44 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
 
     const google = screen.getByRole('checkbox', { name: 'Google satellite imagery' });
-    const sentinel = screen.getByRole('checkbox', { name: 'Satellite imagery' });
     await user.click(google);
     expect(setVisibility).toHaveBeenCalledWith('google-satellite', true);
-    expect(google).toBeChecked();
-    expect(sentinel).not.toBeChecked();
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': true,
+          'satellite-imagery': false,
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
+      ).toBeChecked();
+    });
+    expect(
+      screen.getByRole('checkbox', { name: 'Satellite imagery' }),
+    ).not.toBeChecked();
     expect(screen.getByRole('slider', { name: 'Opacity' })).toBeEnabled();
 
-    await user.click(sentinel);
+    await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     expect(setVisibility).toHaveBeenCalledWith('satellite-imagery', true);
-    expect(google).not.toBeChecked();
-    expect(sentinel).toBeChecked();
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': false,
+          'satellite-imagery': true,
+        },
+      });
+    });
+    expect(
+      screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
+    ).not.toBeChecked();
+    await waitFor(() => {
+      expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
+    });
   });
 
   it('controls all imported tracks and their elevation gradient through Layers', async () => {

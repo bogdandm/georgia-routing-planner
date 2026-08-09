@@ -365,6 +365,39 @@ describe('WorkspaceShell', () => {
       expect(aboutButton).toHaveFocus();
     });
   });
+  it('deduplicates a custom vector attribution that already credits OpenStreetMap', async () => {
+    const configuredMapProviders = services.mapProviderConfiguration;
+    if (configuredMapProviders.status !== 'valid') {
+      throw new Error('Expected configured map providers');
+    }
+    services = {
+      ...services,
+      mapProviderConfiguration: {
+        status: 'valid',
+        value: {
+          ...configuredMapProviders.value,
+          vector: {
+            ...configuredMapProviders.value.vector,
+            attribution:
+              '<a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://openmaptiles.org/">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
+          },
+        },
+      },
+    };
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'About this site' }));
+
+    const about = screen.getByRole('dialog', {
+      name: 'About Trail Planner',
+    });
+    expect(
+      within(about).getByText(
+        'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors',
+      ),
+    ).toBeVisible();
+  });
 
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
     const user = userEvent.setup();

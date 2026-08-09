@@ -954,6 +954,56 @@ describe('MapWorkspace', () => {
     expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
   });
 
+  it('applies NAPR quick presets without opening the Satellite workspace', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({
+      activeTab: 'layers',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'napr-orthophoto': true,
+        },
+        openStreetMapOpacity: 1,
+      });
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>NAPR map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('NAPR map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    expect(
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
+    );
+    await user.click(screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }));
+
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'napr-orthophoto-hybrid');
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(2, 'napr-orthophoto');
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'layers',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+  });
+
   it('opens Satellite instead of applying the Sentinel preset without an applied scene', async () => {
     const user = userEvent.setup();
     const services = createTestServices();

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import { naprOrthophotoSourceIds } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
@@ -679,45 +680,54 @@ describe('MapLibreFacade', () => {
     expect(services.logger.getEvents().at(-1)?.name).toBe('map.source.recovered');
   });
 
-  it('classifies Google tiles as satellite raster failures without Sentinel recovery', () => {
-    const services = createTestServices();
-    const nativeMap = new FakeNativeMap();
-    const handleRasterSourceFailure = vi.fn();
-    const layerController = {
-      attach: vi.fn(),
-      detach: vi.fn(),
-      handleRasterSourceFailure,
-      handleRasterSourceData: vi.fn(() => false),
-      isRasterSourceRecoveryComplete: vi.fn(() => false),
-      handleRasterSourceRecovered: vi.fn(),
-    } as unknown as MapLibreLayerController;
-    const facade = new MapLibreFacade(
-      services.logger,
-      undefined,
-      undefined,
-      undefined,
-      layerController,
-    );
-    facade.attach(nativeMap as unknown as MapLibreMap);
-    nativeMap.fire('load');
-    nativeMap.addSource('satellite-basemap', { type: 'raster' });
+  it.each([
+    { name: 'Google', sourceId: 'satellite-basemap' },
+    ...Object.values(naprOrthophotoSourceIds).map((sourceId) => ({
+      name: `NAPR ${sourceId}`,
+      sourceId,
+    })),
+  ])(
+    'classifies $name static basemap tiles as satellite raster failures',
+    ({ sourceId }) => {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      const handleRasterSourceFailure = vi.fn();
+      const layerController = {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        handleRasterSourceFailure,
+        handleRasterSourceData: vi.fn(() => false),
+        isRasterSourceRecoveryComplete: vi.fn(() => false),
+        handleRasterSourceRecovered: vi.fn(),
+      } as unknown as MapLibreLayerController;
+      const facade = new MapLibreFacade(
+        services.logger,
+        undefined,
+        undefined,
+        undefined,
+        layerController,
+      );
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      nativeMap.fire('load');
+      nativeMap.addSource(sourceId, { type: 'raster' });
 
-    nativeMap.fire('error', {
-      error: { message: 'AJAXError: Service Unavailable', status: 503 },
-      sourceId: 'satellite-basemap',
-    });
+      nativeMap.fire('error', {
+        error: { message: 'AJAXError: Service Unavailable', status: 503 },
+        sourceId,
+      });
 
-    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
-      recoverableFailures: [
-        {
-          category: 'satellite-raster',
-          sourceId: 'satellite-basemap',
-          recoveryState: 'not-applicable',
-        },
-      ],
-    });
-    expect(handleRasterSourceFailure).not.toHaveBeenCalled();
-  });
+      expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+        recoverableFailures: [
+          {
+            category: 'satellite-raster',
+            sourceId,
+            recoveryState: 'not-applicable',
+          },
+        ],
+      });
+      expect(handleRasterSourceFailure).not.toHaveBeenCalled();
+    },
+  );
 
   it('clears a cancelled source failure instead of leaving the map degraded', () => {
     const services = createTestServices();

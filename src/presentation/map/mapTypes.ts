@@ -5,7 +5,12 @@ export type { MapCamera } from '@/application/ports/MapCameraRepository';
 export type TerrainMode = MapViewMode;
 
 export type MapLayerPreset =
-  'vector-osm' | 'google-satellite-hybrid' | 'google-satellite' | 'sentinel-2-hybrid';
+  | 'vector-osm'
+  | 'google-satellite-hybrid'
+  | 'google-satellite'
+  | 'napr-orthophoto-hybrid'
+  | 'napr-orthophoto'
+  | 'sentinel-2-hybrid';
 
 export interface MapCoordinate {
   readonly longitude: number;

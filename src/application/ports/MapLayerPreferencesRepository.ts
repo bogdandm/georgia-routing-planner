@@ -1,5 +1,6 @@
 export type LogicalMapLayerId =
   | 'google-satellite'
+  | 'napr-orthophoto'
   | 'satellite-imagery'
   | 'scene-footprint'
   | 'terrain-relief'

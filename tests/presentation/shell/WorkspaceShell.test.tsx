@@ -984,6 +984,7 @@ describe('WorkspaceShell', () => {
       services.database,
       'replaceCalculatedTrackElevation',
     );
+    const trackSaved = vi.spyOn(services.userData, 'trackSaved');
     const user = userEvent.setup();
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -1020,6 +1021,9 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(saveLocalTrack).toHaveBeenCalledOnce();
     });
+    await waitFor(() => {
+      expect(trackSaved).toHaveBeenCalledOnce();
+    });
     const savedContent = saveLocalTrack.mock.calls[0]?.[1];
     expect(savedContent?.trackPoints).toEqual([
       [
@@ -1032,6 +1036,11 @@ describe('WorkspaceShell', () => {
         (point) => point.elevationMeters === 400,
       ),
     ).toBe(true);
+    const savedTrackId = savedContent?.trackId ?? '';
+    const sourceContentHash = (await services.database.localTracks.get(savedTrackId))
+      ?.contentHash;
+    expect(sourceContentHash).toMatch(/^[0-9a-f]{64}$/u);
+    trackSaved.mockClear();
     await waitFor(
       () => {
         expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
@@ -1047,15 +1056,18 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(replaceCalculatedTrackElevation).toHaveBeenCalledOnce();
     });
-    const recalculatedContent = await services.database.loadLocalTrackContent(
-      savedContent?.trackId ?? '',
-    );
+    const recalculatedContent =
+      await services.database.loadLocalTrackContent(savedTrackId);
     expect(recalculatedContent.trackPoints).toEqual(savedContent?.trackPoints);
     expect(
       recalculatedContent.calculatedTrackPoints?.[0]?.every(
         (point) => point.elevationMeters === 500,
       ),
     ).toBe(true);
+    expect((await services.database.localTracks.get(savedTrackId))?.contentHash).toBe(
+      sourceContentHash,
+    );
+    expect(trackSaved).not.toHaveBeenCalled();
     expect(
       await screen.findByRole('img', {
         name: 'Elevation profile from 1000 to 1120 metres',
@@ -1412,6 +1424,73 @@ describe('WorkspaceShell', () => {
       expect(highlightedSegments?.[0]?.coordinates[0]).toEqual([44, 42]);
       expect(highlightedSegments?.[0]?.coordinates.at(-1)).toEqual([44.015, 42]);
     });
+  });
+
+  it('reloads synchronized source elevation without replacing it from DEM', async () => {
+    const base = savedTrackSummary('local:synchronized', 'Synchronized trail');
+    const summary: LocalTrackSummary = {
+      ...base,
+      metrics: {
+        ...base.metrics,
+        minimumElevationMeters: 1_000,
+        maximumElevationMeters: 1_120,
+        ascentMeters: 120,
+        descentMeters: 0,
+        elevationSource: 'gpx',
+        elevationAlgorithmVersion: 3,
+      },
+    };
+    const sourceContent = savedTrackContent(summary.id);
+    await services.database.saveLocalTrack(summary, sourceContent);
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const sampleMany = vi.spyOn(provider, 'sampleMany');
+    const replaceCalculatedTrackElevation = vi.spyOn(
+      services.database,
+      'replaceCalculatedTrackElevation',
+    );
+    const listLocalTracks = vi.spyOn(services.database, 'listLocalTracks');
+    let notifyTracksChanged: (() => void) | undefined;
+    vi.spyOn(services.userData, 'subscribeTracksChanged').mockImplementation(
+      (listener) => {
+        notifyTracksChanged = listener;
+        return () => undefined;
+      },
+    );
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    expect(
+      within(details).getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      }),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(notifyTracksChanged).toBeDefined();
+    });
+    const initialListCalls = listLocalTracks.mock.calls.length;
+    act(() => {
+      notifyTracksChanged?.();
+    });
+    await waitFor(() => {
+      expect(listLocalTracks.mock.calls.length).toBeGreaterThan(initialListCalls);
+    });
+
+    await expect(services.database.loadLocalTrackContent(summary.id)).resolves.toEqual(
+      sourceContent,
+    );
+    expect(
+      within(
+        screen.getByRole('complementary', { name: 'Track details' }),
+      ).getByLabelText('Elevation gain: 120 m'),
+    ).toBeVisible();
+    expect(sampleMany).not.toHaveBeenCalled();
+    expect(replaceCalculatedTrackElevation).not.toHaveBeenCalled();
   });
 
   it('does not restore a closed saved track after remount', async () => {

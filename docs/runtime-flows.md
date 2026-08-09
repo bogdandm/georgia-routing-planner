@@ -309,15 +309,25 @@ browser-local preparation; the access token remains the sole remote authorizatio
 credential.
 
 Before any remote status, snapshot, or mutation, the worker records `sync.user-id` in
-the same IndexedDB transaction that prepares local pairs. A new, malformed, or different
-owner resets all remembered remote revisions and tombstones to pending upserts while
-retaining valid browser tracks. The worker then validates remote records and private
-GZIP objects, performs explicit pending deletes before other mutations, and merges the
-second full snapshot atomically. A known same-account revision absent from that snapshot
-pauses synchronization for a global decision: selected tracks are deleted locally, while
-unselected tracks become pending upserts and upload again. Only explicit local deletes
-complete silently. Conflicts retry one explicit action against the current revision, and
-invalid or network failures preserve valid local data and pending work.
+the same IndexedDB transaction that prepares local pairs. Each local sync state stores
+the canonical `contentHash`, stable `lineageHash`, and GRPT `geometryVersion`. A new,
+malformed, or different owner resets all remembered remote revisions and tombstones to
+pending upserts while retaining valid browser tracks.
+
+Each snapshot is grouped by lineage before reconciliation. A ready GRPT v2 member is the
+lineage head even when a v1 predecessor has a higher revision; otherwise the highest
+revision wins. A browser that still owns source elevation for a v1 lineage prepares a v2
+replacement without changing the local track ID. The predecessor remains ready until
+that replacement is ready, then deletion uses the exact observed predecessor revision
+and retries one conflict. Quota exhaustion leaves both objects and the pending
+replacement intact instead of discarding elevation or metadata.
+
+The worker validates remote records and private GZIP objects, performs explicit pending
+deletes before other mutations, and merges the second full snapshot atomically. A known
+same-account revision absent from that snapshot pauses synchronization for a global
+decision: selected tracks are deleted locally, while unselected tracks become pending
+upserts and upload again. Only explicit local deletes complete silently. Invalid or
+network failures preserve valid local data and pending work.
 
 ## Track synchronization trust boundary
 
@@ -331,19 +341,25 @@ stored in the browser or this repository.
 Uploads use bounded multipart requests containing `action=upload`, `baseRevision`,
 `contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry
 file. The function checks actual compressed size, bounded decompression, the complete
-GRPT version 1 envelope, and SHA-256 before reserving quota. The database generates a
-unique path under the verified user's prefix. The function validates that path, writes
-the immutable object with `upsert: false`, and finalizes the reservation. A concurrent
-`Asset Already Exists` response proceeds to finalization; other failures delete only an
-object created by that request and release its reservation. If compensation cannot
-delete the object, the released row makes it an orphan for mandatory later cleanup.
+GRPT v1 or v2 envelope, codec flags, segment/point limits, finite v2 `Float64`
+elevation, and SHA-256 before reserving quota. Metadata must include a 64-hex
+`lineageHash` and matching `geometryVersion`; mismatches fail before Storage or RPC
+access. The database generates a unique path under the verified user's prefix. The
+function validates that path, writes the immutable object with `upsert: false`, and
+finalizes the reservation. A concurrent `Asset Already Exists` response proceeds to
+finalization; other failures delete only an object created by that request and release
+its reservation. If compensation cannot delete the object, the released row makes it an
+orphan for mandatory later cleanup.
 
-The uploaded GRPT geometry contains only normalized source points with their retained
-timestamps/elevations; JSON contains the bounded source metadata and distance/elapsed
-metrics already owned by synchronization. Browser-calculated Terrarium points and
-metrics remain local derived data: recalculation neither changes the content hash nor
-creates a cloud revision, and another browser calculates its own projection after
-download.
+The canonical hash identifies the exact GRPT payload; lineage keeps v1 and v2
+representations of the same source track related. GRPT v1 retains normalized source
+coordinates and timestamps. GRPT v2 additionally retains each source point's exact
+finite elevation or explicit missing value. JSON contains the bounded source metadata
+and distance/elapsed metrics already owned by synchronization. Browser-calculated
+Terrarium points and metrics remain local derived data: only explicit recalculation
+replaces them, and it neither changes the content hash nor creates a cloud revision.
+Another browser therefore displays synchronized source elevation when present and leaves
+legacy remote-only v1 elevation missing rather than inventing terrain values.
 
 JSON requests support metadata update, hard deletion, and quota status. The database RPC
 response has one explicit outcome: `applied | upload | conflict | existing | missing`.

@@ -243,6 +243,15 @@ function gpxFile(name = 'Fixture track.gpx'): File {
   return file;
 }
 
+function elevationFreeGpxFile(): File {
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Elevation-free trail</name><trkseg><trkpt lat="42" lon="44"/><trkpt lat="42.01" lon="44.01"/></trkseg></trk></gpx>`;
+  const file = new File([xml], 'Elevation-free.gpx', {
+    type: 'application/gpx+xml',
+  });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
+}
+
 function gpxFileWithGradeBands(): File {
   const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Fixture trail</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele></trkpt><trkpt lat="42.02" lon="44.02"><ele>1000</ele></trkpt><trkpt lat="42.03" lon="44.03"><ele>1120</ele></trkpt></trkseg></trk></gpx>`;
   const file = new File([xml], 'Fixture track.gpx', {
@@ -960,6 +969,125 @@ describe('WorkspaceShell', () => {
     expect(sampleMany).toHaveBeenCalledTimes(2);
   });
 
+  it('places calculated elevation below point and segment metadata', async () => {
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    let demMeters = 400;
+    vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates) =>
+      Promise.resolve(
+        coordinates.map(() => ({ status: 'available' as const, meters: demMeters })),
+      ),
+    );
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const replaceCalculatedTrackElevation = vi.spyOn(
+      services.database,
+      'replaceCalculatedTrackElevation',
+    );
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, gpxFile('Dual elevation.gpx'));
+    let details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+    expect(within(details).getByLabelText('Elevation loss: 0 m')).toBeVisible();
+    const pointAndSegmentCount = within(details).getByText('2 points · 1 segment');
+    const calculatedGain = within(details).getByLabelText(
+      'Elevation gain (calculated): 0 m',
+    );
+    const calculatedLoss = within(details).getByLabelText(
+      'Elevation loss (calculated): 0 m',
+    );
+    expect(calculatedGain).toBeVisible();
+    expect(calculatedLoss).toBeVisible();
+    expect(
+      pointAndSegmentCount.compareDocumentPosition(calculatedGain) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(calculatedGain.querySelector('svg')).toBeNull();
+    expect(calculatedLoss.querySelector('svg')).toBeNull();
+    expect(
+      within(details).getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      }),
+    ).toBeVisible();
+
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const savedContent = saveLocalTrack.mock.calls[0]?.[1];
+    expect(savedContent?.trackPoints).toEqual([
+      [
+        { coordinate: [44, 42], elevationMeters: 1_000 },
+        { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+      ],
+    ]);
+    expect(
+      savedContent?.calculatedTrackPoints?.[0]?.every(
+        (point) => point.elevationMeters === 400,
+      ),
+    ).toBe(true);
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+      },
+      { timeout: 5_000 },
+    );
+
+    demMeters = 500;
+    details = screen.getByRole('complementary', { name: 'Track details' });
+    await user.click(
+      within(details).getByRole('button', { name: 'Recalculate elevation' }),
+    );
+    await waitFor(() => {
+      expect(replaceCalculatedTrackElevation).toHaveBeenCalledOnce();
+    });
+    const recalculatedContent = await services.database.loadLocalTrackContent(
+      savedContent?.trackId ?? '',
+    );
+    expect(recalculatedContent.trackPoints).toEqual(savedContent?.trackPoints);
+    expect(
+      recalculatedContent.calculatedTrackPoints?.[0]?.every(
+        (point) => point.elevationMeters === 500,
+      ),
+    ).toBe(true);
+    expect(
+      await screen.findByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      }),
+    ).toBeVisible();
+    details = screen.getByRole('complementary', { name: 'Track details' });
+
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+    const nextInput = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(nextInput).not.toBeNull();
+    if (nextInput === null) return;
+    await user.upload(nextInput, elevationFreeGpxFile());
+    details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      within(details).queryByLabelText(/^Elevation gain: /u),
+    ).not.toBeInTheDocument();
+    expect(
+      within(details).queryByLabelText(/^Elevation loss: /u),
+    ).not.toBeInTheDocument();
+    expect(
+      within(details).getByLabelText('Elevation gain (calculated): 0 m'),
+    ).toBeVisible();
+    expect(
+      within(details).getByLabelText('Elevation loss (calculated): 0 m'),
+    ).toBeVisible();
+    expect(
+      within(details).getByRole('img', {
+        name: 'Elevation profile from 500 to 500 metres',
+      }),
+    ).toBeVisible();
+  });
+
   it('keeps the newest import when an older preparation completes late', async () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
@@ -1077,9 +1205,9 @@ describe('WorkspaceShell', () => {
       },
     );
     const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
-    const replaceLocalTrackElevation = vi.spyOn(
+    const replaceCalculatedTrackElevation = vi.spyOn(
       services.database,
-      'replaceLocalTrackElevation',
+      'replaceCalculatedTrackElevation',
     );
     const trackMetadataChanged = vi.spyOn(services.userData, 'trackMetadataChanged');
     const user = userEvent.setup();
@@ -1155,7 +1283,7 @@ describe('WorkspaceShell', () => {
       );
     });
     await waitFor(() => {
-      expect(replaceLocalTrackElevation).toHaveBeenCalledOnce();
+      expect(replaceCalculatedTrackElevation).toHaveBeenCalledOnce();
     });
     expect(trackMetadataChanged).not.toHaveBeenCalled();
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
@@ -1217,9 +1345,9 @@ describe('WorkspaceShell', () => {
         );
       });
     });
-    const replaceLocalTrackElevation = vi.spyOn(
+    const replaceCalculatedTrackElevation = vi.spyOn(
       services.database,
-      'replaceLocalTrackElevation',
+      'replaceCalculatedTrackElevation',
     );
     const deleteLocalTrack = vi.spyOn(services.database, 'deleteLocalTrack');
     const user = userEvent.setup();
@@ -1253,7 +1381,7 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(deleteLocalTrack).toHaveBeenCalledOnce();
     });
-    expect(replaceLocalTrackElevation).not.toHaveBeenCalled();
+    expect(replaceCalculatedTrackElevation).not.toHaveBeenCalled();
     expect(
       screen.queryByText('Elevation could not be recalculated.'),
     ).not.toBeInTheDocument();
@@ -1280,7 +1408,7 @@ describe('WorkspaceShell', () => {
       const highlightedSegments = setImportedTrackHighlight.mock.lastCall?.[0];
       expect(highlightedSegments).toHaveLength(1);
       expect(highlightedSegments?.[0]?.color).toBe(appColors.elevationGrade.flat);
-      expect(highlightedSegments?.[0]?.coordinates.length).toBeGreaterThan(16);
+      expect(highlightedSegments?.[0]?.coordinates).toHaveLength(16);
       expect(highlightedSegments?.[0]?.coordinates[0]).toEqual([44, 42]);
       expect(highlightedSegments?.[0]?.coordinates.at(-1)).toEqual([44.015, 42]);
     });
@@ -1542,7 +1670,7 @@ describe('WorkspaceShell', () => {
     if (mapLayers === null) return;
     const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
-      schemaVersion: 3,
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:test-1',
       trackPoints: [
         [

@@ -75,47 +75,66 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
-  it('updates elevation atomically without changing sync identity or metadata time', async () => {
-    await database.saveLocalTrack(summary('local:1', 'Original'), content('local:1'));
+  it('replaces only calculated elevation without changing source or sync identity', async () => {
+    const sourceSummary = summary('local:1', 'Original');
+    const sourceContent = content('local:1');
+    await database.saveLocalTrack(sourceSummary, sourceContent);
     await database.renameLocalTrack('local:1', 'Renamed');
     await database.setLocalTrackFavorite('local:1', true);
     const beforeElevation = await database.listLocalTracks();
-    const updatedContent: LocalTrackContent = {
-      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-      trackId: 'local:1',
-      trackPoints: [
-        [
-          { coordinate: [44, 42], elevationMeters: 900 },
-          { coordinate: [44.01, 42.01], elevationMeters: 1_000 },
-          { coordinate: [44.02, 42.02], elevationMeters: 1_100 },
-        ],
+    const beforeSyncState = await database.loadTrackSyncState('local:1');
+    const calculatedTrackPoints = [
+      [
+        { coordinate: [44, 42] as const, elevationMeters: 900 },
+        { coordinate: [44.01, 42.01] as const, elevationMeters: 1_000 },
+        { coordinate: [44.02, 42.02] as const, elevationMeters: 1_100 },
       ],
+    ];
+    const calculatedMetrics = {
+      ...sourceSummary.metrics,
+      ascentMeters: 200,
+      descentMeters: 50,
+      elevationSource: 'dem-assisted' as const,
+      elevationAlgorithmVersion: 4 as const,
     };
 
-    const updated = await database.replaceLocalTrackElevation(
+    const updated = await database.replaceCalculatedTrackElevation(
       'local:1',
-      { ...summary('local:1', 'Original').metrics, ascentMeters: 200 },
-      updatedContent,
+      calculatedMetrics,
+      calculatedTrackPoints,
     );
 
     expect(updated).toMatchObject({
       name: 'Renamed',
       favorite: true,
-      pointCount: 3,
+      pointCount: 2,
       segmentCount: 1,
       updatedAt: beforeElevation[0]?.updatedAt,
       contentHash: 'a'.repeat(64),
-      metrics: { ascentMeters: 200 },
+      metrics: sourceSummary.metrics,
+      calculatedMetrics: { ascentMeters: 200, descentMeters: 50 },
     });
-    await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({
-      pendingKind: 'upsert',
+    await expect(database.loadTrackSyncState('local:1')).resolves.toEqual(
+      beforeSyncState,
+    );
+    await expect(database.loadLocalTrackContent('local:1')).resolves.toEqual({
+      ...sourceContent,
+      calculatedTrackPoints,
     });
+
+    const cleared = await database.replaceCalculatedTrackElevation(
+      'local:1',
+      null,
+      undefined,
+    );
+    expect(cleared).not.toHaveProperty('calculatedMetrics');
+    expect(cleared.metrics).toEqual(sourceSummary.metrics);
     await expect(database.loadLocalTrackContent('local:1')).resolves.toEqual(
-      updatedContent,
+      sourceContent,
     );
   });
 
-  it('migrates v4 records to local schema v3 without fabricating content hashes', async () => {
+  it('migrates legacy records to local schema v4 without fabricating content hashes', async () => {
     database.close();
     await database.delete();
     const legacy = new Dexie('GeorgiaRoutingPlanner');
@@ -177,11 +196,11 @@ describe('local track persistence', () => {
 
     const migratedTracks = await database.listLocalTracks();
     const migrated = migratedTracks.find((track) => track.id === 'local:legacy');
-    expect(migrated?.schemaVersion).toBe(3);
+    expect(migrated?.schemaVersion).toBe(4);
     expect(migrated?.metrics.elevationSource).toBe('gpx');
     expect(migrated?.metrics.elevationAlgorithmVersion).toBe(1);
     await expect(database.loadLocalTrackContent('local:legacy')).resolves.toEqual({
-      schemaVersion: 3,
+      schemaVersion: 4,
       trackId: 'local:legacy',
       trackPoints: [
         [{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }],
@@ -189,7 +208,7 @@ describe('local track persistence', () => {
       ],
     });
     const storedSummary = await database.localTracks.get('local:legacy');
-    expect(storedSummary).toHaveProperty('schemaVersion', 3);
+    expect(storedSummary).toHaveProperty('schemaVersion', 4);
     expect(storedSummary).toHaveProperty('updatedAt', storedSummary?.savedAt);
     expect(storedSummary).not.toHaveProperty('contentHash');
     await expect(database.loadTrackSyncState('local:legacy')).resolves.toBeNull();
@@ -197,6 +216,60 @@ describe('local track persistence', () => {
     await expect(database.listLocalTrackPairsWithoutSyncState()).resolves.toHaveLength(
       2,
     );
+  });
+
+  it('discards stale schema v4 calculated fields during the v6 upgrade', async () => {
+    database.close();
+    await database.delete();
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(5).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+    });
+    const sourceSummary = summary('local:v4', 'Schema v4');
+    const sourceContent = content('local:v4');
+    await legacy.table('localTracks').put({
+      ...sourceSummary,
+      calculatedMetrics: {
+        ...sourceSummary.metrics,
+        elevationSource: 'dem-assisted',
+        elevationAlgorithmVersion: 3,
+      },
+    });
+    await legacy.table('localTrackContents').put({
+      ...sourceContent,
+      calculatedTrackPoints: sourceContent.trackPoints.map((segment) =>
+        segment.map((point) => ({ ...point, elevationMeters: 999 })),
+      ),
+    });
+    await legacy.table('trackSyncStates').put({
+      trackId: sourceSummary.id,
+      contentHash: sourceSummary.contentHash,
+      remoteRevision: 7,
+      pendingKind: null,
+    });
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    const [migratedSummary] = await database.listLocalTracks();
+    expect(migratedSummary).toEqual(sourceSummary);
+    expect(migratedSummary).not.toHaveProperty('calculatedMetrics');
+    await expect(database.loadLocalTrackContent(sourceSummary.id)).resolves.toEqual(
+      sourceContent,
+    );
+    await expect(
+      database.loadLocalTrackContent(sourceSummary.id),
+    ).resolves.not.toHaveProperty('calculatedTrackPoints');
+    await expect(database.loadTrackSyncState(sourceSummary.id)).resolves.toEqual({
+      trackId: sourceSummary.id,
+      contentHash: sourceSummary.contentHash,
+      remoteRevision: 7,
+      pendingKind: null,
+    });
   });
 
   it('applies the Plan 04 remote merge batch atomically', async () => {

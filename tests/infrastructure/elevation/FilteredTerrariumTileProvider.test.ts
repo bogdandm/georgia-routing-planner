@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -14,7 +11,6 @@ import {
 import type { TerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
 import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
-import { locateDemPixel } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import {
   encodeTerrariumElevation,
   type DecodedTerrariumTile,
@@ -193,33 +189,12 @@ describe('FilteredTerrariumTileProvider', () => {
     }
   });
 
-  it('constrains the reported Svaneti workload to browser-like source-fetch capacity', async () => {
-    const xml = await readFile(
-      join(
-        process.cwd(),
-        'tests',
-        'fixtures',
-        'tracks',
-        'real-world',
-        'svaneti-loop-4.gpx',
-      ),
-      'utf8',
-    );
-    const outputTiles = new Map<
-      string,
-      { readonly zoom: number; readonly x: number; readonly y: number }
-    >();
-    for (const match of xml.matchAll(/<trkpt lat="([^"]+)" lon="([^"]+)"/gu)) {
-      const latitude = Number(match[1]);
-      const longitude = Number(match[2]);
-      const location = locateDemPixel({ longitude, latitude }, 15, 256);
-      if (location === null) continue;
-      outputTiles.set(
-        `${String(location.z)}/${String(location.x)}/${String(location.y)}`,
-        { zoom: location.z, x: location.x, y: location.y },
-      );
-    }
-    expect(outputTiles.size).toBe(181);
+  it('constrains a 181-tile workload to browser-like source-fetch capacity', async () => {
+    const outputTiles = Array.from({ length: 181 }, (_, index) => ({
+      zoom: 15,
+      x: 16_384 + index,
+      y: 12_000,
+    }));
     const log = vi.fn<(input: DiagnosticInput) => void>();
     let activeSourceRequests = 0;
     let maximumActiveSourceRequests = 0;

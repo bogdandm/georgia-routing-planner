@@ -338,6 +338,13 @@ the immutable object with `upsert: false`, and finalizes the reservation. A conc
 object created by that request and release its reservation. If compensation cannot
 delete the object, the released row makes it an orphan for mandatory later cleanup.
 
+The uploaded GRPT geometry contains only normalized source points with their retained
+timestamps/elevations; JSON contains the bounded source metadata and distance/elapsed
+metrics already owned by synchronization. Browser-calculated Terrarium points and
+metrics remain local derived data: recalculation neither changes the content hash nor
+creates a cloud revision, and another browser calculates its own projection after
+download.
+
 JSON requests support metadata update, hard deletion, and quota status. The database RPC
 response has one explicit outcome: `applied | upload | conflict | existing | missing`.
 Metadata and deletion carry a server `baseRevision`; an upload with a nonzero revision
@@ -584,13 +591,15 @@ remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display name, source
-format and filename, favorite state, and derived metrics used by list and detail views;
-the content row contains exactly one normalized source-point projection. Original source
-bytes are discarded after parsing. A database upgrade compacts older blob-backed records
-into this internal representation. A transaction failure leaves neither row listable.
-Rename and favorite updates validate and change only the summary. List reads place
-favorites first and use newest-first import time inside each group. Delete removes both
-rows and clears a matching latest-opened setting in one transaction.
+format and filename, favorite state, authoritative source metrics, and optional
+browser-calculated metrics used by list and detail views. The content row retains the
+exact normalized source-point projection and an optional separate calculated Terrarium
+projection. Original source bytes are discarded after parsing. A database upgrade
+retains historical metrics and points as source fields while adding no calculated data;
+a fresh Terrarium run populates that projection. A transaction failure leaves neither
+row listable. Rename and favorite updates validate and change only the summary. List
+reads place favorites first and use newest-first import time inside each group. Delete
+removes both rows and clears a matching latest-opened setting in one transaction.
 
 Opening or newly saving a track records its opaque ID in the existing settings table. On
 startup the Tracks provider loads that summary and validates its content before
@@ -618,8 +627,15 @@ saved-track selection issue one fit command with left padding for both Tracks pa
 Close replaces the source data with empty geometry; it does not alter the stored row or
 camera.
 
-Elevation analysis reads the retained source-point representation, never bridges
-independent segment gaps, and derives the chart profile from source elevations.
+Elevation analysis never bridges independent segment gaps. Complete parsed source
+elevation runs remain authoritative for the profile, grade bands, and climb/descent
+segments; calculated Terrarium elevation is the profile fallback only when no usable
+source run exists. Terrain calculation resamples each source segment at 10 m, repairs
+invalid DEM pixels through the shared Terrarium provider, median-filters one-point
+spikes, applies a distance-weighted symmetric 150 m trapezoidal moving average, and
+aggregates gain/loss with 10 m hysteresis. Recalculation replaces only calculated
+metrics/points and preserves source geometry, timestamps, elevations, content hash, and
+sync state.
 
 ## Teardown ownership
 

@@ -128,7 +128,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       ? null
       : activeTrack.kind === 'preview'
         ? activeTrack.preparationStatus === 'ready'
-          ? activeTrack.metrics
+          ? activeTrack.sourceMetrics
           : null
         : activeTrack.summary.metrics;
   useEffect(() => {

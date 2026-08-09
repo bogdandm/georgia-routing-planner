@@ -1,5 +1,12 @@
 import { ThemeProvider } from '@mui/material';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -103,12 +110,37 @@ describe('MarkersWorkspace', () => {
     });
     expect(iconButton.querySelector('svg')).toHaveAttribute('viewBox', '0 0 15 15');
     await user.click(iconButton);
-    expect(screen.getByRole('tab', { name: 'Places' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    const categoryRows = screen.getAllByRole('tablist', {
+      name: /Marker icon categories row/,
+    });
+    expect(categoryRows).toHaveLength(2);
+    expect(
+      within(
+        screen.getByRole('tablist', { name: 'Marker icon categories row 1' }),
+      ).getAllByRole('tab'),
+    ).toHaveLength(4);
+    expect(
+      within(
+        screen.getByRole('tablist', { name: 'Marker icon categories row 2' }),
+      ).getAllByRole('tab'),
+    ).toHaveLength(3);
+    const categoryTabs = screen.getAllByRole('tab');
+    expect(categoryTabs).toHaveLength(7);
+    for (const tab of categoryTabs) expect(tab).toBeVisible();
+    const placesStyle = getComputedStyle(screen.getByRole('tab', { name: 'Places' }));
+    expect({
+      backgroundColor: placesStyle.backgroundColor,
+      color: placesStyle.color,
+      whiteSpace: placesStyle.whiteSpace,
+    }).toEqual({
+      backgroundColor: 'rgba(0, 0, 0, 0)',
+      color: 'rgb(2, 48, 71)',
+      whiteSpace: 'nowrap',
+    });
+    expect(
+      getComputedStyle(screen.getByRole('tab', { name: 'Activities' })).color,
+    ).toBe('rgb(84, 116, 129)');
     expect(screen.getByRole('option', { name: 'Choose Place icon' })).toBeVisible();
-    expect(screen.getAllByRole('tab')).toHaveLength(7);
     expect(
       screen.queryByRole('option', { name: 'Choose Hiking icon' }),
     ).not.toBeInTheDocument();
@@ -198,6 +230,39 @@ describe('MarkersWorkspace', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Icon color' }));
     expect(await screen.findByText('Sort preference could not be saved')).toBeVisible();
     expect(list).toHaveTextContent(/km away/);
+  });
+
+  it('sorts by the live map center after the viewport moves', async () => {
+    await services.database.saveSavedMarker(
+      marker('near', 'Near', '2026-07-18T00:00:00.000Z', [44.81, 41.7]),
+    );
+    await services.database.saveSavedMarker(
+      marker('far', 'Far', '2026-07-20T00:00:00.000Z', [45.8, 41.7]),
+    );
+    const user = userEvent.setup();
+    renderMarkers();
+
+    const list = await screen.findByRole('list', { name: 'Saved markers' });
+    expect(list).toHaveTextContent(/^Far/);
+    await user.click(
+      screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
+    );
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Distance from map center' }),
+    );
+    await waitFor(() => {
+      expect(list).toHaveTextContent(/^Near/);
+    });
+
+    act(() => {
+      services.mapViewport.update({
+        ...viewport,
+        center: { longitude: 45.8, latitude: 41.7 },
+      });
+    });
+    await waitFor(() => {
+      expect(list).toHaveTextContent(/^Far/);
+    });
   });
 
   it('renames, changes appearance, and confirms deletion through row actions', async () => {

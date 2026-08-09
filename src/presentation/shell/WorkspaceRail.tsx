@@ -363,6 +363,26 @@ export function WorkspaceRail({
           opacity: collapsed ? 0 : 1,
           transition: (theme) => theme.transitions.create('opacity'),
           mt: 1.5,
+          '& .MuiTab-root': {
+            minWidth: 52,
+            minHeight: 58,
+            mx: 0.75,
+            mb: 0.5,
+            px: 0.5,
+            py: 0.75,
+            borderRadius: 1.25,
+            color: appColors.text.inverseMuted,
+            fontSize: '0.625rem',
+            lineHeight: 1.1,
+            textTransform: 'none',
+          },
+          '& .MuiTab-root.Mui-selected': {
+            color: appColors.text.inverse,
+            bgcolor: appColors.interaction.navigationSelectedBackground,
+          },
+          '& .MuiTab-iconWrapper': {
+            mb: '2px !important',
+          },
           '& .MuiTabs-indicator': {
             left: 0,
             right: 'auto',

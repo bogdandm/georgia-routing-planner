@@ -79,7 +79,6 @@ interface MarkersWorkspaceValue {
   readonly notice: string | null;
   readonly mapCenter: MapCoordinate | null;
   readonly retryLoad: () => Promise<void>;
-  readonly captureDistanceAnchor: () => void;
   readonly openAppearanceEditor: (marker: SavedMarker) => void;
   readonly renameMarker: (marker: SavedMarker, name: string) => Promise<void>;
   readonly deleteMarker: (marker: SavedMarker) => Promise<void>;
@@ -90,9 +89,9 @@ const MarkersWorkspaceContext = createContext<MarkersWorkspaceValue | null>(null
 function sortMarkers(
   markers: readonly SavedMarker[],
   sort: MarkerSort,
-  distanceAnchor: MapCoordinate | null,
+  mapCenter: MapCoordinate | null,
 ): readonly SavedMarker[] {
-  if (sort === 'created' || (sort === 'distance' && distanceAnchor === null)) {
+  if (sort === 'created' || (sort === 'distance' && mapCenter === null)) {
     return [...markers].sort((left, right) => {
       const byCreatedAt = right.createdAt.localeCompare(left.createdAt, 'en');
       return byCreatedAt === 0 ? left.id.localeCompare(right.id, 'en') : byCreatedAt;
@@ -115,17 +114,17 @@ function sortMarkers(
       return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
     });
   }
-  if (distanceAnchor === null) return [...markers];
+  if (mapCenter === null) return [...markers];
   return [...markers].sort((left, right) => {
     const leftDistance = geodesicDistanceKm(
-      distanceAnchor.latitude,
-      distanceAnchor.longitude,
+      mapCenter.latitude,
+      mapCenter.longitude,
       left.coordinate[1],
       left.coordinate[0],
     );
     const rightDistance = geodesicDistanceKm(
-      distanceAnchor.latitude,
-      distanceAnchor.longitude,
+      mapCenter.latitude,
+      mapCenter.longitude,
       right.coordinate[1],
       right.coordinate[0],
     );
@@ -168,7 +167,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const [loadState, setLoadState] = useState<MarkerLoadState>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [distanceAnchor, setDistanceAnchor] = useState<MapCoordinate | null>(null);
   const [editorDraft, setEditorDraft] = useState<MarkerEditorDraft | null>(null);
 
   const loadMarkers = useCallback(async () => {
@@ -192,18 +190,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       window.clearTimeout(timer);
     };
   }, [loadMarkers]);
-
-  useEffect(() => {
-    if (markerSort !== 'distance' || distanceAnchor !== null || viewport === null)
-      return;
-    const anchor = { ...viewport.center };
-    const timer = window.setTimeout(() => {
-      setDistanceAnchor(anchor);
-    }, 0);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [distanceAnchor, markerSort, viewport]);
 
   useEffect(() => {
     if (markerCreationCommand === null || loadState !== 'ready') return;
@@ -231,11 +217,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       mapLayers?.setSavedMarkers([]);
     };
   }, [mapLayers]);
-
-  const captureDistanceAnchor = useCallback(() => {
-    const center = mapViewport.getViewportSnapshot()?.center ?? null;
-    setDistanceAnchor(center === null ? null : { ...center });
-  }, [mapViewport]);
 
   const createMarker = useCallback(
     async (name: NormalizedSavedMarkerName, appearance: MarkerAppearance) => {
@@ -311,9 +292,10 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     [savedMarkers],
   );
 
+  const mapCenter = viewport?.center ?? null;
   const sortedMarkers = useMemo(
-    () => sortMarkers(markers, markerSort, distanceAnchor),
-    [distanceAnchor, markerSort, markers],
+    () => sortMarkers(markers, markerSort, mapCenter),
+    [mapCenter, markerSort, markers],
   );
   const value = useMemo<MarkersWorkspaceValue>(
     () => ({
@@ -322,9 +304,8 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       loadState,
       loadError,
       notice,
-      mapCenter: viewport?.center ?? null,
+      mapCenter,
       retryLoad: loadMarkers,
-      captureDistanceAnchor,
       openAppearanceEditor: (marker) => {
         setEditorDraft({ mode: 'appearance', marker });
       },
@@ -332,7 +313,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       deleteMarker,
     }),
     [
-      captureDistanceAnchor,
       deleteMarker,
       loadError,
       loadMarkers,
@@ -341,7 +321,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       notice,
       renameMarker,
       sortedMarkers,
-      viewport,
+      mapCenter,
     ],
   );
 
@@ -387,13 +367,11 @@ const markerSortLabels: Readonly<Record<MarkerSort, string>> = {
 
 export function MarkerSortControl({ onMarkerSortChange }: MarkerSortControlProps) {
   const markerSort = useUiStore((state) => state.markerSort);
-  const { captureDistanceAnchor } = useMarkersWorkspace();
   const [sortSaveError, setSortSaveError] = useState(false);
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
 
   const chooseSort = async (sort: MarkerSort) => {
     setSortAnchor(null);
-    if (sort === 'distance') captureDistanceAnchor();
     const saved = await onMarkerSortChange(sort);
     setSortSaveError(!saved);
   };

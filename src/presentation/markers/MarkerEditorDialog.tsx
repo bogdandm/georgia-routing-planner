@@ -66,6 +66,11 @@ interface AppearanceMarkerEditorDialogProps extends MarkerEditorDialogBaseProps 
 type MarkerEditorDialogProps =
   CreateMarkerEditorDialogProps | AppearanceMarkerEditorDialogProps;
 
+const markerIconCategoryRows = [
+  markerIconCategories.slice(0, 4),
+  markerIconCategories.slice(4),
+] as const;
+
 export function MarkerEditorDialog(props: MarkerEditorDialogProps) {
   if (!props.open) return null;
   const key =
@@ -257,7 +262,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
-        <Box sx={{ width: 560, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
+        <Box sx={{ width: 420, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
           <TextField
             autoFocus
             fullWidth
@@ -278,24 +283,45 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
               },
             }}
           />
-          <Tabs
-            value={iconCategory}
-            onChange={(_event, category: MarkerIconCategory) => {
-              setIconCategory(category);
-            }}
-            variant="fullWidth"
-            aria-label="Marker icon categories"
-            sx={{ mt: 0.5, minHeight: 40 }}
-          >
-            {markerIconCategories.map((category) => (
-              <Tab
-                key={category}
-                value={category}
-                label={category}
-                sx={{ minHeight: 40, minWidth: 0, px: 0.75, fontSize: '0.75rem' }}
-              />
+          <Stack spacing={0} sx={{ mt: 0.5 }}>
+            {markerIconCategoryRows.map((categories, rowIndex) => (
+              <Tabs
+                key={rowIndex}
+                value={categories.includes(iconCategory) ? iconCategory : false}
+                onChange={(_event, category: MarkerIconCategory) => {
+                  setIconCategory(category);
+                }}
+                variant="fullWidth"
+                aria-label={`Marker icon categories row ${String(rowIndex + 1)}`}
+                sx={{
+                  minHeight: 36,
+                  '& .MuiTab-root': {
+                    minHeight: 36,
+                    minWidth: 0,
+                    m: 0,
+                    px: 0.75,
+                    borderRadius: 0,
+                    bgcolor: 'transparent',
+                    color: 'text.secondary',
+                    fontSize: '0.75rem',
+                    whiteSpace: 'nowrap',
+                  },
+                  '& .MuiTab-root.Mui-selected': {
+                    bgcolor: 'transparent',
+                    color: 'primary.main',
+                  },
+                  '& .MuiTabs-indicator': {
+                    height: 2,
+                    borderRadius: 0,
+                  },
+                }}
+              >
+                {categories.map((category) => (
+                  <Tab key={category} value={category} label={category} />
+                ))}
+              </Tabs>
             ))}
-          </Tabs>
+          </Stack>
           <Box
             role="listbox"
             aria-label="Marker icons"

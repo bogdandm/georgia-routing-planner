@@ -317,7 +317,7 @@ confirms the name, one of 117 Pinhead map icons organized in category tabs, and 
 ten shared-theme colors before anything is stored.
 
 The contextual sidebar lists saved markers using the same row interaction pattern as
-Tracks. It sorts by newest, name, color, or distance from a captured map center; shows
+Tracks. It sorts by newest, name, color, or distance from the current map center; shows
 the current distance; navigates the map from a row; and supports rename, appearance
 changes, and two-step inline deletion. Markers remain in IndexedDB across browser
 restarts and render as MapLibre symbols with their selected icon, color, and name.

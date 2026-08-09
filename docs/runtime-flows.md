@@ -353,14 +353,15 @@ Uploads use bounded multipart requests containing `action=upload`, `baseRevision
 `contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry
 file. The function checks actual compressed size, bounded decompression, the complete
 GRPT v1 or v2 envelope, codec flags, segment/point limits, finite v2 `Float64`
-elevation, and SHA-256 before reserving quota. Metadata must include a 64-hex
-`lineageHash` and matching `geometryVersion`; mismatches fail before Storage or RPC
-access. The database generates a unique path under the verified user's prefix. The
-function validates that path, writes the immutable object with `upsert: false`, and
-finalizes the reservation. A concurrent `Asset Already Exists` response proceeds to
-finalization; other failures delete only an object created by that request and release
-its reservation. If compensation cannot delete the object, the released row makes it an
-orphan for mandatory later cleanup.
+elevation, and SHA-256 before reserving quota. The function derives the stable legacy
+lineage hash from either envelope and requires metadata's 64-hex `lineageHash` and
+`geometryVersion` to match it. Metadata updates must retain the stored identity.
+Mismatches fail before the mutation RPC. The database generates a unique path under the
+verified user's prefix. The function validates that path, writes the immutable object
+with `upsert: false`, and finalizes the reservation. A concurrent `Asset Already Exists`
+response proceeds to finalization; other failures delete only an object created by that
+request and release its reservation. If compensation cannot delete the object, the
+released row makes it an orphan for mandatory later cleanup.
 
 The canonical hash identifies the exact GRPT payload; lineage keeps v1 and v2
 representations of the same source track related. GRPT v1 retains normalized source

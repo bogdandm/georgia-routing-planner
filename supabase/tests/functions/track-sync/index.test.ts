@@ -36,6 +36,7 @@ interface FakeState {
   readonly rpcEffects: Map<string, () => void>;
   readonly objects: Set<string>;
   readonly activePaths: Set<string>;
+  trackMetadata: Record<string, unknown> | null;
   usage: { readonly used_bytes: number; readonly reserved_bytes: number } | null;
   uploadError: {
     readonly message: string;
@@ -100,6 +101,7 @@ function makeState(): FakeState {
     rpcEffects: new Map(),
     objects: new Set(),
     activePaths: new Set(),
+    trackMetadata: { lineageHash: CONTENT_HASH, geometryVersion: 1 },
     usage: null,
     uploadError: null,
     removeErrors: [],
@@ -155,11 +157,10 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
     from(table: string) {
       return {
         select() {
-          let selectedUserId = '';
+          const filters = new Map<string, unknown>();
           const builder = {
-            eq(column: string, value: string) {
-              assertEquals(column, 'user_id');
-              selectedUserId = value;
+            eq(column: string, value: unknown) {
+              filters.set(column, value);
               return builder;
             },
             order(column: string) {
@@ -170,7 +171,7 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
               state.calls.push({
                 kind: 'select',
                 name: table,
-                value: { userId: selectedUserId, start, end },
+                value: { userId: filters.get('user_id'), start, end },
               });
               const paths = Array.from(state.activePaths, (object_path) => ({
                 object_path,
@@ -180,7 +181,11 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
               return { data: paths.slice(start, end + 1), error: null };
             },
             then(resolve: (value: unknown) => void) {
-              state.calls.push({ kind: 'select', name: table, value: selectedUserId });
+              state.calls.push({
+                kind: 'select',
+                name: table,
+                value: filters.get('user_id'),
+              });
               if (table === 'track_records') {
                 resolve({
                   data: Array.from(state.activePaths, (object_path) => ({
@@ -193,7 +198,20 @@ function makeContext(state: FakeState, userId = USER_ID): SupabaseContext {
               }
             },
             async maybeSingle() {
-              state.calls.push({ kind: 'select', name: table, value: selectedUserId });
+              state.calls.push({
+                kind: 'select',
+                name: table,
+                value: Object.fromEntries(filters),
+              });
+              if (table === 'track_records') {
+                return {
+                  data:
+                    state.trackMetadata === null
+                      ? null
+                      : { metadata: state.trackMetadata },
+                  error: null,
+                };
+              }
               return { data: state.usage, error: null };
             },
           };
@@ -221,6 +239,15 @@ function jsonRequest(value: unknown): Request {
   });
 }
 
+function syncMetadata(values: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    name: 'Synthetic track',
+    lineageHash: CONTENT_HASH,
+    geometryVersion: 1,
+    ...values,
+  };
+}
+
 function uploadRequest(
   overrides: {
     readonly contentHash?: string;
@@ -236,10 +263,7 @@ function uploadRequest(
   form.set('baseRevision', String(overrides.baseRevision ?? 0));
   form.set('contentHash', overrides.contentHash ?? CONTENT_HASH);
   form.set('compressedBytes', String(overrides.compressedBytes ?? geometry.byteLength));
-  form.set(
-    'metadata',
-    JSON.stringify(overrides.metadata ?? { name: 'Synthetic track' }),
-  );
+  form.set('metadata', JSON.stringify(overrides.metadata ?? syncMetadata()));
   form.set(
     'geometry',
     new File([new Uint8Array(geometry).buffer], 'geometry.grpt.gz', {
@@ -284,7 +308,10 @@ Deno.test('both shared GRPT fixtures match their envelope and hash', async () =>
     assertEquals(hash, fixture.sha256);
     assertEquals(
       await validateGeometryUpload(bytesFromHex(fixture.gzipHex), fixture.sha256),
-      version,
+      {
+        geometryVersion: version,
+        lineageHash: version === 1 ? fixtureV1.sha256 : fixtureV2.lineageSha256,
+      },
     );
   }
 });
@@ -315,6 +342,28 @@ Deno.test(
       () => validateCanonicalGeometry(bytesFromHex(`${fixtureV1.canonicalHex}00`)),
       Error,
       'trailing bytes',
+    );
+    assertEquals(
+      validateCanonicalGeometry(
+        Uint8Array.from([0x47, 0x52, 0x50, 0x54, 2, 0, 1, 2, 0, 0, 0, 0]),
+      ),
+      2,
+    );
+    assertThrows(
+      () =>
+        validateCanonicalGeometry(
+          Uint8Array.from([0x47, 0x52, 0x50, 0x54, 1, 0x01, 1, 2, 0, 0, 0, 0, 0, 0]),
+        ),
+      Error,
+      'timestamp flag is not canonical',
+    );
+    assertThrows(
+      () =>
+        validateCanonicalGeometry(
+          Uint8Array.from([0x47, 0x52, 0x50, 0x54, 1, 0, 0x81, 0]),
+        ),
+      Error,
+      'non-canonical integer',
     );
   },
 );
@@ -362,6 +411,7 @@ Deno.test(
   'lineage metadata and envelope versions are validated before backend access',
   async () => {
     const invalidUploads = [
+      uploadRequest({ metadata: { name: 'Missing lineage' } }),
       uploadRequest({
         metadata: { lineageHash: 'A'.repeat(64), geometryVersion: 1 },
       }),
@@ -380,6 +430,11 @@ Deno.test(
         contentHash: fixtureV2.sha256,
         gzipHex: fixtureV2.gzipHex,
         metadata: { lineageHash: CONTENT_HASH, geometryVersion: 1 },
+      }),
+      uploadRequest({
+        contentHash: fixtureV2.sha256,
+        gzipHex: fixtureV2.gzipHex,
+        metadata: { lineageHash: 'b'.repeat(64), geometryVersion: 2 },
       }),
     ];
 
@@ -408,7 +463,7 @@ Deno.test(
       uploadRequest({
         contentHash: fixtureV2.sha256,
         gzipHex: fixtureV2.gzipHex,
-        metadata: { lineageHash: CONTENT_HASH, geometryVersion: 2 },
+        metadata: { lineageHash: fixtureV2.lineageSha256, geometryVersion: 2 },
       }),
       makeContext(state),
     );
@@ -419,6 +474,53 @@ Deno.test(
     );
   },
 );
+
+Deno.test('metadata mutations cannot change a stored lineage identity', async () => {
+  const state = makeState();
+  const response = await handleTrackSync(
+    jsonRequest({
+      action: 'metadata',
+      contentHash: CONTENT_HASH,
+      baseRevision: 7,
+      metadata: syncMetadata({
+        lineageHash: 'b'.repeat(64),
+        geometryVersion: 2,
+      }),
+    }),
+    makeContext(state),
+  );
+
+  assertEquals(response.status, 400);
+  assertEquals(
+    ((await responseJson(response)).error as Record<string, unknown>).code,
+    'invalid_metadata',
+  );
+  assertEquals(
+    state.calls.some(
+      (call) => call.kind === 'rpc' && call.name === 'apply_track_metadata',
+    ),
+    false,
+  );
+
+  const legacyState = makeState();
+  legacyState.trackMetadata = {};
+  const upgraded = await handleTrackSync(
+    jsonRequest({
+      action: 'metadata',
+      contentHash: CONTENT_HASH,
+      baseRevision: 7,
+      metadata: syncMetadata({ name: 'Legacy metadata' }),
+    }),
+    makeContext(legacyState),
+  );
+  assertEquals(upgraded.status, 200);
+  assertEquals(
+    legacyState.calls.some(
+      (call) => call.kind === 'rpc' && call.name === 'apply_track_metadata',
+    ),
+    true,
+  );
+});
 
 Deno.test(
   'invalid verified claims and invalid request bodies are rejected before backend access',
@@ -510,7 +612,7 @@ Deno.test(
           action: 'metadata',
           contentHash: CONTENT_HASH,
           baseRevision: 7,
-          metadata: { name: 'Updated' },
+          metadata: syncMetadata({ name: 'Updated' }),
         }),
         makeContext(state),
       );
@@ -615,7 +717,7 @@ Deno.test(
             action: 'metadata',
             contentHash: CONTENT_HASH,
             baseRevision: 7,
-            metadata: { name: 'Updated' },
+            metadata: syncMetadata({ name: 'Updated' }),
           }),
           makeContext(state),
         ),
@@ -869,7 +971,7 @@ Deno.test(
         action: 'metadata',
         contentHash: CONTENT_HASH,
         baseRevision: 9,
-        metadata: { name: 'Late update' },
+        metadata: syncMetadata({ name: 'Late update' }),
       }),
       makeContext(state),
     );

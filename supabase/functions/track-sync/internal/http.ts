@@ -124,25 +124,14 @@ function requireMetadata(value: unknown): Record<string, unknown> {
     );
   }
   if (
-    'lineageHash' in value &&
-    (typeof value.lineageHash !== 'string' ||
-      !CONTENT_HASH_PATTERN.test(value.lineageHash))
+    typeof value.lineageHash !== 'string' ||
+    !CONTENT_HASH_PATTERN.test(value.lineageHash) ||
+    (value.geometryVersion !== 1 && value.geometryVersion !== 2)
   ) {
     throw new TrackSyncFailure(
       400,
       'invalid_metadata',
-      'metadata lineageHash must be lowercase SHA-256.',
-    );
-  }
-  if (
-    'geometryVersion' in value &&
-    value.geometryVersion !== 1 &&
-    value.geometryVersion !== 2
-  ) {
-    throw new TrackSyncFailure(
-      400,
-      'invalid_metadata',
-      'metadata geometryVersion must be 1 or 2.',
+      'metadata must contain a lowercase SHA-256 lineageHash and geometryVersion 1 or 2.',
     );
   }
   const encoded = new TextEncoder().encode(JSON.stringify(value));
@@ -354,17 +343,15 @@ async function parseUploadRequest(request: Request): Promise<TrackSyncCommand> {
     );
   }
   const geometry = new Uint8Array(await geometryFile.arrayBuffer());
-  const geometryVersion = await validateGeometryUpload(geometry, contentHash);
+  const geometryIdentity = await validateGeometryUpload(geometry, contentHash);
   if (
-    (geometryVersion === 2 && metadata.geometryVersion !== 2) ||
-    (geometryVersion === 1 &&
-      metadata.geometryVersion !== undefined &&
-      metadata.geometryVersion !== 1)
+    metadata.geometryVersion !== geometryIdentity.geometryVersion ||
+    metadata.lineageHash !== geometryIdentity.lineageHash
   ) {
     throw new TrackSyncFailure(
       400,
       'invalid_metadata',
-      'metadata geometryVersion does not match the GRPT envelope.',
+      'metadata lineage does not match the GRPT geometry.',
     );
   }
   return {

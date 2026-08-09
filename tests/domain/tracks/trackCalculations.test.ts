@@ -161,6 +161,101 @@ describe('track calculations', () => {
     expect(metrics.descentMeters).toBeUndefined();
   });
 
+  describe('calculated elevation metrics', () => {
+    it('does not accumulate sub-10 metre oscillations', () => {
+      const metrics = calculateTrackMetrics(
+        [
+          {
+            points: [100, 109, 101, 108, 100].map((elevationMeters, index) =>
+              point(equatorialLongitudePerMeter * index * 10, 0, elevationMeters),
+            ),
+          },
+        ],
+        'dem-assisted',
+      );
+
+      expect(metrics.ascentMeters).toBe(0);
+      expect(metrics.descentMeters).toBe(0);
+    });
+
+    it('retains a monotonic climb and reports calculated algorithm version 4', () => {
+      const metrics = calculateTrackMetrics(
+        [
+          {
+            points: [100, 105, 111, 119, 125].map((elevationMeters, index) =>
+              point(equatorialLongitudePerMeter * index * 10, 0, elevationMeters),
+            ),
+          },
+        ],
+        'dem-assisted',
+      );
+
+      expect(metrics.ascentMeters).toBe(25);
+      expect(metrics.descentMeters).toBe(0);
+      expect(metrics.elevationSource).toBe('dem-assisted');
+      expect(metrics.elevationAlgorithmVersion).toBe(4);
+    });
+
+    it('appends the terminal residual to preserve each run net change', () => {
+      const metrics = calculateTrackMetrics(
+        [
+          {
+            points: [100, 112, 107].map((elevationMeters, index) =>
+              point(equatorialLongitudePerMeter * index * 10, 0, elevationMeters),
+            ),
+          },
+        ],
+        'dem-assisted',
+      );
+
+      expect(metrics.ascentMeters).toBe(12);
+      expect(metrics.descentMeters).toBe(5);
+      expect((metrics.ascentMeters ?? 0) - (metrics.descentMeters ?? 0)).toBe(7);
+    });
+
+    it('does not promote ignored extrema when direction reverses', () => {
+      const metrics = calculateTrackMetrics(
+        [
+          {
+            points: [100, 112, 119, 108].map((elevationMeters, index) =>
+              point(equatorialLongitudePerMeter * index * 10, 0, elevationMeters),
+            ),
+          },
+        ],
+        'dem-assisted',
+      );
+
+      expect(metrics.ascentMeters).toBe(12);
+      expect(metrics.descentMeters).toBe(4);
+    });
+
+    it('does not bridge missing-elevation runs or source-segment gaps', () => {
+      const metrics = calculateTrackMetrics(
+        [
+          {
+            points: [
+              point(0, 0, 100),
+              point(equatorialLongitudePerMeter * 10, 0, 112),
+              point(equatorialLongitudePerMeter * 20, 0),
+              point(equatorialLongitudePerMeter * 30, 0, 500),
+              point(equatorialLongitudePerMeter * 40, 0, 515),
+            ],
+          },
+          {
+            points: [
+              point(1, 0, 1_000),
+              point(1 + equatorialLongitudePerMeter * 10, 0, 980),
+            ],
+          },
+        ],
+        'dem-assisted',
+      );
+
+      expect(metrics.ascentMeters).toBe(27);
+      expect(metrics.descentMeters).toBe(20);
+    });
+  });
+
   it('retains recorded duration only for complete, ordered, progressing timestamps', () => {
     const complete = calculateTrackMetrics([
       {

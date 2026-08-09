@@ -7,6 +7,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import {
   Box,
   IconButton,
+  LinearProgress,
   Paper,
   Stack,
   Tooltip as MuiTooltip,
@@ -32,6 +33,7 @@ import {
   type ElevationProfile,
   type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
+import type { TrackElevationPreparationProgress } from '@/application/tracks/prepareImportedTrack';
 import { appColors } from '@/presentation/theme/appColors';
 import {
   formatTrackDistance,
@@ -270,6 +272,76 @@ function ElevationProfileArea({
         isAnimationActive={false}
       />
     </>
+  );
+}
+
+export function ElevationPreparationChart({
+  progress,
+}: {
+  readonly progress: TrackElevationPreparationProgress | null;
+}): ReactElement {
+  const theme = useTheme();
+  const completedTiles = progress?.completedTiles ?? 0;
+  const totalTiles = progress?.totalTiles ?? 0;
+  const hasTileTotal = totalTiles > 0;
+  const label = hasTileTotal
+    ? `Loading elevation tiles: ${String(completedTiles)} of ${String(totalTiles)}`
+    : 'Preparing terrain and elevation…';
+  const accessibilityLabel = hasTileTotal
+    ? `Elevation profile loading: ${String(completedTiles)} of ${String(totalTiles)} tiles`
+    : 'Elevation profile loading';
+
+  return (
+    <Stack spacing={1.5}>
+      <Typography component="h3" variant="subtitle2">
+        Elevation profile
+      </Typography>
+      <Stack spacing={0.75}>
+        <LinearProgress
+          variant={hasTileTotal ? 'determinate' : 'indeterminate'}
+          value={hasTileTotal ? (completedTiles / totalTiles) * 100 : undefined}
+        />
+        <Typography variant="body2" color="text.secondary">
+          {label}
+        </Typography>
+      </Stack>
+      <Box role="img" aria-label={accessibilityLabel} sx={{ height: 264, mx: -1 }}>
+        <AreaChart<TrackElevationPreparationProgress['points'][number]>
+          aria-hidden
+          accessibilityLayer={false}
+          responsive
+          data={progress?.points ?? []}
+          margin={{ top: 12, right: 16, bottom: 6, left: 4 }}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <CartesianGrid stroke={theme.palette.divider} />
+          <XAxis
+            hide
+            type="number"
+            dataKey="distanceMeters"
+            domain={['dataMin', 'dataMax']}
+          />
+          <YAxis
+            hide
+            type="number"
+            dataKey="elevationMeters"
+            domain={['auto', 'auto']}
+          />
+          <Area
+            type="linear"
+            dataKey="elevationMeters"
+            name="Elevation"
+            baseValue="dataMin"
+            dot={false}
+            stroke={appColors.elevationGrade.flat}
+            fill={appColors.elevationGrade.flat}
+            fillOpacity={0.2}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </Box>
+    </Stack>
   );
 }
 

@@ -3,6 +3,7 @@ import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 
 export const ELEVATION_ALGORITHM_VERSION = 3;
+export const DEM_SMOOTHING_WINDOW_METERS = 150;
 
 export interface ElevationAnalysisOptions {
   readonly sampleIntervalM: number;
@@ -212,6 +213,110 @@ export function medianFilterElevationSamples(
         ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
       };
       return filtered;
+    });
+  });
+}
+
+/**
+ * Smooths median-filtered DEM elevations over a symmetric metre-based window.
+ * The input is treated as a piecewise-linear elevation curve, so unevenly spaced
+ * samples contribute by travelled distance rather than by sample count.
+ */
+export function filterDemElevationSamples(
+  segments: readonly (readonly ElevationSampleInput[])[],
+): readonly (readonly ElevationProfileInputPoint[])[] {
+  const medianFiltered = medianFilterElevationSamples(segments);
+  const maximumHalfWindowMeters = DEM_SMOOTHING_WINDOW_METERS / 2;
+  return medianFiltered.map((segment) => {
+    if (segment.length <= 2) return segment;
+    const firstElevationMeters = requiredValue(segment, 0).elevationMeters;
+    if (segment.every((point) => point.elevationMeters === firstElevationMeters)) {
+      return segment;
+    }
+
+    const distances = new Float64Array(segment.length);
+    const cumulativeAreas = new Float64Array(segment.length);
+    for (let index = 1; index < segment.length; index += 1) {
+      const previous = requiredValue(segment, index - 1);
+      const current = requiredValue(segment, index);
+      const legDistanceMeters = geodesicDistanceMeters(
+        previous.coordinate,
+        current.coordinate,
+      );
+      distances[index] = numericValue(distances, index - 1) + legDistanceMeters;
+      cumulativeAreas[index] =
+        numericValue(cumulativeAreas, index - 1) +
+        (legDistanceMeters * (previous.elevationMeters + current.elevationMeters)) / 2;
+    }
+    const totalDistanceMeters = numericValue(distances, segment.length - 1);
+    let leftLegIndex = 0;
+    let rightLegIndex = 0;
+    const areaAtDistance = (
+      distanceMeters: number,
+      initialLegIndex: number,
+    ): { readonly area: number; readonly legIndex: number } => {
+      let legIndex = initialLegIndex;
+      while (
+        legIndex < segment.length - 2 &&
+        numericValue(distances, legIndex + 1) <= distanceMeters
+      ) {
+        legIndex += 1;
+      }
+      while (
+        legIndex < segment.length - 2 &&
+        numericValue(distances, legIndex + 1) === numericValue(distances, legIndex)
+      ) {
+        legIndex += 1;
+      }
+      const startDistanceMeters = numericValue(distances, legIndex);
+      const endDistanceMeters = numericValue(distances, legIndex + 1);
+      const start = requiredValue(segment, legIndex);
+      const end = requiredValue(segment, legIndex + 1);
+      const legDistanceMeters = endDistanceMeters - startDistanceMeters;
+      if (legDistanceMeters <= 0) {
+        return {
+          area: numericValue(cumulativeAreas, legIndex),
+          legIndex,
+        };
+      }
+      const distanceIntoLegMeters = Math.min(
+        legDistanceMeters,
+        Math.max(0, distanceMeters - startDistanceMeters),
+      );
+      const fraction = distanceIntoLegMeters / legDistanceMeters;
+      const elevationAtDistanceMeters =
+        start.elevationMeters +
+        (end.elevationMeters - start.elevationMeters) * fraction;
+      return {
+        area:
+          numericValue(cumulativeAreas, legIndex) +
+          (distanceIntoLegMeters *
+            (start.elevationMeters + elevationAtDistanceMeters)) /
+            2,
+        legIndex,
+      };
+    };
+
+    return segment.map((point, index) => {
+      if (index === 0 || index === segment.length - 1) return point;
+      const pointDistanceMeters = numericValue(distances, index);
+      const halfWindowMeters = Math.min(
+        maximumHalfWindowMeters,
+        pointDistanceMeters,
+        totalDistanceMeters - pointDistanceMeters,
+      );
+      if (halfWindowMeters <= 0) return point;
+      const left = areaAtDistance(pointDistanceMeters - halfWindowMeters, leftLegIndex);
+      leftLegIndex = left.legIndex;
+      const right = areaAtDistance(
+        pointDistanceMeters + halfWindowMeters,
+        rightLegIndex,
+      );
+      rightLegIndex = right.legIndex;
+      return {
+        ...point,
+        elevationMeters: (right.area - left.area) / (halfWindowMeters * 2),
+      };
     });
   });
 }

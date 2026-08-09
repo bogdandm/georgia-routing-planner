@@ -1,9 +1,11 @@
 import type {
   ElevationProvider,
   ElevationSample,
+  ElevationSamplingProgress,
 } from '@/application/ports/ElevationProvider';
 import {
   calculateElevationProfile,
+  filterDemElevationSamples,
   medianFilterElevationSamples,
   type ElevationProfile,
   type ElevationSampleInput,
@@ -21,23 +23,31 @@ const maximumPersistedPoints = 100_000;
 interface ResampledStation {
   readonly coordinate: TrackCoordinate;
   readonly recordedAt?: string;
-  readonly sourceElevationMeters?: number;
   readonly sourceSegmentIndex: number;
 }
 
+export interface TrackElevationProgressPoint {
+  readonly distanceMeters: number;
+  readonly elevationMeters: number | null;
+}
+
+export interface TrackElevationPreparationProgress {
+  readonly completedTiles: number;
+  readonly totalTiles: number;
+  readonly points: readonly TrackElevationProgressPoint[];
+}
+
 interface PrepareImportedTrackOptions {
-  readonly preferDemElevations?: boolean;
-  /**
-   * Retains canonical stored geometry while deriving browser-local elevations.
-   * Imported tracks use the default resampling behavior.
-   */
-  readonly preserveGeometry?: boolean;
+  readonly onProgress?: (progress: TrackElevationPreparationProgress) => void;
 }
 
 export interface PreparedImportedTrack {
-  readonly segments: readonly TrackSegment[];
-  readonly profile: ElevationProfile;
-  readonly metrics: TrackMetrics;
+  readonly sourceSegments: readonly TrackSegment[];
+  readonly sourceProfile: ElevationProfile | null;
+  readonly sourceMetrics: TrackMetrics;
+  readonly calculatedSegments: readonly TrackSegment[] | null;
+  readonly calculatedProfile: ElevationProfile | null;
+  readonly calculatedMetrics: TrackMetrics | null;
 }
 
 export type TrackElevationPreparationErrorCode =
@@ -172,19 +182,12 @@ function resampleSegment(
     const recordedAt =
       sourcePoint?.recordedAt ??
       interpolateRecordedAt(start.recordedAt, end.recordedAt, fraction);
-    const sourceElevationMeters =
-      sourcePoint?.elevationMeters ??
-      (start.elevationMeters !== undefined && end.elevationMeters !== undefined
-        ? start.elevationMeters +
-          (end.elevationMeters - start.elevationMeters) * fraction
-        : undefined);
     const station: ResampledStation = {
       coordinate:
         sourcePoint?.coordinate ??
         interpolateCoordinate(start.coordinate, end.coordinate, fraction),
       sourceSegmentIndex,
       ...(recordedAt === undefined ? {} : { recordedAt }),
-      ...(sourceElevationMeters === undefined ? {} : { sourceElevationMeters }),
     };
     stations.push(station);
   };
@@ -202,9 +205,6 @@ function resampleSegment(
       coordinate: endpoint.coordinate,
       sourceSegmentIndex,
       ...(endpoint.recordedAt === undefined ? {} : { recordedAt: endpoint.recordedAt }),
-      ...(endpoint.elevationMeters === undefined
-        ? {}
-        : { sourceElevationMeters: endpoint.elevationMeters }),
     };
     const finalStation = stations.at(-1);
     if (
@@ -223,6 +223,34 @@ function availableMeters(sample: ElevationSample | undefined): number | undefine
   return sample?.status === 'available' && Number.isFinite(sample.meters)
     ? sample.meters
     : undefined;
+}
+
+function elevationProfileInputs(
+  segments: readonly TrackSegment[],
+): readonly (readonly ElevationSampleInput[])[] {
+  const runs: ElevationSampleInput[][] = [];
+  segments.forEach((segment, sourceSegmentIndex) => {
+    let run: ElevationSampleInput[] = [];
+    const finishRun = (): void => {
+      if (run.length >= 2) runs.push(run);
+      run = [];
+    };
+    for (const point of segment.points) {
+      if (point.elevationMeters === undefined) {
+        finishRun();
+        continue;
+      }
+      const input: ElevationSampleInput = {
+        coordinate: point.coordinate,
+        elevationMeters: point.elevationMeters,
+        sourceSegmentIndex,
+        ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
+      };
+      run.push(input);
+    }
+    finishRun();
+  });
+  return runs;
 }
 
 function fillMissingElevations(
@@ -289,82 +317,114 @@ export async function prepareImportedTrack(
   options: PrepareImportedTrackOptions = {},
 ): Promise<PreparedImportedTrack> {
   signal.throwIfAborted();
-  const routableSegments: TrackSegment[] = [];
+  const routableSegments: {
+    readonly segment: TrackSegment;
+    readonly sourceSegmentIndex: number;
+  }[] = [];
   let totalPoints = 0;
-  for (const segment of segments) {
+  segments.forEach((segment, sourceSegmentIndex) => {
     const segmentStationCount = stationCount(segment);
-    if (segmentStationCount < 2) continue;
+    if (segmentStationCount < 2) return;
     totalPoints += segmentStationCount;
-    if (totalPoints > maximumPersistedPoints) {
-      throw new TrackElevationPreparationError('point-limit-exceeded');
-    }
-    routableSegments.push(segment);
-  }
-  if (routableSegments.length === 0)
+    routableSegments.push({ segment, sourceSegmentIndex });
+  });
+  if (routableSegments.length === 0) {
     throw new TrackElevationPreparationError('zero-length-track');
-  const resampled = options.preserveGeometry
-    ? routableSegments.map((segment, sourceSegmentIndex) =>
-        segment.points.map((point) => ({
-          coordinate: point.coordinate,
-          ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
-          ...(point.elevationMeters === undefined
-            ? {}
-            : { sourceElevationMeters: point.elevationMeters }),
-          sourceSegmentIndex,
-        })),
-      )
-    : routableSegments.map((segment, index) => resampleSegment(segment, index, signal));
+  }
+
+  const sourceMetrics = calculateTrackMetrics(segments);
+  const sourceProfile = calculateElevationProfile(
+    medianFilterElevationSamples(elevationProfileInputs(segments)),
+  );
+  const sourceResult = {
+    sourceSegments: segments,
+    sourceProfile,
+    sourceMetrics,
+  };
+  if (elevationProvider === null) {
+    if (sourceProfile === null) {
+      throw new TrackElevationPreparationError('elevation-unavailable');
+    }
+    return {
+      ...sourceResult,
+      calculatedSegments: null,
+      calculatedProfile: null,
+      calculatedMetrics: null,
+    };
+  }
+  if (totalPoints > maximumPersistedPoints) {
+    throw new TrackElevationPreparationError('point-limit-exceeded');
+  }
+
+  const resampled = routableSegments.map(({ segment, sourceSegmentIndex }) =>
+    resampleSegment(segment, sourceSegmentIndex, signal),
+  );
   const stations = resampled.flat();
-  const samples =
-    elevationProvider === null
-      ? stations.map(() => ({ status: 'unavailable' }) as const)
-      : await elevationProvider.sampleMany(
-          stations.map((station) => ({
-            longitude: station.coordinate[0],
-            latitude: station.coordinate[1],
-          })),
-          signal,
-        );
+  const distancesBySegment = resampled.map((segment) => stationDistances(segment));
+  const stationDistanceMeters: number[] = [];
+  let distanceOffset = 0;
+  for (const distances of distancesBySegment) {
+    for (const distanceMeters of distances) {
+      stationDistanceMeters.push(distanceOffset + distanceMeters);
+    }
+    distanceOffset += distances.at(-1) ?? 0;
+  }
+  const onProgress = options.onProgress;
+  const shouldPublishProgress = onProgress !== undefined;
+  const previewIndices = shouldPublishProgress
+    ? stations.length > 1_200
+      ? Array.from({ length: 1_200 }, (_, slot) =>
+          Math.round((slot * (stations.length - 1)) / 1_199),
+        )
+      : stations.map((_, index) => index)
+    : [];
+  const previewSlotsByStationIndex = new Map(
+    previewIndices.map((stationIndex, slot) => [stationIndex, slot]),
+  );
+  const previewDemElevations: (number | undefined)[] = previewIndices.map(
+    () => undefined,
+  );
+  const publishProgress = (progress: ElevationSamplingProgress): void => {
+    if (onProgress === undefined) return;
+    for (const [sampleOffset, stationIndex] of progress.indices.entries()) {
+      const previewSlot = previewSlotsByStationIndex.get(stationIndex);
+      if (previewSlot === undefined) continue;
+      previewDemElevations[previewSlot] = availableMeters(
+        progress.samples[sampleOffset],
+      );
+    }
+    onProgress({
+      completedTiles: progress.completedTiles,
+      totalTiles: progress.totalTiles,
+      points: previewIndices.map((stationIndex, slot) => ({
+        distanceMeters: stationDistanceMeters[stationIndex] ?? 0,
+        elevationMeters: previewDemElevations[slot] ?? null,
+      })),
+    });
+  };
+  const samples = await elevationProvider.sampleMany(
+    stations.map((station) => ({
+      longitude: station.coordinate[0],
+      latitude: station.coordinate[1],
+    })),
+    signal,
+    shouldPublishProgress ? publishProgress : undefined,
+  );
   signal.throwIfAborted();
+
   let sampleOffset = 0;
   const assembled: ElevationSampleInput[][] = [];
-  for (const stationSegment of resampled) {
+  for (const [segmentIndex, stationSegment] of resampled.entries()) {
     const segmentSamples = samples.slice(
       sampleOffset,
       sampleOffset + stationSegment.length,
     );
     sampleOffset += stationSegment.length;
-    const distances = stationDistances(stationSegment);
-    const values = stationSegment.map((station, index) => {
-      const demMeters = availableMeters(segmentSamples[index]);
-      return options.preferDemElevations
-        ? (demMeters ?? station.sourceElevationMeters)
-        : (station.sourceElevationMeters ?? demMeters);
-    });
-    for (let index = 1; index < stationSegment.length - 1; index += 1) {
-      const source = stationSegment[index]?.sourceElevationMeters;
-      const previous = values[index - 1];
-      const next = values[index + 1];
-      const dem = availableMeters(segmentSamples[index]);
-      if (
-        source === undefined ||
-        previous === undefined ||
-        next === undefined ||
-        dem === undefined
-      )
-        continue;
-      const neighborMedian = (previous + next) / 2;
-      const neighborResidual = source - neighborMedian;
-      const demResidual = source - dem;
-      if (
-        Math.abs(neighborResidual) >= 30 &&
-        Math.abs(demResidual) >= 30 &&
-        Math.sign(neighborResidual) === Math.sign(demResidual)
-      ) {
-        values[index] = Math.abs(dem - neighborMedian) <= 30 ? dem : neighborMedian;
-      }
-    }
-    fillMissingElevations(values, distances);
+    const values = stationSegment.map((_, index) =>
+      availableMeters(segmentSamples[index]),
+    );
+    if (values.every((value) => value === undefined)) continue;
+    fillMissingElevations(values, distancesBySegment[segmentIndex] ?? []);
     assembled.push(
       stationSegment.map((station, index) => ({
         coordinate: station.coordinate,
@@ -374,11 +434,21 @@ export async function prepareImportedTrack(
       })),
     );
   }
-  const filtered = medianFilterElevationSamples(assembled);
-  const profile = calculateElevationProfile(filtered);
-  if (profile === null)
-    throw new TrackElevationPreparationError('elevation-unavailable');
-  const preparedSegments = filtered.map((segment) => ({
+
+  const filtered = filterDemElevationSamples(assembled);
+  const calculatedProfile = calculateElevationProfile(filtered);
+  if (calculatedProfile === null) {
+    if (sourceProfile === null) {
+      throw new TrackElevationPreparationError('elevation-unavailable');
+    }
+    return {
+      ...sourceResult,
+      calculatedSegments: null,
+      calculatedProfile: null,
+      calculatedMetrics: null,
+    };
+  }
+  const calculatedSegments = filtered.map((segment) => ({
     points: segment.map((point) => ({
       coordinate: point.coordinate,
       ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
@@ -386,8 +456,9 @@ export async function prepareImportedTrack(
     })),
   }));
   return {
-    segments: preparedSegments,
-    profile,
-    metrics: calculateTrackMetrics(preparedSegments, 'dem-assisted'),
+    ...sourceResult,
+    calculatedSegments,
+    calculatedProfile,
+    calculatedMetrics: calculateTrackMetrics(calculatedSegments, 'dem-assisted'),
   };
 }

@@ -2190,7 +2190,7 @@ describe('WorkspaceShell', () => {
   it('sends satellite checkbox changes and reflects mutually exclusive state', async () => {
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
-    vi.spyOn(mapLayers, 'restorePersistedState').mockResolvedValue();
+    vi.spyOn(mapLayers, 'restorePersistedState').mockResolvedValue(undefined);
     const setVisibility = vi
       .spyOn(mapLayers, 'setLayerVisibility')
       .mockReturnValue({ status: 'success' });

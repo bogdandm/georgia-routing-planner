@@ -1,8 +1,37 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import { useEffect, useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MapViewControls } from '@/presentation/map/MapViewControls';
+import {
+  MapViewControls,
+  MapViewControlsControl,
+} from '@/presentation/map/MapViewControls';
+
+const mapControlHost = document.createElement('div');
+mapControlHost.className = 'maplibregl-ctrl-top-right';
+
+vi.mock('react-map-gl/maplibre', () => ({
+  useControl: (
+    createControl: () => {
+      readonly onAdd: (map: MapLibreMap) => HTMLElement;
+      readonly onRemove: () => void;
+    },
+  ) => {
+    const [control] = useState(createControl);
+
+    useEffect(() => {
+      const element = control.onAdd({} as MapLibreMap);
+      mapControlHost.append(element);
+      return () => {
+        control.onRemove();
+      };
+    }, [control]);
+
+    return control;
+  },
+}));
 
 describe('MapViewControls', () => {
   it('exposes an exclusive, accessible 2D/3D choice', async () => {
@@ -118,5 +147,27 @@ describe('MapViewControls', () => {
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(button).toHaveFocus();
+  });
+  it('mounts the dimension and layer controls in the MapLibre rail', () => {
+    document.body.append(mapControlHost);
+    const { unmount } = render(
+      <MapViewControlsControl
+        activeLayerPreset={null}
+        layerPresetDisabled={false}
+        onLayerPresetChange={() => true}
+        onTerrainModeChange={() => undefined}
+        terrainState="flat"
+      />,
+    );
+
+    expect(
+      within(mapControlHost)
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Show flat 2D map', 'Show 3D terrain map', 'Choose map layer preset']);
+
+    unmount();
+    expect(mapControlHost.querySelector('.map-view-controls-control')).toBeNull();
+    mapControlHost.remove();
   });
 });

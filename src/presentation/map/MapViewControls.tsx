@@ -11,7 +11,10 @@ import {
   ToggleButtonGroup,
   Tooltip,
 } from '@mui/material';
+import type { IControl, Map as MapLibreMap } from 'maplibre-gl';
 import { useId, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { useControl } from 'react-map-gl/maplibre';
 
 import googleSatelliteHybridPreview from '@/presentation/map/layer-previews/google-satellite-hybrid.png';
 import googleSatellitePreview from '@/presentation/map/layer-previews/google-satellite.png';
@@ -69,6 +72,22 @@ const layerPresets: readonly {
   },
 ];
 
+class MapViewControlHost implements IControl {
+  readonly element: HTMLDivElement = document.createElement('div');
+
+  constructor() {
+    this.element.className = 'maplibregl-ctrl map-view-controls-control';
+  }
+
+  onAdd(_map: MapLibreMap): HTMLElement {
+    return this.element;
+  }
+
+  onRemove(): void {
+    this.element.remove();
+  }
+}
+
 export function MapViewControls({
   terrainState,
   activeLayerPreset,
@@ -95,14 +114,11 @@ export function MapViewControls({
   return (
     <>
       <Paper
-        elevation={2}
+        elevation={0}
         sx={{
+          borderRadius: '0 0 10px 10px',
           overflow: 'hidden',
-          position: 'absolute',
-          top: 135,
-          right: 6,
           width: 40,
-          zIndex: 1,
         }}
       >
         <ToggleButtonGroup
@@ -208,4 +224,12 @@ export function MapViewControls({
       </Menu>
     </>
   );
+}
+
+export function MapViewControlsControl(props: MapViewControlsProps) {
+  const host = useControl(() => new MapViewControlHost(), {
+    position: 'top-right',
+  });
+
+  return createPortal(<MapViewControls {...props} />, host.element);
 }

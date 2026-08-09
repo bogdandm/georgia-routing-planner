@@ -47,10 +47,10 @@ At widths from 900 CSS pixels through 1899 pixels, a selected track or imagery r
 overlays only the contextual sidebar while the rail stays interactive. At 1900 CSS
 pixels and above, the rail, contextual sidebar, and detail pane form one floating
 surface above the full-viewport map. Changing sections or opening a pane never changes
-the map viewport. Native map navigation remains on the right. Directly below it, one
-vertical control contains 2D, 3D, and a quick map-layer preset chooser. The shell uses
-the shared sky-blue, blue-green, deep-space, amber, and orange palette with derived
-surface, border, status, and tag colors.
+the map viewport. One right-side vertical rail contains zoom, compass, geolocation, 2D,
+3D, and the quick map-layer preset chooser. The shell uses the shared sky-blue,
+blue-green, deep-space, amber, and orange palette with derived surface, border, status,
+and tag colors.
 
 When navigation is collapsed on desktop with an active track, the same decorative
 profile-and-stats summary sits between the fixed Trail Planner logo and the navigation

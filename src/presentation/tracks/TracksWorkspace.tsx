@@ -283,7 +283,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const namingAbort = useRef<AbortController | null>(null);
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
-  const synchronizedElevationAbort = useRef<AbortController | null>(null);
   const previewSaveInProgress = useRef(false);
   const importGeneration = useRef(0);
   const latestOpenedTrackId = useRef<string | null>(null);
@@ -335,48 +334,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [database]);
 
-  const prepareDownloadedTracks = useCallback(async () => {
-    synchronizedElevationAbort.current?.abort();
-    const controller = new AbortController();
-    synchronizedElevationAbort.current = controller;
-    try {
-      const downloadedTracks = await database.listLocalTracks();
-      for (const summary of downloadedTracks) {
-        if (
-          summary.calculatedMetrics?.elevationAlgorithmVersion === 4 ||
-          summary.contentHash === undefined
-        ) {
-          continue;
-        }
-        const content = await database.loadLocalTrackContent(summary.id);
-        const prepared = await prepareImportedTrack(
-          content.trackPoints.map((points) => ({ points })),
-          elevationProvider,
-          controller.signal,
-        );
-        controller.signal.throwIfAborted();
-        await database.replaceCalculatedTrackElevation(
-          summary.id,
-          prepared.calculatedMetrics,
-          prepared.calculatedSegments?.map((segment) => segment.points),
-          { expectedContentHash: summary.contentHash },
-        );
-      }
-      await reloadSummaries();
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      logger.log({
-        level: 'warn',
-        name: 'local-track.sync-elevation-preparation.failed',
-        data: { reason: error instanceof Error ? error.name : 'unknown' },
-      });
-    } finally {
-      if (synchronizedElevationAbort.current === controller) {
-        synchronizedElevationAbort.current = null;
-      }
-    }
-  }, [database, elevationProvider, logger, reloadSummaries]);
-
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       void reloadSummaries();
@@ -384,7 +341,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     return () => {
       window.clearTimeout(timeout);
       namingAbort.current?.abort();
-      synchronizedElevationAbort.current?.abort();
       preparationAbort.current?.abort();
       recalculationAbort.current?.abort();
     };
@@ -394,7 +350,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () =>
       userData.subscribeTracksChanged(() => {
         void reloadSummaries();
-        void prepareDownloadedTracks();
         if (active?.kind !== 'saved') return;
         void (async () => {
           const summary = await database.localTracks.get(active.summary.id);
@@ -412,7 +367,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           setActive(null);
         });
       }),
-    [active, database, prepareDownloadedTracks, reloadSummaries, userData],
+    [active, database, reloadSummaries, userData],
   );
 
   useEffect(() => {

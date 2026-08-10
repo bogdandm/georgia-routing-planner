@@ -4,6 +4,7 @@ import { loadSupabaseConfiguration } from '@/bootstrap/configuration/SupabaseCon
 import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 import {
   decodeTrackSyncGeometry,
+  encodeLegacyTrackSyncGeometry,
   encodeTrackSyncGeometry,
 } from '@/domain/tracks/trackSyncGeometry';
 import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
@@ -61,9 +62,82 @@ const remoteRecordSchema = z
         message: 'Reserved records use revision zero.',
       });
     }
+    const hasLineageHash = Object.hasOwn(record.metadata, 'lineageHash');
+    const hasGeometryVersion = Object.hasOwn(record.metadata, 'geometryVersion');
+    if (hasLineageHash !== hasGeometryVersion) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Track lineage metadata must be complete.',
+      });
+    }
+    if (
+      hasLineageHash &&
+      (typeof record.metadata.lineageHash !== 'string' ||
+        !hashPattern.test(record.metadata.lineageHash) ||
+        (record.metadata.geometryVersion !== 1 &&
+          record.metadata.geometryVersion !== 2))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Track lineage metadata is invalid.',
+      });
+    }
   });
 
 type RemoteRecord = z.infer<typeof remoteRecordSchema>;
+
+interface RemoteIdentity {
+  readonly lineageHash: string;
+  readonly geometryVersion: 1 | 2;
+}
+
+interface RemoteLineage {
+  readonly identity: RemoteIdentity;
+  readonly head: RemoteRecord;
+  readonly members: readonly RemoteRecord[];
+}
+
+function remoteIdentity(record: RemoteRecord): RemoteIdentity {
+  const lineageHash = record.metadata.lineageHash;
+  const geometryVersion = record.metadata.geometryVersion;
+  if (lineageHash === undefined && geometryVersion === undefined) {
+    return { lineageHash: record.content_hash, geometryVersion: 1 };
+  }
+  if (
+    typeof lineageHash !== 'string' ||
+    !hashPattern.test(lineageHash) ||
+    (geometryVersion !== 1 && geometryVersion !== 2)
+  ) {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid track records.',
+      'invalid-remote',
+    );
+  }
+  return { lineageHash, geometryVersion };
+}
+
+function readyLineages(records: readonly RemoteRecord[]): readonly RemoteLineage[] {
+  const membersByLineage = new Map<string, RemoteRecord[]>();
+  for (const record of records) {
+    if (record.state !== 'ready') continue;
+    const identity = remoteIdentity(record);
+    const members = membersByLineage.get(identity.lineageHash);
+    if (members === undefined) membersByLineage.set(identity.lineageHash, [record]);
+    else members.push(record);
+  }
+  return [...membersByLineage.entries()].map(([lineageHash, members]) => {
+    members.sort((left, right) => {
+      const versionOrder =
+        remoteIdentity(right).geometryVersion - remoteIdentity(left).geometryVersion;
+      if (versionOrder !== 0) return versionOrder;
+      if (left.revision !== right.revision) return right.revision - left.revision;
+      return left.content_hash.localeCompare(right.content_hash);
+    });
+    const head = members[0];
+    if (head === undefined) throw new Error('A remote lineage has no ready members.');
+    return { identity: { ...remoteIdentity(head), lineageHash }, head, members };
+  });
+}
 
 interface RemoteGateway {
   status(signal: AbortSignal): Promise<TrackSyncUsage>;
@@ -74,6 +148,11 @@ interface RemoteGateway {
     signal: AbortSignal,
   ): Promise<RemoteMutation>;
   download(path: string, signal: AbortSignal): Promise<Uint8Array>;
+  deleteRemoteRecord(
+    contentHash: string,
+    revision: number,
+    signal: AbortSignal,
+  ): Promise<RemoteMutation>;
 }
 
 type RemoteMutation =
@@ -92,6 +171,8 @@ function syncStatesEqual(left: TrackSyncState, right: TrackSyncState): boolean {
   return (
     left.trackId === right.trackId &&
     left.contentHash === right.contentHash &&
+    left.lineageHash === right.lineageHash &&
+    left.geometryVersion === right.geometryVersion &&
     left.remoteRevision === right.remoteRevision &&
     left.pendingKind === right.pendingKind
   );
@@ -213,7 +294,12 @@ export class FetchRemoteGateway implements RemoteGateway {
       form.set('contentHash', state.contentHash);
       form.set('baseRevision', String(state.remoteRevision ?? 0));
       form.set('compressedBytes', String(geometry.byteLength));
-      form.set('metadata', JSON.stringify(remoteMetadata(pair.summary)));
+      form.set(
+        'metadata',
+        JSON.stringify(
+          remoteMetadata(pair.summary, state.lineageHash, state.geometryVersion),
+        ),
+      );
       form.set(
         'geometry',
         new Blob([Uint8Array.from(geometry)], { type: 'application/gzip' }),
@@ -232,21 +318,21 @@ export class FetchRemoteGateway implements RemoteGateway {
           action: 'metadata',
           contentHash: state.contentHash,
           baseRevision: state.remoteRevision,
-          metadata: remoteMetadata(pair.summary),
+          metadata: remoteMetadata(
+            pair.summary,
+            state.lineageHash,
+            state.geometryVersion,
+          ),
         }),
         signal,
       });
     } else {
       if (state.remoteRevision === null) return { outcome: 'applied', revision: 0 };
-      response = await this.request('/functions/v1/track-sync', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'delete',
-          contentHash: state.contentHash,
-          baseRevision: state.remoteRevision,
-        }),
+      return await this.deleteRemoteRecord(
+        state.contentHash,
+        state.remoteRevision,
         signal,
-      });
+      );
     }
     if (!response.ok) throw await errorForResponse(response);
     const value: unknown = await response.json();
@@ -259,9 +345,6 @@ export class FetchRemoteGateway implements RemoteGateway {
     const responseValue = value as Record<string, unknown>;
     const outcome = responseValue.outcome;
     if (outcome === 'missing') return { outcome: 'missing' };
-    if (state.pendingKind === 'delete' && outcome === 'applied') {
-      return { outcome: 'applied', revision: 0 };
-    }
     const record = z
       .object({
         contentHash: z.string().regex(hashPattern),
@@ -286,6 +369,54 @@ export class FetchRemoteGateway implements RemoteGateway {
       'The server returned an invalid mutation outcome.',
       'invalid-remote',
     );
+  }
+
+  public async deleteRemoteRecord(
+    contentHash: string,
+    revision: number,
+    signal: AbortSignal,
+  ): Promise<RemoteMutation> {
+    const response = await this.request('/functions/v1/track-sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'delete',
+        contentHash,
+        baseRevision: revision,
+      }),
+      signal,
+    });
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (typeof value !== 'object' || value === null || !('outcome' in value)) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid mutation.',
+        'invalid-remote',
+      );
+    }
+    const responseValue = value as Record<string, unknown>;
+    if (responseValue.outcome === 'missing') return { outcome: 'missing' };
+    if (responseValue.outcome === 'applied') {
+      return { outcome: 'applied', revision: 0 };
+    }
+    const record = z
+      .object({
+        contentHash: z.string().regex(hashPattern),
+        revision: z.number().int().nonnegative(),
+        state: z.enum(['ready', 'reserved']),
+      })
+      .safeParse(responseValue.record);
+    if (
+      responseValue.outcome !== 'conflict' ||
+      !record.success ||
+      record.data.contentHash !== contentHash
+    ) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid track record.',
+        'invalid-remote',
+      );
+    }
+    if (record.data.state === 'reserved') return { outcome: 'reserved' };
+    return { outcome: 'conflict', revision: record.data.revision };
   }
 
   public async download(path: string, signal: AbortSignal): Promise<Uint8Array> {
@@ -314,6 +445,8 @@ export class FetchRemoteGateway implements RemoteGateway {
 
 function remoteMetadata(
   summary: LocalTrackSyncPair['summary'],
+  lineageHash: string,
+  geometryVersion: 1 | 2,
 ): Record<string, unknown> {
   const {
     metrics: _metrics,
@@ -326,6 +459,8 @@ function remoteMetadata(
   } = summary;
   const result: Record<string, unknown> = {
     ...metadata,
+    lineageHash,
+    geometryVersion,
     metrics: {
       distanceMeters: summary.metrics.distanceMeters,
       ...(summary.metrics.elapsedSeconds === undefined
@@ -472,17 +607,20 @@ export class TrackSyncWorkerServer {
     signal.throwIfAborted();
     let usage = await gateway.status(signal);
     const firstSnapshot = await gateway.snapshot(signal);
-    const localByHash = new Map(local.map((entry) => [entry.state.contentHash, entry]));
+    const firstLineages = readyLineages(firstSnapshot);
+    const localByLineage = new Map(
+      local.map((entry) => [entry.state.lineageHash, entry]),
+    );
     let completedTracks = 0;
     let totalTracks =
       local.filter((entry) => entry.state.pendingKind !== null).length +
-      firstSnapshot.filter((remote) => {
-        const localEntry = localByHash.get(remote.content_hash);
+      firstLineages.filter((lineage) => {
+        const localEntry = localByLineage.get(lineage.identity.lineageHash);
         return (
-          remote.state === 'ready' &&
-          (localEntry === undefined ||
-            (localEntry.state.pendingKind === null &&
-              localEntry.state.remoteRevision !== remote.revision))
+          localEntry === undefined ||
+          (localEntry.state.pendingKind === null &&
+            (localEntry.state.contentHash !== lineage.head.content_hash ||
+              localEntry.state.remoteRevision !== lineage.head.revision))
         );
       }).length;
     const remoteDeletionCandidates = new Map<string, RemoteTrackDeletionCandidate>();
@@ -513,6 +651,10 @@ export class TrackSyncWorkerServer {
     }
     if (mutationStates.size > 0) usage = await gateway.status(signal);
     const secondSnapshot = await gateway.snapshot(signal);
+    const lineages = readyLineages(secondSnapshot);
+    const lineageByHash = new Map(
+      lineages.map((lineage) => [lineage.identity.lineageHash, lineage]),
+    );
     const remoteByHash = new Map(
       secondSnapshot.map((record) => [record.content_hash, record]),
     );
@@ -530,8 +672,8 @@ export class TrackSyncWorkerServer {
     const put: LocalTrackSyncPair[] = [];
     const states: TrackSyncState[] = [];
     const deleted = new Set<string>();
+    const handledLineages = new Set<string>();
     const current = await this.readLocal();
-    const currentHashes = new Set(current.map((entry) => entry.state.contentHash));
     for (const entry of current) {
       const initial = initialEntryByTrackId.get(entry.state.trackId);
       const hasMutation = mutationStates.has(entry.state.trackId);
@@ -561,6 +703,35 @@ export class TrackSyncWorkerServer {
         if (entry.pair === null) deleted.add(entry.state.trackId);
         continue;
       }
+
+      const lineage = lineageByHash.get(effective.lineageHash);
+      if (lineage !== undefined) {
+        handledLineages.add(lineage.identity.lineageHash);
+        const remoteIsOlder =
+          lineage.identity.geometryVersion < effective.geometryVersion;
+        const matchesHead =
+          effective.contentHash === lineage.head.content_hash &&
+          effective.remoteRevision === lineage.head.revision;
+        if (
+          remoteIsOlder ||
+          effective.pendingKind !== null ||
+          (matchesHead && entry.pair !== null)
+        ) {
+          if (!syncStatesEqual(effective, entry.state)) states.push(effective);
+          continue;
+        }
+        if (entry.pair === null) {
+          deleted.add(effective.trackId);
+          continue;
+        }
+        downloads.push({
+          kind: 'existing',
+          localId: effective.trackId,
+          remote: lineage.head,
+        });
+        continue;
+      }
+
       const remote = remoteByHash.get(effective.contentHash);
       if (remote === undefined && effective.remoteRevision !== null) {
         if (entry.pair !== null && effective.pendingKind !== 'delete') {
@@ -581,6 +752,7 @@ export class TrackSyncWorkerServer {
         if (!syncStatesEqual(effective, entry.state)) states.push(effective);
         continue;
       }
+      handledLineages.add(remoteIdentity(remote).lineageHash);
       if (effective.remoteRevision === remote.revision) {
         if (!syncStatesEqual(effective, entry.state)) states.push(effective);
         continue;
@@ -591,9 +763,9 @@ export class TrackSyncWorkerServer {
         remote,
       });
     }
-    for (const remote of secondSnapshot) {
-      if (remote.state !== 'ready' || currentHashes.has(remote.content_hash)) continue;
-      downloads.push({ kind: 'new', remote });
+    for (const lineage of lineages) {
+      if (handledLineages.has(lineage.identity.lineageHash)) continue;
+      downloads.push({ kind: 'new', remote: lineage.head });
     }
     const reconciledTotalTracks = completedTracks + downloads.length;
     if (reconciledTotalTracks !== totalTracks) {
@@ -607,10 +779,13 @@ export class TrackSyncWorkerServer {
         gateway,
         signal,
       );
+      const identity = remoteIdentity(download.remote);
       put.push(pair);
       states.push({
         trackId: pair.summary.id,
         contentHash: download.remote.content_hash,
+        lineageHash: identity.lineageHash,
+        geometryVersion: identity.geometryVersion,
         remoteRevision: download.remote.revision,
         pendingKind: null,
       });
@@ -630,11 +805,62 @@ export class TrackSyncWorkerServer {
       signal,
       usage,
     });
+    const supersededCount = lineages.reduce(
+      (count, lineage) => count + Math.max(0, lineage.members.length - 1),
+      0,
+    );
+    if (supersededCount > 0) {
+      await this.cleanupSupersededLineages(lineages, gateway, signal);
+      usage = await gateway.status(signal);
+      await this.database.applyRemoteTrackMergeBatch({
+        put: [],
+        deleteTrackIds: [],
+        states: [],
+        expectedUserId: userId,
+        signal,
+        usage,
+      });
+    }
     return {
       usage,
       changed: put.length > 0 || deleted.size > 0 || states.length > 0,
       remoteTrackDeletions: [...remoteDeletionCandidates.values()],
     };
+  }
+
+  private async cleanupSupersededLineages(
+    lineages: readonly RemoteLineage[],
+    gateway: RemoteGateway,
+    signal: AbortSignal,
+  ): Promise<void> {
+    for (const lineage of lineages) {
+      for (const record of lineage.members.slice(1)) {
+        let revision = record.revision;
+        let removed = false;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const result = await gateway.deleteRemoteRecord(
+            record.content_hash,
+            revision,
+            signal,
+          );
+          if (result.outcome === 'applied' || result.outcome === 'missing') {
+            removed = true;
+            break;
+          }
+          if (result.outcome === 'conflict' && attempt === 0) {
+            revision = result.revision;
+            continue;
+          }
+          break;
+        }
+        if (!removed) {
+          throw new TrackSyncWorkerError(
+            'Cloud synchronization could not remove a superseded track.',
+            'network',
+          );
+        }
+      }
+    }
   }
 
   private async downloadPair(
@@ -654,6 +880,9 @@ export class TrackSyncWorkerServer {
       const canonical = await gunzip(compressed);
       if ((await hash(canonical)) !== remote.content_hash) {
         throw new Error('The downloaded hash does not match the record.');
+      }
+      if (canonical[4] !== remoteIdentity(remote).geometryVersion) {
+        throw new Error('The downloaded codec version does not match the record.');
       }
       return localFromRemote(remote, canonical, localId);
     } catch (error) {
@@ -699,12 +928,16 @@ export class TrackSyncWorkerServer {
     const contentById = new Map(contents.map((content) => [content.trackId, content]));
     const contentHashes = [];
     for (const summary of summaries) {
-      if (summary.contentHash !== undefined) continue;
       const content = contentById.get(summary.id);
       if (content === undefined) continue;
+      const [contentHash, legacyContentHash] = await Promise.all([
+        hash(encodeTrackSyncGeometry(content)),
+        hash(encodeLegacyTrackSyncGeometry(content)),
+      ]);
       contentHashes.push({
         trackId: summary.id,
-        contentHash: await hash(encodeTrackSyncGeometry(content)),
+        contentHash,
+        legacyContentHash,
       });
       signal.throwIfAborted();
     }

@@ -1,8 +1,14 @@
 import { Blob as NodeBlob } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
+import {
+  encodeLegacyTrackSyncGeometry,
+  encodeTrackSyncGeometry,
+} from '@/domain/tracks/trackSyncGeometry';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   type LocalTrackContent,
@@ -11,17 +17,19 @@ import {
 import {
   AppDatabase,
   type LocalTrackSyncPair,
+  type TrackSyncState,
 } from '@/infrastructure/persistence/AppDatabase';
 import { WorkerRpcClient } from '@/infrastructure/runtime/WorkerRpc';
 import { TrackSyncWorkerServer } from '@/infrastructure/supabase/TrackSyncWorkerServer';
 import {
+  TrackSyncWorkerError,
   trackSyncWorkerEventNames,
   trackSyncWorkerMethods,
 } from '@/infrastructure/supabase/TrackSyncWorkerClient';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { createMemoryWorkerRpcEndpointPair } from '@test/helpers/MemoryWorkerRpcEndpoint';
 
-const contentHash = 'a'.repeat(64);
+const contentHash = 'fbc774b019984d159f533a4309b4b786fee09a1723f243d5eb020495af9e3ba1';
 let database: AppDatabase;
 let services: ReturnType<typeof createTestServices>;
 
@@ -136,6 +144,7 @@ describe('TrackSyncWorkerServer', () => {
         calls.push('mutate');
         return Promise.resolve({ outcome: 'applied' as const, revision: 1 });
       }),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     };
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
@@ -161,6 +170,8 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: null,
     });
@@ -214,6 +225,7 @@ describe('TrackSyncWorkerServer', () => {
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([localRemote, remote]),
       mutate: vi.fn().mockResolvedValue({ outcome: 'applied' as const, revision: 1 }),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn().mockResolvedValue(compressed),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -249,6 +261,8 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveTrackSyncState({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 2,
       pendingKind: null,
     });
@@ -264,6 +278,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot: () => Promise.resolve([]),
       mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -283,6 +298,8 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 2,
       pendingKind: null,
     });
@@ -299,6 +316,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot: () => Promise.reject(new Error('invalid remote response')),
       mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -320,6 +338,8 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveTrackSyncState({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: 'metadata',
     });
@@ -346,6 +366,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot: vi.fn().mockResolvedValue([remote]),
       mutate,
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -380,6 +401,8 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveTrackSyncState({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 2,
       pendingKind: 'metadata',
     });
@@ -394,6 +417,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot: vi.fn().mockResolvedValue([]),
       mutate: vi.fn().mockResolvedValue({ outcome: 'missing' as const }),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -413,6 +437,8 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 2,
       pendingKind: 'metadata',
     });
@@ -425,6 +451,8 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveTrackSyncState({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 2,
       pendingKind: 'delete',
     });
@@ -440,6 +468,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot: vi.fn().mockResolvedValue([]),
       mutate: vi.fn().mockResolvedValue({ outcome: 'applied' as const, revision: 0 }),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -467,6 +496,8 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveTrackSyncState({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 2,
       pendingKind: 'delete',
     });
@@ -485,6 +516,7 @@ describe('TrackSyncWorkerServer', () => {
         await database.saveLocalTrack(restored, content(restored.id));
         return { outcome: 'applied' as const, revision: 0 };
       }),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -509,6 +541,8 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveTrackSyncState({
       trackId: local.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 4,
       pendingKind: null,
     });
@@ -561,6 +595,7 @@ describe('TrackSyncWorkerServer', () => {
         .mockResolvedValueOnce([accountBRemote])
         .mockResolvedValueOnce([uploadedLocal, accountBRemote]),
       mutate: vi.fn().mockResolvedValue({ outcome: 'applied' as const, revision: 1 }),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn().mockResolvedValue(compressed),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -584,6 +619,8 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(local.id)).resolves.toEqual({
       trackId: local.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: null,
     });
@@ -625,6 +662,7 @@ describe('TrackSyncWorkerServer', () => {
         }),
       snapshot: vi.fn().mockResolvedValue([remote]),
       mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn().mockResolvedValue(compressed),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -646,6 +684,57 @@ describe('TrackSyncWorkerServer', () => {
       remoteRevision: 2,
       pendingKind: null,
     });
+    client.dispose();
+  });
+
+  it('rejects downloaded geometry whose codec version contradicts metadata', async () => {
+    const fixture = JSON.parse(
+      await readFile('tests/fixtures/track-sync/geometry-v1.json', 'utf8'),
+    ) as { readonly gzipHex: string; readonly sha256: string };
+    const compressed = bytesFromHex(fixture.gzipHex);
+    vi.stubGlobal('Blob', NodeBlob);
+    const remote = {
+      content_hash: fixture.sha256,
+      revision: 2,
+      state: 'ready' as const,
+      object_path: `user/${fixture.sha256}/upload.grpt.gz`,
+      compressed_bytes: compressed.byteLength,
+      metadata: {
+        name: 'Mismatched track',
+        savedAt: '2026-07-22T10:00:00.000Z',
+        updatedAt: '2026-07-22T10:00:00.000Z',
+        sourceFilename: 'remote.gpx',
+        sourceFormat: 'gpx',
+        favorite: false,
+        geometryKind: 'track',
+        metadata: { version: '1.1', links: [] },
+        warnings: [],
+        lineageHash: fixture.sha256,
+        geometryVersion: 2,
+      },
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({
+          usedBytes: compressed.byteLength,
+          reservedBytes: 0,
+          limitBytes: 8_388_608,
+        }),
+      snapshot: () => Promise.resolve([remote]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: () => Promise.resolve(compressed),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-remote' });
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
     client.dispose();
   });
 
@@ -685,6 +774,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot,
       mutate,
+      deleteRemoteRecord: vi.fn(),
       download,
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -702,6 +792,8 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: 'delete',
     });
@@ -757,6 +849,7 @@ describe('TrackSyncWorkerServer', () => {
         Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
       snapshot,
       mutate,
+      deleteRemoteRecord: vi.fn(),
       download: vi.fn(),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
@@ -795,6 +888,408 @@ describe('TrackSyncWorkerServer', () => {
       AbortSignal,
     ];
     expect(secondMutation[1].summary.name).toBe('Renamed');
+    client.dispose();
+  });
+
+  it('replaces a v1 lineage across devices without changing the local track ID', async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    const sourceContent: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: 'local:device-a',
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 120.25 },
+          { coordinate: [44.01, 42.01] },
+          { coordinate: [44.02, 42.02], elevationMeters: 0 },
+          { coordinate: [44.03, 42.03], elevationMeters: -14.5 },
+        ],
+      ],
+    };
+    const sha256 = async (bytes: Uint8Array) =>
+      Array.from(
+        new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes))),
+        (byte) => byte.toString(16).padStart(2, '0'),
+      ).join('');
+    const legacyHash = await sha256(encodeLegacyTrackSyncGeometry(sourceContent));
+    const v2Hash = await sha256(encodeTrackSyncGeometry(sourceContent));
+    const sourceSummary: LocalTrackSummary = {
+      ...summary(sourceContent.trackId),
+      contentHash: legacyHash,
+      pointCount: 4,
+      metrics: calculateTrackMetrics(
+        sourceContent.trackPoints.map((points) => ({ points })),
+      ),
+    };
+    interface CloudRecord {
+      readonly content_hash: string;
+      readonly revision: number;
+      readonly state: 'ready';
+      readonly object_path: string;
+      readonly compressed_bytes: number;
+      readonly metadata: Record<string, unknown>;
+    }
+    const cloud = new Map<
+      string,
+      { readonly record: CloudRecord; readonly compressed: Uint8Array }
+    >();
+    const metadataFor = (
+      pair: LocalTrackSyncPair,
+      lineageHash?: string,
+      geometryVersion?: 1 | 2,
+    ): Record<string, unknown> => {
+      const metadata: Record<string, unknown> = {
+        name: pair.summary.name,
+        savedAt: pair.summary.savedAt,
+        updatedAt: pair.summary.updatedAt,
+        sourceFilename: pair.summary.sourceFilename,
+        sourceFormat: pair.summary.sourceFormat,
+        favorite: pair.summary.favorite,
+        geometryKind: pair.summary.geometryKind,
+        metadata: pair.summary.metadata,
+        warnings: pair.summary.warnings,
+      };
+      if (lineageHash !== undefined && geometryVersion !== undefined) {
+        metadata.lineageHash = lineageHash;
+        metadata.geometryVersion = geometryVersion;
+      }
+      return metadata;
+    };
+    const addCloudRecord = (
+      canonical: Uint8Array,
+      hash: string,
+      revision: number,
+      metadata: Record<string, unknown>,
+    ) => {
+      const compressed = Uint8Array.from(gzipSync(canonical));
+      cloud.set(hash, {
+        record: {
+          content_hash: hash,
+          revision,
+          state: 'ready',
+          object_path: `user/${hash}/track.grpt.gz`,
+          compressed_bytes: compressed.byteLength,
+          metadata,
+        },
+        compressed,
+      });
+    };
+    addCloudRecord(
+      encodeLegacyTrackSyncGeometry(sourceContent),
+      legacyHash,
+      7,
+      metadataFor({ summary: sourceSummary, content: sourceContent }),
+    );
+    const mutate = vi.fn((state: TrackSyncState, pair: LocalTrackSyncPair | null) => {
+      if (state.pendingKind !== 'upsert' || pair === null) {
+        throw new Error('Unexpected mutation.');
+      }
+      addCloudRecord(
+        encodeTrackSyncGeometry(pair.content),
+        state.contentHash,
+        2,
+        metadataFor(pair, state.lineageHash, state.geometryVersion),
+      );
+      return Promise.resolve({ outcome: 'applied' as const, revision: 2 });
+    });
+    let cleanupFailed = false;
+    let deletionConflicted = false;
+    const deleteRemoteRecord = vi.fn((hash: string, _revision: number) => {
+      if (hash === legacyHash && !cleanupFailed) {
+        cleanupFailed = true;
+        return Promise.resolve({ outcome: 'reserved' as const });
+      }
+      if (hash === legacyHash && !deletionConflicted) {
+        deletionConflicted = true;
+        return Promise.resolve({ outcome: 'conflict' as const, revision: 8 });
+      }
+      cloud.delete(hash);
+      return Promise.resolve({ outcome: 'applied' as const, revision: 0 });
+    });
+    const gateway = {
+      status: () =>
+        Promise.resolve({
+          usedBytes: [...cloud.values()].reduce(
+            (total, value) => total + value.compressed.byteLength,
+            0,
+          ),
+          reservedBytes: 0,
+          limitBytes: 8_388_608 as const,
+        }),
+      snapshot: () => Promise.resolve([...cloud.values()].map(({ record }) => record)),
+      mutate,
+      deleteRemoteRecord,
+      download: (path: string) => {
+        const found = [...cloud.values()].find(
+          ({ record }) => record.object_path === path,
+        );
+        if (found === undefined) throw new Error('Missing cloud geometry.');
+        return Promise.resolve(found.compressed);
+      },
+    };
+
+    await database.saveLocalTrack(sourceSummary, sourceContent);
+    await database.saveTrackSyncState({
+      trackId: sourceSummary.id,
+      contentHash: legacyHash,
+      lineageHash: legacyHash,
+      geometryVersion: 1,
+      remoteRevision: 7,
+      pendingKind: null,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const [clientAEndpoint, serverAEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverAEndpoint, database, () => gateway);
+    const clientA = new WorkerRpcClient(clientAEndpoint);
+
+    await expect(
+      clientA.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+      }),
+    ).rejects.toMatchObject({ code: 'network' });
+    expect([...cloud.keys()]).toEqual([legacyHash, v2Hash]);
+    await expect(database.loadTrackSyncState(sourceSummary.id)).resolves.toMatchObject({
+      contentHash: v2Hash,
+      lineageHash: legacyHash,
+      geometryVersion: 2,
+      pendingKind: null,
+    });
+
+    await clientA.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+    });
+
+    expect([...cloud.keys()]).toEqual([v2Hash]);
+    expect(deleteRemoteRecord).toHaveBeenCalledTimes(3);
+    expect(deleteRemoteRecord.mock.calls.map((call) => call[1])).toEqual([7, 7, 8]);
+    clientA.dispose();
+
+    database.close();
+    await database.delete();
+    database = new AppDatabase(services.logger);
+    const receiverContent: LocalTrackContent = {
+      ...sourceContent,
+      trackId: 'local:device-b',
+      trackPoints: sourceContent.trackPoints.map((segment) =>
+        segment.map(({ coordinate }) => ({ coordinate })),
+      ),
+    };
+    const receiverSummary: LocalTrackSummary = {
+      ...summary(receiverContent.trackId),
+      contentHash: legacyHash,
+      pointCount: 4,
+      metrics: calculateTrackMetrics(
+        receiverContent.trackPoints.map((points) => ({ points })),
+      ),
+    };
+    await database.saveLocalTrack(receiverSummary, receiverContent);
+    await database.saveTrackSyncState({
+      trackId: receiverSummary.id,
+      contentHash: legacyHash,
+      lineageHash: legacyHash,
+      geometryVersion: 1,
+      remoteRevision: 7,
+      pendingKind: null,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const [clientBEndpoint, serverBEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverBEndpoint, database, () => gateway);
+    const clientB = new WorkerRpcClient(clientBEndpoint);
+
+    const result = await clientB.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+    });
+
+    expect(result).toMatchObject({ remoteTrackDeletions: [] });
+    const synchronizedSummaries = await database.listLocalTracks();
+    expect(synchronizedSummaries).toHaveLength(1);
+    const synchronizedSummary = synchronizedSummaries[0];
+    expect(synchronizedSummary).toBeDefined();
+    if (synchronizedSummary === undefined) return;
+    expect(synchronizedSummary.id).toBe(receiverSummary.id);
+    expect(synchronizedSummary.contentHash).toBe(v2Hash);
+    expect(synchronizedSummary.metrics.minimumElevationMeters).toBe(-14.5);
+    expect(synchronizedSummary.metrics.maximumElevationMeters).toBe(120.25);
+    expect(synchronizedSummary.metrics.elevationSource).toBe('gpx');
+    const synchronizedContent = await database.loadLocalTrackContent(
+      receiverSummary.id,
+    );
+    expect(
+      synchronizedContent.trackPoints[0]?.map((point) => point.elevationMeters),
+    ).toEqual([120.25, undefined, 0, -14.5]);
+    expect(mutate).toHaveBeenCalledOnce();
+    clientB.dispose();
+  });
+
+  it('keeps the v1 predecessor when the v2 replacement exceeds quota', async () => {
+    const sourceContent: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: 'local:quota',
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 120.25 },
+          { coordinate: [44.01, 42.01], elevationMeters: -14.5 },
+        ],
+      ],
+    };
+    const digest = async (bytes: Uint8Array) =>
+      Array.from(
+        new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes))),
+        (byte) => byte.toString(16).padStart(2, '0'),
+      ).join('');
+    const legacyHash = await digest(encodeLegacyTrackSyncGeometry(sourceContent));
+    const v2Hash = await digest(encodeTrackSyncGeometry(sourceContent));
+    const sourceSummary: LocalTrackSummary = {
+      ...summary(sourceContent.trackId),
+      contentHash: legacyHash,
+      metrics: calculateTrackMetrics(
+        sourceContent.trackPoints.map((points) => ({ points })),
+      ),
+    };
+    await database.saveLocalTrack(sourceSummary, sourceContent);
+    await database.saveTrackSyncState({
+      trackId: sourceSummary.id,
+      contentHash: legacyHash,
+      lineageHash: legacyHash,
+      geometryVersion: 1,
+      remoteRevision: 1,
+      pendingKind: null,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const remote = {
+      content_hash: legacyHash,
+      revision: 1,
+      state: 'ready' as const,
+      object_path: `user/${legacyHash}/track.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: {},
+    };
+    const mutate = vi
+      .fn()
+      .mockRejectedValue(
+        new TrackSyncWorkerError('Track geometry quota exceeded.', 'quota'),
+      );
+    const deleteRemoteRecord = vi.fn();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: () => Promise.resolve([remote]),
+      mutate,
+      deleteRemoteRecord,
+      download: vi.fn(),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+      }),
+    ).rejects.toMatchObject({ code: 'quota' });
+
+    await expect(database.loadTrackSyncState(sourceSummary.id)).resolves.toEqual({
+      trackId: sourceSummary.id,
+      contentHash: v2Hash,
+      lineageHash: legacyHash,
+      geometryVersion: 2,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    });
+    expect(remote.content_hash).toBe(legacyHash);
+    expect(deleteRemoteRecord).not.toHaveBeenCalled();
+    client.dispose();
+  });
+
+  it('does not auto-promote a synchronized dem-assisted v1 track', async () => {
+    const legacyContent = content('local:dem-assisted');
+    const digest = async (bytes: Uint8Array) =>
+      Array.from(
+        new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes))),
+        (byte) => byte.toString(16).padStart(2, '0'),
+      ).join('');
+    const legacyHash = await digest(encodeLegacyTrackSyncGeometry(legacyContent));
+    const legacySummary: LocalTrackSummary = {
+      ...summary(legacyContent.trackId),
+      contentHash: legacyHash,
+      metrics: {
+        ...calculateTrackMetrics(
+          legacyContent.trackPoints.map((points) => ({ points })),
+        ),
+        ascentMeters: 100,
+        descentMeters: 50,
+        minimumElevationMeters: 900,
+        maximumElevationMeters: 1_000,
+        elevationSource: 'dem-assisted',
+        elevationAlgorithmVersion: 4,
+      },
+    };
+    await database.saveLocalTrack(legacySummary, legacyContent);
+    await database.saveTrackSyncState({
+      trackId: legacySummary.id,
+      contentHash: legacyHash,
+      lineageHash: legacyHash,
+      geometryVersion: 1,
+      remoteRevision: 1,
+      pendingKind: null,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const remote = {
+      content_hash: legacyHash,
+      revision: 1,
+      state: 'ready' as const,
+      object_path: `user/${legacyHash}/track.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: {},
+    };
+    const mutate = vi.fn();
+    const deleteRemoteRecord = vi.fn();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: () => Promise.resolve([remote]),
+      mutate,
+      deleteRemoteRecord,
+      download: vi.fn(),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+      }),
+    ).resolves.toMatchObject({ changed: false, remoteTrackDeletions: [] });
+
+    await expect(database.loadTrackSyncState(legacySummary.id)).resolves.toEqual({
+      trackId: legacySummary.id,
+      contentHash: legacyHash,
+      lineageHash: legacyHash,
+      geometryVersion: 1,
+      remoteRevision: 1,
+      pendingKind: null,
+    });
+    expect(mutate).not.toHaveBeenCalled();
+    expect(deleteRemoteRecord).not.toHaveBeenCalled();
     client.dispose();
   });
 });

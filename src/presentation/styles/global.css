@@ -19,23 +19,55 @@ body {
 .maplibregl-ctrl-top-right {
   top: 6px;
   right: 6px;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 14%))
+    drop-shadow(0 1px 5px rgb(0 0 0 / 12%));
 }
 
-.maplibregl-ctrl-top-right .maplibregl-ctrl {
-  margin: 0 0 6px;
+.maplibregl-ctrl-top-right > .maplibregl-ctrl {
+  clear: both;
+  width: 40px;
+  margin: 0;
 }
 
-/* MapLibre renders navigation and geolocation as separate native control groups.
-   Join them visually so they read as one conventional camera-control stack. */
-.maplibregl-ctrl-top-right .maplibregl-ctrl-group:has(.maplibregl-ctrl-compass) {
-  border-bottom-right-radius: 0;
-  border-bottom-left-radius: 0;
+.maplibregl-ctrl-top-right > .maplibregl-ctrl-group {
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
 }
 
-.maplibregl-ctrl-top-right .maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) {
-  margin-top: -6px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
+.maplibregl-ctrl-top-right > .maplibregl-ctrl-group:has(.maplibregl-ctrl-compass) {
+  border-radius: 10px 10px 0 0;
+}
+
+.maplibregl-ctrl-top-right
+  > .maplibregl-ctrl-group:has(.maplibregl-ctrl-compass)
+  > button:first-child {
+  border-radius: 10px 10px 0 0;
+}
+
+.maplibregl-ctrl-top-right > .maplibregl-ctrl-group > button {
+  width: 40px;
+  height: 36px;
+  border-color: #c7dce6;
+  background: #ffffff;
+  color: #062c3d;
+}
+
+.maplibregl-ctrl-top-right > .maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) {
+  border-top: 1px solid #c7dce6;
+}
+
+.maplibregl-ctrl-top-right > .maplibregl-ctrl-group > button:hover {
+  background: rgb(6 44 61 / 4%);
+}
+
+.maplibregl-ctrl-top-right > .maplibregl-ctrl-group > button:focus-visible {
+  outline: 3px solid #fb8500;
+  outline-offset: 2px;
+}
+
+.map-view-controls-control {
+  background: transparent;
 }
 
 .map-orbit-pivot {

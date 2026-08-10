@@ -123,6 +123,17 @@ function requireMetadata(value: unknown): Record<string, unknown> {
       'metadata must be a JSON object.',
     );
   }
+  if (
+    typeof value.lineageHash !== 'string' ||
+    !CONTENT_HASH_PATTERN.test(value.lineageHash) ||
+    (value.geometryVersion !== 1 && value.geometryVersion !== 2)
+  ) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_metadata',
+      'metadata must contain a lowercase SHA-256 lineageHash and geometryVersion 1 or 2.',
+    );
+  }
   const encoded = new TextEncoder().encode(JSON.stringify(value));
   if (encoded.byteLength > MAX_METADATA_BYTES) {
     throw new TrackSyncFailure(413, 'metadata_too_large', 'metadata exceeds 64 KiB.');
@@ -332,7 +343,17 @@ async function parseUploadRequest(request: Request): Promise<TrackSyncCommand> {
     );
   }
   const geometry = new Uint8Array(await geometryFile.arrayBuffer());
-  await validateGeometryUpload(geometry, contentHash);
+  const geometryIdentity = await validateGeometryUpload(geometry, contentHash);
+  if (
+    metadata.geometryVersion !== geometryIdentity.geometryVersion ||
+    metadata.lineageHash !== geometryIdentity.lineageHash
+  ) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_metadata',
+      'metadata lineage does not match the GRPT geometry.',
+    );
+  }
   return {
     action: 'upload',
     contentHash,

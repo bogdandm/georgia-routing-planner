@@ -47,10 +47,10 @@ At widths from 900 CSS pixels through 1899 pixels, a selected track or imagery r
 overlays only the contextual sidebar while the rail stays interactive. At 1900 CSS
 pixels and above, the rail, contextual sidebar, and detail pane form one floating
 surface above the full-viewport map. Changing sections or opening a pane never changes
-the map viewport. Native map navigation remains on the right. Directly below it, one
-vertical control contains 2D, 3D, and a quick map-layer preset chooser. The shell uses
-the shared sky-blue, blue-green, deep-space, amber, and orange palette with derived
-surface, border, status, and tag colors.
+the map viewport. One right-side vertical rail contains zoom, compass, geolocation, 2D,
+3D, and the quick map-layer preset chooser. The shell uses the shared sky-blue,
+blue-green, deep-space, amber, and orange palette with derived surface, border, status,
+and tag colors.
 
 When navigation is collapsed on desktop with an active track, the same decorative
 profile-and-stats summary sits between the fixed Trail Planner logo and the navigation
@@ -78,17 +78,18 @@ generic always-visible privacy notice.
 ordinary user can create an email/password account and enable **Sync across devices**.
 Synchronization is disabled by default and remains local-first. Signing in to a new or
 different account preserves valid browser tracks and prepares them for upload while
-downloading that account's remote tracks. Downloaded tracks without an elevation profile
-are immediately prepared from the configured terrain provider. If a same-account track
-was deleted from the cloud, a global **Tracks deleted from cloud** dialog opens with
-every affected track unchecked. **Delete**, **Restore**, and **Delete selected, upload
-the rest again** state the selected decision; unchecked tracks upload again. The
-signed-in panel exposes the full support User ID, exact compressed usage,
-reservation-aware quota progress, a **Sync now** action, and per-track transfer progress
-while synchronization runs. The lower-rail User icon shows an orange dot while
-synchronization is active or needs a deletion decision, red after failure, and green
-after success. Three HTTP 500 responses exhaust the page-lifetime server-error budget;
-the worker sends no further synchronization requests until the page reloads.
+downloading that account's remote tracks. Current synchronized geometry retains finite
+source elevation exactly. Legacy remote-only geometry remains elevation-missing; it is
+never filled from a terrain provider automatically. If a same-account track was deleted
+from the cloud, a global **Tracks deleted from cloud** dialog opens with every affected
+track unchecked. **Delete**, **Restore**, and **Delete selected, upload the rest again**
+state the selected decision; unchecked tracks upload again. The signed-in panel exposes
+the full support User ID, exact compressed usage, reservation-aware quota progress, a
+**Sync now** action, and per-track transfer progress while synchronization runs. The
+lower-rail User icon shows an orange dot while synchronization is active or needs a
+deletion decision, red after failure, and green after success. Three HTTP 500 responses
+exhaust the page-lifetime server-error budget; the worker sends no further
+synchronization requests until the page reloads.
 
 ## Feature surfaces
 

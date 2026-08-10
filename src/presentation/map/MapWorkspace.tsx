@@ -39,6 +39,7 @@ import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
   MapViewControls,
+  MapViewControlsControl,
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
@@ -775,6 +776,13 @@ export function MapWorkspace({
               showUserLocation
               trackUserLocation={false}
             />
+            <MapViewControlsControl
+              activeLayerPreset={activeLayerPreset}
+              layerPresetDisabled={layerPresetDisabled}
+              onLayerPresetChange={handleLayerPresetChange}
+              onTerrainModeChange={handleTerrainControlChange}
+              terrainState={terrainState}
+            />
           </Map>
         ))
       )}
@@ -789,7 +797,10 @@ export function MapWorkspace({
           {cameraMessage}
         </Alert>
       ) : null}
-      {restoredView !== null && mapProviderConfiguration.status === 'valid' ? (
+      {restoredView !== null &&
+      mapProviderConfiguration.status === 'valid' &&
+      resolvedMapCanvas !== null &&
+      resolvedMapCanvas !== undefined ? (
         <MapViewControls
           activeLayerPreset={activeLayerPreset}
           layerPresetDisabled={layerPresetDisabled}

@@ -1,6 +1,12 @@
 import { MAX_CANONICAL_BYTES, TrackSyncFailure } from './contracts.ts';
 
-export function validateCanonicalGeometry(bytes: Uint8Array): void {
+export type TrackGeometryVersion = 1 | 2;
+export interface TrackGeometryIdentity {
+  readonly geometryVersion: TrackGeometryVersion;
+  readonly lineageHash: string;
+}
+
+export function validateCanonicalGeometry(bytes: Uint8Array): TrackGeometryVersion {
   if (
     bytes.byteLength < 8 ||
     bytes[0] !== 0x47 ||
@@ -14,15 +20,17 @@ export function validateCanonicalGeometry(bytes: Uint8Array): void {
       'Geometry must use the GRPT envelope.',
     );
   }
-  if (bytes[4] !== 1) {
+  const version = bytes[4];
+  if (version !== 1 && version !== 2) {
     throw new TrackSyncFailure(
       400,
       'unsupported_codec',
-      'Only GRPT codec version 1 is supported.',
+      'Only GRPT codec versions 1 and 2 are supported.',
     );
   }
-  const flags = bytes[5];
-  if ((flags & ~0x01) !== 0) {
+  const flags = bytes[5]!;
+  const allowedFlags = version === 1 ? 0x01 : 0x03;
+  if ((flags & ~allowedFlags) !== 0) {
     throw new TrackSyncFailure(
       400,
       'unsupported_codec',
@@ -32,7 +40,7 @@ export function validateCanonicalGeometry(bytes: Uint8Array): void {
 
   let cursor = readVarUint(bytes, 6);
   const segmentCount = cursor.value;
-  if (segmentCount < 1 || segmentCount > 1_000_000) {
+  if (segmentCount < 1 || segmentCount > 512) {
     throw new TrackSyncFailure(
       400,
       'invalid_geometry',
@@ -40,6 +48,7 @@ export function validateCanonicalGeometry(bytes: Uint8Array): void {
     );
   }
   let pointCount = 0;
+  let hasTimestamp = false;
   for (let segment = 0; segment < segmentCount; segment += 1) {
     cursor = readVarUint(bytes, cursor.offset);
     const segmentPointCount = cursor.value;
@@ -51,7 +60,7 @@ export function validateCanonicalGeometry(bytes: Uint8Array): void {
       );
     }
     pointCount += segmentPointCount;
-    if (pointCount > 5_000_000) {
+    if (pointCount > 100_000) {
       throw new TrackSyncFailure(
         400,
         'invalid_geometry',
@@ -61,8 +70,21 @@ export function validateCanonicalGeometry(bytes: Uint8Array): void {
     for (let point = 0; point < segmentPointCount; point += 1) {
       cursor = readVarUint(bytes, cursor.offset);
       cursor = readVarUint(bytes, cursor.offset);
-      if ((flags & 0x01) !== 0) cursor = readVarUint(bytes, cursor.offset);
+      if ((flags & 0x01) !== 0) {
+        cursor = readVarUint(bytes, cursor.offset);
+        if (cursor.value !== 0) hasTimestamp = true;
+      }
+      if ((flags & 0x02) !== 0) {
+        cursor = { value: 0, offset: readElevation(bytes, cursor.offset) };
+      }
     }
+  }
+  if ((flags & 0x01) !== 0 && !hasTimestamp) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_geometry',
+      'The GRPT timestamp flag is not canonical.',
+    );
   }
   if (cursor.offset !== bytes.byteLength) {
     throw new TrackSyncFailure(
@@ -71,21 +93,89 @@ export function validateCanonicalGeometry(bytes: Uint8Array): void {
       'The GRPT envelope contains trailing bytes.',
     );
   }
+  return version;
 }
 
 export async function validateGeometryUpload(
   compressed: Uint8Array,
   expectedContentHash: string,
-): Promise<void> {
+): Promise<TrackGeometryIdentity> {
   const canonical = await decompressGeometry(compressed);
-  validateCanonicalGeometry(canonical);
-  if ((await sha256Hex(canonical)) !== expectedContentHash) {
+  const geometryVersion = validateCanonicalGeometry(canonical);
+  const contentHash = await sha256Hex(canonical);
+  if (contentHash !== expectedContentHash) {
     throw new TrackSyncFailure(
       400,
       'content_hash_mismatch',
       'Declared and computed geometry hashes differ.',
     );
   }
+  return {
+    geometryVersion,
+    lineageHash:
+      geometryVersion === 1
+        ? contentHash
+        : await sha256Hex(legacyCanonicalGeometry(canonical)),
+  };
+}
+
+function legacyCanonicalGeometry(bytes: Uint8Array): Uint8Array {
+  const legacy = [0x47, 0x52, 0x50, 0x54, 1, bytes[5]! & 0x01];
+  let cursor = copyVarUint(bytes, 6, legacy);
+  const segmentCount = cursor.value;
+  for (let segment = 0; segment < segmentCount; segment += 1) {
+    cursor = copyVarUint(bytes, cursor.offset, legacy);
+    const segmentPointCount = cursor.value;
+    for (let point = 0; point < segmentPointCount; point += 1) {
+      cursor = copyVarUint(bytes, cursor.offset, legacy);
+      cursor = copyVarUint(bytes, cursor.offset, legacy);
+      if ((bytes[5]! & 0x01) !== 0) {
+        cursor = copyVarUint(bytes, cursor.offset, legacy);
+      }
+      if ((bytes[5]! & 0x02) !== 0) {
+        cursor = { value: 0, offset: readElevation(bytes, cursor.offset) };
+      }
+    }
+  }
+  return Uint8Array.from(legacy);
+}
+
+function copyVarUint(
+  bytes: Uint8Array,
+  offset: number,
+  destination: number[],
+): { readonly value: number; readonly offset: number } {
+  const start = offset;
+  const cursor = readVarUint(bytes, offset);
+  for (let index = start; index < cursor.offset; index += 1) {
+    destination.push(bytes[index]!);
+  }
+  return cursor;
+}
+
+function readElevation(bytes: Uint8Array, offset: number): number {
+  const tag = bytes[offset];
+  if (tag === 0x00) return offset + 1;
+  if (tag !== 0x01 || offset + 9 > bytes.byteLength) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_geometry',
+      'The GRPT envelope contains an invalid elevation.',
+    );
+  }
+  const elevationMeters = new DataView(
+    bytes.buffer,
+    bytes.byteOffset + offset + 1,
+    8,
+  ).getFloat64(0, false);
+  if (!Number.isFinite(elevationMeters)) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_geometry',
+      'The GRPT envelope contains an invalid elevation.',
+    );
+  }
+  return offset + 9;
 }
 
 function readVarUint(
@@ -112,7 +202,16 @@ function readVarUint(
       );
     }
     offset += 1;
-    if ((byte & 0x80) === 0) return { value, offset };
+    if ((byte & 0x80) === 0) {
+      if (index > 0 && byte === 0) {
+        throw new TrackSyncFailure(
+          400,
+          'invalid_geometry',
+          'The GRPT envelope contains a non-canonical integer.',
+        );
+      }
+      return { value, offset };
+    }
     multiplier *= 128;
   }
   throw new TrackSyncFailure(

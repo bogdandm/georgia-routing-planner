@@ -1538,7 +1538,7 @@ export class AppDatabase
             identity = {
               lineageHash:
                 state?.remoteRevision === null || state === undefined
-                  ? hashes.contentHash
+                  ? hashes.legacyContentHash
                   : state.lineageHash,
               geometryVersion: 2,
             };
@@ -1551,7 +1551,10 @@ export class AppDatabase
             });
           } else {
             identity = {
-              lineageHash: state?.lineageHash ?? contentHash,
+              lineageHash:
+                state === undefined || state.remoteRevision === null
+                  ? hashes.legacyContentHash
+                  : state.lineageHash,
               geometryVersion: isCurrent ? 2 : 1,
             };
             if (state !== undefined) {

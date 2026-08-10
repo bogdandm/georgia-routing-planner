@@ -626,7 +626,7 @@ describe('local track persistence', () => {
       {
         trackId: retained.id,
         contentHash: retained.contentHash ?? '',
-        legacyContentHash: retained.contentHash ?? '',
+        legacyContentHash: 'b'.repeat(64),
       },
     ]);
 
@@ -636,7 +636,7 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(retained.id)).resolves.toEqual({
       trackId: retained.id,
       contentHash: retained.contentHash,
-      lineageHash: retained.contentHash,
+      lineageHash: 'b'.repeat(64),
       geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'upsert',

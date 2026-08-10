@@ -45,6 +45,7 @@ import {
   type DragEvent,
   type PropsWithChildren,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import {
@@ -1181,67 +1182,74 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 function TrackImportZone() {
   const { importError, importFiles } = useTracksWorkspace();
   const inputRef = useRef<HTMLInputElement>(null);
-  const zoneRef = useRef<HTMLElement>(null);
+  const compactZoneRef = useRef<HTMLElement>(null);
+  const floatingZoneRef = useRef<HTMLElement>(null);
+  const workspaceShellRef = useRef<HTMLElement | null>(null);
+  const [workspaceShell, setWorkspaceShell] = useState<HTMLElement | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
-    const appRoot = document.querySelector('[data-testid="workspace-shell"]');
-    if (!(appRoot instanceof HTMLElement)) return undefined;
+    const workspaceShell = document.querySelector('[data-testid="workspace-shell"]');
+    if (!(workspaceShell instanceof HTMLElement)) return undefined;
+    workspaceShellRef.current = workspaceShell;
 
-    const containsTarget = (event: globalThis.DragEvent) =>
-      event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget);
     const hasFiles = (event: globalThis.DragEvent) =>
       event.dataTransfer?.types.includes('Files') ?? false;
-    const handleAppDragEnter = (event: globalThis.DragEvent) => {
-      if (hasFiles(event)) setDragActive(true);
+    const handleWorkspaceDragEnter = (event: globalThis.DragEvent) => {
+      if (!hasFiles(event)) return;
+      setWorkspaceShell(workspaceShell);
+      setDragActive(true);
     };
-    const handleAppDragOver = (event: globalThis.DragEvent) => {
+    const handleWorkspaceDragOver = (event: globalThis.DragEvent) => {
       if (!hasFiles(event) || event.dataTransfer === null) return;
       event.preventDefault();
-      const target = event.target;
-      const insideZone = target instanceof Node && zoneRef.current?.contains(target);
-      event.dataTransfer.dropEffect = insideZone === true ? 'copy' : 'none';
+      event.dataTransfer.dropEffect =
+        event.target instanceof Node &&
+        (compactZoneRef.current?.contains(event.target) === true ||
+          floatingZoneRef.current?.contains(event.target) === true)
+          ? 'copy'
+          : 'none';
     };
-    const handleAppDragLeave = (event: globalThis.DragEvent) => {
-      if (!hasFiles(event) || containsTarget(event)) return;
+    const handleWorkspaceDragLeave = (event: globalThis.DragEvent) => {
+      if (
+        !hasFiles(event) ||
+        (event.relatedTarget instanceof Node &&
+          workspaceShell.contains(event.relatedTarget))
+      )
+        return;
       setDragActive(false);
     };
-    const handleAppDrop = (event: globalThis.DragEvent) => {
+    const handleWorkspaceDrop = (event: globalThis.DragEvent) => {
       if (!hasFiles(event)) return;
       event.preventDefault();
+      if (
+        event.target instanceof Node &&
+        (compactZoneRef.current?.contains(event.target) === true ||
+          floatingZoneRef.current?.contains(event.target) === true)
+      )
+        return;
       setDragActive(false);
     };
-    const handleAppDragEnd = () => {
+    const handleWorkspaceDragEnd = () => {
       setDragActive(false);
     };
 
-    appRoot.addEventListener('dragenter', handleAppDragEnter);
-    appRoot.addEventListener('dragover', handleAppDragOver);
-    appRoot.addEventListener('dragleave', handleAppDragLeave);
-    appRoot.addEventListener('drop', handleAppDrop);
-    appRoot.addEventListener('dragend', handleAppDragEnd);
+    workspaceShell.addEventListener('dragenter', handleWorkspaceDragEnter);
+    workspaceShell.addEventListener('dragover', handleWorkspaceDragOver);
+    workspaceShell.addEventListener('dragleave', handleWorkspaceDragLeave);
+    workspaceShell.addEventListener('drop', handleWorkspaceDrop);
+    workspaceShell.addEventListener('dragend', handleWorkspaceDragEnd);
     return () => {
-      appRoot.removeEventListener('dragenter', handleAppDragEnter);
-      appRoot.removeEventListener('dragover', handleAppDragOver);
-      appRoot.removeEventListener('dragleave', handleAppDragLeave);
-      appRoot.removeEventListener('drop', handleAppDrop);
-      appRoot.removeEventListener('dragend', handleAppDragEnd);
+      workspaceShell.removeEventListener('dragenter', handleWorkspaceDragEnter);
+      workspaceShell.removeEventListener('dragover', handleWorkspaceDragOver);
+      workspaceShell.removeEventListener('dragleave', handleWorkspaceDragLeave);
+      workspaceShell.removeEventListener('drop', handleWorkspaceDrop);
+      workspaceShell.removeEventListener('dragend', handleWorkspaceDragEnd);
+      workspaceShellRef.current = null;
     };
   }, []);
 
-  const handleDragEnter = (event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes('Files')) return;
-    event.preventDefault();
-    setDragActive(true);
-  };
-
-  const handleDragOver = (event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes('Files')) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-  };
-
-  const handleDrop = (event: DragEvent<HTMLElement>) => {
+  const handleCompactDrop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setDragActive(false);
@@ -1249,85 +1257,64 @@ function TrackImportZone() {
   };
 
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        zIndex: dragActive ? 2 : 1,
-        minHeight: importError === null ? 52 : 106,
-      }}
-    >
+    <Box sx={{ minHeight: importError === null ? 52 : 106 }}>
       <Paper
-        ref={zoneRef}
+        ref={compactZoneRef}
         component="section"
         aria-label="Import track file"
         variant="outlined"
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
+        onDragEnter={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
+          event.preventDefault();
+          setDragActive(true);
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+        }}
+        onDrop={handleCompactDrop}
         sx={{
-          position: dragActive ? 'absolute' : 'relative',
-          inset: '0 0 auto',
-          height: dragActive ? 138 : 'auto',
           minHeight: 52,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           borderStyle: 'dashed',
           borderWidth: 2,
-          borderColor: dragActive ? 'primary.main' : 'divider',
-          bgcolor: dragActive ? appColors.surface.selected : appColors.surface.subtle,
-          boxShadow: dragActive ? '0 12px 28px rgba(2, 48, 71, 0.28)' : 0,
+          borderColor: 'divider',
+          bgcolor: appColors.surface.subtle,
           borderRadius: 1.5,
-          transition: (theme) =>
-            theme.transitions.create([
-              'height',
-              'background-color',
-              'border-color',
-              'box-shadow',
-            ]),
         }}
       >
         <Stack
-          direction={dragActive ? 'column' : 'row'}
-          spacing={dragActive ? 0.75 : 0.75}
+          direction="row"
+          spacing={0.75}
           sx={{
             minHeight: 48,
             width: '100%',
             alignItems: 'center',
             justifyContent: 'center',
-            px: dragActive ? 1.25 : { xs: 0.75, sm: 1.25 },
-            py: dragActive ? 2 : 0.5,
+            px: { xs: 0.75, sm: 1.25 },
+            py: 0.5,
             textAlign: 'center',
           }}
         >
-          <UploadFileOutlinedIcon
-            color="primary"
-            sx={{ fontSize: dragActive ? 36 : 24 }}
-          />
+          <UploadFileOutlinedIcon color="primary" sx={{ fontSize: 24 }} />
           <Typography
             variant="subtitle2"
-            noWrap={!dragActive}
-            sx={{
-              flex: dragActive ? 0 : 1,
-              fontSize: dragActive ? undefined : { xs: '0.6875rem', sm: '0.875rem' },
-            }}
+            noWrap
+            sx={{ flex: 1, fontSize: { xs: '0.6875rem', sm: '0.875rem' } }}
           >
             Drop GPX, FIT, or KML here
           </Typography>
-          {dragActive ? (
-            <Typography variant="caption" color="text.secondary">
-              Release the file inside this zone
-            </Typography>
-          ) : (
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => inputRef.current?.click()}
-              sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
-            >
-              Browse track file
-            </Button>
-          )}
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => inputRef.current?.click()}
+            sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
+          >
+            Browse track file
+          </Button>
         </Stack>
         <input
           ref={inputRef}
@@ -1339,7 +1326,7 @@ function TrackImportZone() {
             event.target.value = '';
           }}
         />
-        {dragActive || importError === null ? null : (
+        {importError === null ? null : (
           <Alert
             severity="warning"
             sx={{
@@ -1356,6 +1343,63 @@ function TrackImportZone() {
           </Alert>
         )}
       </Paper>
+      {dragActive && workspaceShell !== null
+        ? createPortal(
+            <Paper
+              ref={floatingZoneRef}
+              component="section"
+              aria-label="Drop track file"
+              variant="outlined"
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setDragActive(false);
+                void importFiles(event.dataTransfer.files);
+              }}
+              sx={{
+                position: 'absolute',
+                zIndex: 7,
+                top: 70,
+                left: 70,
+                width: { xs: 'calc(100% - 82px)', sm: 420, xl: 464 },
+                height: 138,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                borderStyle: 'dashed',
+                borderWidth: 2,
+                borderColor: 'primary.main',
+                bgcolor: appColors.surface.selected,
+                boxShadow: '0 12px 28px rgba(2, 48, 71, 0.28)',
+                borderRadius: 1.5,
+              }}
+            >
+              <Stack
+                spacing={0.75}
+                sx={{
+                  minHeight: 48,
+                  width: '100%',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  px: 1.25,
+                  py: 2,
+                  textAlign: 'center',
+                }}
+              >
+                <UploadFileOutlinedIcon color="primary" sx={{ fontSize: 36 }} />
+                <Typography variant="subtitle2">Drop GPX, FIT, or KML here</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Release the file inside this zone
+                </Typography>
+              </Stack>
+            </Paper>,
+            workspaceShell,
+          )
+        : null}
     </Box>
   );
 }

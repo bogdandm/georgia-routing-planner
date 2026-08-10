@@ -2132,6 +2132,63 @@ describe('WorkspaceShell', () => {
     expect(route).not.toHaveBeenCalled();
   });
 
+  it('saves accepted route geometry without waiting for elevation', async () => {
+    const sampling = { signal: null as AbortSignal | null };
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
+      sampleMany: vi.fn(
+        (_coordinates: readonly ElevationCoordinate[], signal: AbortSignal) => {
+          sampling.signal = signal;
+          return new Promise<readonly ElevationSample[]>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                reject(new DOMException('Elevation sampling aborted.', 'AbortError'));
+              },
+              { once: true },
+            );
+          });
+        },
+      ),
+    };
+    const trailRouter: TrailRouter = {
+      route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
+      dispose: vi.fn(),
+    };
+    services = { ...createTestServices({ trailRouter }), elevationProvider };
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+
+    expect(await screen.findByText('Preparing elevation…')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(sampling.signal?.aborted).toBe(true);
+    await waitFor(async () => {
+      const tracks = await services.database.listLocalTracks();
+      expect(tracks).toHaveLength(1);
+    });
+    const [summary] = await services.database.listLocalTracks();
+    if (summary === undefined) throw new Error('Expected saved planned route.');
+    const content = await services.database.loadLocalTrackContent(summary.id);
+    expect(
+      content.trackPoints[0]?.every((point) => point.elevationMeters === undefined),
+    ).toBe(true);
+  });
+
   it('explains GPX validation warnings with their parser code and message', async () => {
     const user = userEvent.setup();
     const { container } = renderWorkspaceShell();

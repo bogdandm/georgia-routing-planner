@@ -963,6 +963,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return;
     }
     routePlanSaveInProgress.current = true;
+    routePlanRequestAbort.current?.abort();
+    routePlanElevationAbort.current?.abort();
+    setElevationProgress(null);
     const planId = active.id;
     const previousStatus = active.status;
     setActive((current) =>

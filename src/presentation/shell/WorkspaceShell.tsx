@@ -25,7 +25,7 @@ import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspac
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
-import { RemoteTrackDeletionDialog } from '@/presentation/user/RemoteTrackDeletionDialog';
+import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
 import { WorkspaceSidebar } from '@/presentation/shell/WorkspaceSidebar';
@@ -724,7 +724,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           setShareOpen(false);
         }}
       />
-      <RemoteTrackDeletionDialog />
+      <RemoteDeletionDialog />
       {developerMode ? (
         <DeveloperDrawer
           open={developerDrawerOpen}

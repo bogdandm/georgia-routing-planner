@@ -1552,7 +1552,7 @@ export class AppDatabase
           } else {
             identity = {
               lineageHash:
-                state === undefined || state.remoteRevision === null
+                (state?.remoteRevision ?? null) === null
                   ? hashes.legacyContentHash
                   : state.lineageHash,
               geometryVersion: isCurrent ? 2 : 1,

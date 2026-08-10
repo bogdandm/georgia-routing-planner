@@ -3648,6 +3648,7 @@ describe('WorkspaceShell', () => {
       syncProgress: null,
       syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
       remoteTrackDeletions: [],
+      remoteMarkerDeletions: [],
     };
     const listeners = new Set<() => void>();
     const userData = {

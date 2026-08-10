@@ -19,7 +19,7 @@ const database = {
     limitBytes: 8_388_608,
   }),
   saveTrackSyncEnabled: vi.fn().mockResolvedValue(undefined),
-  resolveRemoteTrackDeletions: vi.fn().mockResolvedValue(undefined),
+  resolveRemoteDeletions: vi.fn().mockResolvedValue(undefined),
 } as unknown as AppDatabase;
 const emptyUsage = { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 } as const;
 function session(email: string, userId = 'user-id'): Session {
@@ -93,7 +93,7 @@ beforeEach(() => {
     limitBytes: 8_388_608,
   });
   database.saveTrackSyncEnabled = vi.fn().mockResolvedValue(undefined);
-  database.resolveRemoteTrackDeletions = vi.fn().mockResolvedValue(undefined);
+  database.resolveRemoteDeletions = vi.fn().mockResolvedValue(undefined);
 });
 
 describe('SupabaseUserDataService', () => {
@@ -238,6 +238,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -267,6 +268,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -296,12 +298,22 @@ describe('SupabaseUserDataService', () => {
   it('aborts an active synchronization when synchronization is disabled', async () => {
     const fake = createClient({ restoredSession: session('abort@example.test') });
     const synchronize = vi.fn(
-      (_userId: string, _accessToken: string, signal: AbortSignal) =>
+      (
+        _userId: string,
+        _accessToken: string,
+        _sessionRevision: number,
+        signal: AbortSignal,
+      ) =>
         new Promise<TrackSyncWorkerResult>((resolve) => {
           signal.addEventListener(
             'abort',
             () => {
-              resolve({ usage: emptyUsage, changed: false, remoteTrackDeletions: [] });
+              resolve({
+                usage: emptyUsage,
+                changed: { tracks: false, markers: false },
+                remoteTrackDeletions: [],
+                remoteMarkerDeletions: [],
+              });
             },
             { once: true },
           );
@@ -310,6 +322,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -325,7 +338,7 @@ describe('SupabaseUserDataService', () => {
     await service.setSyncEnabled(false);
     await enabling;
 
-    expect(synchronize.mock.calls[0]?.[2].aborted).toBe(true);
+    expect(synchronize.mock.calls[0]?.[3].aborted).toBe(true);
     expect(service.getSnapshot().syncStatus).toBe('idle');
     service.dispose();
   });
@@ -334,12 +347,22 @@ describe('SupabaseUserDataService', () => {
     const activeSession = session('signout-abort@example.test');
     const fake = createClient({ restoredSession: activeSession });
     const synchronize = vi.fn(
-      (_userId: string, _accessToken: string, signal: AbortSignal) =>
+      (
+        _userId: string,
+        _accessToken: string,
+        _sessionRevision: number,
+        signal: AbortSignal,
+      ) =>
         new Promise<TrackSyncWorkerResult>((resolve) => {
           signal.addEventListener(
             'abort',
             () => {
-              resolve({ usage: emptyUsage, changed: false, remoteTrackDeletions: [] });
+              resolve({
+                usage: emptyUsage,
+                changed: { tracks: false, markers: false },
+                remoteTrackDeletions: [],
+                remoteMarkerDeletions: [],
+              });
             },
             { once: true },
           );
@@ -348,6 +371,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -363,7 +387,7 @@ describe('SupabaseUserDataService', () => {
     fake.emit('SIGNED_OUT', null);
     await enabling;
 
-    expect(synchronize.mock.calls[0]?.[2].aborted).toBe(true);
+    expect(synchronize.mock.calls[0]?.[3].aborted).toBe(true);
     expect(service.getSnapshot()).toMatchObject({
       email: null,
       userId: null,
@@ -381,6 +405,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -412,6 +437,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -445,12 +471,14 @@ describe('SupabaseUserDataService', () => {
       .mockRejectedValueOnce(new TrackSyncWorkerError('Expired.', 'auth-expired'))
       .mockResolvedValue({
         usage: emptyUsage,
-        changed: false,
+        changed: { tracks: false, markers: false },
         remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
       });
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -466,12 +494,14 @@ describe('SupabaseUserDataService', () => {
       1,
       'user-id',
       'access-token',
+      expect.any(Number),
       expect.any(AbortSignal),
     );
     expect(synchronize).toHaveBeenNthCalledWith(
       2,
       'user-id',
       'refreshed-access-token',
+      expect.any(Number),
       expect.any(AbortSignal),
     );
     expect(fake.getSession).toHaveBeenCalledTimes(3);
@@ -492,6 +522,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -507,7 +538,7 @@ describe('SupabaseUserDataService', () => {
       busy: false,
       syncStatus: 'error',
       errorMessage:
-        'Synchronization could not finish. Your local tracks remain available.',
+        'Synchronization could not finish. Your local tracks and markers remain available.',
     });
     service.dispose();
   });
@@ -516,25 +547,28 @@ describe('SupabaseUserDataService', () => {
     database.loadTrackSyncEnabled = vi.fn().mockResolvedValue(true);
     const fake = createClient({ restoredSession: session('decision@example.test') });
     const resolveRemoteTrackDeletions = vi.fn().mockResolvedValue(undefined);
-    database.resolveRemoteTrackDeletions = resolveRemoteTrackDeletions;
+    database.resolveRemoteDeletions = resolveRemoteTrackDeletions;
     const synchronize = vi
       .fn()
       .mockResolvedValueOnce({
         usage: emptyUsage,
-        changed: false,
+        changed: { tracks: false, markers: false },
         remoteTrackDeletions: [
           { trackId: 'local:delete', name: 'Delete' },
           { trackId: 'local:restore', name: 'Restore' },
         ],
+        remoteMarkerDeletions: [],
       })
       .mockResolvedValue({
         usage: emptyUsage,
-        changed: true,
+        changed: { tracks: true, markers: false },
         remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
       });
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -548,12 +582,21 @@ describe('SupabaseUserDataService', () => {
     await service.synchronizeNow();
     expect(synchronize).toHaveBeenCalledOnce();
 
-    await service.resolveRemoteTrackDeletions(['local:delete']);
+    await service.resolveRemoteDeletions({
+      deleteTrackIds: ['local:delete'],
+      deleteMarkerIds: [],
+    });
 
-    expect(resolveRemoteTrackDeletions).toHaveBeenCalledWith(
-      ['local:delete'],
-      ['local:restore'],
-    );
+    expect(resolveRemoteTrackDeletions).toHaveBeenCalledWith({
+      expectedUserId: 'user-id',
+      trackCandidateIds: ['local:delete', 'local:restore'],
+      markerCandidateIds: [],
+      tracks: {
+        deleteIds: ['local:delete'],
+        restoreIds: ['local:restore'],
+      },
+      markers: { deleteIds: [], restoreIds: [] },
+    });
     expect(changed).toHaveBeenCalledOnce();
     await vi.waitFor(() => {
       expect(synchronize).toHaveBeenCalledTimes(2);
@@ -567,7 +610,7 @@ describe('SupabaseUserDataService', () => {
 
   it('retains remote deletion candidates after a failed decision write', async () => {
     database.loadTrackSyncEnabled = vi.fn().mockResolvedValue(true);
-    database.resolveRemoteTrackDeletions = vi
+    database.resolveRemoteDeletions = vi
       .fn()
       .mockRejectedValue(new Error('storage unavailable'));
     const fake = createClient({
@@ -576,10 +619,12 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize: vi.fn().mockResolvedValue({
         usage: emptyUsage,
-        changed: false,
+        changed: { tracks: false, markers: false },
         remoteTrackDeletions: [{ trackId: 'local:keep', name: 'Keep' }],
+        remoteMarkerDeletions: [],
       }),
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -588,14 +633,17 @@ describe('SupabaseUserDataService', () => {
     await vi.waitFor(() => {
       expect(service.getSnapshot().syncStatus).toBe('needs-action');
     });
-    await service.resolveRemoteTrackDeletions([]);
+    await service.resolveRemoteDeletions({
+      deleteTrackIds: [],
+      deleteMarkerIds: [],
+    });
 
     expect(service.getSnapshot()).toMatchObject({
       busy: false,
       syncStatus: 'needs-action',
       remoteTrackDeletions: [{ trackId: 'local:keep', name: 'Keep' }],
       errorMessage:
-        'Unable to apply the track deletion decision. Your local tracks remain available.',
+        'Unable to apply the deletion decision. Your local data remains available.',
     });
     service.dispose();
   });
@@ -607,8 +655,9 @@ describe('SupabaseUserDataService', () => {
       resolveFirst = () => {
         resolve({
           usage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
-          changed: false,
+          changed: { tracks: false, markers: false },
           remoteTrackDeletions: [],
+          remoteMarkerDeletions: [],
         });
       };
     });
@@ -617,12 +666,14 @@ describe('SupabaseUserDataService', () => {
       .mockReturnValueOnce(firstRun)
       .mockResolvedValue({
         usage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
-        changed: false,
+        changed: { tracks: false, markers: false },
         remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
       });
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -646,6 +697,7 @@ describe('SupabaseUserDataService', () => {
     expect(synchronize).toHaveBeenCalledWith(
       'user-id',
       'access-token',
+      expect.any(Number),
       expect.any(AbortSignal),
     );
   });
@@ -671,12 +723,14 @@ describe('SupabaseUserDataService', () => {
         .mockResolvedValue({ data: { session: activeSession }, error: null });
       const synchronize = vi.fn().mockResolvedValue({
         usage: emptyUsage,
-        changed: false,
+        changed: { tracks: false, markers: false },
         remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
       });
       const worker = {
         synchronize,
         subscribeTracksChanged: vi.fn(),
+        subscribeMarkersChanged: vi.fn(),
         subscribeProgress: vi.fn(),
         dispose: vi.fn(),
       } as unknown as TrackSyncWorkerClient;
@@ -700,7 +754,7 @@ describe('SupabaseUserDataService', () => {
       fake.emit('SIGNED_IN', activeSession);
       fake.emit('TOKEN_REFRESHED', activeSession);
       expect(synchronize).toHaveBeenCalledOnce();
-      expect((synchronize.mock.calls[0]?.[2] as AbortSignal | undefined)?.aborted).toBe(
+      expect((synchronize.mock.calls[0]?.[3] as AbortSignal | undefined)?.aborted).toBe(
         false,
       );
       service.dispose();
@@ -719,17 +773,27 @@ describe('SupabaseUserDataService', () => {
     let resolveFirst: (() => void) | undefined;
     const firstRun = new Promise<TrackSyncWorkerResult>((resolve) => {
       resolveFirst = () => {
-        resolve({ usage: emptyUsage, changed: false, remoteTrackDeletions: [] });
+        resolve({
+          usage: emptyUsage,
+          changed: { tracks: false, markers: false },
+          remoteTrackDeletions: [],
+          remoteMarkerDeletions: [],
+        });
       };
     });
-    const synchronize = vi.fn().mockReturnValueOnce(firstRun).mockResolvedValue({
-      usage: emptyUsage,
-      changed: false,
-      remoteTrackDeletions: [],
-    });
+    const synchronize = vi
+      .fn()
+      .mockReturnValueOnce(firstRun)
+      .mockResolvedValue({
+        usage: emptyUsage,
+        changed: { tracks: false, markers: false },
+        remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
+      });
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -765,22 +829,33 @@ describe('SupabaseUserDataService', () => {
     let resolveFirst: (() => void) | undefined;
     const firstRun = new Promise<TrackSyncWorkerResult>((resolve) => {
       resolveFirst = () => {
-        resolve({ usage: emptyUsage, changed: false, remoteTrackDeletions: [] });
+        resolve({
+          usage: emptyUsage,
+          changed: { tracks: false, markers: false },
+          remoteTrackDeletions: [],
+          remoteMarkerDeletions: [],
+        });
       };
     });
     const synchronize = vi
       .fn()
       .mockReturnValueOnce(firstRun)
       .mockImplementationOnce(
-        (_userId: string, _accessToken: string, signal: AbortSignal) =>
+        (
+          _userId: string,
+          _accessToken: string,
+          _sessionRevision: number,
+          signal: AbortSignal,
+        ) =>
           new Promise<TrackSyncWorkerResult>((resolve) => {
             signal.addEventListener(
               'abort',
               () => {
                 resolve({
                   usage: emptyUsage,
-                  changed: false,
+                  changed: { tracks: false, markers: false },
                   remoteTrackDeletions: [],
+                  remoteMarkerDeletions: [],
                 });
               },
               { once: true },
@@ -791,6 +866,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn((listener) => {
         emitProgress = listener as (progress: UserDataSyncProgress) => void;
         return () => undefined;
@@ -806,25 +882,25 @@ describe('SupabaseUserDataService', () => {
     await vi.waitFor(() => {
       expect(synchronize).toHaveBeenCalledOnce();
     });
-    emitProgress?.({ completedTracks: 1, totalTracks: 10 });
+    emitProgress?.({ completedItems: 1, totalItems: 10 });
     expect(service.getSnapshot().syncProgress).toEqual({
-      completedTracks: 1,
-      totalTracks: 10,
+      completedItems: 1,
+      totalItems: 10,
     });
     resolveFirst?.();
     await enabling;
     expect(service.getSnapshot().syncProgress).toBeNull();
-    emitProgress?.({ completedTracks: 2, totalTracks: 10 });
+    emitProgress?.({ completedItems: 2, totalItems: 10 });
     expect(service.getSnapshot().syncProgress).toBeNull();
 
     const manual = service.synchronizeNow();
     await vi.waitFor(() => {
       expect(synchronize).toHaveBeenCalledTimes(2);
     });
-    emitProgress?.({ completedTracks: 3, totalTracks: 10 });
+    emitProgress?.({ completedItems: 3, totalItems: 10 });
     expect(service.getSnapshot().syncProgress).toEqual({
-      completedTracks: 3,
-      totalTracks: 10,
+      completedItems: 3,
+      totalItems: 10,
     });
     fake.emit('SIGNED_IN', session('replacement@example.test', 'replacement-id'));
     await manual;
@@ -833,7 +909,7 @@ describe('SupabaseUserDataService', () => {
       syncProgress: null,
       userId: 'replacement-id',
     });
-    emitProgress?.({ completedTracks: 4, totalTracks: 10 });
+    emitProgress?.({ completedItems: 4, totalItems: 10 });
     expect(service.getSnapshot().syncProgress).toBeNull();
     service.dispose();
   });

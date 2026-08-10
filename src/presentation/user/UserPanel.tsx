@@ -237,9 +237,8 @@ export function UserPanel() {
               variant="body2"
             >
               {snapshot.syncStatus === 'syncing'
-                ? snapshot.syncProgress !== null &&
-                  snapshot.syncProgress.totalTracks > 0
-                  ? `Synchronizing… ${snapshot.syncProgress.completedTracks.toString()}/${snapshot.syncProgress.totalTracks.toString()}`
+                ? snapshot.syncProgress !== null && snapshot.syncProgress.totalItems > 0
+                  ? `Synchronizing… ${snapshot.syncProgress.completedItems.toString()}/${snapshot.syncProgress.totalItems.toString()}`
                   : 'Synchronizing…'
                 : snapshot.syncStatus === 'error'
                   ? 'Synchronization needs attention'

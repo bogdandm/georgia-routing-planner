@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { installMapProviderFixtures } from './installMapProviderFixtures';
@@ -86,6 +87,39 @@ interface StoredTrackState {
   readonly pointCount: number;
   readonly summaryCount: number;
   readonly sourceBlobCount: number;
+}
+
+interface StoredCamera {
+  readonly longitude: number;
+  readonly latitude: number;
+  readonly zoom: number;
+}
+
+async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
+  return page.evaluate(
+    () =>
+      new Promise<StoredCamera | null>((resolve, reject) => {
+        const openRequest = indexedDB.open('GeorgiaRoutingPlanner');
+        openRequest.onerror = () => {
+          reject(openRequest.error ?? new Error('Could not open fixture database.'));
+        };
+        openRequest.onsuccess = () => {
+          const database = openRequest.result;
+          const transaction = database.transaction('settings', 'readonly');
+          const getRequest = transaction.objectStore('settings').get('map.camera');
+          getRequest.onerror = () => {
+            database.close();
+            reject(getRequest.error ?? new Error('Could not read camera record.'));
+          };
+          getRequest.onsuccess = () => {
+            const record = getRequest.result as
+              { value?: { camera?: StoredCamera } } | undefined;
+            database.close();
+            resolve(record?.value?.camera ?? null);
+          };
+        };
+      }),
+  );
 }
 
 async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
@@ -252,6 +286,105 @@ async function readStoredTrackSummary(
 
 test.beforeEach(async ({ page }) => {
   await installMapProviderFixtures(page);
+});
+
+test('imports and frames a global drop after expanding collapsed navigation', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('#satellite');
+  const mapWorkspace = page.getByTestId('map-workspace');
+  await expect(mapWorkspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+
+  const trackBytes = await readFile(trackFixturePath);
+  const dataTransfer = await page.evaluateHandle(
+    ({ bytes }) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File([Uint8Array.from(bytes)], 'Dropped.gpx', {
+          type: 'application/gpx+xml',
+        }),
+      );
+      return transfer;
+    },
+    { bytes: [...trackBytes] },
+  );
+  const workspaceShell = page.getByTestId('workspace-shell');
+  const dropCard = page.getByRole('region', { name: 'Drop track file' });
+  const dropTrack = async () => {
+    await workspaceShell.dispatchEvent('dragenter', { dataTransfer });
+    await expect(dropCard).toBeVisible();
+    await dropCard.dispatchEvent('dragover', { dataTransfer });
+    await dropCard.dispatchEvent('drop', { dataTransfer });
+    await expect(page.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
+  };
+
+  await expect(
+    page.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+  ).toBeVisible();
+  await expect(mapWorkspace).toBeVisible();
+  await dropTrack();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.zoom ?? null)
+    .toBeGreaterThan(10);
+  const expandedFitCamera = await readStoredCamera(page);
+  expect(expandedFitCamera).not.toBeNull();
+  if (expandedFitCamera === null) return;
+
+  page.once('dialog', (dialog) => {
+    expect(dialog.message()).toBe('Discard this unsaved track?');
+    void dialog.accept();
+  });
+  await page.getByRole('button', { name: 'Back to tracks' }).click();
+  await page.getByRole('tab', { name: 'Satellite' }).click();
+  await page.getByTestId('navigation-collapse-toggle').click();
+  await expect(
+    page.getByRole('button', { name: 'Show navigation', exact: true }),
+  ).toBeVisible();
+
+  await page.locator('.maplibregl-canvas').press('-');
+  await expect
+    .poll(async () => {
+      const camera = await readStoredCamera(page);
+      return camera === null ? 0 : Math.abs(camera.zoom - expandedFitCamera.zoom);
+    })
+    .toBeGreaterThan(0.5);
+
+  await workspaceShell.dispatchEvent('dragenter', { dataTransfer });
+  await expect(dropCard).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Show navigation', exact: true }),
+  ).toBeVisible();
+  await dropCard.dispatchEvent('dragover', { dataTransfer });
+  await dropCard.dispatchEvent('drop', { dataTransfer });
+  await expect(page.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByRole('heading', { name: 'New track' })).toBeVisible();
+  await expect(page.getByTestId('navigation-collapse-toggle')).toBeVisible();
+  await expect
+    .poll(async () => {
+      const camera = await readStoredCamera(page);
+      return camera === null
+        ? null
+        : {
+            longitude: camera.longitude.toFixed(6),
+            latitude: camera.latitude.toFixed(6),
+            zoom: camera.zoom.toFixed(6),
+          };
+    })
+    .toEqual({
+      longitude: expandedFitCamera.longitude.toFixed(6),
+      latitude: expandedFitCamera.latitude.toFixed(6),
+      zoom: expandedFitCamera.zoom.toFixed(6),
+    });
 });
 
 test('uses a map-first smartphone track disclosure without crashing', async ({

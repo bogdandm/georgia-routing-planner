@@ -1267,6 +1267,12 @@ function TrackImportZone() {
     const handleWorkspaceDrop = (event: globalThis.DragEvent) => {
       if (!hasFiles(event)) return;
       event.preventDefault();
+      if (
+        event.target instanceof Node &&
+        (compactZoneRef.current?.contains(event.target) === true ||
+          floatingZoneRef.current?.contains(event.target) === true)
+      )
+        return;
       setDragActive(false);
     };
     const handleWorkspaceDragEnd = () => {

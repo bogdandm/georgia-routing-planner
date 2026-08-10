@@ -10,6 +10,7 @@ import {
   Tooltip,
   Typography,
   useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -43,6 +44,7 @@ import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
 const smartphoneViewportQuery = '(width < 900px)';
 const auxiliaryOverlayViewportQuery = '(width < 1900px)';
+const contextualSidebarWidths = { xs: 420, xl: 464 } as const;
 
 interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
@@ -89,7 +91,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const auxiliaryOverlayViewport = useMediaQuery(auxiliaryOverlayViewportQuery);
   const workspaceShellRef = useRef<HTMLDivElement>(null);
   const navigationRef = useRef<HTMLDivElement>(null);
+  const contextualSidebarRef = useRef<HTMLDivElement>(null);
   const aboutTriggerRef = useRef<HTMLButtonElement>(null);
+  const theme = useTheme();
+  const contextualSidebarWidth = useMediaQuery(theme.breakpoints.up('xl'))
+    ? contextualSidebarWidths.xl
+    : contextualSidebarWidths.xs;
   const getNavigationPadding = useCallback((): MapFitPadding | undefined => {
     if (smartphoneViewport) return undefined;
     const workspaceShell = workspaceShellRef.current;
@@ -97,17 +104,28 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     if (workspaceShell === null || navigation === null) return undefined;
     const workspaceBounds = workspaceShell.getBoundingClientRect();
     const navigationBounds = navigation.getBoundingClientRect();
+    const contextualSidebar = contextualSidebarRef.current;
+    const sidebarWidthShortfall =
+      !navigationCollapsed && contextualSidebar !== null
+        ? Math.max(
+            contextualSidebarWidth - contextualSidebar.getBoundingClientRect().width,
+            0,
+          )
+        : 0;
     const top = Math.min(mapCameraMargin, workspaceBounds.height / 2);
     const left = Math.min(
       Math.max(
-        navigationBounds.right - workspaceBounds.left + mapCameraMargin,
+        navigationBounds.right -
+          workspaceBounds.left +
+          sidebarWidthShortfall +
+          mapCameraMargin,
         mapCameraMargin,
       ),
       Math.max(workspaceBounds.width - mapCameraMargin, 0),
     );
     if (left === 0) return undefined;
     return { top, right: mapCameraMargin, bottom: top, left };
-  }, [smartphoneViewport]);
+  }, [contextualSidebarWidth, navigationCollapsed, smartphoneViewport]);
   const [shareOpen, setShareOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
@@ -503,15 +521,16 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           />
         </Box>
         <Box
+          ref={contextualSidebarRef}
           aria-hidden={auxiliaryOverlay && auxiliaryOpen}
           sx={{
             minWidth: 0,
-            width: smartphoneViewport ? 'auto' : { xs: 420, xl: 464 },
+            width: smartphoneViewport ? 'auto' : contextualSidebarWidths,
             maxWidth: desktopNavigationCollapsed
               ? 0
               : smartphoneViewport
                 ? 'none'
-                : { xs: 420, xl: 464 },
+                : contextualSidebarWidths,
             height: '100%',
             flex: smartphoneViewport ? 1 : '0 0 auto',
             opacity: desktopNavigationCollapsed ? 0 : 1,
@@ -571,7 +590,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                     zIndex: 5,
                     display:
                       auxiliaryOpen && !desktopNavigationCollapsed ? 'flex' : 'none',
-                    width: { xs: 420, xl: 464 },
+                    width: contextualSidebarWidths,
                   }
                 : {
                     position: 'relative',

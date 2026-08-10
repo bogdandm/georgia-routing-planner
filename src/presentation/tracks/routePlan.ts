@@ -331,9 +331,9 @@ export function finishRoutePlanElevation(
 
 export function canSaveRoutePlan(draft: RoutePlanDraft): boolean {
   return (
-    (draft.status === 'route-ready' ||
-      draft.status === 'elevation-ready' ||
-      draft.status === 'elevation-failed') &&
+    draft.status !== 'selecting-start' &&
+    draft.status !== 'calculating' &&
+    draft.status !== 'saving' &&
     draft.segment !== null &&
     draft.segment.points.length >= 2 &&
     draft.metrics !== null &&

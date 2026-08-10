@@ -163,6 +163,7 @@ describe('route plan reducer', () => {
     expect(failed.legs).toBe(acceptedLegs);
     expect(failed.waypoints).toBe(acceptedWaypoints);
     expect(failed.status).toBe('failed');
+    expect(canSaveRoutePlan(failed)).toBe(true);
 
     const cleared = clearRoutePlan(third.draft);
     expect(completeRoutePlanPoint(cleared, third.request, routedSuccess())).toBe(
@@ -171,7 +172,7 @@ describe('route plan reducer', () => {
     expect(completeRoutePlanPoint(draft, third.request, routedSuccess())).toBe(draft);
   });
 
-  it('blocks save during elevation enrichment and preserves geometry on failure', () => {
+  it('keeps accepted geometry saveable during elevation work and on failure', () => {
     const withStart = beginRoutePlanPoint(
       startRoutePlan('route-plan:elevation'),
       A,
@@ -181,7 +182,7 @@ describe('route plan reducer', () => {
 
     const enriching = beginRoutePlanElevation(direct);
     expect(enriching.status).toBe('elevation-enriching');
-    expect(canSaveRoutePlan(enriching)).toBe(false);
+    expect(canSaveRoutePlan(enriching)).toBe(true);
 
     const failed = finishRoutePlanElevation(enriching, null, null);
     expect(failed.status).toBe('elevation-failed');

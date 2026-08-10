@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
 import {
   beginRoutePlanPoint,
+  beginRoutePlanElevation,
   completeRoutePlanPoint,
   setNextSegmentMode,
   startRoutePlan,
@@ -42,6 +43,19 @@ describe('RoutePlanControls', () => {
     expect(handlers.onNextSegmentModeChange).toHaveBeenCalledWith('routes');
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(handlers.onSave).toHaveBeenCalledOnce();
+  });
+
+  it('keeps save available while optional elevation is pending', () => {
+    const withStart = beginRoutePlanPoint(
+      startRoutePlan('route-plan:elevation-pending'),
+      A,
+    ).draft;
+    const ready = beginRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B).draft;
+    render(
+      <RoutePlanControls draft={beginRoutePlanElevation(ready)} {...callbacks()} />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('disables conflicting mode and save controls while routing', () => {

@@ -34,6 +34,8 @@ import { createTestServices } from '@test/helpers/createTestServices';
 import { createMemoryWorkerRpcEndpointPair } from '@test/helpers/MemoryWorkerRpcEndpoint';
 
 const contentHash = 'fbc774b019984d159f533a4309b4b786fee09a1723f243d5eb020495af9e3ba1';
+const legacyContentHash =
+  '86065d77853f4248bb3da66ebc566dc5bf59bb8e4ab6d3cd926427b6129663a1';
 let database: AppDatabase;
 let services: ReturnType<typeof createTestServices>;
 
@@ -191,7 +193,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
-      lineageHash: contentHash,
+      lineageHash: legacyContentHash,
       geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: null,
@@ -608,7 +610,7 @@ describe('TrackSyncWorkerServer', () => {
       state: 'ready' as const,
       object_path: `user/${contentHash}/upload.grpt.gz`,
       compressed_bytes: 128,
-      metadata: {},
+      metadata: { lineageHash: legacyContentHash, geometryVersion: 2 },
     };
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     new TrackSyncWorkerServer(serverEndpoint, database, () => ({
@@ -648,7 +650,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(local.id)).resolves.toEqual({
       trackId: local.id,
       contentHash,
-      lineageHash: contentHash,
+      lineageHash: legacyContentHash,
       geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: null,
@@ -790,7 +792,7 @@ describe('TrackSyncWorkerServer', () => {
       state: 'ready' as const,
       object_path: `user/${contentHash}/upload.grpt.gz`,
       compressed_bytes: 128,
-      metadata: {},
+      metadata: { lineageHash: legacyContentHash, geometryVersion: 2 },
     };
     const snapshot = vi
       .fn()
@@ -824,7 +826,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
-      lineageHash: contentHash,
+      lineageHash: legacyContentHash,
       geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: 'delete',

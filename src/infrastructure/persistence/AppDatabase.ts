@@ -90,9 +90,9 @@ export interface MarkerSyncState {
 const markerSyncStateSchema: z.ZodType<MarkerSyncState> = z
   .object({
     markerId: z.string().min(1).max(200),
-    remoteRevision: z.number().int().positive().nullable(),
+    remoteRevision: z.number().int().positive().refine(Number.isSafeInteger).nullable(),
     pendingKind: z.enum(['upsert', 'delete']).nullable(),
-    localVersion: z.number().int().positive(),
+    localVersion: z.number().int().positive().refine(Number.isSafeInteger),
   })
   .strict()
   .refine(
@@ -100,10 +100,56 @@ const markerSyncStateSchema: z.ZodType<MarkerSyncState> = z
     'Clean marker state requires a remote revision.',
   );
 
+function equalMarkerSyncStates(
+  left: MarkerSyncState | null,
+  right: MarkerSyncState | null,
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.markerId === right.markerId &&
+      left.remoteRevision === right.remoteRevision &&
+      left.pendingKind === right.pendingKind &&
+      left.localVersion === right.localVersion)
+  );
+}
+
+function nextMarkerLocalVersion(state: MarkerSyncState | null): number {
+  if (state === null) return 1;
+  if (
+    !Number.isSafeInteger(state.localVersion) ||
+    state.localVersion >= Number.MAX_SAFE_INTEGER
+  ) {
+    throw new SavedMarkerStorageError(
+      'record-invalid',
+      'The saved marker version is invalid.',
+    );
+  }
+  return state.localVersion + 1;
+}
 
 export interface MarkerSyncEntry {
   readonly marker: SavedMarker | null;
   readonly state: MarkerSyncState;
+}
+
+export interface MarkerMergeExpectation {
+  readonly markerId: string;
+  readonly state: MarkerSyncState | null;
+}
+export interface RemoteMarkerMergeBatch {
+  readonly put: readonly SavedMarker[];
+  readonly deleteMarkerIds: readonly string[];
+  readonly states: readonly MarkerSyncState[];
+  readonly deleteStateIds: readonly string[];
+  readonly expected: readonly MarkerMergeExpectation[];
+  readonly expectedUserId: string;
+  readonly signal?: AbortSignal;
+}
+
+export interface RemoteMarkerMergeResult {
+  readonly changed: boolean;
 }
 export interface LocalTrackSyncPair {
   readonly summary: LocalTrackSummary;
@@ -1071,17 +1117,24 @@ export class AppDatabase
   }
 
   public async readMarkerSyncSnapshot(): Promise<readonly MarkerSyncEntry[]> {
-    return await this.transaction('r', this.savedMarkers, this.markerSyncStates, async () => {
-      const states = await this.markerSyncStates.orderBy('markerId').toArray();
-      const snapshot: MarkerSyncEntry[] = [];
-      for (const value of states) {
-        const parsedState = markerSyncStateSchema.safeParse(value);
-        if (!parsedState.success) continue;
-        const marker = parseSavedMarker(await this.savedMarkers.get(parsedState.data.markerId));
-        snapshot.push({ marker, state: parsedState.data });
-      }
-      return snapshot;
-    });
+    return await this.transaction(
+      'r',
+      this.savedMarkers,
+      this.markerSyncStates,
+      async () => {
+        const states = await this.markerSyncStates.orderBy('markerId').toArray();
+        const snapshot: MarkerSyncEntry[] = [];
+        for (const value of states) {
+          const parsedState = markerSyncStateSchema.safeParse(value);
+          if (!parsedState.success) continue;
+          const marker = parseSavedMarker(
+            await this.savedMarkers.get(parsedState.data.markerId),
+          );
+          snapshot.push({ marker, state: parsedState.data });
+        }
+        return snapshot;
+      },
+    );
   }
 
   public async saveSavedMarker(marker: SavedMarker): Promise<void> {
@@ -1161,26 +1214,16 @@ export class AppDatabase
             'The saved marker update is invalid.',
           );
         }
-        const existingState = markerSyncStateSchema.safeParse(
+        const parsedState = markerSyncStateSchema.safeParse(
           await this.markerSyncStates.get(validMarkerId.data),
         );
-        const localVersion = existingState.success
-          ? existingState.data.localVersion + 1
-          : 1;
-        if (!Number.isSafeInteger(localVersion)) {
-          throw new SavedMarkerStorageError(
-            'record-invalid',
-            'The saved marker version is invalid.',
-          );
-        }
+        const existingState = parsedState.success ? parsedState.data : null;
         await this.savedMarkers.put(updated);
         await this.markerSyncStates.put({
           markerId: updated.id,
-          remoteRevision: existingState.success
-            ? existingState.data.remoteRevision
-            : null,
+          remoteRevision: existingState?.remoteRevision ?? null,
           pendingKind: 'upsert',
-          localVersion,
+          localVersion: nextMarkerLocalVersion(existingState),
         });
         return updated;
       },
@@ -1209,23 +1252,16 @@ export class AppDatabase
           'The saved marker record is invalid.',
         );
       }
-      const state = markerSyncStateSchema.safeParse(
-        await this.markerSyncStates.get(validMarkerId.data),
-      );
+      const storedState = await this.markerSyncStates.get(validMarkerId.data);
+      const parsedState = markerSyncStateSchema.safeParse(storedState);
+      const state = parsedState.success ? parsedState.data : null;
       await this.savedMarkers.delete(validMarkerId.data);
-      if (state.success) {
-        const localVersion = state.data.localVersion + 1;
-        if (!Number.isSafeInteger(localVersion)) {
-          throw new SavedMarkerStorageError(
-            'record-invalid',
-            'The saved marker version is invalid.',
-          );
-        }
+      if (storedState !== undefined) {
         await this.markerSyncStates.put({
           markerId: validMarkerId.data,
-          remoteRevision: state.data.remoteRevision,
+          remoteRevision: state?.remoteRevision ?? null,
           pendingKind: 'delete',
-          localVersion,
+          localVersion: nextMarkerLocalVersion(state),
         });
       }
     });
@@ -1408,10 +1444,10 @@ export class AppDatabase
   }
 
   /**
-   * Backfills legacy hashes and reduces every hash to one local synchronization entity
-   * before the worker makes a server mutation.
+   * Prepares the entire local user-data snapshot before the worker makes a server
+   * mutation, including legacy track hash deduplication and marker mutation intent.
    */
-  public async backfillAndDeduplicateTrackSync(
+  public async prepareUserDataSync(
     userId: string,
     contentHashes: readonly LocalTrackSyncHash[],
     signal?: AbortSignal,
@@ -1423,26 +1459,31 @@ export class AppDatabase
       );
     }
     signal?.throwIfAborted();
-    const hashesByTrackId = new Map(
-      contentHashes.map((entry) => [entry.trackId, entry]),
-    );
+    const hashesByTrackId = new Map<string, LocalTrackSyncHash>();
     for (const entry of contentHashes) {
       if (
+        !savedMarkerIdSchema.safeParse(entry.trackId).success ||
         !/^[0-9a-f]{64}$/.test(entry.contentHash) ||
-        !/^[0-9a-f]{64}$/.test(entry.legacyContentHash)
+        !/^[0-9a-f]{64}$/.test(entry.legacyContentHash) ||
+        hashesByTrackId.has(entry.trackId)
       ) {
         throw new LocalTrackStorageError(
           'record-invalid',
-          'The local track content hash is invalid.',
+          'The local track synchronization hashes are invalid.',
         );
       }
+      hashesByTrackId.set(entry.trackId, entry);
     }
     await this.transaction(
       'rw',
-      this.settings,
-      this.localTracks,
-      this.localTrackContents,
-      this.trackSyncStates,
+      [
+        this.settings,
+        this.localTracks,
+        this.localTrackContents,
+        this.trackSyncStates,
+        this.savedMarkers,
+        this.markerSyncStates,
+      ],
       async () => {
         const owner = await this.settings.get('sync.user-id');
         const sameAccount = owner?.value === userId;
@@ -1670,6 +1711,64 @@ export class AppDatabase
           await this.localTrackContents.put(pair.content);
         }
         for (const state of nextStates) await this.trackSyncStates.put(state);
+        const markers = (await this.savedMarkers.toArray())
+          .map(parseSavedMarker)
+          .filter((marker): marker is SavedMarker => marker !== null);
+        const markerById = new Map(markers.map((marker) => [marker.id, marker]));
+        const persistedMarkerStates = await this.markerSyncStates.toArray();
+        const statesByMarkerId = new Map<string, MarkerSyncState>();
+        if (sameAccount) {
+          for (const candidate of persistedMarkerStates) {
+            const state = markerSyncStateSchema.safeParse(candidate);
+            if (state.success) statesByMarkerId.set(state.data.markerId, state.data);
+          }
+        }
+        await this.markerSyncStates.clear();
+        if (!sameAccount) {
+          for (const marker of markers) {
+            await this.markerSyncStates.put({
+              markerId: marker.id,
+              remoteRevision: null,
+              pendingKind: 'upsert',
+              localVersion: 1,
+            });
+          }
+        } else {
+          for (const marker of markers) {
+            const state = statesByMarkerId.get(marker.id);
+            if (state === undefined) {
+              await this.markerSyncStates.put({
+                markerId: marker.id,
+                remoteRevision: null,
+                pendingKind: 'upsert',
+                localVersion: 1,
+              });
+            } else if (state.pendingKind === 'delete') {
+              await this.markerSyncStates.put({
+                ...state,
+                pendingKind: 'upsert',
+                localVersion: nextMarkerLocalVersion(state),
+              });
+            } else {
+              await this.markerSyncStates.put(state);
+            }
+          }
+          for (const state of statesByMarkerId.values()) {
+            if (markerById.has(state.markerId)) continue;
+            if (state.pendingKind === 'delete') {
+              await this.markerSyncStates.put(state);
+            } else if (
+              state.pendingKind === 'upsert' &&
+              state.remoteRevision !== null
+            ) {
+              await this.markerSyncStates.put({
+                ...state,
+                pendingKind: 'delete',
+                localVersion: nextMarkerLocalVersion(state),
+              });
+            }
+          }
+        }
         signal?.throwIfAborted();
         if (!sameAccount) {
           const updatedAt = new Date().toISOString();
@@ -1845,63 +1944,289 @@ export class AppDatabase
     );
   }
 
-  public async resolveRemoteTrackDeletions(
-    deleteTrackIds: readonly string[],
-    restoreTrackIds: readonly string[],
-  ): Promise<void> {
-    const deleted = new Set(deleteTrackIds);
-    const restored = new Set(restoreTrackIds);
-    if ([...deleted].some((trackId) => restored.has(trackId))) {
+  /** Atomically applies a validated marker merge unless local intent changed. */
+  public async applyRemoteMarkerMergeBatch(
+    batch: RemoteMarkerMergeBatch,
+  ): Promise<RemoteMarkerMergeResult> {
+    if (batch.expectedUserId.length === 0 || batch.expectedUserId.length > 200) {
       throw new LocalTrackStorageError(
         'record-invalid',
-        'A track cannot be both deleted and restored.',
+        'The synchronization account identifier is invalid.',
+      );
+    }
+    const markers = batch.put.map(validateSavedMarkerRecord);
+    const states = batch.states.map((state) => {
+      const parsed = markerSyncStateSchema.safeParse(state);
+      if (!parsed.success) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The marker synchronization state is invalid.',
+        );
+      }
+      return parsed.data;
+    });
+    const markerById = new Map(markers.map((marker) => [marker.id, marker]));
+    const stateById = new Map(states.map((state) => [state.markerId, state]));
+    const markerDeleteIds = new Set(batch.deleteMarkerIds);
+    const stateDeleteIds = new Set(batch.deleteStateIds);
+    const expectedById = new Map(
+      batch.expected.map((expectation) => [expectation.markerId, expectation]),
+    );
+    const lists = [
+      [markerById, markers.length],
+      [markerDeleteIds, batch.deleteMarkerIds.length],
+      [stateById, states.length],
+      [stateDeleteIds, batch.deleteStateIds.length],
+      [expectedById, batch.expected.length],
+    ] as const;
+    if (
+      lists.some(([ids, length]) => ids.size !== length) ||
+      ![...markerDeleteIds, ...stateDeleteIds].every(
+        (id) => savedMarkerIdSchema.safeParse(id).success,
+      ) ||
+      [...markerById].some(([id]) => markerDeleteIds.has(id)) ||
+      [...stateById].some(([id]) => stateDeleteIds.has(id))
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The marker merge contains duplicate or conflicting identifiers.',
+      );
+    }
+    const operationIds = new Set([
+      ...markerById.keys(),
+      ...markerDeleteIds,
+      ...stateById.keys(),
+      ...stateDeleteIds,
+    ]);
+    if (
+      operationIds.size !== expectedById.size ||
+      [...operationIds].some((id) => !expectedById.has(id))
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The marker merge expectations do not match its operations.',
+      );
+    }
+    for (const expectation of expectedById.values()) {
+      const parsedState =
+        expectation.state === null
+          ? null
+          : markerSyncStateSchema.safeParse(expectation.state);
+      if (
+        !savedMarkerIdSchema.safeParse(expectation.markerId).success ||
+        (parsedState !== null &&
+          (!parsedState.success || parsedState.data.markerId !== expectation.markerId))
+      ) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The marker merge expectation is invalid.',
+        );
+      }
+    }
+    batch.signal?.throwIfAborted();
+    return await this.transaction(
+      'rw',
+      this.settings,
+      this.savedMarkers,
+      this.markerSyncStates,
+      async () => {
+        const owner = await this.settings.get('sync.user-id');
+        if (owner?.value !== batch.expectedUserId) return { changed: false };
+        let changed = false;
+        for (const markerId of operationIds) {
+          const expectation = expectedById.get(markerId);
+          if (expectation === undefined) continue;
+          const current = markerSyncStateSchema.safeParse(
+            await this.markerSyncStates.get(markerId),
+          );
+          if (
+            !equalMarkerSyncStates(
+              current.success ? current.data : null,
+              expectation.state,
+            )
+          ) {
+            continue;
+          }
+          batch.signal?.throwIfAborted();
+          const marker = markerById.get(markerId);
+          if (marker !== undefined) {
+            const existing = parseSavedMarker(await this.savedMarkers.get(markerId));
+            if (
+              existing === null ||
+              JSON.stringify(existing) !== JSON.stringify(marker)
+            ) {
+              await this.savedMarkers.put(marker);
+              changed = true;
+            }
+          } else if (markerDeleteIds.has(markerId)) {
+            if ((await this.savedMarkers.get(markerId)) !== undefined) {
+              await this.savedMarkers.delete(markerId);
+              changed = true;
+            }
+          }
+          const state = stateById.get(markerId);
+          if (state !== undefined) await this.markerSyncStates.put(state);
+          else if (stateDeleteIds.has(markerId))
+            await this.markerSyncStates.delete(markerId);
+        }
+        return { changed };
+      },
+    );
+  }
+
+  public async resolveRemoteDeletions(decision: {
+    readonly expectedUserId: string;
+    readonly trackCandidateIds: readonly string[];
+    readonly markerCandidateIds: readonly string[];
+    readonly tracks: {
+      readonly deleteIds: readonly string[];
+      readonly restoreIds: readonly string[];
+    };
+    readonly markers: {
+      readonly deleteIds: readonly string[];
+      readonly restoreIds: readonly string[];
+    };
+  }): Promise<void> {
+    const validatePartition = (
+      candidates: readonly string[],
+      deleted: readonly string[],
+      restored: readonly string[],
+    ): boolean => {
+      const candidateIds = new Set(candidates);
+      const deletedIds = new Set(deleted);
+      const restoredIds = new Set(restored);
+      return (
+        candidates.every((id) => savedMarkerIdSchema.safeParse(id).success) &&
+        deleted.every((id) => savedMarkerIdSchema.safeParse(id).success) &&
+        restored.every((id) => savedMarkerIdSchema.safeParse(id).success) &&
+        candidateIds.size === candidates.length &&
+        deletedIds.size === deleted.length &&
+        restoredIds.size === restored.length &&
+        ![...deletedIds].some((id) => restoredIds.has(id)) &&
+        candidateIds.size === deletedIds.size + restoredIds.size &&
+        [...candidateIds].every((id) => deletedIds.has(id) || restoredIds.has(id)) &&
+        [...deletedIds, ...restoredIds].every((id) => candidateIds.has(id))
+      );
+    };
+    if (
+      decision.expectedUserId.length === 0 ||
+      decision.expectedUserId.length > 200 ||
+      !validatePartition(
+        decision.trackCandidateIds,
+        decision.tracks.deleteIds,
+        decision.tracks.restoreIds,
+      ) ||
+      !validatePartition(
+        decision.markerCandidateIds,
+        decision.markers.deleteIds,
+        decision.markers.restoreIds,
+      )
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The remote deletion decision is invalid.',
       );
     }
     await this.transaction(
       'rw',
-      this.settings,
-      this.localTracks,
-      this.localTrackContents,
-      this.trackSyncStates,
+      [
+        this.settings,
+        this.localTracks,
+        this.localTrackContents,
+        this.trackSyncStates,
+        this.savedMarkers,
+        this.markerSyncStates,
+      ],
       async () => {
-        const latestOpened = await this.settings.get('local-tracks.latest-opened');
-        if (
-          typeof latestOpened?.value === 'string' &&
-          deleted.has(latestOpened.value)
-        ) {
-          await this.settings.delete('local-tracks.latest-opened');
-        }
-        for (const trackId of deleted) {
-          await this.localTracks.delete(trackId);
-          await this.localTrackContents.delete(trackId);
-          await this.trackSyncStates.delete(trackId);
-        }
-        for (const trackId of restored) {
-          const existingState = parseTrackSyncState(
-            await this.trackSyncStates.get(trackId),
+        const owner = await this.settings.get('sync.user-id');
+        if (owner?.value !== decision.expectedUserId) {
+          throw new LocalTrackStorageError(
+            'record-invalid',
+            'The synchronization account changed.',
           );
+        }
+        const trackRestores = new Map<
+          string,
+          { readonly summary: LocalTrackSummary; readonly state: TrackSyncState }
+        >();
+        const markerRestores = new Map<
+          string,
+          { readonly marker: SavedMarker; readonly state: MarkerSyncState }
+        >();
+        for (const trackId of decision.tracks.restoreIds) {
           const summary = parseLocalTrackSummary(await this.localTracks.get(trackId));
           const content = parseLocalTrackContent(
             await this.localTrackContents.get(trackId),
           );
-          if (summary?.contentHash === undefined || content?.trackId !== summary.id) {
-            await this.trackSyncStates.delete(trackId);
-            continue;
+          if (summary?.contentHash === undefined || content?.trackId !== trackId) {
+            throw new LocalTrackStorageError(
+              'content-missing',
+              'The saved track content is unavailable.',
+            );
           }
-          await this.trackSyncStates.put({
-            trackId,
-            contentHash: summary.contentHash,
-            lineageHash:
-              existingState?.contentHash === summary.contentHash
-                ? existingState.lineageHash
-                : summary.contentHash,
-            geometryVersion:
-              existingState?.contentHash === summary.contentHash
-                ? existingState.geometryVersion
-                : 2,
-            remoteRevision: null,
-            pendingKind: 'upsert',
+          const existing = parseTrackSyncState(await this.trackSyncStates.get(trackId));
+          trackRestores.set(trackId, {
+            summary,
+            state: {
+              trackId,
+              contentHash: summary.contentHash,
+              lineageHash:
+                existing?.contentHash === summary.contentHash
+                  ? existing.lineageHash
+                  : summary.contentHash,
+              geometryVersion:
+                existing?.contentHash === summary.contentHash
+                  ? existing.geometryVersion
+                  : 2,
+              remoteRevision: existing?.remoteRevision ?? null,
+              pendingKind: 'upsert',
+            },
           });
+        }
+        for (const markerId of decision.markers.restoreIds) {
+          const marker = parseSavedMarker(await this.savedMarkers.get(markerId));
+          if (marker === null) {
+            throw new SavedMarkerStorageError(
+              'not-found',
+              'The saved marker was not found.',
+            );
+          }
+          const existing = markerSyncStateSchema.safeParse(
+            await this.markerSyncStates.get(markerId),
+          );
+          markerRestores.set(markerId, {
+            marker,
+            state: {
+              markerId,
+              remoteRevision: existing.success ? existing.data.remoteRevision : null,
+              pendingKind: 'upsert',
+              localVersion: nextMarkerLocalVersion(
+                existing.success ? existing.data : null,
+              ),
+            },
+          });
+        }
+        const latestOpened = await this.settings.get('local-tracks.latest-opened');
+        if (
+          typeof latestOpened?.value === 'string' &&
+          decision.tracks.deleteIds.includes(latestOpened.value)
+        ) {
+          await this.settings.delete('local-tracks.latest-opened');
+        }
+        for (const trackId of decision.tracks.deleteIds) {
+          await this.localTracks.delete(trackId);
+          await this.localTrackContents.delete(trackId);
+          await this.trackSyncStates.delete(trackId);
+        }
+        for (const markerId of decision.markers.deleteIds) {
+          await this.savedMarkers.delete(markerId);
+          await this.markerSyncStates.delete(markerId);
+        }
+        for (const { state } of trackRestores.values()) {
+          await this.trackSyncStates.put(state);
+        }
+        for (const { state } of markerRestores.values()) {
+          await this.markerSyncStates.put(state);
         }
       },
     );

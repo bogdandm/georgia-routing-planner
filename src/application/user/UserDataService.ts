@@ -4,12 +4,17 @@ export type UserDataStatus =
 export type UserDataSyncStatus =
   'idle' | 'syncing' | 'success' | 'error' | 'needs-action';
 export interface UserDataSyncProgress {
-  readonly completedTracks: number;
-  readonly totalTracks: number;
+  readonly completedItems: number;
+  readonly totalItems: number;
 }
 
 export interface RemoteTrackDeletionCandidate {
   readonly trackId: string;
+  readonly name: string;
+}
+
+export interface RemoteMarkerDeletionCandidate {
+  readonly markerId: string;
   readonly name: string;
 }
 
@@ -29,6 +34,7 @@ export interface UserDataSnapshot {
     readonly usedBytes: number;
   };
   readonly remoteTrackDeletions: readonly RemoteTrackDeletionCandidate[];
+  readonly remoteMarkerDeletions: readonly RemoteMarkerDeletionCandidate[];
 }
 
 /** Owns browser authentication state and the official persisted Supabase session. */
@@ -36,12 +42,18 @@ export interface UserDataService {
   getSnapshot(): UserDataSnapshot;
   subscribe(listener: () => void): () => void;
   setSyncEnabled(enabled: boolean): Promise<void>;
-  resolveRemoteTrackDeletions(deleteTrackIds: readonly string[]): Promise<void>;
+  resolveRemoteDeletions(decision: {
+    readonly deleteTrackIds: readonly string[];
+    readonly deleteMarkerIds: readonly string[];
+  }): Promise<void>;
   synchronizeNow(): Promise<void>;
   trackSaved(trackId: string): Promise<void>;
   trackMetadataChanged(trackId: string): Promise<void>;
   trackDeleted(trackId: string): Promise<void>;
+  markerChanged(markerId: string): Promise<void>;
+  markerDeleted(markerId: string): Promise<void>;
   subscribeTracksChanged(listener: () => void): () => void;
+  subscribeMarkersChanged(listener: () => void): () => void;
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
@@ -59,6 +71,7 @@ export const unconfiguredUserDataSnapshot: UserDataSnapshot = {
   syncStatus: 'idle',
   syncProgress: null,
   remoteTrackDeletions: [],
+  remoteMarkerDeletions: [],
   syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
 };
 
@@ -73,10 +86,13 @@ export function createUnconfiguredUserDataService(): UserDataService {
     signOut: () => Promise.resolve(),
     subscribe: () => () => undefined,
     subscribeTracksChanged: () => () => undefined,
-    resolveRemoteTrackDeletions: () => Promise.resolve(),
+    subscribeMarkersChanged: () => () => undefined,
+    resolveRemoteDeletions: () => Promise.resolve(),
     synchronizeNow: () => Promise.resolve(),
     trackDeleted: () => Promise.resolve(),
     trackMetadataChanged: () => Promise.resolve(),
     trackSaved: () => Promise.resolve(),
+    markerChanged: () => Promise.resolve(),
+    markerDeleted: () => Promise.resolve(),
   };
 }

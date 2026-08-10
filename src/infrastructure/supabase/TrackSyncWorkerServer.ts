@@ -8,11 +8,17 @@ import {
   encodeTrackSyncGeometry,
 } from '@/domain/tracks/trackSyncGeometry';
 import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
-import type { RemoteTrackDeletionCandidate } from '@/application/user/UserDataService';
+import type { SavedMarker } from '@/domain/markers/savedMarker';
+import type {
+  RemoteMarkerDeletionCandidate,
+  RemoteTrackDeletionCandidate,
+} from '@/application/user/UserDataService';
 import {
   validateLocalTrackSyncPair,
+  validateSavedMarkerRecord,
   type AppDatabase,
   type LocalTrackSyncPair,
+  type MarkerSyncState,
   type TrackSyncState,
   type TrackSyncUsage,
 } from '@/infrastructure/persistence/AppDatabase';
@@ -86,6 +92,46 @@ const remoteRecordSchema = z
 
 type RemoteRecord = z.infer<typeof remoteRecordSchema>;
 
+interface RemoteMarkerRecord {
+  readonly marker_id: string;
+  readonly revision: number;
+  readonly payload: SavedMarker;
+}
+
+const remoteMarkerRecordSchema = z
+  .object({
+    marker_id: z.string().min(1).max(200),
+    revision: z.number().int().positive().safe(),
+    payload: z.unknown(),
+  })
+  .strict();
+
+function parseRemoteMarkerRecord(value: unknown): RemoteMarkerRecord {
+  const parsed = remoteMarkerRecordSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid marker records.',
+      'invalid-remote',
+    );
+  }
+  let payload: SavedMarker;
+  try {
+    payload = validateSavedMarkerRecord(parsed.data.payload);
+  } catch {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid marker records.',
+      'invalid-remote',
+    );
+  }
+  if (payload.id !== parsed.data.marker_id) {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid marker records.',
+      'invalid-remote',
+    );
+  }
+  return { ...parsed.data, payload };
+}
+
 interface RemoteIdentity {
   readonly lineageHash: string;
   readonly geometryVersion: 1 | 2;
@@ -142,9 +188,16 @@ function readyLineages(records: readonly RemoteRecord[]): readonly RemoteLineage
 interface RemoteGateway {
   status(signal: AbortSignal): Promise<TrackSyncUsage>;
   snapshot(signal: AbortSignal): Promise<readonly RemoteRecord[]>;
+  markerSnapshot?(signal: AbortSignal): Promise<readonly RemoteMarkerRecord[]>;
   mutate(
     state: TrackSyncState,
     pair: LocalTrackSyncPair | null,
+    signal: AbortSignal,
+  ): Promise<RemoteMutation>;
+  mutateMarker?(
+    markerId: string,
+    baseRevision: number,
+    payload: SavedMarker | null,
     signal: AbortSignal,
   ): Promise<RemoteMutation>;
   download(path: string, signal: AbortSignal): Promise<Uint8Array>;
@@ -175,6 +228,15 @@ function syncStatesEqual(left: TrackSyncState, right: TrackSyncState): boolean {
     left.geometryVersion === right.geometryVersion &&
     left.remoteRevision === right.remoteRevision &&
     left.pendingKind === right.pendingKind
+  );
+}
+
+function markerStatesEqual(left: MarkerSyncState, right: MarkerSyncState): boolean {
+  return (
+    left.markerId === right.markerId &&
+    left.remoteRevision === right.remoteRevision &&
+    left.pendingKind === right.pendingKind &&
+    left.localVersion === right.localVersion
   );
 }
 
@@ -212,7 +274,22 @@ async function errorForResponse(response: Response): Promise<TrackSyncWorkerErro
   let detail = String(response.status);
   try {
     const parsed = errorResponseSchema.safeParse(await response.json());
-    if (parsed.success) detail += `/${parsed.data.error.code}`;
+    if (parsed.success) {
+      const code = parsed.data.error.code;
+      if (code === 'marker_limit') {
+        return new TrackSyncWorkerError(
+          'Cloud marker limit reached. Delete a synchronized marker and try again.',
+          'limit',
+        );
+      }
+      if (code === 'marker_revision_exhausted') {
+        return new TrackSyncWorkerError(
+          'Synchronization could not finish. Your local tracks and markers remain available.',
+          'revision-exhausted',
+        );
+      }
+      detail += `/${code}`;
+    }
   } catch {
     // The HTTP status remains actionable when an intermediary returns a non-JSON body.
   }
@@ -274,6 +351,54 @@ export class FetchRemoteGateway implements RemoteGateway {
       'The server returned too many track records.',
       'invalid-remote',
     );
+  }
+
+  public async markerSnapshot(
+    signal: AbortSignal,
+  ): Promise<readonly RemoteMarkerRecord[]> {
+    const records: RemoteMarkerRecord[] = [];
+    for (let offset = 0; offset < maximumSnapshotRecords; offset += snapshotPageSize) {
+      const response = await this.request(
+        '/rest/v1/marker_records?select=marker_id,revision,payload&order=marker_id.asc',
+        {
+          headers: {
+            Range: [String(offset), String(offset + snapshotPageSize - 1)].join('-'),
+            'Range-Unit': 'items',
+          },
+          signal,
+        },
+      );
+      if (!response.ok) throw await errorForResponse(response);
+      const value: unknown = await response.json();
+      if (!Array.isArray(value)) {
+        throw new TrackSyncWorkerError(
+          'The server returned invalid marker records.',
+          'invalid-remote',
+        );
+      }
+      const page = value.map(parseRemoteMarkerRecord);
+      records.push(...page);
+      if (page.length < snapshotPageSize) return records;
+    }
+    const probe = await this.request(
+      '/rest/v1/marker_records?select=marker_id,revision,payload&order=marker_id.asc',
+      { headers: { Range: '10000-10000', 'Range-Unit': 'items' }, signal },
+    );
+    if (!probe.ok) throw await errorForResponse(probe);
+    const value: unknown = await probe.json();
+    if (!Array.isArray(value)) {
+      throw new TrackSyncWorkerError(
+        'The server returned invalid marker records.',
+        'invalid-remote',
+      );
+    }
+    if (value.length > 0) {
+      throw new TrackSyncWorkerError(
+        'Cloud marker limit reached. Delete a synchronized marker and try again.',
+        'limit',
+      );
+    }
+    return records;
   }
 
   public async mutate(
@@ -417,6 +542,61 @@ export class FetchRemoteGateway implements RemoteGateway {
     }
     if (record.data.state === 'reserved') return { outcome: 'reserved' };
     return { outcome: 'conflict', revision: record.data.revision };
+  }
+
+  public async mutateMarker(
+    markerId: string,
+    baseRevision: number,
+    payload: SavedMarker | null,
+    signal: AbortSignal,
+  ): Promise<RemoteMutation> {
+    const response = await this.request('/functions/v1/track-sync', {
+      method: 'POST',
+      body: JSON.stringify(
+        payload === null
+          ? { action: 'marker-delete', markerId, baseRevision }
+          : { action: 'marker-upsert', markerId, baseRevision, marker: payload },
+      ),
+      signal,
+    });
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (typeof value !== 'object' || value === null || !('outcome' in value)) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid marker mutation.',
+        'invalid-remote',
+      );
+    }
+    const responseValue = value as Record<string, unknown>;
+    if (responseValue.outcome === 'missing') return { outcome: 'missing' };
+    if (responseValue.outcome === 'applied' && payload === null) {
+      return { outcome: 'applied', revision: 0 };
+    }
+    let record: RemoteMarkerRecord;
+    try {
+      record = parseRemoteMarkerRecord(responseValue.record);
+    } catch {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid marker mutation.',
+        'invalid-remote',
+      );
+    }
+    if (record.marker_id !== markerId) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid marker mutation.',
+        'invalid-remote',
+      );
+    }
+    if (responseValue.outcome === 'conflict') {
+      return { outcome: 'conflict', revision: record.revision };
+    }
+    if (responseValue.outcome === 'applied' || responseValue.outcome === 'existing') {
+      return { outcome: responseValue.outcome, revision: record.revision };
+    }
+    throw new TrackSyncWorkerError(
+      'The server returned an invalid marker mutation outcome.',
+      'invalid-remote',
+    );
   }
 
   public async download(path: string, signal: AbortSignal): Promise<Uint8Array> {
@@ -581,16 +761,21 @@ export class TrackSyncWorkerServer {
           .object({
             accessToken: z.string().min(1).max(8_192),
             userId: z.string().min(1).max(200),
+            sessionRevision: z.number().int().nonnegative().safe(),
           })
           .strict()
           .parse(payload) as TrackSyncWorkerRequest;
         const result = await this.synchronize(
           request.userId,
           request.accessToken,
+          request.sessionRevision,
           signal,
         );
-        if (result.changed) {
-          this.#rpc.publishEvent(trackSyncWorkerEventNames.tracksChanged, null);
+        if (result.changed.markers) {
+          this.#rpc.publishEvent(trackSyncWorkerEventNames.markersChanged, {
+            userId: request.userId,
+            sessionRevision: request.sessionRevision,
+          });
         }
         return result;
       },
@@ -600,10 +785,11 @@ export class TrackSyncWorkerServer {
   public async synchronize(
     userId: string,
     accessToken: string,
+    sessionRevision: number,
     signal: AbortSignal,
   ): Promise<TrackSyncWorkerResult> {
     const gateway = this.#gatewayFactory(accessToken);
-    const local = await this.backfillAndDeduplicate(userId, signal);
+    const local = await this.prepareUserDataSync(userId, signal);
     signal.throwIfAborted();
     let usage = await gateway.status(signal);
     const firstSnapshot = await gateway.snapshot(signal);
@@ -626,8 +812,8 @@ export class TrackSyncWorkerServer {
     const remoteDeletionCandidates = new Map<string, RemoteTrackDeletionCandidate>();
     const publishProgress = () => {
       this.#rpc.publishEvent(trackSyncWorkerEventNames.progress, {
-        completedTracks,
-        totalTracks,
+        completedItems: completedTracks,
+        totalItems: totalTracks,
       });
     };
     if (totalTracks > 0) publishProgress();
@@ -805,6 +991,13 @@ export class TrackSyncWorkerServer {
       signal,
       usage,
     });
+    const tracksChanged = put.length > 0 || deleted.size > 0 || states.length > 0;
+    if (tracksChanged) {
+      this.#rpc.publishEvent(trackSyncWorkerEventNames.tracksChanged, {
+        userId,
+        sessionRevision,
+      });
+    }
     const supersededCount = lineages.reduce(
       (count, lineage) => count + Math.max(0, lineage.members.length - 1),
       0,
@@ -821,11 +1014,184 @@ export class TrackSyncWorkerServer {
         usage,
       });
     }
+    const markerOutcome = await this.synchronizeMarkers(userId, gateway, signal);
     return {
       usage,
-      changed: put.length > 0 || deleted.size > 0 || states.length > 0,
+      changed: { tracks: tracksChanged, markers: markerOutcome.changed },
       remoteTrackDeletions: [...remoteDeletionCandidates.values()],
+      remoteMarkerDeletions: markerOutcome.remoteDeletions,
     };
+  }
+
+  private async synchronizeMarkers(
+    userId: string,
+    gateway: RemoteGateway,
+    signal: AbortSignal,
+  ): Promise<{
+    readonly changed: boolean;
+    readonly remoteDeletions: readonly RemoteMarkerDeletionCandidate[];
+  }> {
+    if (gateway.markerSnapshot === undefined || gateway.mutateMarker === undefined) {
+      return { changed: false, remoteDeletions: [] };
+    }
+    const initial = await this.database.readMarkerSyncSnapshot();
+    const firstRemote = new Map(
+      (await gateway.markerSnapshot(signal)).map((record) => [
+        record.marker_id,
+        record,
+      ]),
+    );
+    const acknowledgements = new Map<string, MarkerSyncState | null>();
+    const remoteDeletions = new Map<string, RemoteMarkerDeletionCandidate>();
+    for (const entry of [...initial].sort(
+      (left, right) =>
+        Number(right.state.pendingKind === 'delete') -
+        Number(left.state.pendingKind === 'delete'),
+    )) {
+      if (entry.state.pendingKind === null) continue;
+      const remote = firstRemote.get(entry.state.markerId);
+      if (entry.state.pendingKind === 'upsert' && entry.marker === null) continue;
+      let baseRevision = entry.state.remoteRevision ?? remote?.revision ?? 0;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const mutation = await gateway.mutateMarker(
+          entry.state.markerId,
+          baseRevision,
+          entry.state.pendingKind === 'delete' ? null : entry.marker,
+          signal,
+        );
+        if (mutation.outcome === 'conflict') {
+          if (attempt === 1) {
+            throw new TrackSyncWorkerError(
+              'Synchronization could not finish. Your local tracks and markers remain available.',
+              'concurrent-change',
+            );
+          }
+          baseRevision = mutation.revision;
+          continue;
+        }
+        if (mutation.outcome === 'missing') {
+          if (entry.state.pendingKind === 'upsert' && entry.marker !== null) {
+            remoteDeletions.set(entry.marker.id, {
+              markerId: entry.marker.id,
+              name: entry.marker.name,
+            });
+          } else {
+            acknowledgements.set(entry.state.markerId, null);
+          }
+          break;
+        }
+        if (mutation.outcome === 'reserved') break;
+        if (entry.state.pendingKind === 'delete') {
+          acknowledgements.set(entry.state.markerId, null);
+        } else {
+          acknowledgements.set(entry.state.markerId, {
+            ...entry.state,
+            remoteRevision: mutation.revision,
+            pendingKind: null,
+          });
+        }
+        break;
+      }
+    }
+    const secondRemote = new Map(
+      (await gateway.markerSnapshot(signal)).map((record) => [
+        record.marker_id,
+        record,
+      ]),
+    );
+    const current = new Map(
+      (await this.database.readMarkerSyncSnapshot()).map((entry) => [
+        entry.state.markerId,
+        entry,
+      ]),
+    );
+    const initialById = new Map(initial.map((entry) => [entry.state.markerId, entry]));
+    const putById = new Map<string, SavedMarker>();
+    const stateById = new Map<string, MarkerSyncState>();
+    const deleteStateIds = new Set<string>();
+    const expectedById = new Map<string, MarkerSyncState | null>();
+    for (const [markerId, acknowledged] of acknowledgements) {
+      const before = initialById.get(markerId);
+      const now = current.get(markerId);
+      if (before === undefined || now === undefined) continue;
+      const markerUnchanged =
+        JSON.stringify(before.marker) === JSON.stringify(now.marker);
+      if (!markerUnchanged || !markerStatesEqual(before.state, now.state)) {
+        throw new TrackSyncWorkerError(
+          'Synchronization could not finish. Your local tracks and markers remain available.',
+          'concurrent-change',
+        );
+      }
+      expectedById.set(markerId, now.state);
+      if (acknowledged === null) deleteStateIds.add(markerId);
+      else stateById.set(markerId, acknowledged);
+    }
+    for (const [markerId, remote] of secondRemote) {
+      const entry = current.get(markerId);
+      if (entry === undefined) {
+        putById.set(markerId, remote.payload);
+        stateById.set(markerId, {
+          markerId,
+          remoteRevision: remote.revision,
+          pendingKind: null,
+          localVersion: 1,
+        });
+        expectedById.set(markerId, null);
+        continue;
+      }
+      if (entry.state.pendingKind !== null) continue;
+      if (entry.state.remoteRevision === null) continue;
+      if (remote.revision < entry.state.remoteRevision) {
+        throw new TrackSyncWorkerError(
+          'The server returned an invalid marker revision.',
+          'invalid-remote',
+        );
+      }
+      const changedPayload =
+        JSON.stringify(remote.payload) !== JSON.stringify(entry.marker);
+      if (
+        remote.revision > entry.state.remoteRevision ||
+        (remote.revision === entry.state.remoteRevision && changedPayload)
+      ) {
+        if (entry.state.localVersion >= Number.MAX_SAFE_INTEGER) {
+          throw new TrackSyncWorkerError(
+            'Synchronization could not finish. Your local tracks and markers remain available.',
+            'revision-exhausted',
+          );
+        }
+        putById.set(markerId, remote.payload);
+        stateById.set(markerId, {
+          markerId,
+          remoteRevision: remote.revision,
+          pendingKind: null,
+          localVersion: entry.state.localVersion + 1,
+        });
+        expectedById.set(markerId, entry.state);
+      }
+    }
+    for (const entry of current.values()) {
+      if (
+        entry.marker !== null &&
+        entry.state.pendingKind === null &&
+        entry.state.remoteRevision !== null &&
+        !secondRemote.has(entry.state.markerId)
+      ) {
+        remoteDeletions.set(entry.marker.id, {
+          markerId: entry.marker.id,
+          name: entry.marker.name,
+        });
+      }
+    }
+    const result = await this.database.applyRemoteMarkerMergeBatch({
+      put: [...putById.values()],
+      deleteMarkerIds: [],
+      states: [...stateById.values()],
+      deleteStateIds: [...deleteStateIds],
+      expected: [...expectedById].map(([markerId, state]) => ({ markerId, state })),
+      expectedUserId: userId,
+      signal,
+    });
+    return { changed: result.changed, remoteDeletions: [...remoteDeletions.values()] };
   }
 
   private async cleanupSupersededLineages(
@@ -914,7 +1280,7 @@ export class TrackSyncWorkerServer {
     return entries;
   }
 
-  private async backfillAndDeduplicate(
+  private async prepareUserDataSync(
     userId: string,
     signal: AbortSignal,
   ): Promise<
@@ -941,7 +1307,7 @@ export class TrackSyncWorkerServer {
       });
       signal.throwIfAborted();
     }
-    await this.database.backfillAndDeduplicateTrackSync(userId, contentHashes, signal);
+    await this.database.prepareUserDataSync(userId, contentHashes, signal);
     return this.readLocal();
   }
 

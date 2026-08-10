@@ -533,4 +533,53 @@ describe('AppDatabase', () => {
     await database.saveSavedMarker(saved);
     await expect(database.listSavedMarkers()).resolves.toEqual([saved]);
   });
+
+  it('tracks marker local versions and retains unacknowledged delete tombstones', async () => {
+    const saved = marker();
+    await database.saveSavedMarker(saved);
+    await expect(database.readMarkerSyncSnapshot()).resolves.toEqual([
+      {
+        marker: saved,
+        state: {
+          markerId: saved.id,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+          localVersion: 1,
+        },
+      },
+    ]);
+
+    await database.updateSavedMarker(saved.id, {
+      name: 'Updated view',
+      normalizedName: 'updated view',
+      iconKey: 'place',
+      colorKey: 'blue',
+      updatedAt: '2026-08-08T11:00:00.000Z',
+    });
+    await database.deleteSavedMarker(saved.id);
+
+    await expect(database.readMarkerSyncSnapshot()).resolves.toEqual([
+      {
+        marker: null,
+        state: {
+          markerId: saved.id,
+          remoteRevision: null,
+          pendingKind: 'delete',
+          localVersion: 3,
+        },
+      },
+    ]);
+  });
+
+  it('rejects remote deletion decisions with non-candidate identifiers', async () => {
+    await expect(
+      database.resolveRemoteDeletions({
+        expectedUserId: 'user-a',
+        trackCandidateIds: [],
+        markerCandidateIds: ['marker:1'],
+        tracks: { deleteIds: [], restoreIds: [] },
+        markers: { deleteIds: ['marker:1', 'marker:outside'], restoreIds: [] },
+      }),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+  });
 });

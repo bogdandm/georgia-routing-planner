@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -18,6 +19,7 @@ import {
 } from 'react';
 
 import type {
+  RemoteMarkerDeletionCandidate,
   RemoteTrackDeletionCandidate,
   UserDataService,
 } from '@/application/user/UserDataService';
@@ -38,13 +40,15 @@ function actionLabel(selectedCount: number, candidateCount: number): string {
   return 'Delete selected, upload the rest again';
 }
 
-function RemoteTrackDeletionForm({
-  candidates,
+function RemoteDeletionForm({
+  tracks,
+  markers,
   busy,
   errorMessage,
   userData,
 }: {
-  readonly candidates: readonly RemoteTrackDeletionCandidate[];
+  readonly tracks: readonly RemoteTrackDeletionCandidate[];
+  readonly markers: readonly RemoteMarkerDeletionCandidate[];
   readonly busy: boolean;
   readonly errorMessage: string | null;
   readonly userData: UserDataService;
@@ -52,13 +56,30 @@ function RemoteTrackDeletionForm({
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const label = actionLabel(selectedTrackIds.size, candidates.length);
-
+  const [selectedMarkerIds, setSelectedMarkerIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const selectedCount = selectedTrackIds.size + selectedMarkerIds.size;
+  const candidateCount = tracks.length + markers.length;
   const handleSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
-    void userData.resolveRemoteTrackDeletions([...selectedTrackIds]);
+    void userData.resolveRemoteDeletions({
+      deleteTrackIds: [...selectedTrackIds],
+      deleteMarkerIds: [...selectedMarkerIds],
+    });
   };
-
+  const toggle = (
+    setSelected: React.Dispatch<React.SetStateAction<Set<string>>>,
+    id: string,
+    checked: boolean,
+  ) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
   return (
     <form onSubmit={handleSubmit}>
       <DialogContent>
@@ -67,32 +88,62 @@ function RemoteTrackDeletionForm({
             These items were deleted from your account. Select the items to delete from
             this browser. Unselected items will be uploaded again.
           </Typography>
-          <Stack spacing={0.5}>
-            {candidates.map((candidate) => (
-              <FormControlLabel
-                key={candidate.trackId}
-                sx={{ m: 0 }}
-                slotProps={{ typography: { variant: 'body2' } }}
-                control={
-                  <Checkbox
-                    checked={selectedTrackIds.has(candidate.trackId)}
-                    disabled={busy}
-                    onChange={(_, checked) => {
-                      setSelectedTrackIds((current) => {
-                        const next = new Set(current);
-                        if (checked) next.add(candidate.trackId);
-                        else next.delete(candidate.trackId);
-                        return next;
-                      });
-                    }}
-                    size="small"
-                    sx={{ p: 0, mr: 1 }}
+          {tracks.length === 0 ? null : (
+            <Box component="section" aria-label="Tracks">
+              <Typography component="h3" variant="subtitle2">
+                Tracks
+              </Typography>
+              <Stack spacing={0.5}>
+                {tracks.map((candidate) => (
+                  <FormControlLabel
+                    key={candidate.trackId}
+                    sx={{ m: 0 }}
+                    slotProps={{ typography: { variant: 'body2' } }}
+                    control={
+                      <Checkbox
+                        checked={selectedTrackIds.has(candidate.trackId)}
+                        disabled={busy}
+                        onChange={(_, checked) =>
+                          toggle(setSelectedTrackIds, candidate.trackId, checked)
+                        }
+                        size="small"
+                        sx={{ p: 0, mr: 1 }}
+                      />
+                    }
+                    label={candidate.name}
                   />
-                }
-                label={candidate.name}
-              />
-            ))}
-          </Stack>
+                ))}
+              </Stack>
+            </Box>
+          )}
+          {markers.length === 0 ? null : (
+            <Box component="section" aria-label="Markers">
+              <Typography component="h3" variant="subtitle2">
+                Markers
+              </Typography>
+              <Stack spacing={0.5}>
+                {markers.map((candidate) => (
+                  <FormControlLabel
+                    key={candidate.markerId}
+                    sx={{ m: 0 }}
+                    slotProps={{ typography: { variant: 'body2' } }}
+                    control={
+                      <Checkbox
+                        checked={selectedMarkerIds.has(candidate.markerId)}
+                        disabled={busy}
+                        onChange={(_, checked) =>
+                          toggle(setSelectedMarkerIds, candidate.markerId, checked)
+                        }
+                        size="small"
+                        sx={{ p: 0, mr: 1 }}
+                      />
+                    }
+                    label={candidate.name}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          )}
           {errorMessage === null ? null : (
             <Alert severity="error">{errorMessage}</Alert>
           )}
@@ -100,7 +151,7 @@ function RemoteTrackDeletionForm({
       </DialogContent>
       <DialogActions>
         <Button disabled={busy} type="submit" variant="contained">
-          {label}
+          {actionLabel(selectedCount, candidateCount)}
         </Button>
       </DialogActions>
     </form>
@@ -111,27 +162,30 @@ function RemoteTrackDeletionForm({
 export function RemoteDeletionDialog() {
   const { userData } = useRuntimeServices();
   const snapshot = useUserDataSnapshot(userData);
-  const candidates = snapshot.remoteTrackDeletions;
-  const candidateKey = candidates.map((candidate) => candidate.trackId).join('|');
-
+  const tracks = snapshot.remoteTrackDeletions;
+  const markers = snapshot.remoteMarkerDeletions;
+  const candidateKey = [
+    ...tracks.map((candidate) => `track:${candidate.trackId}`),
+    ...markers.map((candidate) => `marker:${candidate.markerId}`),
+  ].join('|');
+  const open = tracks.length > 0 || markers.length > 0;
   return (
     <Dialog
       onClose={() => undefined}
-      open={candidates.length > 0}
+      open={open}
       aria-labelledby="remote-deletion-title"
     >
-      <DialogTitle id="remote-deletion-title">
-        Items deleted from cloud
-      </DialogTitle>
-      {candidates.length === 0 ? null : (
-        <RemoteTrackDeletionForm
+      <DialogTitle id="remote-deletion-title">Items deleted from cloud</DialogTitle>
+      {open ? (
+        <RemoteDeletionForm
           key={candidateKey}
           busy={snapshot.busy}
-          candidates={candidates}
+          tracks={tracks}
+          markers={markers}
           errorMessage={snapshot.errorMessage}
           userData={userData}
         />
-      )}
+      ) : null}
     </Dialog>
   );
 }

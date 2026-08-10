@@ -76,6 +76,8 @@ describe('FetchRemoteGateway', () => {
         {
           trackId: pair.summary.id,
           contentHash,
+          lineageHash: contentHash,
+          geometryVersion: 2,
           remoteRevision: 3,
           pendingKind: 'metadata',
         },
@@ -136,6 +138,8 @@ describe('FetchRemoteGateway', () => {
       {
         trackId: pair.summary.id,
         contentHash,
+        lineageHash: contentHash,
+        geometryVersion: 2,
         remoteRevision: null,
         pendingKind: 'upsert',
       },
@@ -150,6 +154,10 @@ describe('FetchRemoteGateway', () => {
     if (typeof metadataValue !== 'string') return;
     const metadata = JSON.parse(metadataValue) as Record<string, unknown>;
     expect(metadata).not.toHaveProperty('calculatedMetrics');
+    expect(metadata).toMatchObject({
+      lineageHash: contentHash,
+      geometryVersion: 2,
+    });
     const geometry = form.get('geometry');
     expect(geometry).toBeInstanceOf(Blob);
     const decompressed = await new Response(
@@ -176,6 +184,8 @@ describe('FetchRemoteGateway', () => {
         {
           trackId: pair.summary.id,
           contentHash,
+          lineageHash: contentHash,
+          geometryVersion: 2,
           remoteRevision: 4,
           pendingKind: 'delete',
         },
@@ -214,6 +224,67 @@ describe('FetchRemoteGateway', () => {
     );
 
     await expect(gateway.snapshot(signal)).resolves.toHaveLength(2);
+  });
+
+  it('rejects incomplete or malformed lineage metadata in snapshots', async () => {
+    for (const metadata of [
+      { lineageHash: contentHash },
+      { lineageHash: contentHash, geometryVersion: 3 },
+      { lineageHash: 'A'.repeat(64), geometryVersion: 2 },
+    ]) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          Response.json([
+            {
+              content_hash: contentHash,
+              revision: 1,
+              state: 'ready',
+              object_path: `user/${contentHash}/upload.grpt.gz`,
+              compressed_bytes: 128,
+              metadata,
+            },
+          ]),
+        ),
+      );
+      const gateway = new FetchRemoteGateway(
+        'https://example.test',
+        'publishable-key',
+        'access-token',
+      );
+
+      await expect(gateway.snapshot(signal)).rejects.toMatchObject({
+        code: 'invalid-remote',
+      });
+    }
+  });
+
+  it('returns the authoritative revision for a remote-only delete conflict', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        outcome: 'conflict',
+        record: { contentHash, revision: 7, state: 'ready' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+
+    await expect(gateway.deleteRemoteRecord(contentHash, 4, signal)).resolves.toEqual({
+      outcome: 'conflict',
+      revision: 7,
+    });
+    const body = fetchMock.mock.calls[0]?.[1]?.body;
+    expect(typeof body).toBe('string');
+    if (typeof body !== 'string') return;
+    expect(JSON.parse(body)).toEqual({
+      action: 'delete',
+      contentHash,
+      baseRevision: 4,
+    });
   });
   it('retrieves every page of a full server snapshot', async () => {
     const record = (index: number) => {

@@ -267,14 +267,35 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(sourceSummary.id)).resolves.toEqual({
       trackId: sourceSummary.id,
       contentHash: sourceSummary.contentHash,
+      lineageHash: sourceSummary.contentHash,
+      geometryVersion: 1,
       remoteRevision: 7,
       pendingKind: null,
     });
   });
 
   it('applies the Plan 04 remote merge batch atomically', async () => {
-    const record = summary('local:remote', 'Remote');
-    const geometry = content('local:remote');
+    const record = {
+      ...summary('local:remote', 'Remote'),
+      metrics: {
+        ...summary('local:remote', 'Remote').metrics,
+        ascentMeters: 20,
+        descentMeters: 154.75,
+        minimumElevationMeters: -14.5,
+        maximumElevationMeters: 120.25,
+        elevationSource: 'gpx' as const,
+        elevationAlgorithmVersion: 1 as const,
+      },
+    };
+    const geometry = {
+      ...content('local:remote'),
+      trackPoints: [
+        [
+          { coordinate: [44, 42] as const, elevationMeters: 120.25 },
+          { coordinate: [44.01, 42.01] as const, elevationMeters: -14.5 },
+        ],
+      ],
+    };
     await database.applyRemoteTrackMergeBatch({
       put: [{ summary: record, content: geometry }],
       deleteTrackIds: [],
@@ -282,6 +303,8 @@ describe('local track persistence', () => {
         {
           trackId: record.id,
           contentHash: record.contentHash ?? '',
+          lineageHash: record.contentHash ?? '',
+          geometryVersion: 2,
           remoteRevision: 3,
           pendingKind: null,
         },
@@ -293,6 +316,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(record.id)).resolves.toEqual({
       trackId: record.id,
       contentHash: record.contentHash,
+      lineageHash: record.contentHash,
+      geometryVersion: 2,
       remoteRevision: 3,
       pendingKind: null,
     });
@@ -310,6 +335,8 @@ describe('local track persistence', () => {
           {
             trackId: record.id,
             contentHash: record.contentHash ?? '',
+            lineageHash: record.contentHash ?? '',
+            geometryVersion: 2,
             remoteRevision: 1,
             pendingKind: null,
           },
@@ -337,6 +364,8 @@ describe('local track persistence', () => {
         {
           trackId: track.id,
           contentHash: 'a'.repeat(64),
+          lineageHash: 'a'.repeat(64),
+          geometryVersion: 2,
           remoteRevision: 1,
           pendingKind: null,
         },
@@ -348,6 +377,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: 'delete',
     });
@@ -369,6 +400,8 @@ describe('local track persistence', () => {
         {
           trackId: track.id,
           contentHash: track.contentHash ?? '',
+          lineageHash: track.contentHash ?? '',
+          geometryVersion: 2,
           remoteRevision: 3,
           pendingKind: null,
         },
@@ -377,6 +410,8 @@ describe('local track persistence', () => {
         {
           trackId: track.id,
           contentHash: track.contentHash ?? '',
+          lineageHash: track.contentHash ?? '',
+          geometryVersion: 2,
           remoteRevision: 2,
           pendingKind: null,
         },
@@ -399,6 +434,8 @@ describe('local track persistence', () => {
         {
           trackId: resaved.id,
           contentHash: resaved.contentHash ?? '',
+          lineageHash: resaved.contentHash ?? '',
+          geometryVersion: 2,
           remoteRevision: 3,
           pendingKind: null,
         },
@@ -427,12 +464,16 @@ describe('local track persistence', () => {
     await database.saveTrackSyncState({
       trackId: older.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 3,
       pendingKind: 'metadata',
     });
     await database.saveTrackSyncState({
       trackId: newer.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 5,
       pendingKind: 'upsert',
     });
@@ -443,7 +484,18 @@ describe('local track persistence', () => {
       value: 'user-id',
       updatedAt: '2026-07-22T12:00:00.000Z',
     });
-    await database.backfillAndDeduplicateTrackSync('user-id', []);
+    await database.backfillAndDeduplicateTrackSync('user-id', [
+      {
+        trackId: older.id,
+        contentHash: 'a'.repeat(64),
+        legacyContentHash: 'a'.repeat(64),
+      },
+      {
+        trackId: newer.id,
+        contentHash: 'a'.repeat(64),
+        legacyContentHash: 'a'.repeat(64),
+      },
+    ]);
 
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({
@@ -457,6 +509,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(newer.id)).resolves.toEqual({
       trackId: newer.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 5,
       pendingKind: 'upsert',
     });
@@ -474,6 +528,8 @@ describe('local track persistence', () => {
     await database.saveTrackSyncState({
       trackId: deleted.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 7,
       pendingKind: null,
     });
@@ -484,12 +540,20 @@ describe('local track persistence', () => {
       value: 'user-id',
       updatedAt: '2026-07-22T12:00:00.000Z',
     });
-    await database.backfillAndDeduplicateTrackSync('user-id', []);
+    await database.backfillAndDeduplicateTrackSync('user-id', [
+      {
+        trackId: duplicate.id,
+        contentHash: 'a'.repeat(64),
+        legacyContentHash: 'a'.repeat(64),
+      },
+    ]);
 
     await expect(database.listLocalTracks()).resolves.toEqual([]);
     await expect(database.loadTrackSyncState(deleted.id)).resolves.toEqual({
       trackId: deleted.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 7,
       pendingKind: 'delete',
     });
@@ -504,7 +568,13 @@ describe('local track persistence', () => {
     await database.deleteLocalTrack(deleted.id);
     await database.trackSyncStates.delete(survivor.id);
 
-    await database.backfillAndDeduplicateTrackSync('user-id', []);
+    await database.backfillAndDeduplicateTrackSync('user-id', [
+      {
+        trackId: survivor.id,
+        contentHash: 'a'.repeat(64),
+        legacyContentHash: 'a'.repeat(64),
+      },
+    ]);
 
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({ id: survivor.id }),
@@ -512,6 +582,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(survivor.id)).resolves.toEqual({
       trackId: survivor.id,
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'upsert',
     });
@@ -524,6 +596,8 @@ describe('local track persistence', () => {
     await database.saveTrackSyncState({
       trackId: retained.id,
       contentHash: retained.contentHash ?? '',
+      lineageHash: retained.contentHash ?? '',
+      geometryVersion: 2,
       remoteRevision: 8,
       pendingKind: null,
     });
@@ -531,6 +605,8 @@ describe('local track persistence', () => {
     await database.saveTrackSyncState({
       trackId: tombstone.id,
       contentHash: tombstone.contentHash ?? '',
+      lineageHash: tombstone.contentHash ?? '',
+      geometryVersion: 2,
       remoteRevision: 4,
       pendingKind: null,
     });
@@ -546,7 +622,13 @@ describe('local track persistence', () => {
       limitBytes: 8_388_608,
     });
 
-    await database.backfillAndDeduplicateTrackSync('current-user', []);
+    await database.backfillAndDeduplicateTrackSync('current-user', [
+      {
+        trackId: retained.id,
+        contentHash: retained.contentHash ?? '',
+        legacyContentHash: retained.contentHash ?? '',
+      },
+    ]);
 
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({ id: retained.id }),
@@ -554,6 +636,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(retained.id)).resolves.toEqual({
       trackId: retained.id,
       contentHash: retained.contentHash,
+      lineageHash: retained.contentHash,
+      geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'upsert',
     });
@@ -594,6 +678,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(restored.id)).resolves.toEqual({
       trackId: restored.id,
       contentHash: restored.contentHash,
+      lineageHash: restored.contentHash,
+      geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'upsert',
     });
@@ -627,6 +713,8 @@ describe('local track persistence', () => {
     await database.saveTrackSyncState({
       trackId: 'local:1',
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 4,
       pendingKind: null,
     });
@@ -646,6 +734,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState('local:unsent')).resolves.toEqual({
       trackId: 'local:unsent',
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'delete',
     });
@@ -654,6 +744,8 @@ describe('local track persistence', () => {
     await database.saveTrackSyncState({
       trackId: 'local:sent',
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 8,
       pendingKind: null,
     });
@@ -665,6 +757,8 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState('local:sent')).resolves.toEqual({
       trackId: 'local:sent',
       contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
       remoteRevision: 8,
       pendingKind: 'delete',
     });

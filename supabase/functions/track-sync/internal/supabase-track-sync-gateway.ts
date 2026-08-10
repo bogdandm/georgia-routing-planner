@@ -15,6 +15,19 @@ import {
   type UploadTrackCommand,
   UUID_PATTERN,
 } from './contracts.ts';
+interface MaybeSingleQuery {
+  eq(column: string, value: unknown): MaybeSingleQuery;
+  maybeSingle(): Promise<{
+    readonly data: unknown;
+    readonly error: { readonly message: string } | null;
+  }>;
+}
+
+interface TrackRecordReader {
+  from(table: string): {
+    select(columns: string): MaybeSingleQuery;
+  };
+}
 
 export class SupabaseTrackSyncGateway {
   constructor(context: SupabaseContext, userId: string) {
@@ -109,6 +122,7 @@ export class SupabaseTrackSyncGateway {
   }
 
   async applyMetadata(command: MetadataTrackCommand): Promise<RpcResponse> {
+    await this.validateMetadataIdentity(command);
     return await this.callRpc('apply_track_metadata', {
       p_user_id: this.userId,
       p_content_hash: command.contentHash,
@@ -127,6 +141,45 @@ export class SupabaseTrackSyncGateway {
 
   private readonly context: SupabaseContext;
   private readonly userId: string;
+
+  private async validateMetadataIdentity(command: MetadataTrackCommand): Promise<void> {
+    const admin = this.context.supabaseAdmin as unknown as TrackRecordReader;
+    const { data, error } = await admin
+      .from('track_records')
+      .select('metadata')
+      .eq('user_id', this.userId)
+      .eq('content_hash', command.contentHash)
+      .eq('revision', command.baseRevision)
+      .eq('state', 'ready')
+      .maybeSingle();
+    if (error) throw new Error(`Unable to read track metadata: ${error.message}`);
+    if (data === null) return;
+    if (!isObject(data) || !isObject(data.metadata)) {
+      throw new Error('Stored track metadata is invalid.');
+    }
+    const current = data.metadata;
+    const hasLineageHash = Object.hasOwn(current, 'lineageHash');
+    const hasGeometryVersion = Object.hasOwn(current, 'geometryVersion');
+    let lineageHash: unknown = command.contentHash;
+    let geometryVersion: unknown = 1;
+    if (hasLineageHash || hasGeometryVersion) {
+      if (!hasLineageHash || !hasGeometryVersion) {
+        throw new Error('Stored track lineage metadata is incomplete.');
+      }
+      lineageHash = current.lineageHash;
+      geometryVersion = current.geometryVersion;
+    }
+    if (
+      command.metadata.lineageHash !== lineageHash ||
+      command.metadata.geometryVersion !== geometryVersion
+    ) {
+      throw new TrackSyncFailure(
+        400,
+        'invalid_metadata',
+        'Track lineage metadata cannot be changed.',
+      );
+    }
+  }
 
   private async executeRpc(
     name: string,

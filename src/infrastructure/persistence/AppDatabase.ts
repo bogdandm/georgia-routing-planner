@@ -63,6 +63,8 @@ interface PersistedDiagnosticRecord {
 export interface TrackSyncState {
   readonly trackId: string;
   readonly contentHash: string;
+  readonly lineageHash: string;
+  readonly geometryVersion: 1 | 2;
   readonly remoteRevision: number | null;
   readonly pendingKind: 'upsert' | 'metadata' | 'delete' | null;
 }
@@ -71,6 +73,8 @@ function equalTrackSyncStates(left: TrackSyncState, right: TrackSyncState): bool
   return (
     left.trackId === right.trackId &&
     left.contentHash === right.contentHash &&
+    left.lineageHash === right.lineageHash &&
+    left.geometryVersion === right.geometryVersion &&
     left.remoteRevision === right.remoteRevision &&
     left.pendingKind === right.pendingKind
   );
@@ -94,6 +98,7 @@ export interface RemoteTrackMergeBatch {
 export interface LocalTrackSyncHash {
   readonly trackId: string;
   readonly contentHash: string;
+  readonly legacyContentHash: string;
 }
 
 export interface TrackSyncUsage {
@@ -645,10 +650,20 @@ const trackSyncStateSchema: z.ZodType<TrackSyncState> = z
   .object({
     trackId: z.string().min(1).max(200),
     contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+    lineageHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    geometryVersion: z.union([z.literal(1), z.literal(2)]).optional(),
     remoteRevision: z.number().int().positive().nullable(),
     pendingKind: z.enum(['upsert', 'metadata', 'delete']).nullable(),
   })
-  .strict();
+  .strict()
+  .transform((value): TrackSyncState => ({
+    ...value,
+    lineageHash: value.lineageHash ?? value.contentHash,
+    geometryVersion: value.geometryVersion ?? 1,
+  }));
 
 function pendingKindWithHighestPrecedence(
   states: readonly TrackSyncState[],
@@ -865,6 +880,8 @@ export class AppDatabase
     const state: TrackSyncState = {
       trackId: validSummary.id,
       contentHash: validSummary.contentHash,
+      lineageHash: validSummary.contentHash,
+      geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'upsert',
     };
@@ -1201,6 +1218,8 @@ export class AppDatabase
           await this.trackSyncStates.put({
             trackId,
             contentHash: state.contentHash,
+            lineageHash: state.lineageHash,
+            geometryVersion: state.geometryVersion,
             remoteRevision: state.remoteRevision,
             pendingKind: 'delete',
           });
@@ -1287,10 +1306,13 @@ export class AppDatabase
     }
     signal?.throwIfAborted();
     const hashesByTrackId = new Map(
-      contentHashes.map((entry) => [entry.trackId, entry.contentHash]),
+      contentHashes.map((entry) => [entry.trackId, entry]),
     );
     for (const entry of contentHashes) {
-      if (!/^[0-9a-f]{64}$/.test(entry.contentHash)) {
+      if (
+        !/^[0-9a-f]{64}$/.test(entry.contentHash) ||
+        !/^[0-9a-f]{64}$/.test(entry.legacyContentHash)
+      ) {
         throw new LocalTrackStorageError(
           'record-invalid',
           'The local track content hash is invalid.',
@@ -1304,31 +1326,83 @@ export class AppDatabase
       this.localTrackContents,
       this.trackSyncStates,
       async () => {
+        const owner = await this.settings.get('sync.user-id');
+        const sameAccount = owner?.value === userId;
+        const stateByTrackId = new Map<string, TrackSyncState>();
+        if (sameAccount) {
+          for (const candidate of await this.trackSyncStates.toArray()) {
+            const state = parseTrackSyncState(candidate);
+            if (state !== null) stateByTrackId.set(state.trackId, state);
+          }
+        }
+
         const pairs: LocalTrackSyncPair[] = [];
+        const identitiesByTrackId = new Map<
+          string,
+          Pick<TrackSyncState, 'lineageHash' | 'geometryVersion'>
+        >();
         for (const candidate of await this.localTracks.toArray()) {
           const summary = parseLocalTrackSummary(candidate);
           const content = parseLocalTrackContent(
             await this.localTrackContents.get(candidate.id),
           );
           if (summary === null || content?.trackId !== candidate.id) continue;
-          const contentHash = summary.contentHash ?? hashesByTrackId.get(summary.id);
-          if (contentHash === undefined) {
+          const hashes = hashesByTrackId.get(summary.id);
+          if (hashes === undefined) {
             throw new LocalTrackStorageError(
               'record-invalid',
               'The local track content hash is unavailable.',
             );
           }
+          const persistedState = stateByTrackId.get(summary.id);
+          const existingHash =
+            summary.contentHash ?? persistedState?.contentHash ?? hashes.contentHash;
+          const isCurrent = existingHash === hashes.contentHash;
+          const isLegacy = existingHash === hashes.legacyContentHash;
+          if (!isCurrent && !isLegacy) {
+            throw new LocalTrackStorageError(
+              'record-invalid',
+              'The local track content hash does not match its geometry.',
+            );
+          }
+          const state =
+            persistedState?.contentHash === existingHash ? persistedState : undefined;
+          const shouldPromote =
+            isLegacy &&
+            (state?.remoteRevision === null ||
+              state === undefined ||
+              summary.metrics.elevationSource === 'gpx');
+          let contentHash = existingHash;
+          let identity: Pick<TrackSyncState, 'lineageHash' | 'geometryVersion'>;
+          if (shouldPromote) {
+            contentHash = hashes.contentHash;
+            identity = {
+              lineageHash:
+                state?.remoteRevision === null || state === undefined
+                  ? hashes.contentHash
+                  : state.lineageHash,
+              geometryVersion: 2,
+            };
+            stateByTrackId.set(summary.id, {
+              trackId: summary.id,
+              contentHash,
+              ...identity,
+              remoteRevision: null,
+              pendingKind: 'upsert',
+            });
+          } else {
+            identity = {
+              lineageHash: state?.lineageHash ?? contentHash,
+              geometryVersion: isCurrent ? 2 : 1,
+            };
+            if (state !== undefined) {
+              stateByTrackId.set(summary.id, { ...state, ...identity });
+            }
+          }
+          identitiesByTrackId.set(summary.id, identity);
           pairs.push({ summary: { ...summary, contentHash }, content });
         }
 
-        const owner = await this.settings.get('sync.user-id');
-        const sameAccount = owner?.value === userId;
-        const states = sameAccount
-          ? (await this.trackSyncStates.toArray()).flatMap((candidate) => {
-              const state = parseTrackSyncState(candidate);
-              return state === null ? [] : [state];
-            })
-          : [];
         const groups = new Map<
           string,
           { pairs: LocalTrackSyncPair[]; states: TrackSyncState[] }
@@ -1343,7 +1417,7 @@ export class AppDatabase
             group.pairs.push(pair);
           }
         }
-        for (const state of states) {
+        for (const state of stateByTrackId.values()) {
           const group = groups.get(state.contentHash);
           if (group === undefined) {
             groups.set(state.contentHash, { pairs: [], states: [state] });
@@ -1380,6 +1454,8 @@ export class AppDatabase
             nextStates.push({
               trackId: deletion.trackId,
               contentHash,
+              lineageHash: deletion.lineageHash,
+              geometryVersion: deletion.geometryVersion,
               remoteRevision,
               pendingKind: 'delete',
             });
@@ -1409,6 +1485,16 @@ export class AppDatabase
             ),
           );
           const pendingKind = pendingKindWithHighestPrecedence(group.states);
+          const identity =
+            [...group.states].sort(
+              (left, right) => (right.remoteRevision ?? 0) - (left.remoteRevision ?? 0),
+            )[0] ?? identitiesByTrackId.get(canonical.summary.id);
+          if (identity === undefined) {
+            throw new LocalTrackStorageError(
+              'record-invalid',
+              'The local track synchronization identity is unavailable.',
+            );
+          }
           const summary = {
             ...canonical.summary,
             contentHash,
@@ -1423,6 +1509,8 @@ export class AppDatabase
           nextStates.push({
             trackId: canonical.summary.id,
             contentHash,
+            lineageHash: identity.lineageHash,
+            geometryVersion: identity.geometryVersion,
             remoteRevision: sameAccount && remoteRevision !== 0 ? remoteRevision : null,
             pendingKind:
               !sameAccount ||
@@ -1671,6 +1759,9 @@ export class AppDatabase
           await this.trackSyncStates.delete(trackId);
         }
         for (const trackId of restored) {
+          const existingState = parseTrackSyncState(
+            await this.trackSyncStates.get(trackId),
+          );
           const summary = parseLocalTrackSummary(await this.localTracks.get(trackId));
           const content = parseLocalTrackContent(
             await this.localTrackContents.get(trackId),
@@ -1682,6 +1773,14 @@ export class AppDatabase
           await this.trackSyncStates.put({
             trackId,
             contentHash: summary.contentHash,
+            lineageHash:
+              existingState?.contentHash === summary.contentHash
+                ? existingState.lineageHash
+                : summary.contentHash,
+            geometryVersion:
+              existingState?.contentHash === summary.contentHash
+                ? existingState.geometryVersion
+                : 2,
             remoteRevision: null,
             pendingKind: 'upsert',
           });

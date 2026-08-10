@@ -2,8 +2,10 @@ import type { TrackPoint } from '@/domain/tracks/gpx';
 import type { LocalTrackContent } from '@/domain/tracks/localTrack';
 
 const magic = [0x47, 0x52, 0x50, 0x54] as const;
-const version = 1;
-const timestampsFlag = 1;
+const legacyVersion = 1;
+const currentVersion = 2;
+const timestampsFlag = 0x01;
+const elevationsFlag = 0x02;
 const coordinateScale = 1_000_000;
 const maximumSegments = 512;
 const maximumPoints = 100_000;
@@ -89,23 +91,71 @@ function timestampMilliseconds(recordedAt: string): number {
   return value;
 }
 
-/** Encodes normalized track geometry into elevation-free canonical GRPT v1 bytes. */
-export function encodeTrackSyncGeometry(content: LocalTrackContent): Uint8Array {
+function appendElevation(bytes: number[], elevationMeters: number | undefined): void {
+  if (elevationMeters === undefined) {
+    bytes.push(0x00);
+    return;
+  }
+  if (!Number.isFinite(elevationMeters)) {
+    throw new TrackSyncGeometryError('Track geometry contains an invalid elevation.');
+  }
+  bytes.push(0x01);
+  const buffer = new ArrayBuffer(8);
+  new DataView(buffer).setFloat64(0, elevationMeters, false);
+  bytes.push(...new Uint8Array(buffer));
+}
+
+function readElevation(
+  bytes: Uint8Array,
+  offset: { value: number },
+): number | undefined {
+  const tag = bytes[offset.value];
+  if (tag === undefined)
+    throw new TrackSyncGeometryError('Track geometry is truncated.');
+  offset.value += 1;
+  if (tag === 0x00) return undefined;
+  if (tag !== 0x01) {
+    throw new TrackSyncGeometryError('Track geometry contains an invalid elevation.');
+  }
+  if (offset.value + 8 > bytes.length) {
+    throw new TrackSyncGeometryError('Track geometry contains an invalid elevation.');
+  }
+  const elevationMeters = new DataView(
+    bytes.buffer,
+    bytes.byteOffset + offset.value,
+    8,
+  ).getFloat64(0, false);
+  offset.value += 8;
+  if (!Number.isFinite(elevationMeters)) {
+    throw new TrackSyncGeometryError('Track geometry contains an invalid elevation.');
+  }
+  return elevationMeters;
+}
+
+function encodeGeometry(
+  content: LocalTrackContent,
+  codecVersion: typeof legacyVersion | typeof currentVersion,
+): Uint8Array {
   const segments = content.trackPoints;
   if (segments.length === 0 || segments.length > maximumSegments) {
     throw new TrackSyncGeometryError('Track geometry has an invalid segment count.');
   }
   let totalPoints = 0;
   let includesTimestamps = false;
+  let includesElevations = false;
   for (const segment of segments) {
     if (segment.length < 2 || totalPoints + segment.length > maximumPoints) {
       throw new TrackSyncGeometryError('Track geometry has an invalid point count.');
     }
     totalPoints += segment.length;
     includesTimestamps ||= segment.some((point) => point.recordedAt !== undefined);
+    includesElevations ||= segment.some((point) => point.elevationMeters !== undefined);
   }
 
-  const bytes = [...magic, version, includesTimestamps ? timestampsFlag : 0];
+  const flags =
+    (includesTimestamps ? timestampsFlag : 0) |
+    (codecVersion === currentVersion && includesElevations ? elevationsFlag : 0);
+  const bytes = [...magic, codecVersion, flags];
   appendVaruint(bytes, BigInt(segments.length));
   for (const segment of segments) {
     appendVaruint(bytes, BigInt(segment.length));
@@ -128,20 +178,37 @@ export function encodeTrackSyncGeometry(content: LocalTrackContent): Uint8Array 
           previousTimestamp = timestamp;
         }
       }
+      if ((flags & elevationsFlag) !== 0) {
+        appendElevation(bytes, point.elevationMeters);
+      }
     }
   }
   return Uint8Array.from(bytes);
 }
 
-/** Decodes and validates a canonical GRPT v1 payload. Elevation is intentionally absent. */
+/** Encodes legacy GRPT v1 geometry solely to recognize persisted v1 identities. */
+export function encodeLegacyTrackSyncGeometry(content: LocalTrackContent): Uint8Array {
+  return encodeGeometry(content, legacyVersion);
+}
+
+/** Encodes normalized track geometry into canonical GRPT v2 bytes. */
+export function encodeTrackSyncGeometry(content: LocalTrackContent): Uint8Array {
+  return encodeGeometry(content, currentVersion);
+}
+
+/** Decodes and validates a canonical GRPT v1 or v2 payload. */
 export function decodeTrackSyncGeometry(bytes: Uint8Array): DecodedTrackSyncGeometry {
   if (bytes.length < 8 || !magic.every((value, index) => bytes[index] === value)) {
     throw new TrackSyncGeometryError('Track geometry has an invalid header.');
   }
-  if (bytes[4] !== version)
+  const codecVersion = bytes[4];
+  if (codecVersion !== legacyVersion && codecVersion !== currentVersion) {
     throw new TrackSyncGeometryError('Track geometry version is unsupported.');
+  }
+  const allowedFlags =
+    codecVersion === legacyVersion ? timestampsFlag : timestampsFlag | elevationsFlag;
   const flags = bytes[5];
-  if (flags === undefined || (flags & ~timestampsFlag) !== 0) {
+  if (flags === undefined || (flags & ~allowedFlags) !== 0) {
     throw new TrackSyncGeometryError('Track geometry has unknown flags.');
   }
   const offset = { value: 6 };
@@ -166,9 +233,11 @@ export function decodeTrackSyncGeometry(bytes: Uint8Array): DecodedTrackSyncGeom
       const latitude = previousLatitude / coordinateScale;
       requireCoordinate(longitude, -180, 180);
       requireCoordinate(latitude, -90, 90);
-      const point: { coordinate: TrackPoint['coordinate']; recordedAt?: string } = {
-        coordinate: [longitude, latitude],
-      };
+      const point: {
+        coordinate: TrackPoint['coordinate'];
+        elevationMeters?: number;
+        recordedAt?: string;
+      } = { coordinate: [longitude, latitude] };
       if ((flags & timestampsFlag) !== 0) {
         const taggedTimestamp = readVaruint(bytes, offset);
         if (taggedTimestamp !== 0n) {
@@ -188,6 +257,10 @@ export function decodeTrackSyncGeometry(bytes: Uint8Array): DecodedTrackSyncGeom
           point.recordedAt = recordedAt.toISOString();
           previousTimestamp = timestamp;
         }
+      }
+      if ((flags & elevationsFlag) !== 0) {
+        const elevationMeters = readElevation(bytes, offset);
+        if (elevationMeters !== undefined) point.elevationMeters = elevationMeters;
       }
       segment.push(point);
     }

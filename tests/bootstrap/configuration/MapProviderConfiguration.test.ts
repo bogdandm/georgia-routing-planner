@@ -17,6 +17,15 @@ describe('MapProviderConfiguration', () => {
     );
 
     expect(configuration.vector.sourceLayers.transportation).toBe('transportation');
+    expect(configuration.schemaVersion).toBe(2);
+    expect(configuration.detailVector).toEqual({
+      id: 'osm-shortbread-v1',
+      label: 'OSM Shortbread',
+      tileJsonUrl: 'https://vector.openstreetmap.org/shortbread_v1/tilejson.json',
+      attribution:
+        '<a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>',
+      sourceLayers: { land: 'land', buildings: 'buildings', streets: 'streets' },
+    });
     expect(configuration.terrain).toMatchObject({
       encoding: 'terrarium',
       tileSize: 256,
@@ -106,9 +115,11 @@ describe('MapProviderConfiguration', () => {
         'Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>',
     });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       vectorId: 'openfreemap-openmaptiles',
       vectorOrigin: 'https://tiles.openfreemap.org',
+      detailVectorId: 'osm-shortbread-v1',
+      detailVectorOrigin: 'https://vector.openstreetmap.org',
       terrainId: 'aws-mapzen-terrarium',
       terrainOrigin: 'https://s3.amazonaws.com',
       satelliteId: 'earth-search-v1',
@@ -152,7 +163,7 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.satelliteBasemap.id).toBe('google-satellite');
   });
 
-  it('defaults NAPR orthophoto for existing schema-v1 external configuration', () => {
+  it('defaults NAPR orthophoto for existing schema-v2 external configuration', () => {
     const input = structuredClone(
       defaultMapProviderConfigurationInput,
     ) as unknown as Record<string, unknown>;
@@ -169,6 +180,7 @@ describe('MapProviderConfiguration', () => {
         tileJsonUrl: string;
         glyphsUrl: string;
       };
+      detailVector: { tileJsonUrl: string };
       terrain: { tileUrl: string };
       satellite: { searchUrl: string };
       satelliteBasemap: { tileUrls: string[] };
@@ -178,6 +190,7 @@ describe('MapProviderConfiguration', () => {
     };
     input.vector.tileJsonUrl = './fixtures/vector/tiles.json';
     input.vector.glyphsUrl = './fixtures/fonts/{fontstack}/{range}.pbf';
+    input.detailVector.tileJsonUrl = './fixtures/detail-vector/tilejson.json';
     input.terrain.tileUrl = './fixtures/terrain/{z}/{x}/{y}.png';
     input.satellite.searchUrl = './fixtures/stac/search';
     input.satelliteBasemap.tileUrls = [
@@ -192,6 +205,9 @@ describe('MapProviderConfiguration', () => {
 
     expect(configuration.vector.tileJsonUrl).toBe(
       'https://example.test/georgia-routing-planner/fixtures/vector/tiles.json',
+    );
+    expect(configuration.detailVector.tileJsonUrl).toBe(
+      'https://example.test/georgia-routing-planner/fixtures/detail-vector/tilejson.json',
     );
     expect(configuration.terrain.tileUrl).toBe(
       'https://example.test/georgia-routing-planner/fixtures/terrain/{z}/{x}/{y}.png',
@@ -222,6 +238,14 @@ describe('MapProviderConfiguration', () => {
         const vector = input.vector as Record<string, unknown>;
         const sourceLayers = vector.sourceLayers as Record<string, unknown>;
         delete sourceLayers.transportation;
+      },
+    },
+    {
+      name: 'missing detail source-layer mapping',
+      mutate: (input: Record<string, unknown>) => {
+        const detailVector = input.detailVector as Record<string, unknown>;
+        const sourceLayers = detailVector.sourceLayers as Record<string, unknown>;
+        delete sourceLayers.streets;
       },
     },
     {
@@ -372,5 +396,13 @@ describe('MapProviderConfiguration', () => {
       expect(result.message).not.toContain(fakeSecret);
       expect(result.message).not.toContain('tiles.test');
     }
+  });
+  it('rejects schema-v1 configuration rather than silently upgrading it', () => {
+    const input = structuredClone(
+      defaultMapProviderConfigurationInput,
+    ) as unknown as Record<string, unknown>;
+    input.schemaVersion = 1;
+
+    expect(() => parseMapProviderConfiguration(input, baseUrl)).toThrow();
   });
 });

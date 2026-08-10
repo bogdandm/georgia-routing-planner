@@ -73,6 +73,12 @@ const navigationAndAccessControls = [
     requiresScene: false,
   },
   {
+    id: 'detail-context',
+    label: 'OSM detail',
+    description: 'Brownfield land and building footprints from OSM Shortbread.',
+    requiresScene: false,
+  },
+  {
     id: 'hiking-paths',
     label: 'Hiking paths',
     description: 'Paths, tracks, footways, and steps.',
@@ -156,7 +162,10 @@ export function LayersPanel() {
     },
     {
       id: 'openstreetmap',
-      title: `OpenStreetMap via ${provider?.vector.label ?? 'vector tile provider'}`,
+      title:
+        provider === null
+          ? 'OpenStreetMap via vector tile provider'
+          : `OpenStreetMap via ${provider.vector.label} + ${provider.detailVector.label}`,
       description: 'Vector basemap data styled for hiking and navigation.',
       controls: openStreetMapControls,
     },

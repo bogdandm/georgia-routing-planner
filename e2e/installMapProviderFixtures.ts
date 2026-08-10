@@ -3,6 +3,7 @@ import { writeArrayBuffer } from 'geotiff';
 import searchResponse from '../tests/fixtures/satellite/search-response.json' with { type: 'json' };
 
 const openFreeMapOrigin = 'https://tiles.openfreemap.org';
+const shortbreadOrigin = 'https://vector.openstreetmap.org';
 const terrainOrigin = 'https://s3.amazonaws.com';
 const earthSearchOrigin = 'https://earth-search.aws.element84.com';
 const satelliteRendererOrigin = 'https://titiler.xyz';
@@ -83,13 +84,13 @@ function zigZag(value: number): number {
 
 function createVectorLayer(
   name: string,
-  feature: Buffer,
+  features: readonly Buffer[],
   keys: readonly string[] = [],
   values: readonly Buffer[] = [],
 ): Buffer {
   return Buffer.concat([
     encodeField(1, 2, Buffer.from(name)),
-    encodeField(2, 2, feature),
+    ...features.map((feature) => encodeField(2, 2, feature)),
     ...keys.map((key) => encodeField(3, 2, Buffer.from(key))),
     ...values.map((value) => encodeField(4, 2, value)),
     encodeField(5, 0, 4_096),
@@ -140,16 +141,97 @@ function createVectorTileFixture(): Buffer {
   ]);
   const pathValue = encodeField(1, 2, Buffer.from('path'));
   return Buffer.concat([
-    encodeField(3, 2, createVectorLayer('water', waterFeature)),
+    encodeField(3, 2, createVectorLayer('water', [waterFeature])),
     encodeField(
       3,
       2,
-      createVectorLayer('transportation', pathFeature, ['class'], [pathValue]),
+      createVectorLayer('transportation', [pathFeature], ['class'], [pathValue]),
     ),
   ]);
 }
 
 const vectorTileFixture = createVectorTileFixture();
+
+const shortbreadBrownfieldValue = encodeField(1, 2, Buffer.from('brownfield'));
+const shortbreadStreetValues = ['service', 'track', 'path'].map((kind) =>
+  encodeField(1, 2, Buffer.from(kind)),
+);
+
+const shortbreadBrownfieldFeature = Buffer.concat([
+  encodeField(1, 0, 1),
+  encodeField(2, 2, encodePacked([0, 0])),
+  encodeField(3, 0, 3),
+  encodeField(
+    4,
+    2,
+    encodePacked([
+      9,
+      zigZag(100),
+      zigZag(100),
+      26,
+      zigZag(3_896),
+      zigZag(0),
+      zigZag(0),
+      zigZag(3_896),
+      zigZag(-3_896),
+      zigZag(0),
+      15,
+    ]),
+  ),
+]);
+
+function createShortbreadStreetFeature(
+  id: number,
+  kindIndex: number,
+  y: number,
+): Buffer {
+  return Buffer.concat([
+    encodeField(1, 0, id),
+    encodeField(2, 2, encodePacked([0, kindIndex])),
+    encodeField(3, 0, 2),
+    encodeField(
+      4,
+      2,
+      encodePacked([
+        9,
+        zigZag(500),
+        zigZag(y),
+        18,
+        zigZag(1_500),
+        zigZag(-500),
+        zigZag(1_500),
+        zigZag(500),
+      ]),
+    ),
+  ]);
+}
+
+const shortbreadVectorTileFixture = Buffer.concat([
+  encodeField(
+    3,
+    2,
+    createVectorLayer(
+      'land',
+      [shortbreadBrownfieldFeature],
+      ['kind'],
+      [shortbreadBrownfieldValue],
+    ),
+  ),
+  encodeField(
+    3,
+    2,
+    createVectorLayer(
+      'streets',
+      [
+        createShortbreadStreetFeature(2, 0, 1_000),
+        createShortbreadStreetFeature(3, 1, 2_000),
+        createShortbreadStreetFeature(4, 2, 3_000),
+      ],
+      ['kind'],
+      shortbreadStreetValues,
+    ),
+  ),
+]);
 const satelliteSearchFixture = structuredClone(searchResponse);
 const satelliteFeature = satelliteSearchFixture.features[0];
 if (satelliteFeature !== undefined) {
@@ -185,10 +267,26 @@ const tileJsonFixture = {
   ].map((id) => ({ id, fields: {} })),
 };
 
+const shortbreadTileJsonFixture = {
+  tilejson: '3.0.0',
+  name: 'Deterministic OSM Shortbread fixture',
+  scheme: 'xyz',
+  minzoom: 0,
+  maxzoom: 14,
+  bounds: [-180, -85.0511, 180, 85.0511],
+  attribution:
+    '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
+  tiles: [`${shortbreadOrigin}/shortbread_v1/fixtures/{z}/{x}/{y}.mvt`],
+  vector_layers: ['land', 'buildings', 'streets'].map((id) => ({
+    id,
+    fields: {},
+  })),
+};
+
 /**
  * Replaces all configured provider traffic with deterministic local responses.
- * The vector tile contains a synthetic water polygon and hiking path; the DEM is a
- * uniform 256 px PNG. Neither fixture contains real-world or user location data.
+ * The OpenFreeMap tile contains a synthetic water polygon and hiking path; the
+ * Shortbread tile contains a synthetic brownfield polygon and representative streets.
  */
 export async function installMapProviderFixtures(page: Page): Promise<void> {
   await page.route(`${overpassOrigin}/api/interpreter**`, (route) => {
@@ -247,6 +345,20 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
         boundingbox: ['42.40', '42.60', '44.40', '44.60'],
       }),
     }),
+  );
+  await page.route(
+    new RegExp(`^${shortbreadOrigin.replaceAll('.', '\\.')}`),
+    (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/shortbread_v1/tilejson.json') {
+        return route.fulfill({ json: shortbreadTileJsonFixture });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/x-protobuf',
+        body: shortbreadVectorTileFixture,
+      });
+    },
   );
   await page.route(
     new RegExp(`^${openFreeMapOrigin.replaceAll('.', '\\.')}`),
@@ -353,6 +465,7 @@ export function isConfiguredProviderRequest(url: URL): boolean {
   if (url.origin === overpassOrigin) return url.pathname === '/api/interpreter';
   return (
     url.origin === openFreeMapOrigin ||
+    url.origin === shortbreadOrigin ||
     url.origin === earthSearchOrigin ||
     url.origin === satelliteRendererOrigin ||
     url.origin === sentinelCogFixtureOrigin

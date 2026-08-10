@@ -342,7 +342,9 @@ describe('WorkspaceShell', () => {
       within(about).getByRole('link', { name: 'nominatim.openstreetmap.org' }),
     ).toBeVisible();
     expect(
-      within(about).getByText('OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap'),
+      within(about).getByText(
+        'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors',
+      ),
     ).toBeVisible();
     expect(
       within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
@@ -362,6 +364,39 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(aboutButton).toHaveFocus();
     });
+  });
+  it('deduplicates a custom vector attribution that already credits OpenStreetMap', async () => {
+    const configuredMapProviders = services.mapProviderConfiguration;
+    if (configuredMapProviders.status !== 'valid') {
+      throw new Error('Expected configured map providers');
+    }
+    services = {
+      ...services,
+      mapProviderConfiguration: {
+        status: 'valid',
+        value: {
+          ...configuredMapProviders.value,
+          vector: {
+            ...configuredMapProviders.value.vector,
+            attribution:
+              '<a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://openmaptiles.org/">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
+          },
+        },
+      },
+    };
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'About this site' }));
+
+    const about = screen.getByRole('dialog', {
+      name: 'About Trail Planner',
+    });
+    expect(
+      within(about).getByText(
+        'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors',
+      ),
+    ).toBeVisible();
   });
 
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
@@ -503,10 +538,13 @@ describe('WorkspaceShell', () => {
       }),
     ).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
+      screen.getByRole('heading', {
+        name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread',
+      }),
     ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'OSM detail' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
     expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();

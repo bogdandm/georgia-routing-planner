@@ -238,6 +238,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -267,6 +268,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -320,6 +322,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -368,6 +371,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -401,6 +405,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -432,6 +437,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -472,6 +478,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -515,6 +522,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -560,6 +568,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -615,6 +624,7 @@ describe('SupabaseUserDataService', () => {
         remoteMarkerDeletions: [],
       }),
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -663,6 +673,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -719,6 +730,7 @@ describe('SupabaseUserDataService', () => {
       const worker = {
         synchronize,
         subscribeTracksChanged: vi.fn(),
+        subscribeMarkersChanged: vi.fn(),
         subscribeProgress: vi.fn(),
         dispose: vi.fn(),
       } as unknown as TrackSyncWorkerClient;
@@ -781,6 +793,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -853,6 +866,7 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize,
       subscribeTracksChanged: vi.fn(),
+      subscribeMarkersChanged: vi.fn(),
       subscribeProgress: vi.fn((listener) => {
         emitProgress = listener as (progress: UserDataSyncProgress) => void;
         return () => undefined;

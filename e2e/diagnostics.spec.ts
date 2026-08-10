@@ -80,7 +80,9 @@ test('captures failures and exports an inspectable redacted bundle', async ({
 
   await page.getByRole('tab', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Check configured providers' }).click();
-  await expect(page.getByText('Vector provider reachability')).toBeVisible();
+  await expect(
+    page.getByText('Vector provider reachability', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('Terrain provider reachability')).toBeVisible();
   await expect(page.getByText('Satellite catalog reachability')).toBeVisible();
 

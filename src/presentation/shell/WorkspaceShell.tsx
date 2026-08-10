@@ -2,11 +2,13 @@ import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
 import {
   Box,
+  Button,
   ButtonBase,
   CircularProgress,
   IconButton,
   Paper,
   Stack,
+  TextField,
   Tooltip,
   Typography,
   useMediaQuery,
@@ -133,7 +135,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     string | null
   >(null);
   const importPreparingRef = useRef(false);
-  const { active: activeTrack, activeProfile, importState } = useTracksWorkspace();
+  const {
+    active: activeTrack,
+    activeProfile,
+    importState,
+    recalculationState,
+    savePreview,
+    setActiveName,
+  } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
@@ -312,6 +321,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       onElevationGradeLegendDismissedChange={handleElevationGradeLegendDismissedChange}
     />
   );
+
+  const handleOpenActiveTrackDetails = () => {
+    if (!smartphoneViewport || activeTrackKey === null) return;
+    setMobileTrackDetailsExpandedKey(activeTrackKey);
+    setMobileWorkspaceOpen(true);
+  };
   const auxiliaryOverlay = smartphoneViewport || auxiliaryOverlayViewport;
   const activeTrackExists = activeTrack !== null;
   const activeTrackOpen = activeTab === 'tracks' && activeTrackExists;
@@ -389,12 +404,48 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           bottom: 'max(12px, env(safe-area-inset-bottom))',
           left: 12,
           display: mobileTrackDisclosureOpen ? 'block' : 'none',
+          height: activeTrack?.kind === 'preview' ? 120 : 56,
           bgcolor: 'background.paper',
           overflow: 'hidden',
         }}
       >
+        {activeTrack?.kind === 'preview' ? (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ height: 64, px: 1.5, py: 1.5, alignItems: 'center' }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              label="Track name"
+              value={activeTrack.name}
+              slotProps={{ htmlInput: { maxLength: 200 } }}
+              onChange={(event) => {
+                setActiveName(event.target.value);
+              }}
+              sx={{ minWidth: 0, flex: 1 }}
+            />
+            <Button
+              variant="contained"
+              disabled={
+                activeTrack.preparationStatus !== 'ready' ||
+                recalculationState === 'recalculating' ||
+                activeTrack.name.trim().length === 0
+              }
+              onClick={() => void savePreview()}
+              sx={{ flexShrink: 0 }}
+            >
+              Save
+            </Button>
+          </Stack>
+        ) : null}
         <ButtonBase
-          aria-label="Expand track details"
+          aria-label={
+            activeTrack?.kind === 'preview'
+              ? 'Expand unsaved track details'
+              : 'Expand track details'
+          }
           onClick={() => {
             if (activeTrackKey !== null) {
               setMobileTrackDetailsExpandedKey(activeTrackKey);
@@ -564,6 +615,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             fullWidth={smartphoneViewport}
             onMarkerSortChange={handleMarkerSortChange}
             onSatellitePaneOpenChange={setSatellitePaneOpen}
+            onOpenActiveTrackDetails={handleOpenActiveTrackDetails}
             onShowMap={() => {
               setMobileWorkspaceOpen(false);
             }}

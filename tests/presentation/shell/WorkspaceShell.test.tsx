@@ -660,8 +660,12 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile());
 
     const disclosure = await screen.findByRole('button', {
-      name: 'Expand track details',
+      name: 'Expand unsaved track details',
     });
+    expect(screen.getByRole('textbox', { name: 'Track name' })).toHaveValue(
+      'Fixture trail',
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     expect(within(disclosure).getByLabelText('Distance: 1.4 km')).toBeVisible();
     expect(within(disclosure).getByLabelText('Elevation gain: 120 m')).toBeVisible();
     expect(within(disclosure).getByLabelText('Elevation loss: 0 m')).toBeVisible();
@@ -692,10 +696,14 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Expand track details' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Expand unsaved track details' }),
+    ).toBeVisible();
     expect(screen.getByLabelText('Fake map')).toBe(map);
 
-    await user.click(screen.getByRole('button', { name: 'Expand track details' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Expand unsaved track details' }),
+    );
     confirm.mockReturnValueOnce(false);
     await user.click(screen.getByRole('button', { name: 'Close track' }));
     expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
@@ -707,9 +715,75 @@ describe('WorkspaceShell', () => {
       screen.queryByRole('complementary', { name: 'Track details' }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Expand track details' }),
+      screen.queryByRole('button', { name: 'Expand unsaved track details' }),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Fake map')).toBe(map);
+  });
+
+  it('saves a named preview from the smartphone disclosure', async () => {
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+    await user.upload(input, gpxFile());
+
+    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Mobile trail');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(async () => {
+      await expect(services.database.listLocalTracks()).resolves.toEqual([
+        expect.objectContaining({ name: 'Mobile trail' }),
+      ]);
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('textbox', { name: 'Track name' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
+    const disclosure = screen.getByRole('button', {
+      name: 'Expand track details',
+    });
+    expect(within(disclosure).getByLabelText('Distance: 1.4 km')).toBeVisible();
+  });
+
+  it('opens active saved track details from the smartphone track list', async () => {
+    const summary = savedTrackSummary('local:mobile-active', 'Mobile active trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    const loadLocalTrackContent = vi.spyOn(services.database, 'loadLocalTrackContent');
+    renderWorkspaceShell();
+
+    await screen.findByRole(
+      'button',
+      { name: 'Expand track details' },
+      { timeout: 5_000 },
+    );
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    loadLocalTrackContent.mockClear();
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Mobile active trail/u,
+      }),
+    );
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    expect(
+      within(details).getByRole('heading', { name: 'Mobile active trail' }),
+    ).toBeVisible();
+    expect(loadLocalTrackContent).not.toHaveBeenCalled();
   });
 
   it('shows mobile track preparation in the collapsed disclosure until metrics are ready', async () => {
@@ -731,7 +805,7 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('Preparing.gpx'));
 
     const disclosure = await screen.findByRole('button', {
-      name: 'Expand track details',
+      name: 'Expand unsaved track details',
     });
     const status = within(disclosure).getByRole('status');
     expect(within(status).getByText('Preparing terrain and elevation…')).toBeVisible();
@@ -1760,9 +1834,7 @@ describe('WorkspaceShell', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
-    await waitFor(() => {
-      expect(fakeFacade.fitBoundsRequests).toEqual([expectedFitBoundsRequest]);
-    });
+    expect(fakeFacade.fitBoundsRequests).toEqual([]);
 
     fakeFacade.fitBoundsRequests.splice(0);
     await user.click(screen.getByRole('button', { name: 'Close track' }));
@@ -3140,7 +3212,7 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Terrain failure.gpx'));
     const disclosure = await screen.findByRole('button', {
-      name: 'Expand track details',
+      name: 'Expand unsaved track details',
     });
     await waitFor(() => {
       expect(sampleMany).toHaveBeenCalledOnce();

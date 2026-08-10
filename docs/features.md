@@ -31,15 +31,17 @@ longer describes the reviewed interface.
 
 Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals the
 full-height feature rail and contextual tools without remounting the map; **Show map**
-and the Trail Planner logo return to the same map. An active track appears over the map
-as a collapsed disclosure containing the same distance, recorded-time, ascent, and
-descent statistics used by the full editor. When the active track has a usable elevation
-profile, its grade-colored graph is drawn decoratively behind these compact stats
-without chart interaction. Expanding the disclosure reveals the full editor; collapsing
-preserves the active track, while closing clears it. Selecting Sentinel imagery closes
-the smartphone workspace so the map immediately shows the applied scene; reopening the
-workspace restores the existing imagery results. This transient presentation state is
-not stored as a navigation preference or URL entry.
+and the Trail Planner logo return to the same map. An active saved track appears over
+the map as a collapsed disclosure containing the same distance, recorded-time, ascent,
+and descent statistics used by the full editor. Tapping its active saved-track row opens
+the editor. An unsaved preview uses a taller disclosure with editable **Track name** and
+**Save** controls above its decorative profile and metrics. When the active track has a
+usable elevation profile, its grade-colored graph is drawn decoratively behind these
+compact stats without chart interaction. Expanding the disclosure reveals the full
+editor; collapsing preserves the active track, while closing clears it. Selecting
+Sentinel imagery closes the smartphone workspace so the map immediately shows the
+applied scene; reopening the workspace restores the existing imagery results. This
+transient presentation state is not stored as a navigation preference or URL entry.
 
 ## Desktop workspace
 

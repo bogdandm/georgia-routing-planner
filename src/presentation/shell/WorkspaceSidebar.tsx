@@ -26,6 +26,7 @@ interface WorkspaceSidebarProps {
   readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
   readonly onSatellitePaneOpenChange: (open: boolean) => void;
   readonly onShowMap: () => void;
+  readonly onOpenActiveTrackDetails: () => void;
 }
 
 interface SidebarDefinition {
@@ -62,6 +63,7 @@ export function WorkspaceSidebar({
   fullWidth,
   onMarkerSortChange,
   onSatellitePaneOpenChange,
+  onOpenActiveTrackDetails,
   onShowMap,
 }: WorkspaceSidebarProps) {
   const { mapDiagnostics, mapViewport } = useRuntimeServices();
@@ -189,7 +191,7 @@ export function WorkspaceSidebar({
             height: '100%',
           }}
         >
-          <TracksPanel />
+          <TracksPanel onOpenActiveDetails={onOpenActiveTrackDetails} />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
           <SatelliteBrowser

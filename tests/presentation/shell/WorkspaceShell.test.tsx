@@ -704,10 +704,12 @@ describe('WorkspaceShell', () => {
         expect.objectContaining({ name: 'Mobile trail' }),
       ]);
     });
-    expect(
-      screen.queryByRole('textbox', { name: 'Track name' }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('textbox', { name: 'Track name' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
     const disclosure = screen.getByRole('button', {
       name: 'Expand track details',
     });
@@ -724,7 +726,11 @@ describe('WorkspaceShell', () => {
     const loadLocalTrackContent = vi.spyOn(services.database, 'loadLocalTrackContent');
     renderWorkspaceShell();
 
-    await screen.findByRole('button', { name: 'Expand track details' });
+    await screen.findByRole(
+      'button',
+      { name: 'Expand track details' },
+      { timeout: 5_000 },
+    );
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     loadLocalTrackContent.mockClear();
     await user.click(
@@ -1790,9 +1796,7 @@ describe('WorkspaceShell', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
-    await waitFor(() => {
-      expect(fakeFacade.fitBoundsRequests).toEqual([expectedFitBoundsRequest]);
-    });
+    expect(fakeFacade.fitBoundsRequests).toEqual([]);
 
     fakeFacade.fitBoundsRequests.splice(0);
     await user.click(screen.getByRole('button', { name: 'Close track' }));

@@ -226,7 +226,7 @@ export function MapSearchPlaceholder() {
       sx={{
         position: 'absolute',
         top: 6,
-        right: 47,
+        right: 54,
         zIndex: 3,
         width: 360,
         maxWidth: 'calc(100% - 144px)',

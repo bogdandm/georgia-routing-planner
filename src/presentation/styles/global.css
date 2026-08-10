@@ -39,6 +39,12 @@ body {
   border-radius: 10px 10px 0 0;
 }
 
+.maplibregl-ctrl-top-right
+  > .maplibregl-ctrl-group:has(.maplibregl-ctrl-compass)
+  > button:first-child {
+  border-radius: 10px 10px 0 0;
+}
+
 .maplibregl-ctrl-top-right > .maplibregl-ctrl-group > button {
   width: 40px;
   height: 36px;

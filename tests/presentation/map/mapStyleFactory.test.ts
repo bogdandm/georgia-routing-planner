@@ -112,6 +112,131 @@ describe('createHikingMapStyle', () => {
     ]);
   });
 
+  it('renders Shortbread brownfields, buildings, service roads, and detailed paths', () => {
+    const style = createHikingMapStyle(configuration);
+    const orderedLayerIds = style.layers.map((layer) => layer.id);
+    const brownfields = style.layers.find(
+      (layer) => layer.id === mapLayerIds.brownfieldAreas,
+    );
+    const buildings = style.layers.find((layer) => layer.id === mapLayerIds.buildings);
+    const roads = style.layers.find((layer) => layer.id === mapLayerIds.roads);
+    const overviewPaths = style.layers.find(
+      (layer) => layer.id === mapLayerIds.hikingPaths,
+    );
+    const detailPaths = style.layers.find(
+      (layer) => layer.id === mapLayerIds.hikingPathDetails,
+    );
+    const bridleways = style.layers.find(
+      (layer) => layer.id === mapLayerIds.hikingBridleways,
+    );
+    const steps = style.layers.find((layer) => layer.id === mapLayerIds.hikingSteps);
+
+    expect(style.sources[mapSourceIds.basemapDetailVector]).toEqual({
+      type: 'vector',
+      url: 'https://vector.openstreetmap.org/shortbread_v1/tilejson.json',
+      attribution:
+        '<a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>',
+    });
+    expect(brownfields).toMatchObject({
+      type: 'fill',
+      source: mapSourceIds.basemapDetailVector,
+      'source-layer': 'land',
+      filter: ['==', ['get', 'kind'], 'brownfield'],
+      paint: {
+        'fill-antialias': false,
+        'fill-color': mapVisualPalette.base.brownfield,
+        'fill-opacity': 1,
+      },
+    });
+    expect(buildings).toMatchObject({
+      type: 'fill',
+      source: mapSourceIds.basemapDetailVector,
+      'source-layer': 'buildings',
+      paint: {
+        'fill-antialias': false,
+        'fill-color': mapVisualPalette.base.building,
+        'fill-opacity': 1,
+      },
+    });
+    expect(roads).toMatchObject({
+      type: 'line',
+      source: mapSourceIds.basemapDetailVector,
+      'source-layer': 'streets',
+      filter: [
+        'in',
+        ['get', 'kind'],
+        [
+          'literal',
+          [
+            'motorway',
+            'trunk',
+            'primary',
+            'secondary',
+            'tertiary',
+            'unclassified',
+            'residential',
+            'living_street',
+            'service',
+          ],
+        ],
+      ],
+      paint: {
+        'line-color': [
+          'match',
+          ['get', 'kind'],
+          'motorway',
+          mapVisualPalette.transport.motorway,
+          'trunk',
+          mapVisualPalette.transport.trunk,
+          'primary',
+          mapVisualPalette.transport.primary,
+          'secondary',
+          mapVisualPalette.transport.secondary,
+          mapVisualPalette.transport.minor,
+        ],
+      },
+    });
+    expect(overviewPaths).toMatchObject({
+      source: mapSourceIds.basemapVector,
+      maxzoom: 13,
+    });
+    expect(detailPaths).toMatchObject({
+      source: mapSourceIds.basemapDetailVector,
+      'source-layer': 'streets',
+      minzoom: 13,
+      filter: [
+        'in',
+        ['get', 'kind'],
+        ['literal', ['track', 'footway', 'path', 'cycleway', 'pedestrian']],
+      ],
+      paint: { 'line-color': mapVisualPalette.transport.path, 'line-opacity': 0.9 },
+    });
+    expect(bridleways).toMatchObject({
+      source: mapSourceIds.basemapVector,
+      'source-layer': 'transportation',
+      minzoom: 13,
+      filter: ['==', ['get', 'subclass'], 'bridleway'],
+    });
+    expect(steps).toMatchObject({
+      source: mapSourceIds.basemapDetailVector,
+      'source-layer': 'streets',
+      minzoom: 13,
+      filter: ['==', ['get', 'kind'], 'steps'],
+    });
+    expect(
+      orderedLayerIds.slice(
+        orderedLayerIds.indexOf(mapLayerIds.landuse) + 1,
+        orderedLayerIds.indexOf(mapLayerIds.landuse) + 3,
+      ),
+    ).toEqual([mapLayerIds.brownfieldAreas, mapLayerIds.restrictedAreas]);
+    expect(
+      orderedLayerIds.slice(
+        orderedLayerIds.indexOf(mapLayerIds.water) + 1,
+        orderedLayerIds.indexOf(mapLayerIds.water) + 3,
+      ),
+    ).toEqual([mapLayerIds.buildings, mapLayerIds.boundaries]);
+  });
+
   it('retains provider attribution and contains no query secrets', () => {
     const style = createHikingMapStyle(configuration);
     const serialized = JSON.stringify(style);
@@ -320,6 +445,15 @@ describe('createHikingMapStyle', () => {
           peaks: 'fixture_peaks',
         },
       },
+      detailVector: {
+        ...configuration.detailVector,
+        sourceLayers: {
+          ...configuration.detailVector.sourceLayers,
+          land: 'fixture_land',
+          buildings: 'fixture_buildings',
+          streets: 'fixture_streets',
+        },
+      },
     };
     const style = createHikingMapStyle(customConfiguration);
     const hikingPaths = style.layers.find(
@@ -328,8 +462,16 @@ describe('createHikingMapStyle', () => {
     const peaks = style.layers.find((layer) => layer.id === mapLayerIds.peaks);
     const ridges = style.layers.find((layer) => layer.id === mapLayerIds.ridges);
 
+    const brownfields = style.layers.find(
+      (layer) => layer.id === mapLayerIds.brownfieldAreas,
+    );
+    const buildings = style.layers.find((layer) => layer.id === mapLayerIds.buildings);
+    const roads = style.layers.find((layer) => layer.id === mapLayerIds.roads);
     expect(hikingPaths).toHaveProperty('source-layer', 'fixture_transport');
     expect(peaks).toHaveProperty('source-layer', 'fixture_peaks');
     expect(ridges).toHaveProperty('source-layer', 'fixture_peaks');
+    expect(brownfields).toHaveProperty('source-layer', 'fixture_land');
+    expect(buildings).toHaveProperty('source-layer', 'fixture_buildings');
+    expect(roads).toHaveProperty('source-layer', 'fixture_streets');
   });
 });

@@ -582,6 +582,30 @@ describe('MapLibreFacade', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('private');
   });
 
+  it('classifies the Shortbread detail vector source as recoverable basemap data', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    nativeMap.fire('error', {
+      error: { message: 'Detail tile unavailable' },
+      sourceId: 'basemap-detail-vector',
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'degraded',
+      recoverableFailures: [
+        {
+          category: 'base-vector',
+          sourceId: 'basemap-detail-vector',
+          recoveryState: 'not-applicable',
+        },
+      ],
+    });
+  });
+
   it('shows a safe exact satellite HTTP failure and records source recovery', () => {
     vi.useFakeTimers();
     const services = createTestServices();

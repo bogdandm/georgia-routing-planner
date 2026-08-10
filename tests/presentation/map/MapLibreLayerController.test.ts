@@ -433,6 +433,18 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
     expect(map.visibility.get(mapLayerIds.roadLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingPaths)).toBe('visible');
+    expect(controller.setLayerVisibility('hiking-paths', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(mapLayerIds.hikingPaths)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.hikingPathDetails)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.hikingBridleways)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.hikingSteps)).toBe('none');
+    expect(controller.setLayerVisibility('detail-context', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(mapLayerIds.brownfieldAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.buildings)).toBe('none');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
 
     expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
@@ -1014,6 +1026,16 @@ describe('MapLibreLayerController', () => {
       0.35,
     );
     expect(map.paintProperties.get(`${mapLayerIds.roads}.line-opacity`)).toBe(0.48);
+    expect(map.paintProperties.get(`${mapLayerIds.brownfieldAreas}.fill-opacity`)).toBe(
+      0,
+    );
+    expect(map.paintProperties.get(`${mapLayerIds.buildings}.fill-opacity`)).toBe(0);
+    expect(
+      map.paintProperties.get(`${mapLayerIds.hikingPathDetails}.line-opacity`),
+    ).toBe(0.48);
+    expect(
+      map.paintProperties.get(`${mapLayerIds.hikingBridleways}.line-opacity`),
+    ).toBe(0.48);
     expect(map.paintProperties.get(`${mapLayerIds.hikingPois}.circle-opacity`)).toBe(
       0.38,
     );
@@ -1852,6 +1874,7 @@ describe('MapLibreLayerController', () => {
         'elevation-isolines': false,
         'natural-features': true,
         'restricted-areas': false,
+        'detail-context': true,
         'hiking-paths': true,
         roads: false,
         'places-and-pois': true,

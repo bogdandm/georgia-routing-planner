@@ -80,7 +80,9 @@ test('captures failures and exports an inspectable redacted bundle', async ({
 
   await page.getByRole('tab', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Check configured providers' }).click();
-  await expect(page.getByText('Vector provider reachability')).toBeVisible();
+  await expect(
+    page.getByText('Vector provider reachability', { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('Terrain provider reachability')).toBeVisible();
   await expect(page.getByText('Satellite catalog reachability')).toBeVisible();
 
@@ -121,6 +123,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     styleId: 'Georgia hiking basemap v1',
     sourceIds: [
       'basemap-vector',
+      'basemap-detail-vector',
       'satellite-basemap',
       'napr-orthophoto-2016-2017',
       'napr-orthophoto-2020-west',

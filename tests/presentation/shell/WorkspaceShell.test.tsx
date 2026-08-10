@@ -342,7 +342,9 @@ describe('WorkspaceShell', () => {
       within(about).getByRole('link', { name: 'nominatim.openstreetmap.org' }),
     ).toBeVisible();
     expect(
-      within(about).getByText('OpenFreeMap · © OpenMapTiles · Data from OpenStreetMap'),
+      within(about).getByText(
+        'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors',
+      ),
     ).toBeVisible();
     expect(
       within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
@@ -362,6 +364,39 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(aboutButton).toHaveFocus();
     });
+  });
+  it('deduplicates a custom vector attribution that already credits OpenStreetMap', async () => {
+    const configuredMapProviders = services.mapProviderConfiguration;
+    if (configuredMapProviders.status !== 'valid') {
+      throw new Error('Expected configured map providers');
+    }
+    services = {
+      ...services,
+      mapProviderConfiguration: {
+        status: 'valid',
+        value: {
+          ...configuredMapProviders.value,
+          vector: {
+            ...configuredMapProviders.value.vector,
+            attribution:
+              '<a href="https://openfreemap.org/">OpenFreeMap</a> · <a href="https://openmaptiles.org/">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a>',
+          },
+        },
+      },
+    };
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'About this site' }));
+
+    const about = screen.getByRole('dialog', {
+      name: 'About Trail Planner',
+    });
+    expect(
+      within(about).getByText(
+        'OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors',
+      ),
+    ).toBeVisible();
   });
 
   it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
@@ -503,10 +538,13 @@ describe('WorkspaceShell', () => {
       }),
     ).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap' }),
+      screen.getByRole('heading', {
+        name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread',
+      }),
     ).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Natural features' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'OSM detail' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
     expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
     expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();
@@ -2108,7 +2146,7 @@ describe('WorkspaceShell', () => {
     }
   });
 
-  it('accepts a GPX drop only inside the import zone and exposes discard confirmation', async () => {
+  it('shows the track drop target over another tab and opens the imported track', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { container } = renderWorkspaceShell();
     const workspace = container.firstElementChild;
@@ -2116,45 +2154,72 @@ describe('WorkspaceShell', () => {
     if (workspace === null) return;
     const file = gpxFile('Dropped.gpx');
 
-    fireEvent.drop(workspace, {
-      dataTransfer: { types: ['Files'], files: [file] },
-    });
-    expect(
-      screen.queryByRole('heading', { name: 'New track' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
-    ).toBeVisible();
-
-    await userEvent.click(screen.getByRole('tab', { name: 'Tracks' }));
-    const importZone = screen.getByRole('region', { name: 'Import track file' });
     fireEvent.dragEnter(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
-    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
+    const dropTarget = screen.getByRole('region', { name: 'Drop track file' });
+    expect(dropTarget).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Fake map')).toBeVisible();
+
+    fireEvent.drop(dropTarget, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close track' }));
+    expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
+  });
+
+  it('shows the track drop target while navigation is collapsed and expands for the imported track', async () => {
+    useUiStore.setState({ navigationCollapsed: true });
+    const { container } = renderWorkspaceShell();
+    const workspace = container.firstElementChild;
+    expect(workspace).not.toBeNull();
+    if (workspace === null) return;
+    const file = gpxFile('Collapsed.gpx');
+
+    fireEvent.dragEnter(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    const dropTarget = screen.getByRole('region', { name: 'Drop track file' });
+    expect(dropTarget).toBeVisible();
+
+    fireEvent.drop(dropTarget, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeVisible();
+  });
+
+  it('ignores a file drop outside the track drop target', () => {
+    useUiStore.setState({ navigationCollapsed: true });
+    const { container } = renderWorkspaceShell();
+    const workspace = container.firstElementChild;
+    expect(workspace).not.toBeNull();
+    if (workspace === null) return;
+    const file = gpxFile('Outside.gpx');
+
+    fireEvent.dragEnter(workspace, {
+      dataTransfer: { types: ['Files'], files: [file] },
+    });
+    expect(screen.getByRole('region', { name: 'Drop track file' })).toBeVisible();
+
     fireEvent.drop(workspace, {
       dataTransfer: { types: ['Files'], files: [file] },
     });
     expect(
-      screen.queryByRole('heading', { name: 'New track' }),
+      screen.queryByRole('region', { name: 'Drop track file' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
-
-    fireEvent.dragEnter(importZone, {
-      dataTransfer: { types: ['Files'], files: [file] },
-    });
-    expect(screen.getByText('Drop GPX, FIT, or KML here')).toBeVisible();
-    fireEvent.drop(importZone, {
-      dataTransfer: { types: ['Files'], files: [file] },
-    });
-    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Tracks', level: 1 })).toBeVisible();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Close track' }));
-    expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
     expect(
       screen.queryByRole('heading', { name: 'New track' }),
     ).not.toBeInTheDocument();
+    expect(useUiStore.getState().activeTab).toBe('satellite');
+    expect(useUiStore.getState().navigationCollapsed).toBe(true);
   });
 
   it('offers calendar navigation tooltips, current-month return, and month-year selection', async () => {

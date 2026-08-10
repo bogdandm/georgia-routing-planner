@@ -37,8 +37,10 @@ const labelLayout: NonNullable<SymbolLayerSpecification['layout']> = {
 
 function createBasemapLayers(
   sourceLayers: MapProviderConfiguration['vector']['sourceLayers'],
+  detailSourceLayers: MapProviderConfiguration['detailVector']['sourceLayers'],
 ): readonly LayerSpecification[] {
   const source = mapSourceIds.basemapVector;
+  const detailSource = mapSourceIds.basemapDetailVector;
   return [
     {
       id: mapLayerIds.background,
@@ -152,6 +154,18 @@ function createBasemapLayers(
       },
     },
     {
+      id: mapLayerIds.brownfieldAreas,
+      type: 'fill',
+      source: detailSource,
+      'source-layer': detailSourceLayers.land,
+      filter: ['==', ['get', 'kind'], 'brownfield'],
+      paint: {
+        'fill-antialias': false,
+        'fill-color': mapVisualPalette.base.brownfield,
+        ...mapVisualModePaint.vector[mapLayerIds.brownfieldAreas],
+      },
+    },
+    {
       id: mapLayerIds.restrictedAreas,
       type: 'line',
       source,
@@ -185,20 +199,6 @@ function createBasemapLayers(
       },
     },
     {
-      id: mapLayerIds.ridges,
-      type: 'line',
-      source,
-      'source-layer': sourceLayers.peaks,
-      minzoom: 13,
-      filter: ['==', ['get', 'class'], 'ridge'],
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': mapVisualPalette.terrain.ridge,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1],
-        ...mapVisualModePaint.vector[mapLayerIds.ridges],
-      },
-    },
-    {
       id: mapLayerIds.water,
       type: 'fill',
       source,
@@ -206,6 +206,17 @@ function createBasemapLayers(
       paint: {
         'fill-color': mapVisualPalette.water.fill,
         ...mapVisualModePaint.vector[mapLayerIds.water],
+      },
+    },
+    {
+      id: mapLayerIds.buildings,
+      type: 'fill',
+      source: detailSource,
+      'source-layer': detailSourceLayers.buildings,
+      paint: {
+        'fill-antialias': false,
+        'fill-color': mapVisualPalette.base.building,
+        ...mapVisualModePaint.vector[mapLayerIds.buildings],
       },
     },
     {
@@ -224,12 +235,25 @@ function createBasemapLayers(
     {
       id: mapLayerIds.roadCasings,
       type: 'line',
-      source,
-      'source-layer': sourceLayers.transportation,
+      source: detailSource,
+      'source-layer': detailSourceLayers.streets,
       filter: [
         'in',
-        ['get', 'class'],
-        ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor']],
+        ['get', 'kind'],
+        [
+          'literal',
+          [
+            'motorway',
+            'trunk',
+            'primary',
+            'secondary',
+            'tertiary',
+            'unclassified',
+            'residential',
+            'living_street',
+            'service',
+          ],
+        ],
       ],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
@@ -241,18 +265,31 @@ function createBasemapLayers(
     {
       id: mapLayerIds.roads,
       type: 'line',
-      source,
-      'source-layer': sourceLayers.transportation,
+      source: detailSource,
+      'source-layer': detailSourceLayers.streets,
       filter: [
         'in',
-        ['get', 'class'],
-        ['literal', ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor']],
+        ['get', 'kind'],
+        [
+          'literal',
+          [
+            'motorway',
+            'trunk',
+            'primary',
+            'secondary',
+            'tertiary',
+            'unclassified',
+            'residential',
+            'living_street',
+            'service',
+          ],
+        ],
       ],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': [
           'match',
-          ['get', 'class'],
+          ['get', 'kind'],
           'motorway',
           mapVisualPalette.transport.motorway,
           'trunk',
@@ -273,6 +310,7 @@ function createBasemapLayers(
       source,
       'source-layer': sourceLayers.transportation,
       minzoom: 10,
+      maxzoom: 13,
       filter: [
         'any',
         ['in', ['get', 'class'], ['literal', ['path', 'track']]],
@@ -291,12 +329,46 @@ function createBasemapLayers(
       },
     },
     {
-      id: mapLayerIds.hikingSteps,
+      id: mapLayerIds.hikingPathDetails,
+      type: 'line',
+      source: detailSource,
+      'source-layer': detailSourceLayers.streets,
+      minzoom: 13,
+      filter: [
+        'in',
+        ['get', 'kind'],
+        ['literal', ['track', 'footway', 'path', 'cycleway', 'pedestrian']],
+      ],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': mapVisualPalette.transport.path,
+        ...mapVisualModePaint.vector[mapLayerIds.hikingPathDetails],
+        'line-dasharray': [2, 1.5],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.8, 16, 2.1],
+      },
+    },
+    {
+      id: mapLayerIds.hikingBridleways,
       type: 'line',
       source,
       'source-layer': sourceLayers.transportation,
       minzoom: 13,
-      filter: ['==', ['get', 'subclass'], 'steps'],
+      filter: ['==', ['get', 'subclass'], 'bridleway'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': mapVisualPalette.transport.path,
+        ...mapVisualModePaint.vector[mapLayerIds.hikingBridleways],
+        'line-dasharray': [2, 1.5],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.8, 16, 2.1],
+      },
+    },
+    {
+      id: mapLayerIds.hikingSteps,
+      type: 'line',
+      source: detailSource,
+      'source-layer': detailSourceLayers.streets,
+      minzoom: 13,
+      filter: ['==', ['get', 'kind'], 'steps'],
       paint: {
         'line-color': mapVisualPalette.transport.steps,
         ...mapVisualModePaint.vector[mapLayerIds.hikingSteps],
@@ -371,6 +443,20 @@ function createBasemapLayers(
         'circle-radius': 3,
         'circle-stroke-color': mapVisualPalette.text.haloVector,
         'circle-stroke-width': 1,
+      },
+    },
+    {
+      id: mapLayerIds.ridges,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.peaks,
+      minzoom: 13,
+      filter: ['==', ['get', 'class'], 'ridge'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': mapVisualPalette.terrain.ridge,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1],
+        ...mapVisualModePaint.vector[mapLayerIds.ridges],
       },
     },
     {
@@ -513,6 +599,11 @@ export function createHikingMapStyle(
         url: configuration.vector.tileJsonUrl,
         attribution: configuration.vector.attribution,
       },
+      [mapSourceIds.basemapDetailVector]: {
+        type: 'vector',
+        url: configuration.detailVector.tileJsonUrl,
+        attribution: configuration.detailVector.attribution,
+      },
       [mapSourceIds.satelliteBasemap]: {
         type: 'raster',
         tiles: [...configuration.satelliteBasemap.tileUrls],
@@ -556,6 +647,11 @@ export function createHikingMapStyle(
         attribution: configuration.naprOrthophoto.attribution,
       },
     },
-    layers: [...createBasemapLayers(configuration.vector.sourceLayers)],
+    layers: [
+      ...createBasemapLayers(
+        configuration.vector.sourceLayers,
+        configuration.detailVector.sourceLayers,
+      ),
+    ],
   };
 }

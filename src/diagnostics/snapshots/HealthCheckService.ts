@@ -59,6 +59,12 @@ export class HealthCheckService {
         signal,
       ),
       this.checkProvider(
+        'Detail vector provider reachability',
+        configuration.detailVector.tileJsonUrl,
+        configuration.policy.requestTimeoutMs,
+        signal,
+      ),
+      this.checkProvider(
         'Terrain provider reachability',
         terrainProbeUrl,
         configuration.policy.requestTimeoutMs,

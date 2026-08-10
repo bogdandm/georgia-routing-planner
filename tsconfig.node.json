@@ -29,6 +29,7 @@
     "vitest.integration.config.ts",
     "playwright.config.ts",
     "tools/**/*.ts",
+    "src/bootstrap/configuration/MapProviderConfiguration.ts",
     "src/infrastructure/elevation/TerrariumDemFilter.ts",
     "src/domain/elevation/robustElevationStatistics.ts",
     "tests/helpers/referenceTerrariumDemFilter.ts",

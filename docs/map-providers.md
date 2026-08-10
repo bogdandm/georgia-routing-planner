@@ -54,6 +54,26 @@ The transportation schema explicitly includes `path`, `track`, `footway`, `steps
 relations as a dedicated source layer in this default schema, so the current style shows
 physical ways rather than claiming to show official marked routes.
 
+### Routing tile inspection baseline
+
+The opt-in `pnpm diagnostics:routing-inspect` command reads the configured vector
+TileJSON and `transportation` source layer independently of MapLibre. The 2026-08-10
+inspection covered the z14 3×3 tile area centered on Stepantsminda (`44.6408, 42.6602`).
+The plan-time baseline recorded 98 transportation features (95 lines and 3 polygons),
+IDs on all 98 features, and 95 repeated endpoint keys. The checked-in inspector
+reproduced the geometry and ID counts against the current versioned tile snapshot and
+measured 92 shared part-endpoint keys, 112 repeated part-endpoint occurrences, and 395
+shared graph-vertex keys. These metrics are reported separately so time-sensitive
+provider changes do not silently alter routing policy.
+
+The observed property keys were `bicycle`, `brunnel`, `class`, `foot`, `layer`, `ramp`,
+`service`, `subclass`, and `surface`. Line classes included `path`, `track`, `minor`,
+`service`, `tertiary`, `trunk`, `minor_construction`, and `trunk_construction`;
+subclasses included `path`, `footway`, `pedestrian`, and `steps`. Representative path
+and track features carried combinations of `surface`, `foot`, `brunnel`, and `layer`.
+This evidence fixes z14 and the explicit walkable subset used by browser routing; it
+does not imply complete access, direction, intersection, or trail-condition data.
+
 English-first labels use `name:en`, then the provider-generated `name:latin` field for
 transliteration, and finally legacy English/native fallbacks. Land-cover `ice` supplies
 the available glacier geometry. Land-use `military` supplies restricted-area geometry,

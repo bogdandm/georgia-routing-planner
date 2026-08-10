@@ -2,6 +2,7 @@ import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
 import {
   DATABASE_PAGE_SIZE,
+  type DeleteMarkerCommand,
   type DeleteTrackCommand,
   MAX_STORAGE_OBJECTS,
   type MetadataTrackCommand,
@@ -12,6 +13,7 @@ import {
   TRACK_QUOTA_BYTES,
   TrackSyncFailure,
   type TrackUsage,
+  type UpsertMarkerCommand,
   type UploadTrackCommand,
   UUID_PATTERN,
 } from './contracts.ts';
@@ -135,6 +137,22 @@ export class SupabaseTrackSyncGateway {
     return await this.callRpc('delete_track', {
       p_user_id: this.userId,
       p_content_hash: command.contentHash,
+      p_base_revision: command.baseRevision,
+    });
+  }
+  async upsertMarker(command: UpsertMarkerCommand): Promise<RpcResponse> {
+    return await this.callRpc('upsert_marker', {
+      p_user_id: this.userId,
+      p_marker_id: command.markerId,
+      p_payload: command.marker,
+      p_base_revision: command.baseRevision,
+    });
+  }
+
+  async deleteMarker(command: DeleteMarkerCommand): Promise<RpcResponse> {
+    return await this.callRpc('delete_marker', {
+      p_user_id: this.userId,
+      p_marker_id: command.markerId,
       p_base_revision: command.baseRevision,
     });
   }
@@ -315,6 +333,8 @@ const RPC_OUTCOMES: Readonly<Record<RpcResponse['outcome'], true>> = {
   conflict: true,
   existing: true,
   missing: true,
+  limit: true,
+  'revision-exhausted': true,
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {

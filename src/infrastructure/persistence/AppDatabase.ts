@@ -100,6 +100,11 @@ const markerSyncStateSchema: z.ZodType<MarkerSyncState> = z
     'Clean marker state requires a remote revision.',
   );
 
+
+export interface MarkerSyncEntry {
+  readonly marker: SavedMarker | null;
+  readonly state: MarkerSyncState;
+}
 export interface LocalTrackSyncPair {
   readonly summary: LocalTrackSummary;
   readonly content: LocalTrackContent;
@@ -1063,6 +1068,20 @@ export class AppDatabase
       });
     }
     return valid;
+  }
+
+  public async readMarkerSyncSnapshot(): Promise<readonly MarkerSyncEntry[]> {
+    return await this.transaction('r', this.savedMarkers, this.markerSyncStates, async () => {
+      const states = await this.markerSyncStates.orderBy('markerId').toArray();
+      const snapshot: MarkerSyncEntry[] = [];
+      for (const value of states) {
+        const parsedState = markerSyncStateSchema.safeParse(value);
+        if (!parsedState.success) continue;
+        const marker = parseSavedMarker(await this.savedMarkers.get(parsedState.data.markerId));
+        snapshot.push({ marker, state: parsedState.data });
+      }
+      return snapshot;
+    });
   }
 
   public async saveSavedMarker(marker: SavedMarker): Promise<void> {

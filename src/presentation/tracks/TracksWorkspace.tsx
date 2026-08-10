@@ -1404,7 +1404,11 @@ function TrackImportZone() {
   );
 }
 
-export function TracksPanel() {
+interface TracksPanelProps {
+  readonly onOpenActiveDetails: () => void;
+}
+
+export function TracksPanel({ onOpenActiveDetails }: TracksPanelProps) {
   const {
     active,
     error,
@@ -1533,7 +1537,13 @@ export function TracksPanel() {
                   >
                     <ListItemButton
                       selected={selected}
-                      onClick={() => void selectSaved(summary)}
+                      onClick={() => {
+                        if (selected) {
+                          onOpenActiveDetails();
+                          return;
+                        }
+                        void selectSaved(summary);
+                      }}
                       sx={{
                         display: 'block',
                         minWidth: 0,

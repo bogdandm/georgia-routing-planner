@@ -1,16 +1,13 @@
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
 import type {
-  DeleteMarkerCommand,
   DeleteTrackCommand,
   MetadataTrackCommand,
   RpcResponse,
   TrackSyncCommand,
   TrackSyncResult,
-  UpsertMarkerCommand,
   UploadTrackCommand,
 } from './contracts.ts';
-import { TrackSyncFailure } from './contracts.ts';
 import { SupabaseTrackSyncGateway } from './supabase-track-sync-gateway.ts';
 
 export class TrackSyncService {
@@ -26,35 +23,9 @@ export class TrackSyncService {
         return await this.metadata(command);
       case 'delete':
         return await this.delete(command);
-      case 'marker-upsert':
-        return await this.upsertMarker(command);
-      case 'marker-delete':
-        return await this.deleteMarker(command);
       case 'status':
         return await this.status();
     }
-  }
-
-  private async upsertMarker(command: UpsertMarkerCommand): Promise<RpcResponse> {
-    return this.markerMutation(await this.gateway.upsertMarker(command));
-  }
-
-  private async deleteMarker(command: DeleteMarkerCommand): Promise<RpcResponse> {
-    return this.markerMutation(await this.gateway.deleteMarker(command));
-  }
-
-  private markerMutation(result: RpcResponse): RpcResponse {
-    if (result.outcome === 'limit') {
-      throw new TrackSyncFailure(409, 'marker_limit', 'Cloud marker limit reached.');
-    }
-    if (result.outcome === 'revision-exhausted') {
-      throw new TrackSyncFailure(
-        409,
-        'marker_revision_exhausted',
-        'Marker revisions are exhausted.',
-      );
-    }
-    return result;
   }
 
   private readonly gateway: SupabaseTrackSyncGateway;

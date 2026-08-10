@@ -3,8 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@1.0.14": "1.0.14",
     "jsr:@std/internal@^1.0.10": "1.0.14",
-    "npm:@supabase/server@1.4.1": "1.4.1_@supabase+supabase-js@2.111.0",
-    "npm:zod@4.4.3": "4.4.3"
+    "npm:@supabase/server@1.4.1": "1.4.1_@supabase+supabase-js@2.111.0"
   },
   "jsr": {
     "@std/assert@1.0.14": {
@@ -78,9 +77,6 @@
     },
     "tslib@2.8.1": {
       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
-    },
-    "zod@4.4.3": {
-      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
   }
 }

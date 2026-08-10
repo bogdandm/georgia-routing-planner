@@ -194,10 +194,12 @@ export function createTrackSyncResponse(result: TrackSyncResult): Response {
     );
   }
   if ('outcome' in result) {
-    return jsonResponse({
+    const response: { outcome: RpcResponse['outcome']; record?: unknown } = {
       outcome: result.outcome,
-      record: serializeRecord((result as RpcResponse).record),
-    });
+    };
+    const record = (result as RpcResponse).record;
+    if (record !== undefined) response.record = serializeRecord(record);
+    return jsonResponse(response);
   }
   return jsonResponse(result as TrackUsage);
 }
@@ -580,6 +582,17 @@ async function parseUploadRequest(request: Request): Promise<TrackSyncCommand> {
 
 function serializeRecord(value: unknown): unknown {
   if (!isObject(value)) return undefined;
+  if (
+    typeof value.marker_id === 'string' &&
+    Number.isSafeInteger(value.revision) &&
+    isObject(value.payload)
+  ) {
+    return {
+      marker_id: value.marker_id,
+      revision: value.revision,
+      payload: value.payload,
+    };
+  }
   return {
     contentHash: value.content_hash,
     metadata: value.metadata,

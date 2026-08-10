@@ -1358,6 +1358,15 @@ describe('TrackSyncWorkerServer', () => {
         .mockResolvedValueOnce([{ marker_id: saved.id, revision: 1, payload: saved }]),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
+    const progress: Array<{
+      readonly completedItems: number;
+      readonly totalItems: number;
+    }> = [];
+    client.subscribeEvent(trackSyncWorkerEventNames.progress, (payload) => {
+      progress.push(
+        payload as { readonly completedItems: number; readonly totalItems: number },
+      );
+    });
 
     await expect(
       client.request(trackSyncWorkerMethods.synchronize, {
@@ -1386,6 +1395,12 @@ describe('TrackSyncWorkerServer', () => {
         },
       },
     ]);
+    await vi.waitFor(() => {
+      expect(progress).toEqual([
+        { completedItems: 0, totalItems: 1 },
+        { completedItems: 1, totalItems: 1 },
+      ]);
+    });
     client.dispose();
   });
 });

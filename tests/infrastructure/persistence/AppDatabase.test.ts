@@ -571,6 +571,42 @@ describe('AppDatabase', () => {
     ]);
   });
 
+  it('restores a cloud-deleted marker as a new remote incarnation', async () => {
+    const saved = marker();
+    await database.saveSavedMarker(saved);
+    await database.markerSyncStates.put({
+      markerId: saved.id,
+      remoteRevision: 5,
+      pendingKind: null,
+      localVersion: 1,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-a',
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+
+    await database.resolveRemoteDeletions({
+      expectedUserId: 'user-a',
+      trackCandidateIds: [],
+      markerCandidateIds: [saved.id],
+      tracks: { deleteIds: [], restoreIds: [] },
+      markers: { deleteIds: [], restoreIds: [saved.id] },
+    });
+
+    await expect(database.readMarkerSyncSnapshot()).resolves.toEqual([
+      {
+        marker: saved,
+        state: {
+          markerId: saved.id,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+          localVersion: 2,
+        },
+      },
+    ]);
+  });
+
   it('rejects remote deletion decisions with non-candidate identifiers', async () => {
     await expect(
       database.resolveRemoteDeletions({

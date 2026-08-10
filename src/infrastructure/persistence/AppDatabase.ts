@@ -2198,7 +2198,7 @@ export class AppDatabase
             marker,
             state: {
               markerId,
-              remoteRevision: existing.success ? existing.data.remoteRevision : null,
+              remoteRevision: null,
               pendingKind: 'upsert',
               localVersion: nextMarkerLocalVersion(
                 existing.success ? existing.data : null,

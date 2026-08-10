@@ -1014,7 +1014,19 @@ export class TrackSyncWorkerServer {
         usage,
       });
     }
-    const markerOutcome = await this.synchronizeMarkers(userId, gateway, signal);
+    const markerOutcome = await this.synchronizeMarkers(
+      userId,
+      gateway,
+      signal,
+      (items) => {
+        totalTracks += items;
+        publishProgress();
+      },
+      () => {
+        completedTracks += 1;
+        publishProgress();
+      },
+    );
     return {
       usage,
       changed: { tracks: tracksChanged, markers: markerOutcome.changed },
@@ -1027,6 +1039,8 @@ export class TrackSyncWorkerServer {
     userId: string,
     gateway: RemoteGateway,
     signal: AbortSignal,
+    addItems: (items: number) => void,
+    completeItem: () => void,
   ): Promise<{
     readonly changed: boolean;
     readonly remoteDeletions: readonly RemoteMarkerDeletionCandidate[];
@@ -1041,16 +1055,34 @@ export class TrackSyncWorkerServer {
         record,
       ]),
     );
+    const initialById = new Map(initial.map((entry) => [entry.state.markerId, entry]));
+    const pending = initial.filter(
+      (entry) =>
+        entry.state.pendingKind !== null &&
+        !(entry.state.pendingKind === 'upsert' && entry.marker === null),
+    );
+    const anticipatedRemoteUpdates = [...firstRemote.values()].filter((remote) => {
+      const entry = initialById.get(remote.marker_id);
+      return (
+        entry === undefined ||
+        (entry.state.pendingKind === null &&
+          entry.state.remoteRevision !== null &&
+          (remote.revision > entry.state.remoteRevision ||
+            (remote.revision === entry.state.remoteRevision &&
+              JSON.stringify(remote.payload) !== JSON.stringify(entry.marker))))
+      );
+    }).length;
+    if (pending.length + anticipatedRemoteUpdates > 0) {
+      addItems(pending.length + anticipatedRemoteUpdates);
+    }
     const acknowledgements = new Map<string, MarkerSyncState | null>();
     const remoteDeletions = new Map<string, RemoteMarkerDeletionCandidate>();
-    for (const entry of [...initial].sort(
+    for (const entry of [...pending].sort(
       (left, right) =>
         Number(right.state.pendingKind === 'delete') -
         Number(left.state.pendingKind === 'delete'),
     )) {
-      if (entry.state.pendingKind === null) continue;
       const remote = firstRemote.get(entry.state.markerId);
-      if (entry.state.pendingKind === 'upsert' && entry.marker === null) continue;
       let baseRevision = entry.state.remoteRevision ?? remote?.revision ?? 0;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const mutation = await gateway.mutateMarker(
@@ -1092,6 +1124,7 @@ export class TrackSyncWorkerServer {
         }
         break;
       }
+      completeItem();
     }
     const secondRemote = new Map(
       (await gateway.markerSnapshot(signal)).map((record) => [
@@ -1105,7 +1138,6 @@ export class TrackSyncWorkerServer {
         entry,
       ]),
     );
-    const initialById = new Map(initial.map((entry) => [entry.state.markerId, entry]));
     const putById = new Map<string, SavedMarker>();
     const stateById = new Map<string, MarkerSyncState>();
     const deleteStateIds = new Set<string>();
@@ -1129,6 +1161,7 @@ export class TrackSyncWorkerServer {
     for (const [markerId, remote] of secondRemote) {
       const entry = current.get(markerId);
       if (entry === undefined) {
+        if (!firstRemote.has(markerId)) addItems(1);
         putById.set(markerId, remote.payload);
         stateById.set(markerId, {
           markerId,
@@ -1137,6 +1170,7 @@ export class TrackSyncWorkerServer {
           localVersion: 1,
         });
         expectedById.set(markerId, null);
+        completeItem();
         continue;
       }
       if (entry.state.pendingKind !== null) continue;
@@ -1167,6 +1201,7 @@ export class TrackSyncWorkerServer {
           localVersion: entry.state.localVersion + 1,
         });
         expectedById.set(markerId, entry.state);
+        completeItem();
       }
     }
     for (const entry of current.values()) {

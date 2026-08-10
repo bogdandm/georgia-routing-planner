@@ -4,6 +4,7 @@ import { createUnconfiguredUserDataService } from '@/application/user/UserDataSe
 import type { UserDataService } from '@/application/user/UserDataService';
 import type { Clock } from '@/application/ports/Clock';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import type { TrailRouter } from '@/application/ports/TrailRouter';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
@@ -53,6 +54,7 @@ class TestIdGenerator implements IdGenerator {
 interface CreateTestServicesOptions {
   readonly satelliteCatalogGateway?: SatelliteCatalogGateway;
   readonly userData?: UserDataService;
+  readonly trailRouter?: TrailRouter | null;
 }
 
 export function createTestServices(
@@ -72,6 +74,7 @@ export function createTestServices(
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
   const mapViewport = new MapViewportSnapshotStore();
   const userData = options.userData ?? createUnconfiguredUserDataService();
+  const trailRouter = options.trailRouter ?? null;
   const httpClient = createHttpClient(logger, clock, idGenerator);
   const parsedMapProviderConfiguration = parseMapProviderConfiguration(
     defaultMapProviderConfigurationInput,
@@ -145,11 +148,13 @@ export function createTestServices(
       mapDiagnostics,
     ),
     dispose: () => {
+      trailRouter?.dispose();
       mapLayers.dispose();
       database.close();
       userData.dispose();
     },
     httpClient,
+    trailRouter,
     trackContentHasher: new WebCryptoTrackContentHasher(),
     idGenerator,
     logger,

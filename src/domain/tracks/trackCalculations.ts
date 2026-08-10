@@ -7,7 +7,7 @@ export const CALCULATED_ELEVATION_HYSTERESIS_METERS = 10;
 export const ROUTE_SHAPE_ALGORITHM_VERSION = 1;
 export const DOMINANT_SUMMIT_ALGORITHM_VERSION = 1;
 
-const earthRadiusMeters = 6_371_008.8;
+export const EARTH_RADIUS_METERS = 6_371_008.8;
 const elevationSampleIntervalMeters = 10;
 const stationDistanceEpsilonMeters = 1e-6;
 
@@ -304,7 +304,7 @@ export function geodesicDistanceMeters(
   const haversine =
     Math.sin(latitudeDelta / 2) ** 2 +
     Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) ** 2;
-  return 2 * earthRadiusMeters * Math.asin(Math.min(1, Math.sqrt(haversine)));
+  return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
 function calculateBounds(points: readonly TrackPoint[]): {

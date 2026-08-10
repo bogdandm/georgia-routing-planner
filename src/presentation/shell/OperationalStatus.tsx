@@ -176,7 +176,7 @@ export function OperationalStatus() {
       sx={{
         position: 'absolute',
         top: 56,
-        right: 47,
+        right: 54,
         zIndex: 2,
         width: 330,
         maxWidth: 'calc(100% - 144px)',

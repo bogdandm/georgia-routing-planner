@@ -40,9 +40,11 @@ export interface RoutePlanDraft {
   readonly id: string;
   readonly name: string;
   readonly waypoints: readonly TrackCoordinate[];
+  readonly queuedWaypoints: readonly TrackCoordinate[];
   readonly legs: readonly RoutePlanLeg[];
   readonly nextSegmentMode: RoutePlanSegmentMode;
   readonly requestGeneration: number;
+  readonly pendingRequest: PendingRoutePlanRequest | null;
   readonly status: RoutePlanStatus;
   readonly failure: TrailRouteFailure | null;
   readonly routeProgress: TrailRouteProgress | null;
@@ -55,11 +57,6 @@ export interface PendingRoutePlanRequest {
   readonly generation: number;
   readonly start: TrackCoordinate;
   readonly destination: TrackCoordinate;
-}
-
-export interface RoutePlanPointTransition {
-  readonly draft: RoutePlanDraft;
-  readonly request: PendingRoutePlanRequest | null;
 }
 
 function coordinatesEqual(left: TrackCoordinate, right: TrackCoordinate): boolean {
@@ -123,8 +120,10 @@ export function startRoutePlan(id: string): RoutePlanDraft {
     name: 'New route',
     waypoints: [],
     legs: [],
+    queuedWaypoints: [],
     nextSegmentMode: 'routes',
     requestGeneration: 0,
+    pendingRequest: null,
     status: 'selecting-start',
     failure: null,
     routeProgress: null,
@@ -142,61 +141,71 @@ export function setNextSegmentMode(
   draft: RoutePlanDraft,
   nextSegmentMode: RoutePlanSegmentMode,
 ): RoutePlanDraft {
-  if (draft.status === 'calculating' || draft.status === 'saving') return draft;
+  if (
+    draft.status === 'saving' ||
+    draft.pendingRequest !== null ||
+    draft.queuedWaypoints.length > 0
+  ) {
+    return draft;
+  }
   return { ...draft, nextSegmentMode };
 }
 
-export function beginRoutePlanPoint(
-  draft: RoutePlanDraft,
-  coordinate: TrackCoordinate,
-): RoutePlanPointTransition {
-  if (draft.status === 'calculating' || draft.status === 'saving') {
-    return { draft, request: null };
+function advanceRoutePlanQueue(draft: RoutePlanDraft): RoutePlanDraft {
+  if (
+    draft.pendingRequest !== null ||
+    draft.status === 'saving' ||
+    draft.queuedWaypoints.length === 0
+  ) {
+    return draft;
   }
-  const generation = draft.requestGeneration + 1;
-  const previous = draft.waypoints.at(-1);
-  if (previous === undefined) {
-    return {
-      draft: {
-        ...draft,
-        waypoints: [coordinate],
+
+  let next = draft;
+  while (next.pendingRequest === null && next.queuedWaypoints.length > 0) {
+    const destination = next.queuedWaypoints[0];
+    if (destination === undefined) return next;
+    const queuedWaypoints = next.queuedWaypoints.slice(1);
+    const generation = next.requestGeneration + 1;
+    const start = next.waypoints.at(-1);
+    if (start === undefined) {
+      next = {
+        ...next,
+        waypoints: [destination],
+        queuedWaypoints,
         requestGeneration: generation,
         status: 'selecting-destination',
         failure: null,
         routeProgress: null,
-      },
-      request: null,
-    };
-  }
-
-  if (draft.nextSegmentMode === 'line') {
-    const leg: RoutePlanLeg = {
-      mode: 'line',
-      rawStart: previous,
-      rawDestination: coordinate,
-      sections: [{ kind: 'direct', coordinates: [previous, coordinate] }],
-      coordinates: [previous, coordinate],
-    };
-    const legs = [...draft.legs, leg];
-    return {
-      draft: {
-        ...draft,
-        waypoints: [...draft.waypoints, coordinate],
+      };
+      continue;
+    }
+    if (next.nextSegmentMode === 'line') {
+      const leg: RoutePlanLeg = {
+        mode: 'line',
+        rawStart: start,
+        rawDestination: destination,
+        sections: [{ kind: 'direct', coordinates: [start, destination] }],
+        coordinates: [start, destination],
+      };
+      const legs = [...next.legs, leg];
+      next = {
+        ...next,
+        waypoints: [...next.waypoints, destination],
+        queuedWaypoints,
         legs,
         requestGeneration: generation,
         status: 'route-ready',
         failure: null,
         routeProgress: null,
         ...geometryState(legs),
-      },
-      request: null,
-    };
-  }
-
-  return {
-    draft: {
-      ...draft,
+      };
+      continue;
+    }
+    const request: PendingRoutePlanRequest = { generation, start, destination };
+    return {
+      ...next,
       requestGeneration: generation,
+      pendingRequest: request,
       status: 'calculating',
       failure: null,
       routeProgress: {
@@ -205,13 +214,20 @@ export function beginRoutePlanPoint(
         loadedTileCount: 0,
         totalTileCount: 0,
       },
-    },
-    request: {
-      generation,
-      start: previous,
-      destination: coordinate,
-    },
-  };
+    };
+  }
+  return next;
+}
+
+export function enqueueRoutePlanPoint(
+  draft: RoutePlanDraft,
+  coordinate: TrackCoordinate,
+): RoutePlanDraft {
+  if (draft.status === 'saving') return draft;
+  return advanceRoutePlanQueue({
+    ...draft,
+    queuedWaypoints: [...draft.queuedWaypoints, coordinate],
+  });
 }
 
 export function updateRoutePlanProgress(
@@ -219,7 +235,11 @@ export function updateRoutePlanProgress(
   generation: number,
   progress: TrailRouteProgress,
 ): RoutePlanDraft {
-  if (draft.status !== 'calculating' || draft.requestGeneration !== generation) {
+  if (
+    draft.status !== 'calculating' ||
+    draft.requestGeneration !== generation ||
+    draft.pendingRequest?.generation !== generation
+  ) {
     return draft;
   }
   return { ...draft, routeProgress: progress };
@@ -234,6 +254,8 @@ export function completeRoutePlanPoint(
   if (
     draft.status !== 'calculating' ||
     draft.requestGeneration !== request.generation ||
+    draft.pendingRequest !== request ||
+    draft.queuedWaypoints[0] !== request.destination ||
     previousWaypoint === undefined ||
     !coordinatesEqual(previousWaypoint, request.start)
   ) {
@@ -242,6 +264,8 @@ export function completeRoutePlanPoint(
   if (result.status === 'failed') {
     return {
       ...draft,
+      queuedWaypoints: [],
+      pendingRequest: null,
       status: 'failed',
       failure: result,
       routeProgress: null,
@@ -280,15 +304,17 @@ export function completeRoutePlanPoint(
     coordinates: flattenSections(sections),
   };
   const legs = [...draft.legs, leg];
-  return {
+  return advanceRoutePlanQueue({
     ...draft,
     waypoints: [...draft.waypoints, request.destination],
+    queuedWaypoints: draft.queuedWaypoints.slice(1),
+    pendingRequest: null,
     legs,
     status: 'route-ready',
     failure: null,
     routeProgress: null,
     ...geometryState(legs),
-  };
+  });
 }
 
 export function undoLastRoutePlanPoint(draft: RoutePlanDraft): RoutePlanDraft {
@@ -297,6 +323,8 @@ export function undoLastRoutePlanPoint(draft: RoutePlanDraft): RoutePlanDraft {
   if (draft.status === 'calculating') {
     return {
       ...draft,
+      queuedWaypoints: [],
+      pendingRequest: null,
       requestGeneration: generation,
       status: statusForWaypointCount(draft.waypoints.length),
       failure: null,
@@ -308,6 +336,8 @@ export function undoLastRoutePlanPoint(draft: RoutePlanDraft): RoutePlanDraft {
   return {
     ...draft,
     waypoints,
+    queuedWaypoints: [],
+    pendingRequest: null,
     legs,
     requestGeneration: generation,
     status: statusForWaypointCount(waypoints.length),
@@ -322,6 +352,8 @@ export function clearRoutePlan(draft: RoutePlanDraft): RoutePlanDraft {
   return {
     ...draft,
     waypoints: [],
+    queuedWaypoints: [],
+    pendingRequest: null,
     legs: [],
     requestGeneration: draft.requestGeneration + 1,
     status: 'selecting-start',
@@ -361,6 +393,8 @@ export function canSaveRoutePlan(draft: RoutePlanDraft): boolean {
     draft.status !== 'selecting-start' &&
     draft.status !== 'calculating' &&
     draft.status !== 'saving' &&
+    draft.pendingRequest === null &&
+    draft.queuedWaypoints.length === 0 &&
     draft.segment !== null &&
     draft.segment.points.length >= 2 &&
     draft.metrics !== null &&

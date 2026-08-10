@@ -56,6 +56,8 @@ export const importedTrackLayerIds = {
 export const routePlanLayerIds = {
   routed: 'route-plan-routed',
   direct: 'route-plan-direct',
+  preview: 'route-plan-preview',
+  previewLabel: 'route-plan-preview-label',
   waypoints: 'route-plan-waypoints',
   waypointLabels: 'route-plan-waypoint-labels',
 } as const;

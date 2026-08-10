@@ -4,6 +4,8 @@ const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
 const maximumPitchDegrees = 75;
 
+type Gesture = 'pan' | 'orbit' | null;
+
 /** Reuses one terrain-aware MapLibre marker for the active 3D orbit pivot. */
 function createOrbitPivotIndicator() {
   const element = document.createElement('div');
@@ -26,16 +28,14 @@ function createOrbitPivotIndicator() {
 }
 
 /**
- * Provides a restrained 3D-only camera orbit around the terrain point beneath the
- * initial middle-button or Shift+left-button press. MapLibre owns projection, terrain
- * anchoring, camera limits, and movement events through one zero-duration `easeTo` per
- * pointer update.
+ * Owns middle-button panning and Shift+left terrain orbit gestures without changing
+ * MapLibre's ordinary left and right button behavior.
  */
-export class CameraOrbitControl {
+export class MapPointerGestureControl {
   #container: HTMLElement | null = null;
   #map: MapLibreMap | null = null;
-  #enabled = false;
-  #activeButton: 0 | 1 | null = null;
+  #terrainOrbitEnabled = false;
+  #gesture: Gesture = null;
   #orbitAnchor: LngLat | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
 
@@ -54,9 +54,9 @@ export class CameraOrbitControl {
     container.addEventListener('auxclick', this.handleAuxClick, true);
   }
 
-  public setEnabled(enabled: boolean): void {
-    this.#enabled = enabled;
-    if (!enabled) this.finishGesture();
+  public setTerrainOrbitEnabled(enabled: boolean): void {
+    this.#terrainOrbitEnabled = enabled;
+    if (!enabled && this.#gesture === 'orbit') this.finishGesture();
   }
 
   public detach(): void {
@@ -71,16 +71,22 @@ export class CameraOrbitControl {
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
-    const isOrbitStart = event.button === 1 || (event.button === 0 && event.shiftKey);
-    if (!isOrbitStart || this.#container === null) return;
+    const gesture: Gesture =
+      event.button === 1
+        ? 'pan'
+        : event.button === 0 && event.shiftKey
+          ? 'orbit'
+          : null;
+    if (gesture === null || this.#container === null) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    this.#activeButton = event.button;
+    this.#gesture = gesture;
+    this.#lastPointer = { x: event.clientX, y: event.clientY };
     window.addEventListener('mousemove', this.handleMouseMove, true);
     window.addEventListener('mouseup', this.handleMouseUp, true);
 
-    if (!this.#enabled || this.#map === null) return;
+    if (gesture !== 'orbit' || !this.#terrainOrbitEnabled || this.#map === null) return;
 
     const bounds = this.#container.getBoundingClientRect();
     this.#orbitAnchor = this.#map.unproject([
@@ -88,22 +94,26 @@ export class CameraOrbitControl {
       event.clientY - bounds.top,
     ]);
     this.pivotIndicator.show(this.#map, this.#orbitAnchor);
-    this.#lastPointer = { x: event.clientX, y: event.clientY };
   };
 
   private readonly handleMouseMove = (event: MouseEvent): void => {
-    if (this.#activeButton === null) return;
+    const gesture = this.#gesture;
+    const map = this.#map;
+    const previous = this.#lastPointer;
+    if (gesture === null || map === null || previous === null) return;
+
     event.preventDefault();
     event.stopImmediatePropagation();
-
-    const map = this.#map;
-    const anchor = this.#orbitAnchor;
-    const previous = this.#lastPointer;
-    if (map === null || anchor === null || previous === null) return;
-
     const horizontalDelta = event.clientX - previous.x;
     const verticalDelta = event.clientY - previous.y;
     this.#lastPointer = { x: event.clientX, y: event.clientY };
+
+    if (gesture === 'pan') {
+      map.panBy([horizontalDelta, verticalDelta], { duration: 0 });
+      return;
+    }
+    const anchor = this.#orbitAnchor;
+    if (!this.#terrainOrbitEnabled || anchor === null) return;
     map.easeTo({
       around: anchor,
       bearing: map.getBearing() + horizontalDelta * bearingDegreesPerPixel,
@@ -117,10 +127,13 @@ export class CameraOrbitControl {
   };
 
   private readonly handleMouseUp = (event: MouseEvent): void => {
-    if (this.#activeButton !== event.button) return;
+    const isExpectedButton =
+      (this.#gesture === 'pan' && event.button === 1) ||
+      (this.#gesture === 'orbit' && event.button === 0);
+    if (!isExpectedButton) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    const suppressClick = this.#activeButton === 0;
+    const suppressClick = this.#gesture === 'orbit';
     this.finishGesture();
     if (suppressClick) this.suppressNextClick();
   };
@@ -142,7 +155,7 @@ export class CameraOrbitControl {
   }
 
   private finishGesture(): void {
-    this.#activeButton = null;
+    this.#gesture = null;
     this.#orbitAnchor = null;
     this.#lastPointer = null;
     this.pivotIndicator.hide();

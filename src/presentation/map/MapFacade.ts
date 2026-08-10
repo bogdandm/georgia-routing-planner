@@ -45,6 +45,7 @@ export interface MapFacade {
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
   setDebugOptions(options: MapDebugOptions): void;
   setInteractionMode(mode: MapInteractionMode): void;
+  setRoutePlanPreviewAnchor(coordinate: MapCoordinate | null): void;
 
   /** Cancels pending transitions and removes every native listener owned by the facade. */
   destroy(): void;

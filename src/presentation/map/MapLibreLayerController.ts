@@ -70,8 +70,9 @@ interface RoutePlanMapSection {
 }
 
 interface RoutePlanFeatureProperties {
-  readonly kind: 'routed' | 'direct' | 'waypoint';
+  readonly kind: 'routed' | 'direct' | 'waypoint' | 'preview' | 'preview-label';
   readonly number?: string;
+  readonly distanceLabel?: string;
 }
 
 const rasterSlots = [
@@ -401,6 +402,11 @@ export class MapLibreLayerController {
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   #routePlanSections: readonly RoutePlanMapSection[] = [];
   #routePlanWaypoints: readonly (readonly [number, number])[] = [];
+  #routePlanPreview: {
+    readonly start: readonly [number, number];
+    readonly cursor: readonly [number, number];
+    readonly distanceLabel: string;
+  } | null = null;
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
   #savedMarkers: readonly SavedMarker[] = [];
@@ -809,9 +815,28 @@ export class MapLibreLayerController {
     return this.reconcileRoutePlan();
   }
 
+  public setRoutePlanPreview(
+    start: readonly [number, number],
+    cursor: readonly [number, number],
+    distanceLabel: string,
+  ): MapLayerVisibilityResult {
+    this.#routePlanPreview = {
+      start: [...start] as readonly [number, number],
+      cursor: [...cursor] as readonly [number, number],
+      distanceLabel,
+    };
+    return this.reconcileRoutePlan();
+  }
+
+  public clearRoutePlanPreview(): void {
+    this.#routePlanPreview = null;
+    this.reconcileRoutePlan();
+  }
+
   public clearRoutePlanGeometry(): void {
     this.#routePlanSections = [];
     this.#routePlanWaypoints = [];
+    this.#routePlanPreview = null;
     this.reconcileRoutePlan();
   }
 
@@ -2098,6 +2123,39 @@ export class MapLibreLayerController {
               geometry: { type: 'Point', coordinates: [...coordinate] },
             }),
           ),
+          ...(this.#routePlanPreview === null
+            ? []
+            : [
+                {
+                  type: 'Feature' as const,
+                  properties: { kind: 'preview' as const },
+                  geometry: {
+                    type: 'LineString' as const,
+                    coordinates: [
+                      [...this.#routePlanPreview.start],
+                      [...this.#routePlanPreview.cursor],
+                    ],
+                  },
+                },
+                {
+                  type: 'Feature' as const,
+                  properties: {
+                    kind: 'preview-label' as const,
+                    distanceLabel: this.#routePlanPreview.distanceLabel,
+                  },
+                  geometry: {
+                    type: 'Point' as const,
+                    coordinates: [
+                      (this.#routePlanPreview.start[0] +
+                        this.#routePlanPreview.cursor[0]) /
+                        2,
+                      (this.#routePlanPreview.start[1] +
+                        this.#routePlanPreview.cursor[1]) /
+                        2,
+                    ],
+                  },
+                },
+              ]),
         ],
       };
       const routeSource = map.getSource(mapSourceIds.routePlan);
@@ -2141,6 +2199,42 @@ export class MapLibreLayerController {
           },
           beforeLayerId,
         );
+      }
+      if (map.getLayer(routePlanLayerIds.preview) === undefined) {
+        map.addLayer(
+          {
+            id: routePlanLayerIds.preview,
+            type: 'line',
+            source: mapSourceIds.routePlan,
+            filter: ['==', ['get', 'kind'], 'preview'],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: {
+              'line-color': mapVisualPalette.userGeometry.gpxTrack,
+              'line-width': 2,
+              'line-dasharray': [2, 2],
+              'line-opacity': 0.75,
+            },
+          },
+          beforeLayerId,
+        );
+      }
+      if (map.getLayer(routePlanLayerIds.previewLabel) === undefined) {
+        map.addLayer({
+          id: routePlanLayerIds.previewLabel,
+          type: 'symbol',
+          source: mapSourceIds.routePlan,
+          filter: ['==', ['get', 'kind'], 'preview-label'],
+          layout: {
+            'text-field': ['get', 'distanceLabel'],
+            'text-size': 12,
+            'text-allow-overlap': true,
+          },
+          paint: {
+            'text-color': mapVisualPalette.userGeometry.gpxTrack,
+            'text-halo-color': '#FFFFFF',
+            'text-halo-width': 1,
+          },
+        });
       }
       if (map.getLayer(routePlanLayerIds.waypoints) === undefined) {
         map.addLayer({

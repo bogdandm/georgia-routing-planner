@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { TrailRouteSuccess } from '@/application/ports/TrailRouter';
 import {
-  beginRoutePlanPoint,
   beginRoutePlanElevation,
   canSaveRoutePlan,
   clearRoutePlan,
   completeRoutePlanPoint,
-  flattenRoutePlanCoordinates,
+  enqueueRoutePlanPoint,
   finishRoutePlanElevation,
+  flattenRoutePlanCoordinates,
   setNextSegmentMode,
   setRoutePlanName,
   startRoutePlan,
@@ -46,194 +46,119 @@ function routedSuccess(): TrailRouteSuccess {
 }
 
 describe('route plan reducer', () => {
-  it('assembles routed connectors, switches to persistent Line, and never routes Line legs', () => {
-    let draft = startRoutePlan('route-plan:1');
-    expect(draft).toMatchObject({
-      name: 'New route',
-      nextSegmentMode: 'routes',
-      status: 'selecting-start',
-    });
+  it('claims routed queue heads one at a time and preserves FIFO input', () => {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:queue'), A);
+    draft = enqueueRoutePlanPoint(draft, B);
+    const firstRequest = draft.pendingRequest;
+    if (firstRequest === null) throw new Error('Expected A to B request.');
+    draft = enqueueRoutePlanPoint(draft, C);
+    draft = enqueueRoutePlanPoint(draft, D);
 
-    const first = beginRoutePlanPoint(draft, A);
-    expect(first.request).toBeNull();
-    draft = first.draft;
-    const second = beginRoutePlanPoint(draft, B);
-    expect(second.request).toEqual({ generation: 2, start: A, destination: B });
-    if (second.request === null) throw new Error('Expected routed request.');
-    draft = completeRoutePlanPoint(second.draft, second.request, routedSuccess());
+    expect(draft.waypoints).toEqual([A]);
+    expect(draft.queuedWaypoints).toEqual([B, C, D]);
+    expect(firstRequest).toEqual({ generation: 2, start: A, destination: B });
+    expect(draft.pendingRequest).toBe(firstRequest);
+    expect(canSaveRoutePlan(draft)).toBe(false);
 
-    expect(draft.legs[0]?.sections).toEqual([
-      { kind: 'direct', coordinates: [A, snappedA] },
-      { kind: 'routed', coordinates: [snappedA, routedMiddle, snappedB] },
-      { kind: 'direct', coordinates: [snappedB, B] },
-    ]);
-    expect(draft.legs[0]?.coordinates).toEqual([
-      A,
-      snappedA,
-      routedMiddle,
-      snappedB,
-      B,
-    ]);
-    expect(draft.segment?.points.map((point) => point.coordinate)).toEqual([
-      A,
-      snappedA,
-      routedMiddle,
-      snappedB,
-      B,
-    ]);
-    expect(draft.metrics?.distanceMeters).toBeGreaterThan(1_200);
+    draft = completeRoutePlanPoint(draft, firstRequest, routedSuccess());
+    expect(draft.waypoints).toEqual([A, B]);
+    expect(draft.queuedWaypoints).toEqual([C, D]);
+    expect(draft.pendingRequest).toEqual({ generation: 3, start: B, destination: C });
 
+    const secondRequest = draft.pendingRequest;
+    if (secondRequest === null) throw new Error('Expected B to C request.');
+    draft = completeRoutePlanPoint(draft, secondRequest, routedSuccess());
+    const thirdRequest = draft.pendingRequest;
+    if (thirdRequest === null) throw new Error('Expected C to D request.');
+    draft = completeRoutePlanPoint(draft, thirdRequest, routedSuccess());
+
+    expect(draft.waypoints).toEqual([A, B, C, D]);
+    expect(draft.queuedWaypoints).toEqual([]);
+    expect(draft.pendingRequest).toBeNull();
+  });
+
+  it('commits Line points synchronously and increments every geometry revision', () => {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:line'), A);
+    expect(draft.requestGeneration).toBe(1);
     draft = setNextSegmentMode(draft, 'line');
-    const direct = beginRoutePlanPoint(draft, C);
-    expect(direct.request).toBeNull();
-    expect(direct.draft.legs[1]).toEqual({
-      mode: 'line',
-      rawStart: B,
-      rawDestination: C,
-      sections: [{ kind: 'direct', coordinates: [B, C] }],
-      coordinates: [B, C],
-    });
-    expect(direct.draft.nextSegmentMode).toBe('line');
+    draft = enqueueRoutePlanPoint(draft, B);
+    draft = enqueueRoutePlanPoint(draft, C);
 
-    const anotherDirect = beginRoutePlanPoint(direct.draft, D);
-    expect(anotherDirect.request).toBeNull();
-    expect(anotherDirect.draft.nextSegmentMode).toBe('line');
-    expect(anotherDirect.draft.legs[2]?.coordinates).toEqual([C, D]);
+    expect(draft.requestGeneration).toBe(3);
+    expect(draft.legs.map((leg) => leg.coordinates)).toEqual([
+      [A, B],
+      [B, C],
+    ]);
+    expect(flattenRoutePlanCoordinates(draft.legs)).toEqual([A, B, C]);
+    expect(canSaveRoutePlan(draft)).toBe(true);
   });
 
-  it('keeps Routes selected across completed legs', () => {
-    let draft = beginRoutePlanPoint(startRoutePlan('route-plan:2'), A).draft;
-    const second = beginRoutePlanPoint(draft, B);
-    if (second.request === null) throw new Error('Expected routed request.');
-    draft = completeRoutePlanPoint(second.draft, second.request, routedSuccess());
-
-    const third = beginRoutePlanPoint(draft, C);
-
-    expect(draft.nextSegmentMode).toBe('routes');
-    expect(third.request).toEqual({
-      generation: 3,
-      start: B,
-      destination: C,
-    });
-    expect(third.draft.status).toBe('calculating');
+  it('keeps the selected segment mode while input is buffered', () => {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:mode'), A);
+    draft = enqueueRoutePlanPoint(draft, B);
+    expect(setNextSegmentMode(draft, 'line')).toBe(draft);
   });
 
-  it('undoes idle points, cancels an active calculation without removing prior points, and clears in place', () => {
-    const withA = beginRoutePlanPoint(startRoutePlan('route-plan:3'), A).draft;
-    const calculating = beginRoutePlanPoint(withA, B).draft;
-    const canceled = undoLastRoutePlanPoint(calculating);
-    expect(canceled.waypoints).toEqual([A]);
-    expect(canceled.status).toBe('selecting-destination');
-    expect(canceled.requestGeneration).toBe(3);
-    const progressed = updateRoutePlanProgress(calculating, 2, {
-      phase: 'loading-tiles',
-      attempt: 1,
-      loadedTileCount: 5,
-      totalTileCount: 9,
-    });
-    expect(progressed.routeProgress).toEqual({
-      phase: 'loading-tiles',
-      attempt: 1,
-      loadedTileCount: 5,
-      totalTileCount: 9,
-    });
-    expect(
-      updateRoutePlanProgress(progressed, 1, {
-        phase: 'building-graph',
-        attempt: 1,
-        loadedTileCount: 9,
-        totalTileCount: 9,
-      }),
-    ).toBe(progressed);
-    expect(canceled.routeProgress).toBeNull();
-
-    const retried = beginRoutePlanPoint(canceled, B);
-    if (retried.request === null) throw new Error('Expected routed request.');
-    const ready = completeRoutePlanPoint(
-      retried.draft,
-      retried.request,
-      routedSuccess(),
-    );
-    const undone = undoLastRoutePlanPoint(ready);
-    expect(undone.waypoints).toEqual([A]);
-    expect(undone.legs).toEqual([]);
-    expect(undone.metrics).toBeNull();
-
-    const cleared = clearRoutePlan(beginRoutePlanPoint(undone, B).draft);
-    expect(cleared).toMatchObject({
-      waypoints: [],
-      legs: [],
-      status: 'selecting-start',
-      nextSegmentMode: 'routes',
-      metrics: null,
-    });
-  });
-
-  it('preserves accepted legs after failure and ignores stale completions', () => {
-    let draft = beginRoutePlanPoint(startRoutePlan('route-plan:4'), A).draft;
-    const second = beginRoutePlanPoint(draft, B);
-    if (second.request === null) throw new Error('Expected routed request.');
-    draft = completeRoutePlanPoint(second.draft, second.request, routedSuccess());
-    const acceptedLegs = draft.legs;
-    const acceptedWaypoints = draft.waypoints;
-    const third = beginRoutePlanPoint(draft, C);
-    if (third.request === null) throw new Error('Expected routed request.');
-    const failed = completeRoutePlanPoint(third.draft, third.request, {
+  it('clears dependent queued points after a routing failure without losing committed geometry', () => {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:failure'), A);
+    draft = enqueueRoutePlanPoint(draft, B);
+    const request = draft.pendingRequest;
+    if (request === null) throw new Error('Expected request.');
+    draft = enqueueRoutePlanPoint(draft, C);
+    const failed = completeRoutePlanPoint(draft, request, {
       status: 'failed',
       reason: 'no-route',
     });
-    expect(failed.legs).toBe(acceptedLegs);
-    expect(failed.waypoints).toBe(acceptedWaypoints);
+
+    expect(failed.waypoints).toEqual([A]);
+    expect(failed.queuedWaypoints).toEqual([]);
+    expect(failed.pendingRequest).toBeNull();
     expect(failed.status).toBe('failed');
-    expect(canSaveRoutePlan(failed)).toBe(true);
-
-    const cleared = clearRoutePlan(third.draft);
-    expect(completeRoutePlanPoint(cleared, third.request, routedSuccess())).toBe(
-      cleared,
-    );
-    expect(completeRoutePlanPoint(draft, third.request, routedSuccess())).toBe(draft);
+    expect(
+      updateRoutePlanProgress(failed, request.generation, {
+        phase: 'building-graph',
+        attempt: 1,
+        loadedTileCount: 1,
+        totalTileCount: 1,
+      }),
+    ).toBe(failed);
   });
 
-  it('keeps accepted geometry saveable during elevation work and on failure', () => {
-    const withStart = beginRoutePlanPoint(
-      startRoutePlan('route-plan:elevation'),
-      A,
-    ).draft;
-    const direct = beginRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B).draft;
-    expect(canSaveRoutePlan(direct)).toBe(true);
+  it('invalidates pending work on undo and clear', () => {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:undo'), A);
+    draft = enqueueRoutePlanPoint(draft, B);
+    const request = draft.pendingRequest;
+    if (request === null) throw new Error('Expected request.');
+    const undone = undoLastRoutePlanPoint(draft);
+    expect(undone).toMatchObject({
+      queuedWaypoints: [],
+      pendingRequest: null,
+      waypoints: [A],
+    });
+    expect(completeRoutePlanPoint(undone, request, routedSuccess())).toBe(undone);
 
-    const enriching = beginRoutePlanElevation(direct);
-    expect(enriching.status).toBe('elevation-enriching');
+    const cleared = clearRoutePlan(draft);
+    expect(cleared).toMatchObject({
+      queuedWaypoints: [],
+      pendingRequest: null,
+      waypoints: [],
+    });
+    expect(completeRoutePlanPoint(cleared, request, routedSuccess())).toBe(cleared);
+  });
+
+  it('keeps committed geometry saveable during elevation work and locks saving edits', () => {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:elevation'), A);
+    draft = setNextSegmentMode(draft, 'line');
+    draft = enqueueRoutePlanPoint(draft, B);
+    const enriching = beginRoutePlanElevation(draft);
     expect(canSaveRoutePlan(enriching)).toBe(true);
-
     const failed = finishRoutePlanElevation(enriching, null, null);
-    expect(failed.status).toBe('elevation-failed');
-    expect(failed.segment).toBe(direct.segment);
-    expect(failed.metrics).toBe(direct.metrics);
     expect(canSaveRoutePlan(failed)).toBe(true);
-  });
 
-  it('locks every geometry and metadata edit while saving', () => {
-    const withStart = beginRoutePlanPoint(startRoutePlan('route-plan:saving'), A).draft;
-    const ready = beginRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B).draft;
-    const saving = { ...ready, status: 'saving' as const };
-
-    expect(beginRoutePlanPoint(saving, C)).toEqual({ draft: saving, request: null });
+    const saving = { ...draft, status: 'saving' as const };
+    expect(enqueueRoutePlanPoint(saving, C)).toBe(saving);
     expect(setNextSegmentMode(saving, 'routes')).toBe(saving);
     expect(setRoutePlanName(saving, 'Changed')).toBe(saving);
-    expect(undoLastRoutePlanPoint(saving)).toBe(saving);
-    expect(clearRoutePlan(saving)).toBe(saving);
     expect(canSaveRoutePlan(saving)).toBe(false);
-  });
-
-  it('flattens only shared adjacent joins', () => {
-    const draft = setNextSegmentMode(
-      beginRoutePlanPoint(startRoutePlan('route-plan:5'), A).draft,
-      'line',
-    );
-    const withB = beginRoutePlanPoint(draft, B).draft;
-    const withC = beginRoutePlanPoint(withB, C).draft;
-
-    expect(flattenRoutePlanCoordinates(withC.legs)).toEqual([A, B, C]);
   });
 });

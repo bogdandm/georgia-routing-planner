@@ -109,11 +109,11 @@ import {
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
 import {
-  beginRoutePlanPoint,
   beginRoutePlanElevation,
   canSaveRoutePlan,
   clearRoutePlan as clearRoutePlanDraft,
   completeRoutePlanPoint,
+  enqueueRoutePlanPoint,
   setNextSegmentMode as setRoutePlanSegmentMode,
   finishRoutePlanElevation,
   setRoutePlanName,
@@ -313,6 +313,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
   const routePlanRequestAbort = useRef<AbortController | null>(null);
+  const routePlanRequestOwner = useRef<string | null>(null);
   const routePlanElevationAbort = useRef<AbortController | null>(null);
   const routePlanElevationOwner = useRef<string | null>(null);
   const previewSaveInProgress = useRef(false);
@@ -441,7 +442,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       mapLayers?.clearImportedTrackGeometry();
       mapLayers?.setRoutePlanGeometry(
         active.legs.flatMap((leg) => leg.sections),
-        active.waypoints,
+        [...active.waypoints, ...active.queuedWaypoints],
       );
       return;
     }
@@ -796,7 +797,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const enrichRoutePlan = useCallback(
     (draft: RoutePlanDraft) => {
-      if (draft.status !== 'elevation-enriching' || draft.segment === null) return;
+      if (
+        draft.status !== 'elevation-enriching' ||
+        draft.segment === null ||
+        draft.pendingRequest !== null ||
+        draft.queuedWaypoints.length > 0
+      ) {
+        return;
+      }
       const planId = draft.id;
       const requestGeneration = draft.requestGeneration;
       const owner = `${planId}:${String(requestGeneration)}`;
@@ -815,11 +823,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sampleIntervalMeters: 30,
         maximumElevationSamples: 5_000,
         onProgress: (progress) => {
-          if (!controller.signal.aborted) setElevationProgress(progress);
+          if (
+            !controller.signal.aborted &&
+            routePlanElevationAbort.current === controller &&
+            routePlanElevationOwner.current === owner
+          ) {
+            setElevationProgress(progress);
+          }
         },
       })
         .then((prepared) => {
-          if (controller.signal.aborted) return;
+          const ownsElevation =
+            routePlanElevationAbort.current === controller &&
+            routePlanElevationOwner.current === owner;
+          if (controller.signal.aborted || !ownsElevation) return;
           const segment =
             prepared.calculatedSegments?.[0] ?? prepared.sourceSegments[0];
           const profile = prepared.calculatedProfile ?? prepared.sourceProfile;
@@ -830,24 +847,34 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             current?.kind === 'route-plan' &&
             current.id === planId &&
             current.requestGeneration === requestGeneration &&
-            current.status === 'elevation-enriching'
+            current.status === 'elevation-enriching' &&
+            current.pendingRequest === null &&
+            current.queuedWaypoints.length === 0
               ? finishRoutePlanElevation(current, segment, profile)
               : current,
           );
         })
         .catch(() => {
-          if (controller.signal.aborted) return;
+          const ownsElevation =
+            routePlanElevationAbort.current === controller &&
+            routePlanElevationOwner.current === owner;
+          if (controller.signal.aborted || !ownsElevation) return;
           setActive((current) =>
             current?.kind === 'route-plan' &&
             current.id === planId &&
             current.requestGeneration === requestGeneration &&
-            current.status === 'elevation-enriching'
+            current.status === 'elevation-enriching' &&
+            current.pendingRequest === null &&
+            current.queuedWaypoints.length === 0
               ? finishRoutePlanElevation(current, null, null)
               : current,
           );
         })
         .finally(() => {
-          if (routePlanElevationAbort.current === controller) {
+          if (
+            routePlanElevationAbort.current === controller &&
+            routePlanElevationOwner.current === owner
+          ) {
             routePlanElevationAbort.current = null;
             routePlanElevationOwner.current = null;
             setElevationProgress(null);
@@ -858,77 +885,102 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
-    if (active?.kind === 'route-plan' && active.status === 'elevation-enriching') {
+    if (
+      active?.kind === 'route-plan' &&
+      active.status === 'elevation-enriching' &&
+      active.pendingRequest === null &&
+      active.queuedWaypoints.length === 0
+    ) {
       enrichRoutePlan(active);
     }
   }, [active, enrichRoutePlan]);
 
-  const addRoutePlanPoint = useCallback(
-    (coordinate: TrackCoordinate) => {
-      if (routePlanSaveInProgress.current) return;
-      if (active?.kind !== 'route-plan') return;
-      const transition = beginRoutePlanPoint(active, coordinate);
-      if (transition.draft === active && transition.request === null) return;
-      routePlanElevationAbort.current?.abort();
-      setElevationProgress(null);
-      setActive((current) =>
-        current?.kind === 'route-plan' && current.id === active.id
-          ? transition.request === null
-            ? beginRoutePlanElevation(transition.draft)
-            : transition.draft
-          : current,
-      );
-      if (transition.request === null) return;
-      const request = transition.request;
-      const controller = new AbortController();
-      routePlanRequestAbort.current?.abort();
-      routePlanRequestAbort.current = controller;
-      const unavailable = {
-        status: 'failed',
-        reason: 'routing-data-unavailable',
-      } as const;
-      void (
-        trailRouter === null
-          ? Promise.resolve(unavailable)
-          : trailRouter
-              .route(
-                { start: request.start, destination: request.destination },
-                controller.signal,
-                (progress) => {
-                  setActive((current) => {
-                    if (current?.kind !== 'route-plan' || current.id !== active.id) {
-                      return current;
-                    }
-                    return updateRoutePlanProgress(
-                      current,
-                      request.generation,
-                      progress,
-                    );
-                  });
-                },
-              )
-              .catch(() => unavailable)
-      )
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          setActive((current) => {
-            if (current?.kind !== 'route-plan' || current.id !== active.id) {
-              return current;
-            }
-            const completed = completeRoutePlanPoint(current, request, result);
-            return completed.status === 'route-ready'
-              ? beginRoutePlanElevation(completed)
-              : completed;
-          });
-        })
-        .finally(() => {
-          if (routePlanRequestAbort.current === controller) {
-            routePlanRequestAbort.current = null;
+  useEffect(() => {
+    if (active?.kind !== 'route-plan' || active.pendingRequest === null) return;
+    const request = active.pendingRequest;
+    const owner = `${active.id}:${String(request.generation)}`;
+    if (routePlanRequestOwner.current === owner) return;
+
+    const controller = new AbortController();
+    routePlanRequestAbort.current?.abort();
+    routePlanRequestAbort.current = controller;
+    routePlanRequestOwner.current = owner;
+    const unavailable = {
+      status: 'failed',
+      reason: 'routing-data-unavailable',
+    } as const;
+    void (
+      trailRouter === null
+        ? Promise.resolve(unavailable)
+        : trailRouter
+            .route(
+              { start: request.start, destination: request.destination },
+              controller.signal,
+              (progress) => {
+                setActive((current) =>
+                  current?.kind === 'route-plan' &&
+                  current.id === active.id &&
+                  current.status === 'calculating' &&
+                  current.pendingRequest === request &&
+                  current.requestGeneration === request.generation &&
+                  routePlanRequestAbort.current === controller &&
+                  routePlanRequestOwner.current === owner
+                    ? updateRoutePlanProgress(current, request.generation, progress)
+                    : current,
+                );
+              },
+            )
+            .catch(() => unavailable)
+    )
+      .then((result) => {
+        const ownsRequest =
+          routePlanRequestAbort.current === controller &&
+          routePlanRequestOwner.current === owner;
+        if (controller.signal.aborted || !ownsRequest) return;
+        setActive((current) => {
+          if (
+            current?.kind !== 'route-plan' ||
+            current.id !== active.id ||
+            current.status !== 'calculating' ||
+            current.pendingRequest !== request ||
+            current.requestGeneration !== request.generation
+          ) {
+            return current;
           }
+          const completed = completeRoutePlanPoint(current, request, result);
+          return completed.pendingRequest === null &&
+            completed.queuedWaypoints.length === 0 &&
+            completed.status === 'route-ready'
+            ? beginRoutePlanElevation(completed)
+            : completed;
         });
-    },
-    [active, trailRouter],
-  );
+      })
+      .finally(() => {
+        if (
+          routePlanRequestAbort.current === controller &&
+          routePlanRequestOwner.current === owner
+        ) {
+          routePlanRequestAbort.current = null;
+          routePlanRequestOwner.current = null;
+        }
+      });
+  }, [active, trailRouter]);
+
+  const addRoutePlanPoint = useCallback((coordinate: TrackCoordinate) => {
+    if (routePlanSaveInProgress.current) return;
+    routePlanElevationAbort.current?.abort();
+    routePlanElevationOwner.current = null;
+    setElevationProgress(null);
+    setActive((current) => {
+      if (current?.kind !== 'route-plan') return current;
+      const next = enqueueRoutePlanPoint(current, coordinate);
+      return next.status === 'route-ready' &&
+        next.pendingRequest === null &&
+        next.queuedWaypoints.length === 0
+        ? beginRoutePlanElevation(next)
+        : next;
+    });
+  }, []);
 
   const setNextSegmentMode = useCallback((mode: RoutePlanSegmentMode) => {
     if (routePlanSaveInProgress.current) return;
@@ -2192,7 +2244,10 @@ function TrackElevationAnalysis() {
   return (
     <Stack spacing={1.5}>
       {preparing ? (
-        <ElevationPreparationChart progress={elevationProgress} />
+        <ElevationPreparationChart
+          progress={elevationProgress}
+          showProgressStatus={active.kind !== 'route-plan'}
+        />
       ) : profile === null ? null : (
         <ElevationProfileChart
           profile={profile}
@@ -2316,6 +2371,7 @@ export function TrackDetailsPane({
     savePreview,
     saveRoutePlan,
     recalculationState,
+    elevationProgress,
     setActiveName,
     setNextSegmentMode,
     toggleFavorite,
@@ -2642,6 +2698,7 @@ export function TrackDetailsPane({
           {active.kind === 'route-plan' ? (
             <RoutePlanControls
               draft={active}
+              elevationProgress={elevationProgress}
               onClear={clearRoutePlan}
               onDiscard={discardRoutePlan}
               onNameChange={setActiveName}

@@ -2386,7 +2386,7 @@ describe('WorkspaceShell', () => {
       facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
     });
 
-    expect(await screen.findByText('Preparing elevation…')).toBeVisible();
+    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
     const nameInput = screen.getByRole('textbox', { name: 'Track name' });
     await user.clear(nameInput);
     await user.type(nameInput, 'Metadata edit');
@@ -2444,7 +2444,7 @@ describe('WorkspaceShell', () => {
       facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
     });
 
-    expect(await screen.findByText('Preparing elevation…')).toBeVisible();
+    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
     expect(sampleMany).toHaveBeenCalledOnce();
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Storage unavailable')).toBeVisible();

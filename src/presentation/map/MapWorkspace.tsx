@@ -213,6 +213,12 @@ export function MapWorkspace({
     tracksWorkspace?.active?.kind === 'route-plan' &&
     tracksWorkspace.active.status !== 'saving';
   const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
+  const routePlanPreviewAnchor =
+    tracksWorkspace?.active?.kind === 'route-plan' && routePlanningActive
+      ? (tracksWorkspace.active.queuedWaypoints.at(-1) ??
+        tracksWorkspace.active.waypoints.at(-1) ??
+        null)
+      : null;
   const fitBoundsCommand = useStore(
     mapInteractionStore,
     (state) => state.fitBoundsCommand,
@@ -373,6 +379,20 @@ export function MapWorkspace({
       addRoutePlanPoint([coordinate.longitude, coordinate.latitude]);
     });
   }, [addRoutePlanPoint, facade, routePlanningActive]);
+
+  useEffect(() => {
+    facade.setRoutePlanPreviewAnchor(
+      routePlanPreviewAnchor === null
+        ? null
+        : {
+            longitude: routePlanPreviewAnchor[0],
+            latitude: routePlanPreviewAnchor[1],
+          },
+    );
+    return () => {
+      facade.setRoutePlanPreviewAnchor(null);
+    };
+  }, [facade, routePlanPreviewAnchor]);
 
   useEffect(() => {
     return () => {

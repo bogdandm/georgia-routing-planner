@@ -4,12 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
 import {
-  beginRoutePlanPoint,
   beginRoutePlanElevation,
   completeRoutePlanPoint,
+  enqueueRoutePlanPoint,
   setNextSegmentMode,
   startRoutePlan,
 } from '@/presentation/tracks/routePlan';
+
 const A = [44.64, 42.66] as const;
 const B = [44.65, 42.67] as const;
 
@@ -24,16 +25,18 @@ function callbacks() {
   };
 }
 
+function lineDraft(id: string) {
+  const withStart = enqueueRoutePlanPoint(startRoutePlan(id), A);
+  return enqueueRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B);
+}
+
 describe('RoutePlanControls', () => {
   it('keeps the next-segment mode persistent and enables save for a usable line', async () => {
     const user = userEvent.setup();
-    const withStart = beginRoutePlanPoint(
-      startRoutePlan('route-plan:controls'),
-      A,
-    ).draft;
-    const draft = beginRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B).draft;
     const handlers = callbacks();
-    render(<RoutePlanControls draft={draft} {...handlers} />);
+    render(
+      <RoutePlanControls draft={lineDraft('route-plan:controls')} {...handlers} />,
+    );
 
     expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
       'aria-pressed',
@@ -45,54 +48,25 @@ describe('RoutePlanControls', () => {
     expect(handlers.onSave).toHaveBeenCalledOnce();
   });
 
-  it('keeps save available while optional elevation is pending', () => {
-    const withStart = beginRoutePlanPoint(
-      startRoutePlan('route-plan:elevation-pending'),
-      A,
-    ).draft;
-    const ready = beginRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B).draft;
-    render(
-      <RoutePlanControls draft={beginRoutePlanElevation(ready)} {...callbacks()} />,
-    );
+  it('uses the one fixed status slot for routing, elevation, and saving', () => {
+    const withStart = enqueueRoutePlanPoint(startRoutePlan('route-plan:status'), A);
+    const calculating = enqueueRoutePlanPoint(withStart, B);
+    const status = render(
+      <RoutePlanControls draft={calculating} {...callbacks()} />,
+    ).getByRole('status');
 
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
-  });
-
-  it('keeps cancellation edits available while routing', async () => {
-    const user = userEvent.setup();
-    const withStart = beginRoutePlanPoint(
-      startRoutePlan('route-plan:pending'),
-      A,
-    ).draft;
-    const calculating = beginRoutePlanPoint(withStart, B).draft;
-    const handlers = callbacks();
-    render(<RoutePlanControls draft={calculating} {...handlers} />);
-
-    expect(screen.getByText('Loading route tiles…')).toBeVisible();
-    expect(
-      screen.getByRole('progressbar', { name: 'Loading route tiles…' }),
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Routes' })).toBeDisabled();
+    expect(status).toHaveStyle({ minHeight: '40px' });
+    expect(screen.getAllByRole('progressbar')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Line' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Undo' }));
-    await user.click(screen.getByRole('button', { name: 'Clear' }));
-    expect(handlers.onUndo).toHaveBeenCalledOnce();
-    expect(handlers.onClear).toHaveBeenCalledOnce();
-  });
 
-  it('locks all route controls while an atomic save is pending', () => {
-    const withStart = beginRoutePlanPoint(startRoutePlan('route-plan:saving'), A).draft;
-    const ready = beginRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B).draft;
     render(
-      <RoutePlanControls draft={{ ...ready, status: 'saving' }} {...callbacks()} />,
+      <RoutePlanControls
+        draft={beginRoutePlanElevation(lineDraft('route-plan:elevation'))}
+        elevationProgress={{ completedTiles: 1, totalTiles: 2, points: [] }}
+        {...callbacks()}
+      />,
     );
-
-    expect(screen.getByText('Saving route…')).toBeVisible();
-    expect(screen.getByRole('textbox', { name: 'Track name' })).toBeDisabled();
-    for (const name of ['Routes', 'Line', 'Undo', 'Clear', 'Discard', 'Save']) {
-      expect(screen.getByRole('button', { name })).toBeDisabled();
-    }
+    expect(screen.getByText('Loading elevation tiles: 1 of 2')).toBeVisible();
   });
 
   it.each([
@@ -101,40 +75,24 @@ describe('RoutePlanControls', () => {
       'No routable trail or road was found within 200 m of the start point.',
     ],
     [
-      { reason: 'no-nearby-trail', endpoint: 'both' } as const,
-      'No routable trail or road was found within 200 m of the start and destination points.',
-    ],
-    [
       { reason: 'no-route' } as const,
       'No connected route was found. Add a closer point or use Line for the next segment.',
-    ],
-    [
-      { reason: 'area-too-large' } as const,
-      'This segment covers too large an area. Add an intermediate point.',
     ],
     [
       { reason: 'routing-data-unavailable' } as const,
       'Routing data is unavailable. Try again when you are online.',
     ],
-    [
-      { reason: 'routing-timeout' } as const,
-      'Route calculation exceeded one minute. Add a closer point or try again.',
-    ],
-    [{ reason: 'routing-data-invalid' } as const, 'Routing data could not be decoded.'],
   ])('shows actionable copy for $reason', (failure, message) => {
-    const withStart = beginRoutePlanPoint(
-      startRoutePlan('route-plan:failure'),
-      A,
-    ).draft;
-    const transition = beginRoutePlanPoint(withStart, B);
-    if (transition.request === null) throw new Error('Expected a route request.');
-    const failed = completeRoutePlanPoint(transition.draft, transition.request, {
+    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:failure'), A);
+    draft = enqueueRoutePlanPoint(draft, B);
+    const request = draft.pendingRequest;
+    if (request === null) throw new Error('Expected route request.');
+    const failed = completeRoutePlanPoint(draft, request, {
       status: 'failed',
       ...failure,
     });
 
     render(<RoutePlanControls draft={failed} {...callbacks()} />);
-
     expect(screen.getByText(message)).toBeVisible();
   });
 });

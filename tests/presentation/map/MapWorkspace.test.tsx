@@ -67,7 +67,12 @@ vi.mock('react-map-gl/maplibre', () => ({
 
 const tracksWorkspaceMock = vi.hoisted(() => ({
   activeProfile: null as ElevationProfile | null,
-  active: null as { readonly kind: 'route-plan' } | null,
+  active: null as {
+    readonly kind: 'route-plan';
+    readonly status: 'selecting-start';
+    readonly queuedWaypoints: readonly (readonly [number, number])[];
+    readonly waypoints: readonly (readonly [number, number])[];
+  } | null,
   addRoutePlanPoint: vi.fn(),
 }));
 
@@ -926,7 +931,12 @@ describe('MapWorkspace', () => {
 
   it('forwards facade clicks only while route planning owns map interaction', async () => {
     const facade = new FakeMapFacade();
-    tracksWorkspaceMock.active = { kind: 'route-plan' };
+    tracksWorkspaceMock.active = {
+      kind: 'route-plan',
+      status: 'selecting-start',
+      queuedWaypoints: [],
+      waypoints: [],
+    };
     render(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Planning map</div>} />

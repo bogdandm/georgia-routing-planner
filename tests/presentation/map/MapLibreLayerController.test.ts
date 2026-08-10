@@ -952,6 +952,53 @@ describe('MapLibreLayerController', () => {
       layout: { 'text-field': ['get', 'number'] },
     });
 
+    controller.setRoutePlanPreview([44.64, 42.66], [44.66, 42.68], '1.2 km');
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features',
+      expect.arrayContaining([
+        expect.objectContaining({
+          properties: { kind: 'preview' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [44.64, 42.66],
+              [44.66, 42.68],
+            ],
+          },
+        }),
+        expect.objectContaining({
+          properties: { kind: 'preview-label', distanceLabel: '1.2 km' },
+          geometry: { type: 'Point', coordinates: [44.65, 42.67] },
+        }),
+      ]),
+    );
+    expect(map.layers.get(routePlanLayerIds.preview)).toMatchObject({
+      filter: ['==', ['get', 'kind'], 'preview'],
+      paint: { 'line-width': 2, 'line-dasharray': [2, 2] },
+    });
+    expect(map.layers.get(routePlanLayerIds.previewLabel)).toMatchObject({
+      filter: ['==', ['get', 'kind'], 'preview-label'],
+      layout: { 'text-field': ['get', 'distanceLabel'] },
+    });
+    controller.setRoutePlanGeometry(
+      [],
+      [
+        [44.64, 42.66],
+        [44.65, 42.67],
+      ],
+    );
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features',
+      expect.arrayContaining([
+        expect.objectContaining({ properties: { kind: 'preview' } }),
+      ]),
+    );
+    controller.clearRoutePlanPreview();
+    expect(map.sources.get(mapSourceIds.routePlan)).not.toHaveProperty(
+      'data.features.2.properties.kind',
+      'preview',
+    );
+
     map.sources.delete(mapSourceIds.routePlan);
     for (const layerId of Object.values(routePlanLayerIds)) {
       map.layers.delete(layerId);
@@ -960,8 +1007,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
       'data.features',
       expect.arrayContaining([
-        expect.objectContaining({ properties: { kind: 'routed' } }),
-        expect.objectContaining({ properties: { kind: 'direct' } }),
+        expect.objectContaining({ properties: { kind: 'waypoint', number: '1' } }),
       ]),
     );
     expect(map.layers.has(routePlanLayerIds.routed)).toBe(true);

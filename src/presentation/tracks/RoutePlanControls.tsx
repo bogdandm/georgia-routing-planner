@@ -1,7 +1,6 @@
 import {
   Alert,
   Button,
-  CircularProgress,
   LinearProgress,
   Stack,
   TextField,
@@ -10,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import type { ReactElement } from 'react';
+import type { TrackElevationPreparationProgress } from '@/application/tracks/prepareImportedTrack';
 
 import {
   canSaveRoutePlan,
@@ -19,6 +19,7 @@ import {
 
 interface RoutePlanControlsProps {
   readonly draft: RoutePlanDraft;
+  readonly elevationProgress?: TrackElevationPreparationProgress | null;
   readonly onClear: () => void;
   readonly onDiscard: () => void;
   readonly onNameChange: (name: string) => void;
@@ -51,7 +52,14 @@ function failureMessage(failure: NonNullable<RoutePlanDraft['failure']>): string
   return 'Routing data could not be decoded.';
 }
 
-function RoutePlanStatus({ draft }: { readonly draft: RoutePlanDraft }): ReactElement {
+function RoutePlanStatus({
+  draft,
+  elevationProgress,
+}: {
+  readonly draft: RoutePlanDraft;
+  readonly elevationProgress: TrackElevationPreparationProgress | null;
+}): ReactElement {
+  let content: ReactElement;
   if (draft.status === 'calculating') {
     const progress = draft.routeProgress;
     const label =
@@ -68,7 +76,7 @@ function RoutePlanStatus({ draft }: { readonly draft: RoutePlanDraft }): ReactEl
       progress?.phase === 'loading-tiles' && progress.totalTileCount > 0
         ? (progress.loadedTileCount / progress.totalTileCount) * 100
         : undefined;
-    return (
+    content = (
       <Stack spacing={0.75}>
         <Typography variant="body2">{label}</Typography>
         <LinearProgress
@@ -78,48 +86,63 @@ function RoutePlanStatus({ draft }: { readonly draft: RoutePlanDraft }): ReactEl
         />
       </Stack>
     );
-  }
-  if (draft.status === 'saving') {
-    return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <CircularProgress size={18} />
+  } else if (draft.status === 'saving') {
+    content = (
+      <Stack spacing={0.75}>
         <Typography variant="body2">Saving route…</Typography>
+        <LinearProgress aria-label="Saving route…" />
       </Stack>
     );
-  }
-  if (draft.status === 'elevation-enriching') {
-    return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <CircularProgress size={18} />
-        <Typography variant="body2">Preparing elevation…</Typography>
+  } else if (draft.status === 'elevation-enriching') {
+    const label =
+      elevationProgress !== null && elevationProgress.totalTiles > 0
+        ? `Loading elevation tiles: ${String(elevationProgress.completedTiles)} of ${String(elevationProgress.totalTiles)}`
+        : 'Preparing terrain and elevation…';
+    const value =
+      elevationProgress !== null && elevationProgress.totalTiles > 0
+        ? (elevationProgress.completedTiles / elevationProgress.totalTiles) * 100
+        : undefined;
+    content = (
+      <Stack spacing={0.75}>
+        <Typography variant="body2">{label}</Typography>
+        <LinearProgress
+          aria-label={label}
+          variant={value === undefined ? 'indeterminate' : 'determinate'}
+          value={value}
+        />
       </Stack>
     );
-  }
-  if (draft.status === 'failed' && draft.failure !== null) {
-    return <Alert severity="warning">{failureMessage(draft.failure)}</Alert>;
-  }
-  if (draft.status === 'elevation-failed') {
-    return (
+  } else if (draft.status === 'failed' && draft.failure !== null) {
+    content = <Alert severity="warning">{failureMessage(draft.failure)}</Alert>;
+  } else if (draft.status === 'elevation-failed') {
+    content = (
       <Alert severity="info">
         Elevation is unavailable. The route geometry is ready and can still be saved.
       </Alert>
     );
+  } else {
+    const instruction =
+      draft.status === 'selecting-start'
+        ? 'Click the map to choose the route start.'
+        : draft.status === 'selecting-destination'
+          ? 'Click the map to choose the next point.'
+          : 'Route ready. Click the map to add another point.';
+    content = (
+      <Typography variant="body2" color="text.secondary">
+        {instruction}
+      </Typography>
+    );
   }
-  const instruction =
-    draft.status === 'selecting-start'
-      ? 'Click the map to choose the route start.'
-      : draft.status === 'selecting-destination'
-        ? 'Click the map to choose the next point.'
-        : 'Route ready. Click the map to add another point.';
   return (
-    <Typography variant="body2" color="text.secondary">
-      {instruction}
-    </Typography>
+    <Stack aria-live="polite" role="status" sx={{ minHeight: 40 }}>
+      {content}
+    </Stack>
   );
 }
 
 export function RoutePlanControls({
   draft,
+  elevationProgress = null,
   onClear,
   onDiscard,
   onNameChange,
@@ -127,7 +150,11 @@ export function RoutePlanControls({
   onSave,
   onUndo,
 }: RoutePlanControlsProps): ReactElement {
-  const locked = draft.status === 'calculating' || draft.status === 'saving';
+  const locked =
+    draft.status === 'calculating' ||
+    draft.status === 'saving' ||
+    draft.pendingRequest !== null ||
+    draft.queuedWaypoints.length > 0;
   return (
     <Stack spacing={2}>
       <TextField
@@ -162,7 +189,7 @@ export function RoutePlanControls({
           </ToggleButton>
         </ToggleButtonGroup>
       </Stack>
-      <RoutePlanStatus draft={draft} />
+      <RoutePlanStatus draft={draft} elevationProgress={elevationProgress} />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1}>
           <Button

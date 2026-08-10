@@ -48,7 +48,11 @@ export class TrackSyncService {
       throw new TrackSyncFailure(409, 'marker_limit', 'Cloud marker limit reached.');
     }
     if (result.outcome === 'revision-exhausted') {
-      throw new TrackSyncFailure(409, 'marker_revision_exhausted', 'Marker revisions are exhausted.');
+      throw new TrackSyncFailure(
+        409,
+        'marker_revision_exhausted',
+        'Marker revisions are exhausted.',
+      );
     }
     return result;
   }

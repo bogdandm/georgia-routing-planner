@@ -945,6 +945,21 @@ describe('trail graph snapping and routing', () => {
     }
   });
 
+  it('connects interior snaps on separate edges through their shared junction', () => {
+    const graph = graphFromCoordinates({ a: [0, 0], b: [0.01, 0], c: [0, 0.01] }, [
+      ['a', 'b'],
+      ['a', 'c'],
+    ]);
+
+    const routed = routeTrailGraph(graph, [0.005, 0.0001], [0.0001, 0.005]);
+
+    expect(routed.status).toBe('ready');
+    if (routed.status === 'ready') {
+      expect(routed.coordinates[0]).toEqual(routed.snappedStart);
+      expect(routed.coordinates.at(-1)).toEqual(routed.snappedDestination);
+    }
+  });
+
   it('chooses the shorter connected branch and reports a disconnected route', () => {
     const connected = graphFromCoordinates(
       { a: [0, 0], b: [0.01, 0], c: [0.005, 0.01] },

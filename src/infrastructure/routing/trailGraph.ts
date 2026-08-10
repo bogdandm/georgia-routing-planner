@@ -956,17 +956,23 @@ function assignSnapNodes(
   }
 
   const adjacencyOverrides = new Map<string, TrailGraphArc[]>();
+  const splitEdgeKeys = new Set(interiorByEdge.keys());
+  for (const edgeKey of splitEdgeKeys) {
+    const edge = graph.edges.get(edgeKey);
+    if (edge === undefined) continue;
+    for (const nodeKey of [edge.nodeA, edge.nodeB]) {
+      if (adjacencyOverrides.has(nodeKey)) continue;
+      adjacencyOverrides.set(
+        nodeKey,
+        (graph.adjacency.get(nodeKey) ?? []).filter(
+          (arc) => !splitEdgeKeys.has(arc.edgeKey),
+        ),
+      );
+    }
+  }
   for (const [edgeKey, snaps] of interiorByEdge) {
     const edge = graph.edges.get(edgeKey);
     if (edge === undefined) continue;
-    adjacencyOverrides.set(
-      edge.nodeA,
-      (graph.adjacency.get(edge.nodeA) ?? []).filter((arc) => arc.edgeKey !== edgeKey),
-    );
-    adjacencyOverrides.set(
-      edge.nodeB,
-      (graph.adjacency.get(edge.nodeB) ?? []).filter((arc) => arc.edgeKey !== edgeKey),
-    );
     snaps.sort(
       (left, right) =>
         left.projection.fraction - right.projection.fraction ||

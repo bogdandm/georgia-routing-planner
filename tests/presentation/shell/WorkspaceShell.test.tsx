@@ -2053,6 +2053,11 @@ describe('WorkspaceShell', () => {
     };
     const baseServices = createTestServices({ trailRouter });
     services = { ...baseServices, elevationProvider };
+    const existingSummary = savedTrackSummary('local:existing', 'Existing trail');
+    await services.database.saveLocalTrack(
+      existingSummary,
+      savedTrackContent(existingSummary.id),
+    );
     const facade = new FakeMapFacade();
     const user = userEvent.setup();
     renderWorkspaceShell(
@@ -2089,6 +2094,12 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText('Saving route…')).toBeVisible();
     expect(screen.getByRole('textbox', { name: 'Track name' })).toBeDisabled();
+    const confirmDiscard = vi.spyOn(window, 'confirm');
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
+    await user.click(screen.getByRole('button', { name: /^Existing trail/ }));
+    expect(confirmDiscard).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(screen.getByText('Saving route…')).toBeVisible();
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('default');
     });
@@ -2098,16 +2109,20 @@ describe('WorkspaceShell', () => {
     savePending.resolve(undefined);
 
     await waitFor(async () => {
-      await expect(services.database.listLocalTracks()).resolves.toEqual([
-        expect.objectContaining({
-          name: 'Planned ridge',
-          sourceFilename: 'Planned ridge.gpx',
-          sourceFormat: 'gpx',
-          geometryKind: 'route',
-        }),
-      ]);
+      await expect(services.database.listLocalTracks()).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Planned ridge',
+            sourceFilename: 'Planned ridge.gpx',
+            sourceFormat: 'gpx',
+            geometryKind: 'route',
+          }),
+        ]),
+      );
     });
-    const [summary] = await services.database.listLocalTracks();
+    const summary = (await services.database.listLocalTracks()).find(
+      (candidate) => candidate.name === 'Planned ridge',
+    );
     if (summary === undefined) throw new Error('Expected saved planned route.');
     const content = await services.database.loadLocalTrackContent(summary.id);
     expect(content.trackPoints[0]).toHaveLength(2);

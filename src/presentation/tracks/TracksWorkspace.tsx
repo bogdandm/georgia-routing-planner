@@ -1250,6 +1250,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, []);
 
   const closeActive = useCallback(async () => {
+    if (routePlanSaveInProgress.current) return false;
     const closingUnsavedTrack =
       active?.kind === 'preview' ||
       (active?.kind === 'route-plan' && active.waypoints.length > 0);
@@ -1287,6 +1288,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const selectSaved = useCallback(
     async (summary: LocalTrackSummary) => {
+      if (routePlanSaveInProgress.current) return;
       const replacingUnsavedTrack =
         active?.kind === 'preview' ||
         (active?.kind === 'route-plan' && active.waypoints.length > 0);

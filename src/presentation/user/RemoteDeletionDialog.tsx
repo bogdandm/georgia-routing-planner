@@ -64,8 +64,8 @@ function RemoteTrackDeletionForm({
       <DialogContent>
         <Stack spacing={2}>
           <Typography>
-            These tracks were deleted from your account. Select the tracks to delete
-            from this browser. Unselected tracks will be uploaded again.
+            These items were deleted from your account. Select the items to delete from
+            this browser. Unselected items will be uploaded again.
           </Typography>
           <Stack spacing={0.5}>
             {candidates.map((candidate) => (
@@ -118,10 +118,10 @@ export function RemoteDeletionDialog() {
     <Dialog
       onClose={() => undefined}
       open={candidates.length > 0}
-      aria-labelledby="remote-track-deletion-title"
+      aria-labelledby="remote-deletion-title"
     >
-      <DialogTitle id="remote-track-deletion-title">
-        Tracks deleted from cloud
+      <DialogTitle id="remote-deletion-title">
+        Items deleted from cloud
       </DialogTitle>
       {candidates.length === 0 ? null : (
         <RemoteTrackDeletionForm

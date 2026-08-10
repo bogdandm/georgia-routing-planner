@@ -108,11 +108,11 @@ describe('RemoteDeletionDialog', () => {
     renderDialog(fake.service);
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    const dialog = screen.getByRole('dialog', { name: 'Tracks deleted from cloud' });
+    const dialog = screen.getByRole('dialog', { name: 'Items deleted from cloud' });
     fireEvent.mouseDown(dialog.parentElement?.parentElement ?? document.body);
 
     expect(
-      screen.getByRole('dialog', { name: 'Tracks deleted from cloud' }),
+      screen.getByRole('dialog', { name: 'Items deleted from cloud' }),
     ).toBeVisible();
   });
 

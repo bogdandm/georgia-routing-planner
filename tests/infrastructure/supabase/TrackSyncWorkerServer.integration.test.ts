@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 import {
+  SAVED_MARKER_SCHEMA_VERSION,
+  type SavedMarker,
+} from '@/domain/markers/savedMarker';
+import {
   encodeLegacyTrackSyncGeometry,
   encodeTrackSyncGeometry,
 } from '@/domain/tracks/trackSyncGeometry';
@@ -91,6 +95,21 @@ function content(trackId: string): LocalTrackContent {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId,
     trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+  };
+}
+
+function marker(overrides: Partial<SavedMarker> = {}): SavedMarker {
+  return {
+    schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+    id: 'marker:one',
+    name: 'Tbilisi view',
+    normalizedName: 'tbilisi view',
+    coordinate: [44.8, 41.7],
+    iconKey: 'place',
+    colorKey: 'blue',
+    createdAt: '2026-08-08T10:00:00.000Z',
+    updatedAt: '2026-08-08T10:00:00.000Z',
+    ...overrides,
   };
 }
 
@@ -1314,6 +1333,59 @@ describe('TrackSyncWorkerServer', () => {
     });
     expect(mutate).not.toHaveBeenCalled();
     expect(deleteRemoteRecord).not.toHaveBeenCalled();
+    client.dispose();
+  });
+
+  it('acknowledges a pending marker upload without changing its local row', async () => {
+    const saved = marker();
+    await database.saveSavedMarker(saved);
+    const mutateMarker = vi.fn().mockResolvedValue({
+      outcome: 'applied' as const,
+      revision: 1,
+    });
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: () => Promise.resolve([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+      mutateMarker,
+      markerSnapshot: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ marker_id: saved.id, revision: 1, payload: saved }]),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+        sessionRevision: 7,
+      }),
+    ).resolves.toMatchObject({
+      changed: { tracks: false, markers: false },
+      remoteMarkerDeletions: [],
+    });
+    expect(mutateMarker).toHaveBeenCalledWith(
+      saved.id,
+      0,
+      saved,
+      expect.any(AbortSignal),
+    );
+    await expect(database.readMarkerSyncSnapshot()).resolves.toEqual([
+      {
+        marker: saved,
+        state: {
+          markerId: saved.id,
+          remoteRevision: 1,
+          pendingKind: null,
+          localVersion: 1,
+        },
+      },
+    ]);
     client.dispose();
   });
 });

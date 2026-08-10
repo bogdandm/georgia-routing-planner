@@ -25,6 +25,7 @@ function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
     syncProgress: null,
     syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
     remoteTrackDeletions: [],
+    remoteMarkerDeletions: [],
   };
 }
 
@@ -43,11 +44,14 @@ function createService(initial: UserDataSnapshot) {
     signUp,
     setSyncEnabled,
     subscribeTracksChanged: () => () => undefined,
-    resolveRemoteTrackDeletions: vi.fn().mockResolvedValue(undefined),
+    subscribeMarkersChanged: () => () => undefined,
+    resolveRemoteDeletions: vi.fn().mockResolvedValue(undefined),
     synchronizeNow,
     trackDeleted: vi.fn().mockResolvedValue(undefined),
     trackMetadataChanged: vi.fn().mockResolvedValue(undefined),
     trackSaved: vi.fn().mockResolvedValue(undefined),
+    markerChanged: vi.fn().mockResolvedValue(undefined),
+    markerDeleted: vi.fn().mockResolvedValue(undefined),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -231,7 +235,7 @@ describe('UserPanel', () => {
         userId: 'user-id',
         syncEnabled: true,
         syncStatus: 'syncing',
-        syncProgress: { completedTracks: 1, totalTracks: 10 },
+        syncProgress: { completedItems: 1, totalItems: 10 },
       });
     });
     expect(screen.getByText('Synchronizing… 1/10')).toBeVisible();

@@ -517,7 +517,7 @@ describe('local track persistence', () => {
       value: 'user-id',
       updatedAt: '2026-07-22T12:00:00.000Z',
     });
-    await database.backfillAndDeduplicateTrackSync('user-id', [
+    await database.prepareUserDataSync('user-id', [
       {
         trackId: older.id,
         contentHash: 'a'.repeat(64),
@@ -573,7 +573,7 @@ describe('local track persistence', () => {
       value: 'user-id',
       updatedAt: '2026-07-22T12:00:00.000Z',
     });
-    await database.backfillAndDeduplicateTrackSync('user-id', [
+    await database.prepareUserDataSync('user-id', [
       {
         trackId: duplicate.id,
         contentHash: 'a'.repeat(64),
@@ -601,7 +601,7 @@ describe('local track persistence', () => {
     await database.deleteLocalTrack(deleted.id);
     await database.trackSyncStates.delete(survivor.id);
 
-    await database.backfillAndDeduplicateTrackSync('user-id', [
+    await database.prepareUserDataSync('user-id', [
       {
         trackId: survivor.id,
         contentHash: 'a'.repeat(64),
@@ -655,11 +655,11 @@ describe('local track persistence', () => {
       limitBytes: 8_388_608,
     });
 
-    await database.backfillAndDeduplicateTrackSync('current-user', [
+    await database.prepareUserDataSync('current-user', [
       {
         trackId: retained.id,
         contentHash: retained.contentHash ?? '',
-        legacyContentHash: retained.contentHash ?? '',
+        legacyContentHash: 'b'.repeat(64),
       },
     ]);
 
@@ -669,7 +669,7 @@ describe('local track persistence', () => {
     await expect(database.loadTrackSyncState(retained.id)).resolves.toEqual({
       trackId: retained.id,
       contentHash: retained.contentHash,
-      lineageHash: retained.contentHash,
+      lineageHash: 'b'.repeat(64),
       geometryVersion: 2,
       remoteRevision: null,
       pendingKind: 'upsert',
@@ -700,8 +700,19 @@ describe('local track persistence', () => {
     await database.saveLocalTrack(absent, content(absent.id));
     await database.saveLatestOpenedTrackId(deleted.id);
     await database.deleteLocalTrack(absent.id);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-08-10T00:00:00.000Z',
+    });
 
-    await database.resolveRemoteTrackDeletions([deleted.id], [restored.id, absent.id]);
+    await database.resolveRemoteDeletions({
+      expectedUserId: 'user-id',
+      trackCandidateIds: [deleted.id, restored.id],
+      markerCandidateIds: [],
+      tracks: { deleteIds: [deleted.id], restoreIds: [restored.id] },
+      markers: { deleteIds: [], restoreIds: [] },
+    });
 
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({ id: restored.id }),
@@ -716,7 +727,10 @@ describe('local track persistence', () => {
       remoteRevision: null,
       pendingKind: 'upsert',
     });
-    await expect(database.loadTrackSyncState(absent.id)).resolves.toBeNull();
+    await expect(database.loadTrackSyncState(absent.id)).resolves.toMatchObject({
+      trackId: absent.id,
+      pendingKind: 'delete',
+    });
   });
 
   it('saves track rows and the pending upsert atomically', async () => {

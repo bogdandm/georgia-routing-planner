@@ -25,6 +25,7 @@ const initialSnapshot: UserDataSnapshot = {
   syncStatus: 'idle',
   syncProgress: null,
   remoteTrackDeletions: [],
+  remoteMarkerDeletions: [],
   syncUsage: emptyUsage,
 };
 const registrationNotice = 'Check your email to confirm your account, then sign in.';
@@ -33,18 +34,19 @@ const signUpErrorMessage = 'Unable to create an account. Try again.';
 const sessionErrorMessage = 'Unable to restore your account session.';
 const signOutErrorMessage = 'Unable to sign out. Try again.';
 const syncErrorMessage =
-  'Synchronization could not finish. Your local tracks remain available.';
+  'Synchronization could not finish. Your local tracks and markers remain available.';
 const syncQuotaErrorMessage =
   'Cloud track storage is full. Delete a synchronized track and try again.';
 const syncPreferenceErrorMessage =
   'Unable to update synchronization. Your previous setting is unchanged.';
 const deletionDecisionErrorMessage =
-  'Unable to apply the track deletion decision. Your local tracks remain available.';
+  'Unable to apply the deletion decision. Your local data remains available.';
 
 /** Bridges session lifecycle and one cancellable worker run to the serializable UI snapshot. */
 export class SupabaseUserDataService implements UserDataService {
   readonly #listeners = new Set<() => void>();
   readonly #trackListeners = new Set<() => void>();
+  readonly #markerListeners = new Set<() => void>();
   #worker: TrackSyncWorkerClient | null;
   #snapshot = initialSnapshot;
   #unsubscribe: (() => void) | null = null;
@@ -91,6 +93,11 @@ export class SupabaseUserDataService implements UserDataService {
     return () => this.#trackListeners.delete(listener);
   }
 
+  public subscribeMarkersChanged(listener: () => void): () => void {
+    this.#markerListeners.add(listener);
+    return () => this.#markerListeners.delete(listener);
+  }
+
   public async setSyncEnabled(enabled: boolean): Promise<void> {
     if (this.#disposed) return;
     const revision = ++this.#syncPreferenceRevision;
@@ -116,6 +123,7 @@ export class SupabaseUserDataService implements UserDataService {
       syncStatus: enabled ? this.#snapshot.syncStatus : 'idle',
       syncProgress: enabled ? this.#snapshot.syncProgress : null,
       remoteTrackDeletions: enabled ? this.#snapshot.remoteTrackDeletions : [],
+      remoteMarkerDeletions: enabled ? this.#snapshot.remoteMarkerDeletions : [],
       errorMessage: enabled ? this.#snapshot.errorMessage : null,
     });
     if (!enabled) {
@@ -156,45 +164,61 @@ export class SupabaseUserDataService implements UserDataService {
     }
   }
 
-  public async resolveRemoteTrackDeletions(
-    deleteTrackIds: readonly string[],
-  ): Promise<void> {
+  public async resolveRemoteDeletions(decision: {
+    readonly deleteTrackIds: readonly string[];
+    readonly deleteMarkerIds: readonly string[];
+  }): Promise<void> {
     if (this.#disposed) return;
-    const candidates = this.#snapshot.remoteTrackDeletions;
-    const candidateIds = new Set(candidates.map((candidate) => candidate.trackId));
-    const selected = new Set(deleteTrackIds);
+    const trackCandidates = this.#snapshot.remoteTrackDeletions;
+    const markerCandidates = this.#snapshot.remoteMarkerDeletions;
+    const trackCandidateIds = new Set(
+      trackCandidates.map((candidate) => candidate.trackId),
+    );
+    const markerCandidateIds = new Set(
+      markerCandidates.map((candidate) => candidate.markerId),
+    );
+    const selectedTracks = new Set(decision.deleteTrackIds);
+    const selectedMarkers = new Set(decision.deleteMarkerIds);
     const sessionRevision = this.#sessionRevision;
     const userId = this.#snapshot.userId;
-    if (userId === null) return;
-    if (this.#remoteDeletionDecisionInProgress) return;
+    if (userId === null || this.#remoteDeletionDecisionInProgress) return;
     this.#remoteDeletionDecisionInProgress = true;
     try {
       if (
-        selected.size !== deleteTrackIds.length ||
-        [...selected].some((trackId) => !candidateIds.has(trackId))
+        selectedTracks.size !== decision.deleteTrackIds.length ||
+        selectedMarkers.size !== decision.deleteMarkerIds.length ||
+        [...selectedTracks].some((id) => !trackCandidateIds.has(id)) ||
+        [...selectedMarkers].some((id) => !markerCandidateIds.has(id))
       ) {
-        throw new Error('The deletion decision contains an unknown track.');
+        throw new Error('The deletion decision contains an unknown item.');
       }
-      const restoreTrackIds = candidates.flatMap((candidate) =>
-        selected.has(candidate.trackId) ? [] : [candidate.trackId],
+      const restoreTrackIds = trackCandidates.flatMap((candidate) =>
+        selectedTracks.has(candidate.trackId) ? [] : [candidate.trackId],
       );
-      this.#setSnapshot({
-        ...this.#snapshot,
-        busy: true,
-        errorMessage: null,
+      const restoreMarkerIds = markerCandidates.flatMap((candidate) =>
+        selectedMarkers.has(candidate.markerId) ? [] : [candidate.markerId],
+      );
+      this.#setSnapshot({ ...this.#snapshot, busy: true, errorMessage: null });
+      await this.database.resolveRemoteDeletions({
+        expectedUserId: userId,
+        trackCandidateIds: trackCandidates.map((candidate) => candidate.trackId),
+        markerCandidateIds: markerCandidates.map((candidate) => candidate.markerId),
+        tracks: { deleteIds: [...selectedTracks], restoreIds: restoreTrackIds },
+        markers: { deleteIds: [...selectedMarkers], restoreIds: restoreMarkerIds },
       });
-      await this.database.resolveRemoteTrackDeletions([...selected], restoreTrackIds);
       if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
         syncStatus: 'idle',
         remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
         errorMessage: null,
       });
       for (const listener of this.#trackListeners) listener();
+      for (const listener of this.#markerListeners) listener();
       if (this.#isDecisionCurrent(userId, sessionRevision)) {
-        await this.synchronizeNow();
+        void this.synchronizeNow();
       }
     } catch {
       if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
@@ -218,6 +242,14 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   public async trackDeleted(_trackId: string): Promise<void> {
+    await this.synchronizeNow();
+  }
+
+  public async markerChanged(_markerId: string): Promise<void> {
+    await this.synchronizeNow();
+  }
+
+  public async markerDeleted(_markerId: string): Promise<void> {
     await this.synchronizeNow();
   }
 
@@ -375,6 +407,7 @@ export class SupabaseUserDataService implements UserDataService {
         result = await worker.synchronize(
           initialSession.user.id,
           initialSession.access_token,
+          sessionRevision,
           controller.signal,
         );
       } catch (error) {
@@ -396,6 +429,7 @@ export class SupabaseUserDataService implements UserDataService {
         result = await worker.synchronize(
           refreshedSession.user.id,
           refreshedSession.access_token,
+          sessionRevision,
           controller.signal,
         );
       }
@@ -403,10 +437,15 @@ export class SupabaseUserDataService implements UserDataService {
       this.#setSnapshot({
         ...this.#snapshot,
         busy: false,
-        syncStatus: result.remoteTrackDeletions.length > 0 ? 'needs-action' : 'success',
+        syncStatus:
+          result.remoteTrackDeletions.length > 0 ||
+          result.remoteMarkerDeletions.length > 0
+            ? 'needs-action'
+            : 'success',
         syncProgress: null,
         syncUsage: result.usage,
         remoteTrackDeletions: result.remoteTrackDeletions,
+        remoteMarkerDeletions: result.remoteMarkerDeletions,
       });
     } catch (error) {
       if (!this.#isRunCurrent(controller, sessionRevision)) return;
@@ -438,6 +477,7 @@ export class SupabaseUserDataService implements UserDataService {
           syncStatus: 'idle',
           syncProgress: null,
           remoteTrackDeletions: [],
+          remoteMarkerDeletions: [],
         });
       }
       this.#setSignedIn(session);
@@ -456,6 +496,7 @@ export class SupabaseUserDataService implements UserDataService {
         syncStatus: 'idle',
         syncProgress: null,
         remoteTrackDeletions: [],
+        remoteMarkerDeletions: [],
       });
       this.#setSignedIn(session);
       return;
@@ -481,6 +522,7 @@ export class SupabaseUserDataService implements UserDataService {
       syncStatus: 'idle',
       syncProgress: null,
       remoteTrackDeletions: [],
+      remoteMarkerDeletions: [],
     });
   }
 
@@ -500,6 +542,7 @@ export class SupabaseUserDataService implements UserDataService {
       syncStatus: 'idle',
       syncProgress: null,
       remoteTrackDeletions: [],
+      remoteMarkerDeletions: [],
     });
   }
 
@@ -523,6 +566,10 @@ export class SupabaseUserDataService implements UserDataService {
         userId === null || userId !== this.#snapshot.userId
           ? []
           : this.#snapshot.remoteTrackDeletions,
+      remoteMarkerDeletions:
+        userId === null || userId !== this.#snapshot.userId
+          ? []
+          : this.#snapshot.remoteMarkerDeletions,
     });
   }
 
@@ -539,8 +586,13 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   #bindWorker(worker: TrackSyncWorkerClient): void {
-    worker.subscribeTracksChanged(() => {
+    worker.subscribeTracksChanged(({ userId, sessionRevision }) => {
+      if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
       for (const listener of this.#trackListeners) listener();
+    });
+    worker.subscribeMarkersChanged(({ userId, sessionRevision }) => {
+      if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
+      for (const listener of this.#markerListeners) listener();
     });
     worker.subscribeProgress((progress: UserDataSyncProgress) => {
       if (this.#snapshot.syncStatus !== 'syncing') return;
@@ -575,7 +627,8 @@ export class SupabaseUserDataService implements UserDataService {
       !this.#disposed &&
       this.#snapshot.syncEnabled &&
       this.#snapshot.userId !== null &&
-      this.#snapshot.remoteTrackDeletions.length === 0
+      this.#snapshot.remoteTrackDeletions.length === 0 &&
+      this.#snapshot.remoteMarkerDeletions.length === 0
     );
   }
 

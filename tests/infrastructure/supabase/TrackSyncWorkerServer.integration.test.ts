@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 import {
+  SAVED_MARKER_SCHEMA_VERSION,
+  type SavedMarker,
+} from '@/domain/markers/savedMarker';
+import {
   encodeLegacyTrackSyncGeometry,
   encodeTrackSyncGeometry,
 } from '@/domain/tracks/trackSyncGeometry';
@@ -30,6 +34,8 @@ import { createTestServices } from '@test/helpers/createTestServices';
 import { createMemoryWorkerRpcEndpointPair } from '@test/helpers/MemoryWorkerRpcEndpoint';
 
 const contentHash = 'fbc774b019984d159f533a4309b4b786fee09a1723f243d5eb020495af9e3ba1';
+const legacyContentHash =
+  '86065d77853f4248bb3da66ebc566dc5bf59bb8e4ab6d3cd926427b6129663a1';
 let database: AppDatabase;
 let services: ReturnType<typeof createTestServices>;
 
@@ -91,6 +97,21 @@ function content(trackId: string): LocalTrackContent {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId,
     trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+  };
+}
+
+function marker(overrides: Partial<SavedMarker> = {}): SavedMarker {
+  return {
+    schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+    id: 'marker:one',
+    name: 'Tbilisi view',
+    normalizedName: 'tbilisi view',
+    coordinate: [44.8, 41.7],
+    iconKey: 'place',
+    colorKey: 'blue',
+    createdAt: '2026-08-08T10:00:00.000Z',
+    updatedAt: '2026-08-08T10:00:00.000Z',
+    ...overrides,
   };
 }
 
@@ -157,11 +178,13 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).resolves.toEqual({
       usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
-      changed: true,
+      changed: { tracks: true, markers: false },
       remoteTrackDeletions: [],
+      remoteMarkerDeletions: [],
     });
     await vi.waitFor(() => {
       expect(changed).toHaveBeenCalledOnce();
@@ -170,7 +193,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
-      lineageHash: contentHash,
+      lineageHash: legacyContentHash,
       geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: null,
@@ -229,22 +252,23 @@ describe('TrackSyncWorkerServer', () => {
       download: vi.fn().mockResolvedValue(compressed),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
-    const progress: { completedTracks: number; totalTracks: number }[] = [];
+    const progress: { completedItems: number; totalItems: number }[] = [];
     client.subscribeEvent(trackSyncWorkerEventNames.progress, (payload) => {
-      progress.push(payload as { completedTracks: number; totalTracks: number });
+      progress.push(payload as { completedItems: number; totalItems: number });
     });
 
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     await vi.waitFor(() => {
       expect(progress).toEqual([
-        { completedTracks: 0, totalTracks: 1 },
-        { completedTracks: 1, totalTracks: 1 },
-        { completedTracks: 1, totalTracks: 2 },
-        { completedTracks: 2, totalTracks: 2 },
+        { completedItems: 0, totalItems: 1 },
+        { completedItems: 1, totalItems: 1 },
+        { completedItems: 1, totalItems: 2 },
+        { completedItems: 2, totalItems: 2 },
       ]);
     });
     await expect(database.listLocalTracks()).resolves.toEqual(
@@ -287,9 +311,10 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: false,
+      changed: { tracks: false, markers: false },
       remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -325,6 +350,7 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).rejects.toMatchObject({ message: 'invalid remote response' });
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
@@ -374,6 +400,7 @@ describe('TrackSyncWorkerServer', () => {
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     expect(mutate).toHaveBeenNthCalledWith(
@@ -426,9 +453,10 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: false,
+      changed: { tracks: false, markers: false },
       remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -477,6 +505,7 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).resolves.toMatchObject({ remoteTrackDeletions: [] });
 
@@ -524,6 +553,7 @@ describe('TrackSyncWorkerServer', () => {
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -580,7 +610,7 @@ describe('TrackSyncWorkerServer', () => {
       state: 'ready' as const,
       object_path: `user/${contentHash}/upload.grpt.gz`,
       compressed_bytes: 128,
-      metadata: {},
+      metadata: { lineageHash: legacyContentHash, geometryVersion: 2 },
     };
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     new TrackSyncWorkerServer(serverEndpoint, database, () => ({
@@ -604,6 +634,7 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'account-b',
+        sessionRevision: 0,
       }),
     ).resolves.toMatchObject({ remoteTrackDeletions: [] });
 
@@ -619,7 +650,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(local.id)).resolves.toEqual({
       trackId: local.id,
       contentHash,
-      lineageHash: contentHash,
+      lineageHash: legacyContentHash,
       geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: null,
@@ -670,6 +701,7 @@ describe('TrackSyncWorkerServer', () => {
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     const localId = `local:sync:${remoteHash}`;
@@ -732,6 +764,7 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).rejects.toMatchObject({ code: 'invalid-remote' });
     await expect(database.listLocalTracks()).resolves.toEqual([]);
@@ -759,7 +792,7 @@ describe('TrackSyncWorkerServer', () => {
       state: 'ready' as const,
       object_path: `user/${contentHash}/upload.grpt.gz`,
       compressed_bytes: 128,
-      metadata: {},
+      metadata: { lineageHash: legacyContentHash, geometryVersion: 2 },
     };
     const snapshot = vi
       .fn()
@@ -781,6 +814,7 @@ describe('TrackSyncWorkerServer', () => {
     const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     await mutationStarted;
@@ -792,7 +826,7 @@ describe('TrackSyncWorkerServer', () => {
     await expect(database.loadTrackSyncState(track.id)).resolves.toEqual({
       trackId: track.id,
       contentHash,
-      lineageHash: contentHash,
+      lineageHash: legacyContentHash,
       geometryVersion: 2,
       remoteRevision: 1,
       pendingKind: 'delete',
@@ -802,6 +836,7 @@ describe('TrackSyncWorkerServer', () => {
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
     await expect(database.loadTrackSyncState(track.id)).resolves.toBeNull();
     await expect(database.listLocalTracks()).resolves.toEqual([]);
@@ -856,6 +891,7 @@ describe('TrackSyncWorkerServer', () => {
     const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     await mutationStarted;
@@ -876,6 +912,7 @@ describe('TrackSyncWorkerServer', () => {
     await client.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
       remoteRevision: 1,
@@ -1049,6 +1086,7 @@ describe('TrackSyncWorkerServer', () => {
       clientA.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).rejects.toMatchObject({ code: 'network' });
     expect([...cloud.keys()]).toEqual([legacyHash, v2Hash]);
@@ -1062,6 +1100,7 @@ describe('TrackSyncWorkerServer', () => {
     await clientA.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     expect([...cloud.keys()]).toEqual([v2Hash]);
@@ -1108,6 +1147,7 @@ describe('TrackSyncWorkerServer', () => {
     const result = await clientB.request(trackSyncWorkerMethods.synchronize, {
       accessToken: 'access-token',
       userId: 'user-id',
+      sessionRevision: 0,
     });
 
     expect(result).toMatchObject({ remoteTrackDeletions: [] });
@@ -1199,6 +1239,7 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
     ).rejects.toMatchObject({ code: 'quota' });
 
@@ -1277,8 +1318,12 @@ describe('TrackSyncWorkerServer', () => {
       client.request(trackSyncWorkerMethods.synchronize, {
         accessToken: 'access-token',
         userId: 'user-id',
+        sessionRevision: 0,
       }),
-    ).resolves.toMatchObject({ changed: false, remoteTrackDeletions: [] });
+    ).resolves.toMatchObject({
+      changed: { tracks: false, markers: false },
+      remoteTrackDeletions: [],
+    });
 
     await expect(database.loadTrackSyncState(legacySummary.id)).resolves.toEqual({
       trackId: legacySummary.id,
@@ -1290,6 +1335,74 @@ describe('TrackSyncWorkerServer', () => {
     });
     expect(mutate).not.toHaveBeenCalled();
     expect(deleteRemoteRecord).not.toHaveBeenCalled();
+    client.dispose();
+  });
+
+  it('acknowledges a pending marker upload without changing its local row', async () => {
+    const saved = marker();
+    await database.saveSavedMarker(saved);
+    const mutateMarker = vi.fn().mockResolvedValue({
+      outcome: 'applied' as const,
+      revision: 1,
+    });
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: () => Promise.resolve([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+      mutateMarker,
+      markerSnapshot: vi
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ marker_id: saved.id, revision: 1, payload: saved }]),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+    const progress: {
+      readonly completedItems: number;
+      readonly totalItems: number;
+    }[] = [];
+    client.subscribeEvent(trackSyncWorkerEventNames.progress, (payload) => {
+      progress.push(
+        payload as { readonly completedItems: number; readonly totalItems: number },
+      );
+    });
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+        sessionRevision: 7,
+      }),
+    ).resolves.toMatchObject({
+      changed: { tracks: false, markers: false },
+      remoteMarkerDeletions: [],
+    });
+    expect(mutateMarker).toHaveBeenCalledWith(
+      saved.id,
+      0,
+      saved,
+      expect.any(AbortSignal),
+    );
+    await expect(database.readMarkerSyncSnapshot()).resolves.toEqual([
+      {
+        marker: saved,
+        state: {
+          markerId: saved.id,
+          remoteRevision: 1,
+          pendingKind: null,
+          localVersion: 1,
+        },
+      },
+    ]);
+    await vi.waitFor(() => {
+      expect(progress).toEqual([
+        { completedItems: 0, totalItems: 1 },
+        { completedItems: 1, totalItems: 1 },
+      ]);
+    });
     client.dispose();
   });
 });

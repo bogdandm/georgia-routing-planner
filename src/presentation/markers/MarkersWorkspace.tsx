@@ -143,7 +143,7 @@ export function useMarkersWorkspace(): MarkersWorkspaceValue {
 }
 
 export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
-  const { clock, idGenerator, mapLayers, mapViewport, savedMarkers } =
+  const { clock, idGenerator, mapLayers, mapViewport, savedMarkers, userData } =
     useRuntimeServices();
   const markerSort = useUiStore((state) => state.markerSort);
   const markerCreationCommand = useStore(
@@ -190,6 +190,11 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       window.clearTimeout(timer);
     };
   }, [loadMarkers]);
+
+  useEffect(
+    () => userData.subscribeMarkersChanged(() => void loadMarkers()),
+    [loadMarkers, userData],
+  );
 
   useEffect(() => {
     if (markerCreationCommand === null || loadState !== 'ready') return;
@@ -238,8 +243,9 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       await savedMarkers.saveSavedMarker(marker);
       setMarkers((current) => [...current, marker]);
       setEditorDraft(null);
+      void userData.markerChanged(marker.id);
     },
-    [clock, editorDraft, idGenerator, savedMarkers],
+    [clock, editorDraft, idGenerator, savedMarkers, userData],
   );
 
   const saveAppearance = useCallback(
@@ -259,8 +265,9 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
         current.map((marker) => (marker.id === updated.id ? updated : marker)),
       );
       setEditorDraft(null);
+      void userData.markerChanged(updated.id);
     },
-    [clock, editorDraft, savedMarkers],
+    [clock, editorDraft, savedMarkers, userData],
   );
 
   const renameMarker = useCallback(
@@ -278,8 +285,9 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
           currentMarker.id === updated.id ? updated : currentMarker,
         ),
       );
+      void userData.markerChanged(updated.id);
     },
-    [clock, savedMarkers],
+    [clock, savedMarkers, userData],
   );
 
   const deleteMarker = useCallback(
@@ -288,8 +296,9 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       setMarkers((current) =>
         current.filter((currentMarker) => currentMarker.id !== marker.id),
       );
+      void userData.markerDeleted(marker.id);
     },
-    [savedMarkers],
+    [savedMarkers, userData],
   );
 
   const mapCenter = viewport?.center ?? null;

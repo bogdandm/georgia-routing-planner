@@ -796,21 +796,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const enrichRoutePlan = useCallback(
     (draft: RoutePlanDraft) => {
-      if (draft.status !== 'route-ready' || draft.segment === null) return;
+      if (draft.status !== 'elevation-enriching' || draft.segment === null) return;
       const planId = draft.id;
       const requestGeneration = draft.requestGeneration;
       const controller = new AbortController();
       routePlanElevationAbort.current?.abort();
       routePlanElevationAbort.current = controller;
-      setElevationProgress(null);
-      setActive((current) =>
-        current?.kind === 'route-plan' &&
-        current.id === planId &&
-        current.requestGeneration === requestGeneration &&
-        current.status === 'route-ready'
-          ? beginRoutePlanElevation(current)
-          : current,
-      );
       void prepareImportedTrack([draft.segment], elevationProvider, controller.signal, {
         preserveGeometry: true,
         sampleIntervalMeters: 30,
@@ -857,6 +848,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [elevationProvider],
   );
 
+  useEffect(() => {
+    if (active?.kind === 'route-plan' && active.status === 'elevation-enriching') {
+      enrichRoutePlan(active);
+    }
+  }, [active, enrichRoutePlan]);
+
   const addRoutePlanPoint = useCallback(
     (coordinate: TrackCoordinate) => {
       if (routePlanSaveInProgress.current) return;
@@ -867,13 +864,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setElevationProgress(null);
       setActive((current) =>
         current?.kind === 'route-plan' && current.id === active.id
-          ? transition.draft
+          ? transition.request === null
+            ? beginRoutePlanElevation(transition.draft)
+            : transition.draft
           : current,
       );
-      if (transition.request === null) {
-        enrichRoutePlan(transition.draft);
-        return;
-      }
+      if (transition.request === null) return;
       const request = transition.request;
       const controller = new AbortController();
       routePlanRequestAbort.current?.abort();
@@ -894,13 +890,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       )
         .then((result) => {
           if (controller.signal.aborted) return;
-          const completed = completeRoutePlanPoint(transition.draft, request, result);
-          setActive((current) =>
-            current?.kind === 'route-plan' && current.id === active.id
-              ? completeRoutePlanPoint(current, request, result)
-              : current,
-          );
-          enrichRoutePlan(completed);
+          setActive((current) => {
+            if (current?.kind !== 'route-plan' || current.id !== active.id) {
+              return current;
+            }
+            const completed = completeRoutePlanPoint(current, request, result);
+            return completed.status === 'route-ready'
+              ? beginRoutePlanElevation(completed)
+              : completed;
+          });
         })
         .finally(() => {
           if (routePlanRequestAbort.current === controller) {
@@ -908,7 +906,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           }
         });
     },
-    [active, enrichRoutePlan, trailRouter],
+    [active, trailRouter],
   );
 
   const setNextSegmentMode = useCallback((mode: RoutePlanSegmentMode) => {
@@ -926,10 +924,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setElevationProgress(null);
     const undone = undoRoutePlanPoint(active);
     setActive((current) =>
-      current?.kind === 'route-plan' && current.id === active.id ? undone : current,
+      current?.kind === 'route-plan' && current.id === active.id
+        ? undone.status === 'route-ready'
+          ? beginRoutePlanElevation(undone)
+          : undone
+        : current,
     );
-    enrichRoutePlan(undone);
-  }, [active, enrichRoutePlan]);
+  }, [active]);
 
   const clearRoutePlan = useCallback(() => {
     if (routePlanSaveInProgress.current) return;

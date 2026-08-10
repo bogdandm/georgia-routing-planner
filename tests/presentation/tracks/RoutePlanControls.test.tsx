@@ -58,18 +58,24 @@ describe('RoutePlanControls', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
-  it('disables conflicting mode and save controls while routing', () => {
+  it('keeps cancellation edits available while routing', async () => {
+    const user = userEvent.setup();
     const withStart = beginRoutePlanPoint(
       startRoutePlan('route-plan:pending'),
       A,
     ).draft;
     const calculating = beginRoutePlanPoint(withStart, B).draft;
-    render(<RoutePlanControls draft={calculating} {...callbacks()} />);
+    const handlers = callbacks();
+    render(<RoutePlanControls draft={calculating} {...handlers} />);
 
     expect(screen.getByText('Calculating route…')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Routes' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Line' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(handlers.onUndo).toHaveBeenCalledOnce();
+    expect(handlers.onClear).toHaveBeenCalledOnce();
   });
 
   it('locks all route controls while an atomic save is pending', () => {

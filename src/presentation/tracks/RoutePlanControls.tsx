@@ -145,7 +145,7 @@ export function RoutePlanControls({
           <Button
             size="small"
             color="inherit"
-            disabled={locked || draft.waypoints.length === 0}
+            disabled={draft.status === 'saving' || draft.waypoints.length === 0}
             onClick={onUndo}
           >
             Undo
@@ -153,7 +153,7 @@ export function RoutePlanControls({
           <Button
             size="small"
             color="inherit"
-            disabled={locked || draft.waypoints.length === 0}
+            disabled={draft.status === 'saving' || draft.waypoints.length === 0}
             onClick={onClear}
           >
             Clear

@@ -20,139 +20,155 @@ import {
   UUID_PATTERN,
 } from './contracts.ts';
 
-const markerIconKeys: Readonly<Record<string, true>> = Object.fromEntries(
-  [
-    'place',
-    'flag',
-    'home',
-    'parking',
-    'apartment',
-    'business',
-    'cabin',
-    'cottage',
-    'city',
-    'map',
-    'my-location',
-    'navigation',
-    'pin',
-    'public',
-    'school',
-    'explore',
-    'landscape',
-    'forest',
-    'terrain',
-    'water',
-    'snow',
-    'beach',
-    'eco',
-    'grass',
-    'park',
-    'spa',
-    'volcano',
-    'waves',
-    'sunny',
-    'cloud',
-    'storm',
-    'tsunami',
-    'hiking',
-    'cycling',
-    'boating',
-    'pets',
-    'skiing',
-    'kayaking',
-    'kitesurfing',
-    'paragliding',
-    'rowing',
-    'sailing',
-    'diving',
-    'skateboarding',
-    'snowboarding',
-    'sports',
-    'football',
-    'surfing',
-    'swimming',
-    'running',
-    'restaurant',
-    'cafe',
-    'hotel',
-    'store',
-    'bakery',
-    'brunch',
-    'camping',
-    'fast-food',
-    'ice-cream',
-    'liquor',
-    'bar',
-    'dining',
-    'drinking-water',
-    'grocery',
-    'shelter',
-    'ramen',
-    'seafood',
-    'tapas',
-    'camera',
-    'castle',
-    'church',
-    'museum',
-    'monument',
-    'attraction',
-    'celebration',
-    'deck',
-    'festival',
-    'fort',
-    'mosque',
-    'synagogue',
-    'buddhist-temple',
-    'hindu-temple',
-    'theater',
-    'tour',
-    'villa',
-    'hospital',
-    'medical',
-    'info',
-    'warning',
-    'roadwork',
-    'blocked',
-    'car-crash',
-    'alert',
-    'danger',
-    'emergency',
-    'engineering',
-    'fire-extinguisher',
-    'safety',
-    'fire-station',
-    'report',
-    'security',
-    'sos',
-    'traffic',
-    'viewpoint',
-    'shuttle',
-    'commute',
-    'bus',
-    'car',
-    'railway',
-    'electric-bike',
-    'flight',
-    'fuel',
-    'bike',
-    'snowmobile',
-    'train',
-    'tram',
-    'motorcycle',
-  ].map((key) => [key, true]),
-);
-const markerColorKeys: Readonly<Record<string, true>> = {
-  blue: true,
-  teal: true,
-  purple: true,
-  olive: true,
-  orange: true,
-  rose: true,
-  navy: true,
-  'blue-green': true,
-  green: true,
-  red: true,
-};
+const markerIconKeys = [
+  'place',
+  'flag',
+  'home',
+  'parking',
+  'apartment',
+  'business',
+  'cabin',
+  'cottage',
+  'city',
+  'map',
+  'my-location',
+  'navigation',
+  'pin',
+  'public',
+  'school',
+  'explore',
+  'landscape',
+  'forest',
+  'terrain',
+  'water',
+  'snow',
+  'beach',
+  'eco',
+  'grass',
+  'park',
+  'spa',
+  'volcano',
+  'waves',
+  'sunny',
+  'cloud',
+  'storm',
+  'tsunami',
+  'hiking',
+  'cycling',
+  'boating',
+  'pets',
+  'skiing',
+  'kayaking',
+  'kitesurfing',
+  'paragliding',
+  'rowing',
+  'sailing',
+  'diving',
+  'skateboarding',
+  'snowboarding',
+  'sports',
+  'football',
+  'surfing',
+  'swimming',
+  'running',
+  'restaurant',
+  'cafe',
+  'hotel',
+  'store',
+  'bakery',
+  'brunch',
+  'camping',
+  'fast-food',
+  'ice-cream',
+  'liquor',
+  'bar',
+  'dining',
+  'drinking-water',
+  'grocery',
+  'shelter',
+  'ramen',
+  'seafood',
+  'tapas',
+  'camera',
+  'castle',
+  'church',
+  'museum',
+  'monument',
+  'attraction',
+  'celebration',
+  'deck',
+  'festival',
+  'fort',
+  'mosque',
+  'synagogue',
+  'buddhist-temple',
+  'hindu-temple',
+  'theater',
+  'tour',
+  'villa',
+  'hospital',
+  'medical',
+  'info',
+  'warning',
+  'roadwork',
+  'blocked',
+  'car-crash',
+  'alert',
+  'danger',
+  'emergency',
+  'engineering',
+  'fire-extinguisher',
+  'safety',
+  'fire-station',
+  'report',
+  'security',
+  'sos',
+  'traffic',
+  'viewpoint',
+  'shuttle',
+  'commute',
+  'bus',
+  'car',
+  'railway',
+  'electric-bike',
+  'flight',
+  'fuel',
+  'bike',
+  'snowmobile',
+  'train',
+  'tram',
+  'motorcycle',
+] as const;
+
+const markerColorKeys = [
+  'blue',
+  'teal',
+  'purple',
+  'olive',
+  'orange',
+  'rose',
+  'navy',
+  'blue-green',
+  'green',
+  'red',
+] as const;
+
+const markerPayloadSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: z.string().min(1).max(200),
+    name: z.string().min(1).max(200),
+    normalizedName: z.string(),
+    coordinate: z.tuple([
+      z.number().finite().min(-180).max(180),
+      z.number().finite().min(-90).max(90),
+    ]),
+    iconKey: z.enum(markerIconKeys),
+    colorKey: z.enum(markerColorKeys),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
 import { validateGeometryUpload } from './geometry.ts';
 
 export function requireUserId(context: SupabaseContext): string {
@@ -292,52 +308,21 @@ function requireMarkerId(value: unknown): string {
 }
 
 function requireMarkerPayload(value: unknown, markerId: string): MarkerPayload {
-  if (!isObject(value)) {
-    throw new TrackSyncFailure(400, 'invalid_marker', 'marker must be an object.');
-  }
-  requireExactFields(value, [
-    'schemaVersion',
-    'id',
-    'name',
-    'normalizedName',
-    'coordinate',
-    'iconKey',
-    'colorKey',
-    'createdAt',
-    'updatedAt',
-  ]);
+  const parsed = markerPayloadSchema.safeParse(value);
   if (
-    value.schemaVersion !== 1 ||
-    value.id !== markerId ||
-    typeof value.name !== 'string' ||
-    value.name.length === 0 ||
-    value.name.length > 200 ||
-    value.name !== value.name.trim() ||
-    typeof value.normalizedName !== 'string' ||
-    value.normalizedName !== value.name.trim().toLocaleLowerCase('en') ||
-    !Array.isArray(value.coordinate) ||
-    value.coordinate.length !== 2 ||
-    !Number.isFinite(value.coordinate[0]) ||
-    !Number.isFinite(value.coordinate[1]) ||
-    value.coordinate[0] < -180 ||
-    value.coordinate[0] > 180 ||
-    value.coordinate[1] < -90 ||
-    value.coordinate[1] > 90 ||
-    typeof value.iconKey !== 'string' ||
-    markerIconKeys[value.iconKey] !== true ||
-    typeof value.colorKey !== 'string' ||
-    markerColorKeys[value.colorKey] !== true ||
-    typeof value.createdAt !== 'string' ||
-    !z.iso.datetime().safeParse(value.createdAt).success ||
-    typeof value.updatedAt !== 'string' ||
-    !z.iso.datetime().safeParse(value.updatedAt).success
+    !parsed.success ||
+    parsed.data.id !== markerId ||
+    parsed.data.name !== parsed.data.name.trim() ||
+    parsed.data.normalizedName !== parsed.data.name.toLocaleLowerCase('en')
   ) {
     throw new TrackSyncFailure(400, 'invalid_marker', 'marker is invalid.');
   }
-  if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_MARKER_BYTES) {
+  if (
+    new TextEncoder().encode(JSON.stringify(parsed.data)).byteLength > MAX_MARKER_BYTES
+  ) {
     throw new TrackSyncFailure(413, 'marker_too_large', 'marker exceeds 4 KiB.');
   }
-  return value as unknown as MarkerPayload;
+  return parsed.data;
 }
 
 function parseIntegerField(value: FormDataEntryValue | null, name: string): number {

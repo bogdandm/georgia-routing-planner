@@ -184,6 +184,7 @@ describe('prepareImportedTrack', () => {
   it('bounds route elevation samples and interpolates them onto retained geometry', async () => {
     const points = Array.from({ length: 6_001 }, (_, index) => ({
       coordinate: equatorCoordinate(index * 40),
+      ...(index === 3_000 ? { recordedAt: '2026-08-10T12:00:00.000Z' } : {}),
     }));
     let sampledCoordinateCount = 0;
     const provider: ElevationProvider = {
@@ -217,9 +218,21 @@ describe('prepareImportedTrack', () => {
       (points[3_000]?.coordinate[0] ?? 0) * 1_000_000,
       3,
     );
+    expect(calculated?.points[3_000]?.recordedAt).toBe('2026-08-10T12:00:00.000Z');
     expect(
       calculated?.points.every((point) => Number.isFinite(point.elevationMeters)),
     ).toBe(true);
+  });
+
+  it.each([
+    ['non-finite interval', { sampleIntervalMeters: Number.NaN }],
+    ['non-positive interval', { sampleIntervalMeters: 0 }],
+    ['non-integer sample limit', { maximumElevationSamples: 2.5 }],
+    ['too-small sample limit', { maximumElevationSamples: 1 }],
+  ] as const)('rejects %s', async (_label, options) => {
+    await expect(
+      prepareImportedTrack(sourceSegments, flatDem(400), signal, options),
+    ).rejects.toThrow('Elevation sampling options are invalid.');
   });
 
   it('rejects calculated projections above the persisted point limit', async () => {

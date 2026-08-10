@@ -438,7 +438,7 @@ export class RoutingTileLoader {
     tiles: readonly RoutingTileCoordinate[],
     signal: AbortSignal,
   ): Promise<readonly DecodedRoutingTile[]> {
-    const decoded: (DecodedRoutingTile | undefined)[] = new Array(tiles.length);
+    const decoded = tiles.map<DecodedRoutingTile | undefined>(() => undefined);
     let nextIndex = 0;
     const loadNext = async (): Promise<void> => {
       while (nextIndex < tiles.length) {

@@ -71,6 +71,14 @@ export class TrackElevationPreparationError extends Error {
   }
 }
 
+function requiredValue<T>(values: readonly (T | undefined)[], index: number): T {
+  const value = values[index];
+  if (value === undefined) {
+    throw new TrackElevationPreparationError('elevation-unavailable');
+  }
+  return value;
+}
+
 function interpolateCoordinate(
   start: TrackCoordinate,
   end: TrackCoordinate,
@@ -130,11 +138,9 @@ function interpolateRecordedAt(
 function segmentDistanceMeters(segment: TrackSegment): number {
   let distanceMeters = 0;
   for (let index = 1; index < segment.points.length; index += 1) {
-    const previous = segment.points[index - 1];
-    const current = segment.points[index];
-    if (previous !== undefined && current !== undefined) {
-      distanceMeters += geodesicDistanceMeters(previous.coordinate, current.coordinate);
-    }
+    const previous = requiredValue(segment.points, index - 1);
+    const current = requiredValue(segment.points, index);
+    distanceMeters += geodesicDistanceMeters(previous.coordinate, current.coordinate);
   }
   return distanceMeters;
 }
@@ -156,30 +162,27 @@ function resampleSegment(
   const distances = [0];
   signal.throwIfAborted();
   for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    const accumulated = distances[index - 1] ?? 0;
+    const previous = requiredValue(points, index - 1);
+    const current = requiredValue(points, index);
     distances.push(
-      previous === undefined || current === undefined
-        ? accumulated
-        : accumulated + geodesicDistanceMeters(previous.coordinate, current.coordinate),
+      requiredValue(distances, index - 1) +
+        geodesicDistanceMeters(previous.coordinate, current.coordinate),
     );
   }
-  const totalDistance = distances.at(-1) ?? 0;
+  const totalDistance = requiredValue(distances, distances.length - 1);
   const stations: ResampledStation[] = [];
   let legIndex = 0;
   const appendStation = (distanceMeters: number): void => {
     while (
       legIndex < points.length - 2 &&
-      (distances[legIndex + 1] ?? Infinity) < distanceMeters
+      requiredValue(distances, legIndex + 1) < distanceMeters
     ) {
       legIndex += 1;
     }
-    const start = points[legIndex];
-    const end = points[legIndex + 1] ?? start;
-    const startDistance = distances[legIndex] ?? 0;
-    const endDistance = distances[legIndex + 1] ?? startDistance;
-    if (start === undefined || end === undefined) return;
+    const start = requiredValue(points, legIndex);
+    const end = requiredValue(points, legIndex + 1);
+    const startDistance = requiredValue(distances, legIndex);
+    const endDistance = requiredValue(distances, legIndex + 1);
     const legDistance = endDistance - startDistance;
     const fraction =
       legDistance === 0 ? 0 : (distanceMeters - startDistance) / legDistance;
@@ -206,22 +209,20 @@ function resampleSegment(
     if (stations.length % 1_000 === 0) signal.throwIfAborted();
     appendStation(Math.min(distanceMeters, totalDistance));
   }
-  const endpoint = points.at(-1);
-  if (endpoint !== undefined) {
-    const endpointStation: ResampledStation = {
-      coordinate: endpoint.coordinate,
-      sourceSegmentIndex,
-      ...(endpoint.recordedAt === undefined ? {} : { recordedAt: endpoint.recordedAt }),
-    };
-    const finalStation = stations.at(-1);
-    if (
-      finalStation?.coordinate[0] === endpoint.coordinate[0] &&
-      finalStation.coordinate[1] === endpoint.coordinate[1]
-    ) {
-      stations[stations.length - 1] = endpointStation;
-    } else {
-      stations.push(endpointStation);
-    }
+  const endpoint = requiredValue(points, points.length - 1);
+  const endpointStation: ResampledStation = {
+    coordinate: endpoint.coordinate,
+    sourceSegmentIndex,
+    ...(endpoint.recordedAt === undefined ? {} : { recordedAt: endpoint.recordedAt }),
+  };
+  const finalStation = requiredValue(stations, stations.length - 1);
+  if (
+    finalStation.coordinate[0] === endpoint.coordinate[0] &&
+    finalStation.coordinate[1] === endpoint.coordinate[1]
+  ) {
+    stations[stations.length - 1] = endpointStation;
+  } else {
+    stations.push(endpointStation);
   }
   return stations;
 }
@@ -307,13 +308,11 @@ function pointDistances(
 ): readonly number[] {
   const distances = [0];
   for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
+    const previous = requiredValue(points, index - 1);
+    const current = requiredValue(points, index);
     distances.push(
-      (distances[index - 1] ?? 0) +
-        (previous === undefined || current === undefined
-          ? 0
-          : geodesicDistanceMeters(previous.coordinate, current.coordinate)),
+      requiredValue(distances, index - 1) +
+        geodesicDistanceMeters(previous.coordinate, current.coordinate),
     );
   }
   return distances;
@@ -328,20 +327,17 @@ function preserveSegmentGeometry(
   let sampleIndex = 0;
   return {
     points: source.points.map((point, index) => {
-      const distanceMeters = sourceDistances[index] ?? 0;
+      const distanceMeters = requiredValue(sourceDistances, index);
       while (
         sampleIndex < samples.length - 2 &&
-        (sampleDistances[sampleIndex + 1] ?? Infinity) < distanceMeters
+        requiredValue(sampleDistances, sampleIndex + 1) < distanceMeters
       ) {
         sampleIndex += 1;
       }
-      const start = samples[sampleIndex];
-      const end = samples[sampleIndex + 1] ?? start;
-      const startDistance = sampleDistances[sampleIndex] ?? 0;
-      const endDistance = sampleDistances[sampleIndex + 1] ?? startDistance;
-      if (start === undefined || end === undefined) {
-        throw new TrackElevationPreparationError('elevation-unavailable');
-      }
+      const start = requiredValue(samples, sampleIndex);
+      const end = requiredValue(samples, sampleIndex + 1);
+      const startDistance = requiredValue(sampleDistances, sampleIndex);
+      const endDistance = requiredValue(sampleDistances, sampleIndex + 1);
       const fraction =
         endDistance === startDistance
           ? 0
@@ -466,7 +462,7 @@ export async function prepareImportedTrack(
     for (const distanceMeters of distances) {
       stationDistanceMeters.push(distanceOffset + distanceMeters);
     }
-    distanceOffset += distances.at(-1) ?? 0;
+    distanceOffset += requiredValue(distances, distances.length - 1);
   }
   const onProgress = options.onProgress;
   const shouldPublishProgress = onProgress !== undefined;
@@ -483,31 +479,33 @@ export async function prepareImportedTrack(
   const previewDemElevations: (number | undefined)[] = previewIndices.map(
     () => undefined,
   );
-  const publishProgress = (progress: ElevationSamplingProgress): void => {
-    if (onProgress === undefined) return;
-    for (const [sampleOffset, stationIndex] of progress.indices.entries()) {
-      const previewSlot = previewSlotsByStationIndex.get(stationIndex);
-      if (previewSlot === undefined) continue;
-      previewDemElevations[previewSlot] = availableMeters(
-        progress.samples[sampleOffset],
-      );
-    }
-    onProgress({
-      completedTiles: progress.completedTiles,
-      totalTiles: progress.totalTiles,
-      points: previewIndices.map((stationIndex, slot) => ({
-        distanceMeters: stationDistanceMeters[stationIndex] ?? 0,
-        elevationMeters: previewDemElevations[slot] ?? null,
-      })),
-    });
-  };
+  const publishProgress =
+    onProgress === undefined
+      ? undefined
+      : (progress: ElevationSamplingProgress): void => {
+          for (const [sampleOffset, stationIndex] of progress.indices.entries()) {
+            const previewSlot = previewSlotsByStationIndex.get(stationIndex);
+            if (previewSlot === undefined) continue;
+            previewDemElevations[previewSlot] = availableMeters(
+              progress.samples[sampleOffset],
+            );
+          }
+          onProgress({
+            completedTiles: progress.completedTiles,
+            totalTiles: progress.totalTiles,
+            points: previewIndices.map((stationIndex, slot) => ({
+              distanceMeters: requiredValue(stationDistanceMeters, stationIndex),
+              elevationMeters: previewDemElevations[slot] ?? null,
+            })),
+          });
+        };
   const samples = await elevationProvider.sampleMany(
     stations.map((station) => ({
       longitude: station.coordinate[0],
       latitude: station.coordinate[1],
     })),
     signal,
-    shouldPublishProgress ? publishProgress : undefined,
+    publishProgress,
   );
   signal.throwIfAborted();
 
@@ -525,20 +523,17 @@ export async function prepareImportedTrack(
       availableMeters(segmentSamples[index]),
     );
     if (values.every((value) => value === undefined)) continue;
-    const distances = distancesBySegment[segmentIndex] ?? [];
+    const distances = requiredValue(distancesBySegment, segmentIndex);
     fillMissingElevations(values, distances);
     assembled.push(
       stationSegment.map((station, index) => ({
         coordinate: station.coordinate,
         ...(station.recordedAt === undefined ? {} : { recordedAt: station.recordedAt }),
-        elevationMeters: values[index] ?? 0,
+        elevationMeters: requiredValue(values, index),
         sourceSegmentIndex: station.sourceSegmentIndex,
       })),
     );
-    const source = routableSegments[segmentIndex]?.segment;
-    if (source === undefined) {
-      throw new TrackElevationPreparationError('elevation-unavailable');
-    }
+    const source = requiredValue(routableSegments, segmentIndex).segment;
     assembledSources.push(source);
     assembledDistances.push(distances);
   }
@@ -546,14 +541,11 @@ export async function prepareImportedTrack(
   const filtered = filterDemElevationSamples(assembled);
   const calculatedSegments = options.preserveGeometry
     ? filtered.map((segment, index) => {
-        const source = assembledSources[index];
-        if (source === undefined) {
-          throw new TrackElevationPreparationError('elevation-unavailable');
-        }
+        const source = requiredValue(assembledSources, index);
         return preserveSegmentGeometry(
           source,
           segment,
-          assembledDistances[index] ?? [],
+          requiredValue(assembledDistances, index),
         );
       })
     : filtered.map((segment) => ({

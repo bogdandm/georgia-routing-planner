@@ -455,7 +455,7 @@ class MinimumQueue {
     }
     let index = 0;
     this.#entries[0] = last;
-    while (true) {
+    for (;;) {
       const leftIndex = index * 2 + 1;
       const rightIndex = leftIndex + 1;
       const left = this.#entries[leftIndex];
@@ -509,7 +509,7 @@ function assignSnapNodes(
   readonly coordinates: ReadonlyMap<string, TrackCoordinate>;
   readonly adjacency: ReadonlyMap<string, readonly TrailGraphArc[]>;
 } {
-  const assigned: AssignedSnap[] = [
+  const assigned: [AssignedSnap, AssignedSnap] = [
     {
       ...start,
       role: 'start',
@@ -588,8 +588,8 @@ function assignSnapNodes(
   }
 
   return {
-    start: assigned[0] as AssignedSnap,
-    destination: assigned[1] as AssignedSnap,
+    start: assigned[0],
+    destination: assigned[1],
     coordinates: temporaryCoordinates,
     adjacency: adjacencyOverrides,
   };
@@ -641,7 +641,7 @@ export function routeTrailGraph(
     score: geodesicDistanceMeters(startSnapCoordinate, destinationSnapCoordinate),
   });
 
-  while (true) {
+  for (;;) {
     const currentEntry = queue.pop();
     if (currentEntry === undefined) break;
     if (visited.has(currentEntry.nodeKey)) continue;
@@ -660,7 +660,10 @@ export function routeTrailGraph(
         .filter(
           (coordinate): coordinate is TrackCoordinate => coordinate !== undefined,
         );
-      if (coordinates.length === 1) coordinates.push(coordinates[0] as TrackCoordinate);
+      const onlyCoordinate = coordinates[0];
+      if (coordinates.length === 1 && onlyCoordinate !== undefined) {
+        coordinates.push(onlyCoordinate);
+      }
       return {
         status: 'ready',
         coordinates,

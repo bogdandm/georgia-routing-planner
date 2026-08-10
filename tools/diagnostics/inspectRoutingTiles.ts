@@ -21,13 +21,11 @@ interface TileJson {
   readonly maxzoom?: number;
 }
 
-const tileJsonSchema = z
-  .object({
-    tiles: z.array(z.string()),
-    minzoom: z.number().finite().optional(),
-    maxzoom: z.number().finite().optional(),
-  })
-  .passthrough();
+const tileJsonSchema = z.looseObject({
+  tiles: z.array(z.string()),
+  minzoom: z.number().optional(),
+  maxzoom: z.number().optional(),
+});
 
 interface TileCoordinate {
   readonly z: number;

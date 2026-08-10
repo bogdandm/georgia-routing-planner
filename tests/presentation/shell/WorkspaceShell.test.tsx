@@ -2033,17 +2033,22 @@ describe('WorkspaceShell', () => {
   }, 30_000);
 
   it('plans a direct multi-point route, enriches elevation, and saves local GPX content', async () => {
+    const route = vi
+      .fn()
+      .mockRejectedValue(new Error('Line mode must not invoke routing.'));
     const trailRouter: TrailRouter = {
-      route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
+      route,
       dispose: vi.fn(),
     };
     const elevationProvider: ElevationProvider = {
       sample: vi.fn().mockResolvedValue({ status: 'available', meters: 1_000 }),
-      sampleMany: vi.fn(async (coordinates: readonly ElevationCoordinate[]) =>
-        coordinates.map((_, index) => ({
-          status: 'available' as const,
-          meters: 1_000 + index,
-        })),
+      sampleMany: vi.fn((coordinates: readonly ElevationCoordinate[]) =>
+        Promise.resolve(
+          coordinates.map((_, index) => ({
+            status: 'available' as const,
+            meters: 1_000 + index,
+          })),
+        ),
       ),
     };
     const baseServices = createTestServices({ trailRouter });
@@ -2109,7 +2114,7 @@ describe('WorkspaceShell', () => {
     expect(
       content.trackPoints[0]?.every((point) => point.elevationMeters !== undefined),
     ).toBe(true);
-    expect(trailRouter.route).not.toHaveBeenCalled();
+    expect(route).not.toHaveBeenCalled();
   });
 
   it('explains GPX validation warnings with their parser code and message', async () => {

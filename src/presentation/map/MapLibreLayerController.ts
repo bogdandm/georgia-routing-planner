@@ -788,7 +788,6 @@ export class MapLibreLayerController {
     if (
       !sections.every(
         (section) =>
-          (section.kind === 'routed' || section.kind === 'direct') &&
           section.coordinates.length >= 2 &&
           section.coordinates.every((coordinate) => validCoordinate(coordinate)),
       ) ||
@@ -2068,7 +2067,7 @@ export class MapLibreLayerController {
 
   private reconcileRoutePlan(): MapLayerVisibilityResult {
     const map = this.#map;
-    if (map === null || map.getLayer(mapLayerIds.background) === undefined) {
+    if (map?.getLayer(mapLayerIds.background) === undefined) {
       return { status: 'success' };
     }
     const beforeLayerId =

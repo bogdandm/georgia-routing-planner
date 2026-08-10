@@ -32,6 +32,11 @@ import {
 const TILE_JSON_URL = 'https://routing.test/tilejson.json';
 const TILE_TEMPLATE = 'https://routing.test/tiles/{z}/{x}/{y}.pbf';
 
+function fetchInputUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === 'string') return input;
+  return input instanceof URL ? input.href : input.url;
+}
+
 function encodeVarint(value: number): Buffer {
   const bytes: number[] = [];
   let remaining = value >>> 0;
@@ -117,8 +122,12 @@ async function initializedLoader(
     tileBytes.byteOffset,
     tileBytes.byteOffset + tileBytes.byteLength,
   ) as ArrayBuffer;
-  const fetcher = vi.fn<typeof fetch>(async (input) =>
-    String(input) === TILE_JSON_URL ? tileJson.clone() : new Response(tileBody),
+  const fetcher = vi.fn<typeof fetch>((input) =>
+    Promise.resolve(
+      fetchInputUrl(input) === TILE_JSON_URL
+        ? tileJson.clone()
+        : new Response(tileBody),
+    ),
   );
   const initialization = await RoutingTileLoader.initialize(
     {
@@ -198,7 +207,12 @@ function loadedArea(
 ): LoadedRoutingArea {
   return {
     tiles: [
-      { z: ROUTING_ZOOM, x: tileX, y: tileY, key: `${ROUTING_ZOOM}/${tileX}/${tileY}` },
+      {
+        z: ROUTING_ZOOM,
+        x: tileX,
+        y: tileY,
+        key: [ROUTING_ZOOM, tileX, tileY].join('/'),
+      },
     ],
     rectangle: {
       minTileX: tileX,
@@ -236,7 +250,7 @@ describe('routing tile coverage and decoding', () => {
             z: ROUTING_ZOOM,
             x: tileX,
             y: tileY,
-            key: `${ROUTING_ZOOM}/${tileX}/${tileY}`,
+            key: [ROUTING_ZOOM, tileX, tileY].join('/'),
           },
         ],
         rectangle: {
@@ -298,11 +312,11 @@ describe('routing tile coverage and decoding', () => {
           readonly resolve: (value: T | PromiseLike<T>) => void;
         };
       }
-    ).withResolvers<void>();
+    ).withResolvers<undefined>();
     let activeRequests = 0;
     let maximumActiveRequests = 0;
     const fetcher = vi.fn<typeof fetch>(async (input) => {
-      if (String(input) === TILE_JSON_URL) return tileJsonResponse();
+      if (fetchInputUrl(input) === TILE_JSON_URL) return tileJsonResponse();
       activeRequests += 1;
       maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
       await gate.promise;
@@ -327,7 +341,7 @@ describe('routing tile coverage and decoding', () => {
       new AbortController().signal,
     );
     expect(maximumActiveRequests).toBe(ROUTING_TILE_FETCH_CONCURRENCY);
-    gate.resolve();
+    gate.resolve(undefined);
     const result = await pending;
     expect(result.status).toBe('ready');
     expect(fetcher.mock.calls.length).toBeGreaterThan(
@@ -462,7 +476,7 @@ describe('routing tile coverage and decoding', () => {
         requestTimeoutMs: 5_000,
       },
       new AbortController().signal,
-      vi.fn<typeof fetch>(async () => Response.json({ tiles: [] })),
+      vi.fn<typeof fetch>(() => Promise.resolve(Response.json({ tiles: [] }))),
     );
     expect(invalidTileJson).toEqual({
       status: 'failed',
@@ -476,7 +490,7 @@ describe('routing tile coverage and decoding', () => {
         requestTimeoutMs: 5_000,
       },
       new AbortController().signal,
-      vi.fn<typeof fetch>(async () => tileJsonResponse({ maxzoom: 13 })),
+      vi.fn<typeof fetch>(() => Promise.resolve(tileJsonResponse({ maxzoom: 13 }))),
     );
     expect(unsupportedZoom).toEqual({
       status: 'failed',
@@ -494,12 +508,16 @@ describe('routing tile coverage and decoding', () => {
   });
 
   it('propagates caller cancellation through in-flight tile requests', async () => {
-    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
-      if (String(input) === TILE_JSON_URL) return tileJsonResponse();
+    const fetcher = vi.fn<typeof fetch>((input, init) => {
+      if (fetchInputUrl(input) === TILE_JSON_URL) {
+        return Promise.resolve(tileJsonResponse());
+      }
       return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener(
           'abort',
-          () => reject(new DOMException('Canceled.', 'AbortError')),
+          () => {
+            reject(new DOMException('Canceled.', 'AbortError'));
+          },
           { once: true },
         );
       });

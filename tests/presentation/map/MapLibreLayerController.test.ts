@@ -904,37 +904,30 @@ describe('MapLibreLayerController', () => {
         ],
       ),
     ).toEqual({ status: 'success' });
-    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty('data.features', [
-      expect.objectContaining({
-        properties: { kind: 'direct' },
-        geometry: expect.objectContaining({
-          coordinates: [
-            [44.64, 42.66],
-            [44.641, 42.661],
-          ],
-        }),
-      }),
-      expect.objectContaining({
-        properties: { kind: 'routed' },
-        geometry: expect.objectContaining({
-          coordinates: [
-            [44.641, 42.661],
-            [44.649, 42.669],
-          ],
-        }),
-      }),
-      expect.objectContaining({
-        properties: { kind: 'direct' },
-        geometry: expect.objectContaining({
-          coordinates: [
-            [44.649, 42.669],
-            [44.65, 42.67],
-          ],
-        }),
-      }),
-      expect.objectContaining({ properties: { kind: 'waypoint', number: '1' } }),
-      expect.objectContaining({ properties: { kind: 'waypoint', number: '2' } }),
+    const routePlanSource = map.sources.get(mapSourceIds.routePlan);
+    expect(routePlanSource).toHaveProperty('data.features.0.properties.kind', 'direct');
+    expect(routePlanSource).toHaveProperty('data.features.0.geometry.coordinates', [
+      [44.64, 42.66],
+      [44.641, 42.661],
     ]);
+    expect(routePlanSource).toHaveProperty('data.features.1.properties.kind', 'routed');
+    expect(routePlanSource).toHaveProperty('data.features.1.geometry.coordinates', [
+      [44.641, 42.661],
+      [44.649, 42.669],
+    ]);
+    expect(routePlanSource).toHaveProperty('data.features.2.properties.kind', 'direct');
+    expect(routePlanSource).toHaveProperty('data.features.2.geometry.coordinates', [
+      [44.649, 42.669],
+      [44.65, 42.67],
+    ]);
+    expect(routePlanSource).toHaveProperty('data.features.3.properties', {
+      kind: 'waypoint',
+      number: '1',
+    });
+    expect(routePlanSource).toHaveProperty('data.features.4.properties', {
+      kind: 'waypoint',
+      number: '2',
+    });
     expect(map.layers.get(routePlanLayerIds.routed)).toMatchObject({
       type: 'line',
       source: mapSourceIds.routePlan,

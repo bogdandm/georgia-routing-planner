@@ -99,8 +99,8 @@ describe('BrowserTrailRouter', () => {
 
   it('aborts one concurrent request without canceling the other', async () => {
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
-    const firstStarted = deferred<void>();
-    const secondStarted = deferred<void>();
+    const firstStarted = deferred<undefined>();
+    const secondStarted = deferred<undefined>();
     const secondResult = deferred<TrailRouteSuccess>();
     const server = new WorkerRpcServer(serverEndpoint, {
       [routingWorkerMethods.initialize]: () => ({ initialized: true }),
@@ -109,16 +109,18 @@ describe('BrowserTrailRouter', () => {
           readonly destination: readonly [number, number];
         };
         if (request.destination[0] === 45) {
-          firstStarted.resolve();
+          firstStarted.resolve(undefined);
           return new Promise<TrailRouteSuccess>((_resolve, reject) => {
             context.signal.addEventListener(
               'abort',
-              () => reject(new DOMException('Canceled.', 'AbortError')),
+              () => {
+                reject(new DOMException('Canceled.', 'AbortError'));
+              },
               { once: true },
             );
           });
         }
-        secondStarted.resolve();
+        secondStarted.resolve(undefined);
         return secondResult.promise;
       },
     });
@@ -145,15 +147,17 @@ describe('BrowserTrailRouter', () => {
 
   it('rejects pending work and terminates the endpoint on dispose', async () => {
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
-    const routeStarted = deferred<void>();
+    const routeStarted = deferred<undefined>();
     const server = new WorkerRpcServer(serverEndpoint, {
       [routingWorkerMethods.initialize]: () => ({ initialized: true }),
       [routingWorkerMethods.route]: (_payload, context) => {
-        routeStarted.resolve();
+        routeStarted.resolve(undefined);
         return new Promise<TrailRouteSuccess>((_resolve, reject) => {
           context.signal.addEventListener(
             'abort',
-            () => reject(new DOMException('Disposed.', 'AbortError')),
+            () => {
+              reject(new DOMException('Disposed.', 'AbortError'));
+            },
             { once: true },
           );
         });

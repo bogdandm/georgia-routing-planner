@@ -26,6 +26,19 @@ function createRoutingWorker(): WorkerRpcEndpoint {
   });
 }
 
+function throwIfAborted(signal: AbortSignal): void {
+  if (!signal.aborted) return;
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Route request canceled.', 'AbortError');
+}
+
+function isAbortError(error: unknown, signal: AbortSignal): boolean {
+  return (
+    signal.aborted || (error instanceof DOMException && error.name === 'AbortError')
+  );
+}
+
 /** Owns one browser routing worker and validates every value crossing its RPC channel. */
 export class BrowserTrailRouter implements TrailRouter {
   readonly #rpc: WorkerRpcClient | null;
@@ -61,22 +74,14 @@ export class BrowserTrailRouter implements TrailRouter {
     request: TrailRouteRequest,
     signal: AbortSignal,
   ): Promise<TrailRouteResult> {
-    if (signal.aborted) {
-      throw signal.reason instanceof Error
-        ? signal.reason
-        : new DOMException('Route request canceled.', 'AbortError');
-    }
+    throwIfAborted(signal);
     if (this.#disposed || this.#rpc === null) {
       return { status: 'failed', reason: 'routing-data-unavailable' };
     }
 
     const initialized = await this.#initialized;
-    if (signal.aborted) {
-      throw signal.reason instanceof Error
-        ? signal.reason
-        : new DOMException('Route request canceled.', 'AbortError');
-    }
-    if (this.#disposed) {
+    throwIfAborted(signal);
+    if (this.isDisposed()) {
       throw new DOMException('Trail router disposed.', 'AbortError');
     }
     if (!initialized.initialized) {
@@ -91,13 +96,10 @@ export class BrowserTrailRouter implements TrailRouter {
       );
       return parseTrailRouteResult(result);
     } catch (error) {
-      if (this.#disposed) {
+      if (this.isDisposed()) {
         throw new DOMException('Trail router disposed.', 'AbortError');
       }
-      if (
-        signal.aborted ||
-        (error instanceof DOMException && error.name === 'AbortError')
-      ) {
+      if (isAbortError(error, signal)) {
         throw signal.reason instanceof Error ? signal.reason : error;
       }
       return {
@@ -108,6 +110,10 @@ export class BrowserTrailRouter implements TrailRouter {
             : 'routing-data-unavailable',
       };
     }
+  }
+
+  private isDisposed(): boolean {
+    return this.#disposed;
   }
 
   public dispose(): void {

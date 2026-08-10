@@ -129,6 +129,10 @@ export function MapViewControls({
           value={selectedMode}
           onChange={handleTerrainModeChange}
           sx={{
+            '& .MuiToggleButtonGroup-firstButton': {
+              borderTopLeftRadius: 0,
+              borderTopRightRadius: 0,
+            },
             '& .MuiToggleButtonGroup-lastButton': {
               borderBottomLeftRadius: 0,
               borderBottomRightRadius: 0,

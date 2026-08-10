@@ -590,7 +590,7 @@ export class SupabaseUserDataService implements UserDataService {
       if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
       for (const listener of this.#trackListeners) listener();
     });
-    worker.subscribeMarkersChanged?.(({ userId, sessionRevision }) => {
+    worker.subscribeMarkersChanged(({ userId, sessionRevision }) => {
       if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
       for (const listener of this.#markerListeners) listener();
     });

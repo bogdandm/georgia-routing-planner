@@ -101,7 +101,7 @@ interface RemoteMarkerRecord {
 const remoteMarkerRecordSchema = z
   .object({
     marker_id: z.string().min(1).max(200),
-    revision: z.number().int().positive().safe(),
+    revision: z.number().int().positive(),
     payload: z.unknown(),
   })
   .strict();
@@ -761,7 +761,7 @@ export class TrackSyncWorkerServer {
           .object({
             accessToken: z.string().min(1).max(8_192),
             userId: z.string().min(1).max(200),
-            sessionRevision: z.number().int().nonnegative().safe(),
+            sessionRevision: z.number().int().nonnegative(),
           })
           .strict()
           .parse(payload) as TrackSyncWorkerRequest;

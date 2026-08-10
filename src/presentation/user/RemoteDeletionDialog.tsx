@@ -103,9 +103,9 @@ function RemoteDeletionForm({
                       <Checkbox
                         checked={selectedTrackIds.has(candidate.trackId)}
                         disabled={busy}
-                        onChange={(_, checked) =>
-                          toggle(setSelectedTrackIds, candidate.trackId, checked)
-                        }
+                        onChange={(_, checked) => {
+                          toggle(setSelectedTrackIds, candidate.trackId, checked);
+                        }}
                         size="small"
                         sx={{ p: 0, mr: 1 }}
                       />
@@ -131,9 +131,9 @@ function RemoteDeletionForm({
                       <Checkbox
                         checked={selectedMarkerIds.has(candidate.markerId)}
                         disabled={busy}
-                        onChange={(_, checked) =>
-                          toggle(setSelectedMarkerIds, candidate.markerId, checked)
-                        }
+                        onChange={(_, checked) => {
+                          toggle(setSelectedMarkerIds, candidate.markerId, checked);
+                        }}
                         size="small"
                         sx={{ p: 0, mr: 1 }}
                       />

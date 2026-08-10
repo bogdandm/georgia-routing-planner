@@ -1358,10 +1358,10 @@ describe('TrackSyncWorkerServer', () => {
         .mockResolvedValueOnce([{ marker_id: saved.id, revision: 1, payload: saved }]),
     }));
     const client = new WorkerRpcClient(clientEndpoint);
-    const progress: Array<{
+    const progress: {
       readonly completedItems: number;
       readonly totalItems: number;
-    }> = [];
+    }[] = [];
     client.subscribeEvent(trackSyncWorkerEventNames.progress, (payload) => {
       progress.push(
         payload as { readonly completedItems: number; readonly totalItems: number },

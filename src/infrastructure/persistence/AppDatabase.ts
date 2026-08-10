@@ -1551,10 +1551,9 @@ export class AppDatabase
             });
           } else {
             identity = {
-              lineageHash:
-                (state?.remoteRevision ?? null) === null
-                  ? hashes.legacyContentHash
-                  : state.lineageHash,
+              lineageHash: state?.remoteRevision
+                ? state.lineageHash
+                : hashes.legacyContentHash,
               geometryVersion: isCurrent ? 2 : 1,
             };
             if (state !== undefined) {

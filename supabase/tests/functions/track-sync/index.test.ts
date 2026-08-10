@@ -1081,3 +1081,32 @@ Deno.test(
     });
   },
 );
+
+Deno.test('marker limits are bounded conflict responses', async () => {
+  const state = makeState();
+  state.rpcResults.set('upsert_marker', [{ data: { outcome: 'limit' }, error: null }]);
+  const response = await handleTrackSync(
+    jsonRequest({
+      action: 'marker-upsert',
+      markerId: 'marker-a',
+      baseRevision: 0,
+      marker: {
+        schemaVersion: 1,
+        id: 'marker-a',
+        name: 'Marker',
+        normalizedName: 'marker',
+        coordinate: [44.8, 41.7],
+        iconKey: 'place',
+        colorKey: 'blue',
+        createdAt: '2026-08-10T00:00:00.000Z',
+        updatedAt: '2026-08-10T00:00:00.000Z',
+      },
+    }),
+    makeContext(state),
+  );
+  assertEquals(response.status, 409);
+  assertEquals((await responseJson(response)).error, {
+    code: 'marker_limit',
+    message: 'Cloud marker limit reached.',
+  });
+});

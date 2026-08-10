@@ -1177,4 +1177,22 @@ describe('MapLibreFacade', () => {
     facade.detachMap();
     expect(nativeMap.getCanvas().style.cursor).toBe('');
   });
+  it('publishes route-planning clicks without opening point inspection', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    const listener = vi.fn();
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    const unsubscribe = facade.subscribePlanningClicks(listener);
+
+    facade.setInteractionMode('route-planning');
+    expect(nativeMap.getCanvas().style.cursor).toBe('crosshair');
+    nativeMap.fire('click', { lngLat: { lng: 44.64, lat: 42.66 } });
+
+    expect(listener).toHaveBeenCalledWith({ longitude: 44.64, latitude: 42.66 });
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+    unsubscribe();
+    nativeMap.fire('click', { lngLat: { lng: 45, lat: 43 } });
+    expect(listener).toHaveBeenCalledOnce();
+  });
 });

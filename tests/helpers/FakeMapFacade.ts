@@ -17,6 +17,7 @@ import {
 
 export class FakeMapFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
+  readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
@@ -60,6 +61,18 @@ export class FakeMapFacade implements MapFacade {
     return () => {
       this.#listeners.delete(listener);
     };
+  }
+  public subscribePlanningClicks(
+    listener: (coordinate: MapCoordinate) => void,
+  ): () => void {
+    this.#planningClickListeners.add(listener);
+    return () => {
+      this.#planningClickListeners.delete(listener);
+    };
+  }
+
+  public emitPlanningClick(coordinate: MapCoordinate): void {
+    for (const listener of this.#planningClickListeners) listener(coordinate);
   }
 
   public getCamera(): MapCamera {
@@ -138,6 +151,7 @@ export class FakeMapFacade implements MapFacade {
   public destroy(): void {
     this.destroyed = true;
     this.#listeners.clear();
+    this.#planningClickListeners.clear();
   }
 
   public setSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {

@@ -46,6 +46,7 @@ import {
   satelliteBasemapLayerIds,
   savedMarkerImageId,
   savedMarkerLayerIds,
+  routePlanLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
@@ -62,6 +63,16 @@ import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type { MapLayerPreset, MapRecoveryState } from '@/presentation/map/mapTypes';
+
+interface RoutePlanMapSection {
+  readonly kind: 'routed' | 'direct';
+  readonly coordinates: readonly (readonly [number, number])[];
+}
+
+interface RoutePlanFeatureProperties {
+  readonly kind: 'routed' | 'direct' | 'waypoint';
+  readonly number?: string;
+}
 
 const rasterSlots = [
   { sourceId: mapSourceIds.sentinelRasterA, layerId: sentinelMapLayerIds.rasterA },
@@ -388,6 +399,8 @@ export class MapLibreLayerController {
   };
   #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
+  #routePlanSections: readonly RoutePlanMapSection[] = [];
+  #routePlanWaypoints: readonly (readonly [number, number])[] = [];
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
   #savedMarkers: readonly SavedMarker[] = [];
@@ -438,6 +451,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
+      this.reconcileRoutePlan();
       this.reconcileSavedMarkers();
       return;
     }
@@ -454,6 +468,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+    this.reconcileRoutePlan();
     this.reconcileSavedMarkers();
   }
 
@@ -758,6 +773,47 @@ export class MapLibreLayerController {
   ): void {
     this.#importedTrackTraceCoordinate = coordinate;
     this.reconcileImportedTrackTrace();
+  }
+  public setRoutePlanGeometry(
+    sections: readonly RoutePlanMapSection[],
+    waypoints: readonly (readonly [number, number])[],
+  ): MapLayerVisibilityResult {
+    const validCoordinate = ([longitude, latitude]: readonly [number, number]) =>
+      Number.isFinite(longitude) &&
+      Number.isFinite(latitude) &&
+      longitude >= -180 &&
+      longitude <= 180 &&
+      latitude >= -90 &&
+      latitude <= 90;
+    if (
+      !sections.every(
+        (section) =>
+          (section.kind === 'routed' || section.kind === 'direct') &&
+          section.coordinates.length >= 2 &&
+          section.coordinates.every((coordinate) => validCoordinate(coordinate)),
+      ) ||
+      !waypoints.every((coordinate) => validCoordinate(coordinate))
+    ) {
+      return this.visibilityFailure('The planned route geometry is invalid.');
+    }
+    this.#routePlanSections = sections.map((section) => ({
+      kind: section.kind,
+      coordinates: section.coordinates.map(([longitude, latitude]) => [
+        longitude,
+        latitude,
+      ]),
+    }));
+    this.#routePlanWaypoints = waypoints.map(([longitude, latitude]) => [
+      longitude,
+      latitude,
+    ]);
+    return this.reconcileRoutePlan();
+  }
+
+  public clearRoutePlanGeometry(): void {
+    this.#routePlanSections = [];
+    this.#routePlanWaypoints = [];
+    this.reconcileRoutePlan();
   }
 
   public setSavedMarkers(markers: readonly SavedMarker[]): void {
@@ -1449,6 +1505,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+    this.reconcileRoutePlan();
     this.reconcileSavedMarkers();
   };
 
@@ -2006,6 +2063,117 @@ export class MapLibreLayerController {
     const layerIds = map.getStyle().layers.map((layer) => layer.id);
     if (layerIds.at(-1) !== savedMarkerLayerIds.symbols) {
       map.moveLayer(savedMarkerLayerIds.symbols);
+    }
+  }
+
+  private reconcileRoutePlan(): MapLayerVisibilityResult {
+    const map = this.#map;
+    if (map === null || map.getLayer(mapLayerIds.background) === undefined) {
+      return { status: 'success' };
+    }
+    const beforeLayerId =
+      map.getLayer(mapInsertionPoints.importedTracksBeforeLayerId) === undefined
+        ? undefined
+        : mapInsertionPoints.importedTracksBeforeLayerId;
+    try {
+      const routeData: FeatureCollection<
+        LineString | Point,
+        RoutePlanFeatureProperties
+      > = {
+        type: 'FeatureCollection',
+        features: [
+          ...this.#routePlanSections.map(
+            (section): Feature<LineString, RoutePlanFeatureProperties> => ({
+              type: 'Feature',
+              properties: { kind: section.kind },
+              geometry: {
+                type: 'LineString',
+                coordinates: section.coordinates.map((coordinate) => [...coordinate]),
+              },
+            }),
+          ),
+          ...this.#routePlanWaypoints.map(
+            (coordinate, index): Feature<Point, RoutePlanFeatureProperties> => ({
+              type: 'Feature',
+              properties: { kind: 'waypoint', number: String(index + 1) },
+              geometry: { type: 'Point', coordinates: [...coordinate] },
+            }),
+          ),
+        ],
+      };
+      const routeSource = map.getSource(mapSourceIds.routePlan);
+      if (routeSource === undefined) {
+        map.addSource(mapSourceIds.routePlan, { type: 'geojson', data: routeData });
+      } else {
+        if (!isGeoJsonSource(routeSource)) {
+          throw new Error('The planned route source cannot update its data.');
+        }
+        routeSource.setData(routeData);
+      }
+      if (map.getLayer(routePlanLayerIds.routed) === undefined) {
+        map.addLayer(
+          {
+            id: routePlanLayerIds.routed,
+            type: 'line',
+            source: mapSourceIds.routePlan,
+            filter: ['==', ['get', 'kind'], 'routed'],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: {
+              'line-color': mapVisualPalette.userGeometry.gpxTrack,
+              'line-width': importedTrackLineWidth,
+            },
+          },
+          beforeLayerId,
+        );
+      }
+      if (map.getLayer(routePlanLayerIds.direct) === undefined) {
+        map.addLayer(
+          {
+            id: routePlanLayerIds.direct,
+            type: 'line',
+            source: mapSourceIds.routePlan,
+            filter: ['==', ['get', 'kind'], 'direct'],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: {
+              'line-color': mapVisualPalette.userGeometry.gpxTrack,
+              'line-width': importedTrackLineWidth,
+              'line-dasharray': [2, 2],
+            },
+          },
+          beforeLayerId,
+        );
+      }
+      if (map.getLayer(routePlanLayerIds.waypoints) === undefined) {
+        map.addLayer({
+          id: routePlanLayerIds.waypoints,
+          type: 'circle',
+          source: mapSourceIds.routePlan,
+          filter: ['==', ['get', 'kind'], 'waypoint'],
+          paint: {
+            'circle-color': mapVisualPalette.userGeometry.gpxTrack,
+            'circle-radius': 10,
+            'circle-stroke-color': '#FFFFFF',
+            'circle-stroke-width': 2,
+          },
+        });
+      }
+      if (map.getLayer(routePlanLayerIds.waypointLabels) === undefined) {
+        map.addLayer({
+          id: routePlanLayerIds.waypointLabels,
+          type: 'symbol',
+          source: mapSourceIds.routePlan,
+          filter: ['==', ['get', 'kind'], 'waypoint'],
+          layout: {
+            'text-field': ['get', 'number'],
+            'text-size': 11,
+            'text-allow-overlap': true,
+          },
+          paint: { 'text-color': '#FFFFFF' },
+        });
+      }
+      return { status: 'success' };
+    } catch {
+      return this.visibilityFailure('The planned route could not be rendered.');
     }
   }
 

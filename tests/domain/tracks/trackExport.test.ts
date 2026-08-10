@@ -70,6 +70,34 @@ describe('track export', () => {
     expect(kml).toContain('44,42,100 45,43,110');
   });
 
+  it('exports generated routes as one ordered GPX route', () => {
+    const routeSummary: LocalTrackSummary = {
+      ...summary,
+      geometryKind: 'route',
+      sourceFilename: 'Planned route.gpx',
+      sourceFormat: 'gpx',
+      pointCount: 3,
+      segmentCount: 1,
+    };
+    const routeContent: LocalTrackContent = {
+      ...content,
+      trackPoints: [
+        content.trackPoints[0] ?? [],
+        [{ coordinate: [46, 44], elevationMeters: 120 }],
+      ],
+    };
+
+    const gpx = exportTrackAsGpx(routeSummary, routeContent);
+
+    expect(gpx).toContain('<rte><name>Ridge &lt;loop&gt;</name>');
+    expect(gpx).toContain('<rtept lat="42" lon="44">');
+    expect(gpx).not.toContain('<trk>');
+    expect(gpx).not.toContain('<trkseg>');
+    expect(gpx).not.toContain('<trkpt');
+    expect(gpx.indexOf('lon="44"')).toBeLessThan(gpx.indexOf('lon="45"'));
+    expect(gpx.indexOf('lon="45"')).toBeLessThan(gpx.indexOf('lon="46"'));
+  });
+
   it('produces filesystem-safe names', () => {
     expect(safeTrackFilename('A/B:*?', 'gpx')).toBe('A-B---.gpx');
   });

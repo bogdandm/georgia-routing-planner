@@ -181,6 +181,47 @@ describe('prepareImportedTrack', () => {
     });
   });
 
+  it('bounds route elevation samples and interpolates them onto retained geometry', async () => {
+    const points = Array.from({ length: 6_001 }, (_, index) => ({
+      coordinate: equatorCoordinate(index * 40),
+    }));
+    let sampledCoordinateCount = 0;
+    const provider: ElevationProvider = {
+      sample: () => Promise.resolve({ status: 'unavailable' }),
+      sampleMany: (coordinates) => {
+        sampledCoordinateCount = coordinates.length;
+        return Promise.resolve(
+          coordinates.map(
+            (coordinate) =>
+              ({
+                status: 'available',
+                meters: coordinate.longitude * 1_000_000,
+              }) as const,
+          ),
+        );
+      },
+    };
+
+    const prepared = await prepareImportedTrack([{ points }], provider, signal, {
+      preserveGeometry: true,
+      sampleIntervalMeters: 30,
+      maximumElevationSamples: 5_000,
+    });
+
+    const calculated = prepared.calculatedSegments?.[0];
+    expect(sampledCoordinateCount).toBeLessThanOrEqual(5_000);
+    expect(sampledCoordinateCount).toBeLessThan(points.length);
+    expect(calculated?.points).toHaveLength(points.length);
+    expect(calculated?.points[3_000]?.coordinate).toEqual(points[3_000]?.coordinate);
+    expect(calculated?.points[3_000]?.elevationMeters).toBeCloseTo(
+      (points[3_000]?.coordinate[0] ?? 0) * 1_000_000,
+      3,
+    );
+    expect(
+      calculated?.points.every((point) => Number.isFinite(point.elevationMeters)),
+    ).toBe(true);
+  });
+
   it('rejects calculated projections above the persisted point limit', async () => {
     const source: readonly TrackSegment[] = [
       {

@@ -207,7 +207,12 @@ export function MapWorkspace({
     (state) => state.openStreetMapOpacity,
   );
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
-  const activeProfile = useOptionalTracksWorkspace()?.activeProfile ?? null;
+  const tracksWorkspace = useOptionalTracksWorkspace();
+  const activeProfile = tracksWorkspace?.activeProfile ?? null;
+  const routePlanningActive =
+    tracksWorkspace?.active?.kind === 'route-plan' &&
+    tracksWorkspace.active.status !== 'saving';
+  const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
   const fitBoundsCommand = useStore(
     mapInteractionStore,
     (state) => state.fitBoundsCommand,
@@ -349,13 +354,25 @@ export function MapWorkspace({
   }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
 
   useEffect(() => {
-    facade.setInteractionMode(
-      markerPlacement === null ? 'default' : 'marker-placement',
-    );
+    const mode =
+      markerPlacement !== null
+        ? 'marker-placement'
+        : routePlanningActive
+          ? 'route-planning'
+          : 'default';
+    facade.setInteractionMode(mode);
+    if (mode === 'route-planning') facade.closePointInspection();
     return () => {
       facade.setInteractionMode('default');
     };
-  }, [facade, markerPlacement]);
+  }, [facade, markerPlacement, routePlanningActive]);
+
+  useEffect(() => {
+    if (!routePlanningActive || addRoutePlanPoint === undefined) return undefined;
+    return facade.subscribePlanningClicks((coordinate) => {
+      addRoutePlanPoint([coordinate.longitude, coordinate.latitude]);
+    });
+  }, [addRoutePlanPoint, facade, routePlanningActive]);
 
   useEffect(() => {
     return () => {

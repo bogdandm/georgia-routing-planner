@@ -42,7 +42,7 @@ src/
   domain/markers/          framework-free saved-marker schema and catalog keys
   application/satellite/   cancellable Sentinel search and result orchestration
   application/ports/       framework-free catalog, diagnostics, storage, and runtime ports
-  infrastructure/          HTTP, STAC, elevation/satellite workers, IndexedDB, clock, and ID adapters
+  infrastructure/          HTTP, STAC, routing/elevation/satellite workers, IndexedDB, clock, and ID adapters
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
@@ -107,7 +107,7 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Component transitions and messages                              | React component state                                 | Local rendering concern                                  |
 | Native map, listeners, camera snapshot, terrain operation       | `MapLibreFacade`                                      | Imperative MapLibre lifecycle stays isolated             |
 | Middle-drag and Shift+left-drag orbit with terrain pivot marker | `CameraOrbitControl`                                  | Camera input and native marker placement stay isolated   |
-| Sentinel, terrain, and active-track source/layer commands       | `MapLibreLayerController`                             | Native resources and ordering stay imperative            |
+| Sentinel, terrain, active-track, and route-plan map commands    | `MapLibreLayerController`                             | Native resources and ordering stay imperative            |
 | Direct visual-COG scene registry and raster worker              | `SatelliteCogTileProvider` / `SatelliteCogRasterizer` | Bounded fallback state and COG URLs stay outside React   |
 | DEM fetch, repair, parse, contour caches, worker fallback       | `TerrainComputeEngine` / `TerrainComputeBackend`      | One algorithm runs in worker or inline compatibility     |
 | Terrain worker execution status                                 | `mapLayerStore`                                       | Transient serializable UI warning state                  |
@@ -118,7 +118,7 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Saved marker records                                            | `AppDatabase` through `SavedMarkerRepository`         | Validated local-only points with atomic IndexedDB writes |
 | Marker collection, editor draft, and distance anchor            | `MarkersWorkspaceProvider` React state                | One feature owner while map commands stay serializable   |
 | Marker placement and one-shot creation command                  | `mapInteractionStore`                                 | Cross-component map interaction without native objects   |
-| Unsaved preview, active selection, and list query               | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store       |
+| Unsaved import/route plan, active selection, and list query     | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store       |
 | Map diagnostic snapshot                                         | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export       |
 | Current/last Sentinel step status and duration                  | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                      |
 | Submitted Sentinel criteria and derived grouped results         | `SatelliteBrowser` React state                        | Disposable, not persisted                                |
@@ -134,8 +134,19 @@ must not mutate it.
 The track parsers and calculation policies stay under `domain/tracks`; they have no
 React, Dexie, MapLibre, or provider dependency. `AppDatabase` implements the narrow
 local-track repository contract because it already owns schema migration and transaction
-lifetime. `MapLibreLayerController` owns both the active track line and the transient
-chart-hover marker so React never owns native map objects.
+lifetime. `TracksWorkspaceProvider` owns imported previews and transient route plans;
+accepted route geometry uses the same calculation and save path instead of adding draft
+persistence. `MapLibreLayerController` owns the active track line, planned route and
+waypoint overlay, and transient chart-hover marker so React never owns native map
+objects.
+
+`BrowserTrailRouter` implements the narrow `TrailRouter` application capability with one
+Vite module worker and the reusable request-correlated `WorkerRpc` transport. The worker
+loads the configured vector TileJSON, fetches bounded XYZ coverage, decodes only the
+configured transportation MVT layer, builds a request-local walkable graph, snaps both
+endpoints, and runs deterministic A*. Provider URLs, tile bytes, graph nodes, and
+MapLibre internals never enter React or the application port. Cancellation crosses the
+RPC boundary, and disposing runtime services terminates the worker.
 
 Saved-marker catalog keys and name normalization stay under `domain/markers`.
 `AppDatabase` implements `SavedMarkerRepository`, while `MarkersWorkspaceProvider` owns
@@ -146,10 +157,10 @@ rather than native map objects.
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
 `WorkspaceRail` owns the Tracks, Satellite, Markers, Layers, and User destinations plus
 global Diagnostics and Settings actions. `WorkspaceSidebar` owns each section's
-implemented, disabled, or empty presentation. Create GPX is currently a disabled Tracks
-action and is never a rail section. Shared palette values live in `appColors.ts` so the
-MUI theme and pure MapLibre style use the same visual vocabulary without introducing a
-second styling system.
+implemented, disabled, or empty presentation. Route planning and the disabled manual GPX
+authoring action belong to Tracks and are never rail sections. Shared palette values
+live in `appColors.ts` so the MUI theme and pure MapLibre style use the same visual
+vocabulary without introducing a second styling system.
 
 `BrowserStorageUsageReader` implements the small `StorageUsageReader` application port.
 It combines the origin storage estimate, Chromium's optional per-category details,

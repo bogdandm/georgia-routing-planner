@@ -67,13 +67,15 @@ vi.mock('react-map-gl/maplibre', () => ({
 
 const tracksWorkspaceMock = vi.hoisted(() => ({
   activeProfile: null as ElevationProfile | null,
+  active: null as { readonly kind: 'route-plan' } | null,
+  addRoutePlanPoint: vi.fn(),
 }));
 
 vi.mock('@/presentation/tracks/TracksWorkspace', () => ({
   useOptionalTracksWorkspace: () =>
-    tracksWorkspaceMock.activeProfile === null
+    tracksWorkspaceMock.activeProfile === null && tracksWorkspaceMock.active === null
       ? null
-      : { activeProfile: tracksWorkspaceMock.activeProfile },
+      : tracksWorkspaceMock,
 }));
 const sharedScene: SatelliteScene = {
   id: 'shared-scene',
@@ -163,6 +165,8 @@ describe('MapWorkspace', () => {
     resetMapLayerStore();
     window.history.replaceState(null, '', '/');
     tracksWorkspaceMock.activeProfile = null;
+    tracksWorkspaceMock.active = null;
+    tracksWorkspaceMock.addRoutePlanPoint.mockReset();
     mockViewportWidth(900);
     useUiStore.setState({
       activeTab: 'satellite',
@@ -918,6 +922,25 @@ describe('MapWorkspace', () => {
         expect.objectContaining({ coordinate: [44.8, 41.7] }),
       ]);
     });
+  });
+
+  it('forwards facade clicks only while route planning owns map interaction', async () => {
+    const facade = new FakeMapFacade();
+    tracksWorkspaceMock.active = { kind: 'route-plan' };
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Planning map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Planning map');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('route-planning');
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
   });
 
   it('applies the Sentinel preset when an applied scene is hidden', async () => {

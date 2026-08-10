@@ -142,7 +142,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       ? null
       : activeTrack.kind === 'preview'
         ? `preview:${activeTrack.id}`
-        : `saved:${activeTrack.summary.id}`;
+        : activeTrack.kind === 'route-plan'
+          ? `route-plan:${activeTrack.id}`
+          : `saved:${activeTrack.summary.id}`;
   const mobileTrackDetailsExpanded =
     activeTrackKey !== null && mobileTrackDetailsExpandedKey === activeTrackKey;
   const activeTrackPreparing =
@@ -154,7 +156,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         ? activeTrack.preparationStatus === 'ready'
           ? activeTrack.sourceMetrics
           : null
-        : activeTrack.summary.metrics;
+        : activeTrack.kind === 'route-plan'
+          ? activeTrack.metrics
+          : activeTrack.summary.metrics;
   useEffect(() => {
     if (!smartphoneViewport) return;
     const animationFrame = window.requestAnimationFrame(() => {

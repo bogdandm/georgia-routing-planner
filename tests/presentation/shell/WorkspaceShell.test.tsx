@@ -11,7 +11,12 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-import type { ElevationSample } from '@/application/ports/ElevationProvider';
+import type {
+  ElevationCoordinate,
+  ElevationProvider,
+  ElevationSample,
+} from '@/application/ports/ElevationProvider';
+import type { TrailRouter } from '@/application/ports/TrailRouter';
 import {
   SatelliteCatalogError,
   type SatelliteCatalogGateway,
@@ -2026,6 +2031,86 @@ describe('WorkspaceShell', () => {
       expect(trackDeleted).toHaveBeenCalledOnce();
     });
   }, 30_000);
+
+  it('plans a direct multi-point route, enriches elevation, and saves local GPX content', async () => {
+    const trailRouter: TrailRouter = {
+      route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
+      dispose: vi.fn(),
+    };
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'available', meters: 1_000 }),
+      sampleMany: vi.fn(async (coordinates: readonly ElevationCoordinate[]) =>
+        coordinates.map((_, index) => ({
+          status: 'available' as const,
+          meters: 1_000 + index,
+        })),
+      ),
+    };
+    const baseServices = createTestServices({ trailRouter });
+    services = { ...baseServices, elevationProvider };
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Planned ridge');
+    const savePending = deferred<undefined>();
+    const saveLocalTrack = services.database.saveLocalTrack.bind(services.database);
+    vi.spyOn(services.database, 'saveLocalTrack').mockImplementation(
+      async (summary, content) => {
+        await savePending.promise;
+        await saveLocalTrack(summary, content);
+      },
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Saving route…')).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Track name' })).toBeDisabled();
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('default');
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.66, latitude: 42.68 });
+    });
+    savePending.resolve(undefined);
+
+    await waitFor(async () => {
+      await expect(services.database.listLocalTracks()).resolves.toEqual([
+        expect.objectContaining({
+          name: 'Planned ridge',
+          sourceFilename: 'Planned ridge.gpx',
+          sourceFormat: 'gpx',
+          geometryKind: 'route',
+        }),
+      ]);
+    });
+    const [summary] = await services.database.listLocalTracks();
+    if (summary === undefined) throw new Error('Expected saved planned route.');
+    const content = await services.database.loadLocalTrackContent(summary.id);
+    expect(content.trackPoints[0]).toHaveLength(2);
+    expect(
+      content.trackPoints[0]?.every((point) => point.elevationMeters !== undefined),
+    ).toBe(true);
+    expect(trailRouter.route).not.toHaveBeenCalled();
+  });
 
   it('explains GPX validation warnings with their parser code and message', async () => {
     const user = userEvent.setup();

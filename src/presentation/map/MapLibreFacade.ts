@@ -200,6 +200,7 @@ function recoverableMessage(
  */
 export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
+  readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
   #map: MapLibreMap | null = null;
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
   #firstIdleRecorded = false;
@@ -284,6 +285,14 @@ export class MapLibreFacade implements MapFacade {
     this.#listeners.add(listener);
     return () => {
       this.#listeners.delete(listener);
+    };
+  }
+  public subscribePlanningClicks(
+    listener: (coordinate: MapCoordinate) => void,
+  ): () => void {
+    this.#planningClickListeners.add(listener);
+    return () => {
+      this.#planningClickListeners.delete(listener);
     };
   }
 
@@ -467,6 +476,7 @@ export class MapLibreFacade implements MapFacade {
     this.detachMap();
     this.#pointInspector.destroy();
     this.#listeners.clear();
+    this.#planningClickListeners.clear();
   }
 
   private readonly handleLoad = (): void => {
@@ -574,6 +584,14 @@ export class MapLibreFacade implements MapFacade {
   private readonly handleMapClick = (event: MapMouseEvent): void => {
     const map = this.#map;
     if (map === null || this.#interactionMode === 'marker-placement') return;
+    const coordinate = {
+      longitude: event.lngLat.lng,
+      latitude: event.lngLat.lat,
+    };
+    if (this.#interactionMode === 'route-planning') {
+      for (const listener of this.#planningClickListeners) listener(coordinate);
+      return;
+    }
     if (this.#pointInspection.status === 'open') {
       const visible = this.#pointInspector.isVisible();
       this.closePointInspection();
@@ -584,10 +602,6 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionAbort?.abort();
     const abortController = new AbortController();
     this.#pointInspectionAbort = abortController;
-    const coordinate = {
-      longitude: event.lngLat.lng,
-      latitude: event.lngLat.lat,
-    };
     this.updatePointInspection({
       status: 'open',
       coordinate,
@@ -1196,7 +1210,7 @@ export class MapLibreFacade implements MapFacade {
     const map = this.#map;
     if (map === null) return;
     map.getCanvas().style.cursor =
-      this.#interactionMode === 'marker-placement' ? 'crosshair' : '';
+      this.#interactionMode === 'default' ? '' : 'crosshair';
   }
 
   private detach(): void {

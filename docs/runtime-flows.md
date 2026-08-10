@@ -294,6 +294,60 @@ camera, sources, and user visibility choices are preserved. Surface polygons are
 restyled as decorative line layers; the restricted-area layer is an intentional red
 perimeter derived from provider-tagged military geometry.
 
+## Browser route planning
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Tracks as TracksWorkspaceProvider
+  participant Map as MapLibreFacade
+  participant Router as BrowserTrailRouter
+  participant Worker as Routing worker
+  participant Terrain as ElevationProvider
+  participant Storage as AppDatabase
+
+  User->>Tracks: choose Plan route
+  Tracks->>Map: enable route-planning clicks
+  Map-->>Tracks: first waypoint coordinate
+  User->>Tracks: choose Routes or Line
+  Map-->>Tracks: next waypoint coordinate
+  alt Routes
+    Tracks->>Router: route(start, destination, signal)
+    Router->>Worker: validated request over WorkerRpc
+    Worker->>Worker: load bounded MVT, build graph, snap, A*
+    Worker-->>Tracks: validated routed geometry and diagnostics
+  else Line
+    Tracks->>Tracks: append direct segment
+  end
+  Tracks->>Terrain: sample accepted geometry
+  Terrain-->>Tracks: elevation profile or explicit failure
+  Tracks->>Map: render line and numbered waypoints
+  User->>Tracks: save
+  Tracks->>Storage: save existing LocalTrackContent
+```
+
+The first planning click creates only a waypoint. Each later click captures the
+currently selected mode for that leg. A routed request expands its half-open XYZ
+coverage once when no path is found, within the same tile and timeout budgets. The
+worker filters the configured transportation layer to walkable lines, joins nodes
+deterministically, splits snapped edges, and runs A* with geodesic edge weights. It
+returns explicit no-path, area-too-large, routing-data-unavailable, timeout, or invalid
+data failures; no failure changes accepted geometry or silently becomes a direct line.
+
+Every click, mode change, Undo, Clear, close, and unmount aborts work that no longer
+owns the current route-plan generation. Stale completions are ignored even if transport
+cancellation races with a response. Accepted route legs preserve the clicked endpoints
+with direct connector fragments around snapped network geometry, while direct legs
+preserve their exact endpoints. Flattening removes only the shared boundary between
+adjacent legs; independent gaps are not invented or joined.
+
+Elevation enrichment starts only for accepted geometry and uses the existing bounded
+track preparation calculations. It is generation-checked and cancellable like routing.
+An unavailable elevation provider preserves a distance-only route without a profile. The
+route remains unsaved React state until explicit Save creates the existing local
+summary/content records atomically, without a route-draft schema or a second persistence
+model.
+
 ## Provider and WebGL failures
 
 - `error` events are classified from safe source IDs and normalized messages.

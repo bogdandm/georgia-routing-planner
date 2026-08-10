@@ -75,6 +75,39 @@ afterEach(async () => {
 });
 
 describe('local track persistence', () => {
+  it('atomically saves and reopens generated route content', async () => {
+    const routeSummary: LocalTrackSummary = {
+      ...summary('local:route', 'Planned route'),
+      sourceFilename: 'Planned route.gpx',
+      geometryKind: 'route',
+      pointCount: 3,
+      metadata: {
+        version: '1.1',
+        creator: 'Trail Planner',
+        name: 'Planned route',
+        links: [],
+      },
+    };
+    const routeContent: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId: routeSummary.id,
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 1_000 },
+          { coordinate: [44.005, 42.005], elevationMeters: 1_050 },
+          { coordinate: [44.01, 42.01], elevationMeters: 1_100 },
+        ],
+      ],
+    };
+
+    await database.saveLocalTrack(routeSummary, routeContent);
+
+    await expect(database.listLocalTracks()).resolves.toEqual([routeSummary]);
+    await expect(database.loadLocalTrackContent(routeSummary.id)).resolves.toEqual(
+      routeContent,
+    );
+  });
+
   it('replaces only calculated elevation without changing source or sync identity', async () => {
     const sourceSummary = summary('local:1', 'Original');
     const sourceContent = content('local:1');

@@ -1,11 +1,13 @@
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
+import { z } from 'npm:zod@4.4.3';
 
 import {
   CONTENT_HASH_PATTERN,
-  type DeleteTrackCommand,
   MAX_JSON_BYTES,
+  MAX_MARKER_BYTES,
   MAX_METADATA_BYTES,
   MAX_MULTIPART_BYTES,
+  type MarkerPayload,
   type MetadataTrackCommand,
   type RpcResponse,
   type StatusTrackCommand,
@@ -14,8 +16,159 @@ import {
   TrackSyncFailure,
   type TrackSyncResult,
   type TrackUsage,
+  type UpsertMarkerCommand,
   UUID_PATTERN,
 } from './contracts.ts';
+
+const markerIconKeys = [
+  'place',
+  'flag',
+  'home',
+  'parking',
+  'apartment',
+  'business',
+  'cabin',
+  'cottage',
+  'city',
+  'map',
+  'my-location',
+  'navigation',
+  'pin',
+  'public',
+  'school',
+  'explore',
+  'landscape',
+  'forest',
+  'terrain',
+  'water',
+  'snow',
+  'beach',
+  'eco',
+  'grass',
+  'park',
+  'spa',
+  'volcano',
+  'waves',
+  'sunny',
+  'cloud',
+  'storm',
+  'tsunami',
+  'hiking',
+  'cycling',
+  'boating',
+  'pets',
+  'skiing',
+  'kayaking',
+  'kitesurfing',
+  'paragliding',
+  'rowing',
+  'sailing',
+  'diving',
+  'skateboarding',
+  'snowboarding',
+  'sports',
+  'football',
+  'surfing',
+  'swimming',
+  'running',
+  'restaurant',
+  'cafe',
+  'hotel',
+  'store',
+  'bakery',
+  'brunch',
+  'camping',
+  'fast-food',
+  'ice-cream',
+  'liquor',
+  'bar',
+  'dining',
+  'drinking-water',
+  'grocery',
+  'shelter',
+  'ramen',
+  'seafood',
+  'tapas',
+  'camera',
+  'castle',
+  'church',
+  'museum',
+  'monument',
+  'attraction',
+  'celebration',
+  'deck',
+  'festival',
+  'fort',
+  'mosque',
+  'synagogue',
+  'buddhist-temple',
+  'hindu-temple',
+  'theater',
+  'tour',
+  'villa',
+  'hospital',
+  'medical',
+  'info',
+  'warning',
+  'roadwork',
+  'blocked',
+  'car-crash',
+  'alert',
+  'danger',
+  'emergency',
+  'engineering',
+  'fire-extinguisher',
+  'safety',
+  'fire-station',
+  'report',
+  'security',
+  'sos',
+  'traffic',
+  'viewpoint',
+  'shuttle',
+  'commute',
+  'bus',
+  'car',
+  'railway',
+  'electric-bike',
+  'flight',
+  'fuel',
+  'bike',
+  'snowmobile',
+  'train',
+  'tram',
+  'motorcycle',
+] as const;
+
+const markerColorKeys = [
+  'blue',
+  'teal',
+  'purple',
+  'olive',
+  'orange',
+  'rose',
+  'navy',
+  'blue-green',
+  'green',
+  'red',
+] as const;
+
+const markerPayloadSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: z.string().min(1).max(200),
+    name: z.string().min(1).max(200),
+    normalizedName: z.string(),
+    coordinate: z.tuple([
+      z.number().finite().min(-180).max(180),
+      z.number().finite().min(-90).max(90),
+    ]),
+    iconKey: z.enum(markerIconKeys),
+    colorKey: z.enum(markerColorKeys),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
 import { validateGeometryUpload } from './geometry.ts';
 
 export function requireUserId(context: SupabaseContext): string {
@@ -57,10 +210,12 @@ export function createTrackSyncResponse(result: TrackSyncResult): Response {
     );
   }
   if ('outcome' in result) {
-    return jsonResponse({
+    const response: { outcome: RpcResponse['outcome']; record?: unknown } = {
       outcome: result.outcome,
-      record: serializeRecord((result as RpcResponse).record),
-    });
+    };
+    const record = (result as RpcResponse).record;
+    if (record !== undefined) response.record = serializeRecord(record);
+    return jsonResponse(response);
   }
   return jsonResponse(result as TrackUsage);
 }
@@ -141,6 +296,35 @@ function requireMetadata(value: unknown): Record<string, unknown> {
   return value;
 }
 
+function requireMarkerId(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 200) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_marker',
+      'markerId must be 1 to 200 characters.',
+    );
+  }
+  return value;
+}
+
+function requireMarkerPayload(value: unknown, markerId: string): MarkerPayload {
+  const parsed = markerPayloadSchema.safeParse(value);
+  if (
+    !parsed.success ||
+    parsed.data.id !== markerId ||
+    parsed.data.name !== parsed.data.name.trim() ||
+    parsed.data.normalizedName !== parsed.data.name.toLocaleLowerCase('en')
+  ) {
+    throw new TrackSyncFailure(400, 'invalid_marker', 'marker is invalid.');
+  }
+  if (
+    new TextEncoder().encode(JSON.stringify(parsed.data)).byteLength > MAX_MARKER_BYTES
+  ) {
+    throw new TrackSyncFailure(413, 'marker_too_large', 'marker exceeds 4 KiB.');
+  }
+  return parsed.data;
+}
+
 function parseIntegerField(value: FormDataEntryValue | null, name: string): number {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) {
     throw new TrackSyncFailure(
@@ -213,9 +397,7 @@ function requireExactFields(
   }
 }
 
-async function parseJsonRequest(
-  request: Request,
-): Promise<MetadataTrackCommand | DeleteTrackCommand | StatusTrackCommand> {
+async function parseJsonRequest(request: Request): Promise<TrackSyncCommand> {
   const bytes = await readBoundedBody(request, MAX_JSON_BYTES);
   let value: unknown;
   try {
@@ -248,6 +430,25 @@ async function parseJsonRequest(
     return {
       action: 'delete',
       contentHash: requireContentHash(value.contentHash),
+      baseRevision: requireBaseRevision(value.baseRevision),
+    };
+  }
+  if (value.action === 'marker-upsert') {
+    requireExactFields(value, ['action', 'markerId', 'baseRevision', 'marker']);
+    const markerId = requireMarkerId(value.markerId);
+    const marker = requireMarkerPayload(value.marker, markerId);
+    return {
+      action: 'marker-upsert',
+      markerId,
+      baseRevision: requireBaseRevision(value.baseRevision),
+      marker,
+    };
+  }
+  if (value.action === 'marker-delete') {
+    requireExactFields(value, ['action', 'markerId', 'baseRevision']);
+    return {
+      action: 'marker-delete',
+      markerId: requireMarkerId(value.markerId),
       baseRevision: requireBaseRevision(value.baseRevision),
     };
   }
@@ -366,6 +567,17 @@ async function parseUploadRequest(request: Request): Promise<TrackSyncCommand> {
 
 function serializeRecord(value: unknown): unknown {
   if (!isObject(value)) return undefined;
+  if (
+    typeof value.marker_id === 'string' &&
+    Number.isSafeInteger(value.revision) &&
+    isObject(value.payload)
+  ) {
+    return {
+      marker_id: value.marker_id,
+      revision: value.revision,
+      payload: value.payload,
+    };
+  }
   return {
     contentHash: value.content_hash,
     metadata: value.metadata,

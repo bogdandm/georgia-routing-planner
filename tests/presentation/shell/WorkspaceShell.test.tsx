@@ -16,7 +16,7 @@ import type {
   ElevationProvider,
   ElevationSample,
 } from '@/application/ports/ElevationProvider';
-import type { TrailRouter } from '@/application/ports/TrailRouter';
+import type { TrailRouter, TrailRouteResult } from '@/application/ports/TrailRouter';
 import {
   SatelliteCatalogError,
   type SatelliteCatalogGateway,
@@ -2032,6 +2032,206 @@ describe('WorkspaceShell', () => {
     });
   }, 30_000);
 
+  it('plans routed and direct track segments through the workspace', async () => {
+    const routePending = deferred<TrailRouteResult>();
+    const route = vi.fn<TrailRouter['route']>(() => routePending.promise);
+    const trailRouter: TrailRouter = {
+      route,
+      dispose: vi.fn(),
+    };
+    services = createTestServices({ trailRouter });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    const A = [44.64, 42.66] as const;
+    const B = [44.65, 42.67] as const;
+    const C = [44.66, 42.68] as const;
+    const snappedA = [44.6405, 42.6605] as const;
+    const routedMiddle = [44.645, 42.665] as const;
+    const snappedB = [44.6495, 42.6695] as const;
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const tracksHeading = screen.getByRole('heading', { name: 'Tracks' });
+    const planRouteButton = screen.getByRole('button', { name: 'Plan route' });
+    expect(planRouteButton.parentElement?.parentElement).toBe(
+      tracksHeading.parentElement?.parentElement,
+    );
+    await user.click(planRouteButton);
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: A[0], latitude: A[1] });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: B[0], latitude: B[1] });
+    });
+    expect(await screen.findByText('Loading route tiles…')).toBeVisible();
+    expect(route).toHaveBeenCalledWith(
+      { start: A, destination: B },
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+    const reportProgress = route.mock.calls[0]?.[2];
+    act(() => {
+      reportProgress?.({
+        phase: 'loading-tiles',
+        attempt: 1,
+        loadedTileCount: 8,
+        totalTileCount: 16,
+      });
+    });
+    expect(await screen.findByText('Loading route tiles… 8/16')).toBeVisible();
+    act(() => {
+      reportProgress?.({
+        phase: 'building-graph',
+        attempt: 1,
+        loadedTileCount: 16,
+        totalTileCount: 16,
+      });
+    });
+    expect(await screen.findByText('Building route graph…')).toBeVisible();
+    act(() => {
+      reportProgress?.({
+        phase: 'searching-route',
+        attempt: 1,
+        loadedTileCount: 16,
+        totalTileCount: 16,
+      });
+    });
+    expect(await screen.findByText('Searching for a route…')).toBeVisible();
+
+    routePending.resolve({
+      status: 'ready',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [snappedA[0], snappedA[1]],
+          [routedMiddle[0], routedMiddle[1]],
+          [snappedB[0], snappedB[1]],
+        ],
+      },
+      networkDistanceMeters: 1_200,
+      snappedStart: snappedA,
+      snappedDestination: snappedB,
+      loadedTileCount: 9,
+      graphNodeCount: 100,
+      graphEdgeCount: 120,
+      expandedAreaRetryUsed: false,
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Line' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledOnce();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(async () => {
+      await expect(services.database.listLocalTracks()).resolves.toHaveLength(1);
+    });
+    const [summary] = await services.database.listLocalTracks();
+    if (summary === undefined) throw new Error('Expected one saved planned route.');
+    expect(summary.geometryKind).toBe('route');
+    const content = await services.database.loadLocalTrackContent(summary.id);
+    expect(content.trackPoints[0]?.map((point) => point.coordinate)).toEqual([
+      A,
+      snappedA,
+      routedMiddle,
+      snappedB,
+      B,
+      C,
+    ]);
+    expect(route).toHaveBeenCalledOnce();
+  }, 30_000);
+
+  it('keeps failed route geometry editable and confirms discard', async () => {
+    const route = vi.fn<TrailRouter['route']>().mockResolvedValue({
+      status: 'failed',
+      reason: 'no-route',
+    });
+    const trailRouter: TrailRouter = {
+      route,
+      dispose: vi.fn(),
+    };
+    services = createTestServices({ trailRouter });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    expect(
+      await screen.findByText(
+        'No connected route was found. Add a closer point or use Line for the next segment.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(
+      await screen.findByText('Click the map to choose the route start.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    const confirmDiscard = vi
+      .spyOn(window, 'confirm')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(confirmDiscard).toHaveBeenCalledWith('Discard this unsaved track?');
+    expect(screen.getByRole('heading', { name: 'New track' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'New track' }),
+      ).not.toBeInTheDocument();
+    });
+  }, 30_000);
+
   it('plans a direct multi-point route, enriches elevation, and saves local GPX content', async () => {
     const route = vi
       .fn()
@@ -2080,6 +2280,17 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     });
+    const elevationProfile = await screen.findByRole('img', {
+      name: /Elevation profile from \d+ to \d+ metres/u,
+    });
+    expect(elevationProfile).toBeVisible();
+    expect(elevationProfile).toHaveStyle({ height: '264px' });
+    expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+    expect(elevationProfile.querySelectorAll('.recharts-cartesian-axis')).toHaveLength(
+      2,
+    );
+    expect(elevationProfile.querySelector('.recharts-cartesian-grid')).not.toBeNull();
+    expect(elevationProfile.querySelector('.recharts-tooltip-wrapper')).not.toBeNull();
     const nameInput = screen.getByRole('textbox', { name: 'Track name' });
     await user.clear(nameInput);
     await user.type(nameInput, 'Planned ridge');
@@ -2130,26 +2341,27 @@ describe('WorkspaceShell', () => {
       content.trackPoints[0]?.every((point) => point.elevationMeters !== undefined),
     ).toBe(true);
     expect(route).not.toHaveBeenCalled();
-  });
+  }, 30_000);
 
   it('saves accepted route geometry without waiting for elevation', async () => {
     const sampling = { signal: null as AbortSignal | null };
+    const sampleMany = vi.fn(
+      (_coordinates: readonly ElevationCoordinate[], signal: AbortSignal) => {
+        sampling.signal = signal;
+        return new Promise<readonly ElevationSample[]>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              reject(new DOMException('Elevation sampling aborted.', 'AbortError'));
+            },
+            { once: true },
+          );
+        });
+      },
+    );
     const elevationProvider: ElevationProvider = {
       sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
-      sampleMany: vi.fn(
-        (_coordinates: readonly ElevationCoordinate[], signal: AbortSignal) => {
-          sampling.signal = signal;
-          return new Promise<readonly ElevationSample[]>((_resolve, reject) => {
-            signal.addEventListener(
-              'abort',
-              () => {
-                reject(new DOMException('Elevation sampling aborted.', 'AbortError'));
-              },
-              { once: true },
-            );
-          });
-        },
-      ),
+      sampleMany,
     };
     const trailRouter: TrailRouter = {
       route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
@@ -2175,6 +2387,11 @@ describe('WorkspaceShell', () => {
     });
 
     expect(await screen.findByText('Preparing elevation…')).toBeVisible();
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Metadata edit');
+    expect(sampleMany).toHaveBeenCalledOnce();
+    expect(sampling.signal?.aborted).toBe(false);
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(sampling.signal?.aborted).toBe(true);
     await waitFor(async () => {
@@ -2187,6 +2404,56 @@ describe('WorkspaceShell', () => {
     expect(
       content.trackPoints[0]?.every((point) => point.elevationMeters === undefined),
     ).toBe(true);
+  });
+
+  it('restarts route elevation after a save failure', async () => {
+    const samplingSignals: AbortSignal[] = [];
+    const sampleMany = vi.fn(
+      (_coordinates: readonly ElevationCoordinate[], signal: AbortSignal) => {
+        samplingSignals.push(signal);
+        return new Promise<readonly ElevationSample[]>(() => undefined);
+      },
+    );
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
+      sampleMany,
+    };
+    const trailRouter: TrailRouter = {
+      route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
+      dispose: vi.fn(),
+    };
+    services = { ...createTestServices({ trailRouter }), elevationProvider };
+    vi.spyOn(services.database, 'saveLocalTrack').mockRejectedValueOnce(
+      new Error('Storage unavailable'),
+    );
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+
+    expect(await screen.findByText('Preparing elevation…')).toBeVisible();
+    expect(sampleMany).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Storage unavailable')).toBeVisible();
+    await waitFor(() => {
+      expect(sampleMany).toHaveBeenCalledTimes(2);
+    });
+    expect(samplingSignals[0]?.aborted).toBe(true);
+    expect(samplingSignals[1]?.aborted).toBe(false);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('explains GPX validation warnings with their parser code and message', async () => {

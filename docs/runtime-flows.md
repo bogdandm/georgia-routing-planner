@@ -328,11 +328,16 @@ sequenceDiagram
 
 The first planning click creates only a waypoint. Each later click captures the
 currently selected mode for that leg. A routed request expands its half-open XYZ
-coverage once when no path is found, within the same tile and timeout budgets. The
-worker filters the configured transportation layer to walkable lines, joins nodes
-deterministically, splits snapped edges, and runs A* with geodesic edge weights. It
-returns explicit no-path, area-too-large, routing-data-unavailable, timeout, or invalid
-data failures; no failure changes accepted geometry or silently becomes a direct line.
+coverage once when no path is found, within the same tile budgets and one-minute
+calculation limit. Worker events report completed/total tile downloads, graph
+construction, and A* search to the owning route-plan generation. The worker filters the
+configured detail-vector `streets` layer to road and path lines, normalizes them onto a
+global MVT grid, and uses a bounded spatial index to split eligible X, T, near-touch,
+and collinear-overlap junctions. Available layer and bridge/tunnel differences prevent
+inferred interior connections. The worker then splits snapped edges and runs A* with
+geodesic edge weights. It returns explicit no-path, area-too-large,
+routing-data-unavailable, one-minute timeout, or invalid data failures; no failure
+changes accepted geometry or silently becomes a direct line.
 
 Every click, mode change, Undo, Clear, close, and unmount aborts work that no longer
 owns the current route-plan generation. Stale completions are ignored even if transport

@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { TrailRouteSuccess } from '@/application/ports/TrailRouter';
+import type {
+  TrailRouteProgress,
+  TrailRouteSuccess,
+} from '@/application/ports/TrailRouter';
 import { BrowserTrailRouter } from '@/infrastructure/routing/BrowserTrailRouter';
-import { routingWorkerMethods } from '@/infrastructure/routing/RoutingWorkerProtocol';
+import { RoutingWorkerServer } from '@/infrastructure/routing/RoutingWorkerServer';
+import {
+  routingWorkerEvents,
+  routingWorkerMethods,
+} from '@/infrastructure/routing/RoutingWorkerProtocol';
+import { RoutingTileLoader } from '@/infrastructure/routing/routingTiles';
 import { WorkerRpcServer } from '@/infrastructure/runtime/WorkerRpc';
 import { createMemoryWorkerRpcEndpointPair } from '@test/helpers/MemoryWorkerRpcEndpoint';
 
@@ -87,8 +95,11 @@ describe('BrowserTrailRouter', () => {
     const clonedRequest = route.mock.calls[0]?.[0];
     expect(structuredClone(clonedInitialization)).toEqual(initialization);
     expect(structuredClone(clonedRequest)).toEqual({
-      start: [44, 42],
-      destination: [45, 43],
+      request: {
+        start: [44, 42],
+        destination: [45, 43],
+      },
+      progressToken: 1,
     });
     expect(clonedInitialization).not.toHaveProperty('postMessage');
     expect(clonedRequest).not.toHaveProperty('postMessage');
@@ -105,8 +116,10 @@ describe('BrowserTrailRouter', () => {
     const server = new WorkerRpcServer(serverEndpoint, {
       [routingWorkerMethods.initialize]: () => ({ initialized: true }),
       [routingWorkerMethods.route]: (payload, context): Promise<TrailRouteSuccess> => {
-        const request = payload as {
-          readonly destination: readonly [number, number];
+        const { request } = payload as {
+          readonly request: {
+            readonly destination: readonly [number, number];
+          };
         };
         if (request.destination[0] === 45) {
           firstStarted.resolve(undefined);
@@ -194,5 +207,161 @@ describe('BrowserTrailRouter', () => {
 
     router.dispose();
     server.dispose();
+  });
+
+  it('forwards progress for the matching route request only', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const server = new WorkerRpcServer(serverEndpoint, {
+      [routingWorkerMethods.initialize]: () => ({ initialized: true }),
+      [routingWorkerMethods.route]: (payload) => {
+        const { progressToken } = payload as { readonly progressToken: number };
+        server.publishEvent(routingWorkerEvents.progress, {
+          progressToken: progressToken + 1,
+          progress: {
+            phase: 'loading-tiles',
+            attempt: 1,
+            loadedTileCount: 99,
+            totalTileCount: 99,
+          },
+        });
+        server.publishEvent(routingWorkerEvents.progress, {
+          progressToken,
+          progress: {
+            phase: 'loading-tiles',
+            attempt: 1,
+            loadedTileCount: 4,
+            totalTileCount: 9,
+          },
+        });
+        return success();
+      },
+    });
+    const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
+    const progress: TrailRouteProgress[] = [];
+
+    await expect(
+      router.route(
+        { start: [44, 42], destination: [45, 43] },
+        new AbortController().signal,
+        (value) => {
+          progress.push(value);
+        },
+      ),
+    ).resolves.toEqual(success());
+    expect(progress).toEqual([
+      {
+        phase: 'loading-tiles',
+        attempt: 1,
+        loadedTileCount: 4,
+        totalTileCount: 9,
+      },
+    ]);
+
+    router.dispose();
+    server.dispose();
+  });
+
+  it('returns a recoverable failure when calculation exceeds its time budget', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const requestAborted = deferred<undefined>();
+    const server = new WorkerRpcServer(serverEndpoint, {
+      [routingWorkerMethods.initialize]: () => ({ initialized: true }),
+      [routingWorkerMethods.route]: (_payload, context) =>
+        new Promise<TrailRouteSuccess>((_resolve, reject) => {
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              requestAborted.resolve(undefined);
+              reject(new DOMException('Timed out.', 'AbortError'));
+            },
+            { once: true },
+          );
+        }),
+    });
+    const router = new BrowserTrailRouter(initialization, () => clientEndpoint, 10);
+
+    await expect(
+      router.route(
+        { start: [44, 42], destination: [45, 43] },
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ status: 'failed', reason: 'routing-timeout' });
+    await requestAborted.promise;
+
+    router.dispose();
+    server.dispose();
+  });
+
+  it('applies cancellation and the time budget while initialization is pending', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const initializationPending = deferred<{ readonly initialized: true }>();
+    const route = vi.fn();
+    const server = new WorkerRpcServer(serverEndpoint, {
+      [routingWorkerMethods.initialize]: () => initializationPending.promise,
+      [routingWorkerMethods.route]: route,
+    });
+    const router = new BrowserTrailRouter(initialization, () => clientEndpoint, 10);
+
+    await expect(
+      router.route(
+        { start: [44, 42], destination: [45, 43] },
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ status: 'failed', reason: 'routing-timeout' });
+    const controller = new AbortController();
+    const canceled = router.route(
+      { start: [44, 42], destination: [45, 43] },
+      controller.signal,
+    );
+    controller.abort(new DOMException('Canceled.', 'AbortError'));
+    await expect(canceled).rejects.toMatchObject({ name: 'AbortError' });
+    expect(route).not.toHaveBeenCalled();
+
+    router.dispose();
+    server.dispose();
+  });
+
+  it('disposes a loader that resolves after the routing worker shuts down', async () => {
+    const initializedLoader = await RoutingTileLoader.initialize(
+      initialization,
+      new AbortController().signal,
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json({
+            tilejson: '3.0.0',
+            tiles: ['https://routing.test/tiles/{z}/{x}/{y}.pbf'],
+            minzoom: 0,
+            maxzoom: 14,
+          }),
+        ),
+      ),
+    );
+    if (initializedLoader.status === 'failed') {
+      throw new Error(initializedLoader.reason);
+    }
+    const dispose = vi.spyOn(initializedLoader.loader, 'dispose');
+    const initializationStarted = deferred<undefined>();
+    const initializationPending =
+      deferred<Awaited<ReturnType<typeof RoutingTileLoader.initialize>>>();
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const server = new RoutingWorkerServer(serverEndpoint, () => {
+      initializationStarted.resolve(undefined);
+      return initializationPending.promise;
+    });
+    const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
+    const route = router.route(
+      { start: [44, 42], destination: [45, 43] },
+      new AbortController().signal,
+    );
+    await initializationStarted.promise;
+
+    router.dispose();
+    server.dispose();
+    initializationPending.resolve(initializedLoader);
+
+    await expect(route).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => {
+      expect(dispose).toHaveBeenCalledOnce();
+    });
   });
 });

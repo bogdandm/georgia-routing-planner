@@ -2,17 +2,30 @@ import { VectorTile } from '@mapbox/vector-tile';
 import Pbf from 'pbf';
 import { z } from 'zod';
 
-import { loadMapProviderConfiguration } from '../../src/bootstrap/configuration/MapProviderConfiguration';
+import type { TrailRouteResult } from '@/application/ports/TrailRouter';
+import {
+  loadMapProviderConfiguration,
+  type MapProviderConfiguration,
+} from '@/bootstrap/configuration/MapProviderConfiguration';
+import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import { executeTrailRoute } from '@/infrastructure/routing/RoutingWorkerServer';
+import { RoutingTileLoader } from '@/infrastructure/routing/routingTiles';
 
 const DEFAULT_LONGITUDE = 44.6408;
 const DEFAULT_LATITUDE = 42.6602;
 const DEFAULT_ZOOM = 14;
 const GRAPH_EXTENT = 4_096;
 
+interface RouteStressCoordinates {
+  readonly start: TrackCoordinate;
+  readonly destination: TrackCoordinate;
+}
+
 interface InspectionOptions {
   readonly longitude: number;
   readonly latitude: number;
   readonly zoom: number;
+  readonly routeStress: RouteStressCoordinates | null;
 }
 
 interface TileJson {
@@ -44,6 +57,10 @@ function parseArguments(): InspectionOptions {
   let longitude = DEFAULT_LONGITUDE;
   let latitude = DEFAULT_LATITUDE;
   let zoom = DEFAULT_ZOOM;
+  let startLatitude: number | undefined;
+  let startLongitude: number | undefined;
+  let destinationLatitude: number | undefined;
+  let destinationLongitude: number | undefined;
 
   for (let index = 0; index < values.length; index += 2) {
     const option = values[index];
@@ -51,7 +68,15 @@ function parseArguments(): InspectionOptions {
     if (option === '--longitude') longitude = parseNumber(value, option);
     else if (option === '--latitude') latitude = parseNumber(value, option);
     else if (option === '--zoom') zoom = parseNumber(value, option);
-    else throw new Error(`Unknown option: ${option ?? '<missing>'}.`);
+    else if (option === '--start-latitude') {
+      startLatitude = parseNumber(value, option);
+    } else if (option === '--start-longitude') {
+      startLongitude = parseNumber(value, option);
+    } else if (option === '--destination-latitude') {
+      destinationLatitude = parseNumber(value, option);
+    } else if (option === '--destination-longitude') {
+      destinationLongitude = parseNumber(value, option);
+    } else throw new Error(`Unknown option: ${option ?? '<missing>'}.`);
   }
 
   if (values.length % 2 !== 0) throw new Error('Every option requires a value.');
@@ -64,7 +89,47 @@ function parseArguments(): InspectionOptions {
     throw new Error('Zoom must be an integer in [0, 24].');
   }
 
-  return { longitude, latitude, zoom };
+  const routeValues = [
+    startLatitude,
+    startLongitude,
+    destinationLatitude,
+    destinationLongitude,
+  ];
+  const routeValueCount = routeValues.filter((value) => value !== undefined).length;
+  if (routeValueCount !== 0 && routeValueCount !== routeValues.length) {
+    throw new Error(
+      'Route stress requires all four start/destination coordinate flags.',
+    );
+  }
+  let routeStress: RouteStressCoordinates | null = null;
+  if (
+    startLatitude !== undefined &&
+    startLongitude !== undefined &&
+    destinationLatitude !== undefined &&
+    destinationLongitude !== undefined
+  ) {
+    if (
+      startLongitude < -180 ||
+      startLongitude > 180 ||
+      destinationLongitude < -180 ||
+      destinationLongitude > 180
+    ) {
+      throw new Error('Route stress longitudes must be in [-180, 180].');
+    }
+    if (
+      startLatitude < -85.051_128_78 ||
+      startLatitude > 85.051_128_78 ||
+      destinationLatitude < -85.051_128_78 ||
+      destinationLatitude > 85.051_128_78
+    ) {
+      throw new Error('Route stress latitudes must be within Web Mercator limits.');
+    }
+    routeStress = {
+      start: [startLongitude, startLatitude],
+      destination: [destinationLongitude, destinationLatitude],
+    };
+  }
+  return { longitude, latitude, zoom, routeStress };
 }
 
 function parseTileJson(value: unknown): TileJson {
@@ -138,6 +203,77 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+function routeStressReport(
+  input: RouteStressCoordinates,
+  result: TrailRouteResult,
+  elapsedMilliseconds: number,
+): Readonly<Record<string, unknown>> {
+  const base = {
+    input,
+    status: result.status,
+    elapsedMilliseconds,
+  };
+  if (result.status === 'failed') {
+    return {
+      ...base,
+      reason: result.reason,
+      endpoint: result.endpoint ?? null,
+    };
+  }
+  return {
+    ...base,
+    snappedStart: result.snappedStart,
+    snappedDestination: result.snappedDestination,
+    networkDistanceMeters: result.networkDistanceMeters,
+    loadedTileCount: result.loadedTileCount,
+    graphNodeCount: result.graphNodeCount,
+    graphEdgeCount: result.graphEdgeCount,
+    expandedAreaRetryUsed: result.expandedAreaRetryUsed,
+    geometryPointCount: result.geometry.coordinates.length,
+  };
+}
+
+async function runRouteStress(
+  input: RouteStressCoordinates,
+  configuration: MapProviderConfiguration,
+): Promise<void> {
+  const startedAt = performance.now();
+  const signal = new AbortController().signal;
+  const initialization = await RoutingTileLoader.initialize(
+    {
+      tileJsonUrl: configuration.detailVector.tileJsonUrl,
+      transportationSourceLayer: configuration.detailVector.sourceLayers.streets,
+      requestTimeoutMs: configuration.policy.requestTimeoutMs,
+    },
+    signal,
+  );
+  let result: TrailRouteResult;
+  if (initialization.status === 'failed') {
+    result = { status: 'failed', reason: initialization.reason };
+  } else {
+    try {
+      result = await executeTrailRoute(initialization.loader, input, signal);
+    } finally {
+      initialization.loader.dispose();
+    }
+  }
+  const elapsedMilliseconds =
+    Math.round((performance.now() - startedAt) * 1_000) / 1_000;
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        inspectedAt: new Date().toISOString(),
+        tileJsonUrl: configuration.detailVector.tileJsonUrl,
+        transportationLayer: configuration.detailVector.sourceLayers.streets,
+        routeStress: routeStressReport(input, result, elapsedMilliseconds),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  if (result.status !== 'ready') process.exitCode = 1;
+}
+
 async function main(): Promise<void> {
   const options = parseArguments();
   const configurationResult = loadMapProviderConfiguration(
@@ -148,7 +284,14 @@ async function main(): Promise<void> {
     throw new Error(configurationResult.message);
 
   const configuration = configurationResult.value;
-  const tileJson = parseTileJson(await fetchJson(configuration.vector.tileJsonUrl));
+  if (options.routeStress !== null) {
+    await runRouteStress(options.routeStress, configuration);
+    return;
+  }
+
+  const tileJson = parseTileJson(
+    await fetchJson(configuration.detailVector.tileJsonUrl),
+  );
   const template = tileJson.tiles[0];
   if (template === undefined) throw new Error('TileJSON has no usable XYZ template.');
   const tiles = inspectionTiles(
@@ -158,8 +301,7 @@ async function main(): Promise<void> {
     throw new Error(`Expected 9 inspection tiles, received ${String(tiles.length)}.`);
 
   const keys = new Set<string>();
-  const classes = new Set<string>();
-  const subclasses = new Set<string>();
+  const kinds = new Set<string>();
   const repeatedEndpoints = new Map<string, number>();
   const graphVertexAppearances = new Map<string, number>();
   const representativePathProperties: Readonly<Record<string, unknown>>[] = [];
@@ -172,10 +314,10 @@ async function main(): Promise<void> {
   await Promise.all(
     tiles.map(async (tile) => {
       const bytes = await fetchBytes(
-        resolveTileUrl(template, tile, configuration.vector.tileJsonUrl),
+        resolveTileUrl(template, tile, configuration.detailVector.tileJsonUrl),
       );
       const vectorTile = new VectorTile(new Pbf(bytes));
-      const layer = vectorTile.layers[configuration.vector.sourceLayers.transportation];
+      const layer = vectorTile.layers[configuration.detailVector.sourceLayers.streets];
       if (layer === undefined) return;
 
       for (let index = 0; index < layer.length; index += 1) {
@@ -183,14 +325,12 @@ async function main(): Promise<void> {
         transportationFeatures += 1;
         if (feature.id !== undefined) featuresWithIds += 1;
         for (const key of Object.keys(feature.properties)) keys.add(key);
-        const featureClass = feature.properties.class;
-        const subclass = feature.properties.subclass;
-        if (typeof featureClass === 'string') classes.add(featureClass);
-        if (typeof subclass === 'string') subclasses.add(subclass);
-        if (featureClass === 'path' && representativePathProperties.length < 3) {
+        const kind = feature.properties.kind;
+        if (typeof kind === 'string') kinds.add(kind);
+        if (kind === 'path' && representativePathProperties.length < 3) {
           representativePathProperties.push({ ...feature.properties });
         }
-        if (featureClass === 'track' && representativeTrackProperties.length < 3) {
+        if (kind === 'track' && representativeTrackProperties.length < 3) {
           representativeTrackProperties.push({ ...feature.properties });
         }
 
@@ -243,16 +383,20 @@ async function main(): Promise<void> {
   ).length;
   const report = {
     inspectedAt: new Date().toISOString(),
-    center: options,
-    tileJsonUrl: configuration.vector.tileJsonUrl,
-    tileTemplate: new URL(template, configuration.vector.tileJsonUrl).toString(),
+    center: {
+      longitude: options.longitude,
+      latitude: options.latitude,
+      zoom: options.zoom,
+    },
+    tileJsonUrl: configuration.detailVector.tileJsonUrl,
+    tileTemplate: new URL(template, configuration.detailVector.tileJsonUrl).toString(),
     advertisedZoomRange: {
       minzoom: tileJson.minzoom ?? null,
       maxzoom: tileJson.maxzoom ?? null,
     },
     requestedTileCount: tiles.length,
     successfulTileCount: tiles.length,
-    transportationLayer: configuration.vector.sourceLayers.transportation,
+    transportationLayer: configuration.detailVector.sourceLayers.streets,
     geometryCounts: {
       features: transportationFeatures,
       lines: lineFeatures,
@@ -260,8 +404,7 @@ async function main(): Promise<void> {
       other: transportationFeatures - lineFeatures - polygonFeatures,
     },
     propertyKeys: sorted(keys),
-    classes: sorted(classes),
-    subclasses: sorted(subclasses),
+    kinds: sorted(kinds),
     featureIdCoverage: {
       present: featuresWithIds,
       total: transportationFeatures,

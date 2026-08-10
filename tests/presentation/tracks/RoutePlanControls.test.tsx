@@ -68,7 +68,10 @@ describe('RoutePlanControls', () => {
     const handlers = callbacks();
     render(<RoutePlanControls draft={calculating} {...handlers} />);
 
-    expect(screen.getByText('Calculating route…')).toBeVisible();
+    expect(screen.getByText('Loading route tiles…')).toBeVisible();
+    expect(
+      screen.getByRole('progressbar', { name: 'Loading route tiles…' }),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Routes' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Line' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -112,6 +115,10 @@ describe('RoutePlanControls', () => {
     [
       { reason: 'routing-data-unavailable' } as const,
       'Routing data is unavailable. Try again when you are online.',
+    ],
+    [
+      { reason: 'routing-timeout' } as const,
+      'Route calculation exceeded one minute. Add a closer point or try again.',
     ],
     [{ reason: 'routing-data-invalid' } as const, 'Routing data could not be decoded.'],
   ])('shows actionable copy for $reason', (failure, message) => {

@@ -1,11 +1,14 @@
 import type {
+  TrailRouteProgress,
+  TrailRouteProgressListener,
   TrailRouteRequest,
   TrailRouteResult,
   TrailRouteSuccess,
 } from '@/application/ports/TrailRouter';
 import {
   parseRoutingWorkerInitializeRequest,
-  parseTrailRouteRequest,
+  parseRoutingWorkerRouteRequest,
+  routingWorkerEvents,
   routingWorkerMethods,
   type RoutingWorkerInitializeRequest,
   type RoutingWorkerInitializeResult,
@@ -33,6 +36,7 @@ export interface RoutingAreaLoader {
     destination: TrailRouteRequest['destination'],
     paddingMeters: number,
     signal: AbortSignal,
+    onProgress?: (loadedTileCount: number, totalTileCount: number) => void,
   ): Promise<RoutingTileLoadResult>;
 }
 
@@ -40,18 +44,40 @@ export async function executeTrailRoute(
   loader: RoutingAreaLoader,
   request: TrailRouteRequest,
   signal: AbortSignal,
+  onProgress?: TrailRouteProgressListener,
 ): Promise<TrailRouteResult> {
   const initialPaddingMeters = routingPaddingMeters(request.start, request.destination);
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    let loadedTileCount = 0;
+    let totalTileCount = 0;
+    const report = (phase: TrailRouteProgress['phase']): void => {
+      onProgress?.({
+        phase,
+        attempt: attempt === 0 ? 1 : 2,
+        loadedTileCount,
+        totalTileCount,
+      });
+    };
+    report('loading-tiles');
     const areaResult = await loader.loadArea(
       request.start,
       request.destination,
       initialPaddingMeters * (attempt + 1),
       signal,
+      (loaded, total) => {
+        loadedTileCount = loaded;
+        totalTileCount = total;
+        report('loading-tiles');
+      },
     );
     if (areaResult.status === 'failed') return areaResult;
 
+    loadedTileCount = areaResult.area.tiles.length;
+    totalTileCount = areaResult.area.tiles.length;
+    report('building-graph');
+
     const graph = buildTrailGraph(areaResult.area.lines, areaResult.area.rectangle);
+    report('searching-route');
     const route = routeTrailGraph(graph, request.start, request.destination);
     if (route.status === 'ready') {
       const result: TrailRouteSuccess = {
@@ -91,6 +117,8 @@ export async function executeTrailRoute(
 export class RoutingWorkerServer {
   readonly #rpc: WorkerRpcServer;
   #loader: RoutingTileLoader | null = null;
+  #initializationGeneration = 0;
+  #disposed = false;
 
   public constructor(
     endpoint: WorkerRpcEndpoint,
@@ -105,24 +133,47 @@ export class RoutingWorkerServer {
           context,
         ): Promise<RoutingWorkerInitializeResult> => {
           const request = parseRoutingWorkerInitializeRequest(payload);
+          const generation = this.#initializationGeneration + 1;
+          this.#initializationGeneration = generation;
           this.#loader?.dispose();
           this.#loader = null;
           const initialization = await initializeLoader(request, context.signal);
           if (initialization.status === 'failed') {
             return { initialized: false, reason: initialization.reason };
           }
+          if (
+            this.#disposed ||
+            context.signal.aborted ||
+            generation !== this.#initializationGeneration
+          ) {
+            initialization.loader.dispose();
+            context.signal.throwIfAborted();
+            return { initialized: false, reason: 'routing-data-unavailable' };
+          }
           this.#loader = initialization.loader;
           return { initialized: true };
         },
         [routingWorkerMethods.route]: async (payload, context) => {
-          const request = parseTrailRouteRequest(payload);
+          const { request, progressToken } = parseRoutingWorkerRouteRequest(payload);
           if (this.#loader === null) {
             return { status: 'failed', reason: 'routing-data-unavailable' };
           }
-          return executeTrailRoute(this.#loader, request, context.signal);
+          return executeTrailRoute(
+            this.#loader,
+            request,
+            context.signal,
+            (progress) => {
+              this.#rpc.publishEvent(routingWorkerEvents.progress, {
+                progressToken,
+                progress,
+              });
+            },
+          );
         },
       },
       () => {
+        this.#disposed = true;
+        this.#initializationGeneration += 1;
         this.#loader?.dispose();
         this.#loader = null;
       },

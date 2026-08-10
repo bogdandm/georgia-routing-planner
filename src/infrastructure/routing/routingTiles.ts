@@ -34,6 +34,7 @@ export interface RoutingBounds {
 export interface RoutingTileCoordinate {
   readonly z: number;
   readonly x: number;
+  readonly graphX: number;
   readonly y: number;
   readonly key: string;
 }
@@ -201,7 +202,7 @@ export function coverRoutingBounds(
     const x = ((rawX % tileCount) + tileCount) % tileCount;
     for (let y = minimumY; y < maximumYExclusive; y += 1) {
       const key = `${String(zoom)}/${String(x)}/${String(y)}`;
-      byKey.set(key, { z: zoom, x, y, key });
+      byKey.set(key, { z: zoom, x, graphX: rawX, y, key });
     }
   }
   const tiles = [...byKey.values()].sort((left, right) =>
@@ -210,7 +211,7 @@ export function coverRoutingBounds(
   if (tiles.length > MAX_ROUTING_TILES) {
     return { status: 'failed', reason: 'area-too-large' };
   }
-  const xValues = tiles.map((tile) => tile.x);
+  const xValues = tiles.map((tile) => tile.graphX);
   const yValues = tiles.map((tile) => tile.y);
   return {
     status: 'ready',
@@ -302,7 +303,7 @@ function decodeRoutingTile(
       });
       if (!hasNonZeroEdge) continue;
       lines.push({
-        tileX: tile.x,
+        tileX: tile.graphX,
         tileY: tile.y,
         extent: feature.extent,
         points: part.map((point) => ({ x: point.x, y: point.y })),
@@ -400,13 +401,18 @@ export class RoutingTileLoader {
     destination: TrackCoordinate,
     paddingMeters: number,
     signal: AbortSignal,
+    onProgress?: (loadedTileCount: number, totalTileCount: number) => void,
   ): Promise<RoutingTileLoadResult> {
     const coverageResult = coverRoutingBounds(
       expandRoutingBounds(start, destination, paddingMeters),
     );
     if (coverageResult.status === 'failed') return coverageResult;
     try {
-      const decoded = await this.loadTiles(coverageResult.coverage.tiles, signal);
+      const decoded = await this.loadTiles(
+        coverageResult.coverage.tiles,
+        signal,
+        onProgress,
+      );
       return {
         status: 'ready',
         area: {
@@ -437,15 +443,22 @@ export class RoutingTileLoader {
   private async loadTiles(
     tiles: readonly RoutingTileCoordinate[],
     signal: AbortSignal,
+    onProgress?: (loadedTileCount: number, totalTileCount: number) => void,
   ): Promise<readonly DecodedRoutingTile[]> {
     const decoded = tiles.map<DecodedRoutingTile | undefined>(() => undefined);
     let nextIndex = 0;
+    let loadedTileCount = 0;
+    onProgress?.(loadedTileCount, tiles.length);
     const loadNext = async (): Promise<void> => {
       while (nextIndex < tiles.length) {
         const index = nextIndex;
         nextIndex += 1;
         const tile = tiles[index];
-        if (tile !== undefined) decoded[index] = await this.loadTile(tile, signal);
+        if (tile !== undefined) {
+          decoded[index] = await this.loadTile(tile, signal);
+          loadedTileCount += 1;
+          onProgress?.(loadedTileCount, tiles.length);
+        }
       }
     };
     await Promise.all(
@@ -469,10 +482,11 @@ export class RoutingTileLoader {
     tile: RoutingTileCoordinate,
     signal: AbortSignal,
   ): Promise<DecodedRoutingTile> {
-    const cached = this.#cache.get(tile.key);
+    const cacheKey = `${tile.key}@${String(tile.graphX)}`;
+    const cached = this.#cache.get(cacheKey);
     if (cached !== undefined) {
-      this.#cache.delete(tile.key);
-      this.#cache.set(tile.key, cached);
+      this.#cache.delete(cacheKey);
+      this.#cache.set(cacheKey, cached);
       return cached;
     }
     const response = await fetchWithTimeout(
@@ -486,7 +500,7 @@ export class RoutingTileLoader {
       tile,
       this.transportationSourceLayer,
     );
-    this.#cache.set(tile.key, decoded);
+    this.#cache.set(cacheKey, decoded);
     while (this.#cache.size > ROUTING_TILE_CACHE_ENTRIES) {
       const oldestKey = this.#cache.keys().next().value;
       if (oldestKey === undefined) break;

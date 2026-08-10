@@ -142,11 +142,12 @@ objects.
 
 `BrowserTrailRouter` implements the narrow `TrailRouter` application capability with one
 Vite module worker and the reusable request-correlated `WorkerRpc` transport. The worker
-loads the configured vector TileJSON, fetches bounded XYZ coverage, decodes only the
-configured transportation MVT layer, builds a request-local walkable graph, snaps both
-endpoints, and runs deterministic A*. Provider URLs, tile bytes, graph nodes, and
-MapLibre internals never enter React or the application port. Cancellation crosses the
-RPC boundary, and disposing runtime services terminates the worker.
+loads the configured detail-vector TileJSON, fetches bounded XYZ coverage, decodes the
+same `streets` MVT layer used by the visible detailed map, geometrically nodes a
+request-local walkable graph through a bounded spatial index, snaps both endpoints, and
+runs deterministic A*. Provider URLs, tile bytes, graph nodes, and MapLibre internals
+never enter React or the application port. Cancellation crosses the RPC boundary, and
+disposing runtime services terminates the worker.
 
 Saved-marker catalog keys and name normalization stay under `domain/markers`.
 `AppDatabase` implements `SavedMarkerRepository`, while `MarkersWorkspaceProvider` owns

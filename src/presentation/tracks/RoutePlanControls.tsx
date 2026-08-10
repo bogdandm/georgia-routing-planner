@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   CircularProgress,
+  LinearProgress,
   Stack,
   TextField,
   ToggleButton,
@@ -44,15 +45,37 @@ function failureMessage(failure: NonNullable<RoutePlanDraft['failure']>): string
   if (failure.reason === 'routing-data-unavailable') {
     return 'Routing data is unavailable. Try again when you are online.';
   }
+  if (failure.reason === 'routing-timeout') {
+    return 'Route calculation exceeded one minute. Add a closer point or try again.';
+  }
   return 'Routing data could not be decoded.';
 }
 
 function RoutePlanStatus({ draft }: { readonly draft: RoutePlanDraft }): ReactElement {
   if (draft.status === 'calculating') {
+    const progress = draft.routeProgress;
+    const label =
+      progress?.phase === 'loading-tiles'
+        ? progress.totalTileCount > 0
+          ? `Loading route tiles… ${String(progress.loadedTileCount)}/${String(progress.totalTileCount)}`
+          : 'Loading route tiles…'
+        : progress?.phase === 'building-graph'
+          ? 'Building route graph…'
+          : progress?.phase === 'searching-route'
+            ? 'Searching for a route…'
+            : 'Loading route tiles…';
+    const value =
+      progress?.phase === 'loading-tiles' && progress.totalTileCount > 0
+        ? (progress.loadedTileCount / progress.totalTileCount) * 100
+        : undefined;
     return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <CircularProgress size={18} />
-        <Typography variant="body2">Calculating route…</Typography>
+      <Stack spacing={0.75}>
+        <Typography variant="body2">{label}</Typography>
+        <LinearProgress
+          aria-label={label}
+          variant={value === undefined ? 'indeterminate' : 'determinate'}
+          value={value}
+        />
       </Stack>
     );
   }

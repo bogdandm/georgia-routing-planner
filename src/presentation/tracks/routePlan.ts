@@ -1,5 +1,6 @@
 import type {
   TrailRouteFailure,
+  TrailRouteProgress,
   TrailRouteResult,
 } from '@/application/ports/TrailRouter';
 import type { TrackCoordinate, TrackSegment } from '@/domain/tracks/gpx';
@@ -44,6 +45,7 @@ export interface RoutePlanDraft {
   readonly requestGeneration: number;
   readonly status: RoutePlanStatus;
   readonly failure: TrailRouteFailure | null;
+  readonly routeProgress: TrailRouteProgress | null;
   readonly segment: TrackSegment | null;
   readonly metrics: TrackMetrics | null;
   readonly profile: ElevationProfile | null;
@@ -125,6 +127,7 @@ export function startRoutePlan(id: string): RoutePlanDraft {
     requestGeneration: 0,
     status: 'selecting-start',
     failure: null,
+    routeProgress: null,
     segment: null,
     metrics: null,
     profile: null,
@@ -160,6 +163,7 @@ export function beginRoutePlanPoint(
         requestGeneration: generation,
         status: 'selecting-destination',
         failure: null,
+        routeProgress: null,
       },
       request: null,
     };
@@ -182,6 +186,7 @@ export function beginRoutePlanPoint(
         requestGeneration: generation,
         status: 'route-ready',
         failure: null,
+        routeProgress: null,
         ...geometryState(legs),
       },
       request: null,
@@ -194,6 +199,12 @@ export function beginRoutePlanPoint(
       requestGeneration: generation,
       status: 'calculating',
       failure: null,
+      routeProgress: {
+        phase: 'loading-tiles',
+        attempt: 1,
+        loadedTileCount: 0,
+        totalTileCount: 0,
+      },
     },
     request: {
       generation,
@@ -201,6 +212,17 @@ export function beginRoutePlanPoint(
       destination: coordinate,
     },
   };
+}
+
+export function updateRoutePlanProgress(
+  draft: RoutePlanDraft,
+  generation: number,
+  progress: TrailRouteProgress,
+): RoutePlanDraft {
+  if (draft.status !== 'calculating' || draft.requestGeneration !== generation) {
+    return draft;
+  }
+  return { ...draft, routeProgress: progress };
 }
 
 export function completeRoutePlanPoint(
@@ -222,6 +244,7 @@ export function completeRoutePlanPoint(
       ...draft,
       status: 'failed',
       failure: result,
+      routeProgress: null,
     };
   }
 
@@ -263,6 +286,7 @@ export function completeRoutePlanPoint(
     legs,
     status: 'route-ready',
     failure: null,
+    routeProgress: null,
     ...geometryState(legs),
   };
 }
@@ -276,6 +300,7 @@ export function undoLastRoutePlanPoint(draft: RoutePlanDraft): RoutePlanDraft {
       requestGeneration: generation,
       status: statusForWaypointCount(draft.waypoints.length),
       failure: null,
+      routeProgress: null,
     };
   }
   const waypoints = draft.waypoints.slice(0, -1);
@@ -287,6 +312,7 @@ export function undoLastRoutePlanPoint(draft: RoutePlanDraft): RoutePlanDraft {
     requestGeneration: generation,
     status: statusForWaypointCount(waypoints.length),
     failure: null,
+    routeProgress: null,
     ...geometryState(legs),
   };
 }
@@ -300,6 +326,7 @@ export function clearRoutePlan(draft: RoutePlanDraft): RoutePlanDraft {
     requestGeneration: draft.requestGeneration + 1,
     status: 'selecting-start',
     failure: null,
+    routeProgress: null,
     segment: null,
     metrics: null,
     profile: null,

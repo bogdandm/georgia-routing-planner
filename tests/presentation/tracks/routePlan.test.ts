@@ -13,6 +13,7 @@ import {
   setRoutePlanName,
   startRoutePlan,
   undoLastRoutePlanPoint,
+  updateRoutePlanProgress,
 } from '@/presentation/tracks/routePlan';
 
 const A = [44.64, 42.66] as const;
@@ -124,6 +125,27 @@ describe('route plan reducer', () => {
     expect(canceled.waypoints).toEqual([A]);
     expect(canceled.status).toBe('selecting-destination');
     expect(canceled.requestGeneration).toBe(3);
+    const progressed = updateRoutePlanProgress(calculating, 2, {
+      phase: 'loading-tiles',
+      attempt: 1,
+      loadedTileCount: 5,
+      totalTileCount: 9,
+    });
+    expect(progressed.routeProgress).toEqual({
+      phase: 'loading-tiles',
+      attempt: 1,
+      loadedTileCount: 5,
+      totalTileCount: 9,
+    });
+    expect(
+      updateRoutePlanProgress(progressed, 1, {
+        phase: 'building-graph',
+        attempt: 1,
+        loadedTileCount: 9,
+        totalTileCount: 9,
+      }),
+    ).toBe(progressed);
+    expect(canceled.routeProgress).toBeNull();
 
     const retried = beginRoutePlanPoint(canceled, B);
     if (retried.request === null) throw new Error('Expected routed request.');

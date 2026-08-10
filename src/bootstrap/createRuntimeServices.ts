@@ -184,9 +184,9 @@ export function createRuntimeServices(): RuntimeServices {
   const trailRouter =
     mapProviderConfiguration.status === 'valid'
       ? new BrowserTrailRouter({
-          tileJsonUrl: mapProviderConfiguration.value.vector.tileJsonUrl,
+          tileJsonUrl: mapProviderConfiguration.value.detailVector.tileJsonUrl,
           transportationSourceLayer:
-            mapProviderConfiguration.value.vector.sourceLayers.transportation,
+            mapProviderConfiguration.value.detailVector.sourceLayers.streets,
           requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
         })
       : null;

@@ -7,6 +7,18 @@ export interface TrailRouteRequest {
   readonly destination: TrackCoordinate;
 }
 
+export type TrailRouteProgressPhase =
+  'loading-tiles' | 'building-graph' | 'searching-route';
+
+export interface TrailRouteProgress {
+  readonly phase: TrailRouteProgressPhase;
+  readonly attempt: 1 | 2;
+  readonly loadedTileCount: number;
+  readonly totalTileCount: number;
+}
+
+export type TrailRouteProgressListener = (progress: TrailRouteProgress) => void;
+
 export interface TrailRouteSuccess {
   readonly status: 'ready';
   readonly geometry: LineString;
@@ -24,7 +36,8 @@ export type TrailRouteFailureReason =
   | 'no-route'
   | 'area-too-large'
   | 'routing-data-unavailable'
-  | 'routing-data-invalid';
+  | 'routing-data-invalid'
+  | 'routing-timeout';
 
 export interface TrailRouteFailure {
   readonly status: 'failed';
@@ -35,6 +48,10 @@ export interface TrailRouteFailure {
 export type TrailRouteResult = TrailRouteSuccess | TrailRouteFailure;
 
 export interface TrailRouter {
-  route(request: TrailRouteRequest, signal: AbortSignal): Promise<TrailRouteResult>;
+  route(
+    request: TrailRouteRequest,
+    signal: AbortSignal,
+    onProgress?: TrailRouteProgressListener,
+  ): Promise<TrailRouteResult>;
   dispose(): void;
 }

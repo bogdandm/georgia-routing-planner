@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
@@ -16,7 +17,7 @@ import {
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
-import { TracksPanel } from '@/presentation/tracks/TracksWorkspace';
+import { TracksPanel, useTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { UserPanel } from '@/presentation/user/UserPanel';
 
 interface WorkspaceSidebarProps {
@@ -64,7 +65,7 @@ export function WorkspaceSidebar({
   onSatellitePaneOpenChange,
   onShowMap,
 }: WorkspaceSidebarProps) {
-  const { mapDiagnostics, mapViewport } = useRuntimeServices();
+  const { mapDiagnostics, mapViewport, trailRouter } = useRuntimeServices();
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
     [mapDiagnostics],
@@ -96,6 +97,7 @@ export function WorkspaceSidebar({
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
   const onSceneSelected = fullWidth ? onShowMap : undefined;
   const { loadState } = useMarkersWorkspace();
+  const { startRoutePlan } = useTracksWorkspace();
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
   const markerCreationMessage =
     mapViewportSnapshot === null
@@ -166,6 +168,26 @@ export function WorkspaceSidebar({
             </Tooltip>
             <MarkerSortControl onMarkerSortChange={onMarkerSortChange} />
           </>
+        ) : activeTab === 'tracks' ? (
+          <Tooltip
+            title={
+              trailRouter === null
+                ? 'Route planning is unavailable because map routing data is not configured'
+                : 'Plan a route on the map'
+            }
+          >
+            <span>
+              <Button
+                disabled={trailRouter === null}
+                size="small"
+                variant="contained"
+                startIcon={<AltRouteOutlinedIcon />}
+                onClick={startRoutePlan}
+              >
+                Plan route
+              </Button>
+            </span>
+          </Tooltip>
         ) : (
           definition.actions
         )}

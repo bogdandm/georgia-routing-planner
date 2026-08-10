@@ -17,8 +17,9 @@ longer describes the reviewed interface.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
   available when developer mode is enabled. The `About this site` action sits below
   Settings and opens public author, repository, API, and data-source information.
-- **Route planning workflow:** browser route planning begins from `Plan route` in
-  Tracks. There is no Plan tab, Plan rail item, or independent planning destination.
+- **Route planning workflow:** browser route planning begins from `Plan route` in the
+  Tracks header. There is no Plan tab, Plan rail item, or independent planning
+  destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
 - **Detail pane:** selected track and imagery details are adjacent to the contextual
   sidebar at widths of 1900 CSS pixels and above, and overlay that sidebar below 1900
@@ -95,9 +96,9 @@ synchronization requests until the page reloads.
 ### Tracks
 
 Tracks combines the implemented browser-local track library with reviewed global catalog
-and folder behavior. The implemented contextual sidebar contains `Plan route`, file
-import, search, sort, and local track results. Catalog, personal folders, tags, filters,
-and batch import remain reviewed but unavailable.
+and folder behavior. The contextual sidebar header owns `Plan route`; its scrollable
+content owns file import, search, sort, and local track results. Catalog, personal
+folders, tags, filters, and batch import remain reviewed but unavailable.
 
 Selecting a track draws its geometry on the map and opens an adjacent detail pane with
 source, tags, metrics, folder/download actions, calculation provenance, and a contextual
@@ -137,17 +138,24 @@ leg. **Next segment: Routes | Line** persists across clicks. **Routes** snaps bo
 to the configured transportation topology and searches the shortest walkable connection
 in a browser worker; **Line** preserves the clicked endpoints as one direct segment.
 Accepted legs remain visible as a single planned line with numbered waypoints. While a
-routed leg is pending, conflicting mode and Save controls are disabled; Undo or Clear
-cancels the request before changing accepted geometry. A failed routed leg keeps the
-existing plan and offers a direct-line fallback without silently changing the selected
-mode.
+routed leg is pending, the detail pane reports tile downloads as a completed share, then
+graph construction and route search as named phases. Conflicting mode and Save controls
+are disabled; Undo or Clear cancels the request before changing accepted geometry.
+Calculation has a one-minute overall limit. A timeout or other failed routed leg keeps
+the existing plan and offers a direct-line fallback without silently changing the
+selected mode.
 
-The worker fetches TileJSON and bounded MVT coverage directly from the configured vector
-provider. It decodes only the configured transportation source layer, accepts walkable
-road and trail classes, and builds a request-local graph. Routing does not query
-MapLibre's visible tile cache and does not use a backend, proxy, routing service, or
-Overpass. Missing or unusable provider topology produces an actionable unavailable
-state; it never falls back to an unrelated external service.
+The worker fetches bounded MVT coverage from the configured detail-vector TileJSON and
+decodes the same `streets` layer used for visible roads and paths at detailed map zooms.
+Every provider road kind participates except construction/proposed and explicit non-road
+or rail features. Explicit `foot=no` or `foot=private` remains rejected when a
+replacement provider supplies it; the default Shortbread schema does not publish access
+values. Exact source vertices and eligible geometric crossings, branches, overlaps, and
+two-grid-unit near touches become route junctions; available layer and bridge/tunnel
+differences remain disconnected. Routing does not query MapLibre's visible tile cache
+and does not use a backend, proxy, routing service, or Overpass. Missing or unusable
+provider topology produces an actionable unavailable state; it never falls back to an
+unrelated external service.
 
 After every accepted geometry edit, the browser samples terrain elevation and computes
 the same track metrics, elevation profile, grades, and climbs/descents used by imported

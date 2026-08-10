@@ -19,6 +19,9 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "types": ["node"]
   },
   "include": [
@@ -29,6 +32,14 @@
     "vitest.integration.config.ts",
     "playwright.config.ts",
     "tools/**/*.ts",
+    "src/application/ports/TrailRouter.ts",
+    "src/domain/tracks/gpx.ts",
+    "src/domain/tracks/trackCalculations.ts",
+    "src/infrastructure/routing/RoutingWorkerProtocol.ts",
+    "src/infrastructure/routing/RoutingWorkerServer.ts",
+    "src/infrastructure/routing/routingTiles.ts",
+    "src/infrastructure/routing/trailGraph.ts",
+    "src/infrastructure/runtime/WorkerRpc.ts",
     "src/bootstrap/configuration/MapProviderConfiguration.ts",
     "src/infrastructure/elevation/TerrariumDemFilter.ts",
     "src/domain/elevation/robustElevationStatistics.ts",

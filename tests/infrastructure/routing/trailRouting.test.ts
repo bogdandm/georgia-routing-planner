@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { TrailRouteProgress } from '@/application/ports/TrailRouter';
+
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import { executeTrailRoute } from '@/infrastructure/routing/RoutingWorkerServer';
@@ -22,6 +24,7 @@ import {
   isWalkableTransportation,
   projectCoordinateToEdge,
   routeTrailGraph,
+  toRoutingLineMetadata,
   type RoutingLineInput,
   type TrailGraph,
   type TrailGraphArc,
@@ -147,13 +150,14 @@ function line(
   tileY: number,
   points: readonly (readonly [number, number])[],
   extent = MVT_GRAPH_EXTENT,
+  metadata: RoutingLineInput['metadata'] = { class: 'path' },
 ): RoutingLineInput {
   return {
     tileX,
     tileY,
     extent,
     points: points.map(([x, y]) => ({ x, y })),
-    metadata: { class: 'path' },
+    metadata,
   };
 }
 
@@ -210,6 +214,7 @@ function loadedArea(
       {
         z: ROUTING_ZOOM,
         x: tileX,
+        graphX: tileX,
         y: tileY,
         key: [ROUTING_ZOOM, tileX, tileY].join('/'),
       },
@@ -249,6 +254,7 @@ describe('routing tile coverage and decoding', () => {
           {
             z: ROUTING_ZOOM,
             x: tileX,
+            graphX: tileX,
             y: tileY,
             key: [ROUTING_ZOOM, tileX, tileY].join('/'),
           },
@@ -286,6 +292,26 @@ describe('routing tile coverage and decoding', () => {
     expect(MAX_ROUTING_TILES).toBe(256);
   });
 
+  it('keeps dateline-adjacent tiles contiguous in graph coordinates', () => {
+    const coverage = coverRoutingBounds({
+      west: 179.99,
+      east: 180.01,
+      south: -0.001,
+      north: 0.001,
+    });
+    expect(coverage.status).toBe('ready');
+    if (coverage.status === 'failed') return;
+
+    expect(new Set(coverage.coverage.tiles.map((tile) => tile.x))).toEqual(
+      new Set([2 ** ROUTING_ZOOM - 1, 0]),
+    );
+    expect(new Set(coverage.coverage.tiles.map((tile) => tile.graphX))).toEqual(
+      new Set([2 ** ROUTING_ZOOM - 1, 2 ** ROUTING_ZOOM]),
+    );
+    expect(
+      coverage.coverage.rectangle.maxTileX - coverage.coverage.rectangle.minTileX,
+    ).toBe(1);
+  });
   it('decodes valid line parts while skipping polygons and malformed geometry', async () => {
     const loader = await initializedLoader();
     const result = await loader.loadArea(
@@ -333,12 +359,14 @@ describe('routing tile coverage and decoding', () => {
       fetcher,
     );
     if (initialized.status === 'failed') throw new Error(initialized.reason);
+    const progress = vi.fn();
 
     const pending = initialized.loader.loadArea(
       [44.64, 42.66],
       [44.64, 42.66],
       8_000,
       new AbortController().signal,
+      progress,
     );
     expect(maximumActiveRequests).toBe(ROUTING_TILE_FETCH_CONCURRENCY);
     gate.resolve(undefined);
@@ -348,6 +376,16 @@ describe('routing tile coverage and decoding', () => {
       ROUTING_TILE_FETCH_CONCURRENCY + 1,
     );
     expect(maximumActiveRequests).toBe(ROUTING_TILE_FETCH_CONCURRENCY);
+    const progressCalls = progress.mock.calls as [number, number][];
+    const totalTileCount = progressCalls[0]?.[1];
+    expect(progressCalls[0]).toEqual([0, totalTileCount]);
+    expect(progressCalls.at(-1)).toEqual([totalTileCount, totalTileCount]);
+    expect(
+      progressCalls.every(([loaded, total], index) => {
+        const previousLoaded = progressCalls[index - 1]?.[0] ?? 0;
+        return loaded >= previousLoaded && loaded <= total;
+      }),
+    ).toBe(true);
   });
 
   it.each([
@@ -362,20 +400,50 @@ describe('routing tile coverage and decoding', () => {
     [{ subclass: 'cycleway' }, true],
     [{ subclass: 'steps' }, true],
     [{ class: 'trunk', foot: 'yes' }, true],
-    [{ class: 'trunk', foot: 'designated' }, true],
-    [{ class: 'trunk', foot: 'permissive' }, true],
-    [{ class: 'trunk' }, false],
+    [{ class: 'trunk' }, true],
+    [{ class: 'primary' }, true],
+    [{ class: 'secondary' }, true],
+    [{ class: 'motorway' }, true],
+    [{ class: 'busway' }, true],
+    [{ class: 'raceway' }, true],
+    [{ class: 'bridge' }, true],
+    [{ class: 'pier' }, true],
+    [{ kind: 'path', rail: false }, true],
+    [{ kind: 'unclassified', rail: false }, true],
+    [{ kind: 'motorway', rail: false }, true],
+    [{ kind: 'construction', rail: false }, false],
+    [{ kind: 'proposed', rail: false }, false],
+    [{ kind: 'runway', rail: false }, false],
+    [{ kind: 'path', rail: true }, false],
     [{ class: 'path', foot: 'no' }, false],
     [{ class: 'path', foot: 'private' }, false],
     [{ class: 'minor_construction' }, false],
     [{ class: 'trunk_construction', foot: 'yes' }, false],
-    [{ class: 'motorway' }, false],
+    [{ class: 'rail', subclass: 'rail' }, false],
+    [{ class: 'transit', subclass: 'platform' }, false],
+    [{ class: 'aerialway', subclass: 'cable_car' }, false],
+    [{ class: 'ferry' }, false],
   ])(
     'applies the exact walkable transportation policy to %o',
     (properties, eligible) => {
       expect(isWalkableTransportation(properties)).toBe(eligible);
     },
   );
+
+  it('normalizes Shortbread road and grade-separation metadata', () => {
+    expect(
+      toRoutingLineMetadata(
+        { kind: 'path', surface: 'unpaved', bridge: true, tunnel: false },
+        undefined,
+      ),
+    ).toEqual({ kind: 'path', surface: 'unpaved', brunnel: 'bridge' });
+    expect(
+      toRoutingLineMetadata(
+        { kind: 'service', bridge: false, tunnel: true },
+        undefined,
+      ),
+    ).toEqual({ kind: 'service', brunnel: 'tunnel' });
+  });
 
   it('normalizes different layer extents onto one global 4096 grid and round-trips within one unit', () => {
     const tileX = 10_000;
@@ -450,6 +518,294 @@ describe('routing tile coverage and decoding', () => {
     expect(
       [...graph.adjacency.values()].reduce((total, arcs) => total + arcs.length, 0),
     ).toBe(4);
+  });
+
+  it('nodes X crossings and endpoint-on-interior T junctions', () => {
+    const tileX = 100;
+    const tileY = 200;
+    const boundary = {
+      minTileX: tileX,
+      maxTileX: tileX,
+      minTileY: tileY,
+      maxTileY: tileY,
+    };
+    const crossing = buildTrailGraph(
+      [
+        line(tileX, tileY, [
+          [1_000, 2_000],
+          [3_000, 2_000],
+        ]),
+        line(tileX, tileY, [
+          [2_000, 1_000],
+          [2_000, 3_000],
+        ]),
+      ],
+      boundary,
+    );
+    expect(crossing.nodes.size).toBe(5);
+    expect(crossing.edges.size).toBe(4);
+    const crossingRoute = routeTrailGraph(
+      crossing,
+      globalMvtVertexToCoordinate(
+        tileX * MVT_GRAPH_EXTENT + 1_000,
+        tileY * MVT_GRAPH_EXTENT + 2_000,
+      ),
+      globalMvtVertexToCoordinate(
+        tileX * MVT_GRAPH_EXTENT + 2_000,
+        tileY * MVT_GRAPH_EXTENT + 1_000,
+      ),
+    );
+    expect(crossingRoute.status).toBe('ready');
+
+    const tee = buildTrailGraph(
+      [
+        line(tileX, tileY, [
+          [1_000, 2_000],
+          [3_000, 2_000],
+        ]),
+        line(tileX, tileY, [
+          [2_000, 2_000],
+          [2_000, 3_000],
+        ]),
+      ],
+      boundary,
+    );
+    expect(tee.nodes.size).toBe(4);
+    expect(tee.edges.size).toBe(3);
+    expect(
+      routeTrailGraph(
+        tee,
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 1_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 2_000,
+          tileY * MVT_GRAPH_EXTENT + 3_000,
+        ),
+      ).status,
+    ).toBe('ready');
+  });
+
+  it('merges endpoint gaps up to two graph units and leaves larger gaps disconnected', () => {
+    const tileX = 100;
+    const tileY = 200;
+    const boundary = {
+      minTileX: tileX,
+      maxTileX: tileX,
+      minTileY: tileY,
+      maxTileY: tileY,
+    };
+    const graphForGap = (gap: number) =>
+      buildTrailGraph(
+        [
+          line(tileX, tileY, [
+            [1_000, 2_000],
+            [2_000, 2_000],
+          ]),
+          line(tileX, tileY, [
+            [2_000 + gap, 2_000],
+            [3_000, 2_000],
+          ]),
+        ],
+        boundary,
+      );
+    const merged = graphForGap(2);
+    expect(merged.nodes.size).toBe(3);
+    expect(merged.edges.size).toBe(2);
+    expect(
+      routeTrailGraph(
+        merged,
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 1_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 3_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+      ).status,
+    ).toBe('ready');
+
+    const disconnected = graphForGap(3);
+    expect(disconnected.nodes.size).toBe(4);
+    expect(disconnected.edges.size).toBe(2);
+    expect(
+      routeTrailGraph(
+        disconnected,
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 1_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 3_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+      ).status,
+    ).toBe('failed');
+  });
+
+  it('splits partially overlapping collinear primitives at both overlap ends', () => {
+    const tileX = 100;
+    const tileY = 200;
+    const graph = buildTrailGraph(
+      [
+        line(tileX, tileY, [
+          [1_000, 2_000],
+          [3_000, 2_000],
+        ]),
+        line(tileX, tileY, [
+          [2_000, 2_000],
+          [4_000, 2_000],
+        ]),
+      ],
+      {
+        minTileX: tileX,
+        maxTileX: tileX,
+        minTileY: tileY,
+        maxTileY: tileY,
+      },
+    );
+    expect(graph.nodes.size).toBe(4);
+    expect(graph.edges.size).toBe(3);
+    expect([...graph.edges.values()].every((edge) => edge.distanceMeters > 0)).toBe(
+      true,
+    );
+  });
+
+  it('keeps inferred interior crossings separated by explicit layer or brunnel', () => {
+    const tileX = 100;
+    const tileY = 200;
+    const boundary = {
+      minTileX: tileX,
+      maxTileX: tileX,
+      minTileY: tileY,
+      maxTileY: tileY,
+    };
+    const crossingLines = (
+      horizontalMetadata: RoutingLineInput['metadata'],
+      verticalMetadata: RoutingLineInput['metadata'],
+    ) => [
+      line(
+        tileX,
+        tileY,
+        [
+          [1_000, 2_000],
+          [3_000, 2_000],
+        ],
+        MVT_GRAPH_EXTENT,
+        horizontalMetadata,
+      ),
+      line(
+        tileX,
+        tileY,
+        [
+          [2_000, 1_000],
+          [2_000, 3_000],
+        ],
+        MVT_GRAPH_EXTENT,
+        verticalMetadata,
+      ),
+    ];
+    const defaultLayer = buildTrailGraph(
+      crossingLines({ class: 'path' }, { class: 'path', layer: '0' }),
+      boundary,
+    );
+    expect(defaultLayer.nodes.size).toBe(5);
+    expect(defaultLayer.edges.size).toBe(4);
+
+    for (const separatedLines of [
+      crossingLines({ class: 'path', layer: 1 }, { class: 'path' }),
+      crossingLines(
+        { class: 'path', brunnel: 'bridge' },
+        { class: 'path', brunnel: 'tunnel' },
+      ),
+    ]) {
+      const separated = buildTrailGraph(separatedLines, boundary);
+      expect(separated.nodes.size).toBe(4);
+      expect(separated.edges.size).toBe(2);
+    }
+
+    const sharedEndpoint = buildTrailGraph(
+      [
+        line(
+          tileX,
+          tileY,
+          [
+            [1_000, 2_000],
+            [2_000, 2_000],
+          ],
+          MVT_GRAPH_EXTENT,
+          { class: 'path', layer: 1, brunnel: 'bridge' },
+        ),
+        line(
+          tileX,
+          tileY,
+          [
+            [2_000, 2_000],
+            [3_000, 2_000],
+          ],
+          MVT_GRAPH_EXTENT,
+          { class: 'path' },
+        ),
+      ],
+      boundary,
+    );
+    expect(sharedEndpoint.nodes.size).toBe(3);
+    expect(sharedEndpoint.edges.size).toBe(2);
+    expect(
+      routeTrailGraph(
+        sharedEndpoint,
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 1_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+        globalMvtVertexToCoordinate(
+          tileX * MVT_GRAPH_EXTENT + 3_000,
+          tileY * MVT_GRAPH_EXTENT + 2_000,
+        ),
+      ).status,
+    ).toBe('ready');
+  });
+
+  it('produces identical topology for input permutations and reversed duplicates', () => {
+    const tileX = 100;
+    const tileY = 200;
+    const horizontal = line(tileX, tileY, [
+      [1_000, 2_000],
+      [3_000, 2_000],
+    ]);
+    const horizontalReversed = line(tileX, tileY, [
+      [3_000, 2_000],
+      [1_000, 2_000],
+    ]);
+    const vertical = line(tileX, tileY, [
+      [2_000, 1_000],
+      [2_000, 3_000],
+    ]);
+    const boundary = {
+      minTileX: tileX,
+      maxTileX: tileX,
+      minTileY: tileY,
+      maxTileY: tileY,
+    };
+    const signature = (graph: TrailGraph) => ({
+      nodes: [...graph.nodes.keys()],
+      edges: [...graph.edges.keys()],
+      adjacency: [...graph.adjacency].map(([key, arcs]) => [
+        key,
+        arcs.map((arc) => `${arc.from}->${arc.to}`),
+      ]),
+    });
+    const first = buildTrailGraph([horizontal, vertical, horizontalReversed], boundary);
+    const second = buildTrailGraph(
+      [horizontalReversed, horizontal, vertical].reverse(),
+      boundary,
+    );
+    expect(signature(second)).toEqual(signature(first));
+    expect([...first.edges.values()].every((edge) => edge.distanceMeters > 0)).toBe(
+      true,
+    );
   });
 
   it('bounds the decoded access-ordered LRU at 128 entries', async () => {
@@ -648,10 +1004,14 @@ describe('trail graph snapping and routing', () => {
         status: 'ready',
         area: loadedArea(secondLines, tileX, tileY),
       });
+    const progress: TrailRouteProgress[] = [];
     const result = await executeTrailRoute(
       { loadArea },
       { start, destination },
       new AbortController().signal,
+      (value) => {
+        progress.push(value);
+      },
     );
     expect(loadArea).toHaveBeenCalledTimes(2);
     expect(result.status).toBe('ready');
@@ -660,6 +1020,14 @@ describe('trail graph snapping and routing', () => {
       expect(result.geometry.coordinates[0]).toEqual(result.snappedStart);
       expect(result.geometry.coordinates.at(-1)).toEqual(result.snappedDestination);
     }
+    expect(progress.map(({ attempt, phase }) => [attempt, phase])).toEqual([
+      [1, 'loading-tiles'],
+      [1, 'building-graph'],
+      [1, 'searching-route'],
+      [2, 'loading-tiles'],
+      [2, 'building-graph'],
+      [2, 'searching-route'],
+    ]);
 
     const snapFailureLoader = {
       loadArea: vi.fn().mockResolvedValue({
@@ -693,5 +1061,49 @@ describe('trail graph snapping and routing', () => {
       ),
     ).resolves.toEqual({ status: 'failed', reason: 'routing-data-unavailable' });
     expect(dataFailureLoader.loadArea).toHaveBeenCalledOnce();
+  });
+
+  it('routes through geometrically inferred X and T junctions in the worker path', async () => {
+    const tileX = 10_000;
+    const tileY = 6_000;
+    const lines = [
+      line(tileX, tileY, [
+        [500, 2_000],
+        [3_500, 2_000],
+      ]),
+      line(tileX, tileY, [
+        [2_000, 500],
+        [2_000, 3_500],
+      ]),
+      line(tileX, tileY, [
+        [3_000, 2_000],
+        [3_000, 3_000],
+      ]),
+    ];
+    const start = globalMvtVertexToCoordinate(
+      tileX * MVT_GRAPH_EXTENT + 2_000,
+      tileY * MVT_GRAPH_EXTENT + 500,
+    );
+    const destination = globalMvtVertexToCoordinate(
+      tileX * MVT_GRAPH_EXTENT + 3_000,
+      tileY * MVT_GRAPH_EXTENT + 3_000,
+    );
+    const result = await executeTrailRoute(
+      {
+        loadArea: vi.fn().mockResolvedValue({
+          status: 'ready',
+          area: loadedArea(lines, tileX, tileY),
+        }),
+      },
+      { start, destination },
+      new AbortController().signal,
+    );
+    expect(result.status).toBe('ready');
+    if (result.status === 'ready') {
+      expect(result.graphNodeCount).toBe(7);
+      expect(result.graphEdgeCount).toBe(6);
+      expect(result.geometry.coordinates[0]).toEqual(result.snappedStart);
+      expect(result.geometry.coordinates.at(-1)).toEqual(result.snappedDestination);
+    }
   });
 });

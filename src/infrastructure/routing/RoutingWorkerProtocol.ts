@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type {
+  TrailRouteProgress,
   TrailRouteRequest,
   TrailRouteResult,
 } from '@/application/ports/TrailRouter';
@@ -9,6 +10,20 @@ export const routingWorkerMethods = {
   initialize: 'initialize',
   route: 'route',
 } as const;
+
+export const routingWorkerEvents = {
+  progress: 'route-progress',
+} as const;
+
+export interface RoutingWorkerRouteRequest {
+  readonly request: TrailRouteRequest;
+  readonly progressToken: number;
+}
+
+export interface RoutingWorkerProgressEvent {
+  readonly progressToken: number;
+  readonly progress: TrailRouteProgress;
+}
 
 export interface RoutingWorkerInitializeRequest {
   readonly tileJsonUrl: string;
@@ -30,8 +45,13 @@ const coordinateSchema = z.tuple([
 
 const routeRequestSchema = z
   .object({
-    start: coordinateSchema,
-    destination: coordinateSchema,
+    request: z
+      .object({
+        start: coordinateSchema,
+        destination: coordinateSchema,
+      })
+      .strict(),
+    progressToken: z.number().int().positive(),
   })
   .strict();
 
@@ -53,6 +73,20 @@ const initializationResultSchema = z.discriminatedUnion('initialized', [
     .strict(),
 ]);
 
+const progressEventSchema = z
+  .object({
+    progressToken: z.number().int().positive(),
+    progress: z
+      .object({
+        phase: z.enum(['loading-tiles', 'building-graph', 'searching-route']),
+        attempt: z.union([z.literal(1), z.literal(2)]),
+        loadedTileCount: z.number().int().nonnegative(),
+        totalTileCount: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
 const routeFailureSchema = z
   .object({
     status: z.literal('failed'),
@@ -62,6 +96,7 @@ const routeFailureSchema = z
       'area-too-large',
       'routing-data-unavailable',
       'routing-data-invalid',
+      'routing-timeout',
     ]),
     endpoint: z.enum(['start', 'destination', 'both']).optional(),
   })
@@ -121,12 +156,23 @@ export function parseRoutingWorkerInitializeResult(
   return initializationResultSchema.parse(value);
 }
 
-export function parseTrailRouteRequest(value: unknown): TrailRouteRequest {
+export function parseRoutingWorkerRouteRequest(
+  value: unknown,
+): RoutingWorkerRouteRequest {
   const parsed = routeRequestSchema.parse(value);
   return {
-    start: parsed.start,
-    destination: parsed.destination,
+    request: {
+      start: parsed.request.start,
+      destination: parsed.request.destination,
+    },
+    progressToken: parsed.progressToken,
   };
+}
+
+export function parseRoutingWorkerProgressEvent(
+  value: unknown,
+): RoutingWorkerProgressEvent {
+  return progressEventSchema.parse(value);
 }
 
 export function parseTrailRouteResult(value: unknown): TrailRouteResult {

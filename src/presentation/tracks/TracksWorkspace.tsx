@@ -1,4 +1,3 @@
-import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
@@ -96,7 +95,6 @@ import {
 import { formatDateTime } from '@/presentation/formatDateTime';
 import {
   ElevationPreparationChart,
-  CompactElevationProfile,
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
@@ -121,6 +119,7 @@ import {
   setRoutePlanName,
   startRoutePlan as createRoutePlanDraft,
   undoLastRoutePlanPoint as undoRoutePlanPoint,
+  updateRoutePlanProgress,
   type RoutePlanDraft,
   type RoutePlanSegmentMode,
 } from '@/presentation/tracks/routePlan';
@@ -315,6 +314,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const recalculationAbort = useRef<AbortController | null>(null);
   const routePlanRequestAbort = useRef<AbortController | null>(null);
   const routePlanElevationAbort = useRef<AbortController | null>(null);
+  const routePlanElevationOwner = useRef<string | null>(null);
   const previewSaveInProgress = useRef(false);
   const routePlanSaveInProgress = useRef(false);
   const importGeneration = useRef(0);
@@ -799,9 +799,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (draft.status !== 'elevation-enriching' || draft.segment === null) return;
       const planId = draft.id;
       const requestGeneration = draft.requestGeneration;
+      const owner = `${planId}:${String(requestGeneration)}`;
+      if (
+        routePlanElevationOwner.current === owner &&
+        routePlanElevationAbort.current !== null
+      ) {
+        return;
+      }
       const controller = new AbortController();
       routePlanElevationAbort.current?.abort();
       routePlanElevationAbort.current = controller;
+      routePlanElevationOwner.current = owner;
       void prepareImportedTrack([draft.segment], elevationProvider, controller.signal, {
         preserveGeometry: true,
         sampleIntervalMeters: 30,
@@ -841,6 +849,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         .finally(() => {
           if (routePlanElevationAbort.current === controller) {
             routePlanElevationAbort.current = null;
+            routePlanElevationOwner.current = null;
             setElevationProgress(null);
           }
         });
@@ -885,6 +894,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               .route(
                 { start: request.start, destination: request.destination },
                 controller.signal,
+                (progress) => {
+                  setActive((current) => {
+                    if (current?.kind !== 'route-plan' || current.id !== active.id) {
+                      return current;
+                    }
+                    return updateRoutePlanProgress(
+                      current,
+                      request.generation,
+                      progress,
+                    );
+                  });
+                },
               )
               .catch(() => unavailable)
       )
@@ -944,13 +965,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const discardRoutePlan = useCallback(() => {
     if (routePlanSaveInProgress.current) return;
+    if (
+      active?.kind === 'route-plan' &&
+      active.waypoints.length > 0 &&
+      !window.confirm('Discard this unsaved track?')
+    ) {
+      return;
+    }
     routePlanRequestAbort.current?.abort();
     routePlanElevationAbort.current?.abort();
     setElevationProgress(null);
     importGeneration.current += 1;
     setActive((current) => (current?.kind === 'route-plan' ? null : current));
     setError(null);
-  }, []);
+  }, [active]);
 
   const saveRoutePlan = useCallback(async () => {
     if (
@@ -965,6 +993,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     routePlanSaveInProgress.current = true;
     routePlanRequestAbort.current?.abort();
     routePlanElevationAbort.current?.abort();
+    routePlanElevationAbort.current = null;
+    routePlanElevationOwner.current = null;
     setElevationProgress(null);
     const planId = active.id;
     const previousStatus = active.status;
@@ -1776,9 +1806,7 @@ export function TracksPanel() {
     summaries,
     toggleFavorite,
     deleteSaved,
-    startRoutePlan,
   } = useTracksWorkspace();
-  const { trailRouter } = useRuntimeServices();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // A sorted row can move under a stationary pointer without a leave event.
@@ -1788,21 +1816,6 @@ export function TracksPanel() {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
-        <Stack spacing={0.75}>
-          <Button
-            variant="contained"
-            startIcon={<AltRouteOutlinedIcon />}
-            disabled={trailRouter === null}
-            onClick={startRoutePlan}
-          >
-            Plan route
-          </Button>
-          {trailRouter === null ? (
-            <Typography variant="caption" color="text.secondary">
-              Route planning is unavailable because map routing data is not configured.
-            </Typography>
-          ) : null}
-        </Stack>
         <TrackImportZone />
         <TextField
           fullWidth
@@ -2172,16 +2185,13 @@ function TrackElevationAnalysis() {
     );
   };
   if (active === null) return null;
-  if (active.kind === 'route-plan') {
-    if (active.status === 'elevation-enriching') {
-      return <ElevationPreparationChart progress={elevationProgress} />;
-    }
-    return profile === null ? null : <CompactElevationProfile profile={profile} />;
-  }
+  const preparing =
+    (active.kind === 'route-plan' && active.status === 'elevation-enriching') ||
+    (active.kind === 'preview' && active.preparationStatus === 'preparing') ||
+    recalculationState === 'recalculating';
   return (
     <Stack spacing={1.5}>
-      {(active.kind === 'preview' && active.preparationStatus === 'preparing') ||
-      recalculationState === 'recalculating' ? (
+      {preparing ? (
         <ElevationPreparationChart progress={elevationProgress} />
       ) : profile === null ? null : (
         <ElevationProfileChart
@@ -2209,18 +2219,20 @@ function TrackElevationAnalysis() {
           }}
         />
       )}
-      <ClimbsDescentsSection
-        recalculating={
-          recalculationState === 'recalculating' ||
-          (active.kind === 'preview' && active.preparationStatus === 'preparing')
-        }
-        onRecalculate={() => void recalculateElevation()}
-        segments={profile?.segments ?? []}
-        activeSegmentIndex={activeSegmentIndex}
-        selectedSegmentIndex={selectedSegmentIndex}
-        onSegmentHoverChange={onSegmentHoverChange}
-        onSegmentSelectionChange={onSegmentSelectionChange}
-      />
+      {active.kind === 'route-plan' ? null : (
+        <ClimbsDescentsSection
+          recalculating={
+            recalculationState === 'recalculating' ||
+            (active.kind === 'preview' && active.preparationStatus === 'preparing')
+          }
+          onRecalculate={() => void recalculateElevation()}
+          segments={profile?.segments ?? []}
+          activeSegmentIndex={activeSegmentIndex}
+          selectedSegmentIndex={selectedSegmentIndex}
+          onSegmentHoverChange={onSegmentHoverChange}
+          onSegmentSelectionChange={onSegmentSelectionChange}
+        />
+      )}
     </Stack>
   );
 }

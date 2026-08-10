@@ -6,6 +6,8 @@ import {
 
 export const MVT_GRAPH_EXTENT = 4_096;
 export const MAX_SNAP_DISTANCE_METERS = 200;
+export const GRAPH_NODE_TOLERANCE_UNITS = 2;
+export const GRAPH_NODE_BUCKET_UNITS = 512;
 
 const ROUTING_ZOOM = 14;
 const fractionEpsilon = 1e-12;
@@ -13,6 +15,7 @@ const distanceTieEpsilonMeters = 1e-9;
 
 export interface RoutingLineMetadata {
   readonly class?: string;
+  readonly kind?: string;
   readonly subclass?: string;
   readonly surface?: string;
   readonly foot?: string;
@@ -97,12 +100,25 @@ export type TrailGraphRouteResult =
 
 type TransportationProperties = Readonly<Record<string, string | number | boolean>>;
 
+type GlobalMvtPoint = readonly [x: number, y: number];
+
+interface PrimitiveSegment {
+  readonly key: string;
+  readonly nodeA: string;
+  readonly nodeB: string;
+  readonly globalA: GlobalMvtPoint;
+  readonly globalB: GlobalMvtPoint;
+  readonly metadata: RoutingLineMetadata;
+  readonly metadataKey: string;
+  readonly splitTokens: Map<string, number>;
+}
+
 interface CandidateEdge {
   readonly key: string;
   readonly nodeA: string;
   readonly nodeB: string;
-  readonly globalA: readonly [x: number, y: number];
-  readonly globalB: readonly [x: number, y: number];
+  readonly globalA: GlobalMvtPoint;
+  readonly globalB: GlobalMvtPoint;
   readonly metadata: RoutingLineMetadata;
   readonly metadataKey: string;
 }
@@ -123,12 +139,21 @@ interface QueueEntry {
   readonly score: number;
 }
 
-const allowedClasses: Readonly<Record<string, true>> = {
-  path: true,
-  track: true,
-  minor: true,
-  service: true,
-  tertiary: true,
+const excludedNonRoadClasses: Readonly<Record<string, true>> = {
+  aerialway: true,
+  ferry: true,
+  rail: true,
+  transit: true,
+};
+
+const excludedNonRoadKinds: Readonly<Record<string, true>> = {
+  apron: true,
+  construction: true,
+  platform: true,
+  proposed: true,
+  rail: true,
+  runway: true,
+  taxiway: true,
 };
 
 const allowedSubclasses: Readonly<Record<string, true>> = {
@@ -140,12 +165,6 @@ const allowedSubclasses: Readonly<Record<string, true>> = {
   steps: true,
 };
 
-const allowedTrunkFootValues: Readonly<Record<string, true>> = {
-  yes: true,
-  designated: true,
-  permissive: true,
-};
-
 function normalizeLongitude(longitude: number): number {
   const normalized = (((longitude + 180) % 360) + 360) % 360;
   return normalized - 180;
@@ -155,6 +174,7 @@ function metadataKey(metadata: RoutingLineMetadata): string {
   return JSON.stringify([
     metadata.class ?? '',
     metadata.subclass ?? '',
+    metadata.kind ?? '',
     metadata.surface ?? '',
     metadata.foot ?? '',
     metadata.brunnel ?? '',
@@ -167,23 +187,450 @@ function unorderedEdgeKey(nodeA: string, nodeB: string): string {
   return nodeA < nodeB ? `${nodeA}|${nodeB}` : `${nodeB}|${nodeA}`;
 }
 
+function globalPointKey(point: GlobalMvtPoint): string {
+  return `${String(point[0])},${String(point[1])}`;
+}
+
+function compareGlobalPoints(left: GlobalMvtPoint, right: GlobalMvtPoint): number {
+  return globalPointKey(left).localeCompare(globalPointKey(right));
+}
+
+function roundedGlobalPoint(x: number, y: number): GlobalMvtPoint {
+  return [Math.round(x), Math.round(y)];
+}
+
+function segmentFraction(
+  point: GlobalMvtPoint,
+  start: GlobalMvtPoint,
+  end: GlobalMvtPoint,
+): number {
+  const deltaX = end[0] - start[0];
+  const deltaY = end[1] - start[1];
+  const squaredLength = deltaX * deltaX + deltaY * deltaY;
+  if (squaredLength === 0) return 0;
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      ((point[0] - start[0]) * deltaX + (point[1] - start[1]) * deltaY) / squaredLength,
+    ),
+  );
+}
+
+function projectGlobalPointToSegment(
+  point: GlobalMvtPoint,
+  start: GlobalMvtPoint,
+  end: GlobalMvtPoint,
+): {
+  readonly fraction: number;
+  readonly point: GlobalMvtPoint;
+  readonly squaredDistance: number;
+} {
+  const fraction = segmentFraction(point, start, end);
+  const projectedX = start[0] + (end[0] - start[0]) * fraction;
+  const projectedY = start[1] + (end[1] - start[1]) * fraction;
+  const deltaX = point[0] - projectedX;
+  const deltaY = point[1] - projectedY;
+  return {
+    fraction,
+    point: roundedGlobalPoint(projectedX, projectedY),
+    squaredDistance: deltaX * deltaX + deltaY * deltaY,
+  };
+}
+
+function normalizedLayer(metadata: RoutingLineMetadata): string {
+  if (metadata.layer === undefined) return '0';
+  if (typeof metadata.layer === 'number') {
+    return metadata.layer === 0 ? '0' : String(metadata.layer);
+  }
+  const layer = metadata.layer.trim().toLowerCase();
+  if (layer.length === 0 || Number(layer) === 0) return '0';
+  return layer;
+}
+
+function inferredJunctionCompatible(
+  left: RoutingLineMetadata,
+  right: RoutingLineMetadata,
+): boolean {
+  return (
+    normalizedLayer(left) === normalizedLayer(right) &&
+    (left.brunnel?.trim().toLowerCase() ?? '') ===
+      (right.brunnel?.trim().toLowerCase() ?? '')
+  );
+}
+
+interface JunctionToken {
+  readonly coordinate: GlobalMvtPoint;
+  readonly originalEndpoint: boolean;
+}
+
+class JunctionClusters {
+  readonly #parents: number[] = [];
+  readonly #tokens: JunctionToken[] = [];
+
+  public create(coordinate: GlobalMvtPoint, originalEndpoint: boolean): number {
+    const token = this.#tokens.length;
+    this.#parents.push(token);
+    this.#tokens.push({ coordinate, originalEndpoint });
+    return token;
+  }
+
+  public find(token: number): number {
+    const parent = this.#parents[token];
+    if (parent === undefined) throw new Error('Unknown routing junction token.');
+    if (parent === token) return token;
+    const root = this.find(parent);
+    this.#parents[token] = root;
+    return root;
+  }
+
+  public union(left: number, right: number): void {
+    const leftRoot = this.find(left);
+    const rightRoot = this.find(right);
+    if (leftRoot === rightRoot) return;
+    if (leftRoot < rightRoot) this.#parents[rightRoot] = leftRoot;
+    else this.#parents[leftRoot] = rightRoot;
+  }
+
+  public canonicalCoordinates(): ReadonlyMap<number, GlobalMvtPoint> {
+    const endpointCandidates = new Map<number, GlobalMvtPoint>();
+    const otherCandidates = new Map<number, GlobalMvtPoint>();
+    for (const [token, value] of this.#tokens.entries()) {
+      const root = this.find(token);
+      const candidates = value.originalEndpoint ? endpointCandidates : otherCandidates;
+      const current = candidates.get(root);
+      if (current === undefined || compareGlobalPoints(value.coordinate, current) < 0) {
+        candidates.set(root, value.coordinate);
+      }
+    }
+    const result = new Map<number, GlobalMvtPoint>();
+    for (const root of new Set(this.#parents.map((_, token) => this.find(token)))) {
+      const coordinate = endpointCandidates.get(root) ?? otherCandidates.get(root);
+      if (coordinate !== undefined) result.set(root, coordinate);
+    }
+    return result;
+  }
+}
+
+function addPrimitiveSplit(
+  primitive: PrimitiveSegment,
+  coordinate: GlobalMvtPoint,
+  originalEndpoint: boolean,
+  clusters: JunctionClusters,
+): number {
+  const key = globalPointKey(coordinate);
+  const existing = primitive.splitTokens.get(key);
+  if (existing !== undefined) return existing;
+  const token = clusters.create(coordinate, originalEndpoint);
+  primitive.splitTokens.set(key, token);
+  return token;
+}
+
+function normalizedPrimitive(
+  start: GlobalMvtPoint,
+  end: GlobalMvtPoint,
+  metadata: RoutingLineMetadata,
+): PrimitiveSegment {
+  const startKey = globalPointKey(start);
+  const endKey = globalPointKey(end);
+  const startsFirst = startKey < endKey;
+  const nodeA = startsFirst ? startKey : endKey;
+  const nodeB = startsFirst ? endKey : startKey;
+  return {
+    key: unorderedEdgeKey(nodeA, nodeB),
+    nodeA,
+    nodeB,
+    globalA: startsFirst ? start : end,
+    globalB: startsFirst ? end : start,
+    metadata,
+    metadataKey: metadataKey(metadata),
+    splitTokens: new Map(),
+  };
+}
+
+function collectPrimitives(lines: readonly RoutingLineInput[]): PrimitiveSegment[] {
+  const primitives: PrimitiveSegment[] = [];
+  for (const line of lines) {
+    if (!Number.isFinite(line.extent) || line.extent <= 0 || line.points.length < 2) {
+      continue;
+    }
+    for (let index = 1; index < line.points.length; index += 1) {
+      const previous = line.points[index - 1];
+      const current = line.points[index];
+      if (
+        previous === undefined ||
+        current === undefined ||
+        !Number.isFinite(previous.x) ||
+        !Number.isFinite(previous.y) ||
+        !Number.isFinite(current.x) ||
+        !Number.isFinite(current.y)
+      ) {
+        continue;
+      }
+      const start = roundedGlobalPoint(
+        line.tileX * MVT_GRAPH_EXTENT + (previous.x * MVT_GRAPH_EXTENT) / line.extent,
+        line.tileY * MVT_GRAPH_EXTENT + (previous.y * MVT_GRAPH_EXTENT) / line.extent,
+      );
+      const end = roundedGlobalPoint(
+        line.tileX * MVT_GRAPH_EXTENT + (current.x * MVT_GRAPH_EXTENT) / line.extent,
+        line.tileY * MVT_GRAPH_EXTENT + (current.y * MVT_GRAPH_EXTENT) / line.extent,
+      );
+      if (globalPointKey(start) !== globalPointKey(end)) {
+        primitives.push(normalizedPrimitive(start, end, line.metadata));
+      }
+    }
+  }
+  primitives.sort(
+    (left, right) =>
+      left.key.localeCompare(right.key) ||
+      left.metadataKey.localeCompare(right.metadataKey),
+  );
+  return primitives;
+}
+
+function candidatePrimitivePairs(
+  primitives: readonly PrimitiveSegment[],
+): readonly (readonly [left: number, right: number])[] {
+  const buckets = new Map<string, number[]>();
+  const pairKeys = new Set<string>();
+  const pairs: (readonly [number, number])[] = [];
+  for (const [index, primitive] of primitives.entries()) {
+    const minimumX =
+      Math.min(primitive.globalA[0], primitive.globalB[0]) - GRAPH_NODE_TOLERANCE_UNITS;
+    const maximumX =
+      Math.max(primitive.globalA[0], primitive.globalB[0]) + GRAPH_NODE_TOLERANCE_UNITS;
+    const minimumY =
+      Math.min(primitive.globalA[1], primitive.globalB[1]) - GRAPH_NODE_TOLERANCE_UNITS;
+    const maximumY =
+      Math.max(primitive.globalA[1], primitive.globalB[1]) + GRAPH_NODE_TOLERANCE_UNITS;
+    const minimumBucketX = Math.floor(minimumX / GRAPH_NODE_BUCKET_UNITS);
+    const maximumBucketX = Math.floor(maximumX / GRAPH_NODE_BUCKET_UNITS);
+    const minimumBucketY = Math.floor(minimumY / GRAPH_NODE_BUCKET_UNITS);
+    const maximumBucketY = Math.floor(maximumY / GRAPH_NODE_BUCKET_UNITS);
+    for (let bucketX = minimumBucketX; bucketX <= maximumBucketX; bucketX += 1) {
+      for (let bucketY = minimumBucketY; bucketY <= maximumBucketY; bucketY += 1) {
+        const bucketKey = `${String(bucketX)},${String(bucketY)}`;
+        const occupants = buckets.get(bucketKey);
+        if (occupants !== undefined) {
+          for (const otherIndex of occupants) {
+            const pairKey = `${String(otherIndex)}:${String(index)}`;
+            if (pairKeys.has(pairKey)) continue;
+            pairKeys.add(pairKey);
+            pairs.push([otherIndex, index]);
+          }
+          occupants.push(index);
+        } else {
+          buckets.set(bucketKey, [index]);
+        }
+      }
+    }
+  }
+  pairs.sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  return pairs;
+}
+
+function connectEndpointToPrimitive(
+  endpointCoordinate: GlobalMvtPoint,
+  endpointToken: number,
+  source: PrimitiveSegment,
+  target: PrimitiveSegment,
+  clusters: JunctionClusters,
+): void {
+  if (target.nodeA === globalPointKey(endpointCoordinate)) return;
+  if (target.nodeB === globalPointKey(endpointCoordinate)) return;
+  const projection = projectGlobalPointToSegment(
+    endpointCoordinate,
+    target.globalA,
+    target.globalB,
+  );
+  if (
+    projection.squaredDistance >
+    GRAPH_NODE_TOLERANCE_UNITS * GRAPH_NODE_TOLERANCE_UNITS + fractionEpsilon
+  ) {
+    return;
+  }
+  const projectionIsInterior =
+    projection.fraction > fractionEpsilon && projection.fraction < 1 - fractionEpsilon;
+  if (
+    projectionIsInterior &&
+    !inferredJunctionCompatible(source.metadata, target.metadata)
+  ) {
+    return;
+  }
+  const projectedToken = addPrimitiveSplit(target, projection.point, false, clusters);
+  clusters.union(endpointToken, projectedToken);
+}
+
+function connectUniqueIntersection(
+  left: PrimitiveSegment,
+  right: PrimitiveSegment,
+  clusters: JunctionClusters,
+): void {
+  const leftDeltaX = left.globalB[0] - left.globalA[0];
+  const leftDeltaY = left.globalB[1] - left.globalA[1];
+  const rightDeltaX = right.globalB[0] - right.globalA[0];
+  const rightDeltaY = right.globalB[1] - right.globalA[1];
+  const denominator = leftDeltaX * rightDeltaY - leftDeltaY * rightDeltaX;
+  if (Math.abs(denominator) <= fractionEpsilon) return;
+  const originDeltaX = right.globalA[0] - left.globalA[0];
+  const originDeltaY = right.globalA[1] - left.globalA[1];
+  const leftFraction =
+    (originDeltaX * rightDeltaY - originDeltaY * rightDeltaX) / denominator;
+  const rightFraction =
+    (originDeltaX * leftDeltaY - originDeltaY * leftDeltaX) / denominator;
+  if (
+    leftFraction < -fractionEpsilon ||
+    leftFraction > 1 + fractionEpsilon ||
+    rightFraction < -fractionEpsilon ||
+    rightFraction > 1 + fractionEpsilon
+  ) {
+    return;
+  }
+  const leftInterior =
+    leftFraction > fractionEpsilon && leftFraction < 1 - fractionEpsilon;
+  const rightInterior =
+    rightFraction > fractionEpsilon && rightFraction < 1 - fractionEpsilon;
+  if (
+    (leftInterior || rightInterior) &&
+    !inferredJunctionCompatible(left.metadata, right.metadata)
+  ) {
+    return;
+  }
+  const coordinate = roundedGlobalPoint(
+    left.globalA[0] + leftDeltaX * leftFraction,
+    left.globalA[1] + leftDeltaY * leftFraction,
+  );
+  const leftToken = addPrimitiveSplit(left, coordinate, false, clusters);
+  const rightToken = addPrimitiveSplit(right, coordinate, false, clusters);
+  clusters.union(leftToken, rightToken);
+}
+
+function nodePrimitives(primitives: readonly PrimitiveSegment[]): JunctionClusters {
+  const clusters = new JunctionClusters();
+  const endpointTokens = new Map<string, number>();
+  for (const primitive of primitives) {
+    for (const [key, coordinate] of [
+      [primitive.nodeA, primitive.globalA],
+      [primitive.nodeB, primitive.globalB],
+    ] as const) {
+      let token = endpointTokens.get(key);
+      if (token === undefined) {
+        token = clusters.create(coordinate, true);
+        endpointTokens.set(key, token);
+      }
+      primitive.splitTokens.set(key, token);
+    }
+  }
+
+  for (const [leftIndex, rightIndex] of candidatePrimitivePairs(primitives)) {
+    const left = primitives[leftIndex];
+    const right = primitives[rightIndex];
+    if (left === undefined || right === undefined) continue;
+    connectUniqueIntersection(left, right, clusters);
+    const leftStartToken = left.splitTokens.get(left.nodeA);
+    const leftEndToken = left.splitTokens.get(left.nodeB);
+    const rightStartToken = right.splitTokens.get(right.nodeA);
+    const rightEndToken = right.splitTokens.get(right.nodeB);
+    if (
+      leftStartToken === undefined ||
+      leftEndToken === undefined ||
+      rightStartToken === undefined ||
+      rightEndToken === undefined
+    ) {
+      continue;
+    }
+    connectEndpointToPrimitive(left.globalA, leftStartToken, left, right, clusters);
+    connectEndpointToPrimitive(left.globalB, leftEndToken, left, right, clusters);
+    connectEndpointToPrimitive(right.globalA, rightStartToken, right, left, clusters);
+    connectEndpointToPrimitive(right.globalB, rightEndToken, right, left, clusters);
+  }
+  return clusters;
+}
+
+function splitPrimitiveEdges(
+  primitives: readonly PrimitiveSegment[],
+  clusters: JunctionClusters,
+): {
+  readonly candidates: readonly CandidateEdge[];
+  readonly nodeCoordinates: ReadonlyMap<string, GlobalMvtPoint>;
+} {
+  const canonicalCoordinates = clusters.canonicalCoordinates();
+  const candidates: CandidateEdge[] = [];
+  const nodeCoordinates = new Map<string, GlobalMvtPoint>();
+  for (const primitive of primitives) {
+    const splits = new Map<
+      string,
+      { readonly coordinate: GlobalMvtPoint; readonly fraction: number }
+    >();
+    for (const token of primitive.splitTokens.values()) {
+      const coordinate = canonicalCoordinates.get(clusters.find(token));
+      if (coordinate === undefined) continue;
+      const key = globalPointKey(coordinate);
+      splits.set(key, {
+        coordinate,
+        fraction: segmentFraction(coordinate, primitive.globalA, primitive.globalB),
+      });
+    }
+    const ordered = [...splits.entries()].sort(
+      ([leftKey, left], [rightKey, right]) =>
+        left.fraction - right.fraction || leftKey.localeCompare(rightKey),
+    );
+    for (let index = 1; index < ordered.length; index += 1) {
+      const previous = ordered[index - 1];
+      const current = ordered[index];
+      if (
+        previous === undefined ||
+        current === undefined ||
+        previous[0] === current[0]
+      ) {
+        continue;
+      }
+      const startsFirst = previous[0] < current[0];
+      const nodeA = startsFirst ? previous[0] : current[0];
+      const nodeB = startsFirst ? current[0] : previous[0];
+      const globalA = startsFirst ? previous[1].coordinate : current[1].coordinate;
+      const globalB = startsFirst ? current[1].coordinate : previous[1].coordinate;
+      nodeCoordinates.set(nodeA, globalA);
+      nodeCoordinates.set(nodeB, globalB);
+      candidates.push({
+        key: unorderedEdgeKey(nodeA, nodeB),
+        nodeA,
+        nodeB,
+        globalA,
+        globalB,
+        metadata: primitive.metadata,
+        metadataKey: primitive.metadataKey,
+      });
+    }
+  }
+  candidates.sort(
+    (left, right) =>
+      left.key.localeCompare(right.key) ||
+      left.metadataKey.localeCompare(right.metadataKey),
+  );
+  return { candidates, nodeCoordinates };
+}
+
 export function isWalkableTransportation(
   properties: TransportationProperties,
 ): boolean {
   const featureClass = properties.class;
-  const subclass = properties.subclass;
+  const kind = properties.kind;
   const foot = properties.foot;
   if (foot === 'no' || foot === 'private') return false;
-  if (typeof featureClass === 'string' && featureClass.endsWith('_construction')) {
+  if (properties.rail === true) return false;
+  if (
+    (typeof featureClass === 'string' && featureClass.endsWith('_construction')) ||
+    (typeof kind === 'string' && kind.endsWith('_construction'))
+  ) {
     return false;
   }
-  if (featureClass === 'trunk') {
-    return typeof foot === 'string' && allowedTrunkFootValues[foot] === true;
+  if (typeof featureClass === 'string') {
+    return excludedNonRoadClasses[featureClass] !== true;
   }
-  return (
-    (typeof featureClass === 'string' && allowedClasses[featureClass] === true) ||
-    (typeof subclass === 'string' && allowedSubclasses[subclass] === true)
-  );
+  if (typeof kind === 'string') return excludedNonRoadKinds[kind] !== true;
+  const subclass = properties.subclass;
+  return typeof subclass === 'string' && allowedSubclasses[subclass] === true;
 }
 
 export function toRoutingLineMetadata(
@@ -192,6 +639,7 @@ export function toRoutingLineMetadata(
 ): RoutingLineMetadata {
   const metadata: {
     class?: string;
+    kind?: string;
     subclass?: string;
     surface?: string;
     foot?: string;
@@ -200,10 +648,13 @@ export function toRoutingLineMetadata(
     featureId?: number;
   } = {};
   if (typeof properties.class === 'string') metadata.class = properties.class;
+  if (typeof properties.kind === 'string') metadata.kind = properties.kind;
   if (typeof properties.subclass === 'string') metadata.subclass = properties.subclass;
   if (typeof properties.surface === 'string') metadata.surface = properties.surface;
   if (typeof properties.foot === 'string') metadata.foot = properties.foot;
   if (typeof properties.brunnel === 'string') metadata.brunnel = properties.brunnel;
+  if (properties.bridge === true) metadata.brunnel = 'bridge';
+  else if (properties.tunnel === true) metadata.brunnel = 'tunnel';
   if (typeof properties.layer === 'string' || typeof properties.layer === 'number') {
     metadata.layer = properties.layer;
   }
@@ -244,58 +695,9 @@ export function buildTrailGraph(
   lines: readonly RoutingLineInput[],
   boundary: RoutingTileRectangle,
 ): TrailGraph {
-  const candidates: CandidateEdge[] = [];
-  const nodeCoordinates = new Map<string, readonly [x: number, y: number]>();
-
-  for (const line of lines) {
-    if (!Number.isFinite(line.extent) || line.extent <= 0 || line.points.length < 2) {
-      continue;
-    }
-    const normalized = line.points
-      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
-      .map((point) => {
-        const globalX =
-          line.tileX * MVT_GRAPH_EXTENT +
-          Math.round((point.x * MVT_GRAPH_EXTENT) / line.extent);
-        const globalY =
-          line.tileY * MVT_GRAPH_EXTENT +
-          Math.round((point.y * MVT_GRAPH_EXTENT) / line.extent);
-        return {
-          key: `${String(globalX)},${String(globalY)}`,
-          global: [globalX, globalY] as const,
-        };
-      });
-
-    for (let index = 1; index < normalized.length; index += 1) {
-      const previous = normalized[index - 1];
-      const current = normalized[index];
-      if (
-        previous === undefined ||
-        current === undefined ||
-        previous.key === current.key
-      ) {
-        continue;
-      }
-      nodeCoordinates.set(previous.key, previous.global);
-      nodeCoordinates.set(current.key, current.global);
-      const edgeKey = unorderedEdgeKey(previous.key, current.key);
-      candidates.push({
-        key: edgeKey,
-        nodeA: previous.key < current.key ? previous.key : current.key,
-        nodeB: previous.key < current.key ? current.key : previous.key,
-        globalA: previous.key < current.key ? previous.global : current.global,
-        globalB: previous.key < current.key ? current.global : previous.global,
-        metadata: line.metadata,
-        metadataKey: metadataKey(line.metadata),
-      });
-    }
-  }
-
-  candidates.sort(
-    (left, right) =>
-      left.key.localeCompare(right.key) ||
-      left.metadataKey.localeCompare(right.metadataKey),
-  );
+  const primitives = collectPrimitives(lines);
+  const clusters = nodePrimitives(primitives);
+  const { candidates, nodeCoordinates } = splitPrimitiveEdges(primitives, clusters);
   const edges = new Map<string, TrailGraphEdge>();
   for (const candidate of candidates) {
     if (edges.has(candidate.key)) continue;

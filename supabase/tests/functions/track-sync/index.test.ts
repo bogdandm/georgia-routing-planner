@@ -1014,3 +1014,68 @@ Deno.test(
     assertEquals(malformed.status, 400);
   },
 );
+
+
+Deno.test('marker commands use the verified owner and preserve bounded outcomes', async () => {
+  const state = makeState();
+  state.rpcResults.set('upsert_marker', [
+    {
+      data: {
+        outcome: 'applied',
+        record: {
+          marker_id: 'marker-a',
+          revision: 1,
+          payload: {
+            schemaVersion: 1,
+            id: 'marker-a',
+            name: 'Marker',
+            normalizedName: 'marker',
+            coordinate: [44.8, 41.7],
+            iconKey: 'place',
+            colorKey: 'blue',
+            createdAt: '2026-08-10T00:00:00.000Z',
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        },
+      },
+      error: null,
+    },
+  ]);
+  const response = await handleTrackSync(
+    jsonRequest({
+      action: 'marker-upsert',
+      markerId: 'marker-a',
+      baseRevision: 0,
+      marker: {
+        schemaVersion: 1,
+        id: 'marker-a',
+        name: 'Marker',
+        normalizedName: 'marker',
+        coordinate: [44.8, 41.7],
+        iconKey: 'place',
+        colorKey: 'blue',
+        createdAt: '2026-08-10T00:00:00.000Z',
+        updatedAt: '2026-08-10T00:00:00.000Z',
+      },
+    }),
+    makeContext(state),
+  );
+  assertEquals(response.status, 200);
+  assertEquals((await responseJson(response)).outcome, 'applied');
+  assertEquals(state.calls.find((call) => call.name === 'upsert_marker')?.value, {
+    p_user_id: USER_ID,
+    p_marker_id: 'marker-a',
+    p_payload: {
+      schemaVersion: 1,
+      id: 'marker-a',
+      name: 'Marker',
+      normalizedName: 'marker',
+      coordinate: [44.8, 41.7],
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-08-10T00:00:00.000Z',
+      updatedAt: '2026-08-10T00:00:00.000Z',
+    },
+    p_base_revision: 0,
+  });
+});

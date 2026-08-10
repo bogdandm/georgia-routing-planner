@@ -80,6 +80,26 @@ function equalTrackSyncStates(left: TrackSyncState, right: TrackSyncState): bool
   );
 }
 
+export interface MarkerSyncState {
+  readonly markerId: string;
+  readonly remoteRevision: number | null;
+  readonly pendingKind: 'upsert' | 'delete' | null;
+  readonly localVersion: number;
+}
+
+const markerSyncStateSchema: z.ZodType<MarkerSyncState> = z
+  .object({
+    markerId: z.string().min(1).max(200),
+    remoteRevision: z.number().int().positive().safe().nullable(),
+    pendingKind: z.enum(['upsert', 'delete']).nullable(),
+    localVersion: z.number().int().positive().safe(),
+  })
+  .strict()
+  .refine(
+    (state) => state.pendingKind !== null || state.remoteRevision !== null,
+    'Clean marker state requires a remote revision.',
+  );
+
 export interface LocalTrackSyncPair {
   readonly summary: LocalTrackSummary;
   readonly content: LocalTrackContent;
@@ -737,6 +757,14 @@ function parseSavedMarker(value: unknown): SavedMarker | null {
   return result.success ? result.data : null;
 }
 
+export function validateSavedMarkerRecord(value: unknown): SavedMarker {
+  const result = savedMarkerSchema.safeParse(value);
+  if (!result.success) {
+    throw new SavedMarkerStorageError('record-invalid', 'The saved marker record is invalid.');
+  }
+  return result.data;
+}
+
 function parseSavedMarkerUpdate(
   value: unknown,
 ): Readonly<
@@ -780,6 +808,7 @@ export class AppDatabase
   public readonly localTrackContents!: EntityTable<LocalTrackContent, 'trackId'>;
   public readonly trackSyncStates!: EntityTable<TrackSyncState, 'trackId'>;
   public readonly savedMarkers!: EntityTable<SavedMarker, 'id'>;
+  public readonly markerSyncStates!: EntityTable<MarkerSyncState, 'markerId'>;
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
     this.version(1).stores({
@@ -864,6 +893,15 @@ export class AppDatabase
           if (parsed !== null) await contentTable.put(parsed);
         }
       });
+    this.version(7).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+    });
   }
 
   public async saveLocalTrack(
@@ -1033,7 +1071,15 @@ export class AppDatabase
       );
     }
     try {
-      await this.savedMarkers.add(parsed);
+      await this.transaction('rw', this.savedMarkers, this.markerSyncStates, async () => {
+        await this.savedMarkers.add(parsed);
+        await this.markerSyncStates.put({
+          markerId: parsed.id,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+          localVersion: 1,
+        });
+      });
     } catch (error) {
       if (error instanceof Dexie.ConstraintError) {
         throw new SavedMarkerStorageError(
@@ -1062,29 +1108,33 @@ export class AppDatabase
         'The saved marker update is invalid.',
       );
     }
-    return this.transaction('rw', this.savedMarkers, async () => {
+    return this.transaction('rw', this.savedMarkers, this.markerSyncStates, async () => {
       const existing = await this.savedMarkers.get(validMarkerId.data);
       if (existing === undefined) {
-        throw new SavedMarkerStorageError(
-          'not-found',
-          'The saved marker was not found.',
-        );
+        throw new SavedMarkerStorageError('not-found', 'The saved marker was not found.');
       }
       const marker = parseSavedMarker(existing);
       if (marker === null) {
-        throw new SavedMarkerStorageError(
-          'record-invalid',
-          'The saved marker record is invalid.',
-        );
+        throw new SavedMarkerStorageError('record-invalid', 'The saved marker record is invalid.');
       }
       const updated = parseSavedMarker({ ...marker, ...validChanges });
       if (updated === null) {
-        throw new SavedMarkerStorageError(
-          'record-invalid',
-          'The saved marker update is invalid.',
-        );
+        throw new SavedMarkerStorageError('record-invalid', 'The saved marker update is invalid.');
+      }
+      const existingState = markerSyncStateSchema.safeParse(
+        await this.markerSyncStates.get(validMarkerId.data),
+      );
+      const localVersion = existingState.success ? existingState.data.localVersion + 1 : 1;
+      if (!Number.isSafeInteger(localVersion)) {
+        throw new SavedMarkerStorageError('record-invalid', 'The saved marker version is invalid.');
       }
       await this.savedMarkers.put(updated);
+      await this.markerSyncStates.put({
+        markerId: updated.id,
+        remoteRevision: existingState.success ? existingState.data.remoteRevision : null,
+        pendingKind: 'upsert',
+        localVersion,
+      });
       return updated;
     });
   }
@@ -1097,21 +1147,28 @@ export class AppDatabase
         'The saved marker identifier is invalid.',
       );
     }
-    await this.transaction('rw', this.savedMarkers, async () => {
+    await this.transaction('rw', this.savedMarkers, this.markerSyncStates, async () => {
       const existing = await this.savedMarkers.get(validMarkerId.data);
       if (existing === undefined) {
-        throw new SavedMarkerStorageError(
-          'not-found',
-          'The saved marker was not found.',
-        );
+        throw new SavedMarkerStorageError('not-found', 'The saved marker was not found.');
       }
       if (parseSavedMarker(existing) === null) {
-        throw new SavedMarkerStorageError(
-          'record-invalid',
-          'The saved marker record is invalid.',
-        );
+        throw new SavedMarkerStorageError('record-invalid', 'The saved marker record is invalid.');
       }
+      const state = markerSyncStateSchema.safeParse(await this.markerSyncStates.get(validMarkerId.data));
       await this.savedMarkers.delete(validMarkerId.data);
+      if (state.success) {
+        const localVersion = state.data.localVersion + 1;
+        if (!Number.isSafeInteger(localVersion)) {
+          throw new SavedMarkerStorageError('record-invalid', 'The saved marker version is invalid.');
+        }
+        await this.markerSyncStates.put({
+          markerId: validMarkerId.data,
+          remoteRevision: state.data.remoteRevision,
+          pendingKind: 'delete',
+          localVersion,
+        });
+      }
     });
   }
 

@@ -1,11 +1,14 @@
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
+import { z } from 'npm:zod@4.4.3';
+
 
 import {
   CONTENT_HASH_PATTERN,
-  type DeleteTrackCommand,
   MAX_JSON_BYTES,
+  MAX_MARKER_BYTES,
   MAX_METADATA_BYTES,
   MAX_MULTIPART_BYTES,
+  type MarkerPayload,
   type MetadataTrackCommand,
   type RpcResponse,
   type StatusTrackCommand,
@@ -14,8 +17,16 @@ import {
   TrackSyncFailure,
   type TrackSyncResult,
   type TrackUsage,
+  type UpsertMarkerCommand,
   UUID_PATTERN,
 } from './contracts.ts';
+
+const markerIconKeys: Readonly<Record<string, true>> = Object.fromEntries(
+  ['place','flag','home','parking','apartment','business','cabin','cottage','city','map','my-location','navigation','pin','public','school','explore','landscape','forest','terrain','water','snow','beach','eco','grass','park','spa','volcano','waves','sunny','cloud','storm','tsunami','hiking','cycling','boating','pets','skiing','kayaking','kitesurfing','paragliding','rowing','sailing','diving','skateboarding','snowboarding','sports','football','surfing','swimming','running','restaurant','cafe','hotel','store','bakery','brunch','camping','fast-food','ice-cream','liquor','bar','dining','drinking-water','grocery','shelter','ramen','seafood','tapas','camera','castle','church','museum','monument','attraction','celebration','deck','festival','fort','mosque','synagogue','buddhist-temple','hindu-temple','theater','tour','villa','hospital','medical','info','warning','roadwork','blocked','car-crash','alert','danger','emergency','engineering','fire-extinguisher','safety','fire-station','report','security','sos','traffic','viewpoint','shuttle','commute','bus','car','railway','electric-bike','flight','fuel','bike','snowmobile','train','tram','motorcycle'].map((key) => [key, true]),
+);
+const markerColorKeys: Readonly<Record<string, true>> = {
+  blue: true, teal: true, purple: true, olive: true, orange: true, rose: true, navy: true, 'blue-green': true, green: true, red: true,
+};
 import { validateGeometryUpload } from './geometry.ts';
 
 export function requireUserId(context: SupabaseContext): string {
@@ -141,6 +152,62 @@ function requireMetadata(value: unknown): Record<string, unknown> {
   return value;
 }
 
+function requireMarkerId(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 200) {
+    throw new TrackSyncFailure(400, 'invalid_marker', 'markerId must be 1 to 200 characters.');
+  }
+  return value;
+}
+
+function requireMarkerPayload(value: unknown, markerId: string): MarkerPayload {
+  if (!isObject(value)) {
+    throw new TrackSyncFailure(400, 'invalid_marker', 'marker must be an object.');
+  }
+  requireExactFields(value, [
+    'schemaVersion',
+    'id',
+    'name',
+    'normalizedName',
+    'coordinate',
+    'iconKey',
+    'colorKey',
+    'createdAt',
+    'updatedAt',
+  ]);
+  if (
+    value.schemaVersion !== 1 ||
+    value.id !== markerId ||
+    typeof value.name !== 'string' ||
+    value.name.length === 0 ||
+    value.name.length > 200 ||
+    value.name !== value.name.trim() ||
+    typeof value.normalizedName !== 'string' ||
+    value.normalizedName !== value.name.trim().toLocaleLowerCase('en') ||
+    !Array.isArray(value.coordinate) ||
+    value.coordinate.length !== 2 ||
+    !Number.isFinite(value.coordinate[0]) ||
+    !Number.isFinite(value.coordinate[1]) ||
+    value.coordinate[0] < -180 ||
+    value.coordinate[0] > 180 ||
+    value.coordinate[1] < -90 ||
+    value.coordinate[1] > 90 ||
+    typeof value.iconKey !== 'string' ||
+    markerIconKeys[value.iconKey] !== true ||
+    typeof value.colorKey !== 'string' ||
+    markerColorKeys[value.colorKey] !== true ||
+    typeof value.createdAt !== 'string' ||
+    !z.iso.datetime().safeParse(value.createdAt).success ||
+    typeof value.updatedAt !== 'string' ||
+    !z.iso.datetime().safeParse(value.updatedAt).success
+  ) {
+    throw new TrackSyncFailure(400, 'invalid_marker', 'marker is invalid.');
+  }
+  if (new TextEncoder().encode(JSON.stringify(value)).byteLength > MAX_MARKER_BYTES) {
+    throw new TrackSyncFailure(413, 'marker_too_large', 'marker exceeds 4 KiB.');
+  }
+  return value as unknown as MarkerPayload;
+}
+
 function parseIntegerField(value: FormDataEntryValue | null, name: string): number {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) {
     throw new TrackSyncFailure(
@@ -213,9 +280,7 @@ function requireExactFields(
   }
 }
 
-async function parseJsonRequest(
-  request: Request,
-): Promise<MetadataTrackCommand | DeleteTrackCommand | StatusTrackCommand> {
+async function parseJsonRequest(request: Request): Promise<TrackSyncCommand> {
   const bytes = await readBoundedBody(request, MAX_JSON_BYTES);
   let value: unknown;
   try {
@@ -248,6 +313,25 @@ async function parseJsonRequest(
     return {
       action: 'delete',
       contentHash: requireContentHash(value.contentHash),
+      baseRevision: requireBaseRevision(value.baseRevision),
+    };
+  }
+  if (value.action === 'marker-upsert') {
+    requireExactFields(value, ['action', 'markerId', 'baseRevision', 'marker']);
+    const markerId = requireMarkerId(value.markerId);
+    const marker = requireMarkerPayload(value.marker, markerId);
+    return {
+      action: 'marker-upsert',
+      markerId,
+      baseRevision: requireBaseRevision(value.baseRevision),
+      marker,
+    };
+  }
+  if (value.action === 'marker-delete') {
+    requireExactFields(value, ['action', 'markerId', 'baseRevision']);
+    return {
+      action: 'marker-delete',
+      markerId: requireMarkerId(value.markerId),
       baseRevision: requireBaseRevision(value.baseRevision),
     };
   }

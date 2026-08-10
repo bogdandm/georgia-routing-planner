@@ -123,6 +123,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
     styleId: 'Georgia hiking basemap v1',
     sourceIds: [
       'basemap-vector',
+      'basemap-detail-vector',
       'satellite-basemap',
       'napr-orthophoto-2016-2017',
       'napr-orthophoto-2020-west',

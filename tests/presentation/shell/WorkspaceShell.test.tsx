@@ -24,6 +24,7 @@ import type {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   type LocalTrackContent,
@@ -638,6 +639,36 @@ describe('WorkspaceShell', () => {
     expect(useUiStore.getState().navigationCollapsed).toBe(false);
     expect(saveUiPreferences).not.toHaveBeenCalled();
     expect(window.location.hash).toBe('');
+    expect(container.querySelector('#mobile-workspace')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+  it('returns smartphone marker selection to the map', async () => {
+    await services.database.saveSavedMarker({
+      schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+      id: 'mobile-marker',
+      name: 'Mobile marker',
+      normalizedName: 'mobile marker',
+      coordinate: [44.9, 41.8],
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+    });
+    useUiStore.setState({ activeTab: 'markers' });
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(await screen.findByRole('button', { name: /^Mobile marker/ }));
+
+    expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
+      longitude: 44.9,
+      latitude: 41.8,
+    });
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
     expect(container.querySelector('#mobile-workspace')).toHaveAttribute(
       'aria-hidden',
       'true',

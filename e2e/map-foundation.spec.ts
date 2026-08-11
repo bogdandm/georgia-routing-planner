@@ -389,9 +389,20 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
     timeout: terrainPersistenceTimeoutMs,
   });
+  const terrainCameraBeforeMiddlePan = await readStoredCamera(page);
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   const pivot = page.locator('.map-orbit-pivot');
+  await expect(pivot).toHaveCount(0);
+  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
+  await page.mouse.up({ button: 'middle' });
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.longitude)
+    .not.toBe(terrainCameraBeforeMiddlePan?.longitude);
+
+  await page.mouse.move(centerX, centerY);
+  await page.keyboard.down('Shift');
+  await page.mouse.down();
   await expect(pivot).toHaveCount(1);
   const pivotBeforeOrbit = await pivot.boundingBox();
   expect(pivotBeforeOrbit).not.toBeNull();
@@ -406,7 +417,8 @@ test('uses conventional native camera gestures and resets them with the compass'
       })
       .toBeLessThan(4);
   }
-  await page.mouse.up({ button: 'middle' });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
   await expect(pivot).toHaveCount(0);
 
   await page.locator('.maplibregl-ctrl-compass').click();

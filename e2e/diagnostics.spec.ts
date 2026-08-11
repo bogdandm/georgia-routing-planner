@@ -134,6 +134,7 @@ test('captures failures and exports an inspectable redacted bundle', async ({
       'imported-track',
       'imported-track-highlight',
       'imported-track-trace',
+      'route-plan',
       'saved-markers',
     ],
     webGlCapabilities: { contextType: 'webgl2' },

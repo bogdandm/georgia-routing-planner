@@ -422,6 +422,79 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
+  it('rebases an existing geometry before acknowledging its pending upload', async () => {
+    const track = { ...summary('local:existing'), favorite: true };
+    await database.saveLocalTrack(track, content(track.id));
+    await database.saveTrackSyncState({
+      trackId: track.id,
+      contentHash,
+      lineageHash: contentHash,
+      geometryVersion: 2,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const mutate = vi
+      .fn()
+      .mockResolvedValueOnce({ outcome: 'existing' as const, revision: 13 })
+      .mockResolvedValueOnce({ outcome: 'applied' as const, revision: 14 });
+    const remote = {
+      content_hash: contentHash,
+      revision: 13,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: { favorite: false },
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: vi.fn().mockImplementation(() => {
+        const rebased = mutate.mock.calls.length === 2;
+        return Promise.resolve([
+          {
+            ...remote,
+            revision: rebased ? 14 : 13,
+            metadata: { favorite: rebased },
+          },
+        ]);
+      }),
+      mutate,
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    expect(mutate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ remoteRevision: null, pendingKind: 'upsert' }),
+      expect.anything(),
+      expect.any(AbortSignal),
+    );
+    expect(mutate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ remoteRevision: 13, pendingKind: 'upsert' }),
+      expect.anything(),
+      expect.any(AbortSignal),
+    );
+    await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
+      remoteRevision: 14,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
+
   it('returns a candidate when a pending metadata mutation is missing remotely', async () => {
     const track = summary('local:missing');
     await database.saveLocalTrack(track, content(track.id));

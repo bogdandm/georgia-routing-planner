@@ -78,7 +78,7 @@ describe('MapPointerGestureControl', () => {
       expect(down.defaultPrevented).toBe(true);
       expect(up.defaultPrevented).toBe(true);
       expect(aux.defaultPrevented).toBe(true);
-      expect(panBy).toHaveBeenCalledWith([20, -5], { duration: 0 });
+      expect(panBy).toHaveBeenCalledWith([-20, 5], { duration: 0 });
       expect(easeTo).not.toHaveBeenCalled();
       expect(unproject).not.toHaveBeenCalled();
       expect(pivot.show).not.toHaveBeenCalled();

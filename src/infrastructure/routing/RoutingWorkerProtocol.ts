@@ -82,6 +82,7 @@ const progressEventSchema = z
         attempt: z.union([z.literal(1), z.literal(2)]),
         loadedTileCount: z.number().int().nonnegative(),
         totalTileCount: z.number().int().nonnegative(),
+        graphProgress: z.number().min(0).max(1),
       })
       .strict(),
   })

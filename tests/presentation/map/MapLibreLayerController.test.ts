@@ -968,7 +968,7 @@ describe('MapLibreLayerController', () => {
         }),
         expect.objectContaining({
           properties: { kind: 'preview-label', distanceLabel: '1.2 km' },
-          geometry: { type: 'Point', coordinates: [44.65, 42.67] },
+          geometry: { type: 'Point', coordinates: [44.66, 42.68] },
         }),
       ]),
     );
@@ -978,7 +978,11 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.layers.get(routePlanLayerIds.previewLabel)).toMatchObject({
       filter: ['==', ['get', 'kind'], 'preview-label'],
-      layout: { 'text-field': ['get', 'distanceLabel'] },
+      layout: {
+        'text-field': ['get', 'distanceLabel'],
+        'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+        'text-radial-offset': 0.75,
+      },
     });
     controller.setRoutePlanGeometry(
       [],

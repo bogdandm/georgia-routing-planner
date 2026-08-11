@@ -213,6 +213,7 @@ function advanceRoutePlanQueue(draft: RoutePlanDraft): RoutePlanDraft {
         attempt: 1,
         loadedTileCount: 0,
         totalTileCount: 0,
+        graphProgress: 0,
       },
     };
   }

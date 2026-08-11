@@ -222,6 +222,7 @@ describe('BrowserTrailRouter', () => {
             attempt: 1,
             loadedTileCount: 99,
             totalTileCount: 99,
+            graphProgress: 0,
           },
         });
         server.publishEvent(routingWorkerEvents.progress, {
@@ -231,6 +232,7 @@ describe('BrowserTrailRouter', () => {
             attempt: 1,
             loadedTileCount: 4,
             totalTileCount: 9,
+            graphProgress: 0,
           },
         });
         return success();
@@ -254,6 +256,7 @@ describe('BrowserTrailRouter', () => {
         attempt: 1,
         loadedTileCount: 4,
         totalTileCount: 9,
+        graphProgress: 0,
       },
     ]);
 

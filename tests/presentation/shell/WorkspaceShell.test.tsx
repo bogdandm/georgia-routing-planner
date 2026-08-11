@@ -2130,6 +2130,15 @@ describe('WorkspaceShell', () => {
       tracksHeading.parentElement?.parentElement,
     );
     await user.click(planRouteButton);
+    const emptyDetails = screen.getByText(
+      'Add at least two route points to see track details.',
+    );
+    expect(emptyDetails.parentElement).toHaveStyle({ minHeight: '56px' });
+    const emptyElevation = screen.getByText(
+      'Add at least two route points to see the elevation profile.',
+    );
+    expect(emptyElevation.parentElement).toHaveStyle({ height: '264px' });
+    expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
 
     act(() => {
       facade.emitPlanningClick({ longitude: A[0], latitude: A[1] });
@@ -2153,6 +2162,7 @@ describe('WorkspaceShell', () => {
         attempt: 1,
         loadedTileCount: 8,
         totalTileCount: 16,
+        graphProgress: 0,
       });
     });
     expect(await screen.findByText('Loading route tiles… 8/16')).toBeVisible();
@@ -2162,15 +2172,17 @@ describe('WorkspaceShell', () => {
         attempt: 1,
         loadedTileCount: 16,
         totalTileCount: 16,
+        graphProgress: 0.6,
       });
     });
-    expect(await screen.findByText('Building route graph…')).toBeVisible();
+    expect(await screen.findByText('Building route graph… 60%')).toBeVisible();
     act(() => {
       reportProgress?.({
         phase: 'searching-route',
         attempt: 1,
         loadedTileCount: 16,
         totalTileCount: 16,
+        graphProgress: 1,
       });
     });
     expect(await screen.findByText('Searching for a route…')).toBeVisible();

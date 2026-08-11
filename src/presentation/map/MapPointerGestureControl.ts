@@ -109,7 +109,7 @@ export class MapPointerGestureControl {
     this.#lastPointer = { x: event.clientX, y: event.clientY };
 
     if (gesture === 'pan') {
-      map.panBy([horizontalDelta, verticalDelta], { duration: 0 });
+      map.panBy([-horizontalDelta, -verticalDelta], { duration: 0 });
       return;
     }
     const anchor = this.#orbitAnchor;

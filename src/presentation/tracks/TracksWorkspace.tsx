@@ -2258,7 +2258,32 @@ function TrackElevationAnalysis() {
           progress={elevationProgress}
           showProgressStatus={active.kind !== 'route-plan'}
         />
-      ) : profile === null ? null : (
+      ) : profile === null ? (
+        <Stack spacing={1.5}>
+          <Typography component="h3" variant="subtitle2">
+            Elevation profile
+          </Typography>
+          <Box
+            sx={{
+              height: 264,
+              mx: -1,
+              px: 3,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              bgcolor: 'action.hover',
+              borderRadius: 1,
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              {active.kind === 'route-plan'
+                ? 'Add at least two route points to see the elevation profile.'
+                : 'No elevation profile is available for this track.'}
+            </Typography>
+          </Box>
+        </Stack>
+      ) : (
         <ElevationProfileChart
           profile={profile}
           activeSegmentIndex={activeSegmentIndex}
@@ -2792,7 +2817,19 @@ export function TrackDetailsPane({
           <Typography component="h3" variant="subtitle2">
             Track details
           </Typography>
-          {metrics === null ? null : <TrackStats metrics={metrics} />}
+          <Box sx={{ minHeight: 56, display: 'flex', alignItems: 'center' }}>
+            {metrics === null ? (
+              <Typography variant="body2" color="text.secondary">
+                {active.kind === 'route-plan'
+                  ? 'Add at least two route points to see track details.'
+                  : 'Track details are being prepared…'}
+              </Typography>
+            ) : (
+              <Box sx={{ width: '100%' }}>
+                <TrackStats metrics={metrics} />
+              </Box>
+            )}
+          </Box>
           <TrackElevationAnalysis
             key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
           />

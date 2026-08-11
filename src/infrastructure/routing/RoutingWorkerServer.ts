@@ -40,6 +40,13 @@ export interface RoutingAreaLoader {
   ): Promise<RoutingTileLoadResult>;
 }
 
+async function yieldForCancellation(signal: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  signal.throwIfAborted();
+}
+
 export async function executeTrailRoute(
   loader: RoutingAreaLoader,
   request: TrailRouteRequest,
@@ -50,12 +57,14 @@ export async function executeTrailRoute(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let loadedTileCount = 0;
     let totalTileCount = 0;
+    let graphProgress = 0;
     const report = (phase: TrailRouteProgress['phase']): void => {
       onProgress?.({
         phase,
         attempt: attempt === 0 ? 1 : 2,
         loadedTileCount,
         totalTileCount,
+        graphProgress,
       });
     };
     report('loading-tiles');
@@ -74,11 +83,24 @@ export async function executeTrailRoute(
 
     loadedTileCount = areaResult.area.tiles.length;
     totalTileCount = areaResult.area.tiles.length;
+    graphProgress = 0;
     report('building-graph');
+    await yieldForCancellation(signal);
 
-    const graph = buildTrailGraph(areaResult.area.lines, areaResult.area.rectangle);
+    const graph = await buildTrailGraph(
+      areaResult.area.lines,
+      areaResult.area.rectangle,
+      async (progress) => {
+        graphProgress = progress;
+        report('building-graph');
+        await yieldForCancellation(signal);
+      },
+    );
+    await yieldForCancellation(signal);
     report('searching-route');
+    await yieldForCancellation(signal);
     const route = routeTrailGraph(graph, request.start, request.destination);
+    await yieldForCancellation(signal);
     if (route.status === 'ready') {
       const result: TrailRouteSuccess = {
         status: 'ready',

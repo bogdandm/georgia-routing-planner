@@ -9,6 +9,7 @@ import {
   enqueueRoutePlanPoint,
   setNextSegmentMode,
   startRoutePlan,
+  updateRoutePlanProgress,
 } from '@/presentation/tracks/routePlan';
 
 const A = [44.64, 42.66] as const;
@@ -67,6 +68,27 @@ describe('RoutePlanControls', () => {
       />,
     );
     expect(screen.getByText('Loading elevation tiles: 1 of 2')).toBeVisible();
+  });
+
+  it('shows determinate progress while building the route graph', () => {
+    const calculating = enqueueRoutePlanPoint(
+      enqueueRoutePlanPoint(startRoutePlan('route-plan:graph-progress'), A),
+      B,
+    );
+    const request = calculating.pendingRequest;
+    if (request === null) throw new Error('Expected route request.');
+    const buildingGraph = updateRoutePlanProgress(calculating, request.generation, {
+      phase: 'building-graph',
+      attempt: 1,
+      loadedTileCount: 4,
+      totalTileCount: 4,
+      graphProgress: 0.6,
+    });
+
+    render(<RoutePlanControls draft={buildingGraph} {...callbacks()} />);
+
+    expect(screen.getByText('Building route graph… 60%')).toBeVisible();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '60');
   });
 
   it.each([

@@ -120,6 +120,7 @@ describe('route plan reducer', () => {
         attempt: 1,
         loadedTileCount: 1,
         totalTileCount: 1,
+        graphProgress: 0.6,
       }),
     ).toBe(failed);
   });

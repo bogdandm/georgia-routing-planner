@@ -15,6 +15,7 @@ export interface TrailRouteProgress {
   readonly attempt: 1 | 2;
   readonly loadedTileCount: number;
   readonly totalTileCount: number;
+  readonly graphProgress: number;
 }
 
 export type TrailRouteProgressListener = (progress: TrailRouteProgress) => void;

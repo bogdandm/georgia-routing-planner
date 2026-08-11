@@ -388,9 +388,12 @@ function collectPrimitives(lines: readonly RoutingLineInput[]): PrimitiveSegment
   return primitives;
 }
 
-function candidatePrimitivePairs(
+type TrailGraphBuildProgressListener = (progress: number) => void | Promise<void>;
+
+async function candidatePrimitivePairs(
   primitives: readonly PrimitiveSegment[],
-): readonly (readonly [left: number, right: number])[] {
+  onProgress?: TrailGraphBuildProgressListener,
+): Promise<readonly (readonly [left: number, right: number])[]> {
   const buckets = new Map<string, number[]>();
   const pairKeys = new Set<string>();
   const pairs: (readonly [number, number])[] = [];
@@ -424,6 +427,7 @@ function candidatePrimitivePairs(
         }
       }
     }
+    await onProgress?.((index + 1) / primitives.length);
   }
   pairs.sort((left, right) => left[0] - right[0] || left[1] - right[1]);
   return pairs;
@@ -505,10 +509,14 @@ function connectUniqueIntersection(
   clusters.union(leftToken, rightToken);
 }
 
-function nodePrimitives(primitives: readonly PrimitiveSegment[]): JunctionClusters {
+async function nodePrimitives(
+  primitives: readonly PrimitiveSegment[],
+  onProgress?: TrailGraphBuildProgressListener,
+): Promise<JunctionClusters> {
   const clusters = new JunctionClusters();
   const endpointTokens = new Map<string, number>();
-  for (const primitive of primitives) {
+  for (const [primitiveIndex, primitive] of primitives.entries()) {
+    await onProgress?.((primitiveIndex / primitives.length) * 0.15);
     for (const [key, coordinate] of [
       [primitive.nodeA, primitive.globalA],
       [primitive.nodeB, primitive.globalB],
@@ -522,7 +530,12 @@ function nodePrimitives(primitives: readonly PrimitiveSegment[]): JunctionCluste
     }
   }
 
-  for (const [leftIndex, rightIndex] of candidatePrimitivePairs(primitives)) {
+  await onProgress?.(0.15);
+  const pairs = await candidatePrimitivePairs(primitives, async (progress) => {
+    await onProgress?.(0.15 + progress * 0.3);
+  });
+  for (const [pairIndex, [leftIndex, rightIndex]] of pairs.entries()) {
+    await onProgress?.(0.45 + (pairIndex / pairs.length) * 0.55);
     const left = primitives[leftIndex];
     const right = primitives[rightIndex];
     if (left === undefined || right === undefined) continue;
@@ -544,20 +557,22 @@ function nodePrimitives(primitives: readonly PrimitiveSegment[]): JunctionCluste
     connectEndpointToPrimitive(right.globalA, rightStartToken, right, left, clusters);
     connectEndpointToPrimitive(right.globalB, rightEndToken, right, left, clusters);
   }
+  await onProgress?.(1);
   return clusters;
 }
 
-function splitPrimitiveEdges(
+async function splitPrimitiveEdges(
   primitives: readonly PrimitiveSegment[],
   clusters: JunctionClusters,
-): {
+  onProgress?: TrailGraphBuildProgressListener,
+): Promise<{
   readonly candidates: readonly CandidateEdge[];
   readonly nodeCoordinates: ReadonlyMap<string, GlobalMvtPoint>;
-} {
+}> {
   const canonicalCoordinates = clusters.canonicalCoordinates();
   const candidates: CandidateEdge[] = [];
   const nodeCoordinates = new Map<string, GlobalMvtPoint>();
-  for (const primitive of primitives) {
+  for (const [primitiveIndex, primitive] of primitives.entries()) {
     const splits = new Map<
       string,
       { readonly coordinate: GlobalMvtPoint; readonly fraction: number }
@@ -602,6 +617,7 @@ function splitPrimitiveEdges(
         metadataKey: primitive.metadataKey,
       });
     }
+    await onProgress?.((primitiveIndex + 1) / primitives.length);
   }
   candidates.sort(
     (left, right) =>
@@ -691,15 +707,35 @@ export function coordinateToGlobalMvtVertex(
   return [x, y];
 }
 
-export function buildTrailGraph(
+export async function buildTrailGraph(
   lines: readonly RoutingLineInput[],
   boundary: RoutingTileRectangle,
-): TrailGraph {
+  onProgress?: TrailGraphBuildProgressListener,
+): Promise<TrailGraph> {
+  let reportedPercentage = -1;
+  const reportProgress = async (progress: number): Promise<void> => {
+    const percentage = Math.floor(progress * 100);
+    if (percentage === reportedPercentage) return;
+    reportedPercentage = percentage;
+    await onProgress?.(percentage / 100);
+  };
   const primitives = collectPrimitives(lines);
-  const clusters = nodePrimitives(primitives);
-  const { candidates, nodeCoordinates } = splitPrimitiveEdges(primitives, clusters);
+  await reportProgress(0.15);
+  const clusters = await nodePrimitives(primitives, async (progress) => {
+    await reportProgress(0.15 + progress * 0.45);
+  });
+  await reportProgress(0.6);
+  const { candidates, nodeCoordinates } = await splitPrimitiveEdges(
+    primitives,
+    clusters,
+    async (progress) => {
+      await reportProgress(0.6 + progress * 0.15);
+    },
+  );
+  await reportProgress(0.75);
   const edges = new Map<string, TrailGraphEdge>();
-  for (const candidate of candidates) {
+  for (const [candidateIndex, candidate] of candidates.entries()) {
+    await reportProgress(0.75 + (candidateIndex / candidates.length) * 0.15);
     if (edges.has(candidate.key)) continue;
     const coordinateA = globalMvtVertexToCoordinate(
       candidate.globalA[0],
@@ -719,6 +755,7 @@ export function buildTrailGraph(
       metadata: candidate.metadata,
     });
   }
+  await reportProgress(0.9);
 
   const minimumGlobalX = boundary.minTileX * MVT_GRAPH_EXTENT;
   const maximumGlobalX = (boundary.maxTileX + 1) * MVT_GRAPH_EXTENT;
@@ -738,6 +775,7 @@ export function buildTrailGraph(
         global[1] >= maximumGlobalY,
     });
   }
+  await reportProgress(0.95);
 
   const adjacency = new Map<string, TrailGraphArc[]>();
   for (const nodeKey of nodes.keys()) adjacency.set(nodeKey, []);
@@ -761,6 +799,7 @@ export function buildTrailGraph(
         left.to.localeCompare(right.to) || left.edgeKey.localeCompare(right.edgeKey),
     );
   }
+  await reportProgress(1);
   return { nodes, edges, adjacency };
 }
 

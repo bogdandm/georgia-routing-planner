@@ -2145,14 +2145,7 @@ export class MapLibreLayerController {
                   },
                   geometry: {
                     type: 'Point' as const,
-                    coordinates: [
-                      (this.#routePlanPreview.start[0] +
-                        this.#routePlanPreview.cursor[0]) /
-                        2,
-                      (this.#routePlanPreview.start[1] +
-                        this.#routePlanPreview.cursor[1]) /
-                        2,
-                    ],
+                    coordinates: [...this.#routePlanPreview.cursor],
                   },
                 },
               ]),
@@ -2227,6 +2220,9 @@ export class MapLibreLayerController {
           layout: {
             'text-field': ['get', 'distanceLabel'],
             'text-size': 12,
+            'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+            'text-radial-offset': 0.75,
+            'text-justify': 'auto',
             'text-allow-overlap': true,
           },
           paint: {

@@ -445,10 +445,10 @@ describe('routing tile coverage and decoding', () => {
     ).toEqual({ kind: 'service', brunnel: 'tunnel' });
   });
 
-  it('normalizes different layer extents onto one global 4096 grid and round-trips within one unit', () => {
+  it('normalizes different layer extents onto one global 4096 grid and round-trips within one unit', async () => {
     const tileX = 10_000;
     const tileY = 6_000;
-    const graph = buildTrailGraph(
+    const graph = await buildTrailGraph(
       [
         line(tileX, tileY, [
           [2_048, 2_048],
@@ -488,10 +488,10 @@ describe('routing tile coverage and decoding', () => {
     }
   });
 
-  it('deduplicates reversed tile-buffer overlap into one undirected graph edge', () => {
+  it('deduplicates reversed tile-buffer overlap into one undirected graph edge', async () => {
     const tileX = 100;
     const tileY = 200;
-    const graph = buildTrailGraph(
+    const graph = await buildTrailGraph(
       [
         line(tileX, tileY, [
           [4_000, 2_000],
@@ -520,7 +520,7 @@ describe('routing tile coverage and decoding', () => {
     ).toBe(4);
   });
 
-  it('nodes X crossings and endpoint-on-interior T junctions', () => {
+  it('nodes X crossings and endpoint-on-interior T junctions', async () => {
     const tileX = 100;
     const tileY = 200;
     const boundary = {
@@ -529,7 +529,7 @@ describe('routing tile coverage and decoding', () => {
       minTileY: tileY,
       maxTileY: tileY,
     };
-    const crossing = buildTrailGraph(
+    const crossing = await buildTrailGraph(
       [
         line(tileX, tileY, [
           [1_000, 2_000],
@@ -557,7 +557,7 @@ describe('routing tile coverage and decoding', () => {
     );
     expect(crossingRoute.status).toBe('ready');
 
-    const tee = buildTrailGraph(
+    const tee = await buildTrailGraph(
       [
         line(tileX, tileY, [
           [1_000, 2_000],
@@ -587,7 +587,7 @@ describe('routing tile coverage and decoding', () => {
     ).toBe('ready');
   });
 
-  it('merges endpoint gaps up to two graph units and leaves larger gaps disconnected', () => {
+  it('merges endpoint gaps up to two graph units and leaves larger gaps disconnected', async () => {
     const tileX = 100;
     const tileY = 200;
     const boundary = {
@@ -596,8 +596,8 @@ describe('routing tile coverage and decoding', () => {
       minTileY: tileY,
       maxTileY: tileY,
     };
-    const graphForGap = (gap: number) =>
-      buildTrailGraph(
+    const graphForGap = async (gap: number) =>
+      await buildTrailGraph(
         [
           line(tileX, tileY, [
             [1_000, 2_000],
@@ -610,7 +610,7 @@ describe('routing tile coverage and decoding', () => {
         ],
         boundary,
       );
-    const merged = graphForGap(2);
+    const merged = await graphForGap(2);
     expect(merged.nodes.size).toBe(3);
     expect(merged.edges.size).toBe(2);
     expect(
@@ -627,7 +627,7 @@ describe('routing tile coverage and decoding', () => {
       ).status,
     ).toBe('ready');
 
-    const disconnected = graphForGap(3);
+    const disconnected = await graphForGap(3);
     expect(disconnected.nodes.size).toBe(4);
     expect(disconnected.edges.size).toBe(2);
     expect(
@@ -645,10 +645,10 @@ describe('routing tile coverage and decoding', () => {
     ).toBe('failed');
   });
 
-  it('splits partially overlapping collinear primitives at both overlap ends', () => {
+  it('splits partially overlapping collinear primitives at both overlap ends', async () => {
     const tileX = 100;
     const tileY = 200;
-    const graph = buildTrailGraph(
+    const graph = await buildTrailGraph(
       [
         line(tileX, tileY, [
           [1_000, 2_000],
@@ -673,7 +673,7 @@ describe('routing tile coverage and decoding', () => {
     );
   });
 
-  it('keeps inferred interior crossings separated by explicit layer or brunnel', () => {
+  it('keeps inferred interior crossings separated by explicit layer or brunnel', async () => {
     const tileX = 100;
     const tileY = 200;
     const boundary = {
@@ -707,7 +707,7 @@ describe('routing tile coverage and decoding', () => {
         verticalMetadata,
       ),
     ];
-    const defaultLayer = buildTrailGraph(
+    const defaultLayer = await buildTrailGraph(
       crossingLines({ class: 'path' }, { class: 'path', layer: '0' }),
       boundary,
     );
@@ -721,12 +721,12 @@ describe('routing tile coverage and decoding', () => {
         { class: 'path', brunnel: 'tunnel' },
       ),
     ]) {
-      const separated = buildTrailGraph(separatedLines, boundary);
+      const separated = await buildTrailGraph(separatedLines, boundary);
       expect(separated.nodes.size).toBe(4);
       expect(separated.edges.size).toBe(2);
     }
 
-    const sharedEndpoint = buildTrailGraph(
+    const sharedEndpoint = await buildTrailGraph(
       [
         line(
           tileX,
@@ -768,7 +768,7 @@ describe('routing tile coverage and decoding', () => {
     ).toBe('ready');
   });
 
-  it('produces identical topology for input permutations and reversed duplicates', () => {
+  it('produces identical topology for input permutations and reversed duplicates', async () => {
     const tileX = 100;
     const tileY = 200;
     const horizontal = line(tileX, tileY, [
@@ -797,8 +797,11 @@ describe('routing tile coverage and decoding', () => {
         arcs.map((arc) => `${arc.from}->${arc.to}`),
       ]),
     });
-    const first = buildTrailGraph([horizontal, vertical, horizontalReversed], boundary);
-    const second = buildTrailGraph(
+    const first = await buildTrailGraph(
+      [horizontal, vertical, horizontalReversed],
+      boundary,
+    );
+    const second = await buildTrailGraph(
       [horizontalReversed, horizontal, vertical].reverse(),
       boundary,
     );
@@ -1035,14 +1038,22 @@ describe('trail graph snapping and routing', () => {
       expect(result.geometry.coordinates[0]).toEqual(result.snappedStart);
       expect(result.geometry.coordinates.at(-1)).toEqual(result.snappedDestination);
     }
-    expect(progress.map(({ attempt, phase }) => [attempt, phase])).toEqual([
-      [1, 'loading-tiles'],
-      [1, 'building-graph'],
-      [1, 'searching-route'],
-      [2, 'loading-tiles'],
-      [2, 'building-graph'],
-      [2, 'searching-route'],
-    ]);
+    for (const attempt of [1, 2] as const) {
+      const attemptProgress = progress.filter((value) => value.attempt === attempt);
+      expect(attemptProgress[0]?.phase).toBe('loading-tiles');
+      const graphProgress = attemptProgress
+        .filter(({ phase }) => phase === 'building-graph')
+        .map((value) => value.graphProgress);
+      expect(graphProgress[0]).toBe(0);
+      expect(graphProgress.at(-1)).toBe(1);
+      expect(graphProgress.some((value) => value > 0.15 && value < 0.6)).toBe(true);
+      expect(
+        graphProgress.every(
+          (value, index) => index === 0 || value >= (graphProgress[index - 1] ?? 0),
+        ),
+      ).toBe(true);
+      expect(attemptProgress.at(-1)?.phase).toBe('searching-route');
+    }
 
     const snapFailureLoader = {
       loadArea: vi.fn().mockResolvedValue({
@@ -1076,6 +1087,43 @@ describe('trail graph snapping and routing', () => {
       ),
     ).resolves.toEqual({ status: 'failed', reason: 'routing-data-unavailable' });
     expect(dataFailureLoader.loadArea).toHaveBeenCalledOnce();
+  });
+
+  it('honors cancellation while graph construction is yielding progress', async () => {
+    const tileX = 10_000;
+    const tileY = 6_000;
+    const points = [
+      [1_000, 2_000],
+      [3_000, 2_000],
+    ] as const;
+    const start = globalMvtVertexToCoordinate(
+      tileX * MVT_GRAPH_EXTENT + points[0][0],
+      tileY * MVT_GRAPH_EXTENT + points[0][1],
+    );
+    const destination = globalMvtVertexToCoordinate(
+      tileX * MVT_GRAPH_EXTENT + points[1][0],
+      tileY * MVT_GRAPH_EXTENT + points[1][1],
+    );
+    const controller = new AbortController();
+    const loadArea = vi.fn().mockResolvedValue({
+      status: 'ready',
+      area: loadedArea([line(tileX, tileY, points)], tileX, tileY),
+    });
+
+    const pending = executeTrailRoute(
+      { loadArea },
+      { start, destination },
+      controller.signal,
+      (progress) => {
+        if (progress.phase === 'building-graph' && progress.graphProgress === 0.15) {
+          queueMicrotask(() => {
+            controller.abort(new DOMException('Canceled.', 'AbortError'));
+          });
+        }
+      },
+    );
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('routes through geometrically inferred X and T junctions in the worker path', async () => {

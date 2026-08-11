@@ -68,14 +68,16 @@ function RoutePlanStatus({
           ? `Loading route tiles… ${String(progress.loadedTileCount)}/${String(progress.totalTileCount)}`
           : 'Loading route tiles…'
         : progress?.phase === 'building-graph'
-          ? 'Building route graph…'
+          ? `Building route graph… ${String(Math.round(progress.graphProgress * 100))}%`
           : progress?.phase === 'searching-route'
             ? 'Searching for a route…'
             : 'Loading route tiles…';
     const value =
       progress?.phase === 'loading-tiles' && progress.totalTileCount > 0
         ? (progress.loadedTileCount / progress.totalTileCount) * 100
-        : undefined;
+        : progress?.phase === 'building-graph'
+          ? progress.graphProgress * 100
+          : undefined;
     content = (
       <Stack spacing={0.75}>
         <Typography variant="body2">{label}</Typography>

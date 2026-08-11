@@ -1,7 +1,16 @@
 import AddIcon from '@mui/icons-material/Add';
 import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
-import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
+import {
+  Box,
+  Button,
+  IconButton,
+  Stack,
+  ToggleButton,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
@@ -99,7 +108,7 @@ export function WorkspaceSidebar({
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
   const onSceneSelected = fullWidth ? onShowMap : undefined;
   const { loadState } = useMarkersWorkspace();
-  const { startRoutePlan } = useTracksWorkspace();
+  const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
   const markerCreationMessage =
     mapViewportSnapshot === null
@@ -171,25 +180,44 @@ export function WorkspaceSidebar({
             <MarkerSortControl onMarkerSortChange={onMarkerSortChange} />
           </>
         ) : activeTab === 'tracks' ? (
-          <Tooltip
-            title={
-              trailRouter === null
-                ? 'Route planning is unavailable because map routing data is not configured'
-                : 'Plan a route on the map'
-            }
-          >
-            <span>
-              <Button
-                disabled={trailRouter === null}
+          <>
+            <Tooltip
+              title={
+                multiTrackMode ? 'Exit multi-track selection' : 'Select multiple tracks'
+              }
+            >
+              <ToggleButton
                 size="small"
-                variant="contained"
-                startIcon={<AltRouteOutlinedIcon />}
-                onClick={startRoutePlan}
+                value="multi-track"
+                aria-label="Select multiple tracks"
+                selected={multiTrackMode}
+                onClick={() => {
+                  void toggleMultiTrackMode();
+                }}
               >
-                Plan route
-              </Button>
-            </span>
-          </Tooltip>
+                <PlaylistAddCheckOutlinedIcon fontSize="small" />
+              </ToggleButton>
+            </Tooltip>
+            <Tooltip
+              title={
+                trailRouter === null
+                  ? 'Route planning is unavailable because map routing data is not configured'
+                  : 'Plan a route on the map'
+              }
+            >
+              <span>
+                <Button
+                  disabled={trailRouter === null}
+                  size="small"
+                  variant="contained"
+                  startIcon={<AltRouteOutlinedIcon />}
+                  onClick={startRoutePlan}
+                >
+                  Plan route
+                </Button>
+              </span>
+            </Tooltip>
+          </>
         ) : (
           definition.actions
         )}

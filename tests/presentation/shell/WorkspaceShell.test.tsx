@@ -2032,7 +2032,9 @@ describe('WorkspaceShell', () => {
 
     expect(await screen.findByText('Restored camera 45.2/42.4/10')).toBeVisible();
     expect(
-      await screen.findByRole('heading', { name: 'Restored trail' }),
+      within(
+        await screen.findByRole('complementary', { name: 'Track details' }),
+      ).getByRole('heading', { name: 'Restored trail' }),
     ).toBeVisible();
     await waitFor(() => {
       expect(setImportedTrackGeometry).toHaveBeenCalled();

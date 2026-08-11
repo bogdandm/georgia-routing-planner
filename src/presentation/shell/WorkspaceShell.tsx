@@ -1,4 +1,5 @@
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
 import {
   Box,
@@ -42,6 +43,7 @@ import {
   TracksWorkspaceProvider,
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
+import { RoutePlanStatus } from '@/presentation/tracks/RoutePlanControls';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
 const smartphoneViewportQuery = '(width < 900px)';
@@ -138,6 +140,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const {
     active: activeTrack,
     activeProfile,
+    elevationProgress,
     importState,
     recalculationState,
     savePreview,
@@ -475,6 +478,48 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             >
               <CircularProgress size={18} />
               <Typography variant="body2">Preparing terrain and elevation…</Typography>
+            </Stack>
+          ) : smartphoneViewport &&
+            activeTrack?.kind === 'route-plan' &&
+            (activeTrack.status === 'calculating' ||
+              activeTrack.status === 'elevation-enriching' ||
+              activeTrack.status === 'saving') ? (
+            <Box sx={{ width: '100%', px: 2 }}>
+              <RoutePlanStatus
+                draft={activeTrack}
+                elevationProgress={elevationProgress}
+              />
+            </Box>
+          ) : smartphoneViewport &&
+            activeTrack?.kind === 'route-plan' &&
+            (activeTrack.waypoints.length < 2 || activeTrack.metrics === null) ? (
+            <Stack
+              direction="row"
+              sx={{
+                width: '100%',
+                height: '100%',
+                alignItems: 'center',
+                textAlign: 'left',
+              }}
+            >
+              <Box
+                aria-hidden
+                sx={{
+                  width: 30,
+                  height: 30,
+                  ml: 0.5,
+                  mr: 1,
+                  flexShrink: 0,
+                  display: 'grid',
+                  placeItems: 'center',
+                  color: 'action.active',
+                }}
+              >
+                <KeyboardArrowUpIcon fontSize="small" />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Click the map to choose the route start and destination.
+              </Typography>
             </Stack>
           ) : activeTrackMetrics !== null ? (
             <CompactTrackSummary

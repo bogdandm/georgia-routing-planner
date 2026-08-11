@@ -52,7 +52,7 @@ function failureMessage(failure: NonNullable<RoutePlanDraft['failure']>): string
   return 'Routing data could not be decoded.';
 }
 
-function RoutePlanStatus({
+export function RoutePlanStatus({
   draft,
   elevationProgress,
 }: {

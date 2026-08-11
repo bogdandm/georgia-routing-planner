@@ -15,6 +15,7 @@ import type {
   ElevationCoordinate,
   ElevationProvider,
   ElevationSample,
+  ElevationSamplingProgressListener,
 } from '@/application/ports/ElevationProvider';
 import type { TrailRouter, TrailRouteResult } from '@/application/ports/TrailRouter';
 import {
@@ -825,6 +826,184 @@ describe('WorkspaceShell', () => {
     });
     expect(within(disclosure).getByLabelText('Elevation gain: 120 m')).toBeVisible();
     expect(within(disclosure).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows route instructions and progress in the smartphone disclosure', async () => {
+    mockViewportWidth(899);
+    const A: [number, number] = [44.64, 42.66];
+    const B: [number, number] = [44.65, 42.67];
+    const C: [number, number] = [44.66, 42.68];
+    const secondRoute = deferred<TrailRouteResult>();
+    const secondElevation = deferred<readonly ElevationSample[]>();
+    const secondElevationState: {
+      coordinates: readonly ElevationCoordinate[];
+      reportProgress: ElevationSamplingProgressListener | undefined;
+    } = {
+      coordinates: [],
+      reportProgress: undefined,
+    };
+    const route = vi
+      .fn<TrailRouter['route']>()
+      .mockResolvedValueOnce({
+        status: 'ready',
+        geometry: { type: 'LineString', coordinates: [A, B] },
+        networkDistanceMeters: 1_200,
+        snappedStart: A,
+        snappedDestination: B,
+        loadedTileCount: 1,
+        graphNodeCount: 2,
+        graphEdgeCount: 1,
+        expandedAreaRetryUsed: false,
+      })
+      .mockImplementationOnce(() => secondRoute.promise);
+    const trailRouter: TrailRouter = { route, dispose: vi.fn() };
+    const sampleMany = vi
+      .fn<ElevationProvider['sampleMany']>()
+      .mockImplementationOnce((coordinates) =>
+        Promise.resolve(
+          coordinates.map((_, index) => ({
+            status: 'available' as const,
+            meters: 1_000 + index * 100,
+          })),
+        ),
+      )
+      .mockImplementationOnce((coordinates, _signal, onProgress) => {
+        secondElevationState.coordinates = coordinates;
+        secondElevationState.reportProgress = onProgress;
+        return secondElevation.promise;
+      });
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
+      sampleMany,
+    };
+    services = {
+      ...createTestServices({ trailRouter }),
+      elevationProvider,
+    };
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand track details',
+    });
+    expect(
+      within(disclosure).getByText(
+        'Click the map to choose the route start and destination.',
+      ),
+    ).toBeVisible();
+    expect(within(disclosure).queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: A[0], latitude: A[1] });
+    });
+    expect(
+      within(disclosure).getByText(
+        'Click the map to choose the route start and destination.',
+      ),
+    ).toBeVisible();
+    expect(within(disclosure).queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: B[0], latitude: B[1] });
+    });
+    await waitFor(() => {
+      expect(within(disclosure).getByLabelText(/^Distance:/u)).toBeVisible();
+      expect(within(disclosure).getByTestId('compact-elevation-profile')).toBeVisible();
+    });
+    const firstDistance = within(disclosure)
+      .getByLabelText(/^Distance:/u)
+      .getAttribute('aria-label');
+    expect(firstDistance).not.toBeNull();
+    if (firstDistance === null) return;
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledTimes(2);
+    });
+    const reportRouteProgress = route.mock.calls[1]?.[2];
+    act(() => {
+      reportRouteProgress?.({
+        phase: 'loading-tiles',
+        attempt: 1,
+        loadedTileCount: 8,
+        totalTileCount: 16,
+        graphProgress: 0,
+      });
+    });
+    const routeProgress = await within(disclosure).findByRole('progressbar', {
+      name: 'Loading route tiles… 8/16',
+    });
+    expect(routeProgress).toHaveAttribute('aria-valuenow', '50');
+    expect(within(disclosure).queryByLabelText(firstDistance)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      secondRoute.resolve({
+        status: 'ready',
+        geometry: { type: 'LineString', coordinates: [B, C] },
+        networkDistanceMeters: 1_200,
+        snappedStart: B,
+        snappedDestination: C,
+        loadedTileCount: 1,
+        graphNodeCount: 2,
+        graphEdgeCount: 1,
+        expandedAreaRetryUsed: false,
+      });
+    });
+    await waitFor(() => {
+      expect(sampleMany).toHaveBeenCalledTimes(2);
+      expect(secondElevationState.reportProgress).toBeDefined();
+    });
+    const elevationProgressReporter = secondElevationState.reportProgress;
+    if (elevationProgressReporter === undefined)
+      throw new Error('Expected elevation progress.');
+    act(() => {
+      elevationProgressReporter({
+        completedTiles: 1,
+        totalTiles: 2,
+        indices: [],
+        samples: [],
+      });
+    });
+    const elevationProgress = await within(disclosure).findByRole('progressbar', {
+      name: 'Loading elevation tiles: 1 of 2',
+    });
+    expect(elevationProgress).toHaveAttribute('aria-valuenow', '50');
+    expect(within(disclosure).queryByLabelText(firstDistance)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      secondElevation.resolve(
+        secondElevationState.coordinates.map((_, index) => ({
+          status: 'available' as const,
+          meters: 1_000 + index * 100,
+        })),
+      );
+    });
+    await waitFor(() => {
+      expect(within(disclosure).queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(within(disclosure).getByLabelText(/^Distance:/u)).toBeVisible();
+      expect(within(disclosure).getByTestId('compact-elevation-profile')).toBeVisible();
+    });
   });
 
   it('overlays track details below 1900px and keeps them adjacent at 1900px and 1920px', async () => {

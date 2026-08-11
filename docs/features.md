@@ -358,10 +358,11 @@ ten shared-theme colors before anything is stored.
 
 The contextual sidebar lists saved markers using the same row interaction pattern as
 Tracks. It sorts by newest, name, color, or distance from the current map center; shows
-the current distance; navigates the map from a row; and supports rename, appearance
-changes, and two-step inline deletion. Markers remain in IndexedDB across browser
-restarts and render as MapLibre symbols with their selected icon, color, and name.
-Malformed stored rows are omitted and reported through bounded local diagnostics.
+the current distance; navigates the map from a row and returns smartphone users to the
+map after selecting it; and supports rename, appearance changes, and two-step inline
+deletion. Markers remain in IndexedDB across browser restarts and render as MapLibre
+symbols with their selected icon, color, and name. Malformed stored rows are omitted and
+reported through bounded local diagnostics.
 
 Marker search, grouping, filtering, coordinate/elevation/scale editing, remote
 synchronization, Satellite targeting, and copying into Create GPX are not currently

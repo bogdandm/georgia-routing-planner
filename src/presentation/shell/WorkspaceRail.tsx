@@ -392,15 +392,15 @@ export function WorkspaceRail({
           },
         }}
       >
-        <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
         <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
-        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
         <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
+        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
+        <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
       </Tabs>
 
       <Box
         sx={{
-          mx: 'auto',
+          mx: 0.75,
           mt: 0.5,
           visibility: collapsed ? 'hidden' : 'visible',
         }}

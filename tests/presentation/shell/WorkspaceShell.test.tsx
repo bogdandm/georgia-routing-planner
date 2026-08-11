@@ -30,6 +30,7 @@ import type {
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   type LocalTrackContent,
@@ -367,6 +368,29 @@ function gpxFileWithCompanionRoute(): File {
 }
 
 describe('WorkspaceShell', () => {
+  it('orders primary rail actions from tracks through sharing', () => {
+    renderWorkspaceShell();
+
+    const navigation = screen.getByRole('navigation', {
+      name: 'Workspace navigation',
+    });
+    const tabs = within(navigation).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Tracks',
+      'Markers',
+      'Layers',
+      'Satellite',
+    ]);
+
+    const satellite = within(navigation).getByRole('tab', { name: 'Satellite' });
+    const share = within(navigation).getByRole('button', {
+      name: 'Share map view',
+    });
+    expect(
+      satellite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('creates a share link only after the explicit rail action', async () => {
     const user = userEvent.setup();
     const writeText = vi
@@ -585,7 +609,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    ).toEqual(['Tracks', 'Markers', 'Layers', 'Satellite']);
     expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
@@ -722,6 +746,36 @@ describe('WorkspaceShell', () => {
     expect(useUiStore.getState().navigationCollapsed).toBe(false);
     expect(saveUiPreferences).not.toHaveBeenCalled();
     expect(window.location.hash).toBe('');
+    expect(container.querySelector('#mobile-workspace')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+  it('returns smartphone marker selection to the map', async () => {
+    await services.database.saveSavedMarker({
+      schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+      id: 'mobile-marker',
+      name: 'Mobile marker',
+      normalizedName: 'mobile marker',
+      coordinate: [44.9, 41.8],
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+    });
+    useUiStore.setState({ activeTab: 'markers' });
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(await screen.findByRole('button', { name: /^Mobile marker/ }));
+
+    expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
+      longitude: 44.9,
+      latitude: 41.8,
+    });
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
     expect(container.querySelector('#mobile-workspace')).toHaveAttribute(
       'aria-hidden',
       'true',
@@ -2079,7 +2133,9 @@ describe('WorkspaceShell', () => {
 
     expect(await screen.findByText('Restored camera 45.2/42.4/10')).toBeVisible();
     expect(
-      await screen.findByRole('heading', { name: 'Restored trail' }),
+      within(
+        await screen.findByRole('complementary', { name: 'Track details' }),
+      ).getByRole('heading', { name: 'Restored trail' }),
     ).toBeVisible();
     await waitFor(() => {
       expect(setImportedTrackGeometry).toHaveBeenCalled();

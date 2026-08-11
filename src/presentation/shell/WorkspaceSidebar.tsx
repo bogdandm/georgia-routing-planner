@@ -107,6 +107,7 @@ export function WorkspaceSidebar({
   const camera = mapSnapshot?.camera ?? defaultGeorgiaCamera;
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
   const onSceneSelected = fullWidth ? onShowMap : undefined;
+  const onMarkerSelected = fullWidth ? onShowMap : undefined;
   const { loadState } = useMarkersWorkspace();
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
@@ -253,7 +254,9 @@ export function WorkspaceSidebar({
           />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
-          <MarkersPanel />
+          <MarkersPanel
+            {...(onMarkerSelected === undefined ? {} : { onMarkerSelected })}
+          />
         </Box>
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
           <LayersPanel />

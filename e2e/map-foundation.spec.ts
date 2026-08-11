@@ -350,7 +350,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   );
 });
 
-test('uses conventional native camera gestures and resets them with the compass', async ({
+test('pans in 2D and orbits 3D terrain with middle drag before compass reset', async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -389,16 +389,28 @@ test('uses conventional native camera gestures and resets them with the compass'
   await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
     timeout: terrainPersistenceTimeoutMs,
   });
-  const terrainCameraBeforeMiddlePan = await readStoredCamera(page);
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   const pivot = page.locator('.map-orbit-pivot');
-  await expect(pivot).toHaveCount(0);
+  await expect(pivot).toHaveCount(1);
+  const pivotBeforeMiddleOrbit = await pivot.boundingBox();
+  expect(pivotBeforeMiddleOrbit).not.toBeNull();
   await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
+  if (pivotBeforeMiddleOrbit !== null) {
+    await expect
+      .poll(async () => {
+        const current = await pivot.boundingBox();
+        return current === null
+          ? Number.POSITIVE_INFINITY
+          : Math.hypot(
+              current.x - pivotBeforeMiddleOrbit.x,
+              current.y - pivotBeforeMiddleOrbit.y,
+            );
+      })
+      .toBeLessThan(4);
+  }
   await page.mouse.up({ button: 'middle' });
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude)
-    .not.toBe(terrainCameraBeforeMiddlePan?.longitude);
+  await expect(pivot).toHaveCount(0);
 
   await page.mouse.move(centerX, centerY);
   await page.keyboard.down('Shift');

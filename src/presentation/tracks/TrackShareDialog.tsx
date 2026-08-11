@@ -118,7 +118,13 @@ export function TrackShareDialog({
       setState({ kind: 'enabled', url, copyFailed: false });
       await copy(url);
     } catch (error) {
-      if (!controller.signal.aborted) {
+      if (controller.signal.aborted) return;
+      if (
+        error instanceof TrackShareError &&
+        (error.category === 'track-not-found' || error.category === 'track-not-ready')
+      ) {
+        setState({ kind: 'disabled', notice: 'Sync this track before sharing.' });
+      } else {
         setState({ kind: 'error', message: messageFor(error) });
       }
     }

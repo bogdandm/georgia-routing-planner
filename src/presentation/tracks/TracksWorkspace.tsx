@@ -433,7 +433,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           },
           warnings: [],
         };
-        setActive({
+        const sharedTrack: SharedTrackSelection = {
           kind: 'shared',
           id: `shared:${shared.contentHash}`,
           file: new File([], safeTrackFilename(shared.metadata.name, 'gpx')),
@@ -448,7 +448,36 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           calculatedProfile: null,
           calculatedMetrics: null,
           namingStatus: 'unavailable',
-        });
+        };
+        setActive(sharedTrack);
+        void prepareImportedTrack(
+          sourceSegments,
+          elevationProvider,
+          controller.signal,
+          {
+            onProgress: (progress) => {
+              if (!controller.signal.aborted) setElevationProgress(progress);
+            },
+          },
+        )
+          .then((prepared) => {
+            if (controller.signal.aborted) return;
+            setElevationProgress(null);
+            setActive((current) =>
+              current?.kind === 'shared' && current.id === sharedTrack.id
+                ? { ...current, ...prepared }
+                : current,
+            );
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) {
+              setElevationProgress(null);
+              logger.log({
+                level: 'warn',
+                name: 'shared-track.elevation-preparation.failed',
+              });
+            }
+          });
       },
       (error: unknown) => {
         if (controller.signal.aborted) return;
@@ -462,7 +491,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     return () => {
       controller.abort();
     };
-  }, [trackShares]);
+  }, [elevationProvider, logger, trackShares]);
 
   useEffect(
     () =>

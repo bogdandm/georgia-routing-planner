@@ -2,7 +2,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { TrackShareService } from '@/application/tracks/TrackShareService';
+import {
+  TrackShareError,
+  type TrackShareService,
+} from '@/application/tracks/TrackShareService';
 import { TrackShareDialog } from '@/presentation/tracks/TrackShareDialog';
 
 const contentHash = 'a'.repeat(64);
@@ -90,5 +93,29 @@ describe('TrackShareDialog', () => {
       expect(screen.getByRole('button', { name: 'Share' })).toBeVisible();
     });
     expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+  });
+
+  it('keeps sharing disabled when the track is no longer ready', async () => {
+    const user = userEvent.setup();
+    const trackShares = service({
+      enable: vi
+        .fn()
+        .mockRejectedValue(new TrackShareError('track-not-ready', 'Not ready')),
+    });
+
+    render(
+      <TrackShareDialog
+        contentHash={contentHash}
+        open
+        service={trackShares}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Share' }));
+
+    expect(await screen.findByText('Sync this track before sharing.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
   });
 });

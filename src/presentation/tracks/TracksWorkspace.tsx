@@ -1875,8 +1875,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [mapLayers],
   );
   useEffect(() => {
-    const highlightSegments =
-      multiTrackMode || active?.kind === 'route-plan' || activeProfile === null
+    const highlightSegments = multiTrackMode
+      ? readyMultiTrackSelections.flatMap((selection) => {
+          const profile = selection.profile;
+          if (profile === null) return [];
+          return profile.gradeSubsegments.map((gradeSubsegment) => ({
+            coordinates: profile.points
+              .slice(
+                gradeSubsegment.startSampleIndex,
+                gradeSubsegment.endSampleIndex + 1,
+              )
+              .map((point) => point.coordinate),
+            color: appColors.elevationGrade[gradeSubsegment.band],
+          }));
+        })
+      : active?.kind === 'route-plan' || activeProfile === null
         ? null
         : activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
             coordinates: activeProfile.points
@@ -1888,7 +1901,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             color: appColors.elevationGrade[gradeSubsegment.band],
           }));
     mapLayers?.setImportedTrackHighlight(highlightSegments);
-  }, [active?.kind, activeProfile, mapLayers, multiTrackMode]);
+  }, [
+    active?.kind,
+    activeProfile,
+    mapLayers,
+    multiTrackMode,
+    readyMultiTrackSelections,
+  ]);
 
   const value = useMemo<TracksWorkspaceValue>(
     () => ({
@@ -2685,7 +2704,7 @@ function InteractiveElevationProfile({
   };
   return (
     <Stack spacing={1.5}>
-      {recalculationState === 'recalculating' ? (
+      {showHeading && recalculationState === 'recalculating' ? (
         <ElevationPreparationChart
           progress={elevationProgress}
           showProgressStatus={active?.kind !== 'route-plan'}
@@ -2985,7 +3004,16 @@ export function TrackDetailsPane({
               <ArrowBackOutlinedIcon fontSize="small" />
             </IconButton>
           ) : null}
-          <Box sx={{ flex: 1 }} />
+          <Box sx={{ minWidth: 0, flex: 1, ml: mode === 'adjacent' ? 0 : 1 }}>
+            <Typography
+              component="h2"
+              variant="subtitle1"
+              noWrap
+              sx={{ fontWeight: 700 }}
+            >
+              Selected tracks
+            </Typography>
+          </Box>
           {mode === 'adjacent' ? (
             <IconButton
               size="small"

@@ -45,6 +45,7 @@ const HOVER_GRADE_SMOOTHING_RADIUS_METERS = 150;
 
 interface ElevationProfileChartProps {
   readonly profile: ElevationProfile;
+  readonly showHeading?: boolean;
   readonly activeSegmentIndex: number | null;
   readonly selectedSegmentIndex: number | null;
   readonly trackGradeLegendDismissed: boolean;
@@ -407,6 +408,7 @@ export function ElevationPreparationChart({
 
 export function ElevationProfileChart({
   profile,
+  showHeading = true,
   activeSegmentIndex,
   selectedSegmentIndex,
   trackGradeLegendDismissed,
@@ -440,30 +442,32 @@ export function ElevationProfileChart({
 
   return (
     <Stack spacing={1.5}>
-      <Box sx={{ position: 'relative' }}>
-        <Typography component="h3" variant="subtitle2">
-          Elevation profile
-        </Typography>
-        {trackGradeLegendDismissed ? (
-          <MuiTooltip title="Show track grade legend">
-            <IconButton
-              aria-label="Show track grade legend"
-              onClick={() => {
-                onTrackGradeLegendDismissedChange(false);
-              }}
-              size="small"
-              sx={{
-                position: 'absolute',
-                right: 0,
-                top: '50%',
-                transform: 'translateY(-50%)',
-              }}
-            >
-              <HelpOutlineOutlinedIcon fontSize="small" />
-            </IconButton>
-          </MuiTooltip>
-        ) : null}
-      </Box>
+      {showHeading ? (
+        <Box sx={{ position: 'relative' }}>
+          <Typography component="h3" variant="subtitle2">
+            Elevation profile
+          </Typography>
+          {trackGradeLegendDismissed ? (
+            <MuiTooltip title="Show track grade legend">
+              <IconButton
+                aria-label="Show track grade legend"
+                onClick={() => {
+                  onTrackGradeLegendDismissedChange(false);
+                }}
+                size="small"
+                sx={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <HelpOutlineOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null}
+        </Box>
+      ) : null}
       <Box
         role="img"
         aria-label={`Elevation profile from ${String(Math.round(profile.minimumMeters))} to ${String(Math.round(profile.maximumMeters))} metres`}

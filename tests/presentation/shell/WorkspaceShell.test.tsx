@@ -209,6 +209,84 @@ function savedTrackContent(trackId: string): LocalTrackContent {
     ],
   };
 }
+function multiTrackSummary(
+  id: string,
+  name: string,
+  distanceMeters: number,
+  elapsedSeconds: number,
+  ascentMeters: number,
+  descentMeters: number,
+  longitude: number,
+): LocalTrackSummary {
+  const base = savedTrackSummary(id, name);
+  return {
+    ...base,
+    metrics: {
+      ...base.metrics,
+      distanceMeters,
+      elapsedSeconds,
+      ascentMeters,
+      descentMeters,
+      startCoordinate: [longitude, 42],
+      endCoordinate: [longitude + 0.01, 42.01],
+      bounds: {
+        west: longitude,
+        south: 42,
+        east: longitude + 0.01,
+        north: 42.01,
+        crossesAntimeridian: false,
+      },
+      center: [longitude + 0.005, 42.005],
+      minimumElevationMeters: 1_000,
+      maximumElevationMeters: 1_120,
+      elevationSource: 'gpx',
+    },
+  };
+}
+
+function multiTrackContent(trackId: string, longitude: number): LocalTrackContent {
+  return {
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    trackId,
+    trackPoints: [
+      [
+        { coordinate: [longitude, 42], elevationMeters: 1_000 },
+        { coordinate: [longitude + 0.01, 42.01], elevationMeters: 1_120 },
+      ],
+    ],
+  };
+}
+async function saveMultiTrackPair(): Promise<{
+  readonly alpha: LocalTrackSummary;
+  readonly alphaContent: LocalTrackContent;
+  readonly beta: LocalTrackSummary;
+  readonly betaContent: LocalTrackContent;
+}> {
+  const alpha = multiTrackSummary(
+    'local:alpha',
+    'Alpha trail',
+    1_000,
+    1_800,
+    100,
+    80,
+    44,
+  );
+  const beta = multiTrackSummary(
+    'local:beta',
+    'Beta trail',
+    2_000,
+    3_600,
+    200,
+    160,
+    45,
+  );
+  const alphaContent = multiTrackContent(alpha.id, 44);
+  const betaContent = multiTrackContent(beta.id, 45);
+  await services.database.saveLocalTrack(alpha, alphaContent);
+  await services.database.saveLocalTrack(beta, betaContent);
+  await services.database.saveLatestOpenedTrackId(alpha.id);
+  return { alpha, alphaContent, beta, betaContent };
+}
 
 const testViewport = {
   bounds: { west: 44.1, south: 42.1, east: 44.9, north: 42.9 },
@@ -4591,6 +4669,351 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expectIndicator('User synchronization successful', appColors.status.success);
     });
+  });
+  it('renders click-ordered multi-track geometry and read-only details', async () => {
+    const { alphaContent, betaContent } = await saveMultiTrackPair();
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackGeometry = vi.spyOn(mapLayers, 'setImportedTrackGeometry');
+    const clearImportedTrackGeometry = vi.spyOn(
+      mapLayers,
+      'clearImportedTrackGeometry',
+    );
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1900);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await screen.findByRole('heading', { name: 'Alpha trail' });
+    const toggle = screen.getByRole('button', {
+      name: 'Select multiple tracks',
+    });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
+    const alphaRow = within(savedTracks).getByRole('button', {
+      name: /^Alpha trail/u,
+    });
+    const betaRow = within(savedTracks).getByRole('button', {
+      name: /^Beta trail/u,
+    });
+    expect(alphaRow).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(betaRow);
+    const details = await screen.findByRole('complementary', {
+      name: 'Multiple track details',
+    });
+    await waitFor(() => {
+      expect(betaRow).toHaveAttribute('aria-pressed', 'true');
+    });
+    const alphaSection = within(details).getByLabelText('Alpha trail track details');
+    const betaSection = within(details).getByLabelText('Beta trail track details');
+    expect(
+      alphaSection.compareDocumentPosition(betaSection) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const combined = within(details).getByRole('group', {
+      name: 'Combined track details',
+    });
+    expect(within(combined).getByLabelText('Distance: 3.0 km')).toBeVisible();
+    expect(within(combined).getByLabelText('Recorded time: 1h 30m')).toBeVisible();
+    expect(within(combined).getByLabelText('Average speed: 2.0 km/h')).toBeVisible();
+    expect(within(combined).getByLabelText('Elevation gain: 300 m')).toBeVisible();
+    expect(within(combined).getByLabelText('Elevation loss: 240 m')).toBeVisible();
+    expect(within(alphaSection).getByLabelText('Distance: 1.0 km')).toBeVisible();
+    expect(within(betaSection).getByLabelText('Distance: 2.0 km')).toBeVisible();
+    expect(within(alphaSection).getAllByRole('img')).toHaveLength(1);
+    expect(within(betaSection).getAllByRole('img')).toHaveLength(1);
+    expect(
+      within(details).queryByRole('heading', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(details).queryByRole('heading', { name: 'Elevation profile' }),
+    ).not.toBeInTheDocument();
+    for (const actionName of [
+      'Track actions',
+      'Close track',
+      'Confirm rename',
+      'Save',
+      'Discard',
+      'Recalculate elevation',
+    ]) {
+      expect(
+        within(details).queryByRole('button', { name: actionName }),
+      ).not.toBeInTheDocument();
+    }
+    expect(within(details).queryByText('Climbs & descents')).not.toBeInTheDocument();
+    expect(within(details).queryByText(/fixture\.gpx/u)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(setImportedTrackGeometry).toHaveBeenLastCalledWith([
+        alphaContent.trackPoints[0]?.map((point) => point.coordinate),
+        betaContent.trackPoints[0]?.map((point) => point.coordinate),
+      ]);
+    });
+
+    await user.click(alphaRow);
+    await waitFor(() => {
+      expect(setImportedTrackGeometry).toHaveBeenLastCalledWith([
+        betaContent.trackPoints[0]?.map((point) => point.coordinate),
+      ]);
+    });
+    await user.click(alphaRow);
+    const reorderedDetails = await screen.findByRole('complementary', {
+      name: 'Multiple track details',
+    });
+    const reorderedBeta = within(reorderedDetails).getByLabelText(
+      'Beta trail track details',
+    );
+    const reorderedAlpha = within(reorderedDetails).getByLabelText(
+      'Alpha trail track details',
+    );
+    expect(
+      reorderedBeta.compareDocumentPosition(reorderedAlpha) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(betaRow);
+    await user.click(alphaRow);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('complementary', {
+          name: 'Multiple track details',
+        }),
+      ).not.toBeInTheDocument();
+      expect(clearImportedTrackGeometry).toHaveBeenCalled();
+    });
+  });
+
+  it('omits partial optional totals from multi-track combined details', async () => {
+    const alpha = multiTrackSummary(
+      'local:complete',
+      'Complete trail',
+      1_000,
+      1_800,
+      100,
+      80,
+      44,
+    );
+    const incompleteBase = savedTrackSummary('local:incomplete', 'Incomplete trail');
+    const incomplete: LocalTrackSummary = {
+      ...incompleteBase,
+      metrics: {
+        ...incompleteBase.metrics,
+        distanceMeters: 2_000,
+        startCoordinate: [45, 42],
+        endCoordinate: [45.01, 42.01],
+        bounds: {
+          west: 45,
+          south: 42,
+          east: 45.01,
+          north: 42.01,
+          crossesAntimeridian: false,
+        },
+        center: [45.005, 42.005],
+      },
+    };
+    await services.database.saveLocalTrack(alpha, multiTrackContent(alpha.id, 44));
+    await services.database.saveLocalTrack(
+      incomplete,
+      multiTrackContent(incomplete.id, 45),
+    );
+    await services.database.saveLatestOpenedTrackId(alpha.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1900);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await screen.findByRole('heading', { name: 'Complete trail' });
+    await user.click(screen.getByRole('button', { name: 'Select multiple tracks' }));
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Incomplete trail/u,
+      }),
+    );
+    const combined = await screen.findByRole('group', {
+      name: 'Combined track details',
+    });
+    expect(within(combined).getByLabelText('Distance: 3.0 km')).toBeVisible();
+    expect(within(combined).queryByLabelText(/Recorded time:/u)).toBeNull();
+    expect(within(combined).queryByLabelText(/Average speed:/u)).toBeNull();
+    expect(within(combined).queryByLabelText(/Elevation gain:/u)).toBeNull();
+    expect(within(combined).queryByLabelText(/Elevation loss:/u)).toBeNull();
+  });
+
+  it('keeps multi-track transitions transient and preserves the ordinary active track', async () => {
+    const { beta } = await saveMultiTrackPair();
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1900);
+    const user = userEvent.setup();
+    const firstRender = renderWorkspaceShell();
+
+    await screen.findByRole('heading', { name: 'Alpha trail' });
+    const toggle = screen.getByRole('button', {
+      name: 'Select multiple tracks',
+    });
+    await user.click(toggle);
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Beta trail/u,
+      }),
+    );
+    await screen.findByLabelText('Beta trail track details');
+    await expect(services.database.loadLatestOpenedTrackId()).resolves.toBe(
+      'local:alpha',
+    );
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      within(screen.getByRole('complementary', { name: 'Track details' })).getByRole(
+        'heading',
+        { name: 'Alpha trail' },
+      ),
+    ).toBeVisible();
+    await user.click(toggle);
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Beta trail/u,
+      }),
+    );
+    await screen.findByLabelText('Beta trail track details');
+
+    firstRender.unmount();
+    renderWorkspaceShell();
+
+    const restoredToggle = await screen.findByRole('button', {
+      name: 'Select multiple tracks',
+    });
+    expect(restoredToggle).toHaveAttribute('aria-pressed', 'false');
+    const restoredDetails = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    expect(
+      within(restoredDetails).getByRole('heading', { name: 'Alpha trail' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('complementary', { name: 'Multiple track details' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: new RegExp(`^${beta.name}`, 'u'),
+      }),
+    ).not.toHaveAttribute('aria-pressed');
+  });
+
+  it('uses the discard confirmation before entering empty multi-track mode', async () => {
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1900);
+    const confirm = vi.spyOn(window, 'confirm');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+    await user.upload(input, gpxFile());
+    await screen.findByRole('heading', { name: 'New track' });
+    const toggle = screen.getByRole('button', {
+      name: 'Select multiple tracks',
+    });
+
+    confirm.mockReturnValueOnce(false);
+    await user.click(toggle);
+    expect(confirm).toHaveBeenCalledWith('Discard this unsaved track?');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('complementary', { name: 'Track details' })).toBeVisible();
+
+    confirm.mockReturnValueOnce(true);
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Multiple track details' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('reopens dismissed multi-track details after another selection', async () => {
+    await saveMultiTrackPair();
+    await services.database.saveLatestOpenedTrackId(null);
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1200);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const savedTracks = await screen.findByRole('list', {
+      name: 'Saved tracks',
+    });
+    const toggle = screen.getByRole('button', {
+      name: 'Select multiple tracks',
+    });
+    await user.click(toggle);
+    await user.click(
+      within(savedTracks).getByRole('button', { name: /^Alpha trail/u }),
+    );
+    const initialDetails = await screen.findByRole('complementary', {
+      name: 'Multiple track details',
+    });
+    await user.click(
+      within(initialDetails).getByRole('button', { name: 'Back to tracks' }),
+    );
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const updatedSavedTracks = screen.getByRole('list', { name: 'Saved tracks' });
+    expect(
+      within(updatedSavedTracks).getByRole('button', { name: /^Alpha trail/u }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('complementary', { name: 'Multiple track details' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(updatedSavedTracks).getByRole('button', { name: /^Beta trail/u }),
+    );
+    const reopened = await screen.findByRole('complementary', {
+      name: 'Multiple track details',
+    });
+    expect(within(reopened).getByLabelText('Alpha trail track details')).toBeVisible();
+    expect(within(reopened).getByLabelText('Beta trail track details')).toBeVisible();
+  });
+
+  it('keeps mobile multi-track row selection open until the combined disclosure is expanded', async () => {
+    await saveMultiTrackPair();
+    await services.database.saveLatestOpenedTrackId(null);
+    useUiStore.setState({ activeTab: 'tracks', mobileWorkspaceOpen: true });
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const toggle = screen.getByRole('button', {
+      name: 'Select multiple tracks',
+    });
+    await user.click(toggle);
+    const savedTracks = await screen.findByRole('list', { name: 'Saved tracks' });
+    await user.click(
+      within(savedTracks).getByRole('button', { name: /^Alpha trail/u }),
+    );
+    await user.click(within(savedTracks).getByRole('button', { name: /^Beta trail/u }));
+
+    expect(screen.getByRole('complementary', { name: 'Tracks tools' })).toBeVisible();
+    expect(
+      screen.queryByRole('complementary', { name: 'Multiple track details' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show map' }));
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand multiple track details',
+    });
+    expect(within(disclosure).getByLabelText('Distance: 3.0 km')).toBeVisible();
+    expect(within(disclosure).queryByTestId('compact-elevation-profile')).toBeNull();
+
+    await user.click(disclosure);
+    expect(
+      await screen.findByRole('complementary', {
+        name: 'Multiple track details',
+      }),
+    ).toBeVisible();
   });
 
   it('returns to the map before beginning mobile marker placement and cancels on tab change', async () => {

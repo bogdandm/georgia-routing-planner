@@ -53,4 +53,42 @@ describe('TrackShareDialog', () => {
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Disable share' })).toBeVisible();
   });
+
+  it('does not restore a link after disabling it during a clipboard operation', async () => {
+    const user = userEvent.setup();
+    let resolveCopy: (() => void) | undefined;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCopy = resolve;
+        }),
+    );
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const disable = vi.fn().mockResolvedValue(undefined);
+    const trackShares = service({
+      status: vi.fn().mockResolvedValue({ enabled: true, token }),
+      disable,
+    });
+
+    render(
+      <TrackShareDialog
+        contentHash={contentHash}
+        open
+        service={trackShares}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Copy link' }));
+    await user.click(screen.getByRole('button', { name: 'Disable share' }));
+    await waitFor(() => {
+      expect(disable).toHaveBeenCalledWith(contentHash, expect.any(AbortSignal));
+    });
+    resolveCopy?.();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Share' })).toBeVisible();
+    });
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+  });
 });

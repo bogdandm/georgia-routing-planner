@@ -92,9 +92,17 @@ export function TrackShareDialog({
   const copy = async (url: string): Promise<void> => {
     try {
       await navigator.clipboard.writeText(url);
-      setState({ kind: 'enabled', url, copyFailed: false });
+      setState((current) =>
+        current.kind === 'enabled' && current.url === url
+          ? { kind: 'enabled', url, copyFailed: false }
+          : current,
+      );
     } catch {
-      setState({ kind: 'enabled', url, copyFailed: true });
+      setState((current) =>
+        current.kind === 'enabled' && current.url === url
+          ? { kind: 'enabled', url, copyFailed: true }
+          : current,
+      );
     }
   };
 

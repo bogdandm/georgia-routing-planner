@@ -1370,7 +1370,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       renderedTrackId.current = null;
       if (active.kind === 'preview') {
         setActive((current) => {
-          if (current?.kind !== 'preview' || current.id !== activeId) return current;
+          if (current?.kind !== 'preview' || current.id !== activeId) {
+            return current;
+          }
           const updated: PreparedPreviewTrack = {
             ...current,
             preparationStatus: 'ready',
@@ -1381,6 +1383,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 : 'unavailable',
           };
           return updated;
+        });
+      } else if (active.kind === 'shared') {
+        setActive((current) => {
+          if (current?.kind !== 'shared' || current.id !== activeId) {
+            return current;
+          }
+          return { ...current, preparationStatus: 'ready', ...prepared };
         });
       } else {
         const summary = await database.replaceCalculatedTrackElevation(

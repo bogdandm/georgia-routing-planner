@@ -42,8 +42,10 @@ import {
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   normalizeLocalTrackName,
+  trackSorts,
   type LocalTrackContent,
   type LocalTrackSummary,
+  type TrackSort,
 } from '@/domain/tracks/localTrack';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
@@ -199,6 +201,7 @@ const uiPreferencesSchema = z
     navigationCollapsed: z.boolean().default(false),
     elevationGradeLegendDismissed: z.boolean().default(false),
     markerSort: z.enum(markerSorts).default('created'),
+    trackSort: z.enum(trackSorts).default('created'),
   })
   .strict();
 
@@ -207,6 +210,7 @@ interface UiPreferences {
   readonly navigationCollapsed: boolean;
   readonly elevationGradeLegendDismissed: boolean;
   readonly markerSort: MarkerSort;
+  readonly trackSort: TrackSort;
 }
 
 const defaultUiPreferences: UiPreferences = {
@@ -214,6 +218,7 @@ const defaultUiPreferences: UiPreferences = {
   navigationCollapsed: false,
   elevationGradeLegendDismissed: false,
   markerSort: 'created',
+  trackSort: 'created',
 };
 
 const mapCameraKey = 'map.camera';

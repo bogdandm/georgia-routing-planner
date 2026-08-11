@@ -12,6 +12,7 @@ import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
+import SortIcon from '@mui/icons-material/Sort';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
@@ -29,6 +30,7 @@ import {
   Menu,
   MenuItem,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Tooltip,
@@ -42,6 +44,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type DragEvent,
   type PropsWithChildren,
 } from 'react';
@@ -53,6 +56,7 @@ import {
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
 import type {
   ParsedGpx,
   TrackCoordinate,
@@ -65,6 +69,7 @@ import {
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
+  type TrackSort,
 } from '@/domain/tracks/localTrack';
 import {
   calculateTrackMetrics,
@@ -127,6 +132,7 @@ import {
   requestMapFitBounds,
   requestMapNavigation,
 } from '@/presentation/map/mapInteractionStore';
+import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 
@@ -219,6 +225,50 @@ interface GeneratedNameInput {
 
 const TracksWorkspaceContext = createContext<TracksWorkspaceValue | null>(null);
 
+function sortTracks(
+  summaries: readonly LocalTrackSummary[],
+  sort: TrackSort,
+  mapCenter: MapCoordinate | null,
+): readonly LocalTrackSummary[] {
+  return [...summaries].sort((left, right) => {
+    const byFavorite = Number(right.favorite) - Number(left.favorite);
+    if (byFavorite !== 0) return byFavorite;
+
+    const byNewest = right.savedAt.localeCompare(left.savedAt, 'en');
+    if (sort === 'created') {
+      return byNewest === 0 ? left.id.localeCompare(right.id, 'en') : byNewest;
+    }
+    if (sort === 'oldest') {
+      const byOldest = left.savedAt.localeCompare(right.savedAt, 'en');
+      return byOldest === 0 ? left.id.localeCompare(right.id, 'en') : byOldest;
+    }
+    const byName = left.normalizedName.localeCompare(right.normalizedName, 'en');
+    if (sort === 'name') {
+      if (byName !== 0) return byName;
+      return byNewest === 0 ? left.id.localeCompare(right.id, 'en') : byNewest;
+    }
+    if (mapCenter === null) {
+      return byNewest === 0 ? left.id.localeCompare(right.id, 'en') : byNewest;
+    }
+
+    const leftDistance = geodesicDistanceKm(
+      mapCenter.latitude,
+      mapCenter.longitude,
+      left.metrics.center[1],
+      left.metrics.center[0],
+    );
+    const rightDistance = geodesicDistanceKm(
+      mapCenter.latitude,
+      mapCenter.longitude,
+      right.metrics.center[1],
+      right.metrics.center[0],
+    );
+    const byDistance = leftDistance - rightDistance;
+    if (byDistance !== 0) return byDistance;
+    return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+  });
+}
+
 interface ImportErrorNotice {
   readonly message: string;
   readonly occurrence: number;
@@ -296,8 +346,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     logger,
     userData,
     mapLayers,
+    mapViewport,
     searchPlaces,
   } = useRuntimeServices();
+  const trackSort = useUiStore((state) => state.trackSort);
+  const subscribeViewport = useCallback(
+    (listener: () => void) => mapViewport.subscribe(listener),
+    [mapViewport],
+  );
+  const getViewportSnapshot = useCallback(
+    () => mapViewport.getViewportSnapshot(),
+    [mapViewport],
+  );
+  const viewport = useSyncExternalStore(
+    subscribeViewport,
+    getViewportSnapshot,
+    getViewportSnapshot,
+  );
+  const mapCenter = viewport?.center ?? null;
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
@@ -1526,10 +1592,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const filteredSummaries = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('en');
-    return normalizedQuery.length === 0
-      ? summaries
-      : summaries.filter((summary) => summary.normalizedName.includes(normalizedQuery));
-  }, [query, summaries]);
+    const matchingSummaries =
+      normalizedQuery.length === 0
+        ? summaries
+        : summaries.filter((summary) =>
+            summary.normalizedName.includes(normalizedQuery),
+          );
+    return sortTracks(matchingSummaries, trackSort, mapCenter);
+  }, [mapCenter, query, summaries, trackSort]);
 
   const activeProfile = useMemo(() => elevationProfileForActiveTrack(active), [active]);
   useEffect(
@@ -1620,6 +1690,73 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   return <TracksWorkspaceContext value={value}>{children}</TracksWorkspaceContext>;
+}
+
+interface TrackSortControlProps {
+  readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
+}
+
+const trackSortLabels: Readonly<Record<TrackSort, string>> = {
+  created: 'Newest',
+  name: 'Name',
+  oldest: 'Oldest',
+  distance: 'Distance from map center',
+};
+
+export function TrackSortControl({ onTrackSortChange }: TrackSortControlProps) {
+  const trackSort = useUiStore((state) => state.trackSort);
+  const [sortSaveError, setSortSaveError] = useState(false);
+  const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
+
+  const chooseSort = async (sort: TrackSort) => {
+    setSortAnchor(null);
+    const saved = await onTrackSortChange(sort);
+    setSortSaveError(!saved);
+  };
+
+  return (
+    <>
+      <Tooltip title={`Sort: ${trackSortLabels[trackSort]}`}>
+        <IconButton
+          size="small"
+          aria-label={`Sort tracks. Current: ${trackSortLabels[trackSort]}`}
+          aria-haspopup="menu"
+          onClick={(event) => {
+            setSortAnchor(event.currentTarget);
+          }}
+        >
+          <SortIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={sortAnchor}
+        open={sortAnchor !== null}
+        onClose={() => {
+          setSortAnchor(null);
+        }}
+      >
+        {(Object.keys(trackSortLabels) as TrackSort[]).map((sort) => (
+          <MenuItem
+            key={sort}
+            selected={sort === trackSort}
+            onClick={() => {
+              void chooseSort(sort);
+            }}
+          >
+            {trackSortLabels[sort]}
+          </MenuItem>
+        ))}
+      </Menu>
+      <Snackbar
+        open={sortSaveError}
+        autoHideDuration={4_000}
+        message="Sort preference could not be saved"
+        onClose={() => {
+          setSortSaveError(false);
+        }}
+      />
+    </>
+  );
 }
 
 function TrackImportZone() {

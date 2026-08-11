@@ -8,6 +8,10 @@ import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculatio
 
 export const LOCAL_TRACK_SCHEMA_VERSION = 4;
 
+export const trackSorts = ['created', 'name', 'oldest', 'distance'] as const;
+
+export type TrackSort = (typeof trackSorts)[number];
+
 export interface LocalTrackSummary {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly id: string;

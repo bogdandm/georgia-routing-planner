@@ -9,6 +9,7 @@ import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { WorkspaceErrorBoundary } from '@/presentation/shell/WorkspaceErrorBoundary';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
+import type { TrackSort } from '@/domain/tracks/localTrack';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import '@/presentation/styles/global.css';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -20,6 +21,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
   let navigationCollapsed = false;
   let elevationGradeLegendDismissed = false;
   let markerSort: MarkerSort = 'created';
+  let trackSort: TrackSort = 'created';
 
   try {
     const preferences = await services.database.loadUiPreferences();
@@ -27,6 +29,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     navigationCollapsed = preferences.navigationCollapsed;
     elevationGradeLegendDismissed = preferences.elevationGradeLegendDismissed;
     markerSort = preferences.markerSort;
+    trackSort = preferences.trackSort;
   } catch {
     services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
   }
@@ -36,6 +39,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     navigationCollapsed,
     elevationGradeLegendDismissed,
     markerSort,
+    trackSort,
   });
   const root = createRoot(rootElement);
   const dispose = registerPageLifecycleDisposal(() => {

@@ -4,6 +4,7 @@ import {
   LOCAL_TRACK_SCHEMA_VERSION,
   localTrackSegments,
   normalizeLocalTrackName,
+  trackSorts,
   type LocalTrackContent,
 } from '@/domain/tracks/localTrack';
 
@@ -20,6 +21,12 @@ describe('normalizeLocalTrackName', () => {
     expect(() => normalizeLocalTrackName('x'.repeat(201))).toThrow(
       'Track name must be 200 characters or fewer.',
     );
+  });
+});
+
+describe('track sorting', () => {
+  it('defines the stable persisted sort options', () => {
+    expect(trackSorts).toEqual(['created', 'name', 'oldest', 'distance']);
   });
 });
 

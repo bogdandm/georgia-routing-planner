@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
+import type { TrackSort } from '@/domain/tracks/localTrack';
 import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
@@ -76,6 +77,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     (state) => state.elevationGradeLegendDismissed,
   );
   const markerSort = useUiStore((state) => state.markerSort);
+  const trackSort = useUiStore((state) => state.trackSort);
   const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
@@ -87,6 +89,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   );
   const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
   const setMarkerSort = useUiStore((state) => state.setMarkerSort);
+  const setTrackSort = useUiStore((state) => state.setTrackSort);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
@@ -236,6 +239,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       nextNavigationCollapsed: boolean,
       nextElevationGradeLegendDismissed: boolean,
       nextMarkerSort: typeof markerSort,
+      nextTrackSort: typeof trackSort,
     ): Promise<boolean> => {
       try {
         await database.saveUiPreferences({
@@ -243,6 +247,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           navigationCollapsed: nextNavigationCollapsed,
           elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
           markerSort: nextMarkerSort,
+          trackSort: nextTrackSort,
         });
         return true;
       } catch {
@@ -271,12 +276,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         value,
         elevationGradeLegendDismissed,
         markerSort,
+        trackSort,
       );
     },
     [
       developerMode,
       elevationGradeLegendDismissed,
       markerSort,
+      trackSort,
       persistUiPreferences,
       setNavigationCollapsed,
     ],
@@ -296,12 +303,19 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       navigationCollapsed,
       elevationGradeLegendDismissed,
       markerSort,
+      trackSort,
     );
   };
 
   const handleElevationGradeLegendDismissedChange = (value: boolean) => {
     setElevationGradeLegendDismissed(value);
-    void persistUiPreferences(developerMode, navigationCollapsed, value, markerSort);
+    void persistUiPreferences(
+      developerMode,
+      navigationCollapsed,
+      value,
+      markerSort,
+      trackSort,
+    );
   };
 
   const handleMarkerSortChange = async (value: MarkerSort): Promise<boolean> => {
@@ -311,9 +325,20 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       navigationCollapsed,
       elevationGradeLegendDismissed,
       value,
+      trackSort,
     );
   };
 
+  const handleTrackSortChange = async (value: TrackSort): Promise<boolean> => {
+    setTrackSort(value);
+    return persistUiPreferences(
+      developerMode,
+      navigationCollapsed,
+      elevationGradeLegendDismissed,
+      markerSort,
+      value,
+    );
+  };
   useEffect(() => {
     if (importState !== 'preparing') {
       importPreparingRef.current = false;
@@ -696,6 +721,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             auxiliaryOverlay={auxiliaryOverlay}
             fullWidth={smartphoneViewport}
             onMarkerSortChange={handleMarkerSortChange}
+            onTrackSortChange={handleTrackSortChange}
             onSatellitePaneOpenChange={setSatellitePaneOpen}
             onOpenActiveTrackDetails={handleOpenActiveTrackDetails}
             onShowMap={() => {

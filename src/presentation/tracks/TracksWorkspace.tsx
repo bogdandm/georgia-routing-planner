@@ -412,9 +412,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
     const controller = new AbortController();
     shareResolutionAbort.current = controller;
+    const generation = importGeneration.current;
     void trackShares.resolve(intent.token, controller.signal).then(
       (shared) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || generation !== importGeneration.current) {
+          return;
+        }
         const sourceSegments = shared.trackPoints.map((points) => ({ points }));
         const metrics = calculateTrackMetrics(sourceSegments);
         const parsed: ParsedGpx = {
@@ -456,12 +459,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           controller.signal,
           {
             onProgress: (progress) => {
-              if (!controller.signal.aborted) setElevationProgress(progress);
+              if (
+                controller.signal.aborted ||
+                generation !== importGeneration.current
+              ) {
+                return;
+              }
+              setElevationProgress(progress);
             },
           },
         )
           .then((prepared) => {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || generation !== importGeneration.current) {
+              return;
+            }
             setElevationProgress(null);
             setActive((current) =>
               current?.kind === 'shared' && current.id === sharedTrack.id
@@ -470,7 +481,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             );
           })
           .catch(() => {
-            if (!controller.signal.aborted) {
+            if (!controller.signal.aborted && generation === importGeneration.current) {
               setElevationProgress(null);
               logger.log({
                 level: 'warn',
@@ -480,7 +491,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           });
       },
       (error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || generation !== importGeneration.current) {
+          return;
+        }
         setError(
           error instanceof TrackShareError && error.category === 'share-not-found'
             ? 'This shared track is unavailable.'

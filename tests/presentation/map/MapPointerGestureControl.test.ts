@@ -145,7 +145,7 @@ describe('MapPointerGestureControl', () => {
     container.remove();
   });
 
-  it('consumes Shift+left in 2D without moving while leaving ordinary left and right native', () => {
+  it('leaves Shift+left, ordinary left, and right native in 2D', () => {
     const container = document.createElement('div');
     const nativeListener = vi.fn();
     const { easeTo, map, panBy } = createMapDouble();
@@ -161,14 +161,13 @@ describe('MapPointerGestureControl', () => {
       shiftKey: true,
     });
     container.dispatchEvent(shiftDown);
-    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
     container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
     container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
 
-    expect(shiftDown.defaultPrevented).toBe(true);
+    expect(shiftDown.defaultPrevented).toBe(false);
     expect(easeTo).not.toHaveBeenCalled();
     expect(panBy).not.toHaveBeenCalled();
-    expect(nativeListener).toHaveBeenCalledTimes(2);
+    expect(nativeListener).toHaveBeenCalledTimes(3);
     control.detach();
   });
 });

@@ -74,7 +74,7 @@ export class MapPointerGestureControl {
     const gesture: Gesture =
       event.button === 1
         ? 'pan'
-        : event.button === 0 && event.shiftKey
+        : event.button === 0 && event.shiftKey && this.#terrainOrbitEnabled
           ? 'orbit'
           : null;
     if (gesture === null || this.#container === null) return;
@@ -86,7 +86,7 @@ export class MapPointerGestureControl {
     window.addEventListener('mousemove', this.handleMouseMove, true);
     window.addEventListener('mouseup', this.handleMouseUp, true);
 
-    if (gesture !== 'orbit' || !this.#terrainOrbitEnabled || this.#map === null) return;
+    if (gesture !== 'orbit' || this.#map === null) return;
 
     const bounds = this.#container.getBoundingClientRect();
     this.#orbitAnchor = this.#map.unproject([

@@ -398,21 +398,31 @@ export function WorkspaceRail({
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
       </Tabs>
 
-      <Box
+      <ButtonBase
+        aria-label="Share map view"
+        onClick={onShare}
         sx={{
+          minWidth: 52,
+          minHeight: 58,
           mx: 0.75,
           mt: 0.5,
+          mb: 0.5,
+          px: 0.5,
+          py: 0.75,
+          flexDirection: 'column',
+          borderRadius: 1.25,
+          color: appColors.text.inverseMuted,
+          fontSize: '0.625rem',
+          lineHeight: 1.1,
+          textTransform: 'none',
           visibility: collapsed ? 'hidden' : 'visible',
         }}
       >
-        <WorkspaceRailIconButton
-          label="Share map view"
-          tooltip="Share map view"
-          onClick={onShare}
-        >
-          <ShareOutlinedIcon />
-        </WorkspaceRailIconButton>
-      </Box>
+        <ShareOutlinedIcon />
+        <Box component="span" sx={{ mt: '2px' }}>
+          Share
+        </Box>
+      </ButtonBase>
 
       <Stack
         spacing={0.5}

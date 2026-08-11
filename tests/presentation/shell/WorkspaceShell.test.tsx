@@ -329,7 +329,7 @@ function gpxFileWithCompanionRoute(): File {
 }
 
 describe('WorkspaceShell', () => {
-  it('orders primary rail actions from tracks through sharing', () => {
+  it('aligns the labeled sharing action with primary rail tabs', () => {
     renderWorkspaceShell();
 
     const navigation = screen.getByRole('navigation', {
@@ -347,6 +347,8 @@ describe('WorkspaceShell', () => {
     const share = within(navigation).getByRole('button', {
       name: 'Share map view',
     });
+    expect(share).toHaveTextContent('Share');
+    expect(share).toHaveStyle({ minWidth: '52px', minHeight: '58px' });
     expect(
       satellite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -3946,6 +3948,9 @@ describe('WorkspaceShell', () => {
       within(collapsedProjectLogo).getByTestId('project-logo-image');
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '94px' });
+    expect(
+      screen.queryByRole('button', { name: 'Share map view' }),
+    ).not.toBeInTheDocument();
     expect(collapsedLogoImage).toHaveStyle({
       width: '52px',
       height: '52px',

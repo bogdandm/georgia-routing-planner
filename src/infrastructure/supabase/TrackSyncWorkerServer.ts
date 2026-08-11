@@ -1382,6 +1382,14 @@ export class TrackSyncWorkerServer {
           remoteTrackDeletion: null,
         };
       }
+      if (
+        result.outcome === 'existing' &&
+        state.pendingKind === 'upsert' &&
+        state.remoteRevision === null
+      ) {
+        state = { ...state, remoteRevision: result.revision };
+        continue;
+      }
       if (result.outcome === 'conflict') {
         if (attempt === 1) {
           return {

@@ -107,6 +107,7 @@ describe('AppDatabase', () => {
       navigationCollapsed: false,
       elevationGradeLegendDismissed: false,
       markerSort: 'created',
+      trackSort: 'created',
     });
 
     await database.saveUiPreferences({
@@ -114,6 +115,7 @@ describe('AppDatabase', () => {
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
       markerSort: 'distance',
+      trackSort: 'distance',
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
@@ -121,6 +123,7 @@ describe('AppDatabase', () => {
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
       markerSort: 'distance',
+      trackSort: 'distance',
     });
 
     await database.saveElevationGradeLegendDismissed(false);
@@ -129,10 +132,11 @@ describe('AppDatabase', () => {
       navigationCollapsed: true,
       elevationGradeLegendDismissed: false,
       markerSort: 'distance',
+      trackSort: 'distance',
     });
   });
 
-  it('adds the default marker sort to persisted earlier UI preferences', async () => {
+  it('adds default sorts to persisted earlier UI preferences', async () => {
     await database.settings.put({
       key: 'ui.preferences',
       value: {
@@ -148,6 +152,7 @@ describe('AppDatabase', () => {
       navigationCollapsed: true,
       elevationGradeLegendDismissed: false,
       markerSort: 'created',
+      trackSort: 'created',
     });
   });
 

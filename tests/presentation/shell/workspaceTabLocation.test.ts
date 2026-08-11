@@ -18,4 +18,9 @@ describe('workspace tab location', () => {
     expect(workspaceHashForTab('user')).toBe('#user');
     expect(workspaceTabFromHash('#USER')).toBe('user');
   });
+
+  it('selects Tracks for valid and invalid share fragments', () => {
+    expect(workspaceTabFromHash('#tracks/share/1.invalid')).toBe('tracks');
+    expect(workspaceTabFromHash('#tracks/share/2.invalid')).toBe('tracks');
+  });
 });

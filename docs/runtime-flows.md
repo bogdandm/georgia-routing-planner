@@ -744,3 +744,20 @@ worker caches, detaches controller listeners, and closes local runtime resources
 retained in Chrome's back-forward cache keeps its runtime and `pagehide` listener
 intact. After restoration, a later final navigation removes that listener and disposes
 the runtime; Vite module replacement uses the same explicit, idempotent cleanup path.
+
+## Public track sharing
+
+An authenticated owner opens the Share dialog for a ready synchronized track. `status`,
+`enable`, and `disable` run through the `track-share` Edge Function using the verified
+owner claim; enable reconstructs the stable HMAC-derived capability from the stored
+nonce and never returns raw tokens from Postgres. The function uses a dedicated stable
+`TRACK_SHARE_TOKEN_SECRET` per environment.
+
+A recipient sends the fragment capability with the publishable key and
+`X-Track-Share-Token`. The function resolves only the token digest, returns a narrow
+metadata projection or the private GZIP bytes, and applies `Cache-Control: no-store`.
+Unknown, disabled, deleted, and non-ready shares converge on the same unavailable
+response. The browser validates byte count, decompresses GRPT, verifies the canonical
+SHA-256 content hash, and decodes geometry before rendering. **Save a copy** explicitly
+creates an independent local track and removes the sharing fragment; opening a link
+never writes persistence or enables synchronization.

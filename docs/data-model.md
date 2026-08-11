@@ -114,6 +114,19 @@ one object at 8 MiB. Server paths have the form
 `<user-id>/<content-hash>/<upload-id>.grpt.gz`; a fresh UUID for every reservation keeps
 late cleanup of an old upload from touching a later upload with the same content hash.
 
+### Public track capabilities
+
+`track_shares` is a service-role-only capability registry. Its SHA-256 token digest is
+the primary key, while `(user_id, content_hash)` is unique and references the ready
+owner record with an `on delete cascade` composite foreign key. The row stores a public
+43-character nonce and no raw capability; the Edge Function reconstructs a stable token
+from the owner UUID, nonce, and a per-environment `TRACK_SHARE_TOKEN_SECRET` HMAC key.
+
+The table has RLS enabled and no `PUBLIC`, `anon`, or `authenticated` table or RPC
+privileges. Resolution returns only the current content hash, byte count, and public
+name/source-format/geometry-kind/updated-at projection. It does not alter
+`user_track_usage`, private `track_records` access, or the private geometry bucket.
+
 The service-role-only RPCs reserve and finalize uploads, release failed reservations,
 apply metadata, and hard-delete one track. Every mutation locks the user's usage row.
 The combined `used_bytes + reserved_bytes + incoming` value may not exceed `8_388_608`.

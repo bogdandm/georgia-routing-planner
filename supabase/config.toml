@@ -11,3 +11,6 @@ allowed_mime_types = ["application/gzip"]
 
 [functions.track-sync]
 verify_jwt = true
+
+[functions.track-share]
+verify_jwt = false

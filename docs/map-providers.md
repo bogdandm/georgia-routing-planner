@@ -54,6 +54,57 @@ The transportation schema explicitly includes `path`, `track`, `footway`, `steps
 relations as a dedicated source layer in this default schema, so the current style shows
 physical ways rather than claiming to show official marked routes.
 
+### Routing tile inspection baseline
+
+The opt-in `pnpm diagnostics:routing-inspect` command reads the configured
+`detailVector` TileJSON and `streets` source layer independently of MapLibre. This is
+the same source and layer used to draw visible roads and paths from z13 upward, so
+routed geometry does not diverge from the detailed map because of a second provider's
+generalization.
+
+The 2026-08-10 inspection covered the z14 3×3 tile area centered on Stepantsminda
+(`44.6408, 42.6602`). It recorded 321 line features, 98 shared part-endpoint keys, 135
+repeated part-endpoint occurrences, and 407 shared graph-vertex keys. The observed
+property keys were `bridge`, `kind`, `oneway`, `oneway_reverse`, `rail`, `service`,
+`tracktype`, and `tunnel`; road kinds included `footway`, `path`, `pedestrian`,
+`residential`, `service`, `steps`, `tertiary`, `track`, `trunk`, and `unclassified`.
+Shortbread does not publish feature IDs or foot/access values in this layer. Routing
+therefore includes every street kind except construction/proposed, rail, and explicit
+non-road aeroway kinds. It rejects explicit `foot=no` or `foot=private` when a
+replacement provider supplies those values, but it does not invent access rules absent
+from the configured schema.
+
+Routing stays at z14 because the inspected TileJSON advertises z14 as its maximum native
+zoom and that level retains the provider's most detailed street geometry. Each leg
+expands the endpoint bounds north, south, east, and west by the larger of 2,000 m or 25%
+of the endpoint geodesic distance, covers the resulting half-open XYZ rectangle, and
+rejects coverage above 256 tiles. A disconnected search that reaches the covered
+boundary retries once with doubled padding. Tile decoding is limited to eight concurrent
+requests and a worker-owned 128-entry LRU; neither MapLibre's viewport nor its tile
+cache participates.
+
+Decoded coordinates are normalized to one global 4,096-unit MVT grid. Exact shared
+vertices connect first. A deterministic 512-unit spatial index then splits primitives at
+eligible X crossings, endpoint-on-interior T junctions, collinear overlap ends, and
+endpoint-to-segment gaps of at most two graph units. Inferred interior junctions require
+matching available layer and bridge/tunnel metadata, so an explicit bridge or tunnel
+remains separated; exact shared source endpoints remain connected. Feature IDs are not
+required for topology identity.
+
+The reported Uravi area at `[43.28590, 42.65015]` demonstrates why routing uses this
+source. In tile `z14/10161/6041`, OpenMapTiles represented the relevant minor road with
+18 vertices while the visible Shortbread road contained 32. The production path routed
+between `[43.2864761, 42.6536135]` and `[43.2814658, 42.6507018]` along that Shortbread
+geometry as a 576.76 m route with 33 geometry points from a 16-tile graph containing
+1,927 nodes and 1,945 edges. The broader stress route from `[44.75419, 41.72431]` to
+`[44.73748, 41.74651]` returned 3,459.05 m and 204 geometry points from a 16-tile graph
+containing 58,890 nodes and 67,262 edges, without expanded coverage.
+
+These point-in-time diagnostics detect provider drift rather than promise an SLA.
+Shortbread can still omit, misclassify, or grade-separate a physical connection, and the
+router does not infer access or one-way restrictions absent from the published
+properties.
+
 English-first labels use `name:en`, then the provider-generated `name:latin` field for
 transliteration, and finally legacy English/native fallbacks. Land-cover `ice` supplies
 the available glacier geometry. Land-use `military` supplies restricted-area geometry,
@@ -110,8 +161,9 @@ The verified mappings are `land.kind = brownfield`, unfiltered `buildings`, and
 `streets.kind`. The road style allows `motorway`, `trunk`, `primary`, `secondary`,
 `tertiary`, `unclassified`, `residential`, `living_street`, and `service`. At z13 and
 above, Shortbread additionally supplies `track`, `footway`, `path`, `cycleway`, and
-`pedestrian`; `steps` also come from Shortbread. OpenMapTiles remains the bridleway
-source because Shortbread v1 does not publish that distinction.
+`pedestrian`; `steps` also come from Shortbread. OpenMapTiles remains the visible
+bridleway styling source because Shortbread v1 does not publish that distinction; the
+underlying way still participates in routing under its Shortbread `kind`.
 
 The inspected endpoint is anonymous, keyless HTTPS with browser CORS for ordinary
 interactive requests. Its TileJSON supplies detail through z14; MapLibre overzooms z14
@@ -122,7 +174,8 @@ OSM Foundation tile use requires normal attributed interactive use: preserve the
 browser's Referer and User-Agent behavior, permit ordinary browser/CDN caching, and do
 not add cache-busting wrappers or synthetic request headers. Bulk retrieval,
 prefetching, archive creation, and offline downloads are prohibited. The application
-therefore requests only MapLibre-visible tiles and has no custom profile build, hosted
+requests tiles only for the current map view or a user-triggered bounded route, never in
+the background or for offline preparation, and has no custom profile build, hosted
 archive, proxy, or fallback provider.
 
 ## Place search: public Nominatim

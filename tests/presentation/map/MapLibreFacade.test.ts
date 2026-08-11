@@ -95,6 +95,9 @@ class FakeNativeMap {
     return this.#pitch;
   }
 
+  public unproject(_point: { readonly x: number; readonly y: number }) {
+    return { lng: 44.65, lat: 42.67 };
+  }
   public getSource(id: string): unknown {
     return this.#sources.get(id);
   }
@@ -208,6 +211,8 @@ describe('MapLibreFacade', () => {
       handleRasterSourceRecovered: vi.fn(),
       isRasterSourceRecoveryComplete: vi.fn(() => false),
       setTerrainInteractionActive,
+      setRoutePlanPreview: vi.fn(),
+      clearRoutePlanPreview: vi.fn(),
     };
     const facade = new MapLibreFacade(
       services.logger,
@@ -219,7 +224,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(9);
+    expect(nativeMap.listenerCount()).toBe(10);
 
     nativeMap.fire('style.load');
     expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
@@ -525,7 +530,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(11);
+    expect(nativeMap.listenerCount()).toBe(12);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -537,7 +542,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(11);
+    expect(nativeMap.listenerCount()).toBe(12);
     expect(nativeMap.terrainTileUpdates).toEqual([
       ['test-dem://tiles/{z}/{x}/{y}?terrainEnableRetry=1'],
     ]);
@@ -1176,5 +1181,55 @@ describe('MapLibreFacade', () => {
 
     facade.detachMap();
     expect(nativeMap.getCanvas().style.cursor).toBe('');
+  });
+  it('publishes only primary route-planning clicks and manages the cursor preview', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const listener = vi.fn();
+    const setRoutePlanPreview = vi.fn();
+    const clearRoutePlanPreview = vi.fn();
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      setRoutePlanPreview,
+      clearRoutePlanPreview,
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    const unsubscribe = facade.subscribePlanningClicks(listener);
+
+    facade.setRoutePlanPreviewAnchor({ longitude: 44.64, latitude: 42.66 });
+    facade.setInteractionMode('route-planning');
+    nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
+    expect(setRoutePlanPreview).toHaveBeenCalledWith(
+      [44.64, 42.66],
+      [44.65, 42.67],
+      expect.stringMatching(/m|km/u),
+    );
+    facade.setRoutePlanPreviewAnchor({ longitude: 44.66, latitude: 42.68 });
+    expect(clearRoutePlanPreview).toHaveBeenCalled();
+
+    nativeMap.fire('click', {
+      lngLat: { lng: 44.64, lat: 42.66 },
+      originalEvent: { button: 1 },
+    });
+    expect(listener).not.toHaveBeenCalled();
+    nativeMap.fire('click', {
+      lngLat: { lng: 44.64, lat: 42.66 },
+      originalEvent: { button: 0 },
+    });
+    expect(listener).toHaveBeenCalledWith({ longitude: 44.64, latitude: 42.66 });
+
+    nativeMap.getCanvasContainer().dispatchEvent(new MouseEvent('mouseleave'));
+    facade.setInteractionMode('default');
+    facade.setRoutePlanPreviewAnchor(null);
+    expect(clearRoutePlanPreview).toHaveBeenCalledTimes(5);
+    unsubscribe();
   });
 });

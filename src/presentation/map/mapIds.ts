@@ -12,6 +12,7 @@ export const mapSourceIds = {
   importedTrack: 'imported-track',
   importedTrackHighlight: 'imported-track-highlight',
   importedTrackTrace: 'imported-track-trace',
+  routePlan: 'route-plan',
   savedMarkers: 'saved-markers',
 } as const;
 
@@ -51,6 +52,14 @@ export const importedTrackLayerIds = {
   line: 'imported-track-line',
   highlight: 'imported-track-highlight',
   trace: 'imported-track-trace',
+} as const;
+export const routePlanLayerIds = {
+  routed: 'route-plan-routed',
+  direct: 'route-plan-direct',
+  preview: 'route-plan-preview',
+  previewLabel: 'route-plan-preview-label',
+  waypoints: 'route-plan-waypoints',
+  waypointLabels: 'route-plan-waypoint-labels',
 } as const;
 
 export const savedMarkerLayerIds = {

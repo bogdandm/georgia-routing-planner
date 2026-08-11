@@ -8,6 +8,7 @@ import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import type { TrackContentHasher } from '@/application/ports/TrackContentHasher';
+import type { TrailRouter } from '@/application/ports/TrailRouter';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
@@ -38,6 +39,7 @@ import { BrowserTerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerr
 import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
 import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
+import { BrowserTrailRouter } from '@/infrastructure/routing/BrowserTrailRouter';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
 import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
@@ -57,6 +59,7 @@ export interface RuntimeServices {
   readonly diagnostics: DiagnosticsService;
   readonly dispose: () => void;
   readonly trackContentHasher: TrackContentHasher;
+  readonly trailRouter: TrailRouter | null;
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
@@ -178,6 +181,15 @@ export function createRuntimeServices(): RuntimeServices {
           database,
         )
       : null;
+  const trailRouter =
+    mapProviderConfiguration.status === 'valid'
+      ? new BrowserTrailRouter({
+          tileJsonUrl: mapProviderConfiguration.value.detailVector.tileJsonUrl,
+          transportationSourceLayer:
+            mapProviderConfiguration.value.detailVector.sourceLayers.streets,
+          requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
+        })
+      : null;
   const httpClient = createHttpClient(logger, clock, idGenerator);
   const filteredTerrariumTiles =
     mapProviderConfiguration.status === 'valid' &&
@@ -269,11 +281,13 @@ export function createRuntimeServices(): RuntimeServices {
     database,
     diagnostics,
     dispose: () => {
+      trailRouter?.dispose();
       mapLayers?.dispose();
       userData.dispose();
       database.close();
     },
     trackContentHasher,
+    trailRouter,
     idGenerator,
     logger,
     elevationProvider,

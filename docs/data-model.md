@@ -18,9 +18,9 @@ contracts when each feature is implemented.
 1. The GitHub repository and its GitHub Pages output are authoritative for the curated
    catalog. The deployed application can read these assets but cannot edit them.
 2. IndexedDB is authoritative for retained local tracks, personal folders, saved
-   markers, route plans, and durable preferences. Track sync is optional: local saves
-   never depend on the network, and only the elevation-free canonical track copy and
-   synchronization metadata cross the boundary.
+   markers, and durable preferences. Track sync is optional: local saves never depend on
+   the network, and only the elevation-free canonical track copy and synchronization
+   metadata cross the boundary.
 3. Supabase Postgres and private Storage are authoritative for a signed-in user's remote
    track revisions, compressed-byte usage, and immutable synchronized geometry objects.
 4. STAC, imagery, OSM, and DEM providers are authoritative for online source data.
@@ -75,27 +75,28 @@ flowchart LR
 
 ## Storage inventory
 
-| Data                                                                                                | Authority and location                                       | Client representation                                    | Retention/network rule                                                          |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Curated source GPX and curation inputs                                                              | GitHub repository, `data/`                                   | Node catalog-tool input                                  | Only maintainer-selected files enter Git; never written by the app              |
-| Curated catalog manifest, track summaries, categories, memberships, previews, and validation report | Generated GitHub Pages assets under `public/catalog/`        | Validated static queries and an in-memory viewport index | Versioned, read-only, fetched from the application origin                       |
-| Curated full GPX                                                                                    | Generated GitHub Pages assets under `public/tracks/`         | Parsed only for an opened/downloaded track               | Loaded on demand; never all fetched at startup                                  |
-| Local GPX before retention                                                                          | Browser memory from a file picker or drop                    | Validated import preview                                 | Discarded unless the user explicitly retains it                                 |
-| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; private to this browser                           |
-| Synchronized track metadata and revision                                                            | Supabase Postgres `track_records`                            | User-owned remote track record                           | Readable only by its owner; writes pass through the authenticated Edge Function |
-| Synchronized compressed geometry                                                                    | Private Supabase Storage `track-geometries`                  | GZIP-compressed canonical GRPT bytes                     | Owner-readable; server writes and hard-deletes immutable per-upload objects     |
-| Synchronized geometry quota                                                                         | Supabase Postgres `user_track_usage`                         | Used, reserved, and next-revision counters               | 8 MiB compressed bytes per user; mutations serialize on this row                |
-| Personal folders and track placement                                                                | Browser IndexedDB                                            | Folder tree and one personal placement per track         | May reference curated or local track IDs; cannot modify static catalog files    |
-| Route plans and saved markers                                                                       | Browser IndexedDB                                            | Aggregate records mapped to domain objects               | Private until explicit GPX/file export                                          |
-| Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                                 |
-| Active selection, edit state, filters, sorting, layer instances                                     | Browser memory/Zustand/components                            | Serializable transient state plus map facade state       | Lost on reload unless a specific preference is deliberately persisted           |
-| Static catalog cache                                                                                | Optional browser IndexedDB cache                             | Catalog data plus catalog version                        | Disposable; GitHub Pages manifest remains authoritative                         |
-| Satellite search results and calendar summaries                                                     | Online STAC authority; component state in browser            | `SatelliteScene` and derived `SceneDaySummary`           | Cancellable and disposable; no bulk permanent mirror                            |
-| Sentinel true-color imagery                                                                         | Online imagery provider                                      | Map raster source/texture                                | Requested for selected scenes; provider/browser cache policy applies            |
-| OSM tiles, glyphs, and sprites                                                                      | Online configured map provider                               | MapLibre sources                                         | Provider-owned, attributed, and replaceable                                     |
-| Terrain/elevation tiles                                                                             | Online configured DEM provider                               | MapLibre terrain and elevation adapter input             | Provider-owned; derived samples may be stored with plans/tracks/markers         |
-| Diagnostics                                                                                         | Bounded browser memory and optional capped IndexedDB records | Typed diagnostic events and snapshots                    | Local-only; sanitized explicit export excludes geometry by default              |
-| Build information and public provider configuration                                                 | GitHub Pages application bundle                              | Validated bootstrap values                               | Public by definition; secrets are forbidden                                     |
+| Data                                                                                                | Authority and location                                       | Client representation                                    | Retention/network rule                                                           |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Curated source GPX and curation inputs                                                              | GitHub repository, `data/`                                   | Node catalog-tool input                                  | Only maintainer-selected files enter Git; never written by the app               |
+| Curated catalog manifest, track summaries, categories, memberships, previews, and validation report | Generated GitHub Pages assets under `public/catalog/`        | Validated static queries and an in-memory viewport index | Versioned, read-only, fetched from the application origin                        |
+| Curated full GPX                                                                                    | Generated GitHub Pages assets under `public/tracks/`         | Parsed only for an opened/downloaded track               | Loaded on demand; never all fetched at startup                                   |
+| Local GPX before retention                                                                          | Browser memory from a file picker or drop                    | Validated import preview                                 | Discarded unless the user explicitly retains it                                  |
+| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; private to this browser                            |
+| Synchronized track metadata and revision                                                            | Supabase Postgres `track_records`                            | User-owned remote track record                           | Readable only by its owner; writes pass through the authenticated Edge Function  |
+| Synchronized compressed geometry                                                                    | Private Supabase Storage `track-geometries`                  | GZIP-compressed canonical GRPT bytes                     | Owner-readable; server writes and hard-deletes immutable per-upload objects      |
+| Synchronized geometry quota                                                                         | Supabase Postgres `user_track_usage`                         | Used, reserved, and next-revision counters               | 8 MiB compressed bytes per user; mutations serialize on this row                 |
+| Personal folders and track placement                                                                | Browser IndexedDB                                            | Folder tree and one personal placement per track         | May reference curated or local track IDs; cannot modify static catalog files     |
+| Unsaved route plans                                                                                 | Browser memory                                               | Ordered waypoints, accepted leg geometry, and metrics    | Discarded on close or reload; Save converts the plan into a retained local track |
+| Saved markers                                                                                       | Browser IndexedDB                                            | Versioned marker records mapped to domain objects        | Private until explicit file export                                               |
+| Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                                  |
+| Active selection, edit state, filters, sorting, layer instances                                     | Browser memory/Zustand/components                            | Serializable transient state plus map facade state       | Lost on reload unless a specific preference is deliberately persisted            |
+| Static catalog cache                                                                                | Optional browser IndexedDB cache                             | Catalog data plus catalog version                        | Disposable; GitHub Pages manifest remains authoritative                          |
+| Satellite search results and calendar summaries                                                     | Online STAC authority; component state in browser            | `SatelliteScene` and derived `SceneDaySummary`           | Cancellable and disposable; no bulk permanent mirror                             |
+| Sentinel true-color imagery                                                                         | Online imagery provider                                      | Map raster source/texture                                | Requested for selected scenes; provider/browser cache policy applies             |
+| OSM tiles, glyphs, and sprites                                                                      | Online configured map provider                               | MapLibre sources                                         | Provider-owned, attributed, and replaceable                                      |
+| Terrain/elevation tiles                                                                             | Online configured DEM provider                               | MapLibre terrain and elevation adapter input             | Provider-owned; derived samples may be stored with plans/tracks/markers          |
+| Diagnostics                                                                                         | Bounded browser memory and optional capped IndexedDB records | Typed diagnostic events and snapshots                    | Local-only; sanitized explicit export excludes geometry by default               |
+| Build information and public provider configuration                                                 | GitHub Pages application bundle                              | Validated bootstrap values                               | Public by definition; secrets are forbidden                                      |
 
 ## Supabase track synchronization backend
 
@@ -335,46 +336,23 @@ cannot silently reinterpret retained results.
 
 ## Plans, waypoints, and saved markers
 
-A route plan is an aggregate stored as one versioned record because its ordered
-waypoints and metrics must change atomically. Segments are derived between consecutive
-waypoints and are not independently persisted. A saved marker and a plan waypoint have
-separate identities; copying a marker into a plan records optional provenance but does
-not create a live link.
+An unsaved route plan is a transient Tracks-owned aggregate. It keeps ordered waypoints,
+accepted routed or direct leg geometry, calculated metrics, and optional elevation
+samples together in browser memory so each accepted edit is internally consistent. It
+does not have an IndexedDB record or a separately persisted draft lifecycle.
 
-`RoutePlanRecord`, “route plan”, and “plan” are domain/storage terms. In the approved UI
-this aggregate is created and edited inside the Tracks-owned `Create GPX` workflow; it
-does not imply a Plan tab, rail item, or separate top-level feature.
+Save is available only after the plan contains usable geometry. It atomically converts
+the draft into the existing `LocalTrackSummary` and `LocalTrackContent` records with
+`geometryKind = route`; after that conversion, the result follows the same persistence,
+rename, export, and deletion contracts as any other retained local track. Closing the
+draft or reloading the application discards it.
+
+A saved marker has its own persistent identity. Planning waypoints are coordinate
+snapshots rather than live links, so later marker edits do not change accepted route
+geometry.
 
 ```mermaid
 classDiagram
-  class RoutePlanRecord {
-    +string id
-    +number schemaVersion
-    +string name
-    +string notes optional
-    +Instant createdAt
-    +Instant updatedAt
-    +RouteWaypoint[] waypoints
-    +PlanMetrics metrics
-  }
-  class RouteWaypoint {
-    +string id
-    +GeoCoordinate coordinate
-    +string name optional
-    +string notes optional
-    +string markerStyle optional
-    +meters elevation optional
-    +string sourceMarkerId optional
-  }
-  class PlanMetrics {
-    +meters distance
-    +meters ascent optional
-    +meters descent optional
-    +meters minimumElevation optional
-    +meters maximumElevation optional
-    +number distanceAlgorithmVersion
-    +number elevationAlgorithmVersion optional
-  }
   class SavedMarkerRecord {
     +string id
     +number schemaVersion
@@ -389,15 +367,7 @@ classDiagram
     +Instant createdAt
     +Instant updatedAt
   }
-
-  RoutePlanRecord "1" *-- "zero or more" RouteWaypoint
-  RoutePlanRecord *-- PlanMetrics
-  SavedMarkerRecord "1" ..> "many" RouteWaypoint : copied snapshot
 ```
-
-A persisted plan may remain an empty or one-point draft. Segments and non-zero route
-metrics exist only when at least two waypoints are present. Deleting or editing a saved
-marker never changes an existing route waypoint copied from it.
 
 ## Map state and extensible layers
 
@@ -530,11 +500,11 @@ are excluded from default export. Geometry requires a separate explicit opt-in.
 ## Deletion and consistency rules
 
 - Deleting a local track removes its content and personal placement atomically. It does
-  not affect curated assets, folders, route plans, or saved markers.
+  not affect curated assets, folders, or saved markers.
 - Removing a personal folder moves its placements to `Unfiled` unless the user chooses
   another explicit destination. Child-folder handling requires confirmation.
 - Catalog-version replacement invalidates only derived/cache records, never user
-  folders, placements, plans, markers, or local tracks.
+  folders, placements, markers, or local tracks.
 - If a curated track disappears in a catalog update, its personal placement becomes an
   identifiable orphan that the UI can remove; it must not be rebound to another track by
   name.

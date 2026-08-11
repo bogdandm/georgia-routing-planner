@@ -3,8 +3,8 @@
 [Open Trail Planner](https://trail-planner.bogdandm.com/)
 
 Trail Planner is a local-first web application for planning hiking trips by exploring
-maps, inspecting terrain and satellite imagery, and working with personal tracks.
-Automatic routing along trails or roads is not currently available.
+maps, inspecting terrain and satellite imagery, planning routes, and working with
+personal tracks.
 
 _This project was built 100% with LLMs._
 
@@ -17,6 +17,7 @@ _This project was built 100% with LLMs._
 - Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
 - Search for places or coordinates and inspect recent Sentinel-2 satellite imagery.
 - Import GPX, FIT, and KML tracks directly in the browser.
+- Plan multi-point routes over available roads and trails or add direct line segments.
 - Review distance, duration, speed, ascent, descent, elevation profile, and route
   grades.
 - Save, search, favorite, rename, reopen, delete, and download personal tracks.
@@ -30,6 +31,11 @@ _This project was built 100% with LLMs._
 Drop a GPX, FIT, or KML file into the Tracks workspace or choose it from disk. Trail
 Planner validates the file, displays the route on the map, and opens a detailed preview
 before anything is saved.
+
+Choose **Plan route** to open an unsaved route. Each map click adds the next waypoint.
+The persistent **Next segment** control chooses whether the next leg follows available
+road and trail topology or remains a direct line. Routing and elevation calculation run
+in the browser; saving stores the result as an existing local track.
 
 Saved tracks remain available after reopening the application. They can be searched,
 favorited, renamed, deleted, or downloaded as GPX or KML.
@@ -68,8 +74,8 @@ is applied to the map. The selected imagery remains aligned with terrain in both
 
 ## Local-first data
 
-Imported tracks, saved tracks, saved markers, and map preferences use browser storage
-and remain available without an account.
+Saved imported and planned tracks, saved markers, and map preferences use browser
+storage and remain available without an account.
 
 Cross-device synchronization is optional and disabled by default. It starts only after
 the user signs in and explicitly enables **Sync across devices**. Local track operations
@@ -78,9 +84,8 @@ Planner does not upload diagnostics or usage telemetry automatically.
 
 ## Limitations
 
-- No automatic routing along trails or roads.
 - No offline map-region downloads.
-- Map, terrain, geocoding, and imagery features depend on public providers.
+- Routing, map, terrain, geocoding, and imagery features depend on public providers.
 - Current desktop Google Chrome is the primary supported browser.
 
 ## Developer overview

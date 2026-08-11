@@ -11,7 +11,13 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-import type { ElevationSample } from '@/application/ports/ElevationProvider';
+import type {
+  ElevationCoordinate,
+  ElevationProvider,
+  ElevationSample,
+  ElevationSamplingProgressListener,
+} from '@/application/ports/ElevationProvider';
+import type { TrailRouter, TrailRouteResult } from '@/application/ports/TrailRouter';
 import {
   SatelliteCatalogError,
   type SatelliteCatalogGateway,
@@ -851,6 +857,184 @@ describe('WorkspaceShell', () => {
     });
     expect(within(disclosure).getByLabelText('Elevation gain: 120 m')).toBeVisible();
     expect(within(disclosure).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('shows route instructions and progress in the smartphone disclosure', async () => {
+    mockViewportWidth(899);
+    const A: [number, number] = [44.64, 42.66];
+    const B: [number, number] = [44.65, 42.67];
+    const C: [number, number] = [44.66, 42.68];
+    const secondRoute = deferred<TrailRouteResult>();
+    const secondElevation = deferred<readonly ElevationSample[]>();
+    const secondElevationState: {
+      coordinates: readonly ElevationCoordinate[];
+      reportProgress: ElevationSamplingProgressListener | undefined;
+    } = {
+      coordinates: [],
+      reportProgress: undefined,
+    };
+    const route = vi
+      .fn<TrailRouter['route']>()
+      .mockResolvedValueOnce({
+        status: 'ready',
+        geometry: { type: 'LineString', coordinates: [A, B] },
+        networkDistanceMeters: 1_200,
+        snappedStart: A,
+        snappedDestination: B,
+        loadedTileCount: 1,
+        graphNodeCount: 2,
+        graphEdgeCount: 1,
+        expandedAreaRetryUsed: false,
+      })
+      .mockImplementationOnce(() => secondRoute.promise);
+    const trailRouter: TrailRouter = { route, dispose: vi.fn() };
+    const sampleMany = vi
+      .fn<ElevationProvider['sampleMany']>()
+      .mockImplementationOnce((coordinates) =>
+        Promise.resolve(
+          coordinates.map((_, index) => ({
+            status: 'available' as const,
+            meters: 1_000 + index * 100,
+          })),
+        ),
+      )
+      .mockImplementationOnce((coordinates, _signal, onProgress) => {
+        secondElevationState.coordinates = coordinates;
+        secondElevationState.reportProgress = onProgress;
+        return secondElevation.promise;
+      });
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
+      sampleMany,
+    };
+    services = {
+      ...createTestServices({ trailRouter }),
+      elevationProvider,
+    };
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand track details',
+    });
+    expect(
+      within(disclosure).getByText(
+        'Click the map to choose the route start and destination.',
+      ),
+    ).toBeVisible();
+    expect(within(disclosure).queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: A[0], latitude: A[1] });
+    });
+    expect(
+      within(disclosure).getByText(
+        'Click the map to choose the route start and destination.',
+      ),
+    ).toBeVisible();
+    expect(within(disclosure).queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: B[0], latitude: B[1] });
+    });
+    await waitFor(() => {
+      expect(within(disclosure).getByLabelText(/^Distance:/u)).toBeVisible();
+      expect(within(disclosure).getByTestId('compact-elevation-profile')).toBeVisible();
+    });
+    const firstDistance = within(disclosure)
+      .getByLabelText(/^Distance:/u)
+      .getAttribute('aria-label');
+    expect(firstDistance).not.toBeNull();
+    if (firstDistance === null) return;
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledTimes(2);
+    });
+    const reportRouteProgress = route.mock.calls[1]?.[2];
+    act(() => {
+      reportRouteProgress?.({
+        phase: 'loading-tiles',
+        attempt: 1,
+        loadedTileCount: 8,
+        totalTileCount: 16,
+        graphProgress: 0,
+      });
+    });
+    const routeProgress = await within(disclosure).findByRole('progressbar', {
+      name: 'Loading route tiles… 8/16',
+    });
+    expect(routeProgress).toHaveAttribute('aria-valuenow', '50');
+    expect(within(disclosure).queryByLabelText(firstDistance)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      secondRoute.resolve({
+        status: 'ready',
+        geometry: { type: 'LineString', coordinates: [B, C] },
+        networkDistanceMeters: 1_200,
+        snappedStart: B,
+        snappedDestination: C,
+        loadedTileCount: 1,
+        graphNodeCount: 2,
+        graphEdgeCount: 1,
+        expandedAreaRetryUsed: false,
+      });
+    });
+    await waitFor(() => {
+      expect(sampleMany).toHaveBeenCalledTimes(2);
+      expect(secondElevationState.reportProgress).toBeDefined();
+    });
+    const elevationProgressReporter = secondElevationState.reportProgress;
+    if (elevationProgressReporter === undefined)
+      throw new Error('Expected elevation progress.');
+    act(() => {
+      elevationProgressReporter({
+        completedTiles: 1,
+        totalTiles: 2,
+        indices: [],
+        samples: [],
+      });
+    });
+    const elevationProgress = await within(disclosure).findByRole('progressbar', {
+      name: 'Loading elevation tiles: 1 of 2',
+    });
+    expect(elevationProgress).toHaveAttribute('aria-valuenow', '50');
+    expect(within(disclosure).queryByLabelText(firstDistance)).not.toBeInTheDocument();
+    expect(
+      within(disclosure).queryByTestId('compact-elevation-profile'),
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      secondElevation.resolve(
+        secondElevationState.coordinates.map((_, index) => ({
+          status: 'available' as const,
+          meters: 1_000 + index * 100,
+        })),
+      );
+    });
+    await waitFor(() => {
+      expect(within(disclosure).queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(within(disclosure).getByLabelText(/^Distance:/u)).toBeVisible();
+      expect(within(disclosure).getByTestId('compact-elevation-profile')).toBeVisible();
+    });
   });
 
   it('overlays track details below 1900px and keeps them adjacent at 1900px and 1920px', async () => {
@@ -2129,6 +2313,442 @@ describe('WorkspaceShell', () => {
       expect(trackDeleted).toHaveBeenCalledOnce();
     });
   }, 30_000);
+
+  it('plans routed and direct track segments through the workspace', async () => {
+    const routePending = deferred<TrailRouteResult>();
+    const route = vi.fn<TrailRouter['route']>(() => routePending.promise);
+    const trailRouter: TrailRouter = {
+      route,
+      dispose: vi.fn(),
+    };
+    services = createTestServices({ trailRouter });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    const A = [44.64, 42.66] as const;
+    const B = [44.65, 42.67] as const;
+    const C = [44.66, 42.68] as const;
+    const snappedA = [44.6405, 42.6605] as const;
+    const routedMiddle = [44.645, 42.665] as const;
+    const snappedB = [44.6495, 42.6695] as const;
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const tracksHeading = screen.getByRole('heading', { name: 'Tracks' });
+    const planRouteButton = screen.getByRole('button', { name: 'Plan route' });
+    expect(planRouteButton.parentElement?.parentElement).toBe(
+      tracksHeading.parentElement?.parentElement,
+    );
+    await user.click(planRouteButton);
+    const emptyDetails = screen.getByText(
+      'Add at least two route points to see track details.',
+    );
+    expect(emptyDetails.parentElement).toHaveStyle({ minHeight: '56px' });
+    const emptyElevation = screen.getByText(
+      'Add at least two route points to see the elevation profile.',
+    );
+    expect(emptyElevation.parentElement).toHaveStyle({ height: '264px' });
+    expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: A[0], latitude: A[1] });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: B[0], latitude: B[1] });
+    });
+    expect(await screen.findByText('Loading route tiles…')).toBeVisible();
+    expect(route).toHaveBeenCalledWith(
+      { start: A, destination: B },
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+    const reportProgress = route.mock.calls[0]?.[2];
+    act(() => {
+      reportProgress?.({
+        phase: 'loading-tiles',
+        attempt: 1,
+        loadedTileCount: 8,
+        totalTileCount: 16,
+        graphProgress: 0,
+      });
+    });
+    expect(await screen.findByText('Loading route tiles… 8/16')).toBeVisible();
+    act(() => {
+      reportProgress?.({
+        phase: 'building-graph',
+        attempt: 1,
+        loadedTileCount: 16,
+        totalTileCount: 16,
+        graphProgress: 0.6,
+      });
+    });
+    expect(await screen.findByText('Building route graph… 60%')).toBeVisible();
+    act(() => {
+      reportProgress?.({
+        phase: 'searching-route',
+        attempt: 1,
+        loadedTileCount: 16,
+        totalTileCount: 16,
+        graphProgress: 1,
+      });
+    });
+    expect(await screen.findByText('Searching for a route…')).toBeVisible();
+
+    routePending.resolve({
+      status: 'ready',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [snappedA[0], snappedA[1]],
+          [routedMiddle[0], routedMiddle[1]],
+          [snappedB[0], snappedB[1]],
+        ],
+      },
+      networkDistanceMeters: 1_200,
+      snappedStart: snappedA,
+      snappedDestination: snappedB,
+      loadedTileCount: 9,
+      graphNodeCount: 100,
+      graphEdgeCount: 120,
+      expandedAreaRetryUsed: false,
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Line' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledOnce();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(async () => {
+      await expect(services.database.listLocalTracks()).resolves.toHaveLength(1);
+    });
+    const [summary] = await services.database.listLocalTracks();
+    if (summary === undefined) throw new Error('Expected one saved planned route.');
+    expect(summary.geometryKind).toBe('route');
+    const content = await services.database.loadLocalTrackContent(summary.id);
+    expect(content.trackPoints[0]?.map((point) => point.coordinate)).toEqual([
+      A,
+      snappedA,
+      routedMiddle,
+      snappedB,
+      B,
+      C,
+    ]);
+    expect(route).toHaveBeenCalledOnce();
+  }, 30_000);
+
+  it('keeps failed route geometry editable and confirms discard', async () => {
+    const route = vi.fn<TrailRouter['route']>().mockResolvedValue({
+      status: 'failed',
+      reason: 'no-route',
+    });
+    const trailRouter: TrailRouter = {
+      route,
+      dispose: vi.fn(),
+    };
+    services = createTestServices({ trailRouter });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    expect(
+      await screen.findByText(
+        'No connected route was found. Add a closer point or use Line for the next segment.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(
+      await screen.findByText('Click the map to choose the route start.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    const confirmDiscard = vi
+      .spyOn(window, 'confirm')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(confirmDiscard).toHaveBeenCalledWith('Discard this unsaved track?');
+    expect(screen.getByRole('heading', { name: 'New track' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: 'New track' }),
+      ).not.toBeInTheDocument();
+    });
+  }, 30_000);
+
+  it('plans a direct multi-point route, enriches elevation, and saves local GPX content', async () => {
+    const route = vi
+      .fn()
+      .mockRejectedValue(new Error('Line mode must not invoke routing.'));
+    const trailRouter: TrailRouter = {
+      route,
+      dispose: vi.fn(),
+    };
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'available', meters: 1_000 }),
+      sampleMany: vi.fn((coordinates: readonly ElevationCoordinate[]) =>
+        Promise.resolve(
+          coordinates.map((_, index) => ({
+            status: 'available' as const,
+            meters: 1_000 + index,
+          })),
+        ),
+      ),
+    };
+    const baseServices = createTestServices({ trailRouter });
+    services = { ...baseServices, elevationProvider };
+    const existingSummary = savedTrackSummary('local:existing', 'Existing trail');
+    await services.database.saveLocalTrack(
+      existingSummary,
+      savedTrackContent(existingSummary.id),
+    );
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+    const elevationProfile = await screen.findByRole('img', {
+      name: /Elevation profile from \d+ to \d+ metres/u,
+    });
+    expect(elevationProfile).toBeVisible();
+    expect(elevationProfile).toHaveStyle({ height: '264px' });
+    expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+    expect(elevationProfile.querySelectorAll('.recharts-cartesian-axis')).toHaveLength(
+      2,
+    );
+    expect(elevationProfile.querySelector('.recharts-cartesian-grid')).not.toBeNull();
+    expect(elevationProfile.querySelector('.recharts-tooltip-wrapper')).not.toBeNull();
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Planned ridge');
+    const savePending = deferred<undefined>();
+    const saveLocalTrack = services.database.saveLocalTrack.bind(services.database);
+    vi.spyOn(services.database, 'saveLocalTrack').mockImplementation(
+      async (summary, content) => {
+        await savePending.promise;
+        await saveLocalTrack(summary, content);
+      },
+    );
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Saving route…')).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Track name' })).toBeDisabled();
+    const confirmDiscard = vi.spyOn(window, 'confirm');
+    await user.click(screen.getByRole('button', { name: 'Close track' }));
+    await user.click(screen.getByRole('button', { name: /^Existing trail/ }));
+    expect(confirmDiscard).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'New track' })).toBeVisible();
+    expect(screen.getByText('Saving route…')).toBeVisible();
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('default');
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.66, latitude: 42.68 });
+    });
+    savePending.resolve(undefined);
+
+    await waitFor(async () => {
+      await expect(services.database.listLocalTracks()).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Planned ridge',
+            sourceFilename: 'Planned ridge.gpx',
+            sourceFormat: 'gpx',
+            geometryKind: 'route',
+          }),
+        ]),
+      );
+    });
+    const summary = (await services.database.listLocalTracks()).find(
+      (candidate) => candidate.name === 'Planned ridge',
+    );
+    if (summary === undefined) throw new Error('Expected saved planned route.');
+    const content = await services.database.loadLocalTrackContent(summary.id);
+    expect(content.trackPoints[0]).toHaveLength(2);
+    expect(
+      content.trackPoints[0]?.every((point) => point.elevationMeters !== undefined),
+    ).toBe(true);
+    expect(route).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it('saves accepted route geometry without waiting for elevation', async () => {
+    const sampling = { signal: null as AbortSignal | null };
+    const sampleMany = vi.fn(
+      (_coordinates: readonly ElevationCoordinate[], signal: AbortSignal) => {
+        sampling.signal = signal;
+        return new Promise<readonly ElevationSample[]>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              reject(new DOMException('Elevation sampling aborted.', 'AbortError'));
+            },
+            { once: true },
+          );
+        });
+      },
+    );
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
+      sampleMany,
+    };
+    const trailRouter: TrailRouter = {
+      route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
+      dispose: vi.fn(),
+    };
+    services = { ...createTestServices({ trailRouter }), elevationProvider };
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+
+    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Metadata edit');
+    expect(sampleMany).toHaveBeenCalledOnce();
+    expect(sampling.signal?.aborted).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(sampling.signal?.aborted).toBe(true);
+    await waitFor(async () => {
+      const tracks = await services.database.listLocalTracks();
+      expect(tracks).toHaveLength(1);
+    });
+    const [summary] = await services.database.listLocalTracks();
+    if (summary === undefined) throw new Error('Expected saved planned route.');
+    const content = await services.database.loadLocalTrackContent(summary.id);
+    expect(
+      content.trackPoints[0]?.every((point) => point.elevationMeters === undefined),
+    ).toBe(true);
+  });
+
+  it('restarts route elevation after a save failure', async () => {
+    const samplingSignals: AbortSignal[] = [];
+    const sampleMany = vi.fn(
+      (_coordinates: readonly ElevationCoordinate[], signal: AbortSignal) => {
+        samplingSignals.push(signal);
+        return new Promise<readonly ElevationSample[]>(() => undefined);
+      },
+    );
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn().mockResolvedValue({ status: 'unavailable' }),
+      sampleMany,
+    };
+    const trailRouter: TrailRouter = {
+      route: vi.fn().mockRejectedValue(new Error('Line mode must not invoke routing.')),
+      dispose: vi.fn(),
+    };
+    services = { ...createTestServices({ trailRouter }), elevationProvider };
+    vi.spyOn(services.database, 'saveLocalTrack').mockRejectedValueOnce(
+      new Error('Storage unavailable'),
+    );
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+
+    expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(sampleMany).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Storage unavailable')).toBeVisible();
+    await waitFor(() => {
+      expect(sampleMany).toHaveBeenCalledTimes(2);
+    });
+    expect(samplingSignals[0]?.aborted).toBe(true);
+    expect(samplingSignals[1]?.aborted).toBe(false);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
 
   it('explains GPX validation warnings with their parser code and message', async () => {
     const user = userEvent.setup();

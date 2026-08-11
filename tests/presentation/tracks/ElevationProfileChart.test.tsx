@@ -247,11 +247,23 @@ describe('ElevationProfileChart', () => {
       renderElevationProfileChart();
 
       expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+      const image = screen.getByRole('img', {
+        name: 'Elevation profile from 1000 to 1120 metres',
+      });
+      expect(image).toBeVisible();
+      expect(image).toHaveStyle({ height: '264px' });
+      expect(image.querySelectorAll('.recharts-cartesian-axis')).toHaveLength(2);
+      expect(image.querySelectorAll('.recharts-cartesian-axis-line')).toHaveLength(2);
       expect(
-        screen.getByRole('img', {
-          name: 'Elevation profile from 1000 to 1120 metres',
-        }),
-      ).toBeVisible();
+        image.querySelectorAll('.recharts-cartesian-axis-tick').length,
+      ).toBeGreaterThan(0);
+      expect(image.querySelector('.recharts-cartesian-grid')).not.toBeNull();
+      expect(image.querySelector('.recharts-tooltip-wrapper')).not.toBeNull();
+      const tickText = [
+        ...image.querySelectorAll('.recharts-cartesian-axis-tick-value'),
+      ].map((tick) => tick.textContent);
+      expect(tickText.some((value) => value.endsWith('km'))).toBe(true);
+      expect(tickText.some((value) => value.endsWith('m'))).toBe(true);
       expect(screen.queryByText('Distance (km)')).not.toBeInTheDocument();
       expect(screen.queryByText('Elevation (m)')).not.toBeInTheDocument();
     },

@@ -19,12 +19,15 @@ import {
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
-import { CameraOrbitControl } from '@/presentation/map/CameraOrbitControl';
+import { MapPointerGestureControl } from '@/presentation/map/MapPointerGestureControl';
 import {
   MapLibrePointInspector,
   type PointInspectorPopup,
 } from '@/presentation/map/MapLibrePointInspector';
-import { selectNearestPoi } from '@/presentation/map/selectNearestPoi';
+import {
+  geodesicDistanceMeters,
+  selectNearestPoi,
+} from '@/presentation/map/selectNearestPoi';
 import {
   defaultGeorgiaCamera,
   type MapCoordinate,
@@ -81,11 +84,13 @@ interface FailureBucket {
 type MapLayerControllerLifecycle = Pick<
   MapLibreLayerController,
   | 'attach'
+  | 'clearRoutePlanPreview'
   | 'detach'
   | 'handleRasterSourceData'
   | 'handleRasterSourceFailure'
   | 'handleRasterSourceRecovered'
   | 'isRasterSourceRecoveryComplete'
+  | 'setRoutePlanPreview'
   | 'setTerrainInteractionActive'
 > &
   Partial<
@@ -93,6 +98,12 @@ type MapLayerControllerLifecycle = Pick<
   >;
 
 const sourceRecoveryStabilityMs = 2_000;
+
+function formatRoutePlanPreviewDistance(distanceMeters: number): string {
+  if (distanceMeters < 1_000) return `${String(Math.round(distanceMeters))} m`;
+  if (distanceMeters < 10_000) return `${(distanceMeters / 1_000).toFixed(1)} km`;
+  return `${String(Math.round(distanceMeters / 1_000))} km`;
+}
 
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {
   const sourceId = (event as unknown as { readonly sourceId?: unknown }).sourceId;
@@ -200,6 +211,7 @@ function recoverableMessage(
  */
 export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
+  readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
   #map: MapLibreMap | null = null;
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
   #firstIdleRecorded = false;
@@ -221,8 +233,9 @@ export class MapLibreFacade implements MapFacade {
   #pointInspectionSequence = 0;
   #pointInspectionAbort: AbortController | null = null;
   readonly #pointInspector: PointInspectorPopup;
-  readonly #cameraOrbit = new CameraOrbitControl();
+  readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
+  #routePlanPreviewAnchor: MapCoordinate | null = null;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -249,8 +262,10 @@ export class MapLibreFacade implements MapFacade {
     this.detach();
     this.#map = map;
     this.applyInteractionCursor();
-    this.#cameraOrbit.attach(map.getCanvasContainer(), map);
-    this.#cameraOrbit.setEnabled(this.#snapshot.terrainMode === 'terrain');
+    this.#pointerGestures.attach(map.getCanvasContainer(), map);
+    this.#pointerGestures.setTerrainOrbitEnabled(
+      this.#snapshot.terrainMode === 'terrain',
+    );
     this.#pointInspector.attach(map);
     map.on('style.load', this.handleStyleLoad);
     map.on('load', this.handleLoad);
@@ -258,6 +273,7 @@ export class MapLibreFacade implements MapFacade {
     map.on('idle', this.handleIdle);
     map.on('movestart', this.handleMoveStart);
     map.on('moveend', this.handleMoveEnd);
+    map.on('mousemove', this.handleMapMouseMove);
     map.on('click', this.handleMapClick);
     map.on('sourcedata', this.handleSourceData);
     map.on('error', this.handleError);
@@ -265,6 +281,9 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .addEventListener('webglcontextrestored', this.handleContextRestored);
+    map
+      .getCanvasContainer()
+      .addEventListener('mouseleave', this.handleCanvasMouseLeave);
     this.layerController?.attach(map);
     this.#mountedAt = performance.now();
     this.logger.log({ level: 'info', name: 'map.lifecycle.mounted' });
@@ -284,6 +303,14 @@ export class MapLibreFacade implements MapFacade {
     this.#listeners.add(listener);
     return () => {
       this.#listeners.delete(listener);
+    };
+  }
+  public subscribePlanningClicks(
+    listener: (coordinate: MapCoordinate) => void,
+  ): () => void {
+    this.#planningClickListeners.add(listener);
+    return () => {
+      this.#planningClickListeners.delete(listener);
     };
   }
 
@@ -451,7 +478,19 @@ export class MapLibreFacade implements MapFacade {
   public setInteractionMode(mode: MapInteractionMode): void {
     if (this.#interactionMode === mode) return;
     this.#interactionMode = mode;
+    if (mode !== 'route-planning') this.clearRoutePlanPreview();
     this.applyInteractionCursor();
+  }
+
+  public setRoutePlanPreviewAnchor(coordinate: MapCoordinate | null): void {
+    if (
+      this.#routePlanPreviewAnchor?.longitude === coordinate?.longitude &&
+      this.#routePlanPreviewAnchor?.latitude === coordinate?.latitude
+    ) {
+      return;
+    }
+    this.#routePlanPreviewAnchor = coordinate;
+    this.clearRoutePlanPreview();
   }
 
   /**
@@ -467,6 +506,7 @@ export class MapLibreFacade implements MapFacade {
     this.detachMap();
     this.#pointInspector.destroy();
     this.#listeners.clear();
+    this.#planningClickListeners.clear();
   }
 
   private readonly handleLoad = (): void => {
@@ -571,9 +611,41 @@ export class MapLibreFacade implements MapFacade {
     this.layerController?.setTerrainInteractionActive(true);
   };
 
+  private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
+    if (
+      this.#interactionMode !== 'route-planning' ||
+      this.#routePlanPreviewAnchor === null ||
+      this.#map === null
+    ) {
+      return;
+    }
+    const cursor = this.#map.unproject(event.point);
+    const cursorCoordinate = { longitude: cursor.lng, latitude: cursor.lat };
+    this.layerController?.setRoutePlanPreview(
+      [this.#routePlanPreviewAnchor.longitude, this.#routePlanPreviewAnchor.latitude],
+      [cursorCoordinate.longitude, cursorCoordinate.latitude],
+      formatRoutePlanPreviewDistance(
+        geodesicDistanceMeters(this.#routePlanPreviewAnchor, cursorCoordinate),
+      ),
+    );
+  };
+
+  private readonly handleCanvasMouseLeave = (): void => {
+    this.clearRoutePlanPreview();
+  };
+
   private readonly handleMapClick = (event: MapMouseEvent): void => {
     const map = this.#map;
     if (map === null || this.#interactionMode === 'marker-placement') return;
+    const coordinate = {
+      longitude: event.lngLat.lng,
+      latitude: event.lngLat.lat,
+    };
+    if (this.#interactionMode === 'route-planning') {
+      if (event.originalEvent.button !== 0) return;
+      for (const listener of this.#planningClickListeners) listener(coordinate);
+      return;
+    }
     if (this.#pointInspection.status === 'open') {
       const visible = this.#pointInspector.isVisible();
       this.closePointInspection();
@@ -584,10 +656,6 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionAbort?.abort();
     const abortController = new AbortController();
     this.#pointInspectionAbort = abortController;
-    const coordinate = {
-      longitude: event.lngLat.lng,
-      latitude: event.lngLat.lat,
-    };
     this.updatePointInspection({
       status: 'open',
       coordinate,
@@ -1179,7 +1247,9 @@ export class MapLibreFacade implements MapFacade {
 
   private updateSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.#snapshot = { ...this.#snapshot, ...changed };
-    this.#cameraOrbit.setEnabled(this.#snapshot.terrainMode === 'terrain');
+    this.#pointerGestures.setTerrainOrbitEnabled(
+      this.#snapshot.terrainMode === 'terrain',
+    );
     this.snapshotStore?.update(this.#snapshot);
     for (const listener of this.#listeners) {
       listener();
@@ -1196,7 +1266,11 @@ export class MapLibreFacade implements MapFacade {
     const map = this.#map;
     if (map === null) return;
     map.getCanvas().style.cursor =
-      this.#interactionMode === 'marker-placement' ? 'crosshair' : '';
+      this.#interactionMode === 'default' ? '' : 'crosshair';
+  }
+
+  private clearRoutePlanPreview(): void {
+    this.layerController?.clearRoutePlanPreview();
   }
 
   private detach(): void {
@@ -1211,6 +1285,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('idle', this.handleIdle);
     map.off('movestart', this.handleMoveStart);
     map.off('moveend', this.handleMoveEnd);
+    map.off('mousemove', this.handleMapMouseMove);
     map.off('click', this.handleMapClick);
     map.off('sourcedata', this.handleSourceData);
     map.off('error', this.handleError);
@@ -1218,8 +1293,11 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvas()
       .removeEventListener('webglcontextrestored', this.handleContextRestored);
+    map
+      .getCanvasContainer()
+      .removeEventListener('mouseleave', this.handleCanvasMouseLeave);
     map.getCanvas().style.cursor = '';
-    this.#cameraOrbit.detach();
+    this.#pointerGestures.detach();
     this.layerController?.detach(map);
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();

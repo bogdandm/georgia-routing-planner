@@ -13,10 +13,24 @@ type RuntimeSupabaseClient = SupabaseClient<
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn() }));
 
-function stubWorker() {
+interface StubWorkerInstance {
+  readonly name: string | undefined;
+  terminated: boolean;
+}
+
+function stubWorker(): StubWorkerInstance[] {
+  const instances: StubWorkerInstance[] = [];
   vi.stubGlobal(
     'Worker',
-    class {
+    class implements StubWorkerInstance {
+      public readonly name: string | undefined;
+      public terminated = false;
+
+      public constructor(_url: URL, options?: WorkerOptions) {
+        this.name = options?.name;
+        instances.push(this);
+      }
+
       public addEventListener(): void {
         return undefined;
       }
@@ -27,10 +41,11 @@ function stubWorker() {
         return undefined;
       }
       public terminate(): void {
-        return undefined;
+        this.terminated = true;
       }
     },
   );
+  return instances;
 }
 
 describe('createRuntimeServices', () => {
@@ -98,6 +113,28 @@ describe('createRuntimeServices', () => {
       true,
     );
 
+    services.dispose();
+  });
+
+  it('owns the configured routing worker and disposes it with runtime services', () => {
+    const workers = stubWorker();
+    const services = createRuntimeServices();
+    const routingWorker = workers.find((worker) => worker.name === 'trail-routing');
+
+    expect(services.trailRouter).not.toBeNull();
+    expect(routingWorker).toBeDefined();
+
+    services.dispose();
+    expect(routingWorker?.terminated).toBe(true);
+  });
+
+  it('does not expose routing when map provider configuration is invalid', () => {
+    vi.stubEnv('VITE_MAP_PROVIDER_CONFIGURATION', '{}');
+    stubWorker();
+
+    const services = createRuntimeServices();
+
+    expect(services.trailRouter).toBeNull();
     services.dispose();
   });
 });

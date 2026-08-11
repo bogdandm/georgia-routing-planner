@@ -277,8 +277,10 @@ function ElevationProfileArea({
 
 export function ElevationPreparationChart({
   progress,
+  showProgressStatus = true,
 }: {
   readonly progress: TrackElevationPreparationProgress | null;
+  readonly showProgressStatus?: boolean;
 }): ReactElement {
   const theme = useTheme();
   const completedTiles = progress?.completedTiles ?? 0;
@@ -296,15 +298,17 @@ export function ElevationPreparationChart({
       <Typography component="h3" variant="subtitle2">
         Elevation profile
       </Typography>
-      <Stack spacing={0.75}>
-        <LinearProgress
-          variant={hasTileTotal ? 'determinate' : 'indeterminate'}
-          value={hasTileTotal ? (completedTiles / totalTiles) * 100 : undefined}
-        />
-        <Typography variant="body2" color="text.secondary">
-          {label}
-        </Typography>
-      </Stack>
+      {showProgressStatus ? (
+        <Stack spacing={0.75}>
+          <LinearProgress
+            variant={hasTileTotal ? 'determinate' : 'indeterminate'}
+            value={hasTileTotal ? (completedTiles / totalTiles) * 100 : undefined}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {label}
+          </Typography>
+        </Stack>
+      ) : null}
       <Box role="img" aria-label={accessibilityLabel} sx={{ height: 264, mx: -1 }}>
         <AreaChart<TrackElevationPreparationProgress['points'][number]>
           aria-hidden

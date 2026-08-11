@@ -16,6 +16,7 @@ import {
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
   savedMarkerLayerIds,
+  routePlanLayerIds,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
@@ -864,6 +865,160 @@ describe('MapLibreLayerController', () => {
       'data.geometry.coordinates',
       [],
     );
+  });
+  it('renders routed sections solid, direct sections dashed, and numbered waypoints', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(
+      controller.setRoutePlanGeometry(
+        [
+          {
+            kind: 'direct',
+            coordinates: [
+              [44.64, 42.66],
+              [44.641, 42.661],
+            ],
+          },
+          {
+            kind: 'routed',
+            coordinates: [
+              [44.641, 42.661],
+              [44.649, 42.669],
+            ],
+          },
+          {
+            kind: 'direct',
+            coordinates: [
+              [44.649, 42.669],
+              [44.65, 42.67],
+            ],
+          },
+        ],
+        [
+          [44.64, 42.66],
+          [44.65, 42.67],
+        ],
+      ),
+    ).toEqual({ status: 'success' });
+    const routePlanSource = map.sources.get(mapSourceIds.routePlan);
+    expect(routePlanSource).toHaveProperty('data.features.0.properties.kind', 'direct');
+    expect(routePlanSource).toHaveProperty('data.features.0.geometry.coordinates', [
+      [44.64, 42.66],
+      [44.641, 42.661],
+    ]);
+    expect(routePlanSource).toHaveProperty('data.features.1.properties.kind', 'routed');
+    expect(routePlanSource).toHaveProperty('data.features.1.geometry.coordinates', [
+      [44.641, 42.661],
+      [44.649, 42.669],
+    ]);
+    expect(routePlanSource).toHaveProperty('data.features.2.properties.kind', 'direct');
+    expect(routePlanSource).toHaveProperty('data.features.2.geometry.coordinates', [
+      [44.649, 42.669],
+      [44.65, 42.67],
+    ]);
+    expect(routePlanSource).toHaveProperty('data.features.3.properties', {
+      kind: 'waypoint',
+      number: '1',
+    });
+    expect(routePlanSource).toHaveProperty('data.features.4.properties', {
+      kind: 'waypoint',
+      number: '2',
+    });
+    expect(map.layers.get(routePlanLayerIds.routed)).toMatchObject({
+      type: 'line',
+      source: mapSourceIds.routePlan,
+      filter: ['==', ['get', 'kind'], 'routed'],
+      paint: { 'line-color': '#168BFF' },
+    });
+    expect(map.layers.get(routePlanLayerIds.direct)).toMatchObject({
+      type: 'line',
+      source: mapSourceIds.routePlan,
+      filter: ['==', ['get', 'kind'], 'direct'],
+      paint: { 'line-color': '#168BFF', 'line-dasharray': [2, 2] },
+    });
+    expect(map.layers.get(routePlanLayerIds.waypoints)).toMatchObject({
+      type: 'circle',
+      source: mapSourceIds.routePlan,
+      filter: ['==', ['get', 'kind'], 'waypoint'],
+    });
+    expect(map.layers.get(routePlanLayerIds.waypointLabels)).toMatchObject({
+      type: 'symbol',
+      source: mapSourceIds.routePlan,
+      filter: ['==', ['get', 'kind'], 'waypoint'],
+      layout: { 'text-field': ['get', 'number'] },
+    });
+
+    controller.setRoutePlanPreview([44.64, 42.66], [44.66, 42.68], '1.2 km');
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features',
+      expect.arrayContaining([
+        expect.objectContaining({
+          properties: { kind: 'preview' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [44.64, 42.66],
+              [44.66, 42.68],
+            ],
+          },
+        }),
+        expect.objectContaining({
+          properties: { kind: 'preview-label', distanceLabel: '1.2 km' },
+          geometry: { type: 'Point', coordinates: [44.66, 42.68] },
+        }),
+      ]),
+    );
+    expect(map.layers.get(routePlanLayerIds.preview)).toMatchObject({
+      filter: ['==', ['get', 'kind'], 'preview'],
+      paint: { 'line-width': 2, 'line-dasharray': [2, 2] },
+    });
+    expect(map.layers.get(routePlanLayerIds.previewLabel)).toMatchObject({
+      filter: ['==', ['get', 'kind'], 'preview-label'],
+      layout: {
+        'text-field': ['get', 'distanceLabel'],
+        'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
+        'text-radial-offset': 0.75,
+      },
+    });
+    controller.setRoutePlanGeometry(
+      [],
+      [
+        [44.64, 42.66],
+        [44.65, 42.67],
+      ],
+    );
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features',
+      expect.arrayContaining([
+        expect.objectContaining({ properties: { kind: 'preview' } }),
+      ]),
+    );
+    controller.clearRoutePlanPreview();
+    expect(map.sources.get(mapSourceIds.routePlan)).not.toHaveProperty(
+      'data.features.2.properties.kind',
+      'preview',
+    );
+
+    map.sources.delete(mapSourceIds.routePlan);
+    for (const layerId of Object.values(routePlanLayerIds)) {
+      map.layers.delete(layerId);
+    }
+    map.fire('styledata', {});
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features',
+      expect.arrayContaining([
+        expect.objectContaining({ properties: { kind: 'waypoint', number: '1' } }),
+      ]),
+    );
+    expect(map.layers.has(routePlanLayerIds.routed)).toBe(true);
+    expect(map.layers.has(routePlanLayerIds.direct)).toBe(true);
+
+    controller.clearRoutePlanGeometry();
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty('data.features', []);
   });
 
   it('renders and gates a multicolor imported-track grade zebra', async () => {

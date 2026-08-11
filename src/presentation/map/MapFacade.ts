@@ -12,7 +12,7 @@ import type {
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
 
-export type MapInteractionMode = 'default' | 'marker-placement';
+export type MapInteractionMode = 'default' | 'marker-placement' | 'route-planning';
 
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
@@ -20,6 +20,7 @@ export type MapInteractionMode = 'default' | 'marker-placement';
  */
 export interface MapFacade {
   subscribe(listener: () => void): () => void;
+  subscribePlanningClicks(listener: (coordinate: MapCoordinate) => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;
@@ -44,6 +45,7 @@ export interface MapFacade {
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
   setDebugOptions(options: MapDebugOptions): void;
   setInteractionMode(mode: MapInteractionMode): void;
+  setRoutePlanPreviewAnchor(coordinate: MapCoordinate | null): void;
 
   /** Cancels pending transitions and removes every native listener owned by the facade. */
   destroy(): void;

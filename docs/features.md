@@ -17,9 +17,9 @@ longer describes the reviewed interface.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
   available when developer mode is enabled. The `About this site` action sits below
   Settings and opens public author, repository, API, and data-source information.
-- **Create GPX workflow:** manual waypoint planning begins from `Create GPX` in Tracks.
-  “Plan” and “route plan” may name domain data, but there is no Plan tab, Plan rail
-  item, or independent planning destination.
+- **Route planning workflow:** browser route planning begins from `Plan route` in the
+  Tracks header. There is no Plan tab, Plan rail item, or independent planning
+  destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
 - **Detail pane:** selected track and imagery details are adjacent to the contextual
   sidebar at widths of 1900 CSS pixels and above, and overlay that sidebar below 1900
@@ -97,10 +97,10 @@ synchronization requests until the page reloads.
 
 ### Tracks
 
-Tracks combines the read-only global catalog and browser-local GPX tracks in one
-library. The contextual sidebar contains `Create GPX`, Import GPX, search, filter, sort,
-curated categories, personal nested folders, and global/local track results. Personal
-folders store a user's organization without modifying global assets.
+Tracks combines the implemented browser-local track library with reviewed global catalog
+and folder behavior. The contextual sidebar header owns `Plan route`; its scrollable
+content owns file import, search, sort, and local track results. Catalog, personal
+folders, tags, filters, and batch import remain reviewed but unavailable.
 
 Selecting a track draws its geometry on the map and opens an adjacent detail pane with
 source, tags, metrics, folder/download actions, calculation provenance, and a contextual
@@ -132,38 +132,73 @@ when the source name does not already include one. Save retains the exact normal
 source points and a separate browser-calculated Terrarium projection, independent line
 segments, source filename/format metadata, and versioned metrics in this browser; the
 original file bytes are discarded after parsing. Unsaved previews activate the native
-leave-site guard. Saved track cards show icon-led recorded duration, distance, and
-source elevation gain when available. The detail pane's primary stats grid presents
-duration, distance, derived average speed, and authoritative source **Elevation
-gain**/**Elevation loss** only. Separate text rows for **Elevation gain (calculated)**
-and **Elevation loss (calculated)** appear below the point/segment count, outside that
-grid. Missing measurements are omitted; source file, point, segment, and save metadata,
-including a `DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved tracks are
-searchable by name, reopen after close, and rename only from the detail header's
-**Rename** action. That action replaces the saved title with a bounded name editor; the
-preview retains its body **Track name** field and English-name application flow. Each
-saved-track row keeps favorite and icon-only delete controls in the DOM, revealing
-inactive controls on pointer hover or keyboard focus; active favorites remain visible.
-Row selection and hover color cover the entire row, including its action column.
-Deletion uses two-stage inline confirmation: the row delete icon becomes a destructive
-confirmation icon, while **Delete track** in the detail action menu replaces that menu
-trigger with **Confirm delete**. Pointer exit, Escape, and click-away cancel either
-confirmation without mutation. Users can favorite a track from its list row or detail
-header; downloads remain in the detail header's compact action menu. Favorites sort
-before other tracks, with newest imports first inside each group. The latest opened
-saved track reopens after restart when its content is still valid. A compact
-local-retention notice stays pinned to the Tracks panel bottom. Catalog, folders, tags,
-filters, batch import, whole-workspace dropping, and GPX creation remain unavailable. A
-newly imported or reopened track renders as bright-blue independent lines and fits its
-complete bounds with padding for the master/detail surfaces. With usable elevation, the
-map overlays every non-flat climb/descent grade subsegment across the active track,
-leaving flat spans bright blue. The overlay is not narrowed by chart or Climbs &
-Descents segment hover/selection; those interactions remain panel-only. Closing the
-track removes the active geometry without deleting a saved record or moving the camera.
-Every saved track can be downloaded locally as GPX or KML. Generated files preserve
-independent segments, saved name, available point elevation, and reliably aligned
-timestamps without writing GPX or KML description elements; conversion never uploads the
-source.
+leave-site guard.
+
+**Plan route** opens a new unsaved-track detail pane and gives route planning ownership
+of map clicks. The first click sets the start waypoint; each later click adds an ordered
+leg. **Next segment: Routes | Line** persists across clicks. **Routes** snaps both ends
+to the configured transportation topology and searches the shortest walkable connection
+in a browser worker; **Line** preserves the clicked endpoints as one direct segment.
+Accepted legs remain visible as a single planned line with numbered waypoints. While a
+routed leg is pending, the detail pane reports tile downloads as a completed share, then
+graph construction and route search as named phases. Conflicting mode and Save controls
+are disabled; Undo or Clear cancels the request before changing accepted geometry.
+Calculation has a one-minute overall limit. A timeout or other failed routed leg keeps
+the existing plan and offers a direct-line fallback without silently changing the
+selected mode.
+
+The worker fetches bounded MVT coverage from the configured detail-vector TileJSON and
+decodes the same `streets` layer used for visible roads and paths at detailed map zooms.
+Every provider road kind participates except construction/proposed and explicit non-road
+or rail features. Explicit `foot=no` or `foot=private` remains rejected when a
+replacement provider supplies it; the default Shortbread schema does not publish access
+values. Exact source vertices and eligible geometric crossings, branches, overlaps, and
+two-grid-unit near touches become route junctions; available layer and bridge/tunnel
+differences remain disconnected. Routing does not query MapLibre's visible tile cache
+and does not use a backend, proxy, routing service, or Overpass. Missing or unusable
+provider topology produces an actionable unavailable state; it never falls back to an
+unrelated external service.
+
+After every accepted geometry edit, the browser samples terrain elevation and computes
+the same track metrics, elevation profile, grades, and climbs/descents used by imported
+tracks. A terrain failure leaves the accepted geometry and distance metrics intact, with
+no elevation profile; the route can still be saved. Saving locks route edits and map
+clicks while it validates and atomically writes the generated points through the
+existing local-track repository. The result then behaves like any other saved local
+track. Unsaved plans are transient and activate the same leave-site guard as imported
+previews.
+
+Saved track cards show icon-led recorded duration, distance, and source elevation gain
+when available. The detail pane's primary stats grid presents duration, distance,
+derived average speed, and authoritative source **Elevation gain**/**Elevation loss**
+only. Separate text rows for **Elevation gain (calculated)** and **Elevation loss
+(calculated)** appear below the point/segment count, outside that grid. Missing
+measurements are omitted; source file, point, segment, and save metadata, including a
+`DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved tracks are searchable by
+name, reopen after close, and rename only from the detail header's **Rename** action.
+That action replaces the saved title with a bounded name editor; the preview retains its
+body **Track name** field and English-name application flow. Each saved-track row keeps
+favorite and icon-only delete controls in the DOM, revealing inactive controls on
+pointer hover or keyboard focus; active favorites remain visible. Row selection and
+hover color cover the entire row, including its action column. Deletion uses two-stage
+inline confirmation: the row delete icon becomes a destructive confirmation icon, while
+**Delete track** in the detail action menu replaces that menu trigger with **Confirm
+delete**. Pointer exit, Escape, and click-away cancel either confirmation without
+mutation. Users can favorite a track from its list row or detail header; downloads
+remain in the detail header's compact action menu. Favorites sort before other tracks,
+with newest imports first inside each group. The latest opened saved track reopens after
+restart when its content is still valid. A compact local-retention notice stays pinned
+to the Tracks panel bottom. Catalog, folders, tags, filters, batch import,
+whole-workspace dropping, and manual GPX authoring remain unavailable. A newly imported
+or reopened track renders as bright-blue independent lines and fits its complete bounds
+with padding for the master/detail surfaces. With usable elevation, the map overlays
+every non-flat climb/descent grade subsegment across the active track, leaving flat
+spans bright blue. The overlay is not narrowed by chart or Climbs & Descents segment
+hover/selection; those interactions remain panel-only. Closing the track removes the
+active geometry without deleting a saved record or moving the camera. Every saved track
+can be downloaded locally as GPX or KML. Generated files preserve independent segments,
+saved name, available point elevation, and reliably aligned timestamps without writing
+GPX or KML description elements; conversion never uploads the source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. Parsed
@@ -177,17 +212,6 @@ From 900 through 1899 CSS pixels, an open track detail pane overlays Tracks tool
 and above, the track pane remains adjacent and uses **Close track**. Favorite and delete
 row actions remain visible on smartphones; desktop rows reveal them on hover or focus.
 Two-stage inline deletion behaves the same at every width.
-
-### Create GPX
-
-`Create GPX` starts the manual waypoint workflow from Tracks. Users add, move, remove,
-and reorder waypoints connected by visibly straight geodesic segments. The workflow owns
-waypoint names, notes, appearance, distance/elevation metrics, local draft saving, and
-GPX export. Its elevation chart uses the same calculation and provenance vocabulary as
-selected-track details.
-
-The current implementation does not expose a `Create GPX` action; waypoint editing,
-calculation, persistence, and export are unavailable.
 
 ### Satellite
 

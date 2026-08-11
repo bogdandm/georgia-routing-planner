@@ -448,7 +448,11 @@ function markerDistanceLabel(
   return `${markerDistanceFormatter.format(distanceKm)} km away`;
 }
 
-export function MarkersPanel() {
+interface MarkersPanelProps {
+  readonly onMarkerSelected?: () => void;
+}
+
+export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
   const {
     deleteMarker,
     loadError,
@@ -648,6 +652,7 @@ export function MarkersPanel() {
                         longitude: marker.coordinate[0],
                         latitude: marker.coordinate[1],
                       });
+                      onMarkerSelected?.();
                     }}
                     sx={{ minWidth: 0, px: 1.5, py: 1.25 }}
                   >

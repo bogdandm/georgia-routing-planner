@@ -36,6 +36,7 @@ import {
   type LocalTrackContent,
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
+
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import {
@@ -51,6 +52,11 @@ import { appColors } from '@/presentation/theme/appColors';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 import { createTestServices } from '@test/helpers/createTestServices';
+interface SavedTrackSummaryOptions {
+  readonly savedAt?: string;
+  readonly favorite?: boolean;
+  readonly center?: LocalTrackSummary['metrics']['center'];
+}
 function deferred<T>(): {
   readonly promise: Promise<T>;
   readonly resolve: (value: T) => void;
@@ -124,6 +130,8 @@ beforeEach(async () => {
     mobileWorkspaceOpen: false,
     navigationCollapsed: false,
     settingsOpen: false,
+    markerSort: 'created',
+    trackSort: 'created',
   });
 });
 
@@ -146,18 +154,25 @@ function renderWorkspaceShell(
   );
 }
 
-function savedTrackSummary(id: string, name: string): LocalTrackSummary {
+function savedTrackSummary(
+  id: string,
+  name: string,
+  options: SavedTrackSummaryOptions = {},
+): LocalTrackSummary {
+  const savedAt = options.savedAt ?? '2026-07-22T10:00:00.000Z';
+  const favorite = options.favorite ?? false;
+  const center = options.center ?? [44.005, 42.005];
   return {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     id,
     name,
     normalizedName: name.toLocaleLowerCase('en'),
-    savedAt: '2026-07-22T10:00:00.000Z',
-    updatedAt: '2026-07-22T10:00:00.000Z',
+    savedAt,
+    updatedAt: savedAt,
     contentHash: 'a'.repeat(64),
     sourceFilename: 'fixture.gpx',
     sourceFormat: 'gpx',
-    favorite: false,
+    favorite,
     geometryKind: 'track',
     pointCount: 2,
     segmentCount: 1,
@@ -173,7 +188,7 @@ function savedTrackSummary(id: string, name: string): LocalTrackSummary {
         north: 42.01,
         crossesAntimeridian: false,
       },
-      center: [44.005, 42.005],
+      center,
       elevationSource: 'dem-assisted',
       elevationAlgorithmVersion: 3,
     },
@@ -199,6 +214,30 @@ const testViewport = {
   bounds: { west: 44.1, south: 42.1, east: 44.9, north: 42.9 },
   center: { longitude: 44.5, latitude: 42.5 },
 } as const;
+
+const trackSortTestNames = [
+  'Alpha',
+  'Bravo',
+  'East',
+  'Mike',
+  'November',
+  'West',
+  'Yankee',
+  'Zulu',
+] as const;
+
+function savedTrackNames(): readonly string[] {
+  return within(screen.getByRole('list', { name: 'Saved tracks' }))
+    .getAllByRole('listitem')
+    .map((row) => {
+      const [trackButton] = within(row).getAllByRole('button');
+      if (trackButton === undefined) throw new Error('Expected a track row button.');
+      const label = trackButton.textContent;
+      const name = trackSortTestNames.find((candidate) => label.startsWith(candidate));
+      if (name === undefined) throw new Error(`Unknown track row label: ${label}`);
+      return name;
+    });
+}
 
 function catalogGatewayReturning(
   result: SatelliteCatalogResult,
@@ -635,6 +674,192 @@ describe('WorkspaceShell', () => {
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
   }, 10_000);
+
+  it('sorts saved tracks within favorite groups and persists the selected order', async () => {
+    const summaries = [
+      savedTrackSummary('local:zulu', 'Zulu', {
+        savedAt: '2026-07-18T00:00:00.000Z',
+        favorite: true,
+        center: [44.9, 41.7],
+      }),
+      savedTrackSummary('local:alpha', 'Alpha', {
+        savedAt: '2026-07-19T00:00:00.000Z',
+        favorite: true,
+        center: [45.8, 41.7],
+      }),
+      savedTrackSummary('local:mike', 'Mike', {
+        savedAt: '2026-07-20T00:00:00.000Z',
+        favorite: true,
+        center: [44.81, 41.7],
+      }),
+      savedTrackSummary('local:yankee', 'Yankee', {
+        savedAt: '2026-07-18T00:00:00.000Z',
+        center: [44.9, 41.7],
+      }),
+      savedTrackSummary('local:bravo', 'Bravo', {
+        savedAt: '2026-07-19T00:00:00.000Z',
+        center: [45.8, 41.7],
+      }),
+      savedTrackSummary('local:november', 'November', {
+        savedAt: '2026-07-20T00:00:00.000Z',
+        center: [44.81, 41.7],
+      }),
+    ];
+    await Promise.all(
+      summaries.map(async (summary) => {
+        await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+      }),
+    );
+    services.mapViewport.update({
+      bounds: { west: 44.7, south: 41.6, east: 45.9, north: 41.8 },
+      center: { longitude: 44.8, latitude: 41.7 },
+    });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    const sortButton = await screen.findByRole('button', {
+      name: 'Sort tracks. Current: Newest',
+    });
+    expect(savedTrackNames()).toEqual([
+      'Mike',
+      'Alpha',
+      'Zulu',
+      'November',
+      'Bravo',
+      'Yankee',
+    ]);
+    await user.click(sortButton);
+    const sortMenu = await screen.findByRole('menu');
+    expect(
+      within(sortMenu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Newest', 'Name', 'Oldest', 'Distance from map center']);
+    expect(within(sortMenu).getByRole('menuitem', { name: 'Newest' })).toHaveClass(
+      'Mui-selected',
+    );
+
+    await user.click(within(sortMenu).getByRole('menuitem', { name: 'Name' }));
+    await waitFor(() => {
+      expect(savedTrackNames()).toEqual([
+        'Alpha',
+        'Mike',
+        'Zulu',
+        'Bravo',
+        'November',
+        'Yankee',
+      ]);
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Sort tracks. Current: Name' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Oldest' }));
+    await waitFor(() => {
+      expect(savedTrackNames()).toEqual([
+        'Zulu',
+        'Alpha',
+        'Mike',
+        'Yankee',
+        'Bravo',
+        'November',
+      ]);
+    });
+
+    await user.click(
+      screen.getByRole('button', { name: 'Sort tracks. Current: Oldest' }),
+    );
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Distance from map center' }),
+    );
+    await waitFor(() => {
+      expect(savedTrackNames()).toEqual([
+        'Mike',
+        'Zulu',
+        'Alpha',
+        'November',
+        'Yankee',
+        'Bravo',
+      ]);
+    });
+  });
+
+  it('falls back to newest tracks and reacts to live map-center updates', async () => {
+    const west = savedTrackSummary('local:west', 'West', {
+      savedAt: '2026-07-18T00:00:00.000Z',
+      center: [44.81, 41.7],
+    });
+    const east = savedTrackSummary('local:east', 'East', {
+      savedAt: '2026-07-20T00:00:00.000Z',
+      center: [45.79, 41.7],
+    });
+    await services.database.saveLocalTrack(west, savedTrackContent(west.id));
+    await services.database.saveLocalTrack(east, savedTrackContent(east.id));
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Sort tracks. Current: Newest' }),
+    );
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Distance from map center' }),
+    );
+    await waitFor(() => {
+      expect(savedTrackNames()).toEqual(['East', 'West']);
+    });
+
+    act(() => {
+      services.mapViewport.update({
+        bounds: { west: 44.7, south: 41.6, east: 45.9, north: 41.8 },
+        center: { longitude: 44.8, latitude: 41.7 },
+      });
+    });
+    await waitFor(() => {
+      expect(savedTrackNames()).toEqual(['West', 'East']);
+    });
+
+    act(() => {
+      services.mapViewport.update({
+        bounds: { west: 44.7, south: 41.6, east: 45.9, north: 41.8 },
+        center: { longitude: 45.8, latitude: 41.7 },
+      });
+    });
+    await waitFor(() => {
+      expect(savedTrackNames()).toEqual(['East', 'West']);
+    });
+  });
+
+  it('keeps the selected track order when saving its preference fails', async () => {
+    const zulu = savedTrackSummary('local:zulu', 'Zulu', {
+      savedAt: '2026-07-20T00:00:00.000Z',
+    });
+    const alpha = savedTrackSummary('local:alpha', 'Alpha', {
+      savedAt: '2026-07-18T00:00:00.000Z',
+    });
+    await services.database.saveLocalTrack(zulu, savedTrackContent(zulu.id));
+    await services.database.saveLocalTrack(alpha, savedTrackContent(alpha.id));
+    vi.spyOn(services.database, 'saveUiPreferences').mockRejectedValueOnce(
+      new Error('write unavailable'),
+    );
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Sort tracks. Current: Newest' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Name' }));
+
+    await waitFor(() => {
+      expect(useUiStore.getState().trackSort).toBe('name');
+      expect(savedTrackNames()).toEqual(['Alpha', 'Zulu']);
+    });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(await screen.findByText('Sort preference could not be saved')).toBeVisible();
+  });
 
   it('opens smartphone tools over the mounted map without persisting navigation state', async () => {
     mockViewportWidth(899);
@@ -3667,6 +3892,7 @@ describe('WorkspaceShell', () => {
         navigationCollapsed: false,
         elevationGradeLegendDismissed: false,
         markerSort: 'created',
+        trackSort: 'created',
       });
     });
   });

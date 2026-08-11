@@ -290,6 +290,29 @@ function gpxFileWithCompanionRoute(): File {
 }
 
 describe('WorkspaceShell', () => {
+  it('orders primary rail actions from tracks through sharing', () => {
+    renderWorkspaceShell();
+
+    const navigation = screen.getByRole('navigation', {
+      name: 'Workspace navigation',
+    });
+    const tabs = within(navigation).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'Tracks',
+      'Markers',
+      'Layers',
+      'Satellite',
+    ]);
+
+    const satellite = within(navigation).getByRole('tab', { name: 'Satellite' });
+    const share = within(navigation).getByRole('button', {
+      name: 'Share map view',
+    });
+    expect(
+      satellite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('creates a share link only after the explicit rail action', async () => {
     const user = userEvent.setup();
     const writeText = vi
@@ -508,7 +531,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Satellite', 'Tracks', 'Layers', 'Markers']);
+    ).toEqual(['Tracks', 'Markers', 'Layers', 'Satellite']);
     expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',

@@ -4441,10 +4441,26 @@ describe('WorkspaceShell', () => {
   });
   it('renders click-ordered multi-track geometry and read-only details', async () => {
     const { alphaContent, betaContent } = await saveMultiTrackPair();
+    const provider = services.elevationProvider;
+    expect(provider).not.toBeNull();
+    if (provider === null) return;
+    const pendingRecalculation = deferred<readonly ElevationSample[]>();
+    vi.spyOn(provider, 'sampleMany').mockImplementation(
+      (_coordinates, _signal, onProgress) => {
+        onProgress?.({
+          completedTiles: 1,
+          totalTiles: 3,
+          indices: [0],
+          samples: [{ status: 'available', meters: 1_000 }],
+        });
+        return pendingRecalculation.promise;
+      },
+    );
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();
     if (mapLayers === null) return;
     const setImportedTrackGeometry = vi.spyOn(mapLayers, 'setImportedTrackGeometry');
+    const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
     const clearImportedTrackGeometry = vi.spyOn(
       mapLayers,
       'clearImportedTrackGeometry',
@@ -4455,6 +4471,15 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await screen.findByRole('heading', { name: 'Alpha trail' });
+    const ordinaryDetails = screen.getByRole('complementary', {
+      name: 'Track details',
+    });
+    await user.click(
+      within(ordinaryDetails).getByRole('button', {
+        name: 'Recalculate elevation',
+      }),
+    );
+    expect(await screen.findByText('Loading elevation tiles: 1 of 3')).toBeVisible();
     const toggle = screen.getByRole('button', {
       name: 'Select multiple tracks',
     });
@@ -4473,6 +4498,9 @@ describe('WorkspaceShell', () => {
     const details = await screen.findByRole('complementary', {
       name: 'Multiple track details',
     });
+    expect(
+      within(details).getByRole('heading', { name: 'Selected tracks' }),
+    ).toBeVisible();
     await waitFor(() => {
       expect(betaRow).toHaveAttribute('aria-pressed', 'true');
     });
@@ -4493,8 +4521,16 @@ describe('WorkspaceShell', () => {
     expect(within(combined).getByLabelText('Elevation loss: 240 m')).toBeVisible();
     expect(within(alphaSection).getByLabelText('Distance: 1.0 km')).toBeVisible();
     expect(within(betaSection).getByLabelText('Distance: 2.0 km')).toBeVisible();
-    expect(within(alphaSection).getAllByRole('img')).toHaveLength(1);
-    expect(within(betaSection).getAllByRole('img')).toHaveLength(1);
+    expect(
+      within(alphaSection).getByRole('img', {
+        name: /Elevation profile from/u,
+      }),
+    ).toBeVisible();
+    expect(
+      within(betaSection).getByRole('img', {
+        name: /Elevation profile from/u,
+      }),
+    ).toBeVisible();
     expect(
       within(details).queryByRole('heading', { name: 'Track details' }),
     ).not.toBeInTheDocument();
@@ -4520,6 +4556,20 @@ describe('WorkspaceShell', () => {
         alphaContent.trackPoints[0]?.map((point) => point.coordinate),
         betaContent.trackPoints[0]?.map((point) => point.coordinate),
       ]);
+    });
+    await waitFor(() => {
+      const highlighted = setImportedTrackHighlight.mock.calls.at(-1)?.[0];
+      expect(highlighted).not.toBeNull();
+      expect(
+        highlighted?.some((segment) =>
+          segment.coordinates.some((coordinate) => coordinate[0] === 44),
+        ),
+      ).toBe(true);
+      expect(
+        highlighted?.some((segment) =>
+          segment.coordinates.some((coordinate) => coordinate[0] === 45),
+        ),
+      ).toBe(true);
     });
 
     await user.click(alphaRow);

@@ -1,3 +1,4 @@
+import { strFromU8, unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,6 +9,7 @@ import {
 import {
   exportTrackAsGpx,
   exportTrackAsKml,
+  exportTracksAsZip,
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
 
@@ -100,5 +102,61 @@ describe('track export', () => {
 
   it('produces filesystem-safe names', () => {
     expect(safeTrackFilename('A/B:*?', 'gpx')).toBe('A-B---.gpx');
+  });
+
+  it('exports ordered GPX members with deterministic collision suffixes', () => {
+    const tracks: readonly {
+      readonly summary: LocalTrackSummary;
+      readonly content: LocalTrackContent;
+    }[] = [
+      {
+        summary: { ...summary, id: 'local:name-1', name: 'Name' },
+        content: {
+          ...content,
+          trackId: 'local:name-1',
+          trackPoints: [[{ coordinate: [44, 42], elevationMeters: 100 }]],
+        },
+      },
+      {
+        summary: { ...summary, id: 'local:name-2', name: 'Name (2)' },
+        content: {
+          ...content,
+          trackId: 'local:name-2',
+          trackPoints: [[{ coordinate: [45, 43], elevationMeters: 110 }]],
+        },
+      },
+      {
+        summary: { ...summary, id: 'local:name-3', name: 'Name' },
+        content: {
+          ...content,
+          trackId: 'local:name-3',
+          trackPoints: [[{ coordinate: [46, 44], elevationMeters: 120 }]],
+        },
+      },
+    ];
+
+    const bytes = exportTracksAsZip(tracks);
+    const members = unzipSync(bytes);
+
+    expect(Object.keys(members)).toEqual(['Name.gpx', 'Name (2).gpx', 'Name (3).gpx']);
+    expect(strFromU8(members['Name.gpx'] ?? new Uint8Array())).toContain(
+      '<name>Name</name>',
+    );
+    expect(strFromU8(members['Name.gpx'] ?? new Uint8Array())).toContain(
+      'lat="42" lon="44"',
+    );
+    expect(strFromU8(members['Name.gpx'] ?? new Uint8Array())).not.toContain(
+      'lat="43" lon="45"',
+    );
+    expect(strFromU8(members['Name (2).gpx'] ?? new Uint8Array())).toContain(
+      '<name>Name (2)</name>',
+    );
+    expect(strFromU8(members['Name (2).gpx'] ?? new Uint8Array())).toContain(
+      'lat="43" lon="45"',
+    );
+    expect(strFromU8(members['Name (3).gpx'] ?? new Uint8Array())).toContain(
+      'lat="44" lon="46"',
+    );
+    expect(exportTracksAsZip(tracks)).toEqual(bytes);
   });
 });

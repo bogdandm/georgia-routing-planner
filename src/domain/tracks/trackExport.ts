@@ -1,3 +1,5 @@
+import { strToU8, zipSync } from 'fflate';
+
 import type { LocalTrackContent, LocalTrackSummary } from '@/domain/tracks/localTrack';
 import type { TrackPoint } from '@/domain/tracks/gpx';
 
@@ -13,6 +15,20 @@ function escapeXml(value: string): string {
 function gpxPoint(point: TrackPoint, element: 'trkpt' | 'rtept'): string {
   const [longitude, latitude] = point.coordinate;
   return `<${element} lat="${String(latitude)}" lon="${String(longitude)}">${point.elevationMeters === undefined ? '' : `<ele>${String(point.elevationMeters)}</ele>`}${point.recordedAt === undefined ? '' : `<time>${escapeXml(point.recordedAt)}</time>`}</${element}>`;
+}
+
+function uniqueGpxFilename(name: string, usedNames: ReadonlySet<string>): string {
+  const filename = safeTrackFilename(name, 'gpx');
+  if (!usedNames.has(filename)) return filename;
+
+  const stem = filename.slice(0, -'.gpx'.length);
+  let suffix = 2;
+  let candidate = `${stem} (${String(suffix)}).gpx`;
+  while (usedNames.has(candidate)) {
+    suffix += 1;
+    candidate = `${stem} (${String(suffix)}).gpx`;
+  }
+  return candidate;
 }
 
 export function exportTrackAsGpx(
@@ -35,6 +51,22 @@ export function exportTrackAsGpx(
     )
     .join('');
   return `${documentStart}<trk><name>${escapedName}</name>${segments}</trk></gpx>`;
+}
+
+export function exportTracksAsZip(
+  tracks: readonly {
+    readonly summary: LocalTrackSummary;
+    readonly content: LocalTrackContent;
+  }[],
+): Uint8Array {
+  const usedNames = new Set<string>();
+  const entries: Record<string, Uint8Array> = {};
+  for (const { summary, content } of tracks) {
+    const filename = uniqueGpxFilename(summary.name, usedNames);
+    usedNames.add(filename);
+    entries[filename] = strToU8(exportTrackAsGpx(summary, content));
+  }
+  return zipSync(entries, { level: 6, mtime: new Date(1980, 0, 1) });
 }
 
 export function exportTrackAsKml(

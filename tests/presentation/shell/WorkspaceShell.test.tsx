@@ -1,3 +1,5 @@
+import { strFromU8, unzipSync } from 'fflate';
+
 import { ThemeProvider } from '@mui/material';
 import {
   act,
@@ -66,6 +68,29 @@ function deferred<T>(): {
     resolveValue = resolve;
   });
   return { promise, resolve: resolveValue };
+}
+
+function readBlob(blob: Blob): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      if (!(reader.result instanceof ArrayBuffer)) {
+        reject(new Error('Blob did not produce an ArrayBuffer.'));
+        return;
+      }
+      resolve(new Uint8Array(reader.result));
+    });
+    reader.addEventListener('error', () => {
+      reject(reader.error ?? new Error('Blob read failed.'));
+    });
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function requiredBlob(blob: Blob | null): Blob {
+  expect(blob).not.toBeNull();
+  if (blob === null) throw new Error('Download did not create a Blob.');
+  return blob;
 }
 
 let services: RuntimeServices;
@@ -4836,6 +4861,159 @@ describe('WorkspaceShell', () => {
       ).not.toBeInTheDocument();
       expect(clearImportedTrackGeometry).toHaveBeenCalled();
     });
+  });
+
+  it('downloads a saved track from the primary header action', async () => {
+    const summary = savedTrackSummary('local:download', 'Ridge / trail');
+    const content = savedTrackContent(summary.id);
+    await services.database.saveLocalTrack(summary, content);
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+
+    let captureDownload = false;
+    let downloadedBlob: Blob | null = null;
+    let downloadedFilename: string | null = null;
+    let downloadedHref: string | null = null;
+    const createObjectUrl = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockImplementation((object) => {
+        if (captureDownload && object instanceof Blob) downloadedBlob = object;
+        return 'blob:track-download';
+      });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        if (!captureDownload) return;
+        downloadedFilename = this.download;
+        downloadedHref = this.href;
+      });
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    const download = within(details).getByRole('button', { name: 'Download GPX' });
+    const actions = within(details).getByRole('button', { name: 'Track actions' });
+    expect(
+      download.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const createObjectUrlCallCount = createObjectUrl.mock.calls.length;
+    const clickCallCount = click.mock.calls.length;
+    captureDownload = true;
+    await user.click(download);
+    captureDownload = false;
+
+    expect(createObjectUrl.mock.calls).toHaveLength(createObjectUrlCallCount + 1);
+    expect(click.mock.calls).toHaveLength(clickCallCount + 1);
+    expect(downloadedFilename).toBe('Ridge - trail.gpx');
+    expect(downloadedHref).toContain('blob:track-download');
+    expect(revokeObjectUrl).toHaveBeenLastCalledWith('blob:track-download');
+    const blob = requiredBlob(downloadedBlob);
+    expect(blob.type).toBe('application/gpx+xml');
+    const downloadedGpx = new TextDecoder().decode(await readBlob(blob));
+    expect(downloadedGpx).toContain('<name>Ridge / trail</name>');
+    expect(downloadedGpx).toContain('lat="42" lon="44"');
+
+    await user.click(actions);
+    const menu = await screen.findByRole('menu');
+    expect(
+      within(menu).queryByRole('menuitem', { name: 'Download GPX' }),
+    ).not.toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Download KML' })).toBeVisible();
+  });
+
+  it('downloads selected tracks in click order as ZIP', async () => {
+    const { beta, betaContent } = await saveMultiTrackPair();
+    await services.database.saveLatestOpenedTrackId(null);
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1900);
+
+    const pendingBeta = deferred<LocalTrackContent>();
+    const loadLocalTrackContent = services.database.loadLocalTrackContent.bind(
+      services.database,
+    );
+    vi.spyOn(services.database, 'loadLocalTrackContent').mockImplementation(
+      (trackId) =>
+        trackId === beta.id ? pendingBeta.promise : loadLocalTrackContent(trackId),
+    );
+    let captureDownload = false;
+    let downloadedBlob: Blob | null = null;
+    let downloadedFilename: string | null = null;
+    const createObjectUrl = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockImplementation((object) => {
+        if (captureDownload && object instanceof Blob) downloadedBlob = object;
+        return 'blob:selected-tracks';
+      });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        if (!captureDownload) return;
+        downloadedFilename = this.download;
+      });
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Select multiple tracks' }));
+    const savedTracks = await screen.findByRole('list', { name: 'Saved tracks' });
+    const betaRow = within(savedTracks).getByRole('button', {
+      name: /^Beta trail/u,
+    });
+    const alphaRow = within(savedTracks).getByRole('button', {
+      name: /^Alpha trail/u,
+    });
+    await user.click(betaRow);
+
+    const details = await screen.findByRole('complementary', {
+      name: 'Multiple track details',
+    });
+    const download = within(details).getByRole('button', {
+      name: 'Download selected tracks',
+    });
+    expect(download).toBeDisabled();
+
+    pendingBeta.resolve(betaContent);
+    await user.click(alphaRow);
+    await waitFor(() => {
+      expect(download).toBeEnabled();
+    });
+    const close = within(details).getByRole('button', {
+      name: 'Close multi-track view',
+    });
+    expect(
+      download.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const createObjectUrlCallCount = createObjectUrl.mock.calls.length;
+    const clickCallCount = click.mock.calls.length;
+    captureDownload = true;
+    await user.click(download);
+    captureDownload = false;
+
+    expect(createObjectUrl.mock.calls).toHaveLength(createObjectUrlCallCount + 1);
+    expect(click.mock.calls).toHaveLength(clickCallCount + 1);
+    expect(downloadedFilename).toBe('selected-tracks.zip');
+    expect(revokeObjectUrl).toHaveBeenLastCalledWith('blob:selected-tracks');
+    const blob = requiredBlob(downloadedBlob);
+    expect(blob.type).toBe('application/zip');
+    const archive = unzipSync(await readBlob(blob));
+    expect(Object.keys(archive)).toEqual(['Beta trail.gpx', 'Alpha trail.gpx']);
+    expect(strFromU8(archive['Beta trail.gpx'] ?? new Uint8Array())).toContain(
+      'lat="42" lon="45"',
+    );
+    expect(strFromU8(archive['Alpha trail.gpx'] ?? new Uint8Array())).toContain(
+      'lat="42" lon="44"',
+    );
+    expect(strFromU8(archive['Beta trail.gpx'] ?? new Uint8Array())).toContain(
+      '<name>Beta trail</name>',
+    );
+    expect(strFromU8(archive['Alpha trail.gpx'] ?? new Uint8Array())).toContain(
+      '<name>Alpha trail</name>',
+    );
   });
 
   it('omits partial optional totals from multi-track combined details', async () => {

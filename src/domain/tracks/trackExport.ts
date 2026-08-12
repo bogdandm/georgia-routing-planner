@@ -12,9 +12,9 @@ function escapeXml(value: string): string {
     .replaceAll("'", '&apos;');
 }
 
-function gpxPoint(point: TrackPoint, element: 'trkpt' | 'rtept'): string {
+function gpxPoint(point: TrackPoint): string {
   const [longitude, latitude] = point.coordinate;
-  return `<${element} lat="${String(latitude)}" lon="${String(longitude)}">${point.elevationMeters === undefined ? '' : `<ele>${String(point.elevationMeters)}</ele>`}${point.recordedAt === undefined ? '' : `<time>${escapeXml(point.recordedAt)}</time>`}</${element}>`;
+  return `<trkpt lat="${String(latitude)}" lon="${String(longitude)}">${point.elevationMeters === undefined ? '' : `<ele>${String(point.elevationMeters)}</ele>`}${point.recordedAt === undefined ? '' : `<time>${escapeXml(point.recordedAt)}</time>`}</trkpt>`;
 }
 
 function uniqueGpxFilename(name: string, usedNames: ReadonlySet<string>): string {
@@ -37,17 +37,10 @@ export function exportTrackAsGpx(
 ): string {
   const escapedName = escapeXml(summary.name);
   const documentStart = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Trail Planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapedName}</name></metadata>`;
-  if (summary.geometryKind === 'route') {
-    const points = content.trackPoints
-      .flatMap((segment) => segment)
-      .map((point) => gpxPoint(point, 'rtept'))
-      .join('');
-    return `${documentStart}<rte><name>${escapedName}</name>${points}</rte></gpx>`;
-  }
   const segments = content.trackPoints
     .map(
       (segment) =>
-        `<trkseg>${segment.map((point) => gpxPoint(point, 'trkpt')).join('')}</trkseg>`,
+        `<trkseg>${segment.map((point) => gpxPoint(point)).join('')}</trkseg>`,
     )
     .join('');
   return `${documentStart}<trk><name>${escapedName}</name>${segments}</trk></gpx>`;

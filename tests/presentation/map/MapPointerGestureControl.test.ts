@@ -33,7 +33,7 @@ function createPivotDouble() {
 
 describe('MapPointerGestureControl', () => {
   it.each([false, true])(
-    'pans with middle drag in terrain mode %s without orbiting',
+    'pans in 2D and orbits the 3D camera with middle drag (%s)',
     (terrainEnabled) => {
       const container = document.createElement('div');
       const { easeTo, map, panBy, unproject } = createMapDouble();
@@ -57,8 +57,8 @@ describe('MapPointerGestureControl', () => {
           cancelable: true,
           button: 1,
           buttons: 4,
-          clientX: 30,
-          clientY: 5,
+          clientX: 110,
+          clientY: -1_000,
         }),
       );
       const up = new MouseEvent('mouseup', {
@@ -78,10 +78,23 @@ describe('MapPointerGestureControl', () => {
       expect(down.defaultPrevented).toBe(true);
       expect(up.defaultPrevented).toBe(true);
       expect(aux.defaultPrevented).toBe(true);
-      expect(panBy).toHaveBeenCalledWith([-20, 5], { duration: 0 });
-      expect(easeTo).not.toHaveBeenCalled();
-      expect(unproject).not.toHaveBeenCalled();
-      expect(pivot.show).not.toHaveBeenCalled();
+      if (terrainEnabled) {
+        expect(easeTo).toHaveBeenCalledWith(
+          expect.objectContaining({
+            around: { lng: 44.8, lat: 41.7 },
+            bearing: 38,
+            pitch: 75,
+          }),
+        );
+        expect(panBy).not.toHaveBeenCalled();
+        expect(unproject).toHaveBeenCalledWith([10, 10]);
+        expect(pivot.show).toHaveBeenCalledWith(map, { lng: 44.8, lat: 41.7 });
+      } else {
+        expect(panBy).toHaveBeenCalledWith([-100, 1_010], { duration: 0 });
+        expect(easeTo).not.toHaveBeenCalled();
+        expect(unproject).not.toHaveBeenCalled();
+        expect(pivot.show).not.toHaveBeenCalled();
+      }
       control.detach();
     },
   );

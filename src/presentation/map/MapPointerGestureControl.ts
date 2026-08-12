@@ -36,6 +36,7 @@ export class MapPointerGestureControl {
   #map: MapLibreMap | null = null;
   #terrainOrbitEnabled = false;
   #gesture: Gesture = null;
+  #gestureButton: 0 | 1 | null = null;
   #orbitAnchor: LngLat | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
 
@@ -73,7 +74,9 @@ export class MapPointerGestureControl {
   private readonly handleMouseDown = (event: MouseEvent): void => {
     const gesture: Gesture =
       event.button === 1
-        ? 'pan'
+        ? this.#terrainOrbitEnabled
+          ? 'orbit'
+          : 'pan'
         : event.button === 0 && event.shiftKey && this.#terrainOrbitEnabled
           ? 'orbit'
           : null;
@@ -82,6 +85,7 @@ export class MapPointerGestureControl {
     event.preventDefault();
     event.stopImmediatePropagation();
     this.#gesture = gesture;
+    this.#gestureButton = event.button === 0 ? 0 : 1;
     this.#lastPointer = { x: event.clientX, y: event.clientY };
     window.addEventListener('mousemove', this.handleMouseMove, true);
     window.addEventListener('mouseup', this.handleMouseUp, true);
@@ -127,13 +131,11 @@ export class MapPointerGestureControl {
   };
 
   private readonly handleMouseUp = (event: MouseEvent): void => {
-    const isExpectedButton =
-      (this.#gesture === 'pan' && event.button === 1) ||
-      (this.#gesture === 'orbit' && event.button === 0);
-    if (!isExpectedButton) return;
+    const gesture = this.#gesture;
+    if (gesture === null || event.button !== this.#gestureButton) return;
+    const suppressClick = gesture === 'orbit' && event.button === 0;
     event.preventDefault();
     event.stopImmediatePropagation();
-    const suppressClick = this.#gesture === 'orbit';
     this.finishGesture();
     if (suppressClick) this.suppressNextClick();
   };
@@ -156,6 +158,7 @@ export class MapPointerGestureControl {
 
   private finishGesture(): void {
     this.#gesture = null;
+    this.#gestureButton = null;
     this.#orbitAnchor = null;
     this.#lastPointer = null;
     this.pivotIndicator.hide();

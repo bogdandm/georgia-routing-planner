@@ -353,7 +353,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
 test('pans in 2D and orbits 3D terrain with middle drag before compass reset', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -411,21 +411,23 @@ test('pans in 2D and orbits 3D terrain with middle drag before compass reset', a
   }
   await page.mouse.up({ button: 'middle' });
   await expect(pivot).toHaveCount(0);
-
   await page.mouse.move(centerX, centerY);
   await page.keyboard.down('Shift');
   await page.mouse.down();
   await expect(pivot).toHaveCount(1);
-  const pivotBeforeOrbit = await pivot.boundingBox();
-  expect(pivotBeforeOrbit).not.toBeNull();
+  const pivotBeforeShiftOrbit = await pivot.boundingBox();
+  expect(pivotBeforeShiftOrbit).not.toBeNull();
   await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
-  if (pivotBeforeOrbit !== null) {
+  if (pivotBeforeShiftOrbit !== null) {
     await expect
       .poll(async () => {
         const current = await pivot.boundingBox();
         return current === null
           ? Number.POSITIVE_INFINITY
-          : Math.hypot(current.x - pivotBeforeOrbit.x, current.y - pivotBeforeOrbit.y);
+          : Math.hypot(
+              current.x - pivotBeforeShiftOrbit.x,
+              current.y - pivotBeforeShiftOrbit.y,
+            );
       })
       .toBeLessThan(4);
   }

@@ -22,7 +22,12 @@ export function formatTrackDuration(seconds: number): string {
   return `${String(hours)}h ${String(minutes)}m`;
 }
 
-function averageSpeedKilometersPerHour(metrics: TrackMetrics): number | undefined {
+export type TrackStatsMetrics = Pick<
+  TrackMetrics,
+  'distanceMeters' | 'elapsedSeconds' | 'ascentMeters' | 'descentMeters'
+>;
+
+function averageSpeedKilometersPerHour(metrics: TrackStatsMetrics): number | undefined {
   const elapsedSeconds = metrics.elapsedSeconds;
   if (elapsedSeconds === undefined || elapsedSeconds <= 0) return undefined;
   return (metrics.distanceMeters / elapsedSeconds) * 3.6;
@@ -82,7 +87,7 @@ export function TrackStat({
 }
 
 interface TrackStatsProps {
-  readonly metrics: TrackMetrics;
+  readonly metrics: TrackStatsMetrics;
   readonly compact?: boolean;
   readonly overGraphic?: boolean;
 }
@@ -156,7 +161,7 @@ export function TrackStats({
 }
 
 interface CompactTrackSummaryProps {
-  readonly metrics: TrackMetrics | null;
+  readonly metrics: TrackStatsMetrics | null;
   readonly profile: ElevationProfile | null;
   readonly showExpandIndicator?: boolean;
 }

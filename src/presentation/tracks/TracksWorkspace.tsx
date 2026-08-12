@@ -47,6 +47,7 @@ import {
   useSyncExternalStore,
   type DragEvent,
   type PropsWithChildren,
+  type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -107,6 +108,7 @@ import {
   formatTrackDuration,
   TrackStat,
   TrackStats,
+  type TrackStatsMetrics,
 } from '@/presentation/tracks/TrackSummary';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
 import {
@@ -181,6 +183,24 @@ interface SavedTrackSelection {
 }
 
 type ActiveTrack = PreviewTrack | SavedTrackSelection | RoutePlanDraft;
+type MultiTrackSelection =
+  | {
+      readonly status: 'loading';
+      readonly requestId: number;
+      readonly summary: LocalTrackSummary;
+    }
+  | {
+      readonly status: 'ready';
+      readonly requestId: number;
+      readonly summary: LocalTrackSummary;
+      readonly content: LocalTrackContent;
+      readonly profile: ElevationProfile | null;
+    };
+
+type ReadyMultiTrackSelection = Extract<
+  MultiTrackSelection,
+  { readonly status: 'ready' }
+>;
 
 interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
@@ -190,6 +210,11 @@ interface TracksWorkspaceValue {
   readonly filteredSummaries: readonly LocalTrackSummary[];
   readonly importError: string | null;
   readonly importFiles: (files: FileList | readonly File[]) => Promise<void>;
+  readonly multiTrackMode: boolean;
+  readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly multiTrackStatsMetrics: TrackStatsMetrics | null;
+  readonly toggleMultiTrackMode: () => Promise<void>;
+  readonly toggleMultiTrackSelection: (summary: LocalTrackSummary) => Promise<void>;
   readonly addRoutePlanPoint: (coordinate: TrackCoordinate) => void;
   readonly clearRoutePlan: () => void;
   readonly importState: 'idle' | 'preparing';
@@ -367,6 +392,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
+  const [multiTrackMode, setMultiTrackMode] = useState(false);
+  const [multiTrackSelections, setMultiTrackSelections] = useState<
+    readonly MultiTrackSelection[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [importError, setImportError] = useState<ImportErrorNotice | null>(null);
   const [importState, setImportState] = useState<'idle' | 'preparing'>('idle');
@@ -385,11 +414,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const previewSaveInProgress = useRef(false);
   const routePlanSaveInProgress = useRef(false);
   const importGeneration = useRef(0);
+  const multiTrackRequestId = useRef(0);
+  const multiTrackSelectionRequests = useRef(new Map<string, number>());
   const latestOpenedTrackId = useRef<string | null>(null);
   const latestOpenedTrackWrite = useRef<Promise<void>>(Promise.resolve());
   const renderedTrackId = useRef<string | null>(null);
   const initiallyRestoredTrackId = useRef<string | null>(null);
   const restorationAttempted = useRef(false);
+  const readyMultiTrackSelections = useMemo(
+    () =>
+      multiTrackSelections.filter(
+        (selection): selection is ReadyMultiTrackSelection =>
+          selection.status === 'ready',
+      ),
+    [multiTrackSelections],
+  );
 
   const saveLatestOpenedTrackId = useCallback(
     async (trackId: string | null) => {
@@ -452,24 +491,100 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () =>
       userData.subscribeTracksChanged(() => {
         void reloadSummaries();
-        if (active?.kind !== 'saved') return;
-        void (async () => {
-          const summary = await database.localTracks.get(active.summary.id);
-          if (summary === undefined) {
+        if (active?.kind === 'saved') {
+          void (async () => {
+            const summary = await database.localTracks.get(active.summary.id);
+            if (summary === undefined) {
+              setActive(null);
+              return;
+            }
+            const content = await database.loadLocalTrackContent(summary.id);
+            setActive((current) =>
+              current?.kind === 'saved' && current.summary.id === summary.id
+                ? { kind: 'saved', summary, content, draftName: summary.name }
+                : current,
+            );
+          })().catch(() => {
             setActive(null);
-            return;
+          });
+        }
+
+        const refreshes = multiTrackSelections.flatMap((selection) => {
+          if (
+            multiTrackSelectionRequests.current.get(selection.summary.id) !==
+            selection.requestId
+          ) {
+            return [];
           }
-          const content = await database.loadLocalTrackContent(summary.id);
-          setActive((current) =>
-            current?.kind === 'saved' && current.summary.id === summary.id
-              ? { kind: 'saved', summary, content, draftName: summary.name }
-              : current,
-          );
-        })().catch(() => {
-          setActive(null);
+          const requestId = ++multiTrackRequestId.current;
+          multiTrackSelectionRequests.current.set(selection.summary.id, requestId);
+          return [
+            {
+              previousRequestId: selection.requestId,
+              requestId,
+              summary: selection.summary,
+            },
+          ];
         });
+        if (refreshes.length === 0) return;
+        setMultiTrackSelections((current) =>
+          current.map((selection) => {
+            const refresh = refreshes.find(
+              (candidate) =>
+                candidate.summary.id === selection.summary.id &&
+                candidate.previousRequestId === selection.requestId,
+            );
+            return refresh === undefined
+              ? selection
+              : {
+                  status: 'loading',
+                  requestId: refresh.requestId,
+                  summary: selection.summary,
+                };
+          }),
+        );
+        for (const refresh of refreshes) {
+          void (async () => {
+            const summary = await database.localTracks.get(refresh.summary.id);
+            if (summary === undefined) {
+              throw new Error('The selected track no longer exists.');
+            }
+            const content = await database.loadLocalTrackContent(summary.id);
+            const profile = elevationProfileForSavedTrack(content);
+            if (
+              multiTrackSelectionRequests.current.get(summary.id) !== refresh.requestId
+            ) {
+              return;
+            }
+            setMultiTrackSelections((current) =>
+              current.map((selection) =>
+                selection.requestId === refresh.requestId
+                  ? {
+                      status: 'ready',
+                      requestId: refresh.requestId,
+                      summary,
+                      content,
+                      profile,
+                    }
+                  : selection,
+              ),
+            );
+          })().catch(() => {
+            if (
+              multiTrackSelectionRequests.current.get(refresh.summary.id) !==
+              refresh.requestId
+            ) {
+              return;
+            }
+            multiTrackSelectionRequests.current.delete(refresh.summary.id);
+            setMultiTrackSelections((current) =>
+              current.filter((selection) => selection.requestId !== refresh.requestId),
+            );
+            setError('The track could not be added to multi-track view.');
+          });
+        }
       }),
-    [active, database, reloadSummaries, userData],
+    [active, database, multiTrackSelections, reloadSummaries, userData],
   );
 
   useEffect(() => {
@@ -497,6 +612,36 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [importError]);
 
   useEffect(() => {
+    if (multiTrackMode) {
+      renderedTrackId.current = null;
+      mapLayers?.clearRoutePlanGeometry();
+      if (readyMultiTrackSelections.length === 0) {
+        mapLayers?.clearImportedTrackGeometry();
+        return;
+      }
+      const segments = readyMultiTrackSelections.flatMap((selection) =>
+        localTrackSegments(selection.content),
+      );
+      const result = mapLayers?.setImportedTrackGeometry(segments);
+      if (result?.status === 'failed') return;
+      const metrics = calculateTrackMetrics(
+        readyMultiTrackSelections.flatMap((selection) =>
+          selection.content.trackPoints.map((points) => ({ points })),
+        ),
+      );
+      requestMapFitBounds(
+        {
+          west: metrics.bounds.west,
+          south: metrics.bounds.south,
+          east: metrics.bounds.crossesAntimeridian
+            ? metrics.bounds.east + 360
+            : metrics.bounds.east,
+          north: metrics.bounds.north,
+        },
+        15,
+      );
+      return;
+    }
     if (active === null) {
       renderedTrackId.current = null;
       mapLayers?.clearImportedTrackGeometry();
@@ -547,7 +692,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         15,
       );
     }
-  }, [active, mapLayers]);
+  }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 
   const generateName = useCallback(
     async (preview: PreparedPreviewTrack, controller: AbortController) => {
@@ -734,6 +879,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       ) {
         return;
       }
+      setMultiTrackMode(false);
+      setMultiTrackSelections([]);
+      multiTrackSelectionRequests.current.clear();
       initiallyRestoredTrackId.current = null;
       namingAbort.current?.abort();
       preparationAbort.current?.abort();
@@ -847,6 +995,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
+    setMultiTrackMode(false);
+    setMultiTrackSelections([]);
+    multiTrackSelectionRequests.current.clear();
     initiallyRestoredTrackId.current = null;
     namingAbort.current?.abort();
     preparationAbort.current?.abort();
@@ -1435,6 +1586,94 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setError(null);
     return true;
   }, [active, saveLatestOpenedTrackId]);
+  const toggleMultiTrackMode = useCallback(async () => {
+    if (multiTrackMode) {
+      setMultiTrackMode(false);
+      setMultiTrackSelections([]);
+      multiTrackSelectionRequests.current.clear();
+      return;
+    }
+    if (
+      (active?.kind === 'preview' || active?.kind === 'route-plan') &&
+      !(await closeActive())
+    ) {
+      return;
+    }
+    if (active?.kind === 'saved') {
+      const requestId = ++multiTrackRequestId.current;
+      multiTrackSelectionRequests.current.set(active.summary.id, requestId);
+      setMultiTrackSelections([
+        {
+          status: 'ready',
+          requestId,
+          summary: active.summary,
+          content: active.content,
+          profile: elevationProfileForSavedTrack(active.content),
+        },
+      ]);
+    } else {
+      multiTrackSelectionRequests.current.clear();
+      setMultiTrackSelections([]);
+    }
+    setMultiTrackMode(true);
+    setError(null);
+  }, [active, closeActive, multiTrackMode]);
+
+  const toggleMultiTrackSelection = useCallback(
+    async (summary: LocalTrackSummary) => {
+      if (!multiTrackMode) return;
+      const existingRequestId = multiTrackSelectionRequests.current.get(summary.id);
+      if (existingRequestId !== undefined) {
+        multiTrackSelectionRequests.current.delete(summary.id);
+        setMultiTrackSelections((current) =>
+          current.filter(
+            (selection) =>
+              selection.summary.id !== summary.id ||
+              selection.requestId !== existingRequestId,
+          ),
+        );
+        return;
+      }
+
+      const requestId = ++multiTrackRequestId.current;
+      multiTrackSelectionRequests.current.set(summary.id, requestId);
+      setMultiTrackSelections((current) => [
+        ...current,
+        { status: 'loading', requestId, summary },
+      ]);
+      try {
+        const content = await database.loadLocalTrackContent(summary.id);
+        if (multiTrackSelectionRequests.current.get(summary.id) !== requestId) {
+          return;
+        }
+        setMultiTrackSelections((current) =>
+          current.map((selection) =>
+            selection.requestId === requestId
+              ? {
+                  status: 'ready',
+                  requestId,
+                  summary,
+                  content,
+                  profile: elevationProfileForSavedTrack(content),
+                }
+              : selection,
+          ),
+        );
+        setError(null);
+      } catch (loadError) {
+        if (multiTrackSelectionRequests.current.get(summary.id) !== requestId) {
+          return;
+        }
+        multiTrackSelectionRequests.current.delete(summary.id);
+        setMultiTrackSelections((current) =>
+          current.filter((selection) => selection.requestId !== requestId),
+        );
+        setError('The track could not be added to multi-track view.');
+        throw loadError;
+      }
+    },
+    [database, multiTrackMode],
+  );
 
   const activeSavedTrackId = active?.kind === 'saved' ? active.summary.id : null;
 
@@ -1543,6 +1782,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? { ...current, summary: updated }
             : current,
         );
+        setMultiTrackSelections((current) =>
+          current.map((selection) =>
+            selection.summary.id === updated.id
+              ? { ...selection, summary: updated }
+              : selection,
+          ),
+        );
         await reloadSummaries();
         void userData.trackMetadataChanged(updated.id);
         setError(null);
@@ -1570,6 +1816,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? null
             : current,
         );
+        const selectedRequestId = multiTrackSelectionRequests.current.get(summary.id);
+        if (selectedRequestId !== undefined) {
+          multiTrackSelectionRequests.current.delete(summary.id);
+          setMultiTrackSelections((current) =>
+            current.filter(
+              (selection) =>
+                selection.summary.id !== summary.id ||
+                selection.requestId !== selectedRequestId,
+            ),
+          );
+        }
         await reloadSummaries();
         void userData.trackDeleted(summary.id);
         setError(null);
@@ -1602,6 +1859,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [mapCenter, query, summaries, trackSort]);
 
   const activeProfile = useMemo(() => elevationProfileForActiveTrack(active), [active]);
+  const multiTrackStatsMetrics = useMemo(
+    () =>
+      multiTrackMode &&
+      multiTrackSelections.length > 0 &&
+      readyMultiTrackSelections.length === multiTrackSelections.length
+        ? aggregateTrackStatsMetrics(readyMultiTrackSelections)
+        : null,
+    [multiTrackMode, multiTrackSelections.length, readyMultiTrackSelections],
+  );
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackHighlight(null);
@@ -1609,8 +1875,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [mapLayers],
   );
   useEffect(() => {
-    const highlightSegments =
-      active?.kind === 'route-plan' || activeProfile === null
+    const highlightSegments = multiTrackMode
+      ? readyMultiTrackSelections.flatMap((selection) => {
+          const profile = selection.profile;
+          if (profile === null) return [];
+          return profile.gradeSubsegments.map((gradeSubsegment) => ({
+            coordinates: profile.points
+              .slice(
+                gradeSubsegment.startSampleIndex,
+                gradeSubsegment.endSampleIndex + 1,
+              )
+              .map((point) => point.coordinate),
+            color: appColors.elevationGrade[gradeSubsegment.band],
+          }));
+        })
+      : active?.kind === 'route-plan' || activeProfile === null
         ? null
         : activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
             coordinates: activeProfile.points
@@ -1622,7 +1901,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             color: appColors.elevationGrade[gradeSubsegment.band],
           }));
     mapLayers?.setImportedTrackHighlight(highlightSegments);
-  }, [active?.kind, activeProfile, mapLayers]);
+  }, [
+    active?.kind,
+    activeProfile,
+    mapLayers,
+    multiTrackMode,
+    readyMultiTrackSelections,
+  ]);
 
   const value = useMemo<TracksWorkspaceValue>(
     () => ({
@@ -1636,6 +1921,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       importError: importError?.message ?? null,
       importState,
       importFiles,
+      multiTrackMode,
+      multiTrackSelections,
+      multiTrackStatsMetrics,
       query,
       summaries,
       applyGeneratedName,
@@ -1654,6 +1942,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setActiveName,
       setQuery,
       undoLastRoutePlanPoint,
+      toggleMultiTrackMode,
+      toggleMultiTrackSelection,
       toggleFavorite,
     }),
     [
@@ -1672,6 +1962,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       importError,
       importFiles,
       importState,
+      multiTrackMode,
+      multiTrackSelections,
+      multiTrackStatsMetrics,
       query,
       renameActive,
       recalculateElevation,
@@ -1686,6 +1979,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       undoLastRoutePlanPoint,
       summaries,
       toggleFavorite,
+      toggleMultiTrackMode,
+      toggleMultiTrackSelection,
     ],
   );
 
@@ -1993,11 +2288,14 @@ export function TracksPanel({ onOpenActiveDetails }: TracksPanelProps) {
     active,
     error,
     filteredSummaries,
+    multiTrackMode,
+    multiTrackSelections,
     query,
     setQuery,
     selectSaved,
     summaries,
     toggleFavorite,
+    toggleMultiTrackSelection,
     deleteSaved,
   } = useTracksWorkspace();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -2047,8 +2345,11 @@ export function TracksPanel({ onOpenActiveDetails }: TracksPanelProps) {
             {filteredSummaries.map((summary) => {
               const elapsedSeconds = summary.metrics.elapsedSeconds;
               const ascentMeters = summary.metrics.ascentMeters;
-              const selected =
-                active?.kind === 'saved' && active.summary.id === summary.id;
+              const selected = multiTrackMode
+                ? multiTrackSelections.some(
+                    (selection) => selection.summary.id === summary.id,
+                  )
+                : active?.kind === 'saved' && active.summary.id === summary.id;
               const pending = pendingDeleteId === summary.id;
               const deleting = deletingId === summary.id;
               const actionClassName = `saved-track-row-action${pending ? ' saved-track-row-action--pending' : ''}`;
@@ -2117,7 +2418,17 @@ export function TracksPanel({ onOpenActiveDetails }: TracksPanelProps) {
                   >
                     <ListItemButton
                       selected={selected}
+                      aria-pressed={multiTrackMode ? selected : undefined}
                       onClick={() => {
+                        if (multiTrackMode) {
+                          const adding = !selected;
+                          void toggleMultiTrackSelection(summary)
+                            .then(() => {
+                              if (adding) onOpenActiveDetails();
+                            })
+                            .catch(() => undefined);
+                          return;
+                        }
                         if (selected) {
                           onOpenActiveDetails();
                           return;
@@ -2300,6 +2611,21 @@ function elevationProfileInputSegments(
   }
   return inputs.length === 0 ? null : inputs;
 }
+function elevationProfileForSavedTrack(
+  content: LocalTrackContent,
+): ElevationProfile | null {
+  const sourceInputs = elevationProfileInputSegments(content.trackPoints);
+  const sourceProfile =
+    sourceInputs === null
+      ? null
+      : calculateElevationProfile(medianFilterElevationSamples(sourceInputs));
+  if (sourceProfile !== null) return sourceProfile;
+  const calculatedInputs =
+    content.calculatedTrackPoints === undefined
+      ? null
+      : elevationProfileInputSegments(content.calculatedTrackPoints);
+  return calculatedInputs === null ? null : calculateElevationProfile(calculatedInputs);
+}
 
 function elevationProfileForActiveTrack(
   active: ActiveTrack | null,
@@ -2311,27 +2637,20 @@ function elevationProfileForActiveTrack(
       ? (active.sourceProfile ?? active.calculatedProfile)
       : null;
   }
-  const sourceInputs = elevationProfileInputSegments(active.content.trackPoints);
-  const sourceProfile =
-    sourceInputs === null
-      ? null
-      : calculateElevationProfile(medianFilterElevationSamples(sourceInputs));
-  if (sourceProfile !== null) return sourceProfile;
-  const calculatedInputs =
-    active.content.calculatedTrackPoints === undefined
-      ? null
-      : elevationProfileInputSegments(active.content.calculatedTrackPoints);
-  return calculatedInputs === null ? null : calculateElevationProfile(calculatedInputs);
+  return elevationProfileForSavedTrack(active.content);
 }
 
-function TrackElevationAnalysis() {
-  const {
-    active,
-    activeProfile: profile,
-    elevationProgress,
-    recalculateElevation,
-    recalculationState,
-  } = useTracksWorkspace();
+interface InteractiveElevationProfileProps {
+  readonly profile: ElevationProfile;
+  readonly showHeading?: boolean;
+}
+
+function InteractiveElevationProfile({
+  profile,
+  showHeading = true,
+}: InteractiveElevationProfileProps): ReactElement {
+  const { active, elevationProgress, recalculateElevation, recalculationState } =
+    useTracksWorkspace();
   const { database, logger, mapLayers } = useRuntimeServices();
   const trackGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
@@ -2362,7 +2681,7 @@ function TrackElevationAnalysis() {
     selectedSegment?.profile === profile ? selectedSegment.index : null;
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
   const onSegmentHoverChange = (nextSegmentIndex: number | null) => {
-    if (nextSegmentIndex === null || profile === null) {
+    if (nextSegmentIndex === null) {
       setHoveredSegment(null);
       return;
     }
@@ -2373,7 +2692,7 @@ function TrackElevationAnalysis() {
     );
   };
   const onSegmentSelectionChange = (nextSegmentIndex: number | null) => {
-    if (nextSegmentIndex === null || profile === null) {
+    if (nextSegmentIndex === null) {
       setSelectedSegment(null);
       return;
     }
@@ -2383,46 +2702,17 @@ function TrackElevationAnalysis() {
         : { profile, index: nextSegmentIndex },
     );
   };
-  if (active === null) return null;
-  const preparing =
-    (active.kind === 'route-plan' && active.status === 'elevation-enriching') ||
-    (active.kind === 'preview' && active.preparationStatus === 'preparing') ||
-    recalculationState === 'recalculating';
   return (
     <Stack spacing={1.5}>
-      {preparing ? (
+      {showHeading && recalculationState === 'recalculating' ? (
         <ElevationPreparationChart
           progress={elevationProgress}
-          showProgressStatus={active.kind !== 'route-plan'}
+          showProgressStatus={active?.kind !== 'route-plan'}
         />
-      ) : profile === null ? (
-        <Stack spacing={1.5}>
-          <Typography component="h3" variant="subtitle2">
-            Elevation profile
-          </Typography>
-          <Box
-            sx={{
-              height: 264,
-              mx: -1,
-              px: 3,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              bgcolor: 'action.hover',
-              borderRadius: 1,
-            }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              {active.kind === 'route-plan'
-                ? 'Add at least two route points to see the elevation profile.'
-                : 'No elevation profile is available for this track.'}
-            </Typography>
-          </Box>
-        </Stack>
       ) : (
         <ElevationProfileChart
           profile={profile}
+          showHeading={showHeading}
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
           onActivePointChange={(point) => {
@@ -2446,22 +2736,89 @@ function TrackElevationAnalysis() {
           }}
         />
       )}
-      {active.kind === 'route-plan' ? null : (
+      {showHeading && active?.kind !== 'route-plan' ? (
         <ClimbsDescentsSection
           recalculating={
             recalculationState === 'recalculating' ||
-            (active.kind === 'preview' && active.preparationStatus === 'preparing')
+            (active?.kind === 'preview' && active.preparationStatus === 'preparing')
           }
           onRecalculate={() => void recalculateElevation()}
-          segments={profile?.segments ?? []}
+          segments={profile.segments}
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
           onSegmentHoverChange={onSegmentHoverChange}
           onSegmentSelectionChange={onSegmentSelectionChange}
         />
-      )}
+      ) : null}
     </Stack>
   );
+}
+
+function TrackElevationAnalysis() {
+  const {
+    active,
+    activeProfile: profile,
+    elevationProgress,
+    recalculateElevation,
+    recalculationState,
+  } = useTracksWorkspace();
+  if (active === null) return null;
+  const preparing =
+    (active.kind === 'route-plan' && active.status === 'elevation-enriching') ||
+    (active.kind === 'preview' && active.preparationStatus === 'preparing');
+  const emptyOrPreparing =
+    preparing || profile === null ? (
+      <Stack spacing={1.5}>
+        {preparing ? (
+          <ElevationPreparationChart
+            progress={elevationProgress}
+            showProgressStatus={active.kind !== 'route-plan'}
+          />
+        ) : (
+          <Stack spacing={1.5}>
+            <Typography component="h3" variant="subtitle2">
+              Elevation profile
+            </Typography>
+            <Box
+              sx={{
+                height: 264,
+                mx: -1,
+                px: 3,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                bgcolor: 'action.hover',
+                borderRadius: 1,
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {active.kind === 'route-plan'
+                  ? 'Add at least two route points to see the elevation profile.'
+                  : 'No elevation profile is available for this track.'}
+              </Typography>
+            </Box>
+          </Stack>
+        )}
+        {active.kind === 'route-plan' ? null : (
+          <ClimbsDescentsSection
+            recalculating={
+              recalculationState === 'recalculating' ||
+              (active.kind === 'preview' && active.preparationStatus === 'preparing')
+            }
+            onRecalculate={() => void recalculateElevation()}
+            segments={[]}
+            activeSegmentIndex={null}
+            selectedSegmentIndex={null}
+            onSegmentHoverChange={() => undefined}
+            onSegmentSelectionChange={() => undefined}
+          />
+        )}
+      </Stack>
+    ) : null;
+  if (emptyOrPreparing !== null) return emptyOrPreparing;
+  if (profile === null) return null;
+  return <InteractiveElevationProfile profile={profile} />;
 }
 
 interface TrackMetadataProps {
@@ -2519,6 +2876,51 @@ function TrackMetadata({
     </Stack>
   );
 }
+type TrackStatsMetricsBuilder = {
+  -readonly [Key in keyof TrackStatsMetrics]: TrackStatsMetrics[Key];
+};
+
+function aggregateTrackStatsMetrics(
+  selections: readonly ReadyMultiTrackSelection[],
+): TrackStatsMetrics {
+  const totals: TrackStatsMetricsBuilder = {
+    distanceMeters: selections.reduce(
+      (sum, selection) => sum + selection.summary.metrics.distanceMeters,
+      0,
+    ),
+  };
+  if (
+    selections.every(
+      (selection) => selection.summary.metrics.elapsedSeconds !== undefined,
+    )
+  ) {
+    totals.elapsedSeconds = selections.reduce(
+      (sum, selection) => sum + (selection.summary.metrics.elapsedSeconds ?? 0),
+      0,
+    );
+  }
+  if (
+    selections.every(
+      (selection) => selection.summary.metrics.ascentMeters !== undefined,
+    )
+  ) {
+    totals.ascentMeters = selections.reduce(
+      (sum, selection) => sum + (selection.summary.metrics.ascentMeters ?? 0),
+      0,
+    );
+  }
+  if (
+    selections.every(
+      (selection) => selection.summary.metrics.descentMeters !== undefined,
+    )
+  ) {
+    totals.descentMeters = selections.reduce(
+      (sum, selection) => sum + (selection.summary.metrics.descentMeters ?? 0),
+      0,
+    );
+  }
+  return totals;
+}
 
 interface TrackDetailsPaneProps {
   readonly mode: 'mobile' | 'overlay' | 'adjacent';
@@ -2539,6 +2941,9 @@ export function TrackDetailsPane({
     deleteSaved,
     discardPreview,
     discardRoutePlan,
+    multiTrackMode,
+    multiTrackSelections,
+    multiTrackStatsMetrics,
     renameActive,
     savePreview,
     saveRoutePlan,
@@ -2547,6 +2952,7 @@ export function TrackDetailsPane({
     setActiveName,
     setNextSegmentMode,
     toggleFavorite,
+    toggleMultiTrackMode,
     undoLastRoutePlanPoint,
   } = useTracksWorkspace();
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
@@ -2556,6 +2962,138 @@ export function TrackDetailsPane({
   );
   const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  if (multiTrackMode && multiTrackSelections.length > 0) {
+    return (
+      <Box
+        component="aside"
+        aria-label="Multiple track details"
+        sx={{
+          width: mode === 'adjacent' ? { xs: 404, xl: 440 } : '100%',
+          height: '100%',
+          minHeight: 0,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          bgcolor: 'background.paper',
+          borderRight: mode === 'adjacent' ? 1 : 0,
+          borderColor: 'divider',
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{
+            minHeight: 64,
+            px: 2,
+            alignItems: 'center',
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
+        >
+          {mode === 'mobile' ? (
+            <IconButton
+              size="small"
+              aria-label="Collapse track details"
+              onClick={onCollapse}
+            >
+              <KeyboardArrowDownIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+          {mode === 'overlay' ? (
+            <IconButton size="small" aria-label="Back to tracks" onClick={onCollapse}>
+              <ArrowBackOutlinedIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+          <Box sx={{ minWidth: 0, flex: 1, ml: mode === 'adjacent' ? 0 : 1 }}>
+            <Typography
+              component="h2"
+              variant="subtitle1"
+              noWrap
+              sx={{ fontWeight: 700 }}
+            >
+              Selected tracks
+            </Typography>
+          </Box>
+          {mode === 'adjacent' ? (
+            <IconButton
+              size="small"
+              aria-label="Close multi-track view"
+              onClick={() => {
+                void toggleMultiTrackMode().then(onClosed);
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+        </Stack>
+        <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
+          <Stack spacing={2}>
+            {multiTrackStatsMetrics === null ? null : (
+              <Box role="group" aria-label="Combined track details">
+                <TrackStats metrics={multiTrackStatsMetrics} />
+              </Box>
+            )}
+            {multiTrackSelections.map((selection) => (
+              <Box
+                component="section"
+                aria-label={`${selection.summary.name} track details`}
+                key={selection.summary.id}
+              >
+                <Stack spacing={1.5}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Divider sx={{ width: 24 }} />
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {selection.summary.name}
+                    </Typography>
+                    <Divider sx={{ flex: 1 }} />
+                  </Stack>
+                  {selection.status === 'loading' ? (
+                    <Stack
+                      role="status"
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: 'center' }}
+                    >
+                      <CircularProgress size={18} />
+                      <Typography variant="body2">Loading track…</Typography>
+                    </Stack>
+                  ) : (
+                    <>
+                      <TrackStats metrics={selection.summary.metrics} />
+                      {selection.profile === null ? (
+                        <Box
+                          sx={{
+                            height: 264,
+                            mx: -1,
+                            px: 3,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            bgcolor: 'action.hover',
+                            borderRadius: 1,
+                          }}
+                        >
+                          <Typography variant="body2" color="text.secondary">
+                            No elevation profile is available for this track.
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <InteractiveElevationProfile
+                          profile={selection.profile}
+                          showHeading={false}
+                        />
+                      )}
+                    </>
+                  )}
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+      </Box>
+    );
+  }
   if (active === null) return null;
   const metrics =
     active.kind === 'route-plan'

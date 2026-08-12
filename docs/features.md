@@ -98,15 +98,27 @@ synchronization requests until the page reloads.
 ### Tracks
 
 Tracks combines the implemented browser-local track library with reviewed global catalog
-and folder behavior. The contextual sidebar header owns `Plan route`; its scrollable
-content owns file import, search, sort, and local track results. Catalog, personal
-folders, tags, filters, and batch import remain reviewed but unavailable.
+and folder behavior. The contextual sidebar header places the pressed multi-track
+selection control immediately before `Plan route`; its scrollable content owns file
+import, search, sort, and local track results. Catalog, personal folders, tags, filters,
+and batch import remain reviewed but unavailable.
 
 Selecting a track draws its geometry on the map and opens an adjacent detail pane with
 source, tags, metrics, folder/download actions, calculation provenance, and a contextual
 elevation profile. Curated source GPX is loaded only when requested. Import retention
 and privacy guidance appears at the relevant preview/confirmation step instead of as a
-permanent workspace banner.
+permanent workspace banner. The multi-track control enables a session-only mode whose
+saved-track row clicks add or remove tracks in click order. Every selected track appears
+in one combined bright-blue base scene, with elevation-grade color overlays retained for
+every track that has a usable profile. The read-only detail pane has a **Selected
+tracks** header, then complete combined statistics followed by a named divider, normal
+statistics, and elevation profile for each track. It omits the ordinary track-specific
+title, metadata, provenance, analysis, and editing actions. At intermediate desktop
+widths, **Back to tracks** preserves the pressed mode and ordered selection, and adding
+another track reopens the pane. On smartphones, row clicks keep the list open; **Show
+map** reveals the combined compact disclosure, which opens the multi-track pane without
+clearing the selection. An empty selection closes the pane and clears the map. The mode
+and its selected-track list are never persisted across reload.
 
 The implemented local workflow imports one `.gpx`, `.fit`, or `.kml` file from the
 contained picker row or its browse button. FIT Activity and Course files must pass

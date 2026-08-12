@@ -439,7 +439,18 @@ test('pans the flat map with middle drag', async ({ page }) => {
   const centerX = bounds.x + bounds.width / 2;
   const centerY = bounds.y + bounds.height / 2;
 
-  const cameraBeforeMiddlePan = await readStoredCamera(page);
+  let cameraBeforeMiddlePan = await readStoredCamera(page);
+  if (cameraBeforeMiddlePan === null) {
+    await canvas.hover();
+    await page.mouse.wheel(0, -300);
+    await expect
+      .poll(async () => (await readStoredCamera(page))?.longitude ?? null, {
+        timeout: cameraPersistenceTimeoutMs,
+      })
+      .not.toBeNull();
+    cameraBeforeMiddlePan = await readStoredCamera(page);
+  }
+  expect(cameraBeforeMiddlePan).not.toBeNull();
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   await expect(page.locator('.map-orbit-pivot')).toHaveCount(0);

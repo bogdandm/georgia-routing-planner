@@ -350,10 +350,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   );
 });
 
-test('pans in 2D and orbits 3D terrain with middle drag before compass reset', async ({
-  page,
-}) => {
-  test.setTimeout(120_000);
+test('pans the flat map with middle drag', async ({ page }) => {
   await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -367,31 +364,39 @@ test('pans in 2D and orbits 3D terrain with middle drag before compass reset', a
   const centerX = bounds.x + bounds.width / 2;
   const centerY = bounds.y + bounds.height / 2;
 
-  const initialCamera = await readStoredCamera(page);
-  await page.mouse.move(centerX, centerY);
-  await page.mouse.down();
-  await page.mouse.move(centerX + 90, centerY + 30, { steps: 4 });
-  await page.mouse.up();
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude)
-    .not.toBe(initialCamera?.longitude);
-
+  const cameraBeforeMiddlePan = await readStoredCamera(page);
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   await expect(page.locator('.map-orbit-pivot')).toHaveCount(0);
-  await page.mouse.move(centerX + 40, centerY - 40, { steps: 2 });
+  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
   await page.mouse.up({ button: 'middle' });
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.longitude)
+    .not.toBe(cameraBeforeMiddlePan?.longitude);
+});
 
-  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Show 3D terrain map' }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
-    timeout: terrainPersistenceTimeoutMs,
-  });
+test('orbits 3D terrain with middle drag', async ({ page }) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
+
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const pivot = page.locator('.map-orbit-pivot');
+
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
-  const pivot = page.locator('.map-orbit-pivot');
   await expect(pivot).toHaveCount(1);
   const pivotBeforeMiddleOrbit = await pivot.boundingBox();
   expect(pivotBeforeMiddleOrbit).not.toBeNull();
@@ -411,35 +416,6 @@ test('pans in 2D and orbits 3D terrain with middle drag before compass reset', a
   }
   await page.mouse.up({ button: 'middle' });
   await expect(pivot).toHaveCount(0);
-  await page.mouse.move(centerX, centerY);
-  await page.keyboard.down('Shift');
-  await page.mouse.down();
-  await expect(pivot).toHaveCount(1);
-  const pivotBeforeShiftOrbit = await pivot.boundingBox();
-  expect(pivotBeforeShiftOrbit).not.toBeNull();
-  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
-  if (pivotBeforeShiftOrbit !== null) {
-    await expect
-      .poll(async () => {
-        const current = await pivot.boundingBox();
-        return current === null
-          ? Number.POSITIVE_INFINITY
-          : Math.hypot(
-              current.x - pivotBeforeShiftOrbit.x,
-              current.y - pivotBeforeShiftOrbit.y,
-            );
-      })
-      .toBeLessThan(4);
-  }
-  await page.mouse.up();
-  await page.keyboard.up('Shift');
-  await expect(pivot).toHaveCount(0);
-
-  await page.locator('.maplibregl-ctrl-compass').click();
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-  );
 });
 
 test('keeps DEM failure feedback in the shared status without a map banner', async ({

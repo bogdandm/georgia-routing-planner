@@ -3045,7 +3045,10 @@ export function TrackDetailsPane({
                   );
                 }}
               >
-                <DownloadOutlinedIcon fontSize="small" />
+                <DownloadOutlinedIcon
+                  fontSize="small"
+                  sx={{ transform: 'translateY(1px)' }}
+                />
               </IconButton>
             </span>
           </Tooltip>
@@ -3354,7 +3357,10 @@ export function TrackDetailsPane({
                         );
                       }}
                     >
-                      <DownloadOutlinedIcon fontSize="small" />
+                      <DownloadOutlinedIcon
+                        fontSize="small"
+                        sx={{ transform: 'translateY(1px)' }}
+                      />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Track actions">

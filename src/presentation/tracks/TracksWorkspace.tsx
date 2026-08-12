@@ -90,6 +90,7 @@ import {
 import {
   exportTrackAsGpx,
   exportTrackAsKml,
+  exportTracksAsZip,
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
 import {
@@ -2578,8 +2579,13 @@ export function TracksPanel({ onOpenActiveDetails }: TracksPanelProps) {
   );
 }
 
-function downloadText(filename: string, type: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type }));
+function downloadFile(
+  filename: string,
+  type: string,
+  content: string | Uint8Array,
+): void {
+  const blobContent = typeof content === 'string' ? content : Uint8Array.from(content);
+  const url = URL.createObjectURL(new Blob([blobContent], { type }));
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
@@ -2956,6 +2962,11 @@ export function TrackDetailsPane({
     undoLastRoutePlanPoint,
   } = useTracksWorkspace();
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
+  const readyMultiTrackSelections = multiTrackSelections.filter(
+    (selection): selection is ReadyMultiTrackSelection => selection.status === 'ready',
+  );
+  const canDownloadMultiTrackSelections =
+    readyMultiTrackSelections.length === multiTrackSelections.length;
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [confirmingDeleteTrackId, setConfirmingDeleteTrackId] = useState<string | null>(
     null,
@@ -3014,6 +3025,30 @@ export function TrackDetailsPane({
               Selected tracks
             </Typography>
           </Box>
+          <Tooltip title="Download selected tracks">
+            <span>
+              <IconButton
+                size="small"
+                aria-label="Download selected tracks"
+                disabled={!canDownloadMultiTrackSelections}
+                onClick={() => {
+                  if (!canDownloadMultiTrackSelections) return;
+                  downloadFile(
+                    'selected-tracks.zip',
+                    'application/zip',
+                    exportTracksAsZip(
+                      readyMultiTrackSelections.map(({ summary, content }) => ({
+                        summary,
+                        content,
+                      })),
+                    ),
+                  );
+                }}
+              >
+                <DownloadOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
           {mode === 'adjacent' ? (
             <IconButton
               size="small"
@@ -3306,17 +3341,34 @@ export function TrackDetailsPane({
                   Confirm delete
                 </Button>
               ) : (
-                <Tooltip title="Track actions">
-                  <IconButton
-                    size="small"
-                    aria-label="Track actions"
-                    onClick={(event) => {
-                      setActionMenuAnchor(event.currentTarget);
-                    }}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                <>
+                  <Tooltip title="Download GPX">
+                    <IconButton
+                      size="small"
+                      aria-label="Download GPX"
+                      onClick={() => {
+                        downloadFile(
+                          safeTrackFilename(active.summary.name, 'gpx'),
+                          'application/gpx+xml',
+                          exportTrackAsGpx(active.summary, active.content),
+                        );
+                      }}
+                    >
+                      <DownloadOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Track actions">
+                    <IconButton
+                      size="small"
+                      aria-label="Track actions"
+                      onClick={(event) => {
+                        setActionMenuAnchor(event.currentTarget);
+                      }}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </>
               )}
               <Menu
                 anchorEl={actionMenuAnchor}
@@ -3342,20 +3394,7 @@ export function TrackDetailsPane({
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
-                    downloadText(
-                      safeTrackFilename(active.summary.name, 'gpx'),
-                      'application/gpx+xml',
-                      exportTrackAsGpx(active.summary, active.content),
-                    );
-                    setActionMenuAnchor(null);
-                  }}
-                >
-                  <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                  Download GPX
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    downloadText(
+                    downloadFile(
                       safeTrackFilename(active.summary.name, 'kml'),
                       'application/vnd.google-earth.kml+xml',
                       exportTrackAsKml(active.summary, active.content),

@@ -111,14 +111,18 @@ permanent workspace banner. The multi-track control enables a session-only mode 
 saved-track row clicks add or remove tracks in click order. Every selected track appears
 in one combined bright-blue base scene, with elevation-grade color overlays retained for
 every track that has a usable profile. The read-only detail pane has a **Selected
-tracks** header, then complete combined statistics followed by a named divider, normal
-statistics, and elevation profile for each track. It omits the ordinary track-specific
-title, metadata, provenance, analysis, and editing actions. At intermediate desktop
-widths, **Back to tracks** preserves the pressed mode and ordered selection, and adding
-another track reopens the pane. On smartphones, row clicks keep the list open; **Show
-map** reveals the combined compact disclosure, which opens the multi-track pane without
-clearing the selection. An empty selection closes the pane and clears the map. The mode
-and its selected-track list are never persisted across reload.
+tracks** header with a **Download selected tracks** action, then complete combined
+statistics followed by a named divider, normal statistics, and elevation profile for
+each track. The action downloads the complete click-ordered selection as
+`selected-tracks.zip`, with one GPX member per track. Member names use the safe track
+name; collisions use deterministic suffixes such as `Stem (2).gpx`, then `Stem (3).gpx`.
+The pane omits the ordinary track-specific title, metadata, provenance, analysis, and
+editing actions. At intermediate desktop widths, **Back to tracks** preserves the
+pressed mode and ordered selection, and adding another track reopens the pane. On
+smartphones, row clicks keep the list open; **Show map** reveals the combined compact
+disclosure, which opens the multi-track pane without clearing the selection. An empty
+selection closes the pane and clears the map. The mode and its selected-track list are
+never persisted across reload.
 
 The implemented local workflow imports one `.gpx`, `.fit`, or `.kml` file from the
 contained picker row or its browse button. FIT Activity and Course files must pass
@@ -196,21 +200,22 @@ hover color cover the entire row, including its action column. Deletion uses two
 inline confirmation: the row delete icon becomes a destructive confirmation icon, while
 **Delete track** in the detail action menu replaces that menu trigger with **Confirm
 delete**. Pointer exit, Escape, and click-away cancel either confirmation without
-mutation. Users can favorite a track from its list row or detail header; downloads
-remain in the detail header's compact action menu. Favorites sort before other tracks,
-with newest imports first inside each group. The latest opened saved track reopens after
-restart when its content is still valid. A compact local-retention notice stays pinned
-to the Tracks panel bottom. Catalog, folders, tags, filters, batch import,
-whole-workspace dropping, and manual GPX authoring remain unavailable. A newly imported
-or reopened track renders as bright-blue independent lines and fits its complete bounds
-with padding for the master/detail surfaces. With usable elevation, the map overlays
-every non-flat climb/descent grade subsegment across the active track, leaving flat
-spans bright blue. The overlay is not narrowed by chart or Climbs & Descents segment
-hover/selection; those interactions remain panel-only. Closing the track removes the
-active geometry without deleting a saved record or moving the camera. Every saved track
-can be downloaded locally as GPX or KML. Generated files preserve independent segments,
-saved name, available point elevation, and reliably aligned timestamps without writing
-GPX or KML description elements; conversion never uploads the source.
+mutation. Users can favorite a track from its list row or detail header. Saved-track GPX
+downloads use the one-click **Download GPX** detail-header action; KML remains in the
+detail header's compact action menu. Favorites sort before other tracks, with newest
+imports first inside each group. The latest opened saved track reopens after restart
+when its content is still valid. A compact local-retention notice stays pinned to the
+Tracks panel bottom. Catalog, folders, tags, filters, batch import, whole-workspace
+dropping, and manual GPX authoring remain unavailable. A newly imported or reopened
+track renders as bright-blue independent lines and fits its complete bounds with padding
+for the master/detail surfaces. With usable elevation, the map overlays every non-flat
+climb/descent grade subsegment across the active track, leaving flat spans bright blue.
+The overlay is not narrowed by chart or Climbs & Descents segment hover/selection; those
+interactions remain panel-only. Closing the track removes the active geometry without
+deleting a saved record or moving the camera. Every saved track can be downloaded
+locally as GPX or KML. Generated files preserve independent segments, saved name,
+available point elevation, and reliably aligned timestamps without writing GPX or KML
+description elements; conversion never uploads the source.
 
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. Parsed

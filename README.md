@@ -25,6 +25,8 @@ _This project was built 100% with LLMs._
   delete them.
 - Choose which tracks, imagery, terrain, contours, and map details are visible.
 - Optionally sign in and explicitly enable synchronization across devices.
+- Share one ready synchronized track with a capability link; recipients need no account
+  and can explicitly save an independent browser-local copy.
 
 ## Tracks
 
@@ -81,6 +83,11 @@ Cross-device synchronization is optional and disabled by default. It starts only
 the user signs in and explicitly enables **Sync across devices**. Local track operations
 remain available when synchronization is disabled or temporarily unavailable. Trail
 Planner does not upload diagnostics or usage telemetry automatically.
+
+Public track links require public Supabase configuration in the deployed build. Owners
+must sign in and synchronize a track before sharing it; recipients do not need an
+account. Every environment needs its own stable 43-character `TRACK_SHARE_TOKEN_SECRET`
+Edge Function secret. Never commit that secret or reuse it between environments.
 
 ## Limitations
 

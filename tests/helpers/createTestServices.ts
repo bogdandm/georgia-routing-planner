@@ -210,6 +210,7 @@ export function createTestServices(
       now: () => new Date('2026-07-19T12:00:00.000Z'),
     }),
     supabaseConfiguration: { status: 'unconfigured' },
+    trackShares: null,
     userData,
   };
 }

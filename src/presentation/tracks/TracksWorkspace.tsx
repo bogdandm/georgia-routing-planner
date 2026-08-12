@@ -57,11 +57,12 @@ import {
 } from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
-import type {
-  ParsedGpx,
-  TrackCoordinate,
-  TrackPoint,
-  TrackSegment,
+import {
+  GPX_PARSER_VERSION,
+  type ParsedGpx,
+  type TrackCoordinate,
+  type TrackPoint,
+  type TrackSegment,
 } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
@@ -103,6 +104,9 @@ import {
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
+import { TrackShareDialog } from '@/presentation/tracks/TrackShareDialog';
+import { TrackShareError } from '@/application/tracks/TrackShareService';
+import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import {
   formatTrackDuration,
   TrackStat,
@@ -171,6 +175,10 @@ interface PreparedPreviewTrack extends PreviewTrackBase {
   readonly fallbackPoi?: PoiCandidate;
 }
 
+interface SharedTrackSelection extends Omit<PreparedPreviewTrack, 'kind'> {
+  readonly kind: 'shared';
+}
+
 type PreviewTrack = PreparingPreviewTrack | FailedPreviewTrack | PreparedPreviewTrack;
 
 interface SavedTrackSelection {
@@ -180,7 +188,8 @@ interface SavedTrackSelection {
   readonly draftName: string;
 }
 
-type ActiveTrack = PreviewTrack | SavedTrackSelection | RoutePlanDraft;
+type ActiveTrack =
+  PreviewTrack | SharedTrackSelection | SavedTrackSelection | RoutePlanDraft;
 
 interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
@@ -334,13 +343,13 @@ function bestCandidate(
       return byRank === 0 ? left.label.localeCompare(right.label, 'en') : byRank;
     })[0];
 }
-
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const {
     clock,
     database,
     elevationProvider,
     trackContentHasher,
+    trackShares,
     trailRouter,
     idGenerator,
     logger,
@@ -389,6 +398,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const latestOpenedTrackWrite = useRef<Promise<void>>(Promise.resolve());
   const renderedTrackId = useRef<string | null>(null);
   const initiallyRestoredTrackId = useRef<string | null>(null);
+  const shareResolutionAbort = useRef<AbortController | null>(null);
+  const sharedIntent = useRef(parseTrackShareLocation(window.location.hash));
   const restorationAttempted = useRef(false);
 
   const saveLatestOpenedTrackId = useCallback(
@@ -410,6 +421,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setSummaries(loaded);
       if (!restorationAttempted.current) {
         restorationAttempted.current = true;
+        if (sharedIntent.current.kind !== 'none') return;
         const latestTrackId = await database.loadLatestOpenedTrackId();
         const latestSummary = loaded.find((summary) => summary.id === latestTrackId);
         if (latestSummary !== undefined) {
@@ -445,8 +457,119 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       recalculationAbort.current?.abort();
       routePlanRequestAbort.current?.abort();
       routePlanElevationAbort.current?.abort();
+      shareResolutionAbort.current?.abort();
     };
   }, [reloadSummaries]);
+  useEffect(() => {
+    const intent = sharedIntent.current;
+    if (intent.kind === 'none') return undefined;
+    if (intent.kind === 'invalid' || trackShares === null) {
+      const timeout = window.setTimeout(() => {
+        setError(
+          intent.kind === 'invalid'
+            ? 'This track link is invalid.'
+            : 'Shared tracks are unavailable because cloud features are not configured.',
+        );
+      }, 0);
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+    const controller = new AbortController();
+    shareResolutionAbort.current = controller;
+    const generation = importGeneration.current;
+    void trackShares.resolve(intent.token, controller.signal).then(
+      (shared) => {
+        if (controller.signal.aborted || generation !== importGeneration.current) {
+          return;
+        }
+        const sourceSegments = shared.trackPoints.map((points) => ({ points }));
+        const metrics = calculateTrackMetrics(sourceSegments);
+        const parsed: ParsedGpx = {
+          parserVersion: GPX_PARSER_VERSION,
+          geometryKind: shared.metadata.geometryKind,
+          segments: sourceSegments,
+          pointCount: shared.trackPoints.reduce(
+            (count, points) => count + points.length,
+            0,
+          ),
+          metadata: {
+            version: '1.1',
+            name: shared.metadata.name,
+            selectedName: shared.metadata.name,
+            links: [],
+          },
+          warnings: [],
+        };
+        const sharedTrack: SharedTrackSelection = {
+          kind: 'shared',
+          id: `shared:${shared.contentHash}`,
+          file: new File([], safeTrackFilename(shared.metadata.name, 'gpx')),
+          parsed,
+          sourceFormat: shared.metadata.sourceFormat,
+          name: shared.metadata.name,
+          preparationStatus: 'ready',
+          sourceSegments,
+          sourceProfile: null,
+          sourceMetrics: metrics,
+          calculatedSegments: null,
+          calculatedProfile: null,
+          calculatedMetrics: null,
+          namingStatus: 'unavailable',
+        };
+        setActive(sharedTrack);
+        void prepareImportedTrack(
+          sourceSegments,
+          elevationProvider,
+          controller.signal,
+          {
+            onProgress: (progress) => {
+              if (
+                controller.signal.aborted ||
+                generation !== importGeneration.current
+              ) {
+                return;
+              }
+              setElevationProgress(progress);
+            },
+          },
+        )
+          .then((prepared) => {
+            if (controller.signal.aborted || generation !== importGeneration.current) {
+              return;
+            }
+            setElevationProgress(null);
+            setActive((current) =>
+              current?.kind === 'shared' && current.id === sharedTrack.id
+                ? { ...current, ...prepared }
+                : current,
+            );
+          })
+          .catch(() => {
+            if (!controller.signal.aborted && generation === importGeneration.current) {
+              setElevationProgress(null);
+              logger.log({
+                level: 'warn',
+                name: 'shared-track.elevation-preparation.failed',
+              });
+            }
+          });
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted || generation !== importGeneration.current) {
+          return;
+        }
+        setError(
+          error instanceof TrackShareError && error.category === 'share-not-found'
+            ? 'This shared track is unavailable.'
+            : 'Shared track could not be loaded. Try again.',
+        );
+      },
+    );
+    return () => {
+      controller.abort();
+    };
+  }, [elevationProvider, logger, trackShares]);
 
   useEffect(
     () =>
@@ -514,7 +637,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
     mapLayers?.clearRoutePlanGeometry();
     const trackId =
-      active.kind === 'preview'
+      active.kind === 'preview' || active.kind === 'shared'
         ? `${active.id}:${active.preparationStatus}`
         : active.summary.id;
     if (renderedTrackId.current === trackId) return;
@@ -1196,7 +1319,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const savePreview = useCallback(async () => {
     if (
-      active?.kind !== 'preview' ||
+      (active?.kind !== 'preview' && active?.kind !== 'shared') ||
       active.preparationStatus !== 'ready' ||
       recalculationState === 'recalculating' ||
       recalculationAbort.current !== null ||
@@ -1209,11 +1332,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const generation = importGeneration.current;
     const previewNamingAbort = namingAbort.current;
     try {
+      const savedTrackId = active.id.startsWith('shared:')
+        ? `local:${idGenerator.generate()}`
+        : active.id;
       const normalizedName = normalizeLocalTrackName(active.name);
       const savedAt = clock.now().toISOString();
       const content: LocalTrackContent = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-        trackId: active.id,
+        trackId: savedTrackId,
         trackPoints: active.sourceSegments.map((segment) => segment.points),
         ...(active.calculatedSegments === null
           ? {}
@@ -1225,7 +1351,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       };
       const summary: LocalTrackSummaryBuilder = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
-        id: active.id,
+        id: savedTrackId,
         ...normalizedName,
         savedAt,
         updatedAt: savedAt,
@@ -1262,13 +1388,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (generation !== importGeneration.current) return;
       if (namingAbort.current === previewNamingAbort) previewNamingAbort?.abort();
       setActive((current) =>
-        current?.kind === 'preview' &&
+        (current?.kind === 'preview' || current?.kind === 'shared') &&
         current.preparationStatus === 'ready' &&
         current.id === previewId &&
         generation === importGeneration.current
           ? { kind: 'saved', summary, content, draftName: summary.name }
           : current,
       );
+      if (previewId.startsWith('shared:')) {
+        window.history.replaceState(null, '', '#tracks');
+      }
       await reloadSummaries();
       setError(null);
     } catch (saveError) {
@@ -1284,6 +1413,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [
     active,
     clock,
+    idGenerator,
     database,
     recalculationState,
     reloadSummaries,
@@ -1309,11 +1439,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setRecalculationState('recalculating');
     setElevationProgress(null);
     setError(null);
-    const activeId = active.kind === 'preview' ? active.id : active.summary.id;
+    const activeId =
+      active.kind === 'preview' || active.kind === 'shared'
+        ? active.id
+        : active.summary.id;
     const generation = importGeneration.current;
     try {
       const sourceSegments =
-        active.kind === 'preview'
+        active.kind === 'preview' || active.kind === 'shared'
           ? active.parsed.segments
           : active.content.trackPoints.map((points) => ({ points }));
       const prepared = await prepareImportedTrack(
@@ -1344,7 +1477,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       renderedTrackId.current = null;
       if (active.kind === 'preview') {
         setActive((current) => {
-          if (current?.kind !== 'preview' || current.id !== activeId) return current;
+          if (current?.kind !== 'preview' || current.id !== activeId) {
+            return current;
+          }
           const updated: PreparedPreviewTrack = {
             ...current,
             preparationStatus: 'ready',
@@ -1355,6 +1490,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 : 'unavailable',
           };
           return updated;
+        });
+      } else if (active.kind === 'shared') {
+        setActive((current) => {
+          if (current?.kind !== 'shared' || current.id !== activeId) {
+            return current;
+          }
+          return { ...current, preparationStatus: 'ready', ...prepared };
         });
       } else {
         const summary = await database.replaceCalculatedTrackElevation(
@@ -1496,7 +1638,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (routePlanSaveInProgress.current) return;
     setActive((current) => {
       if (current === null) return null;
-      if (current.kind === 'preview') return { ...current, name };
+      if (current.kind === 'preview' || current.kind === 'shared') {
+        return { ...current, name };
+      }
       if (current.kind === 'route-plan') return setRoutePlanName(current, name);
       return { ...current, draftName: name };
     });
@@ -2306,7 +2450,7 @@ function elevationProfileForActiveTrack(
 ): ElevationProfile | null {
   if (active === null) return null;
   if (active.kind === 'route-plan') return active.profile;
-  if (active.kind === 'preview') {
+  if (active.kind === 'preview' || active.kind === 'shared') {
     return active.preparationStatus === 'ready'
       ? (active.sourceProfile ?? active.calculatedProfile)
       : null;
@@ -2549,6 +2693,18 @@ export function TrackDetailsPane({
     toggleFavorite,
     undoLastRoutePlanPoint,
   } = useTracksWorkspace();
+  const { trackShares, userData } = useRuntimeServices();
+  const subscribeUser = useCallback(
+    (listener: () => void) => userData.subscribe(listener),
+    [userData],
+  );
+  const getUserSnapshot = useCallback(() => userData.getSnapshot(), [userData]);
+  const userSnapshot = useSyncExternalStore(
+    subscribeUser,
+    getUserSnapshot,
+    getUserSnapshot,
+  );
+  const [sharingTrack, setSharingTrack] = useState<string | null>(null);
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [confirmingDeleteTrackId, setConfirmingDeleteTrackId] = useState<string | null>(
@@ -2557,6 +2713,8 @@ export function TrackDetailsPane({
   const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   if (active === null) return null;
+  const shareContentHash =
+    active.kind === 'saved' ? active.summary.contentHash : undefined;
   const metrics =
     active.kind === 'route-plan'
       ? active.metrics
@@ -2707,7 +2865,11 @@ export function TrackDetailsPane({
               noWrap
               sx={{ fontWeight: 700 }}
             >
-              {active.kind === 'saved' ? active.summary.name : 'New track'}
+              {active.kind === 'saved'
+                ? active.summary.name
+                : active.kind === 'shared'
+                  ? active.name
+                  : 'New track'}
             </Typography>
           )}
         </Box>
@@ -2828,6 +2990,18 @@ export function TrackDetailsPane({
                   <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
                   Download KML
                 </MenuItem>
+                {trackShares !== null &&
+                userSnapshot.status === 'signed-in' &&
+                shareContentHash !== undefined ? (
+                  <MenuItem
+                    onClick={() => {
+                      setActionMenuAnchor(null);
+                      setSharingTrack(shareContentHash);
+                    }}
+                  >
+                    Share
+                  </MenuItem>
+                ) : null}
                 <MenuItem
                   onClick={() => {
                     setActionMenuAnchor(null);
@@ -2852,6 +3026,16 @@ export function TrackDetailsPane({
               </Menu>
             </Box>
           </ClickAwayListener>
+        ) : null}
+        {sharingTrack !== null && trackShares !== null ? (
+          <TrackShareDialog
+            contentHash={sharingTrack}
+            open
+            service={trackShares}
+            onClose={() => {
+              setSharingTrack(null);
+            }}
+          />
         ) : null}
         {mode !== 'overlay' ? (
           <IconButton
@@ -2931,7 +3115,7 @@ export function TrackDetailsPane({
               )}
             </Stack>
           ) : null}
-          {active.kind === 'preview' ? (
+          {active.kind === 'preview' || active.kind === 'shared' ? (
             <>
               <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
                 <Button size="small" color="inherit" onClick={discardPreview}>
@@ -2946,7 +3130,7 @@ export function TrackDetailsPane({
                   }
                   onClick={() => void savePreview()}
                 >
-                  Save
+                  {active.id.startsWith('shared:') ? 'Save a copy' : 'Save'}
                 </Button>
               </Stack>
             </>

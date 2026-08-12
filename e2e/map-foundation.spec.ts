@@ -375,7 +375,9 @@ test('pans the flat map with middle drag', async ({ page }) => {
     .not.toBe(cameraBeforeMiddlePan?.longitude);
 });
 
-test('orbits 3D terrain with middle drag', async ({ page }) => {
+test('orbits 3D terrain with middle drag and resets it with the compass', async ({
+  page,
+}) => {
   await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -394,27 +396,68 @@ test('orbits 3D terrain with middle drag', async ({ page }) => {
   const centerX = bounds.x + bounds.width / 2;
   const centerY = bounds.y + bounds.height / 2;
   const pivot = page.locator('.map-orbit-pivot');
+  const compass = page.locator('.maplibregl-ctrl-compass');
+  const compassIcon = compass.locator('.maplibregl-ctrl-icon');
+  const transformBeforeOrbit = await compassIcon.evaluate(
+    (element) => (element as HTMLElement).style.transform,
+  );
 
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   await expect(pivot).toHaveCount(1);
-  const pivotBeforeMiddleOrbit = await pivot.boundingBox();
-  expect(pivotBeforeMiddleOrbit).not.toBeNull();
   await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
-  if (pivotBeforeMiddleOrbit !== null) {
-    await expect
-      .poll(async () => {
-        const current = await pivot.boundingBox();
-        return current === null
-          ? Number.POSITIVE_INFINITY
-          : Math.hypot(
-              current.x - pivotBeforeMiddleOrbit.x,
-              current.y - pivotBeforeMiddleOrbit.y,
-            );
-      })
-      .toBeLessThan(4);
-  }
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .not.toBe(transformBeforeOrbit);
   await page.mouse.up({ button: 'middle' });
+  await expect(pivot).toHaveCount(0);
+
+  await compass.click();
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .toBe('scale(1) rotateZ(0deg) rotateX(0deg) rotateZ(0deg)');
+});
+
+test('orbits 3D terrain with Shift+left drag', async ({ page }) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
+
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const pivot = page.locator('.map-orbit-pivot');
+  const compassIcon = page.locator('.maplibregl-ctrl-compass .maplibregl-ctrl-icon');
+  const transformBeforeOrbit = await compassIcon.evaluate(
+    (element) => (element as HTMLElement).style.transform,
+  );
+
+  await page.mouse.move(centerX, centerY);
+  await page.keyboard.down('Shift');
+  await page.mouse.down();
+  await expect(pivot).toHaveCount(1);
+  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .not.toBe(transformBeforeOrbit);
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
   await expect(pivot).toHaveCount(0);
 });
 

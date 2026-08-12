@@ -5,6 +5,7 @@ import { Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/materi
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
+import type { TrackSort } from '@/domain/tracks/localTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import { requestMarkerPlacement } from '@/presentation/map/mapInteractionStore';
@@ -17,7 +18,11 @@ import {
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
-import { TracksPanel, useTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
+import {
+  TracksPanel,
+  TrackSortControl,
+  useTracksWorkspace,
+} from '@/presentation/tracks/TracksWorkspace';
 import { UserPanel } from '@/presentation/user/UserPanel';
 
 interface WorkspaceSidebarProps {
@@ -25,6 +30,7 @@ interface WorkspaceSidebarProps {
   readonly auxiliaryOverlay: boolean;
   readonly fullWidth: boolean;
   readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
+  readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
   readonly onSatellitePaneOpenChange: (open: boolean) => void;
   readonly onShowMap: () => void;
   readonly onOpenActiveTrackDetails: () => void;
@@ -63,6 +69,7 @@ export function WorkspaceSidebar({
   auxiliaryOverlay,
   fullWidth,
   onMarkerSortChange,
+  onTrackSortChange,
   onSatellitePaneOpenChange,
   onOpenActiveTrackDetails,
   onShowMap,
@@ -172,25 +179,28 @@ export function WorkspaceSidebar({
             <MarkerSortControl onMarkerSortChange={onMarkerSortChange} />
           </>
         ) : activeTab === 'tracks' ? (
-          <Tooltip
-            title={
-              trailRouter === null
-                ? 'Route planning is unavailable because map routing data is not configured'
-                : 'Plan a route on the map'
-            }
-          >
-            <span>
-              <Button
-                disabled={trailRouter === null}
-                size="small"
-                variant="contained"
-                startIcon={<AltRouteOutlinedIcon />}
-                onClick={startRoutePlan}
-              >
-                Plan route
-              </Button>
-            </span>
-          </Tooltip>
+          <>
+            <Tooltip
+              title={
+                trailRouter === null
+                  ? 'Route planning is unavailable because map routing data is not configured'
+                  : 'Plan a route on the map'
+              }
+            >
+              <span>
+                <Button
+                  disabled={trailRouter === null}
+                  size="small"
+                  variant="contained"
+                  startIcon={<AltRouteOutlinedIcon />}
+                  onClick={startRoutePlan}
+                >
+                  Plan route
+                </Button>
+              </span>
+            </Tooltip>
+            <TrackSortControl onTrackSortChange={onTrackSortChange} />
+          </>
         ) : (
           definition.actions
         )}

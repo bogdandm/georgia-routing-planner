@@ -4701,10 +4701,12 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await screen.findByRole('heading', { name: 'Alpha trail' });
-    const ordinaryDetails = screen.getByRole('complementary', {
+    const ordinaryDetails = await screen.findByRole('complementary', {
       name: 'Track details',
     });
+    expect(
+      within(ordinaryDetails).getByRole('heading', { name: 'Alpha trail' }),
+    ).toBeVisible();
     await user.click(
       within(ordinaryDetails).getByRole('button', {
         name: 'Recalculate elevation',
@@ -4875,7 +4877,12 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await screen.findByRole('heading', { name: 'Complete trail' });
+    const ordinaryDetails = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    expect(
+      within(ordinaryDetails).getByRole('heading', { name: 'Complete trail' }),
+    ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Select multiple tracks' }));
     await user.click(
       within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {

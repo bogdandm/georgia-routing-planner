@@ -113,28 +113,21 @@ export class MapPointerGestureControl {
     this.#lastPointer = { x: event.clientX, y: event.clientY };
 
     if (gesture === 'pan') {
-      map.panBy(
-        [-horizontalDelta, -verticalDelta],
-        { duration: 0 },
-        { originalEvent: event },
-      );
+      map.panBy([-horizontalDelta, -verticalDelta], { duration: 0 });
       return;
     }
     const anchor = this.#orbitAnchor;
     if (!this.#terrainOrbitEnabled || anchor === null) return;
-    map.easeTo(
-      {
-        around: anchor,
-        bearing: map.getBearing() + horizontalDelta * bearingDegreesPerPixel,
-        pitch: Math.min(
-          maximumPitchDegrees,
-          Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel),
-        ),
-        duration: 0,
-        essential: true,
-      },
-      { originalEvent: event },
-    );
+    map.easeTo({
+      around: anchor,
+      bearing: map.getBearing() + horizontalDelta * bearingDegreesPerPixel,
+      pitch: Math.min(
+        maximumPitchDegrees,
+        Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel),
+      ),
+      duration: 0,
+      essential: true,
+    });
   };
 
   private readonly handleMouseUp = (event: MouseEvent): void => {

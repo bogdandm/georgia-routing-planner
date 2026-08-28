@@ -359,7 +359,7 @@ export function MapSearchPlaceholder() {
                 } else {
                   requestMapFitBounds(result.bounds, 13);
                 }
-                requestMapPointInspection(result.coordinate, true);
+                requestMapPointInspection(result.coordinate);
                 closeResults();
               }}
             >

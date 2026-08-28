@@ -51,15 +51,16 @@ describe('MapPointerGestureControl', () => {
         clientY: 10,
       });
       container.dispatchEvent(down);
-      const move = new MouseEvent('mousemove', {
-        bubbles: true,
-        cancelable: true,
-        button: 1,
-        buttons: 4,
-        clientX: 110,
-        clientY: -1_000,
-      });
-      window.dispatchEvent(move);
+      window.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          button: 1,
+          buttons: 4,
+          clientX: 110,
+          clientY: -1_000,
+        }),
+      );
       const up = new MouseEvent('mouseup', {
         bubbles: true,
         cancelable: true,
@@ -84,17 +85,12 @@ describe('MapPointerGestureControl', () => {
             bearing: 38,
             pitch: 75,
           }),
-          { originalEvent: move },
         );
         expect(panBy).not.toHaveBeenCalled();
         expect(unproject).toHaveBeenCalledWith([10, 10]);
         expect(pivot.show).toHaveBeenCalledWith(map, { lng: 44.8, lat: 41.7 });
       } else {
-        expect(panBy).toHaveBeenCalledWith(
-          [-100, 1_010],
-          { duration: 0 },
-          { originalEvent: move },
-        );
+        expect(panBy).toHaveBeenCalledWith([-100, 1_010], { duration: 0 });
         expect(easeTo).not.toHaveBeenCalled();
         expect(unproject).not.toHaveBeenCalled();
         expect(pivot.show).not.toHaveBeenCalled();
@@ -125,15 +121,16 @@ describe('MapPointerGestureControl', () => {
         clientY: 10,
       }),
     );
-    const move = new MouseEvent('mousemove', {
-      bubbles: true,
-      cancelable: true,
-      button: 0,
-      buttons: 1,
-      clientX: 110,
-      clientY: -1_000,
-    });
-    window.dispatchEvent(move);
+    window.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        clientX: 110,
+        clientY: -1_000,
+      }),
+    );
     window.dispatchEvent(
       new MouseEvent('mouseup', {
         bubbles: true,
@@ -151,7 +148,6 @@ describe('MapPointerGestureControl', () => {
         bearing: 38,
         pitch: 75,
       }),
-      { originalEvent: move },
     );
     expect(panBy).not.toHaveBeenCalled();
     const click = new MouseEvent('click', { bubbles: true, cancelable: true });

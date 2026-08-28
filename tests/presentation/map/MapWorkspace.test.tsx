@@ -370,207 +370,32 @@ describe('MapWorkspace', () => {
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
   });
 
-  it('waits for the selected-result camera and map data before inspecting it', async () => {
+  it('opens a selected result immediately while navigating to it', async () => {
     const facade = new FakeMapFacade();
-    let resolveCameraSettle: () => void = () => undefined;
-    const cameraSettle = new Promise<void>((resolve) => {
-      resolveCameraSettle = resolve;
-    });
-    facade.cameraSettle = () => cameraSettle;
     render(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
-          mapCanvas={<div>Settled inspection canvas</div>}
+          mapCanvas={<div>Selected inspection canvas</div>}
         />
       </RuntimeServicesProvider>,
     );
-    await screen.findByText('Settled inspection canvas');
+    await screen.findByText('Selected inspection canvas');
     act(() => {
       facade.setSnapshot({ lifecycle: 'ready' });
       requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 });
     });
 
     expect(facade.navigationRequests).toEqual([
       { latitude: 41.7, longitude: 44.8, zoom: 13 },
     ]);
-    expect(facade.pointInspectionRequests).toEqual([]);
-    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
-    await act(async () => {
-      resolveCameraSettle();
-      await cameraSettle;
-    });
-
-    expect(facade.pointInspectionRequests).toEqual([
-      { latitude: 41.7, longitude: 44.8 },
-    ]);
-    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-  });
-
-  it('drops a delayed selected-result inspection after later navigation', async () => {
-    const facade = new FakeMapFacade();
-    let resolveCameraSettle: () => void = () => undefined;
-    const cameraSettle = new Promise<void>((resolve) => {
-      resolveCameraSettle = resolve;
-    });
-    facade.cameraSettle = () => cameraSettle;
-    render(
-      <RuntimeServicesProvider services={createTestServices()}>
-        <MapWorkspace
-          facade={facade}
-          mapCanvas={<div>Superseded inspection canvas</div>}
-        />
-      </RuntimeServicesProvider>,
-    );
-    await screen.findByText('Superseded inspection canvas');
-    act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
-      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
-    });
-    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
-
-    act(() => {
-      requestMapNavigation({ latitude: 42.1, longitude: 43.2, zoom: 13 });
+    await waitFor(() => {
+      expect(facade.pointInspectionRequests).toEqual([
+        { latitude: 41.7, longitude: 44.8 },
+      ]);
     });
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-
-    await act(async () => {
-      resolveCameraSettle();
-      await cameraSettle;
-    });
-
-    expect(facade.pointInspectionRequests).toEqual([]);
-  });
-
-  it('drops a delayed selected-result inspection after a native map click', async () => {
-    const facade = new FakeMapFacade();
-    let resolveCameraSettle: () => void = () => undefined;
-    const cameraSettle = new Promise<void>((resolve) => {
-      resolveCameraSettle = resolve;
-    });
-    facade.cameraSettle = () => cameraSettle;
-    render(
-      <RuntimeServicesProvider services={createTestServices()}>
-        <MapWorkspace facade={facade} />
-      </RuntimeServicesProvider>,
-    );
-    const nativeMap = await screen.findByTestId('native-map');
-    act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
-      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
-    });
-    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
-
-    fireEvent.click(nativeMap);
-    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-
-    await act(async () => {
-      resolveCameraSettle();
-      await cameraSettle;
-    });
-
-    expect(facade.pointInspectionRequests).toEqual([]);
-  });
-
-  it('drops a delayed selected-result inspection after opening the point action menu', async () => {
-    const facade = new FakeMapFacade();
-    let resolveCameraSettle: () => void = () => undefined;
-    const cameraSettle = new Promise<void>((resolve) => {
-      resolveCameraSettle = resolve;
-    });
-    facade.cameraSettle = () => cameraSettle;
-    render(
-      <RuntimeServicesProvider services={createTestServices()}>
-        <MapWorkspace facade={facade} />
-      </RuntimeServicesProvider>,
-    );
-    const nativeMap = await screen.findByTestId('native-map');
-    act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
-      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
-    });
-    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
-
-    fireEvent.contextMenu(nativeMap);
-    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-
-    await act(async () => {
-      resolveCameraSettle();
-      await cameraSettle;
-    });
-
-    expect(facade.pointInspectionRequests).toEqual([]);
-  });
-
-  it('drops a delayed selected-result inspection after native map movement', async () => {
-    const facade = new FakeMapFacade();
-    let resolveCameraSettle: () => void = () => undefined;
-    const cameraSettle = new Promise<void>((resolve) => {
-      resolveCameraSettle = resolve;
-    });
-    facade.cameraSettle = () => cameraSettle;
-    render(
-      <RuntimeServicesProvider services={createTestServices()}>
-        <MapWorkspace facade={facade} />
-      </RuntimeServicesProvider>,
-    );
-    const nativeMap = await screen.findByTestId('native-map');
-    act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
-      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
-    });
-    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
-
-    fireEvent.wheel(nativeMap);
-    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-
-    await act(async () => {
-      resolveCameraSettle();
-      await cameraSettle;
-    });
-
-    expect(facade.pointInspectionRequests).toEqual([]);
-  });
-
-  it('drops a delayed selected-result inspection when marker placement begins', async () => {
-    const facade = new FakeMapFacade();
-    let resolveCameraSettle: () => void = () => undefined;
-    const cameraSettle = new Promise<void>((resolve) => {
-      resolveCameraSettle = resolve;
-    });
-    facade.cameraSettle = () => cameraSettle;
-    render(
-      <RuntimeServicesProvider services={createTestServices()}>
-        <MapWorkspace
-          facade={facade}
-          mapCanvas={<div>Marker placement inspection canvas</div>}
-        />
-      </RuntimeServicesProvider>,
-    );
-    await screen.findByText('Marker placement inspection canvas');
-    act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
-      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
-    });
-    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
-
-    act(() => {
-      requestMarkerPlacement();
-    });
-    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-
-    await act(async () => {
-      resolveCameraSettle();
-      await cameraSettle;
-    });
-
-    expect(facade.pointInspectionRequests).toEqual([]);
   });
 
   it('holds point-inspection commands until the map is ready', async () => {

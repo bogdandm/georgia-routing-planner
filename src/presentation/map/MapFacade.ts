@@ -29,9 +29,6 @@ export interface MapFacade {
   openPointInspection(coordinate: MapCoordinate): void;
   closePointInspection(): void;
 
-  /** Resolves after the active native camera movement and its map-data rendering settle. */
-  waitForCameraSettled(): Promise<void>;
-
   /** Moves the native camera without exposing MapLibre to callers. */
   navigateTo(
     target: {

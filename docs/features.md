@@ -459,8 +459,8 @@ imagery starts empty unless an explicit share URL requests a scene.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Clicking the map opens an anchored, accessible point-inspection popup. Selecting a
-  place-search result opens the same popup after the destination camera and map data
-  settle, with formatted coordinates, terrain elevation, and the nearest supported named
+  place-search result opens the same popup immediately while its destination navigation
+  begins, with formatted coordinates, terrain elevation, and the nearest supported named
   OSM map feature in the currently loaded vector data. Selection has no fixed distance
   cutoff; the geodesic distance remains visible so the user can judge relevance.
   Supported feature sources include places, peaks, and points of interest. Named results

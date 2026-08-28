@@ -146,6 +146,7 @@ export function requestMarkerPlacement(): void {
   mapInteractionStore.setState({
     markerPlacement: { id: nextMarkerCommandId },
     markerCreationCommand: null,
+    pointInspectionCommand: null,
   });
 }
 
@@ -171,6 +172,7 @@ export function requestMarkerCreationAt(
   mapInteractionStore.setState({
     markerPlacement: null,
     markerCreationCommand: command,
+    pointInspectionCommand: null,
   });
 }
 
@@ -192,6 +194,7 @@ export function completeMarkerPlacement(
   mapInteractionStore.setState({
     markerPlacement: null,
     markerCreationCommand: command,
+    pointInspectionCommand: null,
   });
 }
 

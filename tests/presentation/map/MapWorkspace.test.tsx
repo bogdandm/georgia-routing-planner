@@ -506,6 +506,42 @@ describe('MapWorkspace', () => {
     expect(facade.pointInspectionRequests).toEqual([]);
   });
 
+  it('drops a delayed selected-result inspection when marker placement begins', async () => {
+    const facade = new FakeMapFacade();
+    let resolveCameraSettle: () => void = () => undefined;
+    const cameraSettle = new Promise<void>((resolve) => {
+      resolveCameraSettle = resolve;
+    });
+    facade.cameraSettle = () => cameraSettle;
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Marker placement inspection canvas</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Marker placement inspection canvas');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
+
+    act(() => {
+      requestMarkerPlacement();
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+
+    await act(async () => {
+      resolveCameraSettle();
+      await cameraSettle;
+    });
+
+    expect(facade.pointInspectionRequests).toEqual([]);
+  });
+
   it('holds point-inspection commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
     render(

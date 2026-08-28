@@ -748,7 +748,14 @@ export function MapWorkspace({
   };
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
-    if (markerPlacement === null) return;
+    if (markerPlacement === null) {
+      const pointInspectionCommand =
+        mapInteractionStore.getState().pointInspectionCommand;
+      if (pointInspectionCommand?.waitForCameraSettle) {
+        consumeMapPointInspectionCommand(pointInspectionCommand.id);
+      }
+      return;
+    }
     event.originalEvent.preventDefault();
     const coordinate = {
       longitude: event.lngLat.lng,

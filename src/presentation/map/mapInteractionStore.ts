@@ -70,6 +70,7 @@ export function requestMapNavigation(target: MapNavigationTarget): void {
   nextCommandId += 1;
   mapInteractionStore.setState({
     navigationCommand: { id: nextCommandId, target: { ...target } },
+    pointInspectionCommand: null,
   });
 }
 
@@ -88,6 +89,7 @@ export function requestMapFitBounds(
   if (padding !== undefined) command.padding = { ...padding };
   mapInteractionStore.setState({
     fitBoundsCommand: command,
+    pointInspectionCommand: null,
   });
 }
 

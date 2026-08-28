@@ -403,6 +403,42 @@ describe('MapWorkspace', () => {
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
   });
 
+  it('drops a delayed selected-result inspection after later navigation', async () => {
+    const facade = new FakeMapFacade();
+    let resolveCameraSettle: () => void = () => undefined;
+    const cameraSettle = new Promise<void>((resolve) => {
+      resolveCameraSettle = resolve;
+    });
+    facade.cameraSettle = () => cameraSettle;
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Superseded inspection canvas</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Superseded inspection canvas');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
+
+    act(() => {
+      requestMapNavigation({ latitude: 42.1, longitude: 43.2, zoom: 13 });
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+
+    await act(async () => {
+      resolveCameraSettle();
+      await cameraSettle;
+    });
+
+    expect(facade.pointInspectionRequests).toEqual([]);
+  });
+
   it('holds point-inspection commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
     render(

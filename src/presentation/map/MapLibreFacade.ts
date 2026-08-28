@@ -46,6 +46,11 @@ import {
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
 
+export interface MapPointInspectionActions {
+  onCopyLink(coordinate: MapCoordinate, camera: MapCamera): void;
+  onCreateMarker(coordinate: MapCoordinate, suggestedName?: string): void;
+}
+
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
   camera: defaultGeorgiaCamera,
@@ -245,12 +250,37 @@ export class MapLibreFacade implements MapFacade {
     private readonly layerController?: MapLayerControllerLifecycle,
     private readonly elevationProvider?: ElevationProvider,
     pointInspector?: PointInspectorPopup,
+    pointInspectionActions?: MapPointInspectionActions,
   ) {
-    this.#pointInspector =
-      pointInspector ??
-      new MapLibrePointInspector(() => {
-        this.closePointInspection();
+    if (pointInspector !== undefined) {
+      this.#pointInspector = pointInspector;
+    } else if (pointInspectionActions !== undefined) {
+      this.#pointInspector = new MapLibrePointInspector({
+        onClose: () => {
+          this.closePointInspection();
+        },
+        onCopyLink: (inspection) => {
+          pointInspectionActions.onCopyLink(inspection.coordinate, this.getCamera());
+        },
+        onCreateMarker: (inspection) => {
+          let suggestedName: string | undefined;
+          if (
+            inspection.nearbyPoi.status === 'found' &&
+            inspection.nearbyPoi.poi.name !== null
+          ) {
+            suggestedName = inspection.nearbyPoi.poi.name;
+          }
+          pointInspectionActions.onCreateMarker(inspection.coordinate, suggestedName);
+          this.closePointInspection();
+        },
       });
+    } else {
+      this.#pointInspector = new MapLibrePointInspector({
+        onClose: () => {
+          this.closePointInspection();
+        },
+      });
+    }
     this.snapshotStore?.update(this.#snapshot);
   }
 
@@ -351,6 +381,35 @@ export class MapLibreFacade implements MapFacade {
     } catch {
       return null;
     }
+  }
+
+  public openPointInspection(coordinate: MapCoordinate): void {
+    const map = this.#map;
+    if (
+      map === null ||
+      this.#interactionMode !== 'default' ||
+      !Number.isFinite(coordinate.longitude) ||
+      !Number.isFinite(coordinate.latitude) ||
+      coordinate.longitude < -180 ||
+      coordinate.longitude > 180 ||
+      coordinate.latitude < -90 ||
+      coordinate.latitude > 90
+    ) {
+      return;
+    }
+    this.#pointInspectionSequence += 1;
+    const sequence = this.#pointInspectionSequence;
+    this.#pointInspectionAbort?.abort();
+    const abortController = new AbortController();
+    this.#pointInspectionAbort = abortController;
+    this.updatePointInspection({
+      status: 'open',
+      coordinate,
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'loading' },
+    });
+    this.logger.log({ level: 'info', name: 'map.point-inspection.started' });
+    void this.inspectPoint(map, coordinate, sequence, abortController.signal);
   }
 
   public closePointInspection(): void {
@@ -651,19 +710,7 @@ export class MapLibreFacade implements MapFacade {
       this.closePointInspection();
       if (visible) return;
     }
-    this.#pointInspectionSequence += 1;
-    const sequence = this.#pointInspectionSequence;
-    this.#pointInspectionAbort?.abort();
-    const abortController = new AbortController();
-    this.#pointInspectionAbort = abortController;
-    this.updatePointInspection({
-      status: 'open',
-      coordinate,
-      elevation: { status: 'loading' },
-      nearbyPoi: { status: 'loading' },
-    });
-    this.logger.log({ level: 'info', name: 'map.point-inspection.started' });
-    void this.inspectPoint(map, coordinate, sequence, abortController.signal);
+    this.openPointInspection(coordinate);
   };
 
   private queryNearestPoi(

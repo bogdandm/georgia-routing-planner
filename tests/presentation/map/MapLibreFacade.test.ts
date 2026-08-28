@@ -930,6 +930,95 @@ describe('MapLibreFacade', () => {
     ).toHaveLength(0);
   });
 
+  it('opens a public coordinate inspection through the native loading lifecycle', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const samples: ((value: { status: 'available'; meters: number }) => void)[] = [];
+    const elevationProvider = {
+      sample: () =>
+        new Promise<{ status: 'available'; meters: number }>((resolve) => {
+          samples.push(resolve);
+        }),
+      sampleMany: () => Promise.resolve([]),
+    };
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      elevationProvider,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+
+    expect(popup.show).toHaveBeenNthCalledWith(1, {
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'loading' },
+    });
+    expect(popup.show).toHaveBeenNthCalledWith(2, {
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'none' },
+    });
+
+    samples[0]?.({ status: 'available', meters: 640 });
+    await Promise.resolve();
+
+    expect(popup.show).toHaveBeenNthCalledWith(3, {
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      elevation: { status: 'available', meters: 640 },
+      nearbyPoi: { status: 'none' },
+    });
+  });
+
+  it('rejects public coordinate inspections outside the default valid map state', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.openPointInspection({ longitude: Number.NaN, latitude: 41.7 });
+    facade.openPointInspection({ longitude: 181, latitude: 41.7 });
+    facade.openPointInspection({ longitude: 44.8, latitude: -91 });
+    facade.setInteractionMode('marker-placement');
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+    facade.setInteractionMode('route-planning');
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+
+    expect(popup.show).not.toHaveBeenCalled();
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
   it('closes an open inspection on the next map click and opens another on the following click', async () => {
     const services = createTestServices();
     const provider = services.mapProviderConfiguration;

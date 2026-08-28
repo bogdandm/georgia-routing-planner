@@ -22,6 +22,11 @@ interface MapFitBoundsCommand {
   readonly padding?: MapFitPadding;
 }
 
+interface MapPointInspectionCommand {
+  readonly id: number;
+  readonly coordinate: MapCoordinate;
+}
+
 interface SatelliteSearchRequest {
   readonly id: number;
 }
@@ -39,6 +44,7 @@ interface MarkerCreationCommand {
 interface MapInteractionState {
   readonly navigationCommand: MapNavigationCommand | null;
   readonly fitBoundsCommand: MapFitBoundsCommand | null;
+  readonly pointInspectionCommand: MapPointInspectionCommand | null;
   readonly satelliteSearchAnchor: MapCoordinate | null;
   readonly satelliteSearchRequest: SatelliteSearchRequest | null;
   readonly markerPlacement: MarkerPlacement | null;
@@ -49,6 +55,7 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   navigationCommand: null,
   fitBoundsCommand: null,
   satelliteSearchAnchor: null,
+  pointInspectionCommand: null,
   satelliteSearchRequest: null,
   markerPlacement: null,
   markerCreationCommand: null,
@@ -91,6 +98,18 @@ export function consumeMapNavigationCommand(commandId: number): void {
 export function consumeMapFitBoundsCommand(commandId: number): void {
   if (mapInteractionStore.getState().fitBoundsCommand?.id !== commandId) return;
   mapInteractionStore.setState({ fitBoundsCommand: null });
+}
+
+export function requestMapPointInspection(coordinate: MapCoordinate): void {
+  nextCommandId += 1;
+  mapInteractionStore.setState({
+    pointInspectionCommand: { id: nextCommandId, coordinate: { ...coordinate } },
+  });
+}
+
+export function consumeMapPointInspectionCommand(commandId: number): void {
+  if (mapInteractionStore.getState().pointInspectionCommand?.id !== commandId) return;
+  mapInteractionStore.setState({ pointInspectionCommand: null });
 }
 
 export function setSatelliteSearchAnchor(anchor: MapCoordinate | null): void {
@@ -178,6 +197,7 @@ export function resetMapInteractionStore(): void {
   mapInteractionStore.setState({
     navigationCommand: null,
     fitBoundsCommand: null,
+    pointInspectionCommand: null,
     satelliteSearchAnchor: null,
     satelliteSearchRequest: null,
     markerPlacement: null,

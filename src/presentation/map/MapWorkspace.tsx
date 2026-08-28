@@ -46,6 +46,7 @@ import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
   defaultGeorgiaCamera,
   type MapCamera,
+  type MapCoordinate,
   type MapFitPadding,
   type MapLayerPreset,
 } from '@/presentation/map/mapTypes';
@@ -55,6 +56,7 @@ import {
   completeMarkerPlacement,
   consumeMapFitBoundsCommand,
   consumeMapNavigationCommand,
+  consumeMapPointInspectionCommand,
   mapInteractionStore,
   requestMarkerCreationAt,
   requestSatelliteSearch,
@@ -223,6 +225,10 @@ export function MapWorkspace({
     mapInteractionStore,
     (state) => state.fitBoundsCommand,
   );
+  const pointInspectionCommand = useStore(
+    mapInteractionStore,
+    (state) => state.pointInspectionCommand,
+  );
   const developerMode = useUiStore((state) => state.developerMode);
   const elevationGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
@@ -234,6 +240,36 @@ export function MapWorkspace({
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
+  const copyText = useCallback(async (value: string, message: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyMessage(message);
+      setCopyError(false);
+    } catch {
+      setCopyError(true);
+    }
+  }, []);
+  const copyPointLinkAtCoordinate = useCallback(
+    (coordinate: MapCoordinate, camera: MapCamera) => {
+      const url = createMapShareUrl(
+        window.location.href,
+        {
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          zoom: camera.zoom,
+        },
+        null,
+      );
+      void copyText(url, 'Point link copied');
+    },
+    [copyText],
+  );
+  const createMarkerAtCoordinate = useCallback(
+    (coordinate: MapCoordinate, suggestedName?: string) => {
+      requestMarkerCreationAt(coordinate, suggestedName);
+    },
+    [],
+  );
   const cameraPersistence = useMemo(
     () =>
       new SettledCameraPersistence(mapCameraRepository, logger, () => {
@@ -270,6 +306,11 @@ export function MapWorkspace({
         mapDiagnostics,
         mapLayers ?? undefined,
         elevationProvider ?? undefined,
+        undefined,
+        {
+          onCopyLink: copyPointLinkAtCoordinate,
+          onCreateMarker: createMarkerAtCoordinate,
+        },
       ),
     [
       cameraPersistence,
@@ -279,6 +320,8 @@ export function MapWorkspace({
       elevationProvider,
       mapProviderConfiguration,
       suppliedFacade,
+      copyPointLinkAtCoordinate,
+      createMarkerAtCoordinate,
     ],
   );
   const subscribe = useCallback(
@@ -358,6 +401,15 @@ export function MapWorkspace({
       consumeMapFitBoundsCommand(fitBoundsCommand.id);
     }
   }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
+
+  useEffect(() => {
+    if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
+    try {
+      facade.openPointInspection(pointInspectionCommand.coordinate);
+    } finally {
+      consumeMapPointInspectionCommand(pointInspectionCommand.id);
+    }
+  }, [facade, pointInspectionCommand, snapshot.lifecycle]);
 
   useEffect(() => {
     const mode =
@@ -688,16 +740,6 @@ export function MapWorkspace({
     );
   };
 
-  const copyText = async (value: string, message: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyMessage(message);
-      setCopyError(false);
-    } catch {
-      setCopyError(true);
-    }
-  };
-
   const copyCoordinates = () => {
     if (contextMenu === null) return;
     const value = `${contextMenu.latitude.toFixed(5)}, ${contextMenu.longitude.toFixed(5)}`;
@@ -707,17 +749,8 @@ export function MapWorkspace({
 
   const copyPointLink = () => {
     if (contextMenu === null) return;
-    const url = createMapShareUrl(
-      window.location.href,
-      {
-        latitude: contextMenu.latitude,
-        longitude: contextMenu.longitude,
-        zoom: snapshot.camera.zoom,
-      },
-      null,
-    );
+    copyPointLinkAtCoordinate(contextMenu, snapshot.camera);
     closeContextMenu();
-    void copyText(url, 'Point link copied');
   };
 
   const searchSatelliteAtPoint = () => {
@@ -738,7 +771,7 @@ export function MapWorkspace({
       longitude: contextMenu.longitude,
       latitude: contextMenu.latitude,
     };
-    requestMarkerCreationAt(
+    createMarkerAtCoordinate(
       coordinate,
       facade.getNearestPoi(coordinate)?.name ?? undefined,
     );

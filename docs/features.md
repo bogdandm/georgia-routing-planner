@@ -458,15 +458,17 @@ imagery starts empty unless an explicit share URL requests a scene.
   shading above imagery. Index contours remain labeled at 200 m intervals.
 - Native zoom and compass/navigation controls remain on the right.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
-- Clicking the map opens an anchored, accessible point-inspection popup with formatted
-  coordinates, terrain elevation, and the nearest supported named OSM map feature in the
-  currently loaded vector data. Selection has no fixed distance cutoff; the geodesic
-  distance remains visible so the user can judge relevance. Supported feature sources
-  include places, peaks, and points of interest. Named results include direct English
-  Wikipedia article and Google Search links that open in a new tab. While any part of
-  that popup intersects the map viewport, the next map click only closes it; a
+- Clicking the map or selecting a place-search result opens an anchored, accessible
+  point-inspection popup with formatted coordinates, terrain elevation, and the nearest
+  supported named OSM map feature in the currently loaded vector data. Selection has no
+  fixed distance cutoff; the geodesic distance remains visible so the user can judge
+  relevance. Supported feature sources include places, peaks, and points of interest.
+  Named results include direct English Wikipedia article and Google Search links that
+  open in a new tab. Its bottom actions copy the existing flat 2D point-link schema or
+  open the existing marker editor to create a marker. For native map clicks, while any
+  part of that popup intersects the map viewport, the next map click only closes it; a
   subsequent click opens a new inspection. If camera movement puts the popup entirely
-  outside the viewport, the next click immediately replaces it.
+  outside the viewport, the next native click immediately replaces it.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.

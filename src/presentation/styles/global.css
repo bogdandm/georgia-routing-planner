@@ -160,26 +160,38 @@ body {
 .map-point-inspector__action {
   min-height: 32px;
   padding: 4px 8px;
-  border: 1px solid #1976d2;
+  border: 1px solid #023047;
   border-radius: 4px;
   font: inherit;
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    filter 120ms ease;
 }
 
 .map-point-inspector__action--outlined {
   background: transparent;
-  color: #1976d2;
+  color: #023047;
+}
+
+.map-point-inspector__action--outlined:hover {
+  border-color: #8fb8c9;
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .map-point-inspector__action--contained {
-  background: #1976d2;
+  background: #023047;
   color: #fff;
 }
 
-.map-point-inspector__action:hover {
-  filter: brightness(0.9);
+.map-point-inspector__action--contained:hover {
+  filter: brightness(0.88);
+  box-shadow: 0 4px 10px rgb(2 48 71 / 28%);
 }
 
 .map-point-inspector__action:focus-visible {
-  outline: 2px solid #fb8500;
+  outline: 3px solid #fb8500;
+  outline-offset: 2px;
 }

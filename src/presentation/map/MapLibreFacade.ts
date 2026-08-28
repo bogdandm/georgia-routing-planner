@@ -412,6 +412,16 @@ export class MapLibreFacade implements MapFacade {
     void this.inspectPoint(map, coordinate, sequence, abortController.signal);
   }
 
+  public waitForCameraSettled(): Promise<void> {
+    const map = this.#map;
+    if (map?.isMoving() !== true) return Promise.resolve();
+    return new Promise((resolve) => {
+      void map.once('moveend', () => {
+        void map.once('idle', resolve);
+      });
+    });
+  }
+
   public closePointInspection(): void {
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();

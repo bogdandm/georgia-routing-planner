@@ -402,14 +402,34 @@ export function MapWorkspace({
     }
   }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
 
+  const pendingPointInspectionCommandId = useRef<number | null>(null);
+
   useEffect(() => {
     if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
-    try {
-      facade.openPointInspection(pointInspectionCommand.coordinate);
-    } finally {
-      consumeMapPointInspectionCommand(pointInspectionCommand.id);
+    if (pointInspectionCommand.waitForCameraSettle) {
+      if (pendingPointInspectionCommandId.current === pointInspectionCommand.id) return;
+      pendingPointInspectionCommandId.current = pointInspectionCommand.id;
+      void facade.waitForCameraSettled().then(() => {
+        if (
+          mapInteractionStore.getState().pointInspectionCommand?.id !==
+          pointInspectionCommand.id
+        ) {
+          return;
+        }
+        facade.openPointInspection(pointInspectionCommand.coordinate);
+        consumeMapPointInspectionCommand(pointInspectionCommand.id);
+        pendingPointInspectionCommandId.current = null;
+      });
+      return;
     }
-  }, [facade, pointInspectionCommand, snapshot.lifecycle]);
+    facade.openPointInspection(pointInspectionCommand.coordinate);
+    consumeMapPointInspectionCommand(pointInspectionCommand.id);
+  }, [
+    facade,
+    pendingPointInspectionCommandId,
+    pointInspectionCommand,
+    snapshot.lifecycle,
+  ]);
 
   useEffect(() => {
     const mode =

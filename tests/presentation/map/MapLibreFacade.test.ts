@@ -30,6 +30,7 @@ class FakeNativeMap {
   public repaintCalls = 0;
   public terrainElevation: number | null = null;
   public initialTerrain: unknown = null;
+  public moving = false;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -42,6 +43,14 @@ class FakeNativeMap {
     listeners.add(listener);
     this.#listeners.set(type, listeners);
     return this;
+  }
+
+  public once(type: string, listener: TestListener): this {
+    const onceListener: TestListener = (event) => {
+      this.off(type, onceListener);
+      listener(event);
+    };
+    return this.on(type, onceListener);
   }
 
   public off(type: string, listener: TestListener): this {
@@ -59,6 +68,10 @@ class FakeNativeMap {
 
   public loaded(): boolean {
     return false;
+  }
+
+  public isMoving(): boolean {
+    return this.moving;
   }
 
   public getStyle() {
@@ -184,6 +197,7 @@ class FakeNativeMap {
 
   public fire(type: string, event?: unknown): void {
     if (type === 'style.load') this.styleReady = true;
+    if (type === 'moveend') this.moving = false;
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
     }
@@ -315,6 +329,104 @@ describe('MapLibreFacade', () => {
       right: 0,
       bottom: 0,
       left: 0,
+    });
+  });
+
+  it('waits for camera movement and map rendering before inspecting search results', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.moving = true;
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    const settled = facade.waitForCameraSettled();
+    nativeMap.fire('moveend');
+    await Promise.resolve();
+    let resolved = false;
+    void settled.then(() => {
+      resolved = true;
+    });
+    expect(resolved).toBe(false);
+
+    nativeMap.fire('idle');
+    await settled;
+
+    expect(resolved).toBe(true);
+  });
+
+  it('inspects post-movement map features after a search camera settles', async () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    nativeMap.addSource('basemap-vector', { type: 'vector' });
+    nativeMap.sourceFeatures.set('poi', [
+      {
+        type: 'Feature',
+        id: 'stale-feature',
+        geometry: { type: 'Point', coordinates: [43.2, 42.1] },
+        properties: { name: 'Stale nearby feature', class: 'peak' },
+        source: 'basemap-vector',
+        sourceLayer: 'poi',
+        state: {},
+        layer: { id: 'basemap-poi', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      {
+        terrain: provider.value.terrain,
+        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+        sourceLayers: {
+          pois: 'poi',
+          peaks: 'mountain_peak',
+          places: 'place',
+          waterNames: 'water_name',
+        },
+        requestTimeoutMs: 100,
+        equivalentErrorWindowMs: 10_000,
+      },
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.moving = true;
+
+    const cameraSettled = facade.waitForCameraSettled();
+    nativeMap.fire('moveend');
+    nativeMap.sourceFeatures.set('poi', [
+      {
+        type: 'Feature',
+        id: 'selected-feature',
+        geometry: { type: 'Point', coordinates: [44.8, 41.7] },
+        properties: { name: 'Selected nearby feature', class: 'peak' },
+        source: 'basemap-vector',
+        sourceLayer: 'poi',
+        state: {},
+        layer: { id: 'basemap-poi', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    nativeMap.fire('idle');
+    await cameraSettled;
+
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+
+    expect(facade.getPointInspection()).toMatchObject({
+      nearbyPoi: {
+        status: 'found',
+        poi: { name: 'Selected nearby feature' },
+      },
     });
   });
 

@@ -39,6 +39,7 @@ export class FakeMapFacade implements MapFacade {
   public nearestPoi: NearbyPoi | null = null;
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
+  public cameraSettle: (() => Promise<void>) | null = null;
   public snapshot: MapDiagnosticsSnapshot = {
     lifecycle: 'loading',
     camera: defaultGeorgiaCamera,
@@ -113,6 +114,10 @@ export class FakeMapFacade implements MapFacade {
       nearbyPoi: { status: 'loading' },
     };
     this.notify();
+  }
+
+  public waitForCameraSettled(): Promise<void> {
+    return this.cameraSettle?.() ?? Promise.resolve();
   }
 
   public closePointInspection(): void {

@@ -747,13 +747,17 @@ export function MapWorkspace({
     });
   };
 
+  const cancelDelayedPointInspection = () => {
+    const pointInspectionCommand =
+      mapInteractionStore.getState().pointInspectionCommand;
+    if (pointInspectionCommand?.waitForCameraSettle) {
+      consumeMapPointInspectionCommand(pointInspectionCommand.id);
+    }
+  };
+
   const handleMapClick = (event: MapLayerMouseEvent) => {
     if (markerPlacement === null) {
-      const pointInspectionCommand =
-        mapInteractionStore.getState().pointInspectionCommand;
-      if (pointInspectionCommand?.waitForCameraSettle) {
-        consumeMapPointInspectionCommand(pointInspectionCommand.id);
-      }
+      cancelDelayedPointInspection();
       return;
     }
     event.originalEvent.preventDefault();
@@ -765,6 +769,11 @@ export function MapWorkspace({
       coordinate,
       facade.getNearestPoi(coordinate)?.name ?? undefined,
     );
+  };
+
+  const handleMapMoveStart = (event: { readonly originalEvent?: unknown }) => {
+    if (event.originalEvent === undefined) return;
+    cancelDelayedPointInspection();
   };
 
   const copyCoordinates = () => {
@@ -848,6 +857,7 @@ export function MapWorkspace({
             maxPitch={75}
             onContextMenu={handleContextMenu}
             onClick={handleMapClick}
+            onMoveStart={handleMapMoveStart}
             boxZoom={false}
             doubleClickZoom
             dragPan

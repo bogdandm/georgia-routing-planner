@@ -32,6 +32,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     dragRotate,
     onClick,
     onContextMenu,
+    onMoveStart,
   }: {
     readonly boxZoom?: boolean;
     readonly dragRotate?: boolean;
@@ -43,6 +44,7 @@ vi.mock('react-map-gl/maplibre', () => ({
       readonly originalEvent: MouseEvent;
       readonly lngLat: { readonly lng: number; readonly lat: number };
     }) => void;
+    readonly onMoveStart?: (event: { readonly originalEvent?: Event }) => void;
   }) => (
     <div
       data-box-zoom={String(boxZoom)}
@@ -53,6 +55,9 @@ vi.mock('react-map-gl/maplibre', () => ({
           originalEvent: event.nativeEvent,
           lngLat: { lng: 44.8, lat: 41.7 },
         });
+      }}
+      onWheel={(event) => {
+        onMoveStart?.({ originalEvent: event.nativeEvent });
       }}
       onContextMenu={(event) => {
         onContextMenu?.({
@@ -460,6 +465,37 @@ describe('MapWorkspace', () => {
     expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
 
     fireEvent.click(nativeMap);
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+
+    await act(async () => {
+      resolveCameraSettle();
+      await cameraSettle;
+    });
+
+    expect(facade.pointInspectionRequests).toEqual([]);
+  });
+
+  it('drops a delayed selected-result inspection after native map movement', async () => {
+    const facade = new FakeMapFacade();
+    let resolveCameraSettle: () => void = () => undefined;
+    const cameraSettle = new Promise<void>((resolve) => {
+      resolveCameraSettle = resolve;
+    });
+    facade.cameraSettle = () => cameraSettle;
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    const nativeMap = await screen.findByTestId('native-map');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
+
+    fireEvent.wheel(nativeMap);
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
 
     await act(async () => {

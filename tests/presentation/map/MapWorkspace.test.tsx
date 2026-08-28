@@ -475,6 +475,37 @@ describe('MapWorkspace', () => {
     expect(facade.pointInspectionRequests).toEqual([]);
   });
 
+  it('drops a delayed selected-result inspection after opening the point action menu', async () => {
+    const facade = new FakeMapFacade();
+    let resolveCameraSettle: () => void = () => undefined;
+    const cameraSettle = new Promise<void>((resolve) => {
+      resolveCameraSettle = resolve;
+    });
+    facade.cameraSettle = () => cameraSettle;
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    const nativeMap = await screen.findByTestId('native-map');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 }, true);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
+
+    fireEvent.contextMenu(nativeMap);
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+
+    await act(async () => {
+      resolveCameraSettle();
+      await cameraSettle;
+    });
+
+    expect(facade.pointInspectionRequests).toEqual([]);
+  });
+
   it('drops a delayed selected-result inspection after native map movement', async () => {
     const facade = new FakeMapFacade();
     let resolveCameraSettle: () => void = () => undefined;

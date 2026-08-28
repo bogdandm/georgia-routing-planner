@@ -733,8 +733,16 @@ export function MapWorkspace({
   const closeContextMenu = () => {
     setContextMenu(null);
   };
+  const cancelDelayedPointInspection = () => {
+    const pointInspectionCommand =
+      mapInteractionStore.getState().pointInspectionCommand;
+    if (pointInspectionCommand?.waitForCameraSettle) {
+      consumeMapPointInspectionCommand(pointInspectionCommand.id);
+    }
+  };
   const handleContextMenu = (event: MapLayerMouseEvent) => {
     event.originalEvent.preventDefault();
+    cancelDelayedPointInspection();
     if (markerPlacement !== null) {
       cancelMarkerPlacement();
       return;
@@ -745,14 +753,6 @@ export function MapWorkspace({
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
     });
-  };
-
-  const cancelDelayedPointInspection = () => {
-    const pointInspectionCommand =
-      mapInteractionStore.getState().pointInspectionCommand;
-    if (pointInspectionCommand?.waitForCameraSettle) {
-      consumeMapPointInspectionCommand(pointInspectionCommand.id);
-    }
   };
 
   const handleMapClick = (event: MapLayerMouseEvent) => {

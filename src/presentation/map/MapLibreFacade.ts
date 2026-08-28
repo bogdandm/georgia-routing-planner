@@ -81,6 +81,11 @@ interface MapProviderOptions {
   readonly equivalentErrorWindowMs: number;
 }
 
+interface CameraSettleWaiter {
+  readonly navigationSequence: number;
+  readonly resolve: () => void;
+}
+
 interface FailureBucket {
   readonly failure: MapSourceFailure;
   readonly lastLoggedAtMs: number;
@@ -241,6 +246,9 @@ export class MapLibreFacade implements MapFacade {
   readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
   #routePlanPreviewAnchor: MapCoordinate | null = null;
+  #cameraNavigationSequence = 0;
+  #settledCameraNavigationSequence = 0;
+  readonly #cameraSettleWaiters = new Set<CameraSettleWaiter>();
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -413,12 +421,13 @@ export class MapLibreFacade implements MapFacade {
   }
 
   public waitForCameraSettled(): Promise<void> {
-    const map = this.#map;
-    if (map?.isMoving() !== true) return Promise.resolve();
+    if (this.#map === null) return Promise.resolve();
+    const navigationSequence = this.#cameraNavigationSequence;
+    if (navigationSequence <= this.#settledCameraNavigationSequence) {
+      return Promise.resolve();
+    }
     return new Promise((resolve) => {
-      void map.once('moveend', () => {
-        void map.once('idle', resolve);
-      });
+      this.#cameraSettleWaiters.add({ navigationSequence, resolve });
     });
   }
 
@@ -443,6 +452,7 @@ export class MapLibreFacade implements MapFacade {
   ): void {
     const map = this.#map;
     if (map === null) return;
+    this.#cameraNavigationSequence += 1;
     const center: [number, number] = [target.longitude, target.latitude];
     const padding = { top: 0, right: 0, bottom: 0, left: 0 };
     const options = {
@@ -466,6 +476,7 @@ export class MapLibreFacade implements MapFacade {
         ],
       });
     }
+    if (!map.isMoving()) this.markCameraSettled();
     this.logger.log({
       level: 'info',
       name: 'map.navigation.requested',
@@ -480,6 +491,7 @@ export class MapLibreFacade implements MapFacade {
   ): void {
     const map = this.#map;
     if (map === null) return;
+    this.#cameraNavigationSequence += 1;
     map.fitBounds(
       [
         [bounds.west, bounds.south],
@@ -493,6 +505,7 @@ export class MapLibreFacade implements MapFacade {
         pitch: map.getPitch(),
       },
     );
+    if (!map.isMoving()) this.markCameraSettled();
     this.logger.log({
       level: 'info',
       name: 'map.navigation.bounds-requested',
@@ -644,6 +657,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleIdle = (): void => {
+    this.markCameraSettled();
     this.updateSnapshot({ lastIdleAt: new Date().toISOString() });
     if (!this.#firstIdleRecorded) {
       this.#firstIdleRecorded = true;
@@ -1330,6 +1344,15 @@ export class MapLibreFacade implements MapFacade {
     this.layerController?.clearRoutePlanPreview();
   }
 
+  private markCameraSettled(): void {
+    this.#settledCameraNavigationSequence = this.#cameraNavigationSequence;
+    for (const waiter of this.#cameraSettleWaiters) {
+      if (waiter.navigationSequence > this.#settledCameraNavigationSequence) continue;
+      this.#cameraSettleWaiters.delete(waiter);
+      waiter.resolve();
+    }
+  }
+
   private detach(): void {
     this.cancelAllSourceRecoveries();
     const map = this.#map;
@@ -1356,6 +1379,7 @@ export class MapLibreFacade implements MapFacade {
     map.getCanvas().style.cursor = '';
     this.#pointerGestures.detach();
     this.layerController?.detach(map);
+    this.markCameraSettled();
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;

@@ -45,14 +45,6 @@ class FakeNativeMap {
     return this;
   }
 
-  public once(type: string, listener: TestListener): this {
-    const onceListener: TestListener = (event) => {
-      this.off(type, onceListener);
-      listener(event);
-    };
-    return this.on(type, onceListener);
-  }
-
   public off(type: string, listener: TestListener): this {
     this.#listeners.get(type)?.delete(listener);
     return this;
@@ -338,10 +330,10 @@ describe('MapLibreFacade', () => {
     nativeMap.moving = true;
     const facade = new MapLibreFacade(services.logger);
     facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.navigateTo({ longitude: 44.8, latitude: 41.7, zoom: 13 });
 
-    const settled = facade.waitForCameraSettled();
     nativeMap.fire('moveend');
-    await Promise.resolve();
+    const settled = facade.waitForCameraSettled();
     let resolved = false;
     void settled.then(() => {
       resolved = true;
@@ -402,6 +394,7 @@ describe('MapLibreFacade', () => {
     );
     facade.attach(nativeMap as unknown as MapLibreMap);
     nativeMap.moving = true;
+    facade.navigateTo({ longitude: 44.8, latitude: 41.7, zoom: 13 });
 
     const cameraSettled = facade.waitForCameraSettled();
     nativeMap.fire('moveend');

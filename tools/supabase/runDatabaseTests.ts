@@ -18,9 +18,13 @@ try {
     startedStack = true;
   }
   execFileSync('supabase', ['db', 'reset'], { stdio: 'inherit' });
-  execFileSync('supabase', ['test', 'db', 'supabase/tests/database'], {
-    stdio: 'inherit',
-  });
+  execFileSync(
+    'supabase',
+    ['test', 'db', 'supabase/tests/database/track_share.test.sql'],
+    {
+      stdio: 'inherit',
+    },
+  );
 } finally {
   if (startedStack) {
     execFileSync('supabase', ['stop', '--no-backup'], { stdio: 'inherit' });

@@ -13,7 +13,8 @@ insert into public.user_track_usage (user_id, used_bytes, reserved_bytes)
 values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 17, 0);
 
 insert into public.track_records (
-  user_id, content_hash, metadata, revision, state, object_path, compressed_bytes
+  user_id, content_hash, metadata, revision, state, object_path, compressed_bytes,
+  reservation_expires_at
 ) values (
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   repeat('a', 64),
@@ -21,7 +22,8 @@ insert into public.track_records (
   1,
   'ready',
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/' || repeat('a', 64) || '/11111111-1111-4111-8111-111111111111.grpt.gz',
-  17
+  17,
+  null
 ), (
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   repeat('b', 64),

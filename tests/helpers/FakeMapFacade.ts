@@ -36,6 +36,9 @@ export class FakeMapFacade implements MapFacade {
   }[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
   public pointInspectionRequests: MapCoordinate[] = [];
+  public pointInspectionOptions: (
+    { readonly refreshNearbyPoiOnIdle?: boolean } | undefined
+  )[] = [];
   public nearestPoi: NearbyPoi | null = null;
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
@@ -103,9 +106,13 @@ export class FakeMapFacade implements MapFacade {
     return this.nearestPoi;
   }
 
-  public openPointInspection(coordinate: MapCoordinate): void {
+  public openPointInspection(
+    coordinate: MapCoordinate,
+    options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+  ): void {
     const inspectionCoordinate = { ...coordinate };
     this.pointInspectionRequests.push(inspectionCoordinate);
+    this.pointInspectionOptions.push(options);
     this.pointInspection = {
       status: 'open',
       coordinate: inspectionCoordinate,

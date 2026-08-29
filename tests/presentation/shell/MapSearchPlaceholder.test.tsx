@@ -91,6 +91,9 @@ describe('MapSearchPlaceholder', () => {
       longitude: 44.8271,
     });
     expect(
+      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+    ).toBe(true);
+    expect(
       screen.queryByRole('list', { name: 'Place search results' }),
     ).not.toBeInTheDocument();
 
@@ -221,6 +224,9 @@ describe('MapSearchPlaceholder', () => {
       latitude: 41.7151,
       longitude: 44.8271,
     });
+    expect(
+      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+    ).toBe(true);
   });
 
   it('does not run a global place search before the map viewport is ready', async () => {

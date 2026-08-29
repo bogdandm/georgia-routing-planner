@@ -384,7 +384,10 @@ describe('MapWorkspace', () => {
     act(() => {
       facade.setSnapshot({ lifecycle: 'ready' });
       requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
-      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 });
+      requestMapPointInspection(
+        { latitude: 41.7, longitude: 44.8 },
+        { refreshNearbyPoiOnIdle: true },
+      );
     });
 
     expect(facade.navigationRequests).toEqual([
@@ -396,6 +399,7 @@ describe('MapWorkspace', () => {
       ]);
     });
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+    expect(facade.pointInspectionOptions).toEqual([{ refreshNearbyPoiOnIdle: true }]);
   });
 
   it('holds point-inspection commands until the map is ready', async () => {

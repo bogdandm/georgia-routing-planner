@@ -460,14 +460,15 @@ imagery starts empty unless an explicit share URL requests a scene.
 - The 2D/3D selector is a separate control group immediately below the compass stack.
 - Clicking the map opens an anchored, accessible point-inspection popup. Selecting a
   place-search result opens the same popup immediately while its destination navigation
-  begins, with formatted coordinates, terrain elevation, and the nearest supported named
-  OSM map feature in the currently loaded vector data. Selection has no fixed distance
-  cutoff; the geodesic distance remains visible so the user can judge relevance.
-  Supported feature sources include places, peaks, and points of interest. Named results
-  include direct English Wikipedia article and Google Search links that open in a new
-  tab. Its bottom actions copy the existing flat 2D point-link schema or open the
-  existing marker editor to create a marker. For native map clicks, while any part of
-  that popup intersects the map viewport, the next map click only closes it; a
+  begins. Coordinates and terrain elevation load without waiting for navigation; nearby
+  map-feature lookup remains in its loading state until the destination map data becomes
+  idle, preventing features from the previous viewport from appearing. Selection has no
+  fixed distance cutoff; the geodesic distance remains visible so the user can judge
+  relevance. Supported feature sources include places, peaks, and points of interest.
+  Named results include direct English Wikipedia article and Google Search links that
+  open in a new tab. Its bottom actions copy the existing flat 2D point-link schema or
+  open the existing marker editor to create a marker. For native map clicks, while any
+  part of that popup intersects the map viewport, the next map click only closes it; a
   subsequent click opens a new inspection. If camera movement puts the popup entirely
   outside the viewport, the next native click immediately replaces it.
 - Attribution remains visible in every feature section and terrain mode.

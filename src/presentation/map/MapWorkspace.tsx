@@ -404,7 +404,9 @@ export function MapWorkspace({
 
   useEffect(() => {
     if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
-    facade.openPointInspection(pointInspectionCommand.coordinate);
+    facade.openPointInspection(pointInspectionCommand.coordinate, {
+      refreshNearbyPoiOnIdle: pointInspectionCommand.refreshNearbyPoiOnIdle,
+    });
     consumeMapPointInspectionCommand(pointInspectionCommand.id);
   }, [facade, pointInspectionCommand, snapshot.lifecycle]);
 

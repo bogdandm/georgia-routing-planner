@@ -1025,6 +1025,97 @@ describe('MapLibreFacade', () => {
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
   });
 
+  it('opens immediately and refreshes nearby features after search navigation idles', () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    nativeMap.terrainElevation = 421;
+    nativeMap.addSource('basemap-vector', { type: 'vector' });
+    nativeMap.sourceFeatures.set('poi', [
+      {
+        type: 'Feature',
+        id: 'stale-feature',
+        geometry: { type: 'Point', coordinates: [41.65, 41.64] },
+        properties: { name: 'Stale Batumi feature', class: 'town' },
+        source: 'basemap-vector',
+        sourceLayer: 'poi',
+        state: {},
+        layer: { id: 'basemap-poi', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      {
+        terrain: provider.value.terrain,
+        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+        sourceLayers: {
+          pois: 'poi',
+          peaks: 'mountain_peak',
+          places: 'place',
+          waterNames: 'water_name',
+        },
+        requestTimeoutMs: 100,
+        equivalentErrorWindowMs: 10_000,
+      },
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    facade.openPointInspection(
+      { longitude: 44.80145, latitude: 41.69346 },
+      { refreshNearbyPoiOnIdle: true },
+    );
+
+    expect(popup.show).toHaveBeenCalled();
+    expect(facade.getPointInspection()).toMatchObject({
+      status: 'open',
+      coordinate: { longitude: 44.80145, latitude: 41.69346 },
+      elevation: {
+        status: 'available',
+        meters: 421 / provider.value.terrain.exaggeration,
+      },
+      nearbyPoi: { status: 'loading' },
+    });
+
+    nativeMap.sourceFeatures.set('poi', [
+      {
+        type: 'Feature',
+        id: 'destination-feature',
+        geometry: { type: 'Point', coordinates: [44.8015, 41.6935] },
+        properties: { name: 'Destination Tbilisi feature', class: 'town' },
+        source: 'basemap-vector',
+        sourceLayer: 'poi',
+        state: {},
+        layer: { id: 'basemap-poi', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    nativeMap.fire('idle');
+
+    expect(facade.getPointInspection()).toMatchObject({
+      elevation: {
+        status: 'available',
+        meters: 421 / provider.value.terrain.exaggeration,
+      },
+      nearbyPoi: {
+        status: 'found',
+        poi: { name: 'Destination Tbilisi feature' },
+      },
+    });
+  });
+
   it('closes an open inspection on the next map click and opens another on the following click', async () => {
     const services = createTestServices();
     const provider = services.mapProviderConfiguration;

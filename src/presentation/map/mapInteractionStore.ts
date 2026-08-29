@@ -25,6 +25,7 @@ interface MapFitBoundsCommand {
 interface MapPointInspectionCommand {
   readonly id: number;
   readonly coordinate: MapCoordinate;
+  readonly refreshNearbyPoiOnIdle: boolean;
 }
 
 interface SatelliteSearchRequest {
@@ -102,12 +103,16 @@ export function consumeMapFitBoundsCommand(commandId: number): void {
   mapInteractionStore.setState({ fitBoundsCommand: null });
 }
 
-export function requestMapPointInspection(coordinate: MapCoordinate): void {
+export function requestMapPointInspection(
+  coordinate: MapCoordinate,
+  options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+): void {
   nextCommandId += 1;
   mapInteractionStore.setState({
     pointInspectionCommand: {
       id: nextCommandId,
       coordinate: { ...coordinate },
+      refreshNearbyPoiOnIdle: options?.refreshNearbyPoiOnIdle ?? false,
     },
   });
 }

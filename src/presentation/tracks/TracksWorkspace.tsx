@@ -3091,6 +3091,11 @@ type ShareMenuState =
   | { readonly kind: 'enabled'; readonly token: string }
   | { readonly kind: 'error' };
 
+interface TrackShareMenuState {
+  readonly contentHash: string | null;
+  readonly state: ShareMenuState;
+}
+
 function shareMutationErrorMessage(error: unknown): string {
   if (
     error instanceof TrackShareError &&
@@ -3144,8 +3149,9 @@ export function TrackDetailsPane({
     getUserSnapshot,
     getUserSnapshot,
   );
-  const [shareMenuState, setShareMenuState] = useState<ShareMenuState>({
-    kind: 'disabled',
+  const [shareMenuState, setShareMenuState] = useState<TrackShareMenuState>({
+    contentHash: null,
+    state: { kind: 'disabled' },
   });
   const [shareNotice, setShareNotice] = useState<ShareNotice | null>(null);
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
@@ -3162,6 +3168,13 @@ export function TrackDetailsPane({
   const renameInputRef = useRef<HTMLInputElement>(null);
   const shareContentHash =
     active?.kind === 'saved' ? (active.summary.contentHash ?? null) : null;
+  const currentShareMenuState = useMemo(
+    () =>
+      shareMenuState.contentHash === shareContentHash
+        ? shareMenuState.state
+        : { kind: 'disabled' as const },
+    [shareContentHash, shareMenuState],
+  );
   const shareRequest = useRef<AbortController | null>(null);
   const shareOperationGeneration = useRef(0);
   const beginShareOperation = useCallback(() => {
@@ -3188,18 +3201,19 @@ export function TrackDetailsPane({
       return;
     }
     const { controller, generation } = beginShareOperation();
-    setShareMenuState({ kind: 'loading' });
+    setShareMenuState({ contentHash, state: { kind: 'loading' } });
     try {
       const status = await service.status(contentHash, controller.signal);
       if (!shareOperationIsCurrent(controller, generation)) return;
-      setShareMenuState(
-        status.enabled
+      setShareMenuState({
+        contentHash,
+        state: status.enabled
           ? { kind: 'enabled', token: status.token }
           : { kind: 'disabled' },
-      );
+      });
     } catch {
       if (!shareOperationIsCurrent(controller, generation)) return;
-      setShareMenuState({ kind: 'error' });
+      setShareMenuState({ contentHash, state: { kind: 'error' } });
     } finally {
       if (shareOperationIsCurrent(controller, generation)) {
         shareRequest.current = null;
@@ -3239,28 +3253,32 @@ export function TrackDetailsPane({
       service === null ||
       contentHash === null ||
       userSnapshot.status !== 'signed-in' ||
-      (shareMenuState.kind !== 'disabled' && shareMenuState.kind !== 'enabled')
+      (currentShareMenuState.kind !== 'disabled' &&
+        currentShareMenuState.kind !== 'enabled')
     ) {
       return;
     }
-    const previousState = shareMenuState;
+    const previousState = currentShareMenuState;
     const { controller, generation } = beginShareOperation();
-    setShareMenuState({ kind: 'loading' });
+    setShareMenuState({ contentHash, state: { kind: 'loading' } });
     try {
       if (previousState.kind === 'disabled') {
         const enabled = await service.enable(contentHash, controller.signal);
         if (!shareOperationIsCurrent(controller, generation)) return;
-        setShareMenuState({ kind: 'enabled', token: enabled.token });
+        setShareMenuState({
+          contentHash,
+          state: { kind: 'enabled', token: enabled.token },
+        });
         await copyShareLink(enabled.token);
         return;
       }
       await service.disable(contentHash, controller.signal);
       if (!shareOperationIsCurrent(controller, generation)) return;
-      setShareMenuState({ kind: 'disabled' });
+      setShareMenuState({ contentHash, state: { kind: 'disabled' } });
       setShareNotice({ contentHash, message: 'Sharing disabled.' });
     } catch (error) {
       if (!shareOperationIsCurrent(controller, generation)) return;
-      setShareMenuState(previousState);
+      setShareMenuState({ contentHash, state: previousState });
       setShareNotice({
         contentHash,
         message: shareMutationErrorMessage(error),
@@ -3274,7 +3292,7 @@ export function TrackDetailsPane({
     beginShareOperation,
     copyShareLink,
     shareContentHash,
-    shareMenuState,
+    currentShareMenuState,
     shareOperationIsCurrent,
     trackShares,
     userSnapshot.status,
@@ -3740,10 +3758,10 @@ export function TrackDetailsPane({
                   <>
                     <MenuItem
                       role="menuitemcheckbox"
-                      aria-checked={shareMenuState.kind === 'enabled'}
+                      aria-checked={currentShareMenuState.kind === 'enabled'}
                       disabled={
-                        shareMenuState.kind !== 'disabled' &&
-                        shareMenuState.kind !== 'enabled'
+                        currentShareMenuState.kind !== 'disabled' &&
+                        currentShareMenuState.kind !== 'enabled'
                       }
                       onClick={() => {
                         setActionMenuAnchor(null);
@@ -3756,7 +3774,7 @@ export function TrackDetailsPane({
                         Share
                       </Stack>
                       <Switch
-                        checked={shareMenuState.kind === 'enabled'}
+                        checked={currentShareMenuState.kind === 'enabled'}
                         slotProps={{
                           input: {
                             'aria-label': 'Share track publicly',
@@ -3768,18 +3786,18 @@ export function TrackDetailsPane({
                         sx={{ pointerEvents: 'none' }}
                       />
                     </MenuItem>
-                    {shareMenuState.kind === 'enabled' ? (
+                    {currentShareMenuState.kind === 'enabled' ? (
                       <MenuItem
                         onClick={() => {
                           setActionMenuAnchor(null);
-                          void copyShareLink(shareMenuState.token);
+                          void copyShareLink(currentShareMenuState.token);
                         }}
                       >
                         <ContentCopyOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
                         Copy share link
                       </MenuItem>
                     ) : null}
-                    {shareMenuState.kind === 'error' ? (
+                    {currentShareMenuState.kind === 'error' ? (
                       <MenuItem
                         onClick={() => {
                           void loadShareStatus();

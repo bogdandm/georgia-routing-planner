@@ -4,6 +4,12 @@ import type { MapPointInspection } from '@/presentation/map/mapTypes';
 
 type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 
+export interface PointInspectorActions {
+  readonly onClose: () => void;
+  readonly onCopyLink?: (inspection: OpenMapPointInspection) => void;
+  readonly onCreateMarker?: (inspection: OpenMapPointInspection) => void;
+}
+
 const coordinateFormatter = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 5,
   maximumFractionDigits: 5,
@@ -89,7 +95,7 @@ function nearbyFeatureText(inspection: OpenMapPointInspection): string {
 export function renderPointInspectorContent(
   container: HTMLElement,
   inspection: OpenMapPointInspection,
-  onClose: () => void,
+  actions: PointInspectorActions,
 ): void {
   const restoreCloseFocus = container.contains(document.activeElement);
   container.replaceChildren();
@@ -103,7 +109,7 @@ export function renderPointInspectorContent(
   closeButton.className = 'map-point-inspector__close';
   closeButton.setAttribute('aria-label', 'Close map point details');
   closeButton.textContent = '×';
-  closeButton.addEventListener('click', onClose, { once: true });
+  closeButton.addEventListener('click', actions.onClose, { once: true });
   header.append(title, closeButton);
   container.append(header);
   appendLabelValue(
@@ -123,6 +129,28 @@ export function renderPointInspectorContent(
   ) {
     appendFeatureLinks(nearbyFeature, inspection.nearbyPoi.poi.name);
   }
+  if (actions.onCopyLink !== undefined && actions.onCreateMarker !== undefined) {
+    const actionRow = document.createElement('div');
+    actionRow.className = 'map-point-inspector__actions';
+    const copyLinkButton = document.createElement('button');
+    copyLinkButton.type = 'button';
+    copyLinkButton.className =
+      'map-point-inspector__action map-point-inspector__action--outlined';
+    copyLinkButton.textContent = 'Copy link';
+    copyLinkButton.addEventListener('click', () => {
+      actions.onCopyLink?.(inspection);
+    });
+    const createMarkerButton = document.createElement('button');
+    createMarkerButton.type = 'button';
+    createMarkerButton.className =
+      'map-point-inspector__action map-point-inspector__action--contained';
+    createMarkerButton.textContent = 'Create marker';
+    createMarkerButton.addEventListener('click', () => {
+      actions.onCreateMarker?.(inspection);
+    });
+    actionRow.append(copyLinkButton, createMarkerButton);
+    container.append(actionRow);
+  }
   if (restoreCloseFocus) closeButton.focus();
 }
 
@@ -134,7 +162,7 @@ export class MapLibrePointInspector implements PointInspectorPopup {
   readonly #marker: Marker;
   #map: MapLibreMap | null = null;
 
-  public constructor(private readonly onClose: () => void) {
+  public constructor(private readonly actions: PointInspectorActions) {
     this.#content.className = 'map-point-inspector__content';
     this.#content.setAttribute('role', 'dialog');
     this.#content.setAttribute('aria-labelledby', 'map-point-inspector-title');
@@ -172,7 +200,7 @@ export class MapLibrePointInspector implements PointInspectorPopup {
   public show(inspection: OpenMapPointInspection): void {
     const map = this.#map;
     if (map === null) return;
-    renderPointInspectorContent(this.#content, inspection, this.onClose);
+    renderPointInspectorContent(this.#content, inspection, this.actions);
     const lngLat: [number, number] = [
       inspection.coordinate.longitude,
       inspection.coordinate.latitude,

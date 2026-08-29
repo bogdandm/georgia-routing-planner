@@ -24,11 +24,12 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:coverage": "vitest run --config vitest.coverage.config.ts --coverage",
-    "supabase:functions:check": "deno check --config supabase/functions/deno.json supabase/functions/track-sync/index.ts supabase/tests/functions/track-sync/index.test.ts",
-    "supabase:functions:test": "deno test --config supabase/functions/deno.json --no-prompt supabase/tests/functions/track-sync/index.test.ts",
+    "supabase:functions:check": "deno check --config supabase/functions/deno.json supabase/functions/track-sync/index.ts supabase/functions/track-share/index.ts supabase/tests/functions/track-sync/index.test.ts supabase/tests/functions/track-share/index.test.ts",
+    "supabase:functions:test": "deno test --config supabase/functions/deno.json --no-prompt --allow-env supabase/tests/functions/track-sync/index.test.ts supabase/tests/functions/track-share/index.test.ts",
     "supabase:db:start": "supabase start",
     "supabase:db:reset": "supabase db reset",
     "supabase:db:test": "supabase test db supabase/tests/database/marker_sync.test.sql",
+    "supabase:database:test": "tsx tools/supabase/runDatabaseTests.ts",
     "supabase:db:stop": "supabase stop",
     "e2e": "tsx tools/e2e/runPlaywright.ts",
     "benchmark:terrarium-dem": "tsx tools/benchmarks/terrariumDemFilterBenchmark.ts",
@@ -37,7 +38,7 @@
     "repo:audit": "tsx tools/repository/auditRepository.ts",
     "build:app": "vite build",
     "build": "pnpm typecheck && pnpm build:app",
-    "check": "pnpm supabase:functions:check && pnpm supabase:functions:test && pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm build"
+    "check": "pnpm supabase:database:test && pnpm supabase:functions:check && pnpm supabase:functions:test && pnpm repo:audit && pnpm format:check && pnpm lint && pnpm test:coverage && pnpm build"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -55,6 +56,7 @@
     "@turf/point-to-line-distance": "7.3.5",
     "@waysidemapping/pinhead": "15.25.0",
     "dexie": "4.4.4",
+    "fflate": "0.8.3",
     "geotiff": "3.0.5",
     "ky": "2.0.2",
     "maplibre-contour": "0.0.5",

@@ -52,6 +52,9 @@ importers:
       dexie:
         specifier: 4.4.4
         version: 4.4.4
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       geotiff:
         specifier: 3.0.5
         version: 3.0.5
@@ -2738,6 +2741,12 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution:
+      {
+        integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==,
+      }
 
   file-entry-cache@8.0.0:
     resolution:
@@ -6047,6 +6056,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
       picomatch: 4.0.5
+
+  fflate@0.8.3: {}
 
   file-entry-cache@8.0.0:
     dependencies:

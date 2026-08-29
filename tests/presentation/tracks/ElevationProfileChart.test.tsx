@@ -402,6 +402,117 @@ describe('ElevationProfileChart', () => {
     expect(onSegmentHoverChange).toHaveBeenLastCalledWith(null);
   });
 
+  it('smooths only the hover grade and keeps its indicator direction aligned', async () => {
+    const localGradePcts = [5, 5, 50, 5, 5];
+    const smoothingProfile: ElevationProfile = {
+      points: localGradePcts.map((localGradePct, sampleIndex) => ({
+        sampleIndex,
+        coordinate: [44 + sampleIndex / 100, 42],
+        distanceMeters: sampleIndex * 50,
+        rawElevationMeters: 1_000 + sampleIndex,
+        elevationMeters: 1_000 + sampleIndex,
+        trendElevationMeters: 1_000 + sampleIndex,
+        localGradePct,
+        sourceSegmentIndex: 0,
+      })),
+      segments: [
+        {
+          startSampleIndex: 0,
+          endSampleIndex: 4,
+          startDistanceMeters: 0,
+          endDistanceMeters: 200,
+          type: 'climb',
+          distanceMeters: 200,
+          netElevationChangeMeters: 4,
+          ascentMeters: 4,
+          descentMeters: 0,
+          averageGradePct: 2,
+          gradeSubsegments: [],
+        },
+      ],
+      gradeSubsegments: [],
+      minimumMeters: 1_000,
+      maximumMeters: 1_004,
+      algorithmVersion: 3,
+    };
+    const onActivePointChange = vi.fn();
+    const { unmount } = renderElevationProfileChart({
+      profile: smoothingProfile,
+      onActivePointChange,
+    });
+
+    const positiveChartSurface = screen
+      .getByRole('img', {
+        name: 'Elevation profile from 1000 to 1004 metres',
+      })
+      .querySelector('svg');
+    if (positiveChartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+
+    fireEvent.mouseEnter(positiveChartSurface, { clientX: 210, clientY: 80 });
+    fireEvent.mouseMove(positiveChartSurface, { clientX: 210, clientY: 80 });
+
+    const positiveCentralGrade = await screen.findByText('+20%');
+    expect(onActivePointChange).toHaveBeenLastCalledWith(smoothingProfile.points[2]);
+    expect(positiveCentralGrade.parentElement?.querySelector('svg')).not.toHaveStyle({
+      transform: 'rotate(180deg)',
+    });
+
+    fireEvent.mouseMove(positiveChartSurface, { clientX: 300, clientY: 80 });
+
+    const positiveRightGrade = await screen.findByText('+16%');
+    expect(onActivePointChange).toHaveBeenLastCalledWith(smoothingProfile.points[3]);
+    expect(positiveRightGrade.parentElement?.querySelector('svg')).not.toHaveStyle({
+      transform: 'rotate(180deg)',
+    });
+
+    unmount();
+
+    const negativeProfile: ElevationProfile = {
+      ...smoothingProfile,
+      points: smoothingProfile.points.map((point) => ({
+        ...point,
+        localGradePct: -point.localGradePct,
+      })),
+    };
+    const onNegativeActivePointChange = vi.fn();
+    renderElevationProfileChart({
+      profile: negativeProfile,
+      onActivePointChange: onNegativeActivePointChange,
+    });
+
+    const negativeChartSurface = screen
+      .getByRole('img', {
+        name: 'Elevation profile from 1000 to 1004 metres',
+      })
+      .querySelector('svg');
+    if (negativeChartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+
+    fireEvent.mouseEnter(negativeChartSurface, { clientX: 210, clientY: 80 });
+    fireEvent.mouseMove(negativeChartSurface, { clientX: 210, clientY: 80 });
+
+    const negativeCentralGrade = await screen.findByText('-20%');
+    expect(onNegativeActivePointChange).toHaveBeenLastCalledWith(
+      negativeProfile.points[2],
+    );
+    expect(negativeCentralGrade.parentElement?.querySelector('svg')).toHaveStyle({
+      transform: 'rotate(180deg)',
+    });
+
+    fireEvent.mouseMove(negativeChartSurface, { clientX: 300, clientY: 80 });
+
+    const negativeRightGrade = await screen.findByText('-16%');
+    expect(onNegativeActivePointChange).toHaveBeenLastCalledWith(
+      negativeProfile.points[3],
+    );
+    expect(negativeRightGrade.parentElement?.querySelector('svg')).toHaveStyle({
+      transform: 'rotate(180deg)',
+    });
+  });
+
   it('clears a selected macro range when that chart range is clicked again', async () => {
     const onSegmentSelectionChange = vi.fn();
     observedWidth = 420;

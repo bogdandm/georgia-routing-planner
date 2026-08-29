@@ -1,3 +1,4 @@
+import { strFromU8, unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -5,9 +6,11 @@ import {
   type LocalTrackContent,
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
+import { parseGpx } from '@/domain/tracks/gpx';
 import {
   exportTrackAsGpx,
   exportTrackAsKml,
+  exportTracksAsZip,
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
 
@@ -70,35 +73,112 @@ describe('track export', () => {
     expect(kml).toContain('44,42,100 45,43,110');
   });
 
-  it('exports generated routes as one ordered GPX route', () => {
+  it('exports generated routes as segmented GPX tracks for downstream compatibility', () => {
     const routeSummary: LocalTrackSummary = {
       ...summary,
       geometryKind: 'route',
       sourceFilename: 'Planned route.gpx',
       sourceFormat: 'gpx',
-      pointCount: 3,
-      segmentCount: 1,
+      pointCount: 4,
+      segmentCount: 2,
     };
     const routeContent: LocalTrackContent = {
       ...content,
       trackPoints: [
-        content.trackPoints[0] ?? [],
-        [{ coordinate: [46, 44], elevationMeters: 120 }],
+        [
+          { coordinate: [44, 42], elevationMeters: 100 },
+          { coordinate: [45, 43], elevationMeters: 110 },
+        ],
+        [
+          { coordinate: [46, 44], elevationMeters: 120 },
+          { coordinate: [47, 45], elevationMeters: 130 },
+        ],
       ],
     };
 
     const gpx = exportTrackAsGpx(routeSummary, routeContent);
+    const parsed = parseGpx(gpx);
 
-    expect(gpx).toContain('<rte><name>Ridge &lt;loop&gt;</name>');
-    expect(gpx).toContain('<rtept lat="42" lon="44">');
-    expect(gpx).not.toContain('<trk>');
-    expect(gpx).not.toContain('<trkseg>');
-    expect(gpx).not.toContain('<trkpt');
+    expect(gpx).toContain('<trk><name>Ridge &lt;loop&gt;</name>');
+    expect(gpx.match(/<trk>/g)).toHaveLength(1);
+    expect(gpx.match(/<trkseg>/g)).toHaveLength(2);
+    expect(gpx).not.toContain('<rte>');
+    expect(gpx).not.toContain('<rtept');
     expect(gpx.indexOf('lon="44"')).toBeLessThan(gpx.indexOf('lon="45"'));
     expect(gpx.indexOf('lon="45"')).toBeLessThan(gpx.indexOf('lon="46"'));
+    expect(gpx.indexOf('lon="46"')).toBeLessThan(gpx.indexOf('lon="47"'));
+    expect(parsed.geometryKind).toBe('track');
+    expect(
+      parsed.segments.map((segment) => segment.points.map((point) => point.coordinate)),
+    ).toEqual([
+      [
+        [44, 42],
+        [45, 43],
+      ],
+      [
+        [46, 44],
+        [47, 45],
+      ],
+    ]);
   });
 
   it('produces filesystem-safe names', () => {
     expect(safeTrackFilename('A/B:*?', 'gpx')).toBe('A-B---.gpx');
+  });
+
+  it('exports ordered GPX members with deterministic collision suffixes', () => {
+    const tracks: readonly {
+      readonly summary: LocalTrackSummary;
+      readonly content: LocalTrackContent;
+    }[] = [
+      {
+        summary: { ...summary, id: 'local:name-1', name: 'Name' },
+        content: {
+          ...content,
+          trackId: 'local:name-1',
+          trackPoints: [[{ coordinate: [44, 42], elevationMeters: 100 }]],
+        },
+      },
+      {
+        summary: { ...summary, id: 'local:name-2', name: 'Name (2)' },
+        content: {
+          ...content,
+          trackId: 'local:name-2',
+          trackPoints: [[{ coordinate: [45, 43], elevationMeters: 110 }]],
+        },
+      },
+      {
+        summary: { ...summary, id: 'local:name-3', name: 'Name' },
+        content: {
+          ...content,
+          trackId: 'local:name-3',
+          trackPoints: [[{ coordinate: [46, 44], elevationMeters: 120 }]],
+        },
+      },
+    ];
+
+    const bytes = exportTracksAsZip(tracks);
+    const members = unzipSync(bytes);
+
+    expect(Object.keys(members)).toEqual(['Name.gpx', 'Name (2).gpx', 'Name (3).gpx']);
+    expect(strFromU8(members['Name.gpx'] ?? new Uint8Array())).toContain(
+      '<name>Name</name>',
+    );
+    expect(strFromU8(members['Name.gpx'] ?? new Uint8Array())).toContain(
+      'lat="42" lon="44"',
+    );
+    expect(strFromU8(members['Name.gpx'] ?? new Uint8Array())).not.toContain(
+      'lat="43" lon="45"',
+    );
+    expect(strFromU8(members['Name (2).gpx'] ?? new Uint8Array())).toContain(
+      '<name>Name (2)</name>',
+    );
+    expect(strFromU8(members['Name (2).gpx'] ?? new Uint8Array())).toContain(
+      'lat="43" lon="45"',
+    );
+    expect(strFromU8(members['Name (3).gpx'] ?? new Uint8Array())).toContain(
+      'lat="44" lon="46"',
+    );
+    expect(exportTracksAsZip(tracks)).toEqual(bytes);
   });
 });

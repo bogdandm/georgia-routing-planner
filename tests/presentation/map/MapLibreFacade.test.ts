@@ -30,6 +30,7 @@ class FakeNativeMap {
   public repaintCalls = 0;
   public terrainElevation: number | null = null;
   public initialTerrain: unknown = null;
+  public moving = false;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -59,6 +60,10 @@ class FakeNativeMap {
 
   public loaded(): boolean {
     return false;
+  }
+
+  public isMoving(): boolean {
+    return this.moving;
   }
 
   public getStyle() {
@@ -184,6 +189,7 @@ class FakeNativeMap {
 
   public fire(type: string, event?: unknown): void {
     if (type === 'style.load') this.styleReady = true;
+    if (type === 'moveend') this.moving = false;
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
     }
@@ -928,6 +934,186 @@ describe('MapLibreFacade', () => {
     expect(
       services.logger.getEvents().filter((event) => event.name === 'map.source.failed'),
     ).toHaveLength(0);
+  });
+
+  it('opens a public coordinate inspection through the native loading lifecycle', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const samples: ((value: { status: 'available'; meters: number }) => void)[] = [];
+    const elevationProvider = {
+      sample: () =>
+        new Promise<{ status: 'available'; meters: number }>((resolve) => {
+          samples.push(resolve);
+        }),
+      sampleMany: () => Promise.resolve([]),
+    };
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      elevationProvider,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+
+    expect(popup.show).toHaveBeenNthCalledWith(1, {
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'loading' },
+    });
+    expect(popup.show).toHaveBeenNthCalledWith(2, {
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'none' },
+    });
+
+    samples[0]?.({ status: 'available', meters: 640 });
+    await Promise.resolve();
+
+    expect(popup.show).toHaveBeenNthCalledWith(3, {
+      status: 'open',
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      elevation: { status: 'available', meters: 640 },
+      nearbyPoi: { status: 'none' },
+    });
+  });
+
+  it('rejects public coordinate inspections outside the default valid map state', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.openPointInspection({ longitude: Number.NaN, latitude: 41.7 });
+    facade.openPointInspection({ longitude: 181, latitude: 41.7 });
+    facade.openPointInspection({ longitude: 44.8, latitude: -91 });
+    facade.setInteractionMode('marker-placement');
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+    facade.setInteractionMode('route-planning');
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+
+    expect(popup.show).not.toHaveBeenCalled();
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
+  it('opens immediately and refreshes nearby features after search navigation idles', () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    nativeMap.terrainElevation = 421;
+    nativeMap.addSource('basemap-vector', { type: 'vector' });
+    nativeMap.sourceFeatures.set('poi', [
+      {
+        type: 'Feature',
+        id: 'stale-feature',
+        geometry: { type: 'Point', coordinates: [41.65, 41.64] },
+        properties: { name: 'Stale Batumi feature', class: 'town' },
+        source: 'basemap-vector',
+        sourceLayer: 'poi',
+        state: {},
+        layer: { id: 'basemap-poi', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    const popup = {
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn(),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      {
+        terrain: provider.value.terrain,
+        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+        sourceLayers: {
+          pois: 'poi',
+          peaks: 'mountain_peak',
+          places: 'place',
+          waterNames: 'water_name',
+        },
+        requestTimeoutMs: 100,
+        equivalentErrorWindowMs: 10_000,
+      },
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    facade.openPointInspection(
+      { longitude: 44.80145, latitude: 41.69346 },
+      { refreshNearbyPoiOnIdle: true },
+    );
+
+    expect(popup.show).toHaveBeenCalled();
+    expect(facade.getPointInspection()).toMatchObject({
+      status: 'open',
+      coordinate: { longitude: 44.80145, latitude: 41.69346 },
+      elevation: {
+        status: 'available',
+        meters: 421 / provider.value.terrain.exaggeration,
+      },
+      nearbyPoi: { status: 'loading' },
+    });
+
+    nativeMap.sourceFeatures.set('poi', [
+      {
+        type: 'Feature',
+        id: 'destination-feature',
+        geometry: { type: 'Point', coordinates: [44.8015, 41.6935] },
+        properties: { name: 'Destination Tbilisi feature', class: 'town' },
+        source: 'basemap-vector',
+        sourceLayer: 'poi',
+        state: {},
+        layer: { id: 'basemap-poi', type: 'symbol' },
+      } as unknown as GeoJSONFeature,
+    ]);
+    nativeMap.fire('idle');
+
+    expect(facade.getPointInspection()).toMatchObject({
+      elevation: {
+        status: 'available',
+        meters: 421 / provider.value.terrain.exaggeration,
+      },
+      nearbyPoi: {
+        status: 'found',
+        poi: { name: 'Destination Tbilisi feature' },
+      },
+    });
   });
 
   it('closes an open inspection on the next map click and opens another on the following click', async () => {

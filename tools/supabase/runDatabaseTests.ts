@@ -16,8 +16,9 @@ try {
   if (startedByRunner) {
     execFileSync('supabase', ['start'], { stdio: 'inherit' });
     startedStack = true;
+  } else {
+    execFileSync('supabase', ['db', 'reset'], { stdio: 'inherit' });
   }
-  execFileSync('supabase', ['db', 'reset'], { stdio: 'inherit' });
   execFileSync(
     'supabase',
     ['test', 'db', 'supabase/tests/database/track_share.test.sql'],

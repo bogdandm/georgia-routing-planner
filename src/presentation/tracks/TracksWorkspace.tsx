@@ -3764,7 +3764,6 @@ export function TrackDetailsPane({
                         currentShareMenuState.kind !== 'enabled'
                       }
                       onClick={() => {
-                        setActionMenuAnchor(null);
                         void updateShare();
                       }}
                       sx={{ gap: 2, justifyContent: 'space-between' }}
@@ -3773,18 +3772,35 @@ export function TrackDetailsPane({
                         <ShareOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
                         Share
                       </Stack>
-                      <Switch
-                        checked={currentShareMenuState.kind === 'enabled'}
-                        slotProps={{
-                          input: {
-                            'aria-label': 'Share track publicly',
-                            readOnly: true,
-                            tabIndex: -1,
-                          },
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 24,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
-                        size="small"
-                        sx={{ pointerEvents: 'none' }}
-                      />
+                      >
+                        {currentShareMenuState.kind === 'loading' ? (
+                          <CircularProgress
+                            aria-label="Loading sharing status"
+                            size={20}
+                          />
+                        ) : (
+                          <Switch
+                            checked={currentShareMenuState.kind === 'enabled'}
+                            slotProps={{
+                              input: {
+                                'aria-label': 'Share track publicly',
+                                readOnly: true,
+                                tabIndex: -1,
+                              },
+                            }}
+                            size="small"
+                            sx={{ pointerEvents: 'none' }}
+                          />
+                        )}
+                      </Box>
                     </MenuItem>
                     {currentShareMenuState.kind === 'enabled' ? (
                       <MenuItem
@@ -3922,7 +3938,24 @@ export function TrackDetailsPane({
           ) : null}
           {active.kind === 'preview' || active.kind === 'shared' ? (
             <>
-              <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  width: '100%',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                {active.kind === 'shared' ? (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}
+                  >
+                    Shared track
+                  </Typography>
+                ) : null}
                 <Button size="small" color="inherit" onClick={discardPreview}>
                   Discard
                 </Button>

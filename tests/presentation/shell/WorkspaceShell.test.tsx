@@ -5366,10 +5366,10 @@ describe('WorkspaceShell', () => {
       );
     });
 
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(
       await screen.findByRole('menuitem', { name: 'Copy share link' }),
     ).toBeVisible();
+    expect(screen.getByRole('menu')).toBeVisible();
     expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
       'aria-checked',
       'true',
@@ -5383,16 +5383,35 @@ describe('WorkspaceShell', () => {
       );
     });
 
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('menuitem', { name: 'Copy share link' }),
-      ).not.toBeInTheDocument();
-    });
+    expect(screen.getByRole('menu')).toBeVisible();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Copy share link' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
       'aria-checked',
       'false',
     );
+  });
+
+  it('shows a spinner instead of the Share toggle while status loads', async () => {
+    const user = userEvent.setup();
+    const statusResult = deferred<{ readonly enabled: false }>();
+    const status = vi.fn(() => statusResult.promise);
+    const { details } = await renderSavedTrackForSharing(
+      createTrackShareService({ status }),
+    );
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    const share = await screen.findByRole('menuitemcheckbox', { name: /^Share/u });
+    expect(share).toHaveAttribute('aria-disabled', 'true');
+    expect(share.querySelector('[role="progressbar"]')).not.toBeNull();
+    expect(share.querySelector('input')).toBeNull();
+
+    statusResult.resolve({ enabled: false });
+    await waitFor(() => {
+      expect(share).not.toHaveAttribute('aria-disabled', 'true');
+      expect(share.querySelector('[role="progressbar"]')).toBeNull();
+    });
   });
 
   it('public sharing stays enabled when automatic clipboard copy is denied', async () => {
@@ -5414,7 +5433,6 @@ describe('WorkspaceShell', () => {
     expect(
       await screen.findByText('Sharing is enabled, but the link could not be copied.'),
     ).toBeVisible();
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(
       await screen.findByRole('menuitem', { name: 'Copy share link' }),
     ).toBeVisible();
@@ -5438,7 +5456,6 @@ describe('WorkspaceShell', () => {
     await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
 
     expect(await screen.findByText('Sync this track before sharing.')).toBeVisible();
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
       'aria-checked',
       'false',
@@ -5471,7 +5488,6 @@ describe('WorkspaceShell', () => {
     });
     copy.resolve(undefined);
 
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     await waitFor(() => {
       expect(
         screen.queryByRole('menuitem', { name: 'Copy share link' }),
@@ -5509,6 +5525,27 @@ describe('WorkspaceShell', () => {
     expect(
       await screen.findByRole('heading', { name: 'Recipient trail' }),
     ).toBeVisible();
+    const sharedTrackLabel = screen.getByText('Shared track');
+    expect(sharedTrackLabel).toBeVisible();
+    expect(sharedTrackLabel).toHaveStyle({
+      flex: '1 1 0%',
+      textAlign: 'left',
+    });
+    expect(sharedTrackLabel.parentElement).toHaveStyle({
+      width: '100%',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+    });
+    const discard = screen.getByRole('button', { name: 'Discard' });
+    const saveCopy = screen.getByRole('button', { name: 'Save a copy' });
+    expect(
+      sharedTrackLabel.compareDocumentPosition(discard) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      sharedTrackLabel.compareDocumentPosition(saveCopy) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(resolve).toHaveBeenCalledWith(token, expect.any(AbortSignal));
     expect(await services.database.listLocalTracks()).toHaveLength(0);
     expect(

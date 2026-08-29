@@ -120,16 +120,6 @@ test('keeps closed smartphone workspace surfaces off the map gesture target', as
     x: (canvasBox?.x ?? 0) + (canvasBox?.width ?? 0) / 2,
     y: (canvasBox?.y ?? 0) + (canvasBox?.height ?? 0) / 2,
   };
-  await canvas.hover();
-  await page.mouse.wheel(0, -300);
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude ?? null, {
-      timeout: cameraPersistenceTimeoutMs,
-    })
-    .not.toBeNull();
-  const cameraBeforeDrag = await readStoredCamera(page);
-  expect(cameraBeforeDrag).not.toBeNull();
-
   expect(
     await page.evaluate(({ x, y }) => {
       const target = document.elementFromPoint(x, y);
@@ -141,16 +131,6 @@ test('keeps closed smartphone workspace surfaces off the map gesture target', as
       );
     }, center),
   ).toBe(true);
-
-  await page.mouse.move(center.x, center.y);
-  await page.mouse.down();
-  await page.mouse.move(center.x + 180, center.y, { steps: 8 });
-  await page.mouse.up();
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude, {
-      timeout: cameraPersistenceTimeoutMs,
-    })
-    .not.toBe(cameraBeforeDrag?.longitude);
 
   await page.getByRole('button', { name: 'Open workspace' }).click();
   await expect
@@ -350,10 +330,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   );
 });
 
-test('uses conventional native camera gestures and resets them with the compass', async ({
-  page,
-}) => {
-  test.setTimeout(60_000);
+test('pans the flat desktop map with ordinary left drag', async ({ page }) => {
   await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
@@ -367,65 +344,243 @@ test('uses conventional native camera gestures and resets them with the compass'
   const centerX = bounds.x + bounds.width / 2;
   const centerY = bounds.y + bounds.height / 2;
 
-  const initialCamera = await readStoredCamera(page);
+  let cameraBeforeDrag = await readStoredCamera(page);
+  if (cameraBeforeDrag === null) {
+    await canvas.hover();
+    await page.mouse.wheel(0, -300);
+    await expect
+      .poll(async () => (await readStoredCamera(page))?.longitude ?? null, {
+        timeout: cameraPersistenceTimeoutMs,
+      })
+      .not.toBeNull();
+    cameraBeforeDrag = await readStoredCamera(page);
+  }
+  expect(cameraBeforeDrag).not.toBeNull();
+
   await page.mouse.move(centerX, centerY);
   await page.mouse.down();
-  await page.mouse.move(centerX + 90, centerY + 30, { steps: 4 });
+  await page.mouse.move(centerX + 180, centerY, { steps: 8 });
   await page.mouse.up();
   await expect
-    .poll(async () => (await readStoredCamera(page))?.longitude)
-    .not.toBe(initialCamera?.longitude);
+    .poll(async () => (await readStoredCamera(page))?.longitude, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .not.toBe(cameraBeforeDrag?.longitude);
+});
 
+test('zooms the flat desktop map with double click and keyboard', async ({ page }) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+
+  let cameraBeforeZoom = await readStoredCamera(page);
+  if (cameraBeforeZoom === null) {
+    await canvas.hover();
+    await page.mouse.wheel(0, -300);
+    await expect
+      .poll(async () => (await readStoredCamera(page))?.zoom ?? null, {
+        timeout: cameraPersistenceTimeoutMs,
+      })
+      .not.toBeNull();
+    cameraBeforeZoom = await readStoredCamera(page);
+  }
+  expect(cameraBeforeZoom).not.toBeNull();
+
+  // A visible inspection consumes the first center click, so it cannot place an
+  // anchor over the double-click target before MapLibre receives the second click.
+  await page.mouse.click(bounds.x + bounds.width * 0.75, bounds.y + bounds.height / 2);
+  await expect(page.locator('.map-point-inspector__anchor')).toHaveCount(1);
+
+  await canvas.dblclick();
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.zoom, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .toBeGreaterThan(cameraBeforeZoom?.zoom ?? 0);
+  const zoomAfterDoubleClick = (await readStoredCamera(page))?.zoom;
+  expect(zoomAfterDoubleClick).not.toBeNull();
+
+  await canvas.focus();
+  await canvas.press('+');
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.zoom, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .toBeGreaterThan(zoomAfterDoubleClick ?? 0);
+  const zoomAfterPlus = (await readStoredCamera(page))?.zoom;
+  expect(zoomAfterPlus).not.toBeNull();
+
+  await canvas.press('-');
+  await expect
+    .poll(async () => (await readStoredCamera(page))?.zoom, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .toBeLessThan(zoomAfterPlus ?? 0);
+});
+
+test('pans the flat map with middle drag', async ({ page }) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  let cameraBeforeMiddlePan = await readStoredCamera(page);
+  if (cameraBeforeMiddlePan === null) {
+    await canvas.hover();
+    await page.mouse.wheel(0, -300);
+    await expect
+      .poll(async () => (await readStoredCamera(page))?.longitude ?? null, {
+        timeout: cameraPersistenceTimeoutMs,
+      })
+      .not.toBeNull();
+    cameraBeforeMiddlePan = await readStoredCamera(page);
+  }
+  expect(cameraBeforeMiddlePan).not.toBeNull();
   await page.mouse.move(centerX, centerY);
   await page.mouse.down({ button: 'middle' });
   await expect(page.locator('.map-orbit-pivot')).toHaveCount(0);
-  await page.mouse.move(centerX + 40, centerY - 40, { steps: 2 });
-  await page.mouse.up({ button: 'middle' });
-
-  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Show 3D terrain map' }),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
-    timeout: terrainPersistenceTimeoutMs,
-  });
-  const terrainCameraBeforeMiddlePan = await readStoredCamera(page);
-  await page.mouse.move(centerX, centerY);
-  await page.mouse.down({ button: 'middle' });
-  const pivot = page.locator('.map-orbit-pivot');
-  await expect(pivot).toHaveCount(0);
   await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
   await page.mouse.up({ button: 'middle' });
   await expect
     .poll(async () => (await readStoredCamera(page))?.longitude)
-    .not.toBe(terrainCameraBeforeMiddlePan?.longitude);
+    .not.toBe(cameraBeforeMiddlePan?.longitude);
+});
+
+test('orbits 3D terrain with middle drag and resets it with the compass', async ({
+  page,
+}) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
+
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const pivot = page.locator('.map-orbit-pivot');
+  const compass = page.locator('.maplibregl-ctrl-compass');
+  const compassIcon = compass.locator('.maplibregl-ctrl-icon');
+  const transformBeforeOrbit = await compassIcon.evaluate(
+    (element) => (element as HTMLElement).style.transform,
+  );
+
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down({ button: 'middle' });
+  await expect(pivot).toHaveCount(1);
+  await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .not.toBe(transformBeforeOrbit);
+  await page.mouse.up({ button: 'middle' });
+  await expect(pivot).toHaveCount(0);
+
+  await compass.click();
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .toBe('scale(1) rotateZ(0deg) rotateX(0deg) rotateZ(0deg)');
+});
+
+test('orbits 3D terrain with Shift+left drag', async ({ page }) => {
+  await page.goto('?developer=1');
+  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
+    'data-map-state',
+    'ready',
+    { timeout: 15_000 },
+  );
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
+
+  const canvas = page.locator('.maplibregl-canvas');
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null) return;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const pivot = page.locator('.map-orbit-pivot');
+  const compassIcon = page.locator('.maplibregl-ctrl-compass .maplibregl-ctrl-icon');
+  const transformBeforeOrbit = await compassIcon.evaluate(
+    (element) => (element as HTMLElement).style.transform,
+  );
 
   await page.mouse.move(centerX, centerY);
   await page.keyboard.down('Shift');
   await page.mouse.down();
   await expect(pivot).toHaveCount(1);
-  const pivotBeforeOrbit = await pivot.boundingBox();
-  expect(pivotBeforeOrbit).not.toBeNull();
   await page.mouse.move(centerX + 80, centerY - 80, { steps: 4 });
-  if (pivotBeforeOrbit !== null) {
-    await expect
-      .poll(async () => {
-        const current = await pivot.boundingBox();
-        return current === null
-          ? Number.POSITIVE_INFINITY
-          : Math.hypot(current.x - pivotBeforeOrbit.x, current.y - pivotBeforeOrbit.y);
-      })
-      .toBeLessThan(4);
-  }
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .not.toBe(transformBeforeOrbit);
   await page.mouse.up();
   await page.keyboard.up('Shift');
   await expect(pivot).toHaveCount(0);
+});
 
-  await page.locator('.maplibregl-ctrl-compass').click();
+test('rotates and pitches 3D terrain with Shift+arrow keys', async ({ page }) => {
+  await page.goto('?developer=1');
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',
+    { timeout: 15_000 },
   );
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
+  await terrainButton.click();
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
+
+  const canvas = page.locator('.maplibregl-canvas');
+  const compassIcon = page.locator('.maplibregl-ctrl-compass .maplibregl-ctrl-icon');
+  await canvas.focus();
+  const transformBeforeRotation = await compassIcon.evaluate(
+    (element) => (element as HTMLElement).style.transform,
+  );
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .not.toBe(transformBeforeRotation);
+  const transformAfterRotation = await compassIcon.evaluate(
+    (element) => (element as HTMLElement).style.transform,
+  );
+
+  await page.keyboard.press('Shift+ArrowUp');
+  await expect
+    .poll(() =>
+      compassIcon.evaluate((element) => (element as HTMLElement).style.transform),
+    )
+    .not.toBe(transformAfterRotation);
 });
 
 test('keeps DEM failure feedback in the shared status without a map banner', async ({

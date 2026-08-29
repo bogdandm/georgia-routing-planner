@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
+import type { TrackSort } from '@/domain/tracks/localTrack';
 import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
@@ -76,6 +77,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     (state) => state.elevationGradeLegendDismissed,
   );
   const markerSort = useUiStore((state) => state.markerSort);
+  const trackSort = useUiStore((state) => state.trackSort);
   const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
@@ -87,6 +89,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   );
   const setMapDebugOptions = useUiStore((state) => state.setMapDebugOptions);
   const setMarkerSort = useUiStore((state) => state.setMarkerSort);
+  const setTrackSort = useUiStore((state) => state.setTrackSort);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
@@ -136,12 +139,17 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
     string | null
   >(null);
+  const [multiTrackDetailsDismissed, setMultiTrackDetailsDismissed] = useState(false);
   const importPreparingRef = useRef(false);
+  const previousMultiTrackMode = useRef(false);
   const {
     active: activeTrack,
     activeProfile,
     elevationProgress,
     importState,
+    multiTrackMode,
+    multiTrackSelections,
+    multiTrackStatsMetrics,
     recalculationState,
     savePreview,
     setActiveName,
@@ -157,11 +165,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         : activeTrack.kind === 'route-plan'
           ? `route-plan:${activeTrack.id}`
           : `saved:${activeTrack.summary.id}`;
+  const trackDetailsKey = multiTrackMode ? 'multi-track' : activeTrackKey;
   const mobileTrackDetailsExpanded =
-    activeTrackKey !== null && mobileTrackDetailsExpandedKey === activeTrackKey;
+    trackDetailsKey !== null && mobileTrackDetailsExpandedKey === trackDetailsKey;
   const activeTrackPreparing =
-    activeTrack?.kind === 'preview' && activeTrack.preparationStatus === 'preparing';
-  const activeTrackMetrics =
+    !multiTrackMode &&
+    activeTrack?.kind === 'preview' &&
+    activeTrack.preparationStatus === 'preparing';
+  const ordinaryActiveTrackMetrics =
     activeTrack === null
       ? null
       : activeTrack.kind === 'preview'
@@ -171,8 +182,20 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         : activeTrack.kind === 'route-plan'
           ? activeTrack.metrics
           : activeTrack.summary.metrics;
+  const multiTrackDetailsExist = multiTrackMode && multiTrackSelections.length > 0;
+  const activeTrackMetrics = multiTrackMode
+    ? multiTrackStatsMetrics
+    : ordinaryActiveTrackMetrics;
+  const summaryProfile = multiTrackMode ? null : activeProfile;
   useEffect(() => {
-    if (!smartphoneViewport) return;
+    const enteredMultiTrackMode = multiTrackMode && !previousMultiTrackMode.current;
+    if (enteredMultiTrackMode || multiTrackSelections.length === 0) {
+      setMultiTrackDetailsDismissed(false);
+    }
+    previousMultiTrackMode.current = multiTrackMode;
+  }, [multiTrackMode, multiTrackSelections.length]);
+  useEffect(() => {
+    if (!smartphoneViewport || multiTrackMode) return;
     const animationFrame = window.requestAnimationFrame(() => {
       setMobileTrackDetailsExpandedKey(null);
       if (activeTrackKey !== null) setMobileWorkspaceOpen(false);
@@ -180,7 +203,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [activeTrackKey, setMobileWorkspaceOpen, smartphoneViewport]);
+  }, [activeTrackKey, multiTrackMode, setMobileWorkspaceOpen, smartphoneViewport]);
 
   useEffect(() => {
     if (!smartphoneViewport || activeTab === 'tracks') return;
@@ -216,6 +239,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       nextNavigationCollapsed: boolean,
       nextElevationGradeLegendDismissed: boolean,
       nextMarkerSort: typeof markerSort,
+      nextTrackSort: typeof trackSort,
     ): Promise<boolean> => {
       try {
         await database.saveUiPreferences({
@@ -223,6 +247,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           navigationCollapsed: nextNavigationCollapsed,
           elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
           markerSort: nextMarkerSort,
+          trackSort: nextTrackSort,
         });
         return true;
       } catch {
@@ -251,12 +276,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         value,
         elevationGradeLegendDismissed,
         markerSort,
+        trackSort,
       );
     },
     [
       developerMode,
       elevationGradeLegendDismissed,
       markerSort,
+      trackSort,
       persistUiPreferences,
       setNavigationCollapsed,
     ],
@@ -276,12 +303,19 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       navigationCollapsed,
       elevationGradeLegendDismissed,
       markerSort,
+      trackSort,
     );
   };
 
   const handleElevationGradeLegendDismissedChange = (value: boolean) => {
     setElevationGradeLegendDismissed(value);
-    void persistUiPreferences(developerMode, navigationCollapsed, value, markerSort);
+    void persistUiPreferences(
+      developerMode,
+      navigationCollapsed,
+      value,
+      markerSort,
+      trackSort,
+    );
   };
 
   const handleMarkerSortChange = async (value: MarkerSort): Promise<boolean> => {
@@ -291,9 +325,20 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       navigationCollapsed,
       elevationGradeLegendDismissed,
       value,
+      trackSort,
     );
   };
 
+  const handleTrackSortChange = async (value: TrackSort): Promise<boolean> => {
+    setTrackSort(value);
+    return persistUiPreferences(
+      developerMode,
+      navigationCollapsed,
+      elevationGradeLegendDismissed,
+      markerSort,
+      value,
+    );
+  };
   useEffect(() => {
     if (importState !== 'preparing') {
       importPreparingRef.current = false;
@@ -330,26 +375,37 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   );
 
   const handleOpenActiveTrackDetails = () => {
+    if (multiTrackDetailsExist) {
+      if (!smartphoneViewport) setMultiTrackDetailsDismissed(false);
+      return;
+    }
     if (!smartphoneViewport || activeTrackKey === null) return;
     setMobileTrackDetailsExpandedKey(activeTrackKey);
     setMobileWorkspaceOpen(true);
   };
   const auxiliaryOverlay = smartphoneViewport || auxiliaryOverlayViewport;
-  const activeTrackExists = activeTrack !== null;
-  const activeTrackOpen = activeTab === 'tracks' && activeTrackExists;
+  const trackDetailsExist = multiTrackMode
+    ? multiTrackSelections.length > 0
+    : activeTrack !== null;
+  const activeTrackOpen = activeTab === 'tracks' && trackDetailsExist;
   const trackDetailsOpen =
-    activeTrackOpen && (!smartphoneViewport || mobileTrackDetailsExpanded);
+    activeTrackOpen &&
+    (smartphoneViewport
+      ? mobileTrackDetailsExpanded
+      : !multiTrackDetailsExist ||
+        !auxiliaryOverlayViewport ||
+        !multiTrackDetailsDismissed);
   const satelliteResultsOpen = activeTab === 'satellite' && satellitePaneOpen;
   const auxiliaryOpen = trackDetailsOpen || satelliteResultsOpen;
   const mobileTrackDisclosureOpen =
     smartphoneViewport &&
-    activeTrackExists &&
+    trackDetailsExist &&
     !mobileWorkspaceOpen &&
     !mobileTrackDetailsExpanded;
   const desktopNavigationCollapsed = !smartphoneViewport && navigationCollapsed;
   const collapsedTrackSummary =
     desktopNavigationCollapsed && activeTrackMetrics !== null ? (
-      <CompactTrackSummary metrics={activeTrackMetrics} profile={activeProfile} />
+      <CompactTrackSummary metrics={activeTrackMetrics} profile={summaryProfile} />
     ) : null;
 
   return (
@@ -411,12 +467,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           bottom: 'max(12px, env(safe-area-inset-bottom))',
           left: 12,
           display: mobileTrackDisclosureOpen ? 'block' : 'none',
-          height: activeTrack?.kind === 'preview' ? 120 : 56,
+          height: !multiTrackDetailsExist && activeTrack?.kind === 'preview' ? 120 : 56,
           bgcolor: 'background.paper',
           overflow: 'hidden',
         }}
       >
-        {activeTrack?.kind === 'preview' ? (
+        {!multiTrackDetailsExist && activeTrack?.kind === 'preview' ? (
           <Stack
             direction="row"
             spacing={1}
@@ -449,13 +505,15 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         ) : null}
         <ButtonBase
           aria-label={
-            activeTrack?.kind === 'preview'
-              ? 'Expand unsaved track details'
-              : 'Expand track details'
+            multiTrackDetailsExist
+              ? 'Expand multiple track details'
+              : activeTrack?.kind === 'preview'
+                ? 'Expand unsaved track details'
+                : 'Expand track details'
           }
           onClick={() => {
-            if (activeTrackKey !== null) {
-              setMobileTrackDetailsExpandedKey(activeTrackKey);
+            if (trackDetailsKey !== null) {
+              setMobileTrackDetailsExpandedKey(trackDetailsKey);
             }
             if (activeTab !== 'tracks') handleSectionChange('tracks');
             setMobileWorkspaceOpen(true);
@@ -525,7 +583,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             <CompactTrackSummary
               showExpandIndicator
               metrics={activeTrackMetrics}
-              profile={activeProfile}
+              profile={summaryProfile}
             />
           ) : null}
         </ButtonBase>
@@ -663,6 +721,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             auxiliaryOverlay={auxiliaryOverlay}
             fullWidth={smartphoneViewport}
             onMarkerSortChange={handleMarkerSortChange}
+            onTrackSortChange={handleTrackSortChange}
             onSatellitePaneOpenChange={setSatellitePaneOpen}
             onOpenActiveTrackDetails={handleOpenActiveTrackDetails}
             onShowMap={() => {
@@ -713,6 +772,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                     : 'adjacent'
               }
               onCollapse={() => {
+                if (multiTrackDetailsExist && !smartphoneViewport) {
+                  setMultiTrackDetailsDismissed(true);
+                  return;
+                }
                 setMobileTrackDetailsExpandedKey(null);
                 setMobileWorkspaceOpen(false);
               }}

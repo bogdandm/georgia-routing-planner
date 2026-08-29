@@ -26,6 +26,10 @@ export interface MapFacade {
   getViewportSnapshot(): MapViewportSnapshot | null;
   getPointInspection(): MapPointInspection;
   getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null;
+  openPointInspection(
+    coordinate: MapCoordinate,
+    options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+  ): void;
   closePointInspection(): void;
 
   /** Moves the native camera without exposing MapLibre to callers. */

@@ -41,8 +41,11 @@ import {
   formatTrackGrade,
 } from '@/presentation/tracks/trackFormatters';
 
+const HOVER_GRADE_SMOOTHING_RADIUS_METERS = 150;
+
 interface ElevationProfileChartProps {
   readonly profile: ElevationProfile;
+  readonly showHeading?: boolean;
   readonly activeSegmentIndex: number | null;
   readonly selectedSegmentIndex: number | null;
   readonly trackGradeLegendDismissed: boolean;
@@ -61,6 +64,55 @@ function activeProfilePoint(
   const sampledIndex = Number(activeIndex);
   if (!Number.isInteger(sampledIndex)) return null;
   return sampledPoints[sampledIndex] ?? null;
+}
+
+function smoothedHoverGradePct(
+  profile: ElevationProfile,
+  point: ElevationProfilePoint,
+): number {
+  const target = profile.points[point.sampleIndex];
+  if (target?.sampleIndex !== point.sampleIndex) {
+    return point.localGradePct;
+  }
+
+  let weightedGradeSum = target.localGradePct;
+  let weightSum = 1;
+  for (
+    let candidateIndex = point.sampleIndex - 1;
+    candidateIndex >= 0;
+    candidateIndex -= 1
+  ) {
+    const candidate = profile.points[candidateIndex];
+    if (candidate?.sourceSegmentIndex !== target.sourceSegmentIndex) {
+      break;
+    }
+    const distanceMeters = Math.abs(candidate.distanceMeters - target.distanceMeters);
+    if (distanceMeters > HOVER_GRADE_SMOOTHING_RADIUS_METERS) {
+      break;
+    }
+    const weight = 1 - distanceMeters / HOVER_GRADE_SMOOTHING_RADIUS_METERS;
+    weightedGradeSum += candidate.localGradePct * weight;
+    weightSum += weight;
+  }
+  for (
+    let candidateIndex = point.sampleIndex + 1;
+    candidateIndex < profile.points.length;
+    candidateIndex += 1
+  ) {
+    const candidate = profile.points[candidateIndex];
+    if (candidate?.sourceSegmentIndex !== target.sourceSegmentIndex) {
+      break;
+    }
+    const distanceMeters = Math.abs(candidate.distanceMeters - target.distanceMeters);
+    if (distanceMeters > HOVER_GRADE_SMOOTHING_RADIUS_METERS) {
+      break;
+    }
+    const weight = 1 - distanceMeters / HOVER_GRADE_SMOOTHING_RADIUS_METERS;
+    weightedGradeSum += candidate.localGradePct * weight;
+    weightSum += weight;
+  }
+
+  return weightSum === 0 ? point.localGradePct : weightedGradeSum / weightSum;
 }
 
 interface ElevationTooltipProps extends TooltipContentProps {
@@ -95,6 +147,11 @@ function ElevationTooltip({
   ) {
     return null;
   }
+  const profilePoint = profile.points[point.sampleIndex];
+  const hoverGradePct =
+    profilePoint?.sampleIndex === point.sampleIndex
+      ? smoothedHoverGradePct(profile, profilePoint)
+      : point.localGradePct;
   const typeNumber =
     segment.type === 'flat'
       ? null
@@ -137,11 +194,11 @@ function ElevationTooltip({
               aria-hidden
               sx={{
                 fontSize: 16,
-                transform: point.localGradePct < 0 ? 'rotate(180deg)' : undefined,
+                transform: hoverGradePct < 0 ? 'rotate(180deg)' : undefined,
               }}
             />
             <Typography variant="caption" color="text.secondary">
-              {formatTrackGrade(point.localGradePct)}
+              {formatTrackGrade(hoverGradePct)}
             </Typography>
           </Stack>
         </Stack>
@@ -351,6 +408,7 @@ export function ElevationPreparationChart({
 
 export function ElevationProfileChart({
   profile,
+  showHeading = true,
   activeSegmentIndex,
   selectedSegmentIndex,
   trackGradeLegendDismissed,
@@ -384,30 +442,32 @@ export function ElevationProfileChart({
 
   return (
     <Stack spacing={1.5}>
-      <Box sx={{ position: 'relative' }}>
-        <Typography component="h3" variant="subtitle2">
-          Elevation profile
-        </Typography>
-        {trackGradeLegendDismissed ? (
-          <MuiTooltip title="Show track grade legend">
-            <IconButton
-              aria-label="Show track grade legend"
-              onClick={() => {
-                onTrackGradeLegendDismissedChange(false);
-              }}
-              size="small"
-              sx={{
-                position: 'absolute',
-                right: 0,
-                top: '50%',
-                transform: 'translateY(-50%)',
-              }}
-            >
-              <HelpOutlineOutlinedIcon fontSize="small" />
-            </IconButton>
-          </MuiTooltip>
-        ) : null}
-      </Box>
+      {showHeading ? (
+        <Box sx={{ position: 'relative' }}>
+          <Typography component="h3" variant="subtitle2">
+            Elevation profile
+          </Typography>
+          {trackGradeLegendDismissed ? (
+            <MuiTooltip title="Show track grade legend">
+              <IconButton
+                aria-label="Show track grade legend"
+                onClick={() => {
+                  onTrackGradeLegendDismissedChange(false);
+                }}
+                size="small"
+                sx={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <HelpOutlineOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null}
+        </Box>
+      ) : null}
       <Box
         role="img"
         aria-label={`Elevation profile from ${String(Math.round(profile.minimumMeters))} to ${String(Math.round(profile.maximumMeters))} metres`}

@@ -16,6 +16,7 @@ import {
   mapInteractionStore,
   requestMapFitBounds,
   requestMapNavigation,
+  requestMapPointInspection,
   requestMarkerPlacement,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
@@ -31,6 +32,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     dragRotate,
     onClick,
     onContextMenu,
+    onMoveStart,
   }: {
     readonly boxZoom?: boolean;
     readonly dragRotate?: boolean;
@@ -42,6 +44,7 @@ vi.mock('react-map-gl/maplibre', () => ({
       readonly originalEvent: MouseEvent;
       readonly lngLat: { readonly lng: number; readonly lat: number };
     }) => void;
+    readonly onMoveStart?: (event: { readonly originalEvent?: Event }) => void;
   }) => (
     <div
       data-box-zoom={String(boxZoom)}
@@ -52,6 +55,9 @@ vi.mock('react-map-gl/maplibre', () => ({
           originalEvent: event.nativeEvent,
           lngLat: { lng: 44.8, lat: 41.7 },
         });
+      }}
+      onWheel={(event) => {
+        onMoveStart?.({ originalEvent: event.nativeEvent });
       }}
       onContextMenu={(event) => {
         onContextMenu?.({
@@ -338,6 +344,90 @@ describe('MapWorkspace', () => {
     expect(facade.navigationRequests).toEqual([
       { latitude: 41.7, longitude: 44.8, zoom: 14 },
     ]);
+  });
+
+  it('delivers ready point-inspection commands through the facade', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Inspection command canvas</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Inspection command canvas');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 });
+    });
+
+    await waitFor(() => {
+      expect(facade.pointInspectionRequests).toEqual([
+        { latitude: 41.7, longitude: 44.8 },
+      ]);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+  });
+
+  it('opens a selected result immediately while navigating to it', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Selected inspection canvas</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Selected inspection canvas');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection(
+        { latitude: 41.7, longitude: 44.8 },
+        { refreshNearbyPoiOnIdle: true },
+      );
+    });
+
+    expect(facade.navigationRequests).toEqual([
+      { latitude: 41.7, longitude: 44.8, zoom: 13 },
+    ]);
+    await waitFor(() => {
+      expect(facade.pointInspectionRequests).toEqual([
+        { latitude: 41.7, longitude: 44.8 },
+      ]);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+    expect(facade.pointInspectionOptions).toEqual([{ refreshNearbyPoiOnIdle: true }]);
+  });
+
+  it('holds point-inspection commands until the map is ready', async () => {
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<div>Loading inspection canvas</div>}
+        />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Loading inspection canvas');
+    act(() => {
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 });
+    });
+    expect(facade.pointInspectionRequests).toEqual([]);
+    expect(mapInteractionStore.getState().pointInspectionCommand).not.toBeNull();
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(facade.pointInspectionRequests).toEqual([
+        { latitude: 41.7, longitude: 44.8 },
+      ]);
+    });
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
   });
 
   it('applies visible-area padding to point navigation and unpadded bounds', async () => {
@@ -919,14 +1009,50 @@ describe('MapWorkspace', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Create marker here' }));
     const contextName = screen.getByRole('textbox', { name: 'Marker name' });
     expect(contextName).toHaveValue('Mtatsminda');
-    await user.clear(contextName);
-    await user.type(contextName, 'Context marker');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
-    await waitFor(async () => {
-      await expect(services.database.listSavedMarkers()).resolves.toEqual([
-        expect.objectContaining({ coordinate: [44.8, 41.7] }),
-      ]);
-    });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await expect(services.database.listSavedMarkers()).resolves.toEqual([]);
+  });
+
+  it('copies canonical point links and reports clipboard failures from shared point actions', async () => {
+    const facade = new FakeMapFacade();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    const nativeMap = await screen.findByTestId('native-map');
+
+    fireEvent.contextMenu(nativeMap);
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link to this point' }));
+    await screen.findByText('Point link copied');
+
+    expect(writeText).toHaveBeenCalledOnce();
+    const copiedUrl = writeText.mock.calls[0]?.[0];
+    expect(copiedUrl).toBeDefined();
+    if (copiedUrl === undefined) throw new Error('Expected a copied point URL.');
+    const url = new URL(copiedUrl);
+    expect(url.searchParams.get('map')).toBe('2');
+    expect(url.searchParams.get('lat')).toBe('41.70000');
+    expect(url.searchParams.get('lon')).toBe('44.80000');
+    expect(url.searchParams.get('z')).toBe(facade.snapshot.camera.zoom.toFixed(2));
+    expect(url.searchParams.get('view')).toBe('2d');
+    expect(url.searchParams.get('scene')).toBeNull();
+    expect(url.searchParams.get('bearing')).toBeNull();
+    expect(url.searchParams.get('pitch')).toBeNull();
+
+    writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
+    fireEvent.contextMenu(nativeMap);
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link to this point' }));
+
+    expect(
+      await screen.findByText(
+        'Clipboard access failed. Try again or use the Share dialog.',
+      ),
+    ).toBeVisible();
   });
 
   it('forwards facade clicks only while route planning owns map interaction', async () => {

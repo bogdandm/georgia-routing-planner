@@ -46,6 +46,7 @@ describe('MapSearchPlaceholder', () => {
       longitude: 44.8,
       zoom: 13,
     });
+    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
   });
 
   it('submits text only on request and navigates to the selected result', async () => {
@@ -85,6 +86,16 @@ describe('MapSearchPlaceholder', () => {
       longitude: 44.8271,
       zoom: 13,
     });
+    expect(mapInteractionStore.getState().pointInspectionCommand?.coordinate).toEqual({
+      latitude: 41.7151,
+      longitude: 44.8271,
+    });
+    expect(
+      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+    ).toBe(true);
+    expect(
+      screen.queryByRole('list', { name: 'Place search results' }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Clear map search' }));
     expect(input).toHaveValue('');
@@ -209,6 +220,13 @@ describe('MapSearchPlaceholder', () => {
       bounds,
       maxZoom: 13,
     });
+    expect(mapInteractionStore.getState().pointInspectionCommand?.coordinate).toEqual({
+      latitude: 41.7151,
+      longitude: 44.8271,
+    });
+    expect(
+      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+    ).toBe(true);
   });
 
   it('does not run a global place search before the map viewport is ready', async () => {

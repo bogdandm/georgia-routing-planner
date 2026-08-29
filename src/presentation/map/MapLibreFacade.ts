@@ -46,6 +46,11 @@ import {
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
 
+export interface MapPointInspectionActions {
+  onCopyLink(coordinate: MapCoordinate, camera: MapCamera): void;
+  onCreateMarker(coordinate: MapCoordinate, suggestedName?: string): void;
+}
+
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
   camera: defaultGeorgiaCamera,
@@ -232,6 +237,11 @@ export class MapLibreFacade implements MapFacade {
   #pointInspection: MapPointInspection = { status: 'closed' };
   #pointInspectionSequence = 0;
   #pointInspectionAbort: AbortController | null = null;
+  #pendingNearbyPoiRefresh: {
+    readonly sequence: number;
+    readonly startedAt: number;
+  } | null = null;
+  #completedPointInspectionSequence = 0;
   readonly #pointInspector: PointInspectorPopup;
   readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
@@ -245,12 +255,37 @@ export class MapLibreFacade implements MapFacade {
     private readonly layerController?: MapLayerControllerLifecycle,
     private readonly elevationProvider?: ElevationProvider,
     pointInspector?: PointInspectorPopup,
+    pointInspectionActions?: MapPointInspectionActions,
   ) {
-    this.#pointInspector =
-      pointInspector ??
-      new MapLibrePointInspector(() => {
-        this.closePointInspection();
+    if (pointInspector !== undefined) {
+      this.#pointInspector = pointInspector;
+    } else if (pointInspectionActions !== undefined) {
+      this.#pointInspector = new MapLibrePointInspector({
+        onClose: () => {
+          this.closePointInspection();
+        },
+        onCopyLink: (inspection) => {
+          pointInspectionActions.onCopyLink(inspection.coordinate, this.getCamera());
+        },
+        onCreateMarker: (inspection) => {
+          let suggestedName: string | undefined;
+          if (
+            inspection.nearbyPoi.status === 'found' &&
+            inspection.nearbyPoi.poi.name !== null
+          ) {
+            suggestedName = inspection.nearbyPoi.poi.name;
+          }
+          pointInspectionActions.onCreateMarker(inspection.coordinate, suggestedName);
+          this.closePointInspection();
+        },
       });
+    } else {
+      this.#pointInspector = new MapLibrePointInspector({
+        onClose: () => {
+          this.closePointInspection();
+        },
+      });
+    }
     this.snapshotStore?.update(this.#snapshot);
   }
 
@@ -353,10 +388,55 @@ export class MapLibreFacade implements MapFacade {
     }
   }
 
+  public openPointInspection(
+    coordinate: MapCoordinate,
+    options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+  ): void {
+    const map = this.#map;
+    if (
+      map === null ||
+      this.#interactionMode !== 'default' ||
+      !Number.isFinite(coordinate.longitude) ||
+      !Number.isFinite(coordinate.latitude) ||
+      coordinate.longitude < -180 ||
+      coordinate.longitude > 180 ||
+      coordinate.latitude < -90 ||
+      coordinate.latitude > 90
+    ) {
+      return;
+    }
+    this.#pointInspectionSequence += 1;
+    const sequence = this.#pointInspectionSequence;
+    const startedAt = performance.now();
+    const refreshNearbyPoiOnIdle = options?.refreshNearbyPoiOnIdle === true;
+    this.#pendingNearbyPoiRefresh = refreshNearbyPoiOnIdle
+      ? { sequence, startedAt }
+      : null;
+    this.#pointInspectionAbort?.abort();
+    const abortController = new AbortController();
+    this.#pointInspectionAbort = abortController;
+    this.updatePointInspection({
+      status: 'open',
+      coordinate,
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'loading' },
+    });
+    this.logger.log({ level: 'info', name: 'map.point-inspection.started' });
+    void this.inspectPoint(
+      map,
+      coordinate,
+      sequence,
+      abortController.signal,
+      startedAt,
+      !refreshNearbyPoiOnIdle,
+    );
+  }
+
   public closePointInspection(): void {
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;
+    this.#pendingNearbyPoiRefresh = null;
     if (this.#pointInspection.status !== 'closed') {
       this.#pointInspector.close();
       this.updatePointInspection({ status: 'closed' });
@@ -575,6 +655,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleIdle = (): void => {
+    this.refreshPendingNearbyPoi();
     this.updateSnapshot({ lastIdleAt: new Date().toISOString() });
     if (!this.#firstIdleRecorded) {
       this.#firstIdleRecorded = true;
@@ -651,19 +732,7 @@ export class MapLibreFacade implements MapFacade {
       this.closePointInspection();
       if (visible) return;
     }
-    this.#pointInspectionSequence += 1;
-    const sequence = this.#pointInspectionSequence;
-    this.#pointInspectionAbort?.abort();
-    const abortController = new AbortController();
-    this.#pointInspectionAbort = abortController;
-    this.updatePointInspection({
-      status: 'open',
-      coordinate,
-      elevation: { status: 'loading' },
-      nearbyPoi: { status: 'loading' },
-    });
-    this.logger.log({ level: 'info', name: 'map.point-inspection.started' });
-    void this.inspectPoint(map, coordinate, sequence, abortController.signal);
+    this.openPointInspection(coordinate);
   };
 
   private queryNearestPoi(
@@ -694,21 +763,49 @@ export class MapLibreFacade implements MapFacade {
     return selectNearestPoi(features, coordinate);
   }
 
+  private inspectNearbyPoi(
+    map: MapLibreMap,
+    coordinate: MapCoordinate,
+  ): Exclude<MapPointInspection, { status: 'closed' }>['nearbyPoi'] {
+    try {
+      const feature = this.queryNearestPoi(map, coordinate);
+      return feature === null ? { status: 'none' } : { status: 'found', poi: feature };
+    } catch {
+      return { status: 'error' };
+    }
+  }
+
+  private refreshPendingNearbyPoi(): void {
+    const pending = this.#pendingNearbyPoiRefresh;
+    const map = this.#map;
+    const inspection = this.#pointInspection;
+    if (
+      pending === null ||
+      map === null ||
+      pending.sequence !== this.#pointInspectionSequence ||
+      inspection.status === 'closed'
+    ) {
+      return;
+    }
+    this.#pendingNearbyPoiRefresh = null;
+    this.updatePointInspection({
+      ...inspection,
+      nearbyPoi: this.inspectNearbyPoi(map, inspection.coordinate),
+    });
+    this.logPointInspectionCompleted(pending.sequence, pending.startedAt);
+  }
+
   private async inspectPoint(
     map: MapLibreMap,
     coordinate: { readonly longitude: number; readonly latitude: number },
     sequence: number,
     signal: AbortSignal,
+    startedAt: number,
+    inspectNearbyPoiImmediately: boolean,
   ): Promise<void> {
-    const startedAt = performance.now();
-    let nearbyPoi: Exclude<MapPointInspection, { status: 'closed' }>['nearbyPoi'];
-    try {
-      const feature = this.queryNearestPoi(map, coordinate);
-      nearbyPoi =
-        feature === null ? { status: 'none' } : { status: 'found', poi: feature };
-    } catch {
-      nearbyPoi = { status: 'error' };
-    }
+    const nearbyPoi = inspectNearbyPoiImmediately
+      ? this.inspectNearbyPoi(map, coordinate)
+      : ({ status: 'loading' } as const);
 
     if (!this.isCurrentInspection(map, sequence, signal)) return;
     this.updatePointInspection({
@@ -750,18 +847,38 @@ export class MapLibreFacade implements MapFacade {
 
     if (!this.isCurrentInspection(map, sequence, signal)) return;
     this.#pointInspectionAbort = null;
-    this.updatePointInspection({ status: 'open', coordinate, elevation, nearbyPoi });
+    const inspection = this.#pointInspection;
+    if (inspection.status === 'closed') return;
+    this.updatePointInspection({ ...inspection, elevation });
+    this.logPointInspectionCompleted(sequence, startedAt);
+  }
+
+  private logPointInspectionCompleted(sequence: number, startedAt: number): void {
+    const inspection = this.#pointInspection;
+    if (
+      inspection.status === 'closed' ||
+      inspection.elevation.status === 'loading' ||
+      inspection.nearbyPoi.status === 'loading' ||
+      this.#completedPointInspectionSequence === sequence
+    ) {
+      return;
+    }
+    this.#completedPointInspectionSequence = sequence;
     this.logger.log({
       level:
-        elevation.status === 'error' || nearbyPoi.status === 'error' ? 'warn' : 'info',
+        inspection.elevation.status === 'error' ||
+        inspection.nearbyPoi.status === 'error'
+          ? 'warn'
+          : 'info',
       name: 'map.point-inspection.completed',
       data: {
         durationMs: Math.max(0, performance.now() - startedAt),
         status:
-          elevation.status === 'error' || nearbyPoi.status === 'error'
+          inspection.elevation.status === 'error' ||
+          inspection.nearbyPoi.status === 'error'
             ? 'partial'
             : 'ready',
-        count: nearbyPoi.status === 'found' ? 1 : 0,
+        count: inspection.nearbyPoi.status === 'found' ? 1 : 0,
       },
     });
   }
@@ -1302,6 +1419,7 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;
+    this.#pendingNearbyPoiRefresh = null;
     this.#pointInspector.close();
     this.#pointInspection = { status: 'closed' };
     this.#map = null;

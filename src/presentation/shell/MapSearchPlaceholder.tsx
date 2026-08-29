@@ -39,6 +39,7 @@ import type { MapViewportBounds } from '@/presentation/map/mapTypes';
 import {
   requestMapFitBounds,
   requestMapNavigation,
+  requestMapPointInspection,
 } from '@/presentation/map/mapInteractionStore';
 import { parseCoordinateQuery } from '@/presentation/shell/parseCoordinateQuery';
 import { formatPlaceSearchCategory } from '@/presentation/shell/formatPlaceSearchCategory';
@@ -358,6 +359,9 @@ export function MapSearchPlaceholder() {
                 } else {
                   requestMapFitBounds(result.bounds, 13);
                 }
+                requestMapPointInspection(result.coordinate, {
+                  refreshNearbyPoiOnIdle: true,
+                });
                 closeResults();
               }}
             >

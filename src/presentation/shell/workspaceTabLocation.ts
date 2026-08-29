@@ -14,6 +14,7 @@ export function workspaceTabFromHash(hash: string): WorkspaceTab | null {
   for (const [tab, tabHash] of Object.entries(hashByTab)) {
     if (normalized === tabHash) return tab as WorkspaceTab;
   }
+  if (normalized.startsWith('#tracks/share/')) return 'tracks';
   return normalized === '#satelite' ? 'satellite' : null;
 }
 

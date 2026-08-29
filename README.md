@@ -25,6 +25,8 @@ _This project was built 100% with LLMs._
   delete them.
 - Choose which tracks, imagery, terrain, contours, and map details are visible.
 - Optionally sign in and explicitly enable synchronization across devices.
+- Share one ready synchronized track with a capability link; recipients need no account
+  and can explicitly save an independent browser-local copy.
 
 ## Tracks
 
@@ -81,6 +83,23 @@ Cross-device synchronization is optional and disabled by default. It starts only
 the user signs in and explicitly enables **Sync across devices**. Local track operations
 remain available when synchronization is disabled or temporarily unavailable. Trail
 Planner does not upload diagnostics or usage telemetry automatically.
+
+Public track links require public Supabase configuration in the deployed build. Owners
+must sign in and synchronize a track before sharing it; recipients do not need an
+account. The `track-share` Edge Function requires a dedicated `TRACK_SHARE_TOKEN_SECRET`
+in every environment before owner status and enable requests can reconstruct stable
+links. Its value is exactly 32 random bytes encoded as unpadded base64url (43
+characters); never print, commit, reuse between environments, or put it in `VITE_*`
+configuration.
+
+Generate and set it through the Edge Function secret store, replacing `<project-ref>`
+with the target project:
+
+```shell
+secret="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=')" && \
+  ./node_modules/.bin/supabase secrets set --project-ref <project-ref> "TRACK_SHARE_TOKEN_SECRET=$secret" && \
+  unset secret
+```
 
 ## Limitations
 

@@ -10,6 +10,7 @@ import type { StorageUsageReader } from '@/application/ports/StorageUsageReader'
 import type { TrackContentHasher } from '@/application/ports/TrackContentHasher';
 import type { TrailRouter } from '@/application/ports/TrailRouter';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
+import type { TrackShareService } from '@/application/tracks/TrackShareService';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
   createUnconfiguredUserDataService,
@@ -49,6 +50,7 @@ import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerControl
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { MapLibreSatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 import { createClient } from '@supabase/supabase-js';
+import { SupabaseTrackShareService } from '@/infrastructure/supabase/SupabaseTrackShareService';
 import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
 
 /** The complete dependency bundle injected once at the React composition boundary. */
@@ -76,6 +78,7 @@ export interface RuntimeServices {
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
   readonly storageUsage: StorageUsageReader;
   readonly supabaseConfiguration: SupabaseConfigurationResult;
+  readonly trackShares: TrackShareService | null;
   readonly userData: UserDataService;
 }
 
@@ -104,23 +107,32 @@ export function createRuntimeServices(): RuntimeServices {
     import.meta.env.VITE_SUPABASE_URL,
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
   );
-  const userData =
+  const supabase =
     supabaseConfiguration.status === 'configured'
-      ? new SupabaseUserDataService(
-          createClient(
-            supabaseConfiguration.value.url,
-            supabaseConfiguration.value.publishableKey,
-            {
-              auth: {
-                autoRefreshToken: true,
-                detectSessionInUrl: true,
-                persistSession: true,
-              },
+      ? createClient(
+          supabaseConfiguration.value.url,
+          supabaseConfiguration.value.publishableKey,
+          {
+            auth: {
+              autoRefreshToken: true,
+              detectSessionInUrl: true,
+              persistSession: true,
             },
-          ),
-          database,
+          },
         )
-      : createUnconfiguredUserDataService();
+      : null;
+  const userData =
+    supabase === null
+      ? createUnconfiguredUserDataService()
+      : new SupabaseUserDataService(supabase, database);
+  const trackShares =
+    supabaseConfiguration.status === 'configured' && supabase !== null
+      ? new SupabaseTrackShareService(
+          supabase,
+          supabaseConfiguration.value.url,
+          supabaseConfiguration.value.publishableKey,
+        )
+      : null;
   const storageUsage = new BrowserStorageUsageReader();
   const mapProviderConfiguration = loadMapProviderConfiguration(
     import.meta.env.VITE_MAP_PROVIDER_CONFIGURATION,
@@ -304,6 +316,7 @@ export function createRuntimeServices(): RuntimeServices {
     sentinelQueryDiagnostics,
     storageUsage,
     supabaseConfiguration,
+    trackShares,
     userData,
   };
 }

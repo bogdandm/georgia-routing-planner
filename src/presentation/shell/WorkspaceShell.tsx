@@ -160,8 +160,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const activeTrackKey =
     activeTrack === null
       ? null
-      : activeTrack.kind === 'preview'
-        ? `preview:${activeTrack.id}`
+      : activeTrack.kind === 'preview' || activeTrack.kind === 'shared'
+        ? `${activeTrack.kind}:${activeTrack.id}`
         : activeTrack.kind === 'route-plan'
           ? `route-plan:${activeTrack.id}`
           : `saved:${activeTrack.summary.id}`;
@@ -170,12 +170,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     trackDetailsKey !== null && mobileTrackDetailsExpandedKey === trackDetailsKey;
   const activeTrackPreparing =
     !multiTrackMode &&
-    activeTrack?.kind === 'preview' &&
+    (activeTrack?.kind === 'preview' || activeTrack?.kind === 'shared') &&
     activeTrack.preparationStatus === 'preparing';
   const ordinaryActiveTrackMetrics =
     activeTrack === null
       ? null
-      : activeTrack.kind === 'preview'
+      : activeTrack.kind === 'preview' || activeTrack.kind === 'shared'
         ? activeTrack.preparationStatus === 'ready'
           ? activeTrack.sourceMetrics
           : null

@@ -683,3 +683,17 @@ scene-cloud control. Successful results are grouped by UTC acquisition day and s
 thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
 sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
 its footprint; Layers can hide or restore the raster and related logical map groups.
+
+## Public track links
+
+A signed-in owner with a ready synchronized saved track uses **Share** in **Track
+actions**. Opening the menu loads authoritative sharing status. The direct **Share**
+toggle enables or disables public access; enabling automatically copies the canonical
+link, and an enabled share adds **Copy share link** for retrieving the same stable link
+later. Disabling removes public access without deleting or unsynchronizing the track.
+There is no share dialog.
+
+Links use `#tracks/share/1.<token>`, keeping the capability out of GitHub Pages request
+paths and referrers. A recipient needs no account. Opening a valid link fetches the
+owner's current shared snapshot as a read-only Tracks view; **Save a copy** explicitly
+creates an independent local track that does not follow later owner changes.

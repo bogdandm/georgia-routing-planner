@@ -12,6 +12,7 @@ import {
 import { defaultGeocodingProviderConfiguration } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import type { TrackShareService } from '@/application/tracks/TrackShareService';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
@@ -53,6 +54,7 @@ class TestIdGenerator implements IdGenerator {
 
 interface CreateTestServicesOptions {
   readonly satelliteCatalogGateway?: SatelliteCatalogGateway;
+  readonly trackShares?: TrackShareService | null;
   readonly userData?: UserDataService;
   readonly trailRouter?: TrailRouter | null;
 }
@@ -210,6 +212,7 @@ export function createTestServices(
       now: () => new Date('2026-07-19T12:00:00.000Z'),
     }),
     supabaseConfiguration: { status: 'unconfigured' },
+    trackShares: options.trackShares ?? null,
     userData,
   };
 }

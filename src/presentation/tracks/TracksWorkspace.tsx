@@ -1,13 +1,16 @@
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
@@ -32,6 +35,7 @@ import {
   Paper,
   Snackbar,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -106,9 +110,11 @@ import {
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
-import { TrackShareDialog } from '@/presentation/tracks/TrackShareDialog';
 import { TrackShareError } from '@/application/tracks/TrackShareService';
-import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
+import {
+  createTrackShareUrl,
+  parseTrackShareLocation,
+} from '@/presentation/tracks/trackShareUrl';
 import {
   formatTrackDuration,
   TrackStat,
@@ -192,10 +198,7 @@ interface SavedTrackSelection {
 }
 
 type ActiveTrack =
-  | PreviewTrack
-  | SharedTrackSelection
-  | SavedTrackSelection
-  | RoutePlanDraft;
+  PreviewTrack | SharedTrackSelection | SavedTrackSelection | RoutePlanDraft;
 type MultiTrackSelection =
   | {
       readonly status: 'loading';
@@ -1739,6 +1742,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       multiTrackSelectionRequests.current.clear();
       return;
     }
+    if (active?.kind === 'shared') return;
     if (
       (active?.kind === 'preview' || active?.kind === 'route-plan') &&
       !(await closeActive())
@@ -3081,6 +3085,27 @@ interface TrackDetailsPaneProps {
   readonly onClosed: () => void;
 }
 
+type ShareMenuState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'disabled' }
+  | { readonly kind: 'enabled'; readonly token: string }
+  | { readonly kind: 'error' };
+
+function shareMutationErrorMessage(error: unknown): string {
+  if (
+    error instanceof TrackShareError &&
+    (error.category === 'track-not-found' || error.category === 'track-not-ready')
+  ) {
+    return 'Sync this track before sharing.';
+  }
+  return 'Sharing could not be updated. Try again.';
+}
+
+interface ShareNotice {
+  readonly contentHash: string;
+  readonly message: string;
+}
+
 export function TrackDetailsPane({
   mode,
   onCollapse,
@@ -3119,7 +3144,10 @@ export function TrackDetailsPane({
     getUserSnapshot,
     getUserSnapshot,
   );
-  const [sharingTrack, setSharingTrack] = useState<string | null>(null);
+  const [shareMenuState, setShareMenuState] = useState<ShareMenuState>({
+    kind: 'disabled',
+  });
+  const [shareNotice, setShareNotice] = useState<ShareNotice | null>(null);
   const [actionMenuAnchor, setActionMenuAnchor] = useState<HTMLElement | null>(null);
   const readyMultiTrackSelections = multiTrackSelections.filter(
     (selection): selection is ReadyMultiTrackSelection => selection.status === 'ready',
@@ -3132,6 +3160,135 @@ export function TrackDetailsPane({
   );
   const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const shareContentHash =
+    active?.kind === 'saved' ? (active.summary.contentHash ?? null) : null;
+  const shareRequest = useRef<AbortController | null>(null);
+  const shareOperationGeneration = useRef(0);
+  const beginShareOperation = useCallback(() => {
+    shareRequest.current?.abort();
+    const controller = new AbortController();
+    const generation = shareOperationGeneration.current + 1;
+    shareOperationGeneration.current = generation;
+    shareRequest.current = controller;
+    return { controller, generation };
+  }, []);
+  const shareOperationIsCurrent = useCallback(
+    (controller: AbortController, generation: number): boolean =>
+      !controller.signal.aborted && generation === shareOperationGeneration.current,
+    [],
+  );
+  const loadShareStatus = useCallback(async () => {
+    const service = trackShares;
+    const contentHash = shareContentHash;
+    if (
+      service === null ||
+      contentHash === null ||
+      userSnapshot.status !== 'signed-in'
+    ) {
+      return;
+    }
+    const { controller, generation } = beginShareOperation();
+    setShareMenuState({ kind: 'loading' });
+    try {
+      const status = await service.status(contentHash, controller.signal);
+      if (!shareOperationIsCurrent(controller, generation)) return;
+      setShareMenuState(
+        status.enabled
+          ? { kind: 'enabled', token: status.token }
+          : { kind: 'disabled' },
+      );
+    } catch {
+      if (!shareOperationIsCurrent(controller, generation)) return;
+      setShareMenuState({ kind: 'error' });
+    } finally {
+      if (shareOperationIsCurrent(controller, generation)) {
+        shareRequest.current = null;
+      }
+    }
+  }, [
+    beginShareOperation,
+    shareContentHash,
+    shareOperationIsCurrent,
+    trackShares,
+    userSnapshot.status,
+  ]);
+  const copyShareLink = useCallback(
+    async (token: string): Promise<void> => {
+      const contentHash = shareContentHash;
+      if (contentHash === null) return;
+      const generation = shareOperationGeneration.current;
+      const url = createTrackShareUrl(window.location.href, token);
+      try {
+        await navigator.clipboard.writeText(url);
+        if (generation !== shareOperationGeneration.current) return;
+        setShareNotice({ contentHash, message: 'Share link copied.' });
+      } catch {
+        if (generation !== shareOperationGeneration.current) return;
+        setShareNotice({
+          contentHash,
+          message: 'Sharing is enabled, but the link could not be copied.',
+        });
+      }
+    },
+    [shareContentHash],
+  );
+  const updateShare = useCallback(async (): Promise<void> => {
+    const service = trackShares;
+    const contentHash = shareContentHash;
+    if (
+      service === null ||
+      contentHash === null ||
+      userSnapshot.status !== 'signed-in' ||
+      (shareMenuState.kind !== 'disabled' && shareMenuState.kind !== 'enabled')
+    ) {
+      return;
+    }
+    const previousState = shareMenuState;
+    const { controller, generation } = beginShareOperation();
+    setShareMenuState({ kind: 'loading' });
+    try {
+      if (previousState.kind === 'disabled') {
+        const enabled = await service.enable(contentHash, controller.signal);
+        if (!shareOperationIsCurrent(controller, generation)) return;
+        setShareMenuState({ kind: 'enabled', token: enabled.token });
+        await copyShareLink(enabled.token);
+        return;
+      }
+      await service.disable(contentHash, controller.signal);
+      if (!shareOperationIsCurrent(controller, generation)) return;
+      setShareMenuState({ kind: 'disabled' });
+      setShareNotice({ contentHash, message: 'Sharing disabled.' });
+    } catch (error) {
+      if (!shareOperationIsCurrent(controller, generation)) return;
+      setShareMenuState(previousState);
+      setShareNotice({
+        contentHash,
+        message: shareMutationErrorMessage(error),
+      });
+    } finally {
+      if (shareOperationIsCurrent(controller, generation)) {
+        shareRequest.current = null;
+      }
+    }
+  }, [
+    beginShareOperation,
+    copyShareLink,
+    shareContentHash,
+    shareMenuState,
+    shareOperationIsCurrent,
+    trackShares,
+    userSnapshot.status,
+  ]);
+  useEffect(() => {
+    shareRequest.current?.abort();
+    shareRequest.current = null;
+    shareOperationGeneration.current += 1;
+    return () => {
+      shareRequest.current?.abort();
+      shareRequest.current = null;
+      shareOperationGeneration.current += 1;
+    };
+  }, [shareContentHash]);
   if (multiTrackMode && multiTrackSelections.length > 0) {
     return (
       <Box
@@ -3292,8 +3449,10 @@ export function TrackDetailsPane({
     );
   }
   if (active === null) return null;
-  const shareContentHash =
-    active.kind === 'saved' ? active.summary.contentHash : undefined;
+  const canManageShare =
+    trackShares !== null &&
+    userSnapshot.status === 'signed-in' &&
+    shareContentHash !== null;
   const metrics =
     active.kind === 'route-plan'
       ? active.metrics
@@ -3534,6 +3693,7 @@ export function TrackDetailsPane({
                       aria-label="Track actions"
                       onClick={(event) => {
                         setActionMenuAnchor(event.currentTarget);
+                        void loadShareStatus();
                       }}
                     >
                       <MoreVertIcon fontSize="small" />
@@ -3576,17 +3736,60 @@ export function TrackDetailsPane({
                   <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
                   Download KML
                 </MenuItem>
-                {trackShares !== null &&
-                userSnapshot.status === 'signed-in' &&
-                shareContentHash !== undefined ? (
-                  <MenuItem
-                    onClick={() => {
-                      setActionMenuAnchor(null);
-                      setSharingTrack(shareContentHash);
-                    }}
-                  >
-                    Share
-                  </MenuItem>
+                {canManageShare ? (
+                  <>
+                    <MenuItem
+                      role="menuitemcheckbox"
+                      aria-checked={shareMenuState.kind === 'enabled'}
+                      disabled={
+                        shareMenuState.kind !== 'disabled' &&
+                        shareMenuState.kind !== 'enabled'
+                      }
+                      onClick={() => {
+                        setActionMenuAnchor(null);
+                        void updateShare();
+                      }}
+                      sx={{ gap: 2, justifyContent: 'space-between' }}
+                    >
+                      <Stack direction="row" sx={{ alignItems: 'center' }}>
+                        <ShareOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                        Share
+                      </Stack>
+                      <Switch
+                        checked={shareMenuState.kind === 'enabled'}
+                        slotProps={{
+                          input: {
+                            'aria-label': 'Share track publicly',
+                            readOnly: true,
+                            tabIndex: -1,
+                          },
+                        }}
+                        size="small"
+                        sx={{ pointerEvents: 'none' }}
+                      />
+                    </MenuItem>
+                    {shareMenuState.kind === 'enabled' ? (
+                      <MenuItem
+                        onClick={() => {
+                          setActionMenuAnchor(null);
+                          void copyShareLink(shareMenuState.token);
+                        }}
+                      >
+                        <ContentCopyOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                        Copy share link
+                      </MenuItem>
+                    ) : null}
+                    {shareMenuState.kind === 'error' ? (
+                      <MenuItem
+                        onClick={() => {
+                          void loadShareStatus();
+                        }}
+                      >
+                        <RefreshOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                        Retry sharing status
+                      </MenuItem>
+                    ) : null}
+                  </>
                 ) : null}
                 <MenuItem
                   onClick={() => {
@@ -3613,16 +3816,14 @@ export function TrackDetailsPane({
             </Box>
           </ClickAwayListener>
         ) : null}
-        {sharingTrack !== null && trackShares !== null ? (
-          <TrackShareDialog
-            contentHash={sharingTrack}
-            open
-            service={trackShares}
-            onClose={() => {
-              setSharingTrack(null);
-            }}
-          />
-        ) : null}
+        <Snackbar
+          autoHideDuration={6_000}
+          message={shareNotice?.message}
+          open={shareNotice !== null && shareNotice.contentHash === shareContentHash}
+          onClose={() => {
+            setShareNotice(null);
+          }}
+        />
         {mode !== 'overlay' ? (
           <IconButton
             size="small"

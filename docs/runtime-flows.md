@@ -747,11 +747,14 @@ the runtime; Vite module replacement uses the same explicit, idempotent cleanup 
 
 ## Public track sharing
 
-An authenticated owner opens the Share dialog for a ready synchronized track. `status`,
-`enable`, and `disable` run through the `track-share` Edge Function using the verified
-owner claim; enable reconstructs the stable HMAC-derived capability from the stored
-nonce and never returns raw tokens from Postgres. The function uses a dedicated stable
-`TRACK_SHARE_TOKEN_SECRET` per environment.
+An authenticated owner opens **Track actions** for a ready synchronized track. The menu
+loads `status` through the `track-share` Edge Function using the verified owner claim.
+Its direct **Share** toggle calls `enable` or `disable`; successful enable copies the
+canonical capability link and an enabled status exposes **Copy share link**. Disable
+clears the retained token and removes public access. Enable reconstructs the stable
+HMAC-derived capability from the stored nonce and never returns raw tokens from
+Postgres. The function uses a dedicated stable `TRACK_SHARE_TOKEN_SECRET` per
+environment; there is no share dialog.
 
 A recipient sends the fragment capability with the publishable key and
 `X-Track-Share-Token`. The function resolves only the token digest, returns a narrow

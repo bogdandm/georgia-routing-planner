@@ -86,8 +86,20 @@ Planner does not upload diagnostics or usage telemetry automatically.
 
 Public track links require public Supabase configuration in the deployed build. Owners
 must sign in and synchronize a track before sharing it; recipients do not need an
-account. Every environment needs its own stable 43-character `TRACK_SHARE_TOKEN_SECRET`
-Edge Function secret. Never commit that secret or reuse it between environments.
+account. The `track-share` Edge Function requires a dedicated `TRACK_SHARE_TOKEN_SECRET`
+in every environment before owner status and enable requests can reconstruct stable
+links. Its value is exactly 32 random bytes encoded as unpadded base64url (43
+characters); never print, commit, reuse between environments, or put it in `VITE_*`
+configuration.
+
+Generate and set it through the Edge Function secret store, replacing `<project-ref>`
+with the target project:
+
+```shell
+secret="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=')" && \
+  ./node_modules/.bin/supabase secrets set --project-ref <project-ref> "TRACK_SHARE_TOKEN_SECRET=$secret" && \
+  unset secret
+```
 
 ## Limitations
 

@@ -29,6 +29,10 @@ import type {
   UserDataService,
   UserDataSnapshot,
 } from '@/application/user/UserDataService';
+import {
+  TrackShareError,
+  type TrackShareService,
+} from '@/application/tracks/TrackShareService';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -233,6 +237,62 @@ function savedTrackContent(trackId: string): LocalTrackContent {
       ],
     ],
   };
+}
+
+const trackShareToken = 'A'.repeat(43);
+
+function createTrackShareService(
+  overrides: Partial<TrackShareService> = {},
+): TrackShareService {
+  return {
+    status: vi.fn().mockResolvedValue({ enabled: false }),
+    enable: vi.fn().mockResolvedValue({ enabled: true, token: trackShareToken }),
+    disable: vi.fn().mockResolvedValue(undefined),
+    resolve: vi.fn(),
+    ...overrides,
+  };
+}
+
+function signedInUserData(): UserDataService {
+  const snapshot: UserDataSnapshot = {
+    busy: false,
+    email: 'share@example.test',
+    userId: 'share-user',
+    errorMessage: null,
+    noticeMessage: null,
+    status: 'signed-in',
+    syncEnabled: true,
+    syncStatus: 'success',
+    syncProgress: null,
+    syncUsage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
+    remoteTrackDeletions: [],
+    remoteMarkerDeletions: [],
+  };
+  return {
+    ...services.userData,
+    getSnapshot: () => snapshot,
+    subscribe: () => () => undefined,
+  };
+}
+
+async function renderSavedTrackForSharing(trackShares: TrackShareService): Promise<{
+  readonly details: HTMLElement;
+  readonly summary: LocalTrackSummary;
+}> {
+  services = {
+    ...services,
+    trackShares,
+    userData: signedInUserData(),
+  };
+  const summary = savedTrackSummary('local:share-track', 'Shared trail');
+  await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+  useUiStore.setState({ activeTab: 'tracks' });
+  await services.database.saveLatestOpenedTrackId(summary.id);
+  renderWorkspaceShell();
+  const details = await screen.findByRole('complementary', {
+    name: 'Track details',
+  });
+  return { details, summary };
 }
 function multiTrackSummary(
   id: string,
@@ -5271,5 +5331,204 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(mapInteractionStore.getState().markerPlacement).toBeNull();
     });
+  });
+
+  it('public sharing loads status, enables, copies, and disables from Track actions', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const status = vi
+      .fn()
+      .mockResolvedValueOnce({ enabled: false })
+      .mockResolvedValueOnce({ enabled: true, token: trackShareToken })
+      .mockResolvedValueOnce({ enabled: false });
+    const enable = vi.fn().mockResolvedValue({
+      enabled: true,
+      token: trackShareToken,
+    });
+    const disable = vi.fn().mockResolvedValue(undefined);
+    const trackShares = createTrackShareService({ status, enable, disable });
+    const { details, summary } = await renderSavedTrackForSharing(trackShares);
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await waitFor(() => {
+      expect(status).toHaveBeenCalledWith(summary.contentHash, expect.any(AbortSignal));
+    });
+    const share = await screen.findByRole('menuitemcheckbox', { name: /^Share/u });
+    expect(share).toHaveAttribute('aria-checked', 'false');
+
+    await user.click(share);
+    await waitFor(() => {
+      expect(enable).toHaveBeenCalledOnce();
+      expect(enable).toHaveBeenCalledWith(summary.contentHash, expect.any(AbortSignal));
+      expect(writeText).toHaveBeenCalledWith(
+        `${window.location.origin}/#tracks/share/1.${trackShareToken}`,
+      );
+    });
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Copy share link' }),
+    ).toBeVisible();
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Share/u }));
+    await waitFor(() => {
+      expect(disable).toHaveBeenCalledOnce();
+      expect(disable).toHaveBeenCalledWith(
+        summary.contentHash,
+        expect.any(AbortSignal),
+      );
+    });
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('menuitem', { name: 'Copy share link' }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('public sharing stays enabled when automatic clipboard copy is denied', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    });
+    const status = vi
+      .fn()
+      .mockResolvedValueOnce({ enabled: false })
+      .mockResolvedValueOnce({ enabled: true, token: trackShareToken });
+    const { details } = await renderSavedTrackForSharing(
+      createTrackShareService({ status }),
+    );
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
+
+    expect(
+      await screen.findByText('Sharing is enabled, but the link could not be copied.'),
+    ).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    expect(
+      await screen.findByRole('menuitem', { name: 'Copy share link' }),
+    ).toBeVisible();
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('public sharing keeps disabled status when the track is not ready', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() } });
+    const enable = vi
+      .fn()
+      .mockRejectedValue(new TrackShareError('track-not-ready', 'Not ready'));
+    const { details } = await renderSavedTrackForSharing(
+      createTrackShareService({ enable }),
+    );
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
+
+    expect(await screen.findByText('Sync this track before sharing.')).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('public sharing ignores a late clipboard completion after disable', async () => {
+    const user = userEvent.setup();
+    const copy = deferred<undefined>();
+    vi.stubGlobal('navigator', {
+      clipboard: { writeText: vi.fn(() => copy.promise) },
+    });
+    const status = vi
+      .fn()
+      .mockResolvedValueOnce({ enabled: true, token: trackShareToken })
+      .mockResolvedValueOnce({ enabled: true, token: trackShareToken })
+      .mockResolvedValueOnce({ enabled: false });
+    const disable = vi.fn().mockResolvedValue(undefined);
+    const { details } = await renderSavedTrackForSharing(
+      createTrackShareService({ status, disable }),
+    );
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy share link' }));
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
+    await waitFor(() => {
+      expect(disable).toHaveBeenCalledOnce();
+      expect(screen.getByText('Sharing disabled.')).toBeVisible();
+    });
+    copy.resolve(undefined);
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('menuitem', { name: 'Copy share link' }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('Share link copied.')).not.toBeInTheDocument();
+  });
+
+  it('opens a shared link read-only and saves an independent local copy', async () => {
+    const token = 'B'.repeat(43);
+    const resolve = vi.fn().mockResolvedValue({
+      contentHash: 'b'.repeat(64),
+      metadata: {
+        name: 'Recipient trail',
+        sourceFormat: 'gpx',
+        geometryKind: 'track',
+        updatedAt: '2026-08-29T00:00:00.000Z',
+      },
+      trackPoints: [
+        [
+          { coordinate: [44, 42], elevationMeters: 1_000 },
+          { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
+        ],
+      ],
+    });
+    services = {
+      ...services,
+      trackShares: createTrackShareService({ resolve }),
+    };
+    window.history.replaceState(null, '', `/#tracks/share/1.${token}`);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Recipient trail' }),
+    ).toBeVisible();
+    expect(resolve).toHaveBeenCalledWith(token, expect.any(AbortSignal));
+    expect(await services.database.listLocalTracks()).toHaveLength(0);
+    expect(
+      screen.queryByRole('complementary', { name: 'Multiple track details' }),
+    ).not.toBeInTheDocument();
+    const multiTrackToggle = screen.getByRole('button', {
+      name: 'Select multiple tracks',
+    });
+    await user.click(multiTrackToggle);
+    expect(multiTrackToggle).toHaveAttribute('aria-pressed', 'false');
+    await user.click(screen.getByRole('button', { name: 'Save a copy' }));
+
+    await waitFor(async () => {
+      expect(await services.database.listLocalTracks()).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(window.location.hash).toBe('#tracks');
+    });
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Recipient trail' }),
+    ).toBeVisible();
   });
 });

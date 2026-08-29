@@ -686,10 +686,12 @@ its footprint; Layers can hide or restore the raster and related logical map gro
 
 ## Public track links
 
-A signed-in owner with a ready synchronized saved track can use **Share** from its
-action menu. The dialog has **Share**, read-only link with **Copy link**, and **Disable
-share** states. Reopening an enabled share restores the same link; disabling it
-immediately removes public access without deleting or unsynchronizing the track.
+A signed-in owner with a ready synchronized saved track uses **Share** in **Track
+actions**. Opening the menu loads authoritative sharing status. The direct **Share**
+toggle enables or disables public access; enabling automatically copies the canonical
+link, and an enabled share adds **Copy share link** for retrieving the same stable link
+later. Disabling removes public access without deleting or unsynchronizing the track.
+There is no share dialog.
 
 Links use `#tracks/share/1.<token>`, keeping the capability out of GitHub Pages request
 paths and referrers. A recipient needs no account. Opening a valid link fetches the

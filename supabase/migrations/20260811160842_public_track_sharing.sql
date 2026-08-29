@@ -51,10 +51,10 @@ begin
   if v_record.state <> 'ready' then
     return jsonb_build_object('outcome', 'not_ready');
   end if;
-  if jsonb_typeof(v_record.metadata -> 'name') <> 'string'
-    or v_record.metadata ->> 'sourceFormat' not in ('gpx', 'fit', 'kml')
-    or v_record.metadata ->> 'geometryKind' not in ('track', 'route')
-    or jsonb_typeof(v_record.metadata -> 'updatedAt') <> 'string'
+  if jsonb_typeof(v_record.metadata -> 'name') is distinct from 'string'
+    or coalesce((v_record.metadata ->> 'sourceFormat') in ('gpx', 'fit', 'kml'), false) = false
+    or coalesce((v_record.metadata ->> 'geometryKind') in ('track', 'route'), false) = false
+    or jsonb_typeof(v_record.metadata -> 'updatedAt') is distinct from 'string'
   then
     return jsonb_build_object('outcome', 'not_shareable');
   end if;
@@ -125,10 +125,10 @@ begin
   if v_record.state <> 'ready' then
     return jsonb_build_object('outcome', 'not_ready');
   end if;
-  if jsonb_typeof(v_record.metadata -> 'name') <> 'string'
-    or v_record.metadata ->> 'sourceFormat' not in ('gpx', 'fit', 'kml')
-    or v_record.metadata ->> 'geometryKind' not in ('track', 'route')
-    or jsonb_typeof(v_record.metadata -> 'updatedAt') <> 'string'
+  if jsonb_typeof(v_record.metadata -> 'name') is distinct from 'string'
+    or coalesce((v_record.metadata ->> 'sourceFormat') in ('gpx', 'fit', 'kml'), false) = false
+    or coalesce((v_record.metadata ->> 'geometryKind') in ('track', 'route'), false) = false
+    or jsonb_typeof(v_record.metadata -> 'updatedAt') is distinct from 'string'
   then
     return jsonb_build_object('outcome', 'not_shareable');
   end if;

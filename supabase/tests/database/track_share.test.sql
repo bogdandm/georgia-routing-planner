@@ -33,6 +33,18 @@ insert into public.track_records (
   now() + interval '10 minutes'
 );
 
+insert into public.track_records (
+  user_id, content_hash, metadata, revision, state, object_path, compressed_bytes
+) values (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  repeat('c', 64),
+  '{"lineageHash":"not-public-metadata","geometryVersion":2}'::jsonb,
+  1,
+  'ready',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/' || repeat('c', 64) || '/33333333-3333-4333-8333-333333333333.grpt.gz',
+  17
+);
+
 select has_table('public', 'track_shares', 'track shares table exists');
 select col_is_pk('public', 'track_shares', 'share_token_hash', 'token digest is the primary key');
 select col_is_unique('public', 'track_shares', array['user_id', 'content_hash'], 'owner track has one share state');
@@ -66,6 +78,11 @@ select is(
   'missing', 'missing tracks cannot be shared'
 );
 select is(
+  public.enable_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('c', 64), repeat('f', 64), 'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD') ->> 'outcome',
+  'not_shareable', 'ready tracks require public metadata before sharing'
+);
+
+select is(
   public.resolve_track_share(repeat('c', 64)) -> 'metadata',
   '{"name":"Shared ridge","sourceFormat":"gpx","geometryKind":"track","updatedAt":"2026-08-11T00:00:00.000Z"}'::jsonb,
   'resolve exposes only the public metadata projection'
@@ -74,6 +91,19 @@ select is(
   (select used_bytes from public.user_track_usage where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
   17::bigint, 'share state does not affect quota usage'
 );
+update public.track_records
+set metadata = '{"lineageHash":"not-public-metadata","geometryVersion":2}'::jsonb
+where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  and content_hash = repeat('a', 64);
+select is(
+  public.read_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('a', 64)) ->> 'outcome',
+  'not_shareable', 'metadata changes disable public sharing until metadata is restored'
+);
+select is(
+  public.resolve_track_share(repeat('c', 64)), null::jsonb,
+  'shares with invalidated metadata resolve as missing'
+);
+
 select is(
   public.disable_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('a', 64)) ->> 'outcome',
   'disabled', 'owner disables a share'

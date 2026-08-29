@@ -19,6 +19,52 @@ import {
 } from './internal/share-token.ts';
 import { SupabaseTrackShareGateway } from './internal/supabase-track-share-gateway.ts';
 
+type PublicResponseFormat = 'json' | 'gzip';
+
+function qualityFor(
+  accept: string,
+  mediaType: 'application/json' | 'application/gzip',
+): number {
+  let matchedSpecificity = -1;
+  let matchedQuality = 0;
+
+  for (const part of accept.split(',')) {
+    const [mediaRange = '', ...parameters] = part.trim().toLowerCase().split(';');
+    const specificity =
+      mediaRange === mediaType
+        ? 2
+        : mediaRange === 'application/*'
+          ? 1
+          : mediaRange === '*/*'
+            ? 0
+            : -1;
+    if (specificity === -1 || specificity < matchedSpecificity) continue;
+
+    const qualityParameter = parameters.find((parameter) =>
+      parameter.trim().startsWith('q='),
+    );
+    const quality =
+      qualityParameter === undefined
+        ? 1
+        : Number(qualityParameter.trim().slice('q='.length));
+    if (!Number.isFinite(quality) || quality < 0 || quality > 1) continue;
+
+    matchedSpecificity = specificity;
+    matchedQuality = quality;
+  }
+
+  return matchedQuality;
+}
+
+function preferredPublicFormat(accept: string | null): PublicResponseFormat | null {
+  if (accept === null) return 'json';
+
+  const jsonQuality = qualityFor(accept, 'application/json');
+  const gzipQuality = qualityFor(accept, 'application/gzip');
+  if (jsonQuality <= 0 && gzipQuality <= 0) return null;
+  return gzipQuality > jsonQuality ? 'gzip' : 'json';
+}
+
 function logFailure(error: TrackShareFailure, method: string): void {
   const redact = (value: string): string =>
     value.replace(/\b[A-Za-z0-9_-]{43}\b/g, '[redacted-share-token]').slice(0, 500);
@@ -85,12 +131,12 @@ async function handlePublic(
   if (token === null || !SHARE_TOKEN_PATTERN.test(token)) {
     throw new TrackShareFailure(400, 'invalid_token', 'Share token is invalid.');
   }
-  const accept = request.headers.get('accept');
-  if (accept !== 'application/json' && accept !== 'application/gzip') {
+  const format = preferredPublicFormat(request.headers.get('accept'));
+  if (format === null) {
     throw new TrackShareFailure(
       406,
       'not_acceptable',
-      'Accept must be application/json or application/gzip.',
+      'Accept must include application/json or application/gzip.',
     );
   }
   const digest = await tokenDigest(base64UrlToBytes(token));
@@ -99,7 +145,7 @@ async function handlePublic(
   if (resolved === null) {
     throw new TrackShareFailure(404, 'share_not_found', 'Shared track was not found.');
   }
-  if (accept === 'application/json') {
+  if (format === 'json') {
     return response({
       version: 1,
       contentHash: resolved.contentHash,

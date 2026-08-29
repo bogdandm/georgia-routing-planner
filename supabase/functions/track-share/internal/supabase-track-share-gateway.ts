@@ -150,6 +150,13 @@ export class SupabaseTrackShareGateway {
         'Track is not ready to share.',
       );
     }
+    if (result.outcome === 'not_shareable') {
+      throw new TrackShareFailure(
+        409,
+        'track_not_shareable',
+        'Track metadata cannot be shared.',
+      );
+    }
     if (allowDisabled && result.outcome === 'disabled') return { enabled: false };
     if (
       result.outcome !== 'enabled' ||

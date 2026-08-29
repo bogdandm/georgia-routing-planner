@@ -123,7 +123,10 @@ owner record with an `on delete cascade` composite foreign key. The row stores a
 from the owner UUID, nonce, and a per-environment `TRACK_SHARE_TOKEN_SECRET` HMAC key.
 
 The table has RLS enabled and no `PUBLIC`, `anon`, or `authenticated` table or RPC
-privileges. Resolution returns only the current content hash, byte count, and public
+privileges. A share can be enabled or read only while its ready record has string
+`name`/`updatedAt`, a `gpx`/`fit`/`kml` source format, and a `track`/`route` geometry
+kind; resolution treats metadata invalidated later as absent. Resolution returns only
+the current content hash, byte count, and public
 name/source-format/geometry-kind/updated-at projection. It does not alter
 `user_track_usage`, private `track_records` access, or the private geometry bucket.
 

@@ -51,6 +51,14 @@ begin
   if v_record.state <> 'ready' then
     return jsonb_build_object('outcome', 'not_ready');
   end if;
+  if jsonb_typeof(v_record.metadata -> 'name') <> 'string'
+    or v_record.metadata ->> 'sourceFormat' not in ('gpx', 'fit', 'kml')
+    or v_record.metadata ->> 'geometryKind' not in ('track', 'route')
+    or jsonb_typeof(v_record.metadata -> 'updatedAt') <> 'string'
+  then
+    return jsonb_build_object('outcome', 'not_shareable');
+  end if;
+
 
   select track_shares.* into v_share
   from public.track_shares
@@ -117,6 +125,14 @@ begin
   if v_record.state <> 'ready' then
     return jsonb_build_object('outcome', 'not_ready');
   end if;
+  if jsonb_typeof(v_record.metadata -> 'name') <> 'string'
+    or v_record.metadata ->> 'sourceFormat' not in ('gpx', 'fit', 'kml')
+    or v_record.metadata ->> 'geometryKind' not in ('track', 'route')
+    or jsonb_typeof(v_record.metadata -> 'updatedAt') <> 'string'
+  then
+    return jsonb_build_object('outcome', 'not_shareable');
+  end if;
+
 
   select track_shares.* into v_share
   from public.track_shares
@@ -193,6 +209,10 @@ as $$
   where track_shares.share_token_hash = p_share_token_hash
     and track_records.state = 'ready'
     and p_share_token_hash ~ '^[0-9a-f]{64}$'
+    and jsonb_typeof(track_records.metadata -> 'name') = 'string'
+    and track_records.metadata ->> 'sourceFormat' in ('gpx', 'fit', 'kml')
+    and track_records.metadata ->> 'geometryKind' in ('track', 'route')
+    and jsonb_typeof(track_records.metadata -> 'updatedAt') = 'string'
 $$;
 
 revoke execute on function public.enable_track_share(uuid, text, text, text)

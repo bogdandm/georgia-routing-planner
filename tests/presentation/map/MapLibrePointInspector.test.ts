@@ -1,28 +1,32 @@
+import { within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { renderPointInspectorContent } from '@/presentation/map/MapLibrePointInspector';
 
 describe('renderPointInspectorContent', () => {
-  it('renders safe formatted values and an accessible close action', () => {
+  it('renders safe formatted values and accessible current-inspection actions', () => {
     const container = document.createElement('div');
     const onClose = vi.fn();
-    renderPointInspectorContent(
-      container,
-      {
-        status: 'open',
-        coordinate: { longitude: 44.801234, latitude: 41.712345 },
-        elevation: { status: 'available', meters: 1_234.4 },
-        nearbyPoi: {
-          status: 'found',
-          poi: {
-            name: '<script>fixture hut</script>',
-            category: 'alpine_hut',
-            distanceMeters: 42.2,
-          },
+    const onCopyLink = vi.fn();
+    const onCreateMarker = vi.fn();
+    const inspection = {
+      status: 'open' as const,
+      coordinate: { longitude: 44.801234, latitude: 41.712345 },
+      elevation: { status: 'available' as const, meters: 1_234.4 },
+      nearbyPoi: {
+        status: 'found' as const,
+        poi: {
+          name: '<script>fixture hut</script>',
+          category: 'alpine_hut',
+          distanceMeters: 42.2,
         },
       },
+    };
+    renderPointInspectorContent(container, inspection, {
       onClose,
-    );
+      onCopyLink,
+      onCreateMarker,
+    });
     expect(container.textContent).toContain('44.80123, 41.71235');
     expect(container.textContent).toContain('1,234 m');
     expect(container.textContent).toContain(
@@ -41,11 +45,18 @@ describe('renderPointInspectorContent', () => {
     ]);
     expect(links.every((link) => link.target === '_blank')).toBe(true);
     expect(links.every((link) => link.rel === 'noopener noreferrer')).toBe(true);
-    const close = container.querySelector<HTMLButtonElement>(
-      '[aria-label="Close map point details"]',
-    );
-    close?.click();
+    const buttons = within(container).getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      '×',
+      'Copy link',
+      'Create marker',
+    ]);
+    within(container).getByRole('button', { name: 'Close map point details' }).click();
+    within(container).getByRole('button', { name: 'Copy link' }).click();
+    within(container).getByRole('button', { name: 'Create marker' }).click();
     expect(onClose).toHaveBeenCalledOnce();
+    expect(onCopyLink).toHaveBeenCalledWith(inspection);
+    expect(onCreateMarker).toHaveBeenCalledWith(inspection);
   });
 
   it('renders loading, missing, and provider-error states intentionally', () => {
@@ -59,7 +70,7 @@ describe('renderPointInspectorContent', () => {
         elevation: { status: 'loading' },
         nearbyPoi: { status: 'loading' },
       },
-      () => undefined,
+      { onClose: () => undefined },
     );
     expect(container.textContent).toContain('Loading elevation…');
     renderPointInspectorContent(
@@ -70,7 +81,7 @@ describe('renderPointInspectorContent', () => {
         elevation: { status: 'error' },
         nearbyPoi: { status: 'none' },
       },
-      () => undefined,
+      { onClose: () => undefined },
     );
     expect(container.textContent).toContain('Elevation could not be loaded.');
     expect(container.textContent).toContain('No named map feature found.');

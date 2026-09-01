@@ -583,12 +583,43 @@ describe('WorkspaceShell', () => {
     expect(
       within(about).getByText('Copernicus Sentinel data · Earth Search / Element 84'),
     ).toBeVisible();
+    expect(
+      within(about).getByRole('link', { name: 'Google satellite imagery' }),
+    ).toHaveAttribute('href', 'https://mt0.google.com');
+    expect(
+      within(about).getByRole('link', { name: 'NAPR orthophoto mosaic' }),
+    ).toHaveAttribute('href', 'https://nt0.napr.gov.ge');
+    expect(within(about).getByText('© Google')).toBeVisible();
+    expect(
+      within(about).getByText(
+        'Imagery: National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025',
+      ),
+    ).toBeVisible();
     expect(about).not.toHaveTextContent('@');
     expect(about).toHaveStyle({
       top: '50%',
       left: '50%',
       transform: 'translate(-50%, -50%)',
     });
+    const aboutTitle = within(about).getByRole('heading', {
+      name: 'About Trail Planner',
+    });
+    const aboutTitleStyle = window.getComputedStyle(aboutTitle);
+    expect(aboutTitleStyle.paddingLeft).toBe('24px');
+    expect(aboutTitleStyle.paddingTop).toBe('16px');
+    expect(aboutTitleStyle.paddingBottom).toBe('16px');
+    expect(aboutTitleStyle.paddingRight).toBe('56px');
+
+    const aboutContent = aboutTitle.nextElementSibling;
+    expect(aboutContent).not.toBeNull();
+    if (aboutContent === null) {
+      throw new Error('Expected About content to follow its title.');
+    }
+    const aboutContentStyle = window.getComputedStyle(aboutContent);
+    expect(aboutContentStyle.paddingLeft).toBe('24px');
+    expect(aboutContentStyle.paddingTop).toBe('16px');
+    expect(aboutContentStyle.paddingBottom).toBe('16px');
+    expect(aboutContentStyle.paddingRight).toBe('24px');
 
     expect(
       within(about).getByRole('button', { name: 'Close site information' }),

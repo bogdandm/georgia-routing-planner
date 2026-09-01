@@ -181,6 +181,27 @@ export function AboutDialog({
         title: mapProviders.satellite.attribution,
       },
     );
+
+    const satelliteBasemapTileUrl = mapProviders.satelliteBasemap.tileUrls[0];
+    if (satelliteBasemapTileUrl !== undefined) {
+      dataEntries.push({
+        description: 'Satellite basemap',
+        details: mapProviders.satelliteBasemap.attribution.replace(/<[^>]*>/gu, ''),
+        href: originFor(satelliteBasemapTileUrl),
+        title: mapProviders.satelliteBasemap.label,
+      });
+    }
+
+    const naprOrthophotoTileUrl =
+      mapProviders.naprOrthophoto.sources.national2016To2017.tileUrls[0];
+    if (naprOrthophotoTileUrl !== undefined) {
+      dataEntries.push({
+        description: 'Georgian orthophoto mosaic',
+        details: mapProviders.naprOrthophoto.attribution.replace(/<[^>]*>/gu, ''),
+        href: originFor(naprOrthophotoTileUrl),
+        title: mapProviders.naprOrthophoto.label,
+      });
+    }
   }
 
   return (
@@ -205,7 +226,7 @@ export function AboutDialog({
     >
       <DialogTitle
         id="about-panel-title"
-        sx={{ px: 2, py: 1.5, position: 'relative', pr: 6 }}
+        sx={{ px: 3, py: 2, position: 'relative', pr: 7 }}
       >
         About Trail Planner
         <IconButton
@@ -213,12 +234,12 @@ export function AboutDialog({
           onClick={handleClose}
           ref={closeButtonRef}
           size="small"
-          sx={{ position: 'absolute', right: 12, top: 12 }}
+          sx={{ position: 'absolute', right: 16, top: 16 }}
         >
           <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ px: 2, py: 1.5 }}>
+      <DialogContent sx={{ px: 3, py: 2, '&&': { py: 2 } }}>
         <Stack spacing={2}>
           <Stack spacing={0.5}>
             <Typography variant="body2">

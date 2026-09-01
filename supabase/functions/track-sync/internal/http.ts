@@ -153,6 +153,56 @@ const markerColorKeys = [
   'red',
 ] as const;
 
+const trackMarkersSchema = z
+  .array(
+    z
+      .object({
+        id: z.uuid(),
+        name: z
+          .string()
+          .min(1)
+          .max(200)
+          .refine((value) => {
+            if (value !== value.trim()) return false;
+            for (const character of value) {
+              const codePoint = character.codePointAt(0);
+              if (
+                codePoint !== 0x09 &&
+                codePoint !== 0x0a &&
+                codePoint !== 0x0d &&
+                (codePoint === undefined ||
+                  codePoint < 0x20 ||
+                  (codePoint > 0xd7ff && codePoint < 0xe000) ||
+                  (codePoint > 0xfffd && codePoint < 0x10000) ||
+                  codePoint > 0x10ffff)
+              ) {
+                return false;
+              }
+            }
+            return true;
+          }),
+        coordinate: z.tuple([
+          z.number().finite().min(-180).max(180),
+          z.number().finite().min(-90).max(90),
+        ]),
+      })
+      .strict(),
+  )
+  .max(32)
+  .superRefine((markers, context) => {
+    const ids = new Set<string>();
+    for (const [index, marker] of markers.entries()) {
+      if (ids.has(marker.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Track marker IDs must be unique.',
+          path: [index, 'id'],
+        });
+      }
+      ids.add(marker.id);
+    }
+  });
+
 const markerPayloadSchema = z
   .object({
     schemaVersion: z.literal(1),
@@ -287,6 +337,16 @@ function requireMetadata(value: unknown): Record<string, unknown> {
       400,
       'invalid_metadata',
       'metadata must contain a lowercase SHA-256 lineageHash and geometryVersion 1 or 2.',
+    );
+  }
+  if (
+    Object.hasOwn(value, 'markers') &&
+    !trackMarkersSchema.safeParse(value.markers).success
+  ) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_metadata',
+      'metadata markers are invalid.',
     );
   }
   const encoded = new TextEncoder().encode(JSON.stringify(value));

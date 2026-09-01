@@ -51,10 +51,13 @@ describe('saved markers', () => {
     });
   });
 
-  it('rejects empty and overlong names', () => {
+  it('rejects empty, overlong, and XML-invalid names', () => {
     expect(() => normalizeMarkerName('   ')).toThrow('Marker name is required.');
     expect(() => normalizeMarkerName('x'.repeat(201))).toThrow(
       'Marker name must be 200 characters or fewer.',
+    );
+    expect(() => normalizeMarkerName('Control\u0001character')).toThrow(
+      'Marker name contains characters that cannot be exported.',
     );
   });
 });

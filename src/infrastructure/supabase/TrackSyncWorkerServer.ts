@@ -710,7 +710,7 @@ function localFromRemote(
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: id,
         trackPoints: decoded,
-        markers: base.markers ?? [],
+        markers: base.markers === undefined ? [] : base.markers,
       },
     });
   } catch {

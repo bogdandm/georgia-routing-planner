@@ -695,7 +695,13 @@ const markerNameSchema = z
   .string()
   .min(1)
   .max(200)
-  .refine((value) => value.trim() === value, 'Marker names must be trimmed.');
+  .refine((value) => {
+    try {
+      return normalizeMarkerName(value).name === value;
+    } catch {
+      return false;
+    }
+  }, 'Marker names must be normalized and exportable.');
 
 const trackMarkerSchema: z.ZodType<TrackMarker> = z
   .object({

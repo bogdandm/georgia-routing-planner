@@ -422,6 +422,20 @@ Deno.test(
         metadata: { lineageHash: CONTENT_HASH, geometryVersion: 2 },
       }),
       uploadRequest({
+        metadata: syncMetadata({ markers: null }),
+      }),
+      uploadRequest({
+        metadata: syncMetadata({
+          markers: [
+            {
+              id: '00000000-0000-4000-8000-000000000001',
+              name: 'Control\u0001character',
+              coordinate: [44, 42],
+            },
+          ],
+        }),
+      }),
+      uploadRequest({
         contentHash: fixtureV2.sha256,
         gzipHex: fixtureV2.gzipHex,
         metadata: { lineageHash: CONTENT_HASH },

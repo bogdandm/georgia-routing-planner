@@ -540,6 +540,38 @@ describe('AppDatabase', () => {
     await expect(database.listSavedMarkers()).resolves.toEqual([saved]);
   });
 
+  it('backfills pending sync state for saved markers when upgrading version 6', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(6).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+    });
+    const saved = marker();
+    await legacy.table('savedMarkers').put(saved);
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    await expect(database.readMarkerSyncSnapshot()).resolves.toEqual([
+      {
+        marker: saved,
+        state: {
+          markerId: saved.id,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+          localVersion: 1,
+        },
+      },
+    ]);
+  });
+
   it('tracks marker local versions and retains unacknowledged delete tombstones', async () => {
     const saved = marker();
     await database.saveSavedMarker(saved);

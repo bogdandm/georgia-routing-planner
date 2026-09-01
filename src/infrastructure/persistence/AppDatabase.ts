@@ -1004,15 +1004,31 @@ export class AppDatabase
           if (parsed !== null) await contentTable.put(parsed);
         }
       });
-    this.version(7).stores({
-      settings: 'key,updatedAt',
-      diagnostics: '++id,timestamp,name,level',
-      localTracks: 'id,normalizedName,savedAt',
-      localTrackContents: 'trackId',
-      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
-      savedMarkers: 'id,normalizedName,colorKey,createdAt',
-      markerSyncStates: 'markerId,remoteRevision,pendingKind',
-    });
+    this.version(7)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+        savedMarkers: 'id,normalizedName,colorKey,createdAt',
+        markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      })
+      .upgrade(async (transaction) => {
+        const markerTable = transaction.table('savedMarkers');
+        const stateTable = transaction.table('markerSyncStates');
+        const markers: unknown[] = await markerTable.toArray();
+        for (const value of markers) {
+          const marker = parseSavedMarker(value);
+          if (marker === null) continue;
+          await stateTable.put({
+            markerId: marker.id,
+            remoteRevision: null,
+            pendingKind: 'upsert',
+            localVersion: 1,
+          });
+        }
+      });
   }
 
   public async saveLocalTrack(

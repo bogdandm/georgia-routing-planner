@@ -601,14 +601,16 @@ describe('WorkspaceShell', () => {
       left: '50%',
       transform: 'translate(-50%, -50%)',
     });
+    const aboutStyle = window.getComputedStyle(about);
+    expect(aboutStyle.maxWidth).toBe('calc(100% - 32px)');
     const aboutTitle = within(about).getByRole('heading', {
       name: 'About Trail Planner',
     });
     const aboutTitleStyle = window.getComputedStyle(aboutTitle);
-    expect(aboutTitleStyle.paddingLeft).toBe('24px');
-    expect(aboutTitleStyle.paddingTop).toBe('16px');
-    expect(aboutTitleStyle.paddingBottom).toBe('16px');
-    expect(aboutTitleStyle.paddingRight).toBe('56px');
+    expect(aboutTitleStyle.paddingLeft).toBe('16px');
+    expect(aboutTitleStyle.paddingTop).toBe('12px');
+    expect(aboutTitleStyle.paddingBottom).toBe('12px');
+    expect(aboutTitleStyle.paddingRight).toBe('48px');
 
     const aboutContent = aboutTitle.nextElementSibling;
     expect(aboutContent).not.toBeNull();
@@ -616,10 +618,10 @@ describe('WorkspaceShell', () => {
       throw new Error('Expected About content to follow its title.');
     }
     const aboutContentStyle = window.getComputedStyle(aboutContent);
-    expect(aboutContentStyle.paddingLeft).toBe('24px');
-    expect(aboutContentStyle.paddingTop).toBe('16px');
-    expect(aboutContentStyle.paddingBottom).toBe('16px');
-    expect(aboutContentStyle.paddingRight).toBe('24px');
+    expect(aboutContentStyle.paddingLeft).toBe('16px');
+    expect(aboutContentStyle.paddingTop).toBe('0px');
+    expect(aboutContentStyle.paddingBottom).toBe('12px');
+    expect(aboutContentStyle.paddingRight).toBe('16px');
 
     expect(
       within(about).getByRole('button', { name: 'Close site information' }),

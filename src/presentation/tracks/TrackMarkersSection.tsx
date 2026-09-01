@@ -26,6 +26,10 @@ import { MAXIMUM_TRACK_MARKERS, type TrackMarker } from '@/domain/tracks/localTr
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
 import { formatTrackElevation } from '@/presentation/tracks/trackFormatters';
 
+function markerElevationKey(marker: TrackMarker): string {
+  return `${marker.id}:${String(marker.coordinate[0])}:${String(marker.coordinate[1])}`;
+}
+
 interface TrackMarkersSectionProps {
   readonly elevationProvider: ElevationProvider | null;
   readonly markers: readonly TrackMarker[];
@@ -55,44 +59,54 @@ export function TrackMarkersSection({
 
   useEffect(() => {
     const controller = new AbortController();
-    if (markers.length === 0 || elevationProvider === null) {
+    const pendingMarkers = markers.filter(
+      (marker) => !markerElevations.has(markerElevationKey(marker)),
+    );
+    if (pendingMarkers.length === 0 || elevationProvider === null) {
       return () => {
         controller.abort();
       };
     }
 
+    const applySamples = (samples: readonly ElevationSample[]): void => {
+      if (controller.signal.aborted) return;
+      const resolved = new Map<string, ElevationSample>();
+      for (let index = 0; index < pendingMarkers.length; index += 1) {
+        const marker = pendingMarkers[index];
+        if (marker === undefined) continue;
+        resolved.set(
+          markerElevationKey(marker),
+          samples[index] ?? { status: 'unavailable' },
+        );
+      }
+      setMarkerElevations((current) => {
+        const next = new Map<string, ElevationSample>();
+        for (const marker of markers) {
+          const key = markerElevationKey(marker);
+          const sample = resolved.get(key) ?? current.get(key);
+          if (sample !== undefined) next.set(key, sample);
+        }
+        return next;
+      });
+    };
+
     void elevationProvider
       .sampleMany(
-        markers.map((marker) => ({
+        pendingMarkers.map((marker) => ({
           longitude: marker.coordinate[0],
           latitude: marker.coordinate[1],
         })),
         controller.signal,
       )
-      .then((samples) => {
-        if (controller.signal.aborted) return;
-        setMarkerElevations(
-          new Map(
-            markers.map((marker, index) => [
-              marker.id,
-              samples[index] ?? { status: 'unavailable' },
-            ]),
-          ),
-        );
-      })
+      .then(applySamples)
       .catch(() => {
-        if (controller.signal.aborted) return;
-        setMarkerElevations(
-          new Map(
-            markers.map((marker) => [marker.id, { status: 'unavailable' }] as const),
-          ),
-        );
+        applySamples([]);
       });
 
     return () => {
       controller.abort();
     };
-  }, [elevationProvider, markers]);
+  }, [elevationProvider, markerElevations, markers]);
 
   const startRename = (marker: TrackMarker) => {
     setRenameTargetId(marker.id);
@@ -236,7 +250,7 @@ export function TrackMarkersSection({
                 }
                 const pendingDelete = pendingDeleteId === marker.id;
                 const deleting = deletingId === marker.id;
-                const elevation = markerElevations.get(marker.id);
+                const elevation = markerElevations.get(markerElevationKey(marker));
                 const elevationLabel =
                   elevation?.status === 'available'
                     ? formatTrackElevation(elevation.meters)

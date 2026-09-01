@@ -72,7 +72,7 @@ describe('TrackMarkersSection', () => {
       sampleMany,
     };
     const user = userEvent.setup();
-    renderSection({ elevationProvider, markers: [marker] });
+    const view = renderSection({ elevationProvider, markers: [marker] });
 
     await user.click(screen.getByRole('button', { name: 'Markers' }));
     expect(screen.getByRole('heading', { name: 'Markers (1)' })).toBeVisible();
@@ -96,6 +96,40 @@ describe('TrackMarkersSection', () => {
       longitude: 44.5,
       latitude: 42.25,
     });
+
+    view.rerender(
+      <ThemeProvider theme={createAppTheme()}>
+        <TrackMarkersSection
+          elevationProvider={elevationProvider}
+          markers={[{ ...marker, name: 'Renamed summit' }]}
+          onAdd={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('Renamed summit')).toBeVisible();
+    expect(screen.getByText('1,235 m')).toBeVisible();
+    expect(sampleMany).toHaveBeenCalledOnce();
+
+    view.rerender(
+      <ThemeProvider theme={createAppTheme()}>
+        <TrackMarkersSection
+          elevationProvider={elevationProvider}
+          markers={[{ ...marker, coordinate: [44.6, 42.3] }]}
+          onAdd={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    await waitFor(() => {
+      expect(sampleMany).toHaveBeenCalledTimes(2);
+    });
+    expect(sampleMany).toHaveBeenLastCalledWith(
+      [{ longitude: 44.6, latitude: 42.3 }],
+      expect.any(AbortSignal),
+    );
   });
 
   it('renames inline with the shared field, Save, Cancel, Enter, and Escape contract', async () => {

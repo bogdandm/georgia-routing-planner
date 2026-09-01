@@ -59,7 +59,7 @@ Pinhead map icons grouped by category and ten colors; saved markers render on th
 and remain available after reopening the application.
 
 Root GPX waypoints are imported as track-owned markers. The active editable track lists
-them below elevation analysis, renders them as compact blue flags, and supports adding,
+them below elevation analysis, renders them as compact blue pins, and supports adding,
 renaming, navigating to, and deleting them without adding them to the global marker
 library. They persist and synchronize with the track.
 

@@ -2233,8 +2233,8 @@ describe('MapLibreLayerController', () => {
     });
     controller.setTrackMarkers(trackMarkers);
     await waitFor(() => {
-      expect(createIcon).toHaveBeenCalledTimes(3);
-      expect(map.images.size).toBe(3);
+      expect(createIcon).toHaveBeenCalledTimes(2);
+      expect(map.images.size).toBe(2);
     });
     const source = map.sources.get(mapSourceIds.savedMarkers) as {
       readonly data: { readonly features: readonly { readonly properties: unknown }[] };
@@ -2264,7 +2264,7 @@ describe('MapLibreLayerController', () => {
       {
         id: 'alpha',
         name: 'Track summit',
-        iconKey: 'flag',
+        iconKey: 'place',
         colorKey: 'blue',
         kind: 'track',
       },
@@ -2309,7 +2309,7 @@ describe('MapLibreLayerController', () => {
       {
         id: 'alpha',
         name: 'Track summit',
-        iconKey: 'flag',
+        iconKey: 'place',
         colorKey: 'blue',
         kind: 'track',
       },

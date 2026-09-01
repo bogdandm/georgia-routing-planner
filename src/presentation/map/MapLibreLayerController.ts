@@ -2000,7 +2000,7 @@ export class MapLibreLayerController {
       ...this.#savedMarkers.map((marker) => ({ ...marker, kind: 'saved' as const })),
       ...this.#trackMarkers.map((marker) => ({
         ...marker,
-        iconKey: 'flag' as const,
+        iconKey: 'place' as const,
         colorKey: 'blue' as const,
         kind: 'track' as const,
       })),

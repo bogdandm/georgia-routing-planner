@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import {
   mapInteractionStore,
@@ -19,6 +20,7 @@ const marker: TrackMarker = {
 
 function renderSection(
   overrides: {
+    readonly elevationProvider?: ElevationProvider | null;
     readonly markers?: readonly TrackMarker[];
     readonly onAdd?: () => void;
     readonly onRename?: (markerId: string, name: string) => Promise<void>;
@@ -28,6 +30,7 @@ function renderSection(
   return render(
     <ThemeProvider theme={createAppTheme()}>
       <TrackMarkersSection
+        elevationProvider={overrides.elevationProvider ?? null}
         markers={overrides.markers ?? []}
         onAdd={overrides.onAdd ?? vi.fn()}
         onRename={overrides.onRename ?? vi.fn().mockResolvedValue(undefined)}
@@ -60,12 +63,25 @@ describe('TrackMarkersSection', () => {
     expect(screen.getByText('No markers for this track.')).toBeVisible();
   });
 
-  it('uses a fixed flag row and navigates to the marker without appearance controls', async () => {
+  it('shows the marker count and sampled elevation without a repeated row icon', async () => {
+    const sampleMany = vi
+      .fn()
+      .mockResolvedValue([{ status: 'available', meters: 1234.5 }]);
+    const elevationProvider: ElevationProvider = {
+      sample: vi.fn(),
+      sampleMany,
+    };
     const user = userEvent.setup();
-    renderSection({ markers: [marker] });
+    renderSection({ elevationProvider, markers: [marker] });
 
     await user.click(screen.getByRole('button', { name: 'Markers' }));
-    expect(screen.getByRole('img', { name: 'Track marker flag' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Markers (1)' })).toBeVisible();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(await screen.findByText('1,235 m')).toBeVisible();
+    expect(sampleMany).toHaveBeenCalledWith(
+      [{ longitude: 44.5, latitude: 42.25 }],
+      expect.any(AbortSignal),
+    );
     expect(screen.getByText(marker.name)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Rename' })).toBeVisible();
     expect(

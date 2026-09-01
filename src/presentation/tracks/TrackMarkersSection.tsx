@@ -16,14 +16,18 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useId, useState, type ReactElement } from 'react';
+import { useEffect, useId, useState, type ReactElement } from 'react';
 
+import type {
+  ElevationProvider,
+  ElevationSample,
+} from '@/application/ports/ElevationProvider';
 import { MAXIMUM_TRACK_MARKERS, type TrackMarker } from '@/domain/tracks/localTrack';
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
-import { markerColorFor, markerIconFor } from '@/presentation/markers/markerCatalog';
-import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
+import { formatTrackElevation } from '@/presentation/tracks/trackFormatters';
 
 interface TrackMarkersSectionProps {
+  readonly elevationProvider: ElevationProvider | null;
   readonly markers: readonly TrackMarker[];
   readonly onAdd: () => void;
   readonly onRename: (markerId: string, name: string) => Promise<void>;
@@ -31,6 +35,7 @@ interface TrackMarkersSectionProps {
 }
 
 export function TrackMarkersSection({
+  elevationProvider,
   markers,
   onAdd,
   onRename,
@@ -44,8 +49,50 @@ export function TrackMarkersSection({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const detailsId = `track-markers-${useId().replaceAll(':', '')}`;
-  const flagIcon = markerIconFor('flag');
-  const flagColor = markerColorFor('blue');
+  const [markerElevations, setMarkerElevations] = useState<
+    ReadonlyMap<string, ElevationSample>
+  >(new Map());
+
+  useEffect(() => {
+    const controller = new AbortController();
+    if (markers.length === 0 || elevationProvider === null) {
+      return () => {
+        controller.abort();
+      };
+    }
+
+    void elevationProvider
+      .sampleMany(
+        markers.map((marker) => ({
+          longitude: marker.coordinate[0],
+          latitude: marker.coordinate[1],
+        })),
+        controller.signal,
+      )
+      .then((samples) => {
+        if (controller.signal.aborted) return;
+        setMarkerElevations(
+          new Map(
+            markers.map((marker, index) => [
+              marker.id,
+              samples[index] ?? { status: 'unavailable' },
+            ]),
+          ),
+        );
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setMarkerElevations(
+          new Map(
+            markers.map((marker) => [marker.id, { status: 'unavailable' }] as const),
+          ),
+        );
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [elevationProvider, markers]);
 
   const startRename = (marker: TrackMarker) => {
     setRenameTargetId(marker.id);
@@ -95,7 +142,7 @@ export function TrackMarkersSection({
           }}
         >
           <Typography component="h3" variant="subtitle2">
-            Markers
+            Markers ({markers.length})
           </Typography>
           <ExpandMoreIcon
             aria-hidden
@@ -189,6 +236,13 @@ export function TrackMarkersSection({
                 }
                 const pendingDelete = pendingDeleteId === marker.id;
                 const deleting = deletingId === marker.id;
+                const elevation = markerElevations.get(marker.id);
+                const elevationLabel =
+                  elevation?.status === 'available'
+                    ? formatTrackElevation(elevation.meters)
+                    : elevationProvider === null || elevation?.status === 'unavailable'
+                      ? 'Elevation unavailable'
+                      : 'Loading elevation…';
                 return (
                   <ClickAwayListener
                     key={marker.id}
@@ -207,6 +261,17 @@ export function TrackMarkersSection({
                         display: 'grid',
                         gridTemplateColumns: 'minmax(0, 1fr) auto',
                         alignItems: 'center',
+                        '@media (hover: hover) and (pointer: fine)': {
+                          '& .TrackMarker-actions': {
+                            opacity: 0,
+                            pointerEvents: 'none',
+                          },
+                          '&:hover .TrackMarker-actions, &:focus-within .TrackMarker-actions':
+                            {
+                              opacity: 1,
+                              pointerEvents: 'auto',
+                            },
+                        },
                       }}
                     >
                       <ListItemButton
@@ -218,36 +283,27 @@ export function TrackMarkersSection({
                         }}
                         sx={{ minWidth: 0, px: 1.5, py: 1.25 }}
                       >
-                        <Stack
-                          direction="row"
-                          spacing={1.25}
-                          sx={{ alignItems: 'center', minWidth: 0 }}
-                        >
-                          <Box
-                            sx={{
-                              width: 36,
-                              height: 36,
-                              flex: '0 0 36px',
-                              display: 'grid',
-                              placeItems: 'center',
-                            }}
-                          >
-                            <PinheadIcon
-                              svg={flagIcon.svg}
-                              color={flagColor.value}
-                              size={24}
-                              label="Track marker flag"
-                            />
-                          </Box>
+                        <Stack spacing={0.125} sx={{ minWidth: 0 }}>
                           <Typography variant="subtitle2" noWrap>
                             {marker.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {elevationLabel}
                           </Typography>
                         </Stack>
                       </ListItemButton>
                       <Stack
+                        className="TrackMarker-actions"
                         direction="row"
                         spacing={0.5}
-                        sx={{ alignItems: 'center', px: 1 }}
+                        sx={{
+                          alignItems: 'center',
+                          px: 1,
+                          transition: (theme) =>
+                            theme.transitions.create('opacity', {
+                              duration: theme.transitions.duration.shortest,
+                            }),
+                        }}
                       >
                         <Button
                           size="small"

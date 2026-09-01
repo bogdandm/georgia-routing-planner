@@ -3396,7 +3396,7 @@ export function TrackDetailsPane({
       : active?.kind === 'preview'
         ? active.markers
         : null;
-  const { trackShares, userData } = useRuntimeServices();
+  const { elevationProvider, trackShares, userData } = useRuntimeServices();
   const subscribeUser = useCallback(
     (listener: () => void) => userData.subscribe(listener),
     [userData],
@@ -4253,6 +4253,7 @@ export function TrackDetailsPane({
           {trackMarkers === null ? null : (
             <TrackMarkersSection
               key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
+              elevationProvider={elevationProvider}
               markers={trackMarkers}
               onAdd={startTrackMarkerPlacement}
               onRename={renameTrackMarker}

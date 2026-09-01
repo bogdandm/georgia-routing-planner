@@ -36,6 +36,7 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
+import type { TrackMarker } from '@/domain/tracks/localTrack';
 import {
   importedTrackLayerIds,
   mapInsertionPoints,
@@ -232,11 +233,21 @@ interface SavedMarkerImageState {
   readonly generation: number;
 }
 
+interface RenderedMarker {
+  readonly id: string;
+  readonly name: string;
+  readonly coordinate: readonly [number, number];
+  readonly iconKey: SavedMarker['iconKey'];
+  readonly colorKey: SavedMarker['colorKey'];
+  readonly kind: 'saved' | 'track';
+}
+
 interface SavedMarkerFeatureProperties {
   readonly id: string;
   readonly name: string;
   readonly iconKey: SavedMarker['iconKey'];
   readonly colorKey: SavedMarker['colorKey'];
+  readonly kind: RenderedMarker['kind'];
 }
 
 function sceneBounds(scene: SatelliteScene): [number, number, number, number] {
@@ -410,6 +421,7 @@ export class MapLibreLayerController {
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
   #savedMarkers: readonly SavedMarker[] = [];
+  #trackMarkers: readonly TrackMarker[] = [];
   #savedMarkerGeneration = 0;
   readonly #savedMarkerImages = new Map<string, SavedMarkerImageState>();
   readonly #savedMarkerImageIds = new Set<string>();
@@ -842,6 +854,18 @@ export class MapLibreLayerController {
 
   public setSavedMarkers(markers: readonly SavedMarker[]): void {
     this.#savedMarkers = markers
+      .map((marker) => ({
+        ...marker,
+        coordinate: [...marker.coordinate] as readonly [number, number],
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id, 'en'));
+    this.#savedMarkerGeneration += 1;
+    this.#savedMarkerImages.clear();
+    this.reconcileSavedMarkers();
+  }
+
+  public setTrackMarkers(markers: readonly TrackMarker[]): void {
+    this.#trackMarkers = markers
       .map((marker) => ({
         ...marker,
         coordinate: [...marker.coordinate] as readonly [number, number],
@@ -1972,9 +1996,23 @@ export class MapLibreLayerController {
       return;
     }
 
+    const markers: readonly RenderedMarker[] = [
+      ...this.#savedMarkers.map((marker) => ({ ...marker, kind: 'saved' as const })),
+      ...this.#trackMarkers.map((marker) => ({
+        ...marker,
+        iconKey: 'flag' as const,
+        colorKey: 'blue' as const,
+        kind: 'track' as const,
+      })),
+    ].sort(
+      (left, right) =>
+        left.kind.localeCompare(right.kind, 'en') ||
+        left.id.localeCompare(right.id, 'en'),
+    );
+
     const generation = this.#savedMarkerGeneration;
     const combinations = new Map<string, Pick<SavedMarker, 'iconKey' | 'colorKey'>>();
-    for (const marker of this.#savedMarkers) {
+    for (const marker of markers) {
       const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
       combinations.set(imageId, {
         iconKey: marker.iconKey,
@@ -2020,19 +2058,20 @@ export class MapLibreLayerController {
         });
     }
 
-    const features: Feature<Point, SavedMarkerFeatureProperties>[] = this.#savedMarkers
+    const features: Feature<Point, SavedMarkerFeatureProperties>[] = markers
       .filter((marker) => {
         const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
         return this.#savedMarkerImages.get(imageId)?.status === 'ready';
       })
       .map((marker) => ({
         type: 'Feature',
-        id: marker.id,
+        id: `${marker.kind}:${marker.id}`,
         properties: {
           id: marker.id,
           name: marker.name,
           iconKey: marker.iconKey,
           colorKey: marker.colorKey,
+          kind: marker.kind,
         },
         geometry: {
           type: 'Point',
@@ -2061,14 +2100,19 @@ export class MapLibreLayerController {
             '-',
             ['get', 'colorKey'],
           ],
-          'icon-size': 0.7,
+          'icon-size': ['case', ['==', ['get', 'kind'], 'track'], 0.56, 0.7],
           'icon-anchor': 'bottom',
           'icon-allow-overlap': true,
           'text-field': ['get', 'name'],
           'text-font': ['Noto Sans Regular'],
-          'text-size': 12,
+          'text-size': ['case', ['==', ['get', 'kind'], 'track'], 11, 12],
           'text-anchor': 'top',
-          'text-offset': [0, 0.2],
+          'text-offset': [
+            'case',
+            ['==', ['get', 'kind'], 'track'],
+            ['literal', [0, 0.12]],
+            ['literal', [0, 0.2]],
+          ],
           'text-allow-overlap': true,
         },
         paint: {

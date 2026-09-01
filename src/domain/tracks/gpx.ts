@@ -1,4 +1,4 @@
-export const GPX_PARSER_VERSION = 1;
+export const GPX_PARSER_VERSION = 2;
 
 export type TrackCoordinate = readonly [longitude: number, latitude: number];
 
@@ -14,9 +14,11 @@ export interface TrackSegment {
 
 export type GpxWarningCode =
   | 'invalid-point'
+  | 'invalid-waypoint'
   | 'short-segment'
   | 'track-preferred-over-route'
   | 'invalid-time'
+  | 'waypoint-limit-reached'
   | 'warning-limit-reached';
 
 export interface GpxValidationWarning {
@@ -53,11 +55,16 @@ export interface GpxMetadataProjection {
 type GpxMetadataBuilder = {
   -readonly [Key in keyof GpxMetadataProjection]: GpxMetadataProjection[Key];
 };
+export interface ParsedGpxWaypoint {
+  readonly name: string;
+  readonly coordinate: TrackCoordinate;
+}
 
 export interface ParsedGpx {
   readonly parserVersion: typeof GPX_PARSER_VERSION;
   readonly geometryKind: 'track' | 'route';
   readonly segments: readonly TrackSegment[];
+  readonly waypoints: readonly ParsedGpxWaypoint[];
   readonly pointCount: number;
   readonly metadata: GpxMetadataProjection;
   readonly warnings: readonly GpxValidationWarning[];
@@ -96,6 +103,8 @@ const defaultLimits = {
   maximumWarnings: 50,
   maximumTextLength: 2_000,
   maximumLinks: 10,
+  maximumWaypoints: 32,
+  maximumWaypointNameLength: 200,
 } as const;
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
@@ -236,6 +245,54 @@ function parsePoint(
   if (elevationMeters !== undefined) point.elevationMeters = elevationMeters;
   if (recordedAt !== undefined) point.recordedAt = recordedAt;
   return point;
+}
+function parseWaypoints(
+  root: Element,
+  warnings: GpxValidationWarning[],
+): readonly ParsedGpxWaypoint[] {
+  const waypoints: ParsedGpxWaypoint[] = [];
+  let unnamedCount = 0;
+
+  for (const [pointIndex, element] of directChildren(root, 'wpt').entries()) {
+    const longitude = optionalFiniteNumber(element.getAttribute('lon'));
+    const latitude = optionalFiniteNumber(element.getAttribute('lat'));
+    if (
+      longitude === undefined ||
+      latitude === undefined ||
+      longitude < -180 ||
+      longitude > 180 ||
+      latitude < -90 ||
+      latitude > 90
+    ) {
+      addWarning(warnings, {
+        code: 'invalid-waypoint',
+        message: 'A waypoint with invalid coordinates was skipped.',
+        pointIndex,
+      });
+      continue;
+    }
+    if (waypoints.length >= defaultLimits.maximumWaypoints) {
+      if (!warnings.some(({ code }) => code === 'waypoint-limit-reached')) {
+        addWarning(warnings, {
+          code: 'waypoint-limit-reached',
+          message: 'Additional valid waypoints were omitted.',
+        });
+      }
+      continue;
+    }
+
+    const explicitName = firstChild(element, 'name')
+      ?.textContent.trim()
+      .slice(0, defaultLimits.maximumWaypointNameLength);
+    let name = explicitName;
+    if (name === undefined || name.length === 0) {
+      unnamedCount += 1;
+      name = `Marker ${String(unnamedCount)}`;
+    }
+    waypoints.push({ name, coordinate: [longitude, latitude] });
+  }
+
+  return waypoints;
 }
 
 function parseSegments(
@@ -390,6 +447,7 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
   }
 
   const warnings: GpxValidationWarning[] = [];
+  const waypoints = parseWaypoints(root, warnings);
   const trackSegments = parseSegments(
     trackSegmentElements,
     'trkpt',
@@ -426,6 +484,7 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
     geometryKind,
     segments,
     pointCount: segments.reduce((sum, segment) => sum + segment.points.length, 0),
+    waypoints,
     metadata: readMetadata(root, selected, version),
     warnings,
   };

@@ -85,6 +85,7 @@ function localTrackContent(): LocalTrackContent {
         { coordinate: [44.01, 42.01], elevationMeters: 1_100 },
       ],
     ],
+    markers: [],
   };
 }
 

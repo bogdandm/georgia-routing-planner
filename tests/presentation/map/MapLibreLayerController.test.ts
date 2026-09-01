@@ -6,6 +6,7 @@ import {
   SAVED_MARKER_SCHEMA_VERSION,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
+import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
@@ -2173,7 +2174,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('renders deterministic saved-marker symbols with unique generated images', async () => {
+  it('renders global and active-track markers through one data-driven symbol layer', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -2217,19 +2218,56 @@ describe('MapLibreLayerController', () => {
         updatedAt: '2026-07-18T00:00:00.000Z',
       },
     ];
+    const trackMarkers: readonly TrackMarker[] = [
+      {
+        id: 'alpha',
+        name: 'Track summit',
+        coordinate: [44.6, 41.5],
+      },
+    ];
 
     controller.setSavedMarkers(markers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
       expect(map.images.size).toBe(2);
     });
+    controller.setTrackMarkers(trackMarkers);
+    await waitFor(() => {
+      expect(createIcon).toHaveBeenCalledTimes(3);
+      expect(map.images.size).toBe(3);
+    });
     const source = map.sources.get(mapSourceIds.savedMarkers) as {
       readonly data: { readonly features: readonly { readonly properties: unknown }[] };
     };
     expect(source.data.features.map((feature) => feature.properties)).toEqual([
-      { id: 'alpha', name: 'Alpha', iconKey: 'place', colorKey: 'blue' },
-      { id: 'bravo', name: 'Bravo', iconKey: 'hiking', colorKey: 'red' },
-      { id: 'charlie', name: 'Charlie', iconKey: 'hiking', colorKey: 'red' },
+      {
+        id: 'alpha',
+        name: 'Alpha',
+        iconKey: 'place',
+        colorKey: 'blue',
+        kind: 'saved',
+      },
+      {
+        id: 'bravo',
+        name: 'Bravo',
+        iconKey: 'hiking',
+        colorKey: 'red',
+        kind: 'saved',
+      },
+      {
+        id: 'charlie',
+        name: 'Charlie',
+        iconKey: 'hiking',
+        colorKey: 'red',
+        kind: 'saved',
+      },
+      {
+        id: 'alpha',
+        name: 'Track summit',
+        iconKey: 'flag',
+        colorKey: 'blue',
+        kind: 'track',
+      },
     ]);
     expect(map.layers.get(savedMarkerLayerIds.symbols)).toMatchObject({
       layout: {
@@ -2240,14 +2278,19 @@ describe('MapLibreLayerController', () => {
           '-',
           ['get', 'colorKey'],
         ],
-        'icon-size': 0.7,
+        'icon-size': ['case', ['==', ['get', 'kind'], 'track'], 0.56, 0.7],
         'icon-anchor': 'bottom',
         'icon-allow-overlap': true,
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
-        'text-size': 12,
+        'text-size': ['case', ['==', ['get', 'kind'], 'track'], 11, 12],
         'text-anchor': 'top',
-        'text-offset': [0, 0.2],
+        'text-offset': [
+          'case',
+          ['==', ['get', 'kind'], 'track'],
+          ['literal', [0, 0.12]],
+          ['literal', [0, 0.2]],
+        ],
         'text-allow-overlap': true,
       },
       paint: {
@@ -2259,6 +2302,20 @@ describe('MapLibreLayerController', () => {
     expect(map.getStyle().layers.at(-1)?.id).toBe(savedMarkerLayerIds.symbols);
 
     controller.setSavedMarkers([]);
+    const trackOnlySource = map.sources.get(mapSourceIds.savedMarkers) as {
+      readonly data: { readonly features: readonly { readonly properties: unknown }[] };
+    };
+    expect(trackOnlySource.data.features.map((feature) => feature.properties)).toEqual([
+      {
+        id: 'alpha',
+        name: 'Track summit',
+        iconKey: 'flag',
+        colorKey: 'blue',
+        kind: 'track',
+      },
+    ]);
+
+    controller.setTrackMarkers([]);
     const emptySource = map.sources.get(mapSourceIds.savedMarkers) as {
       readonly data: { readonly features: readonly unknown[] };
     };

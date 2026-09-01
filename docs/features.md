@@ -217,6 +217,27 @@ locally as GPX or KML. Generated files preserve independent segments, saved name
 available point elevation, and reliably aligned timestamps without writing GPX or KML
 description elements; conversion never uploads the source.
 
+GPX import also reads bounded root `<wpt>` elements in document order. Valid coordinates
+are retained, names use the same whitespace and length normalization as saved markers,
+and blank names receive deterministic `Marker N` labels. Invalid or excess waypoints are
+skipped with bounded warnings; they never satisfy the requirement for usable track or
+route geometry. FIT, KML, reconstructed public shares, and route plans do not invent
+track markers.
+
+Imported waypoints and markers added from the map belong to one preview or saved track.
+Editable single-track details show a collapsed **Markers** section below elevation
+analysis with an independent add action, fixed blue-flag rows, map navigation, direct
+inline rename, and two-stage deletion. Shared tracks, route plans, and multi-track mode
+do not expose that editor. Only the active editable track renders its markers, using the
+existing marker symbol layer with smaller icons and labels alongside global saved
+markers.
+
+Track markers persist atomically in local track content and synchronize as bounded
+mutable track metadata. They do not alter GRPT geometry, content hashes, lineage,
+duplicate grouping, or elevation identity. GPX downloads emit escaped root `<wpt>`
+elements before `<trk>` in stored order, including each marker name and coordinate; KML
+downloads remain geometry-only.
+
 Tracks with usable elevation show an interactive distance profile with labeled axes,
 grid, axis tooltip, and a map marker synchronized to the highlighted chart point. Parsed
 source elevation remains authoritative for that profile, grades, and climb/descent

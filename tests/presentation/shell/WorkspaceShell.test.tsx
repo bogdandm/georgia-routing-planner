@@ -46,6 +46,7 @@ import {
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import {
+  completeMarkerPlacement,
   mapInteractionStore,
   resetMapInteractionStore,
   setSatelliteSearchAnchor,
@@ -236,6 +237,7 @@ function savedTrackContent(trackId: string): LocalTrackContent {
         { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
       ],
     ],
+    markers: [],
   };
 }
 
@@ -339,6 +341,7 @@ function multiTrackContent(trackId: string, longitude: number): LocalTrackConten
         { coordinate: [longitude + 0.01, 42.01], elevationMeters: 1_120 },
       ],
     ],
+    markers: [],
   };
 }
 async function saveMultiTrackPair(): Promise<{
@@ -462,7 +465,7 @@ function elevationFreeGpxFile(): File {
 }
 
 function gpxFileWithGradeBands(): File {
-  const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Fixture trail</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele></trkpt><trkpt lat="42.02" lon="44.02"><ele>1000</ele></trkpt><trkpt lat="42.03" lon="44.03"><ele>1120</ele></trkpt></trkseg></trk></gpx>`;
+  const xml = `<?xml version="1.0"?><gpx version="1.1"><wpt lat="42.015" lon="44.015"><name>Imported summit</name></wpt><trk><name>Fixture trail</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele></trkpt><trkpt lat="42.02" lon="44.02"><ele>1000</ele></trkpt><trkpt lat="42.03" lon="44.03"><ele>1120</ele></trkpt></trkseg></trk></gpx>`;
   const file = new File([xml], 'Fixture track.gpx', {
     type: 'application/gpx+xml',
   });
@@ -2501,6 +2504,7 @@ describe('WorkspaceShell', () => {
           { coordinate: [44.02, 42.02], elevationMeters: 1_120 },
         ],
       ],
+      markers: [],
     });
     const { container } = renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
@@ -2520,6 +2524,53 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('Recorded time')).not.toBeInTheDocument();
     expect(screen.queryByText('Unavailable')).not.toBeInTheDocument();
     let details = screen.getByRole('complementary', { name: 'Track details' });
+    const markerDisclosure = within(details).getByRole('button', { name: 'Markers' });
+    expect(markerDisclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(markerDisclosure);
+    expect(within(details).getByText('Imported summit')).toBeVisible();
+
+    await user.click(within(details).getByRole('button', { name: 'Add track marker' }));
+    const placement = mapInteractionStore.getState().markerPlacement;
+    expect(placement?.target).toMatchObject({ kind: 'track-marker' });
+    act(() => {
+      completeMarkerPlacement({ longitude: 44.02, latitude: 42.02 }, 'Map marker');
+    });
+    const markerDialog = await screen.findByRole('dialog', {
+      name: 'Create track marker',
+    });
+    expect(
+      within(markerDialog).queryByRole('group', { name: 'Marker color' }),
+    ).not.toBeInTheDocument();
+    await user.click(within(markerDialog).getByRole('button', { name: 'Create' }));
+    expect(await within(details).findByText('Map marker')).toBeVisible();
+
+    const importedMarkerRow = within(details)
+      .getByText('Imported summit')
+      .closest('li');
+    expect(importedMarkerRow).not.toBeNull();
+    if (importedMarkerRow === null) return;
+    await user.click(within(importedMarkerRow).getByRole('button', { name: 'Rename' }));
+    const markerName = within(details).getByRole('textbox', {
+      name: 'Marker name',
+    });
+    await user.clear(markerName);
+    await user.type(markerName, 'Renamed summit{Enter}');
+    expect(await within(details).findByText('Renamed summit')).toBeVisible();
+
+    const addedMarkerRow = within(details).getByText('Map marker').closest('li');
+    expect(addedMarkerRow).not.toBeNull();
+    if (addedMarkerRow === null) return;
+    await user.click(
+      within(addedMarkerRow).getByRole('button', { name: 'Delete Map marker' }),
+    );
+    await user.click(
+      within(addedMarkerRow).getByRole('button', {
+        name: 'Confirm deletion of Map marker',
+      }),
+    );
+    await waitFor(() => {
+      expect(within(details).queryByText('Map marker')).not.toBeInTheDocument();
+    });
     const elevationProfile = within(details).getByRole('img', {
       name: 'Elevation profile from 1000 to 1120 metres',
     });
@@ -2607,13 +2658,32 @@ describe('WorkspaceShell', () => {
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
     );
+    const savedMarkerDisclosure = within(details).getByRole('button', {
+      name: 'Markers',
+    });
+    expect(savedMarkerDisclosure).toHaveAttribute('aria-expanded', 'false');
+    await user.click(savedMarkerDisclosure);
+    const savedMarkerRow = within(details).getByText('Renamed summit').closest('li');
+    expect(savedMarkerRow).not.toBeNull();
+    if (savedMarkerRow === null) return;
+    await user.click(within(savedMarkerRow).getByRole('button', { name: 'Rename' }));
+    const savedMarkerName = within(details).getByRole('textbox', {
+      name: 'Marker name',
+    });
+    await user.clear(savedMarkerName);
+    await user.type(savedMarkerName, 'Synchronized summit{Enter}');
+    expect(await within(details).findByText('Synchronized summit')).toBeVisible();
+    await waitFor(() => {
+      expect(trackMetadataChanged).toHaveBeenCalledOnce();
+    });
+
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(
       await screen.findByRole('menuitem', { name: 'Add to favorites' }),
     ).toBeVisible();
     await user.click(screen.getByRole('menuitem', { name: 'Add to favorites' }));
     await waitFor(() => {
-      expect(trackMetadataChanged).toHaveBeenCalledOnce();
+      expect(trackMetadataChanged).toHaveBeenCalledTimes(2);
     });
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
     expect(
@@ -2649,7 +2719,7 @@ describe('WorkspaceShell', () => {
       await within(details).findByRole('heading', { name: 'Final trail' }),
     ).toBeVisible();
     await waitFor(() => {
-      expect(trackMetadataChanged).toHaveBeenCalledTimes(2);
+      expect(trackMetadataChanged).toHaveBeenCalledTimes(3);
     });
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));

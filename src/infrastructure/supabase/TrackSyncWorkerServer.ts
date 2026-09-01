@@ -421,9 +421,7 @@ export class FetchRemoteGateway implements RemoteGateway {
       form.set('compressedBytes', String(geometry.byteLength));
       form.set(
         'metadata',
-        JSON.stringify(
-          remoteMetadata(pair.summary, state.lineageHash, state.geometryVersion),
-        ),
+        JSON.stringify(remoteMetadata(pair, state.lineageHash, state.geometryVersion)),
       );
       form.set(
         'geometry',
@@ -443,11 +441,7 @@ export class FetchRemoteGateway implements RemoteGateway {
           action: 'metadata',
           contentHash: state.contentHash,
           baseRevision: state.remoteRevision,
-          metadata: remoteMetadata(
-            pair.summary,
-            state.lineageHash,
-            state.geometryVersion,
-          ),
+          metadata: remoteMetadata(pair, state.lineageHash, state.geometryVersion),
         }),
         signal,
       });
@@ -624,10 +618,11 @@ export class FetchRemoteGateway implements RemoteGateway {
 }
 
 function remoteMetadata(
-  summary: LocalTrackSyncPair['summary'],
+  pair: LocalTrackSyncPair,
   lineageHash: string,
   geometryVersion: 1 | 2,
 ): Record<string, unknown> {
+  const { summary } = pair;
   const {
     metrics: _metrics,
     calculatedMetrics: _calculatedMetrics,
@@ -641,6 +636,7 @@ function remoteMetadata(
     ...metadata,
     lineageHash,
     geometryVersion,
+    markers: pair.content.markers,
     metrics: {
       distanceMeters: summary.metrics.distanceMeters,
       ...(summary.metrics.elapsedSeconds === undefined
@@ -714,6 +710,7 @@ function localFromRemote(
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: id,
         trackPoints: decoded,
+        markers: base.markers ?? [],
       },
     });
   } catch {

@@ -45,6 +45,7 @@ describe('parseGpx', () => {
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ code: 'track-preferred-over-route' }),
     );
+    expect(result.waypoints).toEqual([]);
   });
 
   it('preserves a Unicode track name and does not invent timestamps', async () => {
@@ -55,6 +56,38 @@ describe('parseGpx', () => {
     expect(
       result.segments[0]?.points.every((point) => point.recordedAt === undefined),
     ).toBe(true);
+  });
+  it('imports bounded root waypoints in document order', async () => {
+    const xml = await readFile(`${fixtures}/track-with-waypoints.gpx`, 'utf8');
+    const result = parseGpx(xml);
+
+    expect(result.waypoints).toEqual([
+      { name: 'Start flag', coordinate: [44.1, 41.1] },
+      { name: 'Marker 1', coordinate: [44.2, 41.2] },
+      { name: 'Rock & Ridge <camp>', coordinate: [44.3, 41.3] },
+    ]);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'invalid-waypoint', pointIndex: 3 }),
+    );
+  });
+
+  it('caps waypoint names and retains only the first 32 valid coordinates', () => {
+    const longName = 'a'.repeat(201);
+    const waypoints = Array.from({ length: 33 }, (_, index) => {
+      const name = index === 0 ? `<name>${longName}</name>` : '';
+      return `<wpt lat="${String(index)}" lon="${String(index)}">${name}</wpt>`;
+    }).join('');
+    const result = parseGpx(
+      `<gpx version="1.1">${waypoints}<trk><trkseg><trkpt lat="0" lon="0"/><trkpt lat="1" lon="1"/></trkseg></trk></gpx>`,
+    );
+
+    expect(result.waypoints).toHaveLength(32);
+    expect(result.waypoints[0]?.name).toBe('a'.repeat(200));
+    expect(result.waypoints[1]?.name).toBe('Marker 1');
+    expect(result.waypoints[31]?.name).toBe('Marker 31');
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'waypoint-limit-reached' }),
+    );
   });
 
   it('falls back to route geometry for GPX 1.0', () => {

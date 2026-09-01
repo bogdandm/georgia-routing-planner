@@ -97,6 +97,7 @@ function content(trackId: string): LocalTrackContent {
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
     trackId,
     trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }]],
+    markers: [],
   };
 }
 
@@ -209,6 +210,13 @@ describe('TrackSyncWorkerServer', () => {
     await database.saveLocalTrack(track, content(track.id));
     const compressed = bytesFromHex(fixture.gzipHex);
     vi.stubGlobal('Blob', NodeBlob);
+    const remoteMarkers = [
+      {
+        id: '00000000-0000-4000-8000-000000000002',
+        name: 'Remote pass',
+        coordinate: [44.02, 42.02] as const,
+      },
+    ];
     const remote = {
       content_hash: fixture.sha256,
       revision: 2,
@@ -225,6 +233,7 @@ describe('TrackSyncWorkerServer', () => {
         geometryKind: 'track',
         metadata: { version: '1.1', links: [] },
         warnings: [],
+        markers: remoteMarkers,
       },
     };
     const localRemote = {
@@ -277,6 +286,14 @@ describe('TrackSyncWorkerServer', () => {
         expect.objectContaining({ contentHash: fixture.sha256 }),
       ]),
     );
+    const downloaded = (await database.listLocalTracks()).find(
+      (candidate) => candidate.contentHash === fixture.sha256,
+    );
+    expect(downloaded).toBeDefined();
+    if (downloaded === undefined) throw new Error('Expected synchronized track.');
+    await expect(database.loadLocalTrackContent(downloaded.id)).resolves.toMatchObject({
+      markers: remoteMarkers,
+    });
     client.dispose();
   });
   it('returns a decision candidate for a known remote track absent from the snapshot', async () => {
@@ -1014,6 +1031,13 @@ describe('TrackSyncWorkerServer', () => {
           { coordinate: [44.03, 42.03], elevationMeters: -14.5 },
         ],
       ],
+      markers: [
+        {
+          id: '00000000-0000-4000-8000-000000000003',
+          name: 'Lineage summit',
+          coordinate: [44.02, 42.02],
+        },
+      ],
     };
     const sha256 = async (bytes: Uint8Array) =>
       Array.from(
@@ -1057,6 +1081,7 @@ describe('TrackSyncWorkerServer', () => {
         geometryKind: pair.summary.geometryKind,
         metadata: pair.summary.metadata,
         warnings: pair.summary.warnings,
+        markers: pair.content.markers,
       };
       if (lineageHash !== undefined && geometryVersion !== undefined) {
         metadata.lineageHash = lineageHash;
@@ -1240,6 +1265,7 @@ describe('TrackSyncWorkerServer', () => {
     expect(
       synchronizedContent.trackPoints[0]?.map((point) => point.elevationMeters),
     ).toEqual([120.25, undefined, 0, -14.5]);
+    expect(synchronizedContent.markers).toEqual(sourceContent.markers);
     expect(mutate).toHaveBeenCalledOnce();
     clientB.dispose();
   });
@@ -1254,6 +1280,7 @@ describe('TrackSyncWorkerServer', () => {
           { coordinate: [44.01, 42.01], elevationMeters: -14.5 },
         ],
       ],
+      markers: [],
     };
     const digest = async (bytes: Uint8Array) =>
       Array.from(

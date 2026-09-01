@@ -49,6 +49,13 @@ const pair = {
     trackPoints: [
       [{ coordinate: [44, 42] as const }, { coordinate: [44.01, 42.01] as const }],
     ],
+    markers: [
+      {
+        id: '00000000-0000-4000-8000-000000000001',
+        name: 'Track summit',
+        coordinate: [44.005, 42.005],
+      },
+    ],
   },
 } satisfies LocalTrackSyncPair;
 
@@ -85,6 +92,17 @@ describe('FetchRemoteGateway', () => {
         signal,
       ),
     ).resolves.toEqual({ outcome: 'applied', revision: 4 });
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(typeof request.body).toBe('string');
+    if (typeof request.body !== 'string')
+      throw new Error('Expected a JSON request body.');
+    expect(JSON.parse(request.body)).toMatchObject({
+      metadata: {
+        markers: pair.content.markers,
+        lineageHash: contentHash,
+        geometryVersion: 2,
+      },
+    });
   });
   it('excludes browser-calculated elevation from cloud metadata and geometry', async () => {
     class CapturingFormData {
@@ -158,6 +176,7 @@ describe('FetchRemoteGateway', () => {
       lineageHash: contentHash,
       geometryVersion: 2,
     });
+    expect(metadata.markers).toEqual(pair.content.markers);
     const geometry = form.get('geometry');
     expect(geometry).toBeInstanceOf(Blob);
     const decompressed = await new Response(

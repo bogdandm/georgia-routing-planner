@@ -57,6 +57,13 @@ const content: LocalTrackContent = {
       { coordinate: [45, 43] as const, elevationMeters: 110 },
     ],
   ],
+  markers: [
+    {
+      id: '00000000-0000-4000-8000-000000000005',
+      name: 'Summit & <camp>',
+      coordinate: [44.25, 42.25],
+    },
+  ],
 };
 
 describe('track export', () => {
@@ -71,6 +78,23 @@ describe('track export', () => {
     expect(gpx).toContain('<time>2026-07-01T10:00:00.000Z</time>');
     expect(kml).not.toContain('<description>');
     expect(kml).toContain('44,42,100 45,43,110');
+  });
+
+  it('round-trips ordered track markers as root GPX waypoints only', () => {
+    const gpx = exportTrackAsGpx(summary, content);
+    const parsed = parseGpx(gpx);
+
+    expect(gpx).toContain(
+      '<wpt lat="42.25" lon="44.25"><name>Summit &amp; &lt;camp&gt;</name></wpt>',
+    );
+    expect(gpx.indexOf('<wpt')).toBeLessThan(gpx.indexOf('<trk>'));
+    expect(parsed.waypoints).toEqual([
+      {
+        name: 'Summit & <camp>',
+        coordinate: [44.25, 42.25],
+      },
+    ]);
+    expect(exportTrackAsKml(summary, content)).not.toContain('Summit');
   });
 
   it('exports generated routes as segmented GPX tracks for downstream compatibility', () => {

@@ -153,12 +153,12 @@ export interface SavedMarker {
   readonly updatedAt: string;
 }
 
-export interface NormalizedSavedMarkerName {
+export interface NormalizedMarkerName {
   readonly name: string;
   readonly normalizedName: string;
 }
 
-export function normalizeSavedMarkerName(name: string): NormalizedSavedMarkerName {
+export function normalizeMarkerName(name: string): NormalizedMarkerName {
   const trimmed = name.trim();
   if (trimmed.length === 0) throw new Error('Marker name is required.');
   if (trimmed.length > 200) {

@@ -44,15 +44,19 @@ not yet accept saved markers as search targets. The sidebar never receives the n
 MapLibre object and falls back to `defaultGeorgiaCamera` before the first snapshot is
 available.
 
-`MarkersWorkspaceProvider` loads validated saved markers from the IndexedDB repository
-and sends the ready collection to `MapLibreLayerController`. **New marker** changes the
-map interaction mode until the next map click; the context-menu action supplies a point
-directly. Both paths query the facade's nearest inspected POI for an initial name and
-queue one creation command until marker loading is ready. Confirmation writes the
-marker, then the controller reconciles GeoJSON features and generated MUI icon images.
-Row navigation changes the shared map camera without remounting the map. Rename,
-appearance changes, deletion, and the persisted sort preference stay local to this
-browser.
+`MarkersWorkspaceProvider` loads validated global saved markers from the IndexedDB
+repository and sends the ready collection to `MapLibreLayerController`. **New marker**
+changes the map interaction mode until the next map click; the context-menu action
+supplies a point directly. Both paths query the facade's nearest inspected POI for an
+initial name and queue one creation command until marker loading is ready. Confirmation
+writes the marker, then the controller reconciles GeoJSON features and generated MUI
+icon images. `TracksWorkspaceProvider` independently sends markers from only the active
+editable preview or saved track to the same source and symbol layer. The controller
+combines both owners without letting either clear the other and selects the smaller
+track-marker icon and label values from feature properties. Row navigation changes the
+shared map camera without remounting the map. Global rename, appearance changes,
+deletion, and persisted sort remain owned by the global marker workspace; synchronized
+global marker records stay separate from track metadata.
 
 Changing sections changes floating contextual content, not the full-viewport map owner
 or its dimensions. Collapsing navigation keeps only the Trail Planner logo above the
@@ -425,12 +429,15 @@ released row makes it an orphan for mandatory later cleanup.
 The canonical hash identifies the exact GRPT payload; lineage keeps v1 and v2
 representations of the same source track related. GRPT v1 retains normalized source
 coordinates and timestamps. GRPT v2 additionally retains each source point's exact
-finite elevation or explicit missing value. JSON contains the bounded source metadata
-and distance/elapsed metrics already owned by synchronization. Browser-calculated
-Terrarium points and metrics remain local derived data: only explicit recalculation
-replaces them, and it neither changes the content hash nor creates a cloud revision.
-Another browser therefore displays synchronized source elevation when present and leaves
-legacy remote-only v1 elevation missing rather than inventing terrain values.
+finite elevation or explicit missing value. JSON contains the bounded source metadata,
+track-owned marker IDs, names, and coordinates, and distance/elapsed metrics already
+owned by synchronization. Marker-only edits use metadata revisions and therefore do not
+change GRPT bytes, canonical content hashes, lineage, or duplicate grouping.
+Browser-calculated Terrarium points and metrics remain local derived data: only explicit
+recalculation replaces them, and it neither changes the content hash nor creates a cloud
+revision. Another browser therefore displays synchronized source elevation and track
+markers when present and leaves legacy remote-only v1 elevation missing rather than
+inventing terrain values.
 
 JSON requests support metadata update, hard deletion, and quota status. The database RPC
 response has one explicit outcome: `applied | upload | conflict | existing | missing`.

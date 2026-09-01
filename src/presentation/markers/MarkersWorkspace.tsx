@@ -38,9 +38,9 @@ import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
-  normalizeSavedMarkerName,
+  normalizeMarkerName,
   type MarkerSort,
-  type NormalizedSavedMarkerName,
+  type NormalizedMarkerName,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
 import {
@@ -197,7 +197,12 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
-    if (markerCreationCommand === null || loadState !== 'ready') return;
+    if (
+      markerCreationCommand?.target.kind !== 'saved-marker' ||
+      loadState !== 'ready'
+    ) {
+      return;
+    }
     const command = markerCreationCommand;
     const timer = window.setTimeout(() => {
       consumeMarkerCreationCommand(command.id);
@@ -224,7 +229,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   }, [mapLayers]);
 
   const createMarker = useCallback(
-    async (name: NormalizedSavedMarkerName, appearance: MarkerAppearance) => {
+    async (name: NormalizedMarkerName, appearance: MarkerAppearance) => {
       const draft = editorDraft;
       if (draft?.mode !== 'create')
         throw new Error('The marker creation draft is unavailable.');
@@ -272,7 +277,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
 
   const renameMarker = useCallback(
     async (marker: SavedMarker, name: string) => {
-      const normalized = normalizeSavedMarkerName(name);
+      const normalized = normalizeMarkerName(name);
       const updated = await savedMarkers.updateSavedMarker(marker.id, {
         name: normalized.name,
         normalizedName: normalized.normalizedName,

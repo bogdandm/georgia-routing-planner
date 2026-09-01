@@ -133,6 +133,7 @@ export function parseKml(xml: string): ParsedGpx {
     parserVersion: GPX_PARSER_VERSION,
     geometryKind: 'track',
     segments,
+    waypoints: [],
     pointCount,
     metadata: {
       version: '1.1',

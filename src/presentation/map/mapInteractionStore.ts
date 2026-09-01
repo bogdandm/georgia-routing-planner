@@ -31,15 +31,20 @@ interface MapPointInspectionCommand {
 interface SatelliteSearchRequest {
   readonly id: number;
 }
+export type MarkerPlacementTarget =
+  | { readonly kind: 'saved-marker' }
+  | { readonly kind: 'track-marker'; readonly trackId: string };
 
 interface MarkerPlacement {
   readonly id: number;
+  readonly target: MarkerPlacementTarget;
 }
 
 interface MarkerCreationCommand {
   readonly id: number;
   readonly coordinate: MapCoordinate;
   readonly suggestedName?: string;
+  readonly target: MarkerPlacementTarget;
 }
 
 interface MapInteractionState {
@@ -141,10 +146,10 @@ export function consumeSatelliteSearchRequest(requestId: number): void {
   mapInteractionStore.setState({ satelliteSearchRequest: null });
 }
 
-export function requestMarkerPlacement(): void {
+export function requestMarkerPlacement(target: MarkerPlacementTarget): void {
   nextMarkerCommandId += 1;
   mapInteractionStore.setState({
-    markerPlacement: { id: nextMarkerCommandId },
+    markerPlacement: { id: nextMarkerCommandId, target },
     markerCreationCommand: null,
   });
 }
@@ -163,9 +168,11 @@ export function requestMarkerCreationAt(
     id: number;
     coordinate: MapCoordinate;
     suggestedName?: string;
+    target: MarkerPlacementTarget;
   } = {
     id: nextMarkerCommandId,
     coordinate: { ...coordinate },
+    target: { kind: 'saved-marker' },
   };
   if (suggestedName !== undefined) command.suggestedName = suggestedName;
   mapInteractionStore.setState({
@@ -178,15 +185,18 @@ export function completeMarkerPlacement(
   coordinate: MapCoordinate,
   suggestedName?: string,
 ): void {
-  if (mapInteractionStore.getState().markerPlacement === null) return;
+  const placement = mapInteractionStore.getState().markerPlacement;
+  if (placement === null) return;
   nextMarkerCommandId += 1;
   const command: {
     id: number;
     coordinate: MapCoordinate;
     suggestedName?: string;
+    target: MarkerPlacementTarget;
   } = {
     id: nextMarkerCommandId,
     coordinate: { ...coordinate },
+    target: placement.target,
   };
   if (suggestedName !== undefined) command.suggestedName = suggestedName;
   mapInteractionStore.setState({

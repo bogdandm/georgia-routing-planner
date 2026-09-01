@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Trail Planner tests">
+  <wpt lat="41.10" lon="44.10"><name> Start flag </name></wpt>
+  <wpt lat="41.20" lon="44.20"><name>   </name></wpt>
+  <wpt lat="41.30" lon="44.30"><name>Rock &amp; Ridge &lt;camp&gt;</name></wpt>
+  <wpt lat="invalid" lon="45"><name>Ignored waypoint</name></wpt>
+  <trk>
+    <name>Waypoint track</name>
+    <trkseg>
+      <trkpt lat="41.00" lon="44.00"/>
+      <trkpt lat="41.50" lon="44.50"/>
+    </trkseg>
+  </trk>
+</gpx>

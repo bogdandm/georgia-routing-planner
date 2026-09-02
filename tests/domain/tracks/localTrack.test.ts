@@ -41,6 +41,7 @@ describe('local track projections', () => {
           { coordinate: [45, 43] as const, elevationMeters: 110 },
         ],
       ],
+      markers: [],
     };
 
     expect(localTrackSegments(content)).toEqual([

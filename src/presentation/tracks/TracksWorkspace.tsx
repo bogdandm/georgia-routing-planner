@@ -54,6 +54,7 @@ import {
   type ReactElement,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useStore } from 'zustand';
 
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import {
@@ -61,6 +62,10 @@ import {
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import {
+  normalizeMarkerName,
+  type NormalizedMarkerName,
+} from '@/domain/markers/savedMarker';
 import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
 import {
   GPX_PARSER_VERSION,
@@ -71,10 +76,12 @@ import {
 } from '@/domain/tracks/gpx';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  MAXIMUM_TRACK_MARKERS,
   localTrackSegments,
   normalizeLocalTrackName,
   type LocalTrackContent,
   type LocalTrackSummary,
+  type TrackMarker,
   type TrackSort,
 } from '@/domain/tracks/localTrack';
 import {
@@ -121,7 +128,9 @@ import {
   TrackStats,
   type TrackStatsMetrics,
 } from '@/presentation/tracks/TrackSummary';
+import { MarkerEditorDialog } from '@/presentation/markers/MarkerEditorDialog';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
+import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import {
   formatTrackDistance,
   formatTrackElevation,
@@ -142,12 +151,18 @@ import {
   type RoutePlanSegmentMode,
 } from '@/presentation/tracks/routePlan';
 import {
+  cancelMarkerPlacement,
+  consumeMarkerCreationCommand,
+  mapInteractionStore,
   requestMapFitBounds,
   requestMapNavigation,
+  requestMarkerPlacement,
 } from '@/presentation/map/mapInteractionStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
+
+const EMPTY_TRACK_MARKERS: readonly TrackMarker[] = [];
 
 interface PreviewTrackBase {
   readonly kind: 'preview';
@@ -156,6 +171,7 @@ interface PreviewTrackBase {
   readonly parsed: ParsedGpx;
   readonly sourceFormat: TrackSourceFormat;
   readonly name: string;
+  readonly markers: readonly TrackMarker[];
 }
 
 interface PreparingPreviewTrack extends PreviewTrackBase {
@@ -195,6 +211,12 @@ interface SavedTrackSelection {
   readonly summary: LocalTrackSummary;
   readonly content: LocalTrackContent;
   readonly draftName: string;
+}
+
+interface TrackMarkerEditorDraft {
+  readonly trackId: string;
+  readonly coordinate: TrackCoordinate;
+  readonly initialName: string;
 }
 
 type ActiveTrack =
@@ -242,6 +264,9 @@ interface TracksWorkspaceValue {
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
   readonly discardRoutePlan: () => void;
+  readonly startTrackMarkerPlacement: () => void;
+  readonly renameTrackMarker: (markerId: string, name: string) => Promise<void>;
+  readonly deleteTrackMarker: (markerId: string) => Promise<void>;
   readonly recalculateElevation: () => Promise<void>;
   readonly savePreview: () => Promise<void>;
   readonly saveRoutePlan: () => Promise<void>;
@@ -391,6 +416,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     searchPlaces,
   } = useRuntimeServices();
   const trackSort = useUiStore((state) => state.trackSort);
+  const markerPlacement = useStore(
+    mapInteractionStore,
+    (state) => state.markerPlacement,
+  );
+  const markerCreationCommand = useStore(
+    mapInteractionStore,
+    (state) => state.markerCreationCommand,
+  );
   const subscribeViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
@@ -409,6 +442,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
+  const editableTrackId =
+    active?.kind === 'saved'
+      ? active.summary.id
+      : active?.kind === 'preview'
+        ? active.id
+        : null;
+  const editableTrackMarkers =
+    active?.kind === 'saved'
+      ? active.content.markers
+      : active?.kind === 'preview'
+        ? active.markers
+        : null;
   const [multiTrackSelections, setMultiTrackSelections] = useState<
     readonly MultiTrackSelection[]
   >([]);
@@ -420,6 +465,48 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   >('idle');
   const [elevationProgress, setElevationProgress] =
     useState<TrackElevationPreparationProgress | null>(null);
+  const [trackMarkerDraft, setTrackMarkerDraft] =
+    useState<TrackMarkerEditorDraft | null>(null);
+  useEffect(() => {
+    const command = markerCreationCommand;
+    if (command?.target.kind !== 'track-marker') return;
+    const trackId = command.target.trackId;
+    const matchesActiveTrack = !multiTrackMode && trackId === editableTrackId;
+    const timer = window.setTimeout(() => {
+      consumeMarkerCreationCommand(command.id);
+      if (!matchesActiveTrack) return;
+      setTrackMarkerDraft({
+        trackId,
+        coordinate: [command.coordinate.longitude, command.coordinate.latitude],
+        initialName: command.suggestedName ?? '',
+      });
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [editableTrackId, markerCreationCommand, multiTrackMode]);
+  useEffect(() => {
+    if (
+      markerPlacement?.target.kind === 'track-marker' &&
+      (multiTrackMode || markerPlacement.target.trackId !== editableTrackId)
+    ) {
+      cancelMarkerPlacement();
+    }
+  }, [editableTrackId, markerPlacement, multiTrackMode]);
+  useEffect(() => {
+    if (
+      trackMarkerDraft === null ||
+      (!multiTrackMode && trackMarkerDraft.trackId === editableTrackId)
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setTrackMarkerDraft(null);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [editableTrackId, multiTrackMode, trackMarkerDraft]);
   const namingAbort = useRef<AbortController | null>(null);
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
@@ -446,6 +533,23 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           selection.status === 'ready',
       ),
     [multiTrackSelections],
+  );
+  const visibleTrackMarkers = useMemo(() => {
+    if (multiTrackMode) return EMPTY_TRACK_MARKERS;
+    if (active?.kind === 'saved') return active.content.markers;
+    if (active?.kind === 'preview') return active.markers;
+    return EMPTY_TRACK_MARKERS;
+  }, [active, multiTrackMode]);
+
+  useEffect(() => {
+    mapLayers?.setTrackMarkers(visibleTrackMarkers);
+  }, [mapLayers, visibleTrackMarkers]);
+
+  useEffect(
+    () => () => {
+      mapLayers?.setTrackMarkers([]);
+    },
+    [mapLayers],
   );
 
   const saveLatestOpenedTrackId = useCallback(
@@ -535,6 +639,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           parserVersion: GPX_PARSER_VERSION,
           geometryKind: shared.metadata.geometryKind,
           segments: sourceSegments,
+          waypoints: [],
           pointCount: shared.trackPoints.reduce(
             (count, points) => count + points.length,
             0,
@@ -554,6 +659,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           parsed,
           sourceFormat: shared.metadata.sourceFormat,
           name: shared.metadata.name,
+          markers: [],
           preparationStatus: 'ready',
           sourceSegments,
           sourceProfile: null,
@@ -1040,6 +1146,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           parsed,
           sourceFormat,
           name: initialTrackName(file, parsed),
+          markers: parsed.waypoints.map((waypoint) => ({
+            id: idGenerator.generate(),
+            name: waypoint.name,
+            coordinate: waypoint.coordinate,
+          })),
         };
         setActive({ ...previewBase, preparationStatus: 'preparing' });
         try {
@@ -1410,6 +1521,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: planId,
         trackPoints: [active.segment.points],
+        markers: [],
       };
       const summary: LocalTrackSummary = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
@@ -1499,6 +1611,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: savedTrackId,
         trackPoints: active.sourceSegments.map((segment) => segment.points),
+        markers: active.markers,
         ...(active.calculatedSegments === null
           ? {}
           : {
@@ -1922,6 +2035,122 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, database, reloadSummaries, userData]);
 
+  const updateTrackMarkers = useCallback(
+    async (trackId: string, markers: readonly TrackMarker[]) => {
+      if (active?.kind === 'preview' && active.id === trackId) {
+        setActive((current) =>
+          current?.kind === 'preview' && current.id === trackId
+            ? { ...current, markers }
+            : current,
+        );
+        return;
+      }
+      if (active?.kind !== 'saved' || active.summary.id !== trackId) {
+        throw new Error('The active track changed before the marker update.');
+      }
+      const updated = await database.updateLocalTrackMarkers(trackId, markers);
+      setActive((current) =>
+        current?.kind === 'saved' && current.summary.id === trackId
+          ? {
+              ...current,
+              summary: updated.summary,
+              content: updated.content,
+            }
+          : current,
+      );
+      await reloadSummaries();
+      void userData.trackMetadataChanged(trackId);
+    },
+    [active, database, reloadSummaries, userData],
+  );
+
+  const startTrackMarkerPlacement = useCallback(() => {
+    if (multiTrackMode || editableTrackId === null || editableTrackMarkers === null) {
+      return;
+    }
+    if (editableTrackMarkers.length >= MAXIMUM_TRACK_MARKERS) {
+      setError(`A track can have up to ${String(MAXIMUM_TRACK_MARKERS)} markers.`);
+      return;
+    }
+    requestMarkerPlacement({ kind: 'track-marker', trackId: editableTrackId });
+  }, [editableTrackId, editableTrackMarkers, multiTrackMode]);
+
+  const createTrackMarker = useCallback(
+    async (name: NormalizedMarkerName) => {
+      const draft = trackMarkerDraft;
+      if (
+        draft === null ||
+        multiTrackMode ||
+        draft.trackId !== editableTrackId ||
+        editableTrackMarkers === null
+      ) {
+        throw new Error('The active track changed before the marker was created.');
+      }
+      if (editableTrackMarkers.length >= MAXIMUM_TRACK_MARKERS) {
+        throw new Error(
+          `A track can have up to ${String(MAXIMUM_TRACK_MARKERS)} markers.`,
+        );
+      }
+      await updateTrackMarkers(draft.trackId, [
+        ...editableTrackMarkers,
+        {
+          id: idGenerator.generate(),
+          name: name.name,
+          coordinate: draft.coordinate,
+        },
+      ]);
+      setTrackMarkerDraft((current) =>
+        current?.trackId === draft.trackId ? null : current,
+      );
+    },
+    [
+      editableTrackId,
+      editableTrackMarkers,
+      idGenerator,
+      multiTrackMode,
+      trackMarkerDraft,
+      updateTrackMarkers,
+    ],
+  );
+
+  const renameTrackMarker = useCallback(
+    async (markerId: string, name: string) => {
+      if (editableTrackId === null || editableTrackMarkers === null) {
+        throw new Error('No editable track is active.');
+      }
+      const marker = editableTrackMarkers.find(
+        (candidate) => candidate.id === markerId,
+      );
+      if (marker === undefined) throw new Error('The track marker was not found.');
+      const normalized = normalizeMarkerName(name);
+      await updateTrackMarkers(
+        editableTrackId,
+        editableTrackMarkers.map((candidate) =>
+          candidate.id === marker.id
+            ? { ...candidate, name: normalized.name }
+            : candidate,
+        ),
+      );
+    },
+    [editableTrackId, editableTrackMarkers, updateTrackMarkers],
+  );
+
+  const deleteTrackMarker = useCallback(
+    async (markerId: string) => {
+      if (editableTrackId === null || editableTrackMarkers === null) {
+        throw new Error('No editable track is active.');
+      }
+      if (!editableTrackMarkers.some((marker) => marker.id === markerId)) {
+        throw new Error('The track marker was not found.');
+      }
+      await updateTrackMarkers(
+        editableTrackId,
+        editableTrackMarkers.filter((marker) => marker.id !== markerId),
+      );
+    },
+    [editableTrackId, editableTrackMarkers, updateTrackMarkers],
+  );
+
   const toggleFavorite = useCallback(
     async (summary: LocalTrackSummary) => {
       try {
@@ -2083,6 +2312,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       deleteSaved,
       discardPreview,
       discardRoutePlan,
+      startTrackMarkerPlacement,
+      renameTrackMarker,
+      deleteTrackMarker,
       recalculateElevation,
       recalculationState,
       renameActive,
@@ -2109,6 +2341,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       deleteSaved,
       discardPreview,
       discardRoutePlan,
+      startTrackMarkerPlacement,
+      renameTrackMarker,
+      deleteTrackMarker,
       error,
       filteredSummaries,
       importError,
@@ -2136,7 +2371,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ],
   );
 
-  return <TracksWorkspaceContext value={value}>{children}</TracksWorkspaceContext>;
+  return (
+    <>
+      <TracksWorkspaceContext value={value}>{children}</TracksWorkspaceContext>
+      <MarkerEditorDialog
+        open={trackMarkerDraft !== null}
+        mode="name-only"
+        initialName={trackMarkerDraft?.initialName ?? ''}
+        title="Create track marker"
+        onCancel={() => {
+          setTrackMarkerDraft(null);
+        }}
+        onSubmit={createTrackMarker}
+      />
+    </>
+  );
 }
 
 interface TrackSortControlProps {
@@ -3124,6 +3373,9 @@ export function TrackDetailsPane({
     deleteSaved,
     discardPreview,
     discardRoutePlan,
+    startTrackMarkerPlacement,
+    renameTrackMarker,
+    deleteTrackMarker,
     multiTrackMode,
     multiTrackSelections,
     multiTrackStatsMetrics,
@@ -3138,7 +3390,13 @@ export function TrackDetailsPane({
     toggleMultiTrackMode,
     undoLastRoutePlanPoint,
   } = useTracksWorkspace();
-  const { trackShares, userData } = useRuntimeServices();
+  const trackMarkers =
+    active?.kind === 'saved'
+      ? active.content.markers
+      : active?.kind === 'preview'
+        ? active.markers
+        : null;
+  const { elevationProvider, trackShares, userData } = useRuntimeServices();
   const subscribeUser = useCallback(
     (listener: () => void) => userData.subscribe(listener),
     [userData],
@@ -3992,6 +4250,16 @@ export function TrackDetailsPane({
           <TrackElevationAnalysis
             key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
           />
+          {trackMarkers === null ? null : (
+            <TrackMarkersSection
+              key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
+              elevationProvider={elevationProvider}
+              markers={trackMarkers}
+              onAdd={startTrackMarkerPlacement}
+              onRename={renameTrackMarker}
+              onDelete={deleteTrackMarker}
+            />
+          )}
           {active.kind === 'route-plan' ? null : (
             <TrackMetadata
               calculatedMetrics={calculatedMetrics}

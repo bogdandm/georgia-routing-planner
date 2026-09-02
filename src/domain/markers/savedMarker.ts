@@ -153,16 +153,30 @@ export interface SavedMarker {
   readonly updatedAt: string;
 }
 
-export interface NormalizedSavedMarkerName {
+export interface NormalizedMarkerName {
   readonly name: string;
   readonly normalizedName: string;
 }
 
-export function normalizeSavedMarkerName(name: string): NormalizedSavedMarkerName {
+export function normalizeMarkerName(name: string): NormalizedMarkerName {
   const trimmed = name.trim();
   if (trimmed.length === 0) throw new Error('Marker name is required.');
   if (trimmed.length > 200) {
     throw new Error('Marker name must be 200 characters or fewer.');
+  }
+  for (const character of trimmed) {
+    const codePoint = character.codePointAt(0);
+    const validXmlCharacter =
+      codePoint === 0x09 ||
+      codePoint === 0x0a ||
+      codePoint === 0x0d ||
+      (codePoint !== undefined &&
+        ((codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+          (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+          (codePoint >= 0x10000 && codePoint <= 0x10ffff)));
+    if (!validXmlCharacter) {
+      throw new Error('Marker name contains characters that cannot be exported.');
+    }
   }
   return {
     name: trimmed,

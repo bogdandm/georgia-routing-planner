@@ -5,7 +5,7 @@ import {
   markerColorKeys,
   markerIconKeys,
   markerSorts,
-  normalizeSavedMarkerName,
+  normalizeMarkerName,
 } from '@/domain/markers/savedMarker';
 
 describe('saved markers', () => {
@@ -45,16 +45,19 @@ describe('saved markers', () => {
   });
 
   it('trims a name and derives an English-locale comparison key', () => {
-    expect(normalizeSavedMarkerName('  Kazbegi Ridge  ')).toEqual({
+    expect(normalizeMarkerName('  Kazbegi Ridge  ')).toEqual({
       name: 'Kazbegi Ridge',
       normalizedName: 'kazbegi ridge',
     });
   });
 
-  it('rejects empty and overlong names', () => {
-    expect(() => normalizeSavedMarkerName('   ')).toThrow('Marker name is required.');
-    expect(() => normalizeSavedMarkerName('x'.repeat(201))).toThrow(
+  it('rejects empty, overlong, and XML-invalid names', () => {
+    expect(() => normalizeMarkerName('   ')).toThrow('Marker name is required.');
+    expect(() => normalizeMarkerName('x'.repeat(201))).toThrow(
       'Marker name must be 200 characters or fewer.',
+    );
+    expect(() => normalizeMarkerName('Control\u0001character')).toThrow(
+      'Marker name contains characters that cannot be exported.',
     );
   });
 });

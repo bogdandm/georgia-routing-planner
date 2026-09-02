@@ -43,6 +43,7 @@ describe('GRPT geometry', () => {
           },
         ],
       ],
+      markers: [],
     };
 
     const canonical = encodeLegacyTrackSyncGeometry(content);
@@ -93,6 +94,13 @@ describe('GRPT geometry', () => {
           },
           { coordinate: [44.79303, 41.709025] },
         ],
+      ],
+      markers: [
+        {
+          id: '00000000-0000-4000-8000-000000000004',
+          name: 'Hash-independent marker',
+          coordinate: [44.79301, 41.709005],
+        },
       ],
     };
 
@@ -151,6 +159,7 @@ describe('GRPT geometry', () => {
           },
         ],
       ],
+      markers: [],
     };
     expect(decodeTrackSyncGeometry(encodeTrackSyncGeometry(content))).toEqual([
       [
@@ -182,6 +191,7 @@ describe('GRPT geometry', () => {
       schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:invalid',
       trackPoints: [[firstPoint, { coordinate: [44, 42] }]],
+      markers: [],
     };
     expect(() => encodeTrackSyncGeometry(content)).toThrow(TrackSyncGeometryError);
   });
@@ -192,11 +202,13 @@ describe('GRPT geometry', () => {
       schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:segments',
       trackPoints: Array.from({ length: 513 }, () => [point, point]),
+      markers: [],
     };
     const tooManyPoints: LocalTrackContent = {
       schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:points',
       trackPoints: [Array.from({ length: 100_001 }, () => point)],
+      markers: [],
     };
     expect(() => encodeTrackSyncGeometry(tooManySegments)).toThrow(
       TrackSyncGeometryError,

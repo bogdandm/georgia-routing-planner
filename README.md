@@ -16,7 +16,8 @@ _This project was built 100% with LLMs._
 
 - Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
 - Search for places or coordinates and inspect recent Sentinel-2 satellite imagery.
-- Import GPX, FIT, and KML tracks directly in the browser.
+- Import GPX tracks with their root waypoints, plus FIT and KML tracks, directly in the
+  browser.
 - Plan multi-point routes over available roads and trails or add direct line segments.
 - Review distance, duration, speed, ascent, descent, elevation profile, and route
   grades.
@@ -40,7 +41,8 @@ road and trail topology or remains a direct line. Routing and elevation calculat
 in the browser; saving stores the result as an existing local track.
 
 Saved tracks remain available after reopening the application. They can be searched,
-favorited, renamed, deleted, or downloaded as GPX or KML.
+favorited, renamed, deleted, or downloaded as GPX or KML. GPX waypoints stay attached to
+their track as name-only markers and are included in GPX downloads.
 
 When usable elevation is available, the track view adds:
 
@@ -56,9 +58,14 @@ of interest is available, Trail Planner suggests its name before saving. Choose 
 Pinhead map icons grouped by category and ten colors; saved markers render on the map
 and remain available after reopening the application.
 
+Root GPX waypoints are imported as track-owned markers. The active editable track lists
+them below elevation analysis, renders them as compact blue pins, and supports adding,
+renaming, navigating to, and deleting them without adding them to the global marker
+library. They persist and synchronize with the track.
+
 The marker library sorts by creation time, name, color, or distance from the current map
-area. Marker search, grouping, remote synchronization, Satellite targeting, and copying
-markers into a manually created GPX route are not currently available.
+area. Marker search, grouping, Satellite targeting, and copying global markers into a
+manually created GPX route are not currently available.
 
 ## Maps and satellite imagery
 

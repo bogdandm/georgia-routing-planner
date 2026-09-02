@@ -112,6 +112,7 @@ export function parseFit(buffer: ArrayBuffer): ParsedGpx {
     parserVersion: GPX_PARSER_VERSION,
     geometryKind: 'track',
     segments,
+    waypoints: [],
     pointCount: segments.reduce((sum, segment) => sum + segment.points.length, 0),
     metadata: {
       version: '1.1',

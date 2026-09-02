@@ -35,16 +35,18 @@ import {
   markerColorKeys,
   markerIconKeys,
   markerSorts,
-  normalizeSavedMarkerName,
+  normalizeMarkerName,
   type MarkerSort,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  MAXIMUM_TRACK_MARKERS,
   normalizeLocalTrackName,
   trackSorts,
   type LocalTrackContent,
   type LocalTrackSummary,
+  type TrackMarker,
   type TrackSort,
 } from '@/domain/tracks/localTrack';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
@@ -460,9 +462,11 @@ const warningSchema = z
   .object({
     code: z.enum([
       'invalid-point',
+      'invalid-waypoint',
       'short-segment',
       'track-preferred-over-route',
       'invalid-time',
+      'waypoint-limit-reached',
       'warning-limit-reached',
     ]),
     message: z.string().min(1).max(500),
@@ -550,17 +554,22 @@ type LocalTrackContentBuilder = {
   -readonly [Key in keyof LocalTrackContent]: LocalTrackContent[Key];
 };
 
+function isLegacyLocalTrackRecord(
+  value: unknown,
+): value is Record<string, unknown> & { readonly schemaVersion: 1 | 2 | 3 | 4 } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'schemaVersion' in value &&
+    typeof value.schemaVersion === 'number' &&
+    Number.isInteger(value.schemaVersion) &&
+    value.schemaVersion >= 1 &&
+    value.schemaVersion <= 4
+  );
+}
+
 function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('schemaVersion' in value) ||
-    (value.schemaVersion !== 1 &&
-      value.schemaVersion !== 2 &&
-      value.schemaVersion !== 3)
-  ) {
-    return value;
-  }
+  if (!isLegacyLocalTrackRecord(value)) return value;
   const migrated = {
     ...value,
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
@@ -569,6 +578,15 @@ function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
     return { ...migrated, updatedAt: migrated.savedAt };
   }
   return migrated;
+}
+
+function withCurrentLocalTrackContentSchemaVersion(value: unknown): unknown {
+  if (!isLegacyLocalTrackRecord(value)) return value;
+  return {
+    ...value,
+    schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    markers: [],
+  };
 }
 function withoutCalculatedElevation(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) return value;
@@ -673,12 +691,50 @@ const storedTrackSegmentsSchema = z
 
 const storedCalculatedTrackSegmentsSchema = storedTrackSegmentsSchema.optional();
 
+const markerNameSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => {
+    try {
+      return normalizeMarkerName(value).name === value;
+    } catch {
+      return false;
+    }
+  }, 'Marker names must be normalized and exportable.');
+
+const trackMarkerSchema: z.ZodType<TrackMarker> = z
+  .object({
+    id: z.uuid(),
+    name: markerNameSchema,
+    coordinate: coordinateSchema,
+  })
+  .strict();
+
+const trackMarkersSchema = z
+  .array(trackMarkerSchema)
+  .max(MAXIMUM_TRACK_MARKERS)
+  .superRefine((markers, context) => {
+    const markerIds = new Set<string>();
+    for (const [index, marker] of markers.entries()) {
+      if (markerIds.has(marker.id)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Track marker identifiers must be unique.',
+          path: [index, 'id'],
+        });
+      }
+      markerIds.add(marker.id);
+    }
+  });
+
 const currentLocalTrackContentSchema = z
   .object({
     schemaVersion: z.literal(LOCAL_TRACK_SCHEMA_VERSION),
     trackId: z.string().min(1).max(200),
     trackPoints: storedTrackSegmentsSchema,
     calculatedTrackPoints: storedCalculatedTrackSegmentsSchema,
+    markers: trackMarkersSchema,
   })
   .strict()
   .transform((value): LocalTrackContent => {
@@ -686,6 +742,7 @@ const currentLocalTrackContentSchema = z
       schemaVersion: value.schemaVersion,
       trackId: value.trackId,
       trackPoints: value.trackPoints,
+      markers: value.markers,
     };
     if (value.calculatedTrackPoints !== undefined) {
       content.calculatedTrackPoints = value.calculatedTrackPoints;
@@ -707,10 +764,11 @@ const legacyLocalTrackContentSchema: z.ZodType<LocalTrackContent> = z
     trackPoints:
       value.trackPoints ??
       value.segments.map((segment) => segment.map((coordinate) => ({ coordinate }))),
+    markers: [],
   }));
 
 const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.preprocess(
-  withCurrentLocalTrackSchemaVersion,
+  withCurrentLocalTrackContentSchemaVersion,
   z.union([currentLocalTrackContentSchema, legacyLocalTrackContentSchema]),
 );
 
@@ -756,12 +814,6 @@ function parseTrackSyncState(value: unknown): TrackSyncState | null {
   return result.success ? result.data : null;
 }
 
-const markerNameSchema = z
-  .string()
-  .min(1)
-  .max(200)
-  .refine((value) => value.trim() === value, 'Marker names must be trimmed.');
-
 const savedMarkerSchema: z.ZodType<SavedMarker> = z
   .object({
     schemaVersion: z.literal(SAVED_MARKER_SCHEMA_VERSION),
@@ -776,7 +828,7 @@ const savedMarkerSchema: z.ZodType<SavedMarker> = z
   })
   .strict()
   .superRefine((value, context) => {
-    const normalized = normalizeSavedMarkerName(value.name);
+    const normalized = normalizeMarkerName(value.name);
     if (value.normalizedName !== normalized.normalizedName) {
       context.addIssue({
         code: 'custom',
@@ -796,7 +848,7 @@ const savedMarkerUpdateSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const normalized = normalizeSavedMarkerName(value.name);
+    const normalized = normalizeMarkerName(value.name);
     if (value.normalizedName !== normalized.normalizedName) {
       context.addIssue({
         code: 'custom',
@@ -952,15 +1004,31 @@ export class AppDatabase
           if (parsed !== null) await contentTable.put(parsed);
         }
       });
-    this.version(7).stores({
-      settings: 'key,updatedAt',
-      diagnostics: '++id,timestamp,name,level',
-      localTracks: 'id,normalizedName,savedAt',
-      localTrackContents: 'trackId',
-      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
-      savedMarkers: 'id,normalizedName,colorKey,createdAt',
-      markerSyncStates: 'markerId,remoteRevision,pendingKind',
-    });
+    this.version(7)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+        savedMarkers: 'id,normalizedName,colorKey,createdAt',
+        markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      })
+      .upgrade(async (transaction) => {
+        const markerTable = transaction.table('savedMarkers');
+        const stateTable = transaction.table('markerSyncStates');
+        const markers: unknown[] = await markerTable.toArray();
+        for (const value of markers) {
+          const marker = parseSavedMarker(value);
+          if (marker === null) continue;
+          await stateTable.put({
+            markerId: marker.id,
+            remoteRevision: null,
+            pendingKind: 'upsert',
+            localVersion: 1,
+          });
+        }
+      });
   }
 
   public async saveLocalTrack(
@@ -1288,6 +1356,57 @@ export class AppDatabase
       );
     }
     return parsed;
+  }
+  public async updateLocalTrackMarkers(
+    trackId: string,
+    markers: readonly TrackMarker[],
+  ): Promise<{
+    readonly summary: LocalTrackSummary;
+    readonly content: LocalTrackContent;
+  }> {
+    const validMarkers = trackMarkersSchema.safeParse(markers);
+    if (!validMarkers.success) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The track markers are invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      this.trackSyncStates,
+      async () => {
+        const summary = parseLocalTrackSummary(await this.localTracks.get(trackId));
+        const content = parseLocalTrackContent(
+          await this.localTrackContents.get(trackId),
+        );
+        if (summary === null || content?.trackId !== trackId) {
+          throw new LocalTrackStorageError(
+            'not-found',
+            'The saved track was not found.',
+          );
+        }
+        const updatedSummary: LocalTrackSummary = {
+          ...summary,
+          updatedAt: new Date().toISOString(),
+        };
+        const updatedContent: LocalTrackContent = {
+          ...content,
+          markers: validMarkers.data,
+        };
+        await this.localTracks.put(updatedSummary);
+        await this.localTrackContents.put(updatedContent);
+        const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
+        if (state !== null) {
+          await this.trackSyncStates.put({
+            ...state,
+            pendingKind: state.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+          });
+        }
+        return { summary: updatedSummary, content: updatedContent };
+      },
+    );
   }
 
   public async renameLocalTrack(

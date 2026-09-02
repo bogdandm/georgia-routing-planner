@@ -988,7 +988,7 @@ describe('MapWorkspace', () => {
 
     const nativeMap = await screen.findByTestId('native-map');
     act(() => {
-      requestMarkerPlacement();
+      requestMarkerPlacement({ kind: 'saved-marker' });
     });
     expect(await screen.findByText('Click the map to place the marker')).toBeVisible();
     await waitFor(() => {

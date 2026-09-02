@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalTrackStorageError } from '@/application/ports/LocalTrackRepository';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
+  MAXIMUM_TRACK_MARKERS,
   type LocalTrackContent,
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
@@ -59,6 +60,7 @@ function content(trackId: string): LocalTrackContent {
         { coordinate: [44.01, 42.01], elevationMeters: 1_120 },
       ],
     ],
+    markers: [],
   };
 }
 
@@ -98,6 +100,7 @@ describe('local track persistence', () => {
           { coordinate: [44.01, 42.01], elevationMeters: 1_100 },
         ],
       ],
+      markers: [],
     };
 
     await database.saveLocalTrack(routeSummary, routeContent);
@@ -166,8 +169,111 @@ describe('local track persistence', () => {
       sourceContent,
     );
   });
+  it('updates bounded track markers without changing geometry or sync identity', async () => {
+    const firstMarker = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Start',
+      coordinate: [44.001, 42.001] as const,
+    };
+    const secondMarker = {
+      id: '00000000-0000-4000-8000-000000000002',
+      name: 'Camp',
+      coordinate: [44.009, 42.009] as const,
+    };
+    const calculatedTrackPoints = [
+      [
+        { coordinate: [44, 42] as const, elevationMeters: 900 },
+        { coordinate: [44.01, 42.01] as const, elevationMeters: 1_000 },
+      ],
+    ];
+    const sourceSummary = summary('local:markers', 'Markers');
+    const sourceContent = {
+      ...content(sourceSummary.id),
+      calculatedTrackPoints,
+    };
+    await database.saveLocalTrack(sourceSummary, sourceContent);
 
-  it('migrates legacy records to local schema v4 without fabricating content hashes', async () => {
+    const created = await database.updateLocalTrackMarkers(sourceSummary.id, [
+      firstMarker,
+      secondMarker,
+    ]);
+
+    expect(created.summary.contentHash).toBe(sourceSummary.contentHash);
+    expect(created.content).toEqual({
+      ...sourceContent,
+      markers: [firstMarker, secondMarker],
+    });
+    await expect(database.loadTrackSyncState(sourceSummary.id)).resolves.toMatchObject({
+      pendingKind: 'upsert',
+    });
+
+    await database.saveTrackSyncState({
+      trackId: sourceSummary.id,
+      contentHash: sourceSummary.contentHash ?? '',
+      lineageHash: sourceSummary.contentHash ?? '',
+      geometryVersion: 2,
+      remoteRevision: 4,
+      pendingKind: null,
+    });
+    const renamedMarker = { ...firstMarker, name: 'Trailhead' };
+    const renamed = await database.updateLocalTrackMarkers(sourceSummary.id, [
+      renamedMarker,
+      secondMarker,
+    ]);
+    expect(renamed.content.trackPoints).toEqual(sourceContent.trackPoints);
+    expect(renamed.content.calculatedTrackPoints).toEqual(calculatedTrackPoints);
+    await expect(database.loadTrackSyncState(sourceSummary.id)).resolves.toMatchObject({
+      remoteRevision: 4,
+      pendingKind: 'metadata',
+    });
+
+    const deleted = await database.updateLocalTrackMarkers(sourceSummary.id, [
+      renamedMarker,
+    ]);
+    expect(deleted.content.markers).toEqual([renamedMarker]);
+
+    const beforeFailedUpdate = await database.listLocalTracks();
+    vi.spyOn(database.localTrackContents, 'put').mockRejectedValueOnce(
+      new Error('quota unavailable'),
+    );
+    await expect(
+      database.updateLocalTrackMarkers(sourceSummary.id, []),
+    ).rejects.toThrow('quota unavailable');
+    await expect(database.listLocalTracks()).resolves.toEqual(beforeFailedUpdate);
+    await expect(database.loadLocalTrackContent(sourceSummary.id)).resolves.toEqual(
+      deleted.content,
+    );
+
+    await expect(
+      database.updateLocalTrackMarkers(sourceSummary.id, [
+        renamedMarker,
+        renamedMarker,
+      ]),
+    ).rejects.toBeInstanceOf(LocalTrackStorageError);
+    await expect(
+      database.updateLocalTrackMarkers(sourceSummary.id, [
+        { ...renamedMarker, name: ' ' },
+      ]),
+    ).rejects.toBeInstanceOf(LocalTrackStorageError);
+    const tooManyMarkers = Array.from(
+      { length: MAXIMUM_TRACK_MARKERS + 1 },
+      (_, index) => ({
+        id: `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
+        name: `Marker ${String(index)}`,
+        coordinate: [44, 42] as const,
+      }),
+    );
+    await expect(
+      database.updateLocalTrackMarkers(sourceSummary.id, tooManyMarkers),
+    ).rejects.toBeInstanceOf(LocalTrackStorageError);
+
+    await database.deleteLocalTrack(sourceSummary.id);
+    await expect(
+      database.localTrackContents.get(sourceSummary.id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('migrates legacy records to local schema v5 without fabricating content hashes', async () => {
     database.close();
     await database.delete();
     const legacy = new Dexie('GeorgiaRoutingPlanner');
@@ -229,19 +335,20 @@ describe('local track persistence', () => {
 
     const migratedTracks = await database.listLocalTracks();
     const migrated = migratedTracks.find((track) => track.id === 'local:legacy');
-    expect(migrated?.schemaVersion).toBe(4);
+    expect(migrated?.schemaVersion).toBe(5);
     expect(migrated?.metrics.elevationSource).toBe('gpx');
     expect(migrated?.metrics.elevationAlgorithmVersion).toBe(1);
     await expect(database.loadLocalTrackContent('local:legacy')).resolves.toEqual({
-      schemaVersion: 4,
+      schemaVersion: 5,
       trackId: 'local:legacy',
       trackPoints: [
         [{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }],
         [{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }],
       ],
+      markers: [],
     });
     const storedSummary = await database.localTracks.get('local:legacy');
-    expect(storedSummary).toHaveProperty('schemaVersion', 4);
+    expect(storedSummary).toHaveProperty('schemaVersion', 5);
     expect(storedSummary).toHaveProperty('updatedAt', storedSummary?.savedAt);
     expect(storedSummary).not.toHaveProperty('contentHash');
     await expect(database.loadTrackSyncState('local:legacy')).resolves.toBeNull();
@@ -273,7 +380,9 @@ describe('local track persistence', () => {
       },
     });
     await legacy.table('localTrackContents').put({
-      ...sourceContent,
+      schemaVersion: 4,
+      trackId: sourceContent.trackId,
+      trackPoints: sourceContent.trackPoints,
       calculatedTrackPoints: sourceContent.trackPoints.map((segment) =>
         segment.map((point) => ({ ...point, elevationMeters: 999 })),
       ),

@@ -126,7 +126,7 @@ export function WorkspaceSidebar({
         : 'Saved markers are loading';
   const startMarkerPlacement = () => {
     if (fullWidth) onShowMap();
-    requestMarkerPlacement();
+    requestMarkerPlacement({ kind: 'saved-marker' });
   };
 
   return (

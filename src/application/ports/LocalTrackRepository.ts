@@ -1,4 +1,8 @@
-import type { LocalTrackContent, LocalTrackSummary } from '@/domain/tracks/localTrack';
+import type {
+  LocalTrackContent,
+  LocalTrackSummary,
+  TrackMarker,
+} from '@/domain/tracks/localTrack';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
 
 export interface LocalTrackRepository {
@@ -11,6 +15,13 @@ export interface LocalTrackRepository {
   ): Promise<LocalTrackSummary>;
   listLocalTracks(): Promise<readonly LocalTrackSummary[]>;
   loadLocalTrackContent(trackId: string): Promise<LocalTrackContent>;
+  updateLocalTrackMarkers(
+    trackId: string,
+    markers: readonly TrackMarker[],
+  ): Promise<{
+    readonly summary: LocalTrackSummary;
+    readonly content: LocalTrackContent;
+  }>;
   renameLocalTrack(trackId: string, name: string): Promise<LocalTrackSummary>;
   setLocalTrackFavorite(trackId: string, favorite: boolean): Promise<LocalTrackSummary>;
   loadLatestOpenedTrackId(): Promise<string | null>;

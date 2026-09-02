@@ -48,7 +48,7 @@ class TestIdGenerator implements IdGenerator {
 
   public generate(): string {
     this.#nextId += 1;
-    return `test-${String(this.#nextId)}`;
+    return `00000000-0000-4000-8000-${String(this.#nextId).padStart(12, '0')}`;
   }
 }
 

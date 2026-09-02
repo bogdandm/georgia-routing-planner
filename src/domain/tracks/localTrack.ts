@@ -6,7 +6,8 @@ import type {
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
-export const LOCAL_TRACK_SCHEMA_VERSION = 4;
+export const LOCAL_TRACK_SCHEMA_VERSION = 5;
+export const MAXIMUM_TRACK_MARKERS = 32;
 
 export const trackSorts = ['created', 'name', 'oldest', 'distance'] as const;
 
@@ -38,12 +39,18 @@ export interface LocalTrackSummary {
   readonly endPoi?: PoiCandidate;
   readonly fallbackPoi?: PoiCandidate;
 }
+export interface TrackMarker {
+  readonly id: string;
+  readonly name: string;
+  readonly coordinate: TrackCoordinate;
+}
 
 export interface LocalTrackContent {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly trackId: string;
   readonly trackPoints: readonly (readonly TrackPoint[])[];
   readonly calculatedTrackPoints?: readonly (readonly TrackPoint[])[];
+  readonly markers: readonly TrackMarker[];
 }
 
 export function localTrackSegments(

@@ -153,6 +153,23 @@ describe('CompactTrackSummary', () => {
     expect(renderedStyles).toContain('border:1px solid rgba(255,255,255,0.88)');
   });
 
+  it('renders the maximum supported compact metric labels', () => {
+    renderSummary(
+      {
+        ...metrics,
+        distanceMeters: 999_000,
+        ascentMeters: 99_999,
+        descentMeters: 99_999,
+      },
+      profile,
+    );
+
+    expect(screen.getByLabelText('Distance: 999 km')).toBeVisible();
+    expect(screen.getByLabelText('Elevation gain: 99,999 m')).toBeVisible();
+    expect(screen.getByLabelText('Elevation loss: 99,999 m')).toBeVisible();
+    expect(screen.getByTestId('compact-elevation-profile')).toBeVisible();
+  });
+
   it('keeps metrics on the paper surface without a profile', () => {
     renderSummary(metrics, null);
 

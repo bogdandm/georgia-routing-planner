@@ -155,7 +155,7 @@ export function WorkspaceRail({
       sx={{
         position: 'relative',
         zIndex: 4,
-        width: collapsed ? (collapsedSummary === null ? 94 : 414) : 64,
+        width: collapsed ? (collapsedSummary === null ? 94 : 484) : 64,
         height: '100%',
         flexShrink: 0,
         display: 'flex',
@@ -178,7 +178,7 @@ export function WorkspaceRail({
         <Box
           sx={{
             position: 'relative',
-            width: collapsedSummary === null ? 88 : 408,
+            width: collapsedSummary === null ? 88 : 478,
             height: 52,
             flexShrink: 0,
             mt: 0.75,
@@ -257,7 +257,7 @@ export function WorkspaceRail({
               sx={{
                 position: 'relative',
                 zIndex: 1,
-                width: 320,
+                width: 390,
                 height: 52,
                 minWidth: 0,
                 color: 'inherit',

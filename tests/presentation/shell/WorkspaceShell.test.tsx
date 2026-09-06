@@ -4296,8 +4296,8 @@ describe('WorkspaceShell', () => {
         'compact-elevation-profile',
       );
       const logo = within(collapsedProjectLogo).getByTestId('project-logo-image');
-      expect(navigation).toHaveStyle({ width: '414px' });
-      expect(trackSummary).toHaveStyle({ width: '320px', height: '52px' });
+      expect(navigation).toHaveStyle({ width: '484px' });
+      expect(trackSummary).toHaveStyle({ width: '390px', height: '52px' });
       expect(showNavigation).toHaveStyle({ width: '36px', height: '52px' });
       expect(within(trackSummary).getByLabelText('Distance: 1.4 km')).toBeVisible();
       expect(

@@ -208,6 +208,7 @@ describe('MapLibreFacade', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const onCameraSettled = vi.fn();
+    const viewportMovement = vi.fn();
     const setTerrainInteractionActive = vi.fn();
     const layerController = {
       attach: vi.fn(),
@@ -227,6 +228,7 @@ describe('MapLibreFacade', () => {
       undefined,
       layerController,
     );
+    facade.subscribeViewportMovement(viewportMovement);
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
@@ -244,6 +246,23 @@ describe('MapLibreFacade', () => {
 
     expect(setTerrainInteractionActive).toHaveBeenNthCalledWith(1, true);
     expect(setTerrainInteractionActive).toHaveBeenNthCalledWith(2, false);
+    expect(viewportMovement.mock.calls.map(([event]) => event)).toEqual([
+      {
+        phase: 'settled',
+        viewport: {
+          bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
+          center: { longitude: 44.8, latitude: 41.7 },
+        },
+      },
+      { phase: 'moving' },
+      {
+        phase: 'settled',
+        viewport: {
+          bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
+          center: { longitude: 44.8, latitude: 41.7 },
+        },
+      },
+    ]);
 
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'ready',

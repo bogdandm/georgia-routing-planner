@@ -102,6 +102,7 @@ export function createTestServices(
     );
   let demFilterEnabled = true;
   let demFilterRevision = 0;
+  const registeredSatelliteScenes = new Set<string>();
   const mapLayers = new MapLibreLayerController(
     parsedMapProviderConfiguration.satellite.renderer,
     parsedMapProviderConfiguration.terrain,
@@ -129,9 +130,15 @@ export function createTestServices(
       dispose: () => undefined,
     } satisfies ContourTileGenerator,
     {
-      registerScene: () => undefined,
-      createTileUrl: (sceneKey) =>
-        `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`,
+      registerScene: (sceneKey) => {
+        registeredSatelliteScenes.add(sceneKey);
+      },
+      createTileUrl: (sceneKey) => {
+        if (!registeredSatelliteScenes.has(sceneKey)) {
+          throw new Error('The direct satellite scene is not registered.');
+        }
+        return `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`;
+      },
       dispose: () => undefined,
     } satisfies SatelliteCogTileProvider,
     logger,

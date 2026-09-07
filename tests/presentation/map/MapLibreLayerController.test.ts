@@ -19,6 +19,7 @@ import {
   savedMarkerLayerIds,
   routePlanLayerIds,
   sentinelMapLayerIds,
+  sentinelMosaicIdPrefixes,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
 import * as markerCatalog from '@/presentation/markers/markerCatalog';
@@ -42,6 +43,7 @@ class FakeLayerMap {
   sourceLoaded = true;
   styleLoaded = true;
   directRasterSourceAdds = 0;
+  failNextRasterSourceAdd = false;
   readonly refreshTilesCalls: {
     readonly sourceId: string;
     readonly tileIds?: readonly {
@@ -157,6 +159,15 @@ class FakeLayerMap {
   }
 
   public addSource(id: string, source: unknown): void {
+    const isRasterSource =
+      typeof source === 'object' &&
+      source !== null &&
+      'type' in source &&
+      source.type === 'raster';
+    if (isRasterSource && this.failNextRasterSourceAdd) {
+      this.failNextRasterSourceAdd = false;
+      throw new Error('Synthetic raster add failure.');
+    }
     if (
       typeof source === 'object' &&
       source !== null &&
@@ -235,23 +246,29 @@ class FakeLayerMap {
   }
 }
 
-function scene(id: string): SatelliteScene {
+function scene(
+  id: string,
+  bounds: readonly [west: number, south: number, east: number, north: number] = [
+    44, 42, 45, 43,
+  ],
+  acquiredAt = '2026-07-12T10:12:00.000Z',
+): SatelliteScene {
   return {
     id,
     collection: 'sentinel-2-l2a',
     platform: 'sentinel-2a',
     productLevel: 'L2A',
-    acquiredAt: '2026-07-12T10:12:00.000Z',
+    acquiredAt,
     cloudCoverPercent: 4,
     footprint: {
       type: 'Polygon',
       coordinates: [
         [
-          [44, 42],
-          [45, 42],
-          [45, 43],
-          [44, 43],
-          [44, 42],
+          [bounds[0], bounds[1]],
+          [bounds[2], bounds[1]],
+          [bounds[2], bounds[3]],
+          [bounds[0], bounds[3]],
+          [bounds[0], bounds[1]],
         ],
       ],
     },
@@ -269,6 +286,10 @@ function scene(id: string): SatelliteScene {
     attribution: 'Synthetic test data',
   };
 }
+const mosaicViewport = {
+  bounds: { west: 44, south: 42, east: 46, north: 43 },
+  center: { longitude: 45, latitude: 42.5 },
+} as const;
 
 beforeEach(async () => {
   const services = createTestServices();
@@ -2320,5 +2341,155 @@ describe('MapLibreLayerController', () => {
       readonly data: { readonly features: readonly unknown[] };
     };
     expect(emptySource.data.features).toEqual([]);
+  });
+  it('applies unique mosaic sources with oldest imagery below newer imagery', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const newest = scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z');
+    const older = scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z');
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const result = await controller.applyMosaic(
+      [newest, older],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+
+    expect(result).toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'ready',
+      selectedDate: '2026-07-20',
+      sceneKeys: ['sentinel-2-l2a:newest', 'sentinel-2-l2a:older'],
+      coveragePercent: 100,
+    });
+    expect(
+      [...map.layers.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.layer),
+      ),
+    ).toEqual([
+      `${sentinelMosaicIdPrefixes.layer}2`,
+      `${sentinelMosaicIdPrefixes.layer}1`,
+    ]);
+  });
+
+  it('retains ready imagery and actual coverage when a mosaic replacement fails', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const original = scene('original', [44, 42, 45, 43]);
+    const replacement = scene('replacement', [44, 42, 45, 43]);
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await controller.applyMosaic(
+      [original],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    map.failNextRasterSourceAdd = true;
+    controller.beginMosaic('2026-07-21', mosaicViewport);
+    const result = await controller.applyMosaic(
+      [replacement],
+      mosaicViewport,
+      '2026-07-21',
+      new AbortController().signal,
+    );
+
+    expect(result).toMatchObject({ status: 'failed' });
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'failed',
+      selectedDate: '2026-07-21',
+      sceneKeys: ['sentinel-2-l2a:original'],
+      coveragePercent: expect.closeTo(50, 5),
+    });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toEqual([`${sentinelMosaicIdPrefixes.source}1`]);
+  });
+
+  it('prunes nonintersecting mosaic entries and clears every source on mode switches', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const left = scene('left', [44, 42, 45, 43]);
+    const right = scene('right', [45, 42, 46, 43]);
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await controller.applyMosaic(
+      [left, right],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    const leftViewport = {
+      bounds: { west: 44, south: 42, east: 45, north: 43 },
+      center: { longitude: 44.5, latitude: 42.5 },
+    } as const;
+    controller.pruneMosaic(leftViewport);
+
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'ready',
+      sceneKeys: ['sentinel-2-l2a:left'],
+      coveragePercent: 100,
+    });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(1);
+
+    await controller.applyScene(scene('single'), new AbortController().signal);
+    expect(mapLayerStore.getState().appliedMosaic).toEqual({ status: 'empty' });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(0);
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    expect(mapLayerStore.getState().selectedScene).toBeNull();
+    expect(mapLayerStore.getState().appliedImagery).toEqual({ status: 'empty' });
+  });
+
+  it('reconciles every mosaic entry when the shared rendering mode changes', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await controller.applyMosaic(
+      [scene('left', [44, 42, 45, 43]), scene('right', [45, 42, 46, 43])],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+
+    const result = await controller.setRenderingMode(
+      'direct',
+      new AbortController().signal,
+    );
+
+    expect(result).toEqual({ status: 'success' });
+    expect(map.directRasterSourceAdds).toBe(2);
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'ready',
+      sceneKeys: ['sentinel-2-l2a:left', 'sentinel-2-l2a:right'],
+    });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(2);
   });
 });

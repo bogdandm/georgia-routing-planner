@@ -1,8 +1,9 @@
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
-import type {
-  SatelliteSearchCriteria,
-  SatelliteSearchCriteriaInput,
-  SatelliteSearchViewport,
+import {
+  satelliteViewportValidationIssue,
+  type SatelliteSearchCriteria,
+  type SatelliteSearchCriteriaInput,
+  type SatelliteSearchViewport,
 } from '@/domain/satellite/SatelliteSearchCriteria';
 
 const maximumSatelliteSearchDays = 62;
@@ -31,28 +32,20 @@ export function validateSatelliteViewport(
 ): SatelliteSearchViewport {
   const { west, south, east, north } = viewport.bounds;
   const { longitude, latitude } = viewport.center;
-  const values = [west, south, east, north, longitude, latitude];
-  if (values.some((value) => !Number.isFinite(value))) {
+  const issue = satelliteViewportValidationIssue(viewport);
+  if (issue === 'non-finite') {
     throw new SatelliteSearchError(
       'invalid-viewport',
       'The current viewport does not have finite bounds.',
     );
   }
-  if (
-    west < -180 ||
-    east > 180 ||
-    south < -85 ||
-    north > 85 ||
-    west >= east ||
-    south >= north ||
-    east - west >= 180
-  ) {
+  if (issue === 'unsupported-boundary') {
     throw new SatelliteSearchError(
       'invalid-viewport',
       'This viewport crosses an unsupported boundary. Pan to one side and try again.',
     );
   }
-  if (longitude < west || longitude > east || latitude < south || latitude > north) {
+  if (issue === 'center-outside') {
     throw new SatelliteSearchError(
       'invalid-viewport',
       'The viewport center is outside its settled bounds.',
@@ -85,9 +78,10 @@ export function validateSatelliteSearchCriteria(
     );
   }
   if (
-    !Number.isFinite(input.maxCloudCoverPercent) ||
-    input.maxCloudCoverPercent < 0 ||
-    input.maxCloudCoverPercent > 100
+    input.maxCloudCoverPercent !== null &&
+    (!Number.isFinite(input.maxCloudCoverPercent) ||
+      input.maxCloudCoverPercent < 0 ||
+      input.maxCloudCoverPercent > 100)
   ) {
     throw new SatelliteSearchError(
       'invalid-cloud-cover',

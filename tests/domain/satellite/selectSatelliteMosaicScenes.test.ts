@@ -1,0 +1,197 @@
+import type { Polygon } from 'geojson';
+import { describe, expect, it } from 'vitest';
+
+import { SatelliteGeometryError } from '@/domain/satellite/SatelliteGeometryError';
+import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
+import type {
+  SatelliteAcquisitionGroup,
+  SatelliteSceneMatch,
+} from '@/domain/satellite/SatelliteSearchResult';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { selectSatelliteMosaicScenes } from '@/domain/satellite/selectSatelliteMosaicScenes';
+
+const viewport: SatelliteSearchViewport = {
+  bounds: { west: 0, south: 0, east: 2, north: 2 },
+  center: { longitude: 1, latitude: 1 },
+};
+
+function rectangle(west: number, south: number, east: number, north: number): Polygon {
+  return {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [west, south],
+        [east, south],
+        [east, north],
+        [west, north],
+        [west, south],
+      ],
+    ],
+  };
+}
+
+function scene(
+  id: string,
+  acquiredAt: string,
+  footprint: Polygon,
+  productLevel: 'L1C' | 'L2A' = 'L2A',
+): SatelliteScene {
+  return {
+    id,
+    collection: productLevel === 'L2A' ? 'sentinel-2-l2a' : 'sentinel-2-l1c',
+    platform: 'sentinel-2a',
+    productLevel,
+    acquiredAt,
+    cloudCoverPercent: 0,
+    footprint,
+    tileId: null,
+    orbit: null,
+    productId: null,
+    thumbnailHref: null,
+    visualAsset: { kind: 'unavailable' },
+    attribution: 'Copernicus Sentinel data',
+  };
+}
+
+function match(value: SatelliteScene): SatelliteSceneMatch {
+  return {
+    scene: value,
+    coverage: {
+      viewportCoveragePercent: 0,
+      interestPointRelation: 'outside',
+      distanceToSceneEdgeKm: 0,
+      hasEdgeWarning: false,
+    },
+  };
+}
+
+function group(
+  date: string,
+  scenes: readonly SatelliteScene[],
+): SatelliteAcquisitionGroup {
+  return { date, scenes: scenes.map(match) };
+}
+
+describe('selectSatelliteMosaicScenes', () => {
+  it('accepts every unique intersecting L2A boundary from the newest acquisition day', () => {
+    const full = scene('full', '2026-07-20T11:00:00.000Z', rectangle(0, 0, 2, 2));
+    const sameDay = scene(
+      'same-day',
+      '2026-07-20T10:00:00.000Z',
+      rectangle(1.5, 0, 2.5, 2),
+    );
+    const older = scene('older', '2026-07-19T10:00:00.000Z', rectangle(0, 0, 1, 2));
+
+    const result = selectSatelliteMosaicScenes(viewport, [
+      group('2026-07-19', [older]),
+      group('2026-07-20', [full, sameDay]),
+    ]);
+
+    expect(result.scenes.map(({ id }) => id)).toEqual(['full', 'same-day']);
+    expect(result.coveragePercent).toBe(100);
+    expect(result.oldestAcquisitionDate).toBe('2026-07-20');
+  });
+
+  it('keeps the later scene when an older scene has the same exact bounds', () => {
+    const bounds = rectangle(0, 0, 1, 2);
+    const later = scene('later', '2026-07-20T10:00:00.000Z', bounds);
+    const duplicate = scene('duplicate', '2026-07-19T10:00:00.000Z', bounds);
+    const fill = scene('fill', '2026-07-18T10:00:00.000Z', rectangle(1, 0, 2, 2));
+
+    const result = selectSatelliteMosaicScenes(viewport, [
+      group('2026-07-20', [later]),
+      group('2026-07-19', [duplicate]),
+      group('2026-07-18', [fill]),
+    ]);
+
+    expect(result.scenes.map(({ id }) => id)).toEqual(['later', 'fill']);
+    expect(result.oldestAcquisitionDate).toBe('2026-07-18');
+    expect(result.coveragePercent).toBe(100);
+  });
+
+  it('measures overlapping footprints by their union rather than summing them', () => {
+    const left = scene('left', '2026-07-20T10:00:00.000Z', rectangle(0, 0, 1.2, 2));
+    const overlap = scene(
+      'overlap',
+      '2026-07-20T09:00:00.000Z',
+      rectangle(0.8, 0, 1.6, 2),
+    );
+
+    const result = selectSatelliteMosaicScenes(viewport, [
+      group('2026-07-20', [left, overlap]),
+    ]);
+
+    expect(result.coveragePercent).toBeCloseTo(80, 5);
+  });
+
+  it('accepts the whole date group that completes coverage and ignores older groups', () => {
+    const first = scene('first', '2026-07-20T10:00:00.000Z', rectangle(0, 0, 0.5, 2));
+    const completing = scene(
+      'completing',
+      '2026-07-19T11:00:00.000Z',
+      rectangle(0.5, 0, 2, 2),
+    );
+    const sameDayExtra = scene(
+      'same-day-extra',
+      '2026-07-19T10:00:00.000Z',
+      rectangle(1.5, 0, 2.5, 2),
+    );
+    const ignored = scene('ignored', '2026-07-18T10:00:00.000Z', rectangle(0, 0, 2, 2));
+
+    const result = selectSatelliteMosaicScenes(viewport, [
+      group('2026-07-20', [first]),
+      group('2026-07-19', [completing, sameDayExtra]),
+      group('2026-07-18', [ignored]),
+    ]);
+
+    expect(result.scenes.map(({ id }) => id)).toEqual([
+      'first',
+      'completing',
+      'same-day-extra',
+    ]);
+    expect(result.coveragePercent).toBe(100);
+    expect(result.oldestAcquisitionDate).toBe('2026-07-19');
+  });
+
+  it('rejects invalid viewports and malformed or degenerate scene geometry', () => {
+    const invalidViewport = {
+      ...viewport,
+      bounds: { ...viewport.bounds, west: 2 },
+    };
+    expect(() => selectSatelliteMosaicScenes(invalidViewport, [])).toThrow(
+      SatelliteGeometryError,
+    );
+    expect(() =>
+      selectSatelliteMosaicScenes(
+        {
+          bounds: { west: -170, south: -10, east: 170, north: 10 },
+          center: { longitude: 0, latitude: 0 },
+        },
+        [],
+      ),
+    ).toThrow(SatelliteGeometryError);
+
+    const incomplete = scene('incomplete', '2026-07-20T10:00:00.000Z', {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [0, 0],
+          [1, 0],
+          [0, 0],
+        ],
+      ],
+    });
+    expect(() =>
+      selectSatelliteMosaicScenes(viewport, [group('2026-07-20', [incomplete])]),
+    ).toThrow(SatelliteGeometryError);
+
+    const degenerate = scene(
+      'degenerate',
+      '2026-07-20T10:00:00.000Z',
+      rectangle(0, 0, 0, 2),
+    );
+    expect(() =>
+      selectSatelliteMosaicScenes(viewport, [group('2026-07-20', [degenerate])]),
+    ).toThrow(SatelliteGeometryError);
+  });
+});

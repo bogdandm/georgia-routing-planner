@@ -15,6 +15,8 @@ const searchUrl = 'https://earth-search.example.test/v1/search';
 function createQuery(
   productLevel: 'L1C' | 'L2A' = 'L2A',
   maximumItems = 100,
+  spatialScope: SatelliteCatalogQuery['spatialScope'] = 'center',
+  maxCloudCoverPercent: number | null = 25,
 ): SatelliteCatalogQuery {
   return {
     criteria: {
@@ -25,9 +27,10 @@ function createQuery(
       startDate: '2025-07-02',
       endDate: '2025-07-17',
       productLevel,
-      maxCloudCoverPercent: 25,
+      maxCloudCoverPercent,
       inclusiveDayCount: 16,
     },
+    spatialScope,
     maximumItems,
   };
 }
@@ -111,6 +114,38 @@ describe('EarthSearchSatelliteCatalogGateway', () => {
         expect.objectContaining({ id: 'map-scene-metadata', status: 'success' }),
       ]),
     );
+  });
+
+  it('posts viewport bounds as a closed polygon without a cloud predicate', async () => {
+    let requestBody: Record<string, unknown> | null = null;
+    mswServer.use(
+      http.post(searchUrl, async ({ request }) => {
+        requestBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(searchResponse);
+      }),
+    );
+    const { services, gateway } = createGateway();
+
+    await gateway.search(
+      createQuery('L2A', 100, 'viewport', null),
+      beginOperation(services, 'viewport-search'),
+    );
+
+    expect(requestBody).toMatchObject({
+      intersects: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [44.1, 42.1],
+            [44.9, 42.1],
+            [44.9, 42.9],
+            [44.1, 42.9],
+            [44.1, 42.1],
+          ],
+        ],
+      },
+    });
+    expect(requestBody).not.toHaveProperty('query');
   });
 
   it('keeps L1C distinct and maps its public S3 object to an unsupported HTTPS JP2 asset', async () => {

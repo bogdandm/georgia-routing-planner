@@ -14,6 +14,7 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { TrackShareService } from '@/application/tracks/TrackShareService';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
+import { SearchSatelliteMosaic } from '@/application/satellite/SearchSatelliteMosaic';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
@@ -138,6 +139,13 @@ export function createTestServices(
     sentinelQueryDiagnostics,
     database,
   );
+  const searchSatelliteScenes = new SearchSatelliteScenes(
+    satelliteCatalogGateway,
+    sentinelQueryDiagnostics,
+    logger,
+    idGenerator,
+    clock,
+  );
 
   return {
     buildInfo,
@@ -179,13 +187,8 @@ export function createTestServices(
       value: parsedMapProviderConfiguration,
     },
     satelliteCatalogGateway,
-    searchSatelliteScenes: new SearchSatelliteScenes(
-      satelliteCatalogGateway,
-      sentinelQueryDiagnostics,
-      logger,
-      idGenerator,
-      clock,
-    ),
+    searchSatelliteScenes,
+    searchSatelliteMosaic: new SearchSatelliteMosaic(searchSatelliteScenes),
     searchPlaces: new SearchPlaces(
       { search: () => Promise.resolve([]) },
       logger,

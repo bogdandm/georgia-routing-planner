@@ -1,8 +1,11 @@
 import type { SatelliteSearchCriteria } from '@/domain/satellite/SatelliteSearchCriteria';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 
+export type SatelliteCatalogSpatialScope = 'center' | 'viewport';
+
 export interface SatelliteCatalogQuery {
   readonly criteria: SatelliteSearchCriteria;
+  readonly spatialScope: SatelliteCatalogSpatialScope;
   readonly maximumItems: number;
 }
 

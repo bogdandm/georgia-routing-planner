@@ -2780,4 +2780,163 @@ describe('MapLibreLayerController', () => {
       ),
     ).toHaveLength(2);
   });
+
+  it('attributes a terminal source-less error to one pending Mosaic source', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    const sourceId = `${sentinelMosaicIdPrefixes.source}1`;
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const application = controller.applyMosaic(
+      [scene('only', [44, 42, 45, 43])],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    map.fire('error', {
+      error: { message: 'AJAXError: Too Many Requests', status: 429 },
+    });
+    await Promise.resolve();
+
+    expect(map.directRasterSourceAdds).toBe(1);
+    map.sourceLoaded = true;
+    map.fire('sourcedata', {
+      sourceId,
+      sourceDataType: 'content',
+      isSourceLoaded: true,
+    });
+    await expect(application).resolves.toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().automaticAlternativeProviderState).toBe('active');
+  });
+
+  it('fails every pending Mosaic source on an ambiguous terminal error', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const application = controller.applyMosaic(
+      [
+        scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
+        scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
+      ],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(2);
+
+    map.fire('error', {
+      error: { message: 'AJAXError: Too Many Requests', status: 429 },
+    });
+
+    await expect(application).resolves.toEqual({
+      status: 'failed',
+      message:
+        'The imagery renderer is rate-limiting requests (HTTP 429). The current map remains usable; wait briefly, then retry.',
+    });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('keeps older Mosaic imagery below newer imagery after direct fallback', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await controller.applyMosaic(
+      [
+        scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
+        scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
+      ],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    const olderSourceId = `${sentinelMosaicIdPrefixes.source}2`;
+
+    expect(
+      controller.handleRasterSourceFailure({
+        sourceId: olderSourceId,
+        error: { message: 'AJAXError: Too Many Requests', status: 429 },
+      } as unknown as MapLibreErrorEvent),
+    ).toEqual({
+      state: 'alternative-provider',
+      retryAttempt: 0,
+      retryDelayMs: 0,
+    });
+    expect(
+      [...map.layers.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.layer),
+      ),
+    ).toEqual([
+      `${sentinelMosaicIdPrefixes.layer}2`,
+      `${sentinelMosaicIdPrefixes.layer}1`,
+    ]);
+  });
+
+  it('restarts every pending Mosaic source when rendering mode changes', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    const scenes = [
+      scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
+      scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
+    ];
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const initialApplication = controller.applyMosaic(
+      scenes,
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    const modeChange = controller.setRenderingMode(
+      'direct',
+      new AbortController().signal,
+    );
+
+    await expect(initialApplication).resolves.toEqual({ status: 'cancelled' });
+    const pendingSourceIds = [...map.sources.keys()].filter((id) =>
+      id.startsWith(sentinelMosaicIdPrefixes.source),
+    );
+    expect(pendingSourceIds).toEqual([
+      `${sentinelMosaicIdPrefixes.source}3`,
+      `${sentinelMosaicIdPrefixes.source}4`,
+    ]);
+    expect(map.directRasterSourceAdds).toBe(2);
+
+    map.sourceLoaded = true;
+    for (const sourceId of pendingSourceIds) {
+      map.fire('sourcedata', {
+        sourceId,
+        sourceDataType: 'content',
+        isSourceLoaded: true,
+      });
+    }
+    await expect(modeChange).resolves.toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'ready',
+      sceneKeys: ['sentinel-2-l2a:newest', 'sentinel-2-l2a:older'],
+    });
+  });
 });

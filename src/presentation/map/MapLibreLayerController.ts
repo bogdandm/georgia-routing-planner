@@ -400,6 +400,7 @@ export class MapLibreLayerController {
   #stagingScene: SatelliteScene | null = null;
   readonly #mosaicEntries = new Map<string, MosaicRasterEntry>();
   readonly #stagingMosaicEntries = new Map<string, MosaicRasterEntry>();
+  #mosaicApplicationScenes: readonly SatelliteScene[] | null = null;
   #mosaicApplyController: AbortController | null = null;
   #mosaicSelectedDate: string | null = null;
   #mosaicViewport: SatelliteSearchViewport | null = null;
@@ -530,6 +531,7 @@ export class MapLibreLayerController {
     this.#stagingScene = null;
     this.#stagingSourceId = null;
     this.#stagingMosaicEntries.clear();
+    this.#mosaicApplicationScenes = null;
     this.#map = null;
     this.#progressiveRasterSourceId = null;
     this.#appliedVisualMode = null;
@@ -921,6 +923,7 @@ export class MapLibreLayerController {
   ): SatelliteImageryCommandResult {
     this.#mosaicApplyController?.abort();
     this.#mosaicApplyController = null;
+    this.#mosaicApplicationScenes = null;
     this.#mosaicSequence += 1;
     this.clearSingleScene();
     this.#mosaicSelectedDate = selectedDate;
@@ -984,6 +987,7 @@ export class MapLibreLayerController {
       if (map !== null) this.removeSlot(map, entry.slot);
     }
     this.#stagingMosaicEntries.clear();
+    this.#mosaicApplicationScenes = null;
     for (const entry of this.#mosaicEntries.values()) {
       this.cancelRasterRecovery(entry.slot.sourceId);
       if (map !== null) this.removeSlot(map, entry.slot);
@@ -1057,8 +1061,9 @@ export class MapLibreLayerController {
   /**
    * Resolves source-less MapLibre transport errors without exporting or logging their URL.
    * Tile errors normally include a source ID, but Chromium can omit it for cross-origin
-   * failures. While a scene is staging, a terminal 429/status-zero belongs to that one
-   * in-flight raster; otherwise an error URL must match a registered raster template.
+   * failures. A terminal URL-less failure can be attributed only when exactly one native
+   * raster is awaiting readiness; multiple pending Mosaic sources remain deliberately
+   * ambiguous and their waiters fail together instead.
    */
   public getRasterSourceId(event: MapLibreErrorEvent): string | null {
     const reportedSourceId = sourceIdFromError(event);
@@ -1080,6 +1085,16 @@ export class MapLibreLayerController {
       // A URL-less terminal failure can only be attributed to the source whose
       // readiness is currently pending.
       return this.#stagingSourceId;
+    }
+    if (this.#stagingMosaicEntries.size === 1) {
+      const pendingEntry = this.#stagingMosaicEntries.values().next().value;
+      if (
+        pendingEntry !== undefined &&
+        (details.reason === 'rate-limit' || details.reason === 'no-response') &&
+        this.#map?.getSource(pendingEntry.slot.sourceId) !== undefined
+      ) {
+        return pendingEntry.slot.sourceId;
+      }
     }
     return null;
   }
@@ -1261,13 +1276,16 @@ export class MapLibreLayerController {
     // Rendering mode is a durable user choice, not a property of one successful scene.
     // Save it before a potentially long local render so reload preserves the selection.
     this.persistStableState();
+    const mosaicScenes =
+      this.#mosaicApplicationScenes ??
+      [...this.#mosaicEntries.values()].map((entry) => entry.scene);
     if (
-      this.#mosaicEntries.size > 0 &&
+      mosaicScenes.length > 0 &&
       this.#mosaicViewport !== null &&
       this.#mosaicSelectedDate !== null
     ) {
       return this.runMosaicApplication(
-        [...this.#mosaicEntries.values()].map((entry) => entry.scene),
+        mosaicScenes,
         this.#mosaicViewport,
         this.#mosaicSelectedDate,
         signal,
@@ -1639,6 +1657,7 @@ export class MapLibreLayerController {
     this.#mosaicApplyController?.abort();
     const controller = new AbortController();
     this.#mosaicApplyController = controller;
+    this.#mosaicApplicationScenes = scenes;
     const abortFromCaller = () => {
       controller.abort();
     };
@@ -1656,6 +1675,7 @@ export class MapLibreLayerController {
       callerSignal.removeEventListener('abort', abortFromCaller);
       if (this.#mosaicApplyController === controller) {
         this.#mosaicApplyController = null;
+        this.#mosaicApplicationScenes = null;
       }
     }
   }
@@ -3255,8 +3275,21 @@ export class MapLibreLayerController {
         }
       };
       const handleError = (event: MapLibreErrorEvent) => {
-        if (this.getRasterSourceId(event) !== sourceId) return;
-        if (stabilityTimer !== null) clearTimeout(stabilityTimer);
+        const attributedSourceId = this.getRasterSourceId(event);
+        if (attributedSourceId !== sourceId) {
+          const details = mapFailureDetails(event);
+          const isAmbiguousTerminalMosaicFailure =
+            attributedSourceId === null &&
+            sourceIdFromError(event) === null &&
+            requestUrlFromError(event) === null &&
+            this.#stagingMosaicEntries.size > 1 &&
+            this.#stagingMosaicEntries.has(sourceId) &&
+            (details.reason === 'rate-limit' || details.reason === 'no-response');
+          if (!isAmbiguousTerminalMosaicFailure) return;
+          fail(new SentinelRasterLoadError(safeRasterFailureMessage(event)));
+          return;
+        }
+        clearTimeout(stabilityTimer ?? undefined);
         stabilityTimer = null;
         const recovery = this.handleRasterSourceFailure(event);
         if (recovery.state === 'not-retryable') {
@@ -3420,6 +3453,7 @@ export class MapLibreLayerController {
         },
         mapInsertionPoints.satelliteBeforeLayerId,
       );
+      this.orderMosaicLayers(map);
       this.#rasterTileUrls.set(sourceId, fallbackUrl);
       // MapLibre sends one ErrorEvent to the global map listener and the temporary
       // source-readiness listener. Both must observe the same successful transition.

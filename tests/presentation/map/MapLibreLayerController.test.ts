@@ -42,6 +42,7 @@ class FakeLayerMap {
   readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
+  loadSourceOnNextSourceDataSubscription = false;
   styleLoaded = true;
   directRasterSourceAdds = 0;
   failNextRasterSourceAdd = false;
@@ -77,6 +78,10 @@ class FakeLayerMap {
     const listeners = this.#listeners.get(type) ?? new Set<Listener>();
     listeners.add(listener);
     this.#listeners.set(type, listeners);
+    if (type === 'sourcedata' && this.loadSourceOnNextSourceDataSubscription) {
+      this.loadSourceOnNextSourceDataSubscription = false;
+      this.sourceLoaded = true;
+    }
     return this;
   }
 
@@ -2439,6 +2444,86 @@ describe('MapLibreLayerController', () => {
       isSourceLoaded: true,
     });
     await expect(application).resolves.toEqual({ status: 'success' });
+  });
+
+  it('waits for retained Mosaic sources to render the moved viewport', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const source1 = `${sentinelMosaicIdPrefixes.source}1`;
+    const source2 = `${sentinelMosaicIdPrefixes.source}2`;
+    const scenes = [
+      scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
+      scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
+    ];
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await expect(
+      controller.applyMosaic(
+        scenes,
+        mosaicViewport,
+        '2026-07-20',
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ status: 'success' });
+
+    map.sourceLoaded = false;
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const refresh = controller.applyMosaic(
+      scenes,
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'loading',
+      renderProgress: { renderedSceneCount: 0, totalSceneCount: 2 },
+    });
+
+    map.fire('sourcedata', {
+      sourceId: source1,
+      isSourceLoaded: true,
+      tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
+    });
+    await vi.waitFor(() => {
+      expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+        status: 'loading',
+        renderProgress: { renderedSceneCount: 1, totalSceneCount: 2 },
+      });
+    });
+
+    map.fire('sourcedata', {
+      sourceId: source2,
+      isSourceLoaded: true,
+      tile: { tileID: { canonical: { x: 124, y: 456, z: 12 } } },
+    });
+    await expect(refresh).resolves.toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().appliedMosaic.status).toBe('ready');
+  });
+
+  it('observes Mosaic readiness reached while source listeners attach', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    map.loadSourceOnNextSourceDataSubscription = true;
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+
+    await expect(
+      controller.applyMosaic(
+        [scene('race', [44, 42, 45, 43])],
+        mosaicViewport,
+        '2026-07-20',
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().appliedMosaic.status).toBe('ready');
   });
 
   it('does not restore render progress after a pending Mosaic is cleared', async () => {

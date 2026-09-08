@@ -1696,11 +1696,24 @@ export class MapLibreLayerController {
         'This area needs too many Sentinel images. Zoom in and try again.',
       );
     }
+    const renderedExistingSourceIds = new Set<string>();
     let renderedSceneCount = 0;
     for (const [boundsKey, scene] of desiredByBounds) {
       const existing = this.#mosaicEntries.get(boundsKey);
-      if (!forceReplacement && existing?.sceneKey === satelliteSceneKey(scene)) {
-        renderedSceneCount += 1;
+      if (forceReplacement || existing?.sceneKey !== satelliteSceneKey(scene)) {
+        continue;
+      }
+      try {
+        if (
+          map.isSourceLoaded(existing.slot.sourceId) &&
+          (!this.#rasterRecoveries.has(existing.slot.sourceId) ||
+            this.isRasterSourceRecoveryComplete(existing.slot.sourceId))
+        ) {
+          renderedExistingSourceIds.add(existing.slot.sourceId);
+          renderedSceneCount += 1;
+        }
+      } catch {
+        // A concurrent style replacement can temporarily remove the retained source.
       }
     }
     const publishRenderProgress = () => {
@@ -1720,6 +1733,27 @@ export class MapLibreLayerController {
       const existing = this.#mosaicEntries.get(boundsKey);
       const sceneKey = satelliteSceneKey(scene);
       if (!forceReplacement && existing?.sceneKey === sceneKey) {
+        if (!renderedExistingSourceIds.has(existing.slot.sourceId)) {
+          try {
+            // Matching catalog identity does not mean MapLibre has finished loading
+            // this source's tiles for the current viewport after a camera move.
+            await this.waitForSource(map, existing.slot.sourceId, signal, 'loaded');
+            if (sequence !== this.#mosaicSequence || this.#map !== map) {
+              throw new DOMException('Superseded mosaic application.', 'AbortError');
+            }
+            renderedExistingSourceIds.add(existing.slot.sourceId);
+            renderedSceneCount += 1;
+          } catch (error) {
+            if (isAborted(signal, error)) {
+              publishRenderProgress();
+              return { status: 'cancelled' };
+            }
+            firstFailure ??=
+              error instanceof SentinelRasterLoadError
+                ? error.userMessage
+                : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
+          }
+        }
         publishRenderProgress();
         continue;
       }
@@ -3169,10 +3203,6 @@ export class MapLibreLayerController {
   ): Promise<void> {
     if (signal.aborted)
       return Promise.reject(new DOMException('Aborted', 'AbortError'));
-    if (map.isSourceLoaded(sourceId)) {
-      this.startProgressiveRasterRendering(map, sourceId);
-      return Promise.resolve();
-    }
     return new Promise((resolve, reject) => {
       let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
       const cleanup = () => {
@@ -3240,6 +3270,18 @@ export class MapLibreLayerController {
       signal.addEventListener('abort', handleAbort, { once: true });
       map.on('sourcedata', handleSourceData);
       map.on('error', handleError);
+      try {
+        if (
+          map.isSourceLoaded(sourceId) &&
+          (!this.#rasterRecoveries.has(sourceId) ||
+            this.isRasterSourceRecoveryComplete(sourceId))
+        ) {
+          this.startProgressiveRasterRendering(map, sourceId);
+          succeed();
+        }
+      } catch {
+        // A superseding style replacement can remove the source after registration.
+      }
     });
   }
 

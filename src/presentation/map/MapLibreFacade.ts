@@ -153,8 +153,7 @@ function categorizeMapError(
     return 'base-vector';
   }
   if (
-    sourceId === mapSourceIds.sentinelRasterA ||
-    sourceId === mapSourceIds.sentinelRasterB ||
+    (sourceId !== null && isSatelliteSourceId(sourceId)) ||
     sourceId === mapSourceIds.satelliteBasemap ||
     Object.values(naprOrthophotoSourceIds).includes(
       sourceId as (typeof naprOrthophotoSourceIds)[keyof typeof naprOrthophotoSourceIds],

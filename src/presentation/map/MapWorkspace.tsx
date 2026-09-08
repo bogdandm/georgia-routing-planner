@@ -349,9 +349,10 @@ export function MapWorkspace({
       ? true
       : (appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
         appliedImagery.previousSceneKey !== null;
+  const mosaicImageryAvailable =
+    appliedMosaic.status !== 'empty' && appliedMosaic.sceneKeys.length > 0;
   const satelliteImageryVisible =
-    singleSceneImageryVisible ||
-    (appliedMosaic.status !== 'empty' && appliedMosaic.sceneKeys.length > 0);
+    singleSceneImageryVisible || (satelliteImagerySelected && mosaicImageryAvailable);
   let activeLayerPreset: MapLayerPreset | null = null;
   if (!googleSatelliteVisible && !naprOrthophotoVisible && !satelliteImageryVisible) {
     activeLayerPreset = 'vector-osm';
@@ -814,7 +815,11 @@ export function MapWorkspace({
   const handleLayerPresetChange = useCallback(
     (preset: MapLayerPreset): boolean => {
       if (mapLayers === null) return false;
-      if (preset === 'sentinel-2-hybrid' && mapLayers.getAppliedScene() === null) {
+      if (
+        preset === 'sentinel-2-hybrid' &&
+        mapLayers.getAppliedScene() === null &&
+        !mosaicImageryAvailable
+      ) {
         setActiveTab('satellite');
         setMobileWorkspaceOpen(true);
         setNavigationCollapsed(false);
@@ -828,7 +833,13 @@ export function MapWorkspace({
       setPresetErrorMessage(result.message);
       return false;
     },
-    [mapLayers, setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed],
+    [
+      mapLayers,
+      mosaicImageryAvailable,
+      setActiveTab,
+      setMobileWorkspaceOpen,
+      setNavigationCollapsed,
+    ],
   );
 
   return (

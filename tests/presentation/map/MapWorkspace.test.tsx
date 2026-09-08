@@ -1159,6 +1159,51 @@ describe('MapWorkspace', () => {
     expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
   });
 
+  it('recognizes a hidden Mosaic and reapplies the Sentinel preset', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': false,
+          'napr-orthophoto': false,
+          'satellite-imagery': false,
+        },
+        appliedMosaic: {
+          status: 'ready',
+          selectedDate: '2026-07-20',
+          sceneKeys: ['sentinel-2-l2a:mosaic-scene'],
+          coveragePercent: 100,
+          oldestAcquisitionDate: '2026-07-20',
+        },
+      });
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Hidden Mosaic map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Hidden Mosaic map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Vector OSM' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+
+    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
+  });
+
   it('applies NAPR quick presets without opening the Satellite workspace', async () => {
     const user = userEvent.setup();
     const services = createTestServices();

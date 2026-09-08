@@ -1,4 +1,4 @@
-import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
+import type { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
 import { validateSatelliteViewport } from '@/application/satellite/validateSatelliteSearchCriteria';
 import { SatelliteGeometryError } from '@/domain/satellite/SatelliteGeometryError';
@@ -6,11 +6,10 @@ import type {
   SatelliteProductLevel,
   SatelliteSearchViewport,
 } from '@/domain/satellite/SatelliteSearchCriteria';
-import type { SatelliteAcquisitionGroup } from '@/domain/satellite/SatelliteSearchResult';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   satelliteMosaicCompleteCoveragePercent,
-  selectSatelliteMosaicScenes,
+  SatelliteMosaicSelectionAccumulator,
 } from '@/domain/satellite/selectSatelliteMosaicScenes';
 
 export const sentinelArchiveStartDate = '2015-06-23';
@@ -57,16 +56,15 @@ export class SearchSatelliteMosaic {
     parseSelectedDate(input.selectedDate);
     const viewport = validateSatelliteViewport(input.viewport);
     let endDate = input.selectedDate;
-    let groups: readonly SatelliteAcquisitionGroup[] = [];
+    const selectionAccumulator = new SatelliteMosaicSelectionAccumulator(viewport);
 
     try {
-      while (true) {
+      for (;;) {
         signal.throwIfAborted();
         const monthStart = `${endDate.slice(0, 7)}-01`;
-        const startDate =
-          monthStart.slice(0, 7) === sentinelArchiveStartDate.slice(0, 7)
-            ? sentinelArchiveStartDate
-            : monthStart;
+        const startDate = monthStart.startsWith(sentinelArchiveStartDate.slice(0, 7))
+          ? sentinelArchiveStartDate
+          : monthStart;
         const reachedArchiveStart = startDate === sentinelArchiveStartDate;
         const result = await this.searchScenes.executeViewport(
           {
@@ -79,9 +77,14 @@ export class SearchSatelliteMosaic {
           signal,
         );
         signal.throwIfAborted();
-        groups = [...groups, ...result.groups];
-        const selection = selectSatelliteMosaicScenes(viewport, groups);
+        const selection = selectionAccumulator.addGroups(result.groups);
 
+        if (selectionAccumulator.limitReached) {
+          throw new SatelliteSearchError(
+            'result-limit-exceeded',
+            'This area needs too many Sentinel images. Zoom in and try again.',
+          );
+        }
         if (
           selection.coveragePercent >= satelliteMosaicCompleteCoveragePercent ||
           reachedArchiveStart

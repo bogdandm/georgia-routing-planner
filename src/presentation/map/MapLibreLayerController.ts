@@ -32,7 +32,10 @@ import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQuery
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
-import { calculateSatelliteMosaicCoveragePercent } from '@/domain/satellite/selectSatelliteMosaicScenes';
+import {
+  calculateSatelliteMosaicCoveragePercent,
+  maximumSatelliteMosaicSceneCount,
+} from '@/domain/satellite/selectSatelliteMosaicScenes';
 import {
   satelliteSceneBounds,
   satelliteSceneBoundsKey,
@@ -56,7 +59,10 @@ import {
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
-import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapLayerStore,
+  type SatelliteMosaicRenderProgress,
+} from '@/presentation/map/mapLayerStore';
 import {
   mapVisualModePaint,
   mapVisualPalette,
@@ -149,6 +155,7 @@ const openStreetMapOpacityProperties = {
 const maximumRasterRecoveryAttempts = 3;
 const rasterRecoveryBaseDelayMs = 1_000;
 const rasterSourceStabilityMs = 2_000;
+type RasterSourceReadiness = 'stable' | 'loaded';
 const canceledDirectSourceErrorWindowMs = 5_000;
 
 type MapLayerVisibilityResult =
@@ -281,9 +288,19 @@ function requestUrlFromError(event: MapLibreErrorEvent): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function tileTemplatePrefix(template: string): string {
+function requestMatchesTileTemplate(requestUrl: string, template: string): boolean {
   const placeholderIndex = template.indexOf('{');
-  return placeholderIndex === -1 ? template : template.slice(0, placeholderIndex);
+  const staticPrefix =
+    placeholderIndex === -1 ? template : template.slice(0, placeholderIndex);
+  if (!requestUrl.startsWith(staticPrefix)) return false;
+
+  const templateQueryIndex = template.indexOf('?');
+  if (templateQueryIndex === -1) return true;
+  const requestQueryIndex = requestUrl.indexOf('?');
+  return (
+    requestQueryIndex !== -1 &&
+    requestUrl.slice(requestQueryIndex) === template.slice(templateQueryIndex)
+  );
 }
 
 function tileCoordinateFromEvent(event: unknown): RasterTileCoordinate | null {
@@ -334,6 +351,9 @@ function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
     errorName === 'AbortError' ||
     /\b(?:abort(?:ed)?|cancel(?:ed|led)|superseded)\b/iu.test(event.error.message)
   );
+}
+function isAborted(signal: AbortSignal, error: unknown): boolean {
+  return signal.aborted || error instanceof DOMException;
 }
 
 class SentinelRasterLoadError extends Error {
@@ -899,6 +919,7 @@ export class MapLibreLayerController {
   ): SatelliteImageryCommandResult {
     this.#mosaicApplyController?.abort();
     this.#mosaicApplyController = null;
+    this.#mosaicSequence += 1;
     this.clearSingleScene();
     this.#mosaicSelectedDate = selectedDate;
     this.#mosaicViewport = viewport;
@@ -947,6 +968,7 @@ export class MapLibreLayerController {
       snapshot.selectedDate,
       viewport,
       snapshot.status === 'failed' ? snapshot.message : undefined,
+      snapshot.status === 'loading' ? snapshot.renderProgress : null,
     );
   }
 
@@ -1045,23 +1067,22 @@ export class MapLibreLayerController {
     const reportedSourceId = sourceIdFromError(event);
     if (reportedSourceId !== null) return reportedSourceId;
 
+    const requestUrl = requestUrlFromError(event);
+    if (requestUrl !== null) {
+      for (const [sourceId, template] of this.#rasterTileUrls) {
+        if (requestMatchesTileTemplate(requestUrl, template)) return sourceId;
+      }
+    }
+
     const details = mapFailureDetails(event);
     if (
       this.#stagingSourceId !== null &&
       (details.reason === 'rate-limit' || details.reason === 'no-response') &&
       this.#map?.getSource(this.#stagingSourceId) !== undefined
     ) {
-      // Both alternating rasters use the same hosted URL prefix. During an apply,
-      // source-less terminal failures must belong to the one staging source rather
-      // than whichever identical template was registered first.
+      // A URL-less terminal failure can only be attributed to the source whose
+      // readiness is currently pending.
       return this.#stagingSourceId;
-    }
-
-    const requestUrl = requestUrlFromError(event);
-    if (requestUrl !== null) {
-      for (const [sourceId, template] of this.#rasterTileUrls) {
-        if (requestUrl.startsWith(tileTemplatePrefix(template))) return sourceId;
-      }
     }
     return null;
   }
@@ -1668,18 +1689,38 @@ export class MapLibreLayerController {
       }
     }
 
+    if (desiredByBounds.size > maximumSatelliteMosaicSceneCount) {
+      return this.failMosaic(
+        selectedDate,
+        viewport,
+        'This area needs too many Sentinel images. Zoom in and try again.',
+      );
+    }
+    let renderedSceneCount = 0;
+    for (const [boundsKey, scene] of desiredByBounds) {
+      const existing = this.#mosaicEntries.get(boundsKey);
+      if (!forceReplacement && existing?.sceneKey === satelliteSceneKey(scene)) {
+        renderedSceneCount += 1;
+      }
+    }
+    const publishRenderProgress = () => {
+      if (sequence !== this.#mosaicSequence) return;
+      this.publishMosaicSnapshot('loading', selectedDate, viewport, undefined, {
+        renderedSceneCount,
+        totalSceneCount: desiredByBounds.size,
+      });
+    };
+    publishRenderProgress();
+
     for (const [boundsKey, scene] of desiredByBounds) {
       if (signal.aborted || sequence !== this.#mosaicSequence) {
-        this.publishMosaicSnapshot('loading', selectedDate, viewport);
+        publishRenderProgress();
         return { status: 'cancelled' };
       }
       const existing = this.#mosaicEntries.get(boundsKey);
       const sceneKey = satelliteSceneKey(scene);
-      if (
-        !forceReplacement &&
-        existing !== undefined &&
-        existing.sceneKey === sceneKey
-      ) {
+      if (!forceReplacement && existing?.sceneKey === sceneKey) {
+        publishRenderProgress();
         continue;
       }
 
@@ -1706,14 +1747,15 @@ export class MapLibreLayerController {
           this.removeSlot(map, existing.slot);
         }
         this.#mosaicEntries.set(boundsKey, staged);
+        renderedSceneCount += 1;
       } catch (error) {
         this.cancelRasterRecovery(staged.slot.sourceId);
         this.removeSlot(map, staged.slot);
-        if (signal.aborted || error instanceof DOMException) {
+        if (isAborted(signal, error)) {
           this.#stagingMosaicEntry = null;
           this.#stagingScene = null;
           this.#stagingSourceId = null;
-          this.publishMosaicSnapshot('loading', selectedDate, viewport);
+          publishRenderProgress();
           return { status: 'cancelled' };
         }
         firstFailure ??=
@@ -1727,6 +1769,7 @@ export class MapLibreLayerController {
           this.#stagingSourceId = null;
         }
       }
+      publishRenderProgress();
     }
 
     for (const [boundsKey, entry] of this.#mosaicEntries) {
@@ -1793,7 +1836,7 @@ export class MapLibreLayerController {
       );
     }
     this.addMosaicNativeSource(map, entry);
-    await this.waitForSource(map, entry.slot.sourceId, signal);
+    await this.waitForSource(map, entry.slot.sourceId, signal, 'loaded');
     map.setPaintProperty(entry.slot.layerId, 'raster-opacity', 1);
   }
 
@@ -1848,6 +1891,7 @@ export class MapLibreLayerController {
     selectedDate: string,
     viewport: SatelliteSearchViewport,
     message?: string,
+    renderProgress: SatelliteMosaicRenderProgress | null = null,
   ): void {
     const sceneKeys = [...this.#mosaicEntries.values()].map((entry) => entry.sceneKey);
     let oldestAcquisitionDate: string | null = null;
@@ -1861,14 +1905,23 @@ export class MapLibreLayerController {
       viewport,
       [...this.#mosaicEntries.values()].map((entry) => entry.scene),
     );
+    const fields = {
+      selectedDate,
+      sceneKeys,
+      coveragePercent,
+      oldestAcquisitionDate,
+    };
+    if (status === 'loading') {
+      mapLayerStore.setState({
+        appliedMosaic: { status, ...fields, renderProgress },
+      });
+      return;
+    }
     if (status === 'failed') {
       mapLayerStore.setState({
         appliedMosaic: {
           status,
-          selectedDate,
-          sceneKeys,
-          coveragePercent,
-          oldestAcquisitionDate,
+          ...fields,
           message:
             message ??
             'The Sentinel mosaic could not be updated. Ready imagery remains visible.',
@@ -1877,13 +1930,7 @@ export class MapLibreLayerController {
       return;
     }
     mapLayerStore.setState({
-      appliedMosaic: {
-        status,
-        selectedDate,
-        sceneKeys,
-        coveragePercent,
-        oldestAcquisitionDate,
-      },
+      appliedMosaic: { status, ...fields },
     });
   }
 
@@ -3118,6 +3165,7 @@ export class MapLibreLayerController {
     map: MapLibreMap,
     sourceId: string,
     signal: AbortSignal,
+    readiness: RasterSourceReadiness = 'stable',
   ): Promise<void> {
     if (signal.aborted)
       return Promise.reject(new DOMException('Aborted', 'AbortError'));
@@ -3169,8 +3217,10 @@ export class MapLibreLayerController {
         }
         const recoveredFailedTiles = this.handleRasterSourceData(event);
         const loaded = event.isSourceLoaded || map.isSourceLoaded(sourceId);
-        if (loaded && (!this.#rasterRecoveries.has(sourceId) || recoveredFailedTiles))
-          scheduleStableSuccess(false);
+        if (loaded && (!this.#rasterRecoveries.has(sourceId) || recoveredFailedTiles)) {
+          if (readiness === 'loaded') succeed();
+          else scheduleStableSuccess(false);
+        }
       };
       const handleError = (event: MapLibreErrorEvent) => {
         if (this.getRasterSourceId(event) !== sourceId) return;
@@ -3371,13 +3421,13 @@ export class MapLibreLayerController {
     if (
       requestUrl !== null &&
       fallbackUrl !== undefined &&
-      requestUrl.startsWith(tileTemplatePrefix(fallbackUrl))
+      requestMatchesTileTemplate(requestUrl, fallbackUrl)
     ) {
       return false;
     }
     const previousUrl = this.#staleRendererTileUrls.get(sourceId);
     if (requestUrl !== null && previousUrl !== undefined) {
-      return requestUrl.startsWith(tileTemplatePrefix(previousUrl));
+      return requestMatchesTileTemplate(requestUrl, previousUrl);
     }
     // The direct protocol does not issue hosted-renderer HTTP responses. A source-less
     // 429 received during the transition is therefore another already-started server tile.

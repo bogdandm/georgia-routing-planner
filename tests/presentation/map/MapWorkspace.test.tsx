@@ -21,6 +21,10 @@ import {
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
 import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
+import {
+  SatelliteMosaicProvider,
+  useSatelliteMosaic,
+} from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -208,6 +212,11 @@ describe('MapWorkspace', () => {
     ).toBeVisible();
   });
 
+  function MosaicModeButton() {
+    const { toggleMosaicMode } = useSatelliteMosaic();
+    return <button onClick={toggleMosaicMode}>Toggle Mosaic mode</button>;
+  }
+
   it('starts shared 3D terrain after the base map becomes ready', async () => {
     window.history.replaceState(
       null,
@@ -284,6 +293,43 @@ describe('MapWorkspace', () => {
       facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
     });
     expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+  });
+
+  it('forces 2D and suppresses shared 3D startup while Mosaic is active', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5#satellite',
+    );
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace facade={facade} mapCanvas={<div>Mosaic terrain map</div>} />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Mosaic terrain map');
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['flat']);
+    });
+    const terrainButton = screen.getByRole('button', {
+      name: 'Show 3D terrain map',
+    });
+    expect(terrainButton).toBeDisabled();
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    expect(terrainButton).toBeEnabled();
     expect(facade.terrainModeRequests).toEqual(['flat']);
   });
 

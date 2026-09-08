@@ -1,6 +1,7 @@
 import AddIcon from '@mui/icons-material/Add';
 import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
 import {
   Box,
@@ -25,6 +26,8 @@ import {
   useMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
+import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
+import { useSatelliteMosaic } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 import {
@@ -117,6 +120,7 @@ export function WorkspaceSidebar({
   const onMarkerSelected = fullWidth ? onShowMap : undefined;
   const { loadState } = useMarkersWorkspace();
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
+  const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
   const markerCreationMessage =
     mapViewportSnapshot === null
@@ -166,6 +170,34 @@ export function WorkspaceSidebar({
             {definition.title}
           </Typography>
         </Box>
+        {activeTab === 'satellite' ? (
+          <Tooltip
+            title={
+              satelliteMode === 'mosaic'
+                ? 'Return to individual Sentinel scenes'
+                : 'Switch to Sentinel Mosaic'
+            }
+          >
+            <ToggleButton
+              size="small"
+              value="mosaic"
+              selected={satelliteMode === 'mosaic'}
+              aria-label="Mosaic"
+              aria-pressed={satelliteMode === 'mosaic'}
+              sx={{ gap: 0.75 }}
+              onClick={() => {
+                if (satelliteMode === 'scene') onSatellitePaneOpenChange(false);
+                toggleMosaicMode();
+              }}
+            >
+              <GridViewOutlinedIcon
+                fontSize="small"
+                sx={{ transform: 'translateY(-1px)' }}
+              />
+              Mosaic
+            </ToggleButton>
+          </Tooltip>
+        ) : null}
         {activeTab === 'markers' ? (
           <>
             <Tooltip
@@ -253,13 +285,17 @@ export function WorkspaceSidebar({
           <TracksPanel onOpenActiveDetails={onOpenActiveTrackDetails} />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
-          <SatelliteBrowser
-            active={activeTab === 'satellite'}
-            auxiliaryOverlay={auxiliaryOverlay}
-            fallbackCoordinates={searchAreaCoordinates}
-            onPaneOpenChange={onSatellitePaneOpenChange}
-            {...(onSceneSelected === undefined ? {} : { onSceneSelected })}
-          />
+          {satelliteMode === 'mosaic' ? (
+            <SatelliteMosaicBrowser />
+          ) : (
+            <SatelliteBrowser
+              active={activeTab === 'satellite'}
+              auxiliaryOverlay={auxiliaryOverlay}
+              fallbackCoordinates={searchAreaCoordinates}
+              onPaneOpenChange={onSatellitePaneOpenChange}
+              {...(onSceneSelected === undefined ? {} : { onSceneSelected })}
+            />
+          )}
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersPanel

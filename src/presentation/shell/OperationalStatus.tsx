@@ -28,12 +28,14 @@ interface DisplayStatus {
   readonly message: string;
   readonly startedAt: number | null;
   readonly announcement: 'polite' | 'assertive';
+  readonly progressPercent?: number;
 }
 
 /** Quiet, always-visible summary of map and imagery work for ordinary users. */
 export function OperationalStatus() {
   const { mapDiagnostics, mapProviderConfiguration } = useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
+  const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const automaticAlternativeProviderState = useStore(
     mapLayerStore,
     (state) => state.automaticAlternativeProviderState,
@@ -107,6 +109,28 @@ export function OperationalStatus() {
       message: appliedImagery.message,
       startedAt: appliedImagery.startedAt,
       announcement: 'polite',
+    };
+  } else if (appliedMosaic.status === 'loading') {
+    const renderProgress = appliedMosaic.renderProgress;
+    display = {
+      kind: 'pending',
+      message:
+        renderProgress === null
+          ? 'Searching Sentinel archive…'
+          : `Rendering Mosaic images · ${String(
+              renderProgress.renderedSceneCount,
+            )}/${String(renderProgress.totalSceneCount)}`,
+      startedAt: null,
+      announcement: 'polite',
+      ...(renderProgress === null
+        ? {}
+        : {
+            progressPercent:
+              renderProgress.totalSceneCount === 0
+                ? 0
+                : (renderProgress.renderedSceneCount / renderProgress.totalSceneCount) *
+                  100,
+          }),
     };
   } else if (requestStatus.status === 'pending') {
     display = {
@@ -254,7 +278,19 @@ export function OperationalStatus() {
         </Tooltip>
       </Box>
       {display.kind === 'pending' ? (
-        <LinearProgress aria-hidden sx={{ mt: 0.25, height: 2, borderRadius: 1 }} />
+        <LinearProgress
+          aria-hidden={display.progressPercent === undefined ? true : undefined}
+          aria-label={
+            display.progressPercent === undefined
+              ? undefined
+              : 'Rendering Mosaic images'
+          }
+          variant={
+            display.progressPercent === undefined ? 'indeterminate' : 'determinate'
+          }
+          value={display.progressPercent}
+          sx={{ mt: 0.25, height: 2, borderRadius: 1 }}
+        />
       ) : null}
       {display.kind === 'ready' && terrainActivityLabel !== null ? (
         <Typography

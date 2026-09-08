@@ -34,7 +34,9 @@ export interface SatelliteCogTileProvider {
 type SatelliteCogWorkerFactory = () => WorkerRpcEndpoint;
 
 const protocolId = 'georgia-satellite-cog';
-const maximumRegisteredScenes = 2;
+// One viewport search is capped at 1,000 scenes. Keep that complete result plus active
+// replacement slots so direct rendering and automatic fallback can serve a full Mosaic.
+const maximumRegisteredScenes = 1_024;
 
 function defaultWorkerFactory(): WorkerRpcEndpoint {
   return new Worker(

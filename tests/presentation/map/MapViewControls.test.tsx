@@ -40,6 +40,7 @@ describe('MapViewControls', () => {
     render(
       <MapViewControls
         activeLayerPreset={null}
+        terrainDisabled={false}
         layerPresetDisabled={false}
         onLayerPresetChange={() => true}
         onTerrainModeChange={onTerrainModeChange}
@@ -61,6 +62,7 @@ describe('MapViewControls', () => {
     render(
       <MapViewControls
         activeLayerPreset={null}
+        terrainDisabled={false}
         layerPresetDisabled={false}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
@@ -77,6 +79,7 @@ describe('MapViewControls', () => {
     render(
       <MapViewControls
         activeLayerPreset="google-satellite-hybrid"
+        terrainDisabled={false}
         layerPresetDisabled={false}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
@@ -110,6 +113,7 @@ describe('MapViewControls', () => {
     render(
       <MapViewControls
         activeLayerPreset={null}
+        terrainDisabled={false}
         layerPresetDisabled={false}
         onLayerPresetChange={onLayerPresetChange}
         onTerrainModeChange={vi.fn()}
@@ -133,6 +137,7 @@ describe('MapViewControls', () => {
     render(
       <MapViewControls
         activeLayerPreset={null}
+        terrainDisabled={false}
         layerPresetDisabled={false}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
@@ -148,11 +153,40 @@ describe('MapViewControls', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(button).toHaveFocus();
   });
+  it('disables 3D terrain while Sentinel Mosaic is active', async () => {
+    const user = userEvent.setup();
+    render(
+      <MapViewControls
+        activeLayerPreset={null}
+        terrainDisabled
+        layerPresetDisabled={false}
+        onLayerPresetChange={() => true}
+        onTerrainModeChange={vi.fn()}
+        terrainState="flat"
+      />,
+    );
+
+    const terrainButton = screen.getByRole('button', {
+      name: 'Show 3D terrain map',
+    });
+    expect(terrainButton).toBeDisabled();
+    const tooltipTarget = terrainButton.parentElement;
+    expect(tooltipTarget).not.toBeNull();
+    if (tooltipTarget === null) return;
+    await user.hover(tooltipTarget);
+    expect(
+      await screen.findByText(
+        '3D terrain is unavailable while Sentinel Mosaic is active.',
+      ),
+    ).toBeVisible();
+  });
+
   it('mounts the dimension and layer controls in the MapLibre rail', () => {
     document.body.append(mapControlHost);
     const { unmount } = render(
       <MapViewControlsControl
         activeLayerPreset={null}
+        terrainDisabled={false}
         layerPresetDisabled={false}
         onLayerPresetChange={() => true}
         onTerrainModeChange={() => undefined}

@@ -9,6 +9,7 @@ import type {
   SatelliteSearchResult,
 } from '@/domain/satellite/SatelliteSearchResult';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 const viewport = {
@@ -183,6 +184,38 @@ describe('SearchSatelliteMosaic', () => {
     );
 
     expect(result.archiveExhausted).toBe(true);
+  });
+
+  it('rejects an over-budget catalog result before scanning older months', async () => {
+    const { searchScenes, useCase } = createUseCase();
+    const candidates = Array.from(
+      { length: maximumSatelliteMosaicSceneCount + 1 },
+      (_, index) =>
+        scene(
+          `candidate-${String(index)}`,
+          '2026-07-15T10:00:00.000Z',
+          rectangle(
+            (2 * index) / (maximumSatelliteMosaicSceneCount + 1),
+            0,
+            (2 * (index + 1)) / (maximumSatelliteMosaicSceneCount + 1),
+            2,
+          ),
+        ),
+    );
+    const executeViewport = vi
+      .spyOn(searchScenes, 'executeViewport')
+      .mockResolvedValue(resultFor('2026-07-15', candidates));
+
+    await expect(
+      useCase.execute(
+        { viewport, selectedDate: '2026-07-17', productLevel: 'L2A' },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({
+      code: 'result-limit-exceeded',
+      message: 'This area needs too many Sentinel images. Zoom in and try again.',
+    });
+    expect(executeViewport).toHaveBeenCalledOnce();
   });
 
   it('preserves cancellation before catalog work begins', async () => {

@@ -54,9 +54,18 @@ interface AppliedSatelliteMosaicFields {
   readonly oldestAcquisitionDate: string | null;
 }
 
+export interface SatelliteMosaicRenderProgress {
+  readonly renderedSceneCount: number;
+  readonly totalSceneCount: number;
+}
+
 export type AppliedSatelliteMosaicSnapshot =
   | { readonly status: 'empty' }
-  | ({ readonly status: 'loading' | 'ready' } & AppliedSatelliteMosaicFields)
+  | ({
+      readonly status: 'loading';
+      readonly renderProgress: SatelliteMosaicRenderProgress | null;
+    } & AppliedSatelliteMosaicFields)
+  | ({ readonly status: 'ready' } & AppliedSatelliteMosaicFields)
   | ({
       readonly status: 'failed';
       readonly message: string;

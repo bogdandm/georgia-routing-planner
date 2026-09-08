@@ -16,6 +16,7 @@ import {
 } from '@/domain/satellite/SatelliteScene';
 
 export const satelliteMosaicCompleteCoveragePercent = 100 - 1e-6;
+export const maximumSatelliteMosaicSceneCount = 128;
 
 export interface SatelliteMosaicSelection {
   readonly scenes: readonly SatelliteScene[];
@@ -45,6 +46,7 @@ class MosaicCoverageAccumulator {
   readonly #viewportFeature: Feature<Polygon>;
   readonly #viewportArea: number;
   #coverageGeometry: Feature<Polygon | MultiPolygon> | null = null;
+  #coverageArea = 0;
 
   public constructor(viewport: SatelliteSearchViewport) {
     this.#viewportFeature = createViewportFeature(viewport);
@@ -68,17 +70,33 @@ class MosaicCoverageAccumulator {
         ]),
       );
       if (clipped === null) return false;
+
+      const minimumIncreaseArea =
+        (this.#viewportArea * (100 - satelliteMosaicCompleteCoveragePercent)) / 100;
       if (this.#coverageGeometry === null) {
-        this.#coverageGeometry = clipped;
-      } else {
-        const combined: Feature<Polygon | MultiPolygon> | null = union(
-          featureCollection<Polygon | MultiPolygon>([this.#coverageGeometry, clipped]),
-        );
-        if (combined === null) {
-          throw new SatelliteGeometryError('Scene footprints could not be combined.');
+        const clippedArea = area(clipped);
+        if (!Number.isFinite(clippedArea) || clippedArea < 0) {
+          throw new SatelliteGeometryError('Scene footprint could not be measured.');
         }
-        this.#coverageGeometry = combined;
+        if (clippedArea <= minimumIncreaseArea) return false;
+        this.#coverageGeometry = clipped;
+        this.#coverageArea = clippedArea;
+        return true;
       }
+
+      const combined: Feature<Polygon | MultiPolygon> | null = union(
+        featureCollection<Polygon | MultiPolygon>([this.#coverageGeometry, clipped]),
+      );
+      if (combined === null) {
+        throw new SatelliteGeometryError('Scene footprints could not be combined.');
+      }
+      const combinedArea = area(combined);
+      if (!Number.isFinite(combinedArea) || combinedArea < 0) {
+        throw new SatelliteGeometryError('Mosaic coverage could not be measured.');
+      }
+      if (combinedArea - this.#coverageArea <= minimumIncreaseArea) return false;
+      this.#coverageGeometry = combined;
+      this.#coverageArea = combinedArea;
       return true;
     } catch (error) {
       if (error instanceof SatelliteGeometryError) throw error;
@@ -87,12 +105,80 @@ class MosaicCoverageAccumulator {
   }
 
   public coveragePercent(): number {
-    const coverageArea =
-      this.#coverageGeometry === null ? 0 : area(this.#coverageGeometry);
-    if (!Number.isFinite(coverageArea) || coverageArea < 0) {
-      throw new SatelliteGeometryError('Mosaic coverage could not be measured.');
+    return Math.min(100, Math.max(0, (this.#coverageArea / this.#viewportArea) * 100));
+  }
+}
+
+/**
+ * Retains only the bounded selection and union geometry while older catalog months arrive.
+ * The scene cap also bounds the number of native MapLibre raster caches in one Mosaic.
+ */
+export class SatelliteMosaicSelectionAccumulator {
+  readonly #composition: MosaicCoverageAccumulator;
+  readonly #scenes: SatelliteScene[] = [];
+  readonly #acceptedBounds = new Set<string>();
+  #coveragePercent = 0;
+  #oldestAcquisitionDate: string | null = null;
+  #limitReached = false;
+
+  public constructor(viewport: SatelliteSearchViewport) {
+    this.#composition = new MosaicCoverageAccumulator(viewport);
+  }
+
+  public get limitReached(): boolean {
+    return this.#limitReached;
+  }
+
+  public addGroups(
+    groups: readonly SatelliteAcquisitionGroup[],
+  ): SatelliteMosaicSelection {
+    if (
+      this.#limitReached ||
+      this.#coveragePercent >= satelliteMosaicCompleteCoveragePercent
+    ) {
+      return this.snapshot();
     }
-    return Math.min(100, Math.max(0, (coverageArea / this.#viewportArea) * 100));
+
+    for (const group of groups.toSorted((left, right) =>
+      right.date.localeCompare(left.date),
+    )) {
+      let acceptedFromGroup = false;
+      for (const match of group.scenes) {
+        const { scene } = match;
+        if (scene.productLevel !== 'L2A') continue;
+
+        const boundsKey = satelliteSceneBoundsKey(scene);
+        if (this.#acceptedBounds.has(boundsKey)) continue;
+        if (this.#scenes.length >= maximumSatelliteMosaicSceneCount) {
+          this.#limitReached = true;
+          break;
+        }
+        if (!this.#composition.add(scene)) continue;
+
+        this.#acceptedBounds.add(boundsKey);
+        this.#scenes.push(scene);
+        acceptedFromGroup = true;
+      }
+
+      if (acceptedFromGroup) this.#oldestAcquisitionDate = group.date;
+      this.#coveragePercent = this.#composition.coveragePercent();
+      if (
+        this.#limitReached ||
+        this.#coveragePercent >= satelliteMosaicCompleteCoveragePercent
+      ) {
+        break;
+      }
+    }
+
+    return this.snapshot();
+  }
+
+  private snapshot(): SatelliteMosaicSelection {
+    return {
+      scenes: [...this.#scenes],
+      coveragePercent: this.#coveragePercent,
+      oldestAcquisitionDate: this.#oldestAcquisitionDate,
+    };
   }
 }
 
@@ -115,32 +201,5 @@ export function selectSatelliteMosaicScenes(
   viewport: SatelliteSearchViewport,
   groups: readonly SatelliteAcquisitionGroup[],
 ): SatelliteMosaicSelection {
-  const composition = new MosaicCoverageAccumulator(viewport);
-  const scenes: SatelliteScene[] = [];
-  const acceptedBounds = new Set<string>();
-  let coveragePercent = 0;
-  let oldestAcquisitionDate: string | null = null;
-
-  for (const group of groups.toSorted((left, right) =>
-    right.date.localeCompare(left.date),
-  )) {
-    let acceptedFromGroup = false;
-    for (const match of group.scenes) {
-      const { scene } = match;
-      if (scene.productLevel !== 'L2A') continue;
-
-      const boundsKey = satelliteSceneBoundsKey(scene);
-      if (acceptedBounds.has(boundsKey) || !composition.add(scene)) continue;
-
-      acceptedBounds.add(boundsKey);
-      scenes.push(scene);
-      acceptedFromGroup = true;
-    }
-
-    if (acceptedFromGroup) oldestAcquisitionDate = group.date;
-    coveragePercent = composition.coveragePercent();
-    if (coveragePercent >= satelliteMosaicCompleteCoveragePercent) break;
-  }
-
-  return { scenes, coveragePercent, oldestAcquisitionDate };
+  return new SatelliteMosaicSelectionAccumulator(viewport).addGroups(groups);
 }

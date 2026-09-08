@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import type { MapViewportMovement } from '@/presentation/map/MapFacade';
 import { naprOrthophotoSourceIds } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
 
@@ -208,7 +209,7 @@ describe('MapLibreFacade', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const onCameraSettled = vi.fn();
-    const viewportMovement = vi.fn();
+    const viewportMovement = vi.fn<(event: MapViewportMovement) => void>();
     const setTerrainInteractionActive = vi.fn();
     const layerController = {
       attach: vi.fn(),

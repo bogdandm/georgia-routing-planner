@@ -34,7 +34,7 @@ import type {
   MapCamera as PersistedMapCamera,
   MapViewState,
 } from '@/application/ports/MapCameraRepository';
-import type { MapFacade } from '@/presentation/map/MapFacade';
+import type { MapFacade, MapViewportMovement } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
@@ -42,6 +42,7 @@ import {
   MapViewControlsControl,
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
+import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
   defaultGeorgiaCamera,
@@ -147,6 +148,8 @@ export function MapWorkspace({
     satelliteCatalogGateway,
     idGenerator,
   } = useRuntimeServices();
+  const satelliteMode = useSatelliteMode();
+  const mosaicActive = satelliteMode === 'mosaic';
   const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
   const [sharedTerrainUrlIntentActive, setSharedTerrainUrlIntentActive] = useState(
@@ -209,6 +212,7 @@ export function MapWorkspace({
     (state) => state.openStreetMapOpacity,
   );
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
+  const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const tracksWorkspace = useOptionalTracksWorkspace();
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const routePlanningActive =
@@ -333,16 +337,21 @@ export function MapWorkspace({
   const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
   const terrainState: TerrainControlState =
     terrainCommandState ??
-    (sharedTerrainRequested &&
-    sharedTerrainUrlIntentActive &&
-    snapshot.lifecycle === 'loading'
-      ? 'terrain'
-      : snapshot.terrainMode);
-  const satelliteImageryVisible =
+    (mosaicActive
+      ? 'flat'
+      : sharedTerrainRequested &&
+          sharedTerrainUrlIntentActive &&
+          snapshot.lifecycle === 'loading'
+        ? 'terrain'
+        : snapshot.terrainMode);
+  const singleSceneImageryVisible =
     appliedImagery.status === 'preview' || appliedImagery.status === 'ready'
       ? true
       : (appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
         appliedImagery.previousSceneKey !== null;
+  const satelliteImageryVisible =
+    singleSceneImageryVisible ||
+    (appliedMosaic.status !== 'empty' && appliedMosaic.sceneKeys.length > 0);
   let activeLayerPreset: MapLayerPreset | null = null;
   if (!googleSatelliteVisible && !naprOrthophotoVisible && !satelliteImageryVisible) {
     activeLayerPreset = 'vector-osm';
@@ -372,11 +381,18 @@ export function MapWorkspace({
     const publishViewport = () => {
       mapViewport.update(facade.getViewportSnapshot());
     };
+    const publishMovement = (event: MapViewportMovement) => {
+      if (event.phase === 'moving') mapViewport.markMoving();
+      else mapViewport.settle(event.viewport);
+    };
     publishViewport();
     const unsubscribe = facade.subscribe(publishViewport);
+    const unsubscribeMovement = facade.subscribeViewportMovement(publishMovement);
     return () => {
       unsubscribe();
+      unsubscribeMovement();
       mapViewport.update(null);
+      mapViewport.clearMovement();
     };
   }, [facade, mapViewport]);
 
@@ -512,17 +528,33 @@ export function MapWorkspace({
 
   const handleTerrainControlChange = useCallback(
     (mode: 'flat' | 'terrain') => {
+      if (mosaicActive && mode === 'terrain') return;
       // A direct user choice supersedes the startup intent from a shared URL, including
       // while MapLibre is still loading and its diagnostics snapshot remains stale.
       setSharedTerrainUrlIntentActive(false);
       void handleTerrainModeChange(mode);
     },
-    [handleTerrainModeChange],
+    [handleTerrainModeChange, mosaicActive],
   );
+
+  useEffect(() => {
+    if (!mosaicActive) return;
+    let active = true;
+    sharedTerrainStartRequested.current = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setSharedTerrainUrlIntentActive(false);
+      void handleTerrainModeChange('flat');
+    });
+    return () => {
+      active = false;
+    };
+  }, [handleTerrainModeChange, mosaicActive]);
 
   useEffect(() => {
     if (
       !sharedTerrainRequested ||
+      mosaicActive ||
       !sharedTerrainUrlIntentActive ||
       sharedTerrainStartRequested.current ||
       snapshot.lifecycle !== 'ready' ||
@@ -536,6 +568,7 @@ export function MapWorkspace({
     sharedTerrainStartRequested.current = true;
     void handleTerrainModeChange('terrain');
   }, [
+    mosaicActive,
     handleTerrainModeChange,
     sharedTerrainRequested,
     sharedTerrainUrlIntentActive,
@@ -849,6 +882,7 @@ export function MapWorkspace({
             />
             <MapViewControlsControl
               activeLayerPreset={activeLayerPreset}
+              terrainDisabled={mosaicActive}
               layerPresetDisabled={layerPresetDisabled}
               onLayerPresetChange={handleLayerPresetChange}
               onTerrainModeChange={handleTerrainControlChange}
@@ -874,6 +908,7 @@ export function MapWorkspace({
       resolvedMapCanvas !== undefined ? (
         <MapViewControls
           activeLayerPreset={activeLayerPreset}
+          terrainDisabled={mosaicActive}
           layerPresetDisabled={layerPresetDisabled}
           onLayerPresetChange={handleLayerPresetChange}
           onTerrainModeChange={handleTerrainControlChange}

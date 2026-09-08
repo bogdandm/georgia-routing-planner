@@ -1,3 +1,4 @@
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Accordion,
   AccordionDetails,
@@ -16,7 +17,6 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
@@ -48,76 +48,62 @@ function SliderLabel({
   );
 }
 
-export function SatelliteRenderingControls() {
+interface SatelliteRenderModeSelectProps {
+  readonly disabled?: boolean;
+  readonly onPendingChange?: (pending: boolean) => void;
+}
+
+export function SatelliteRenderModeSelect({
+  disabled = false,
+  onPendingChange,
+}: SatelliteRenderModeSelectProps) {
   const { mapLayers } = useRuntimeServices();
   const labelId = useId();
   const renderingMode = useStore(
     mapLayerStore,
     (state) => state.satelliteRenderingMode,
   );
-  const persistedTuning = useStore(
-    mapLayerStore,
-    (state) => state.satelliteRenderingTuning,
-  );
-  const terrainOverlayPreferences = useStore(
-    mapLayerStore,
-    (state) => state.terrainOverlays.preferences,
-  );
-  const [renderingTuningDraft, setRenderingTuningDraft] =
-    useState<SatelliteRenderingTuning | null>(null);
-  const renderingTuning = renderingTuningDraft ?? persistedTuning;
-  const [renderingPending, setRenderingPending] = useState(false);
-  const [renderingError, setRenderingError] = useState<string | null>(null);
-  const [terrainOverlayError, setTerrainOverlayError] = useState<string | null>(null);
-  const renderingRequest = useRef<AbortController | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const request = useRef<AbortController | null>(null);
 
   useEffect(
     () => () => {
-      renderingRequest.current?.abort();
+      const activeRequest = request.current;
+      request.current = null;
+      activeRequest?.abort();
     },
     [],
   );
 
-  const changeRenderingMode = (mode: SatelliteRenderingMode) => {
-    if (mapLayers === null) return;
-    renderingRequest.current?.abort();
-    const controller = new AbortController();
-    renderingRequest.current = controller;
-    setRenderingPending(true);
-    setRenderingError(null);
-    void mapLayers.setRenderingMode(mode, controller.signal).then((result) => {
-      if (result.status === 'failed') setRenderingError(result.message);
-      if (renderingRequest.current === controller) {
-        renderingRequest.current = null;
-        setRenderingPending(false);
-        setRenderingTuningDraft(null);
-      }
-    });
+  const setRequestPending = (nextPending: boolean) => {
+    setPending(nextPending);
+    onPendingChange?.(nextPending);
   };
 
-  const commitRenderingTuning = (tuning: SatelliteRenderingTuning) => {
-    setRenderingTuningDraft(tuning);
+  const changeRenderingMode = (mode: SatelliteRenderingMode) => {
     if (mapLayers === null) return;
-    renderingRequest.current?.abort();
+    request.current?.abort();
     const controller = new AbortController();
-    renderingRequest.current = controller;
-    setRenderingPending(true);
-    setRenderingError(null);
-    void mapLayers.setRenderingTuning(tuning, controller.signal).then((result) => {
-      if (result.status === 'failed') {
-        setRenderingError(result.message);
-      }
-      if (renderingRequest.current === controller) {
-        renderingRequest.current = null;
-        setRenderingPending(false);
-        setRenderingTuningDraft(null);
+    request.current = controller;
+    setRequestPending(true);
+    setError(null);
+    void mapLayers.setRenderingMode(mode, controller.signal).then((result) => {
+      if (result.status === 'failed') setError(result.message);
+      if (request.current === controller) {
+        request.current = null;
+        setRequestPending(false);
       }
     });
   };
 
   return (
-    <Stack spacing={1.5}>
-      <FormControl size="small" fullWidth disabled={mapLayers === null}>
+    <Stack spacing={1}>
+      <FormControl
+        size="small"
+        fullWidth
+        disabled={disabled || pending || mapLayers === null}
+      >
         <InputLabel id={labelId}>Satellite render</InputLabel>
         <Select
           labelId={labelId}
@@ -139,6 +125,63 @@ export function SatelliteRenderingControls() {
               : 'Reads the pre-rendered 8-bit Sentinel visual asset without contacting TiTiler.'}
         </FormHelperText>
       </FormControl>
+      {error === null ? null : <Alert severity="error">{error}</Alert>}
+    </Stack>
+  );
+}
+
+export function SatelliteRenderingControls() {
+  const { mapLayers } = useRuntimeServices();
+  const persistedTuning = useStore(
+    mapLayerStore,
+    (state) => state.satelliteRenderingTuning,
+  );
+  const terrainOverlayPreferences = useStore(
+    mapLayerStore,
+    (state) => state.terrainOverlays.preferences,
+  );
+  const [renderingTuningDraft, setRenderingTuningDraft] =
+    useState<SatelliteRenderingTuning | null>(null);
+  const renderingTuning = renderingTuningDraft ?? persistedTuning;
+  const [renderingPending, setRenderingPending] = useState(false);
+  const [modePending, setModePending] = useState(false);
+  const [renderingError, setRenderingError] = useState<string | null>(null);
+  const [terrainOverlayError, setTerrainOverlayError] = useState<string | null>(null);
+  const renderingRequest = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      renderingRequest.current?.abort();
+    },
+    [],
+  );
+
+  const commitRenderingTuning = (tuning: SatelliteRenderingTuning) => {
+    setRenderingTuningDraft(tuning);
+    if (mapLayers === null) return;
+    renderingRequest.current?.abort();
+    const controller = new AbortController();
+    renderingRequest.current = controller;
+    setRenderingPending(true);
+    setRenderingError(null);
+    void mapLayers.setRenderingTuning(tuning, controller.signal).then((result) => {
+      if (result.status === 'failed') setRenderingError(result.message);
+      if (renderingRequest.current === controller) {
+        renderingRequest.current = null;
+        setRenderingPending(false);
+        setRenderingTuningDraft(null);
+      }
+    });
+  };
+
+  const controlsPending = renderingPending || modePending;
+
+  return (
+    <Stack spacing={1.5}>
+      <SatelliteRenderModeSelect
+        disabled={renderingPending}
+        onPendingChange={setModePending}
+      />
 
       {renderingError === null ? null : (
         <Alert severity="error">{renderingError}</Alert>
@@ -153,7 +196,7 @@ export function SatelliteRenderingControls() {
               size="small"
               sx={{ p: 0, mr: 1 }}
               checked={terrainOverlayPreferences.shadeAboveSatellite}
-              disabled={mapLayers === null}
+              disabled={mapLayers === null || controlsPending}
               onChange={(event) => {
                 if (mapLayers === null) return;
                 const result = mapLayers.setTerrainOverlayPreferences({
@@ -211,7 +254,7 @@ export function SatelliteRenderingControls() {
                 step={250}
                 value={renderingTuning.reflectanceMax}
                 valueLabelDisplay="auto"
-                disabled={mapLayers === null || renderingPending}
+                disabled={mapLayers === null || controlsPending}
                 onChange={(_event, value) => {
                   if (typeof value === 'number') {
                     setRenderingTuningDraft({
@@ -240,7 +283,7 @@ export function SatelliteRenderingControls() {
                 step={0.05}
                 value={renderingTuning.gamma}
                 valueLabelDisplay="auto"
-                disabled={mapLayers === null || renderingPending}
+                disabled={mapLayers === null || controlsPending}
                 onChange={(_event, value) => {
                   if (typeof value === 'number') {
                     setRenderingTuningDraft({ ...renderingTuning, gamma: value });
@@ -266,7 +309,7 @@ export function SatelliteRenderingControls() {
                 step={0.05}
                 value={renderingTuning.saturation}
                 valueLabelDisplay="auto"
-                disabled={mapLayers === null || renderingPending}
+                disabled={mapLayers === null || controlsPending}
                 onChange={(_event, value) => {
                   if (typeof value === 'number') {
                     setRenderingTuningDraft({ ...renderingTuning, saturation: value });
@@ -284,7 +327,7 @@ export function SatelliteRenderingControls() {
               <Button
                 size="small"
                 variant="outlined"
-                disabled={mapLayers === null || renderingPending}
+                disabled={mapLayers === null || controlsPending}
                 onClick={() => {
                   setRenderingTuningDraft(defaultSatelliteRenderingTuning);
                   commitRenderingTuning(defaultSatelliteRenderingTuning);

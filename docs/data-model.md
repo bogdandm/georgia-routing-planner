@@ -397,6 +397,7 @@ and preference data crosses the storage boundary.
 | `MapLayerDefinition`          | Application code/public configuration on GitHub Pages | Stable ID, layer kind, ordered band, adapter/source key, supported opacity/visibility controls, zoom limits, and attribution key |
 | `MapLayerPreference`          | IndexedDB when persistence is useful                  | Layer ID, visibility, optional opacity, and update time                                                                          |
 | `ActiveMapSelection`          | Session/Zustand                                       | Selected track/plan/marker/scene IDs and current interaction mode                                                                |
+| `AppliedSatelliteMosaic`      | Session/Zustand plus map facade memory                | Empty/loading/ready/failed state, committed date, safe scene keys, rendered coverage, acquisition range, and render progress     |
 | Native map/source/layer state | Map facade memory                                     | Reconstructed from definitions, configuration, selections, and preferences                                                       |
 
 Layer definitions occupy stable bands in this order:
@@ -464,12 +465,28 @@ classDiagram
     +percent maximumCloudCover optional
     +string[] sceneIds
   }
+  class SatelliteMosaicSelection {
+    +LocalDate selectedUpperBound
+    +SatelliteScene[] coverageContributors
+    +percent unionCoverage
+    +LocalDate oldestAcquisition optional
+    +boolean archiveExhausted
+  }
+  class AppliedSatelliteMosaic {
+    +MosaicStatus status
+    +LocalDate selectedDate
+    +SceneKey[] readyScenes
+    +percent renderedUnionCoverage
+    +RenderProgress optional
+  }
 
   SatelliteSearchQuery *-- ViewportTarget
   SatelliteSearchQuery *-- MarkerAreaTarget
   SatelliteSearchQuery "1" --> "many" SatelliteScene
   SatelliteScene "1" --> "1" SatelliteSceneCoverage
   SatelliteScene "many" --> "one" SceneDaySummary
+  SatelliteScene "many" --> "one" SatelliteMosaicSelection
+  SatelliteMosaicSelection "1" --> "one" AppliedSatelliteMosaic
 ```
 
 `SearchTarget` is exactly one viewport or marker-area variant. The implemented viewport
@@ -494,9 +511,19 @@ or unavailable; unsupported L1C imagery is never replaced with an L2A scene.
 | DEM source                | Provider/source ID, tile template, encoding, tile size, zoom range, attribution                                                                        | Public validated configuration plus runtime map/elevation adapter |
 | Elevation sample          | Coordinate/distance-along-line, elevation meters or missing status, provider ID, and algorithm version                                                 | Derived profile cache or embedded metrics provenance              |
 
-Selecting a date does not imply complete coverage. The MVP shows scene footprints and
-requires an explicit scene selection instead of silently mosaicking all scenes on that
-date. This can evolve behind the satellite gateway and raster adapter.
+An individual-scene date shortcut and Mosaic upper-bound date are separate contracts.
+Single-scene mode chooses one explicit footprint and preserves its shareable selection.
+Mosaic mode queries the exact settled viewport in descending monthly chunks, accepts
+only newest-to-oldest L2A footprints that add measurable clipped union coverage, and
+bounds the transient selection at 128 scenes. Exact west/south/east/north extrema define
+duplicate geometric coverage; nullable provider tile IDs do not.
+
+`SatelliteMosaicSelection.coverageContributors` is the bounded catalog decision.
+`AppliedSatelliteMosaic.readyScenes` contains only sources that actually reached map
+readiness, so its union coverage can be lower and is recalculated against each committed
+viewport. Both forms are transient. Changing the selected upper-bound date or leaving
+Mosaic removes the applied snapshot and native resources; neither Mosaic state nor scene
+keys enter IndexedDB, URLs, or diagnostics exports.
 
 ## Settings, caches, and diagnostics
 

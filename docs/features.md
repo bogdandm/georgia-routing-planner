@@ -358,6 +358,39 @@ reveals another local set or fetches preceding months, with a small bounded numb
 automatic month requests. The same load-more button remains available for further manual
 archive traversal.
 
+The compact **Mosaic** toggle beside the Satellite heading, identified by a grid icon
+and hover explanation, replaces individual-scene browsing with a viewport-filling L2A
+workflow. Its calendar selects an inclusive upper-bound date: visible cells from the
+Sentinel archive start through that date form one continuous range, while pre-archive
+and future dates remain disabled. Mosaic exposes the shared Auto, Server, and Direct
+render selector but intentionally omits the cloud ceiling, relief shading, stretch
+controls, scene cards, and footprint control.
+
+**Show mosaic** requires a settled map in 2D. It searches the exact viewport polygon
+from the selected date backwards in complete calendar-month chunks, without a cloud
+predicate. Newest-to-oldest scenes with unique geometric bounds are retained only when
+their clipped footprint adds measurable viewport coverage. Turf union area, rather than
+summed per-scene percentages, determines completion at 100% within numerical tolerance.
+Search stops when coverage is complete, the archive reaches 23 June 2015, or the bounded
+128-scene native-source budget is reached. An exhausted archive can leave an explicit
+partial result or a non-error no-imagery result.
+
+Mosaic raster sources are staged progressively with their validated scene bounds and no
+cross-fade. The global Ready area under map search reports rendered images and a
+determinate progress bar; coverage, rendered-image count, and chronological acquisition
+range remain in Satellite after completion. Selecting a different upper-bound date
+immediately cancels catalog/render work, removes every current Mosaic source, and clears
+that progress before the next explicit **Show mosaic**. Map movement cancels obsolete
+work and refreshes the shown Mosaic for the next settled viewport. Closing the sidebar
+or visiting another rail destination preserves the active Mosaic and its settled-camera
+refresh behavior.
+
+Mosaic and a selected single scene are mutually exclusive. Mosaic entry flattens the map
+and disables the 3D control; leaving it re-enables 3D without restoring an earlier
+terrain mode. Mosaic dates, request state, and applied layers are transient: they are
+neither persisted nor added to map/share URLs. The existing single-scene sharing
+contract remains unchanged.
+
 Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
 `#markers`, `#layers`, or `#user`. Loading an anchored URL restores that tab, and
 changing tabs updates the anchor.

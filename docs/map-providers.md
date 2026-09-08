@@ -512,13 +512,15 @@ AWS Sentinel objects. Earth Search remains the selected replaceable catalog cand
   provider fallback is not assumed.
 
 The validated public configuration supplies the exact search URL, distinct collection
-IDs, plain-text attribution, and a one-to-ten page cap (default five). The production
-gateway sends a single collection, WGS84 point intersection, inclusive UTC interval,
-scene-level cloud filter, descending acquisition sort, allowlisted fields, and at most
-100 items. It follows only one unambiguous `POST` next link at a time when the link has
-the configured HTTPS origin/path, no query or fragment, and a bounded opaque `next`
-token. Invalid items, counts, assets, or pagination fail closed; raw bodies, links,
-tokens, and exact geometry are never logged.
+IDs, plain-text attribution, and a one-to-ten page cap (default five). An
+individual-scene search sends one WGS84 center point and a numeric scene-level cloud
+filter. Mosaic sends the closed WGS84 settled-viewport polygon and omits
+`eo:cloud_cover`, so scenes without cloud metadata remain eligible. Both requests send
+one collection, an inclusive UTC interval, descending acquisition sort, allowlisted
+fields, and at most 100 items per page. The gateway follows only one unambiguous `POST`
+next link at a time when it has the configured HTTPS origin/path, no query or fragment,
+and a bounded opaque `next` token. Invalid items, counts, assets, or pagination fail
+closed; raw bodies, links, tokens, and exact geometry are never logged.
 
 ### L2A true-color COG
 
@@ -590,17 +592,22 @@ its 429 response, leaving the application with only status zero. A dedicated mod
 worker range-reads the validated 8-bit visual COG, selects appropriate overviews,
 transforms output pixels between Web Mercator and the declared northern UTM CRS, and
 returns 256-pixel WebP tiles without additional stretching. The main thread and MapLibre
-source contain only a safe scene key. The provider and worker each retain at most two
-scene definitions; the GeoTIFF readers use bounded block caches. HTTP 5xx, timeout, and
-identifiable network failures trigger up to three deduplicated failed-tile refreshes
-with exponential delay. Refreshing only the failed canonical tile coordinates keeps
-already rendered imagery available. The current status names the exact HTTP code when
-available; developer diagnostics also retain the stable source ID, safe failure class,
-aggregate count, recovery state, and retry attempt. URLs, queries, response bodies, and
-tile coordinates remain excluded. MapLibre status zero is reported as `no-response`,
-which accurately covers blocked CORS responses as well as connection failures without
-inventing an HTTP status. If direct COG range access or worker rasterization also fails,
-a safe direct-rendering error remains visible and the vector basemap stays available.
+source contain only a safe scene key. The provider registry retains bounded scene
+definitions for the complete Mosaic source budget plus replacement headroom, while the
+worker retains only the two most recent GeoTIFF readers to cap large per-file block
+caches. Direct rendering across many interleaved Mosaic scenes can therefore reopen
+older readers rather than growing memory without bound.
+
+HTTP 5xx, timeout, and identifiable network failures trigger up to three deduplicated
+failed-tile refreshes with exponential delay. Refreshing only the failed canonical tile
+coordinates keeps already rendered imagery available. The current status names the exact
+HTTP code when available; developer diagnostics also retain the stable source ID, safe
+failure class, aggregate count, recovery state, and retry attempt. URLs, queries,
+response bodies, and tile coordinates remain excluded. MapLibre status zero is reported
+as `no-response`, which accurately covers blocked CORS responses as well as connection
+failures without inventing an HTTP status. If direct COG range access or worker
+rasterization also fails, a safe direct-rendering error remains visible and the vector
+basemap stays available.
 
 Selecting a different scene removes both stable raster slots and the old footprint
 immediately, restores the complete vector style, and creates only the requested scene.
@@ -615,6 +622,23 @@ partial imagery can be promoted after retries are exhausted. Cancellation or
 supersession removes pending resources. The validated WGS84 footprint renders
 independently as GeoJSON, making partial coverage explicit. The application never logs
 or stores the COG or tile URL in shared state or support bundles.
+
+Mosaic reuses these catalog and rendering endpoints without adding a provider stack. Its
+application search walks descending calendar months and incrementally retains at most
+128 unique-bound L2A scenes whose clipped footprints add measurable coverage. Actual
+completion uses the union of those footprints inside the exact viewport; overlap cannot
+inflate the percentage. This raises the number of bounded Earth Search and TiTiler
+requests for one explicit user action, but does not create background prefetching,
+retries, credentials, or unbounded traversal.
+
+Each selected scene becomes one MapLibre raster source constrained to its validated
+WGS84 extrema. Sources stage newest-first and reveal as soon as their content is loaded,
+with zero raster fade and no artificial stability delay between sources. The existing
+vector basemap remains below partial imagery. A global rendered/total progress value is
+derived only from ready sources. Cancellation, a different selected date, mode exit, or
+supersession removes pending resources; date changes additionally remove every ready
+Mosaic source before another run. A sequence guard prevents cancelled work from
+restoring cleared progress.
 
 A 2026-07-19 current-Chrome smoke searched the live Georgia viewport, applied
 `S2A_38TLM_20260709_0_L2A`, and displayed the georeferenced true-color tiles plus the

@@ -8,7 +8,11 @@ import type {
   SatelliteSceneMatch,
 } from '@/domain/satellite/SatelliteSearchResult';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
-import { selectSatelliteMosaicScenes } from '@/domain/satellite/selectSatelliteMosaicScenes';
+import {
+  maximumSatelliteMosaicSceneCount,
+  SatelliteMosaicSelectionAccumulator,
+  selectSatelliteMosaicScenes,
+} from '@/domain/satellite/selectSatelliteMosaicScenes';
 
 const viewport: SatelliteSearchViewport = {
   bounds: { west: 0, south: 0, east: 2, north: 2 },
@@ -73,10 +77,10 @@ function group(
 }
 
 describe('selectSatelliteMosaicScenes', () => {
-  it('accepts every unique intersecting L2A boundary from the newest acquisition day', () => {
+  it('keeps only coverage-contributing L2A boundaries from the newest day', () => {
     const full = scene('full', '2026-07-20T11:00:00.000Z', rectangle(0, 0, 2, 2));
-    const sameDay = scene(
-      'same-day',
+    const redundant = scene(
+      'redundant',
       '2026-07-20T10:00:00.000Z',
       rectangle(1.5, 0, 2.5, 2),
     );
@@ -84,10 +88,10 @@ describe('selectSatelliteMosaicScenes', () => {
 
     const result = selectSatelliteMosaicScenes(viewport, [
       group('2026-07-19', [older]),
-      group('2026-07-20', [full, sameDay]),
+      group('2026-07-20', [full, redundant]),
     ]);
 
-    expect(result.scenes.map(({ id }) => id)).toEqual(['full', 'same-day']);
+    expect(result.scenes.map(({ id }) => id)).toEqual(['full']);
     expect(result.coveragePercent).toBe(100);
     expect(result.oldestAcquisitionDate).toBe('2026-07-20');
   });
@@ -144,13 +148,78 @@ describe('selectSatelliteMosaicScenes', () => {
       group('2026-07-18', [ignored]),
     ]);
 
-    expect(result.scenes.map(({ id }) => id)).toEqual([
-      'first',
-      'completing',
-      'same-day-extra',
-    ]);
+    expect(result.scenes.map(({ id }) => id)).toEqual(['first', 'completing']);
     expect(result.coveragePercent).toBe(100);
     expect(result.oldestAcquisitionDate).toBe('2026-07-19');
+  });
+
+  it('extends monthly selections without retaining duplicate older boundaries', () => {
+    const leftBounds = rectangle(0, 0, 1, 2);
+    const newest = scene('newest', '2026-07-20T10:00:00.000Z', leftBounds);
+    const olderDuplicate = scene(
+      'older-duplicate',
+      '2026-06-20T10:00:00.000Z',
+      leftBounds,
+    );
+    const olderFill = scene(
+      'older-fill',
+      '2026-06-20T09:00:00.000Z',
+      rectangle(1, 0, 2, 2),
+    );
+    const accumulator = new SatelliteMosaicSelectionAccumulator(viewport);
+
+    accumulator.addGroups([group('2026-07-20', [newest])]);
+    const result = accumulator.addGroups([
+      group('2026-06-20', [olderDuplicate, olderFill]),
+    ]);
+
+    expect(result.scenes.map(({ id }) => id)).toEqual(['newest', 'older-fill']);
+    expect(result.coveragePercent).toBe(100);
+    expect(result.oldestAcquisitionDate).toBe('2026-06-20');
+  });
+
+  it('keeps a regional mosaic that needs more than 32 source footprints', () => {
+    const regionalScenes = Array.from({ length: 40 }, (_, index) =>
+      scene(
+        `regional-${String(index)}`,
+        '2026-07-20T10:00:00.000Z',
+        rectangle(index / 20, 0, (index + 1) / 20, 2),
+      ),
+    );
+
+    const result = selectSatelliteMosaicScenes(viewport, [
+      group('2026-07-20', regionalScenes),
+    ]);
+
+    expect(result.scenes).toHaveLength(40);
+    expect(result.coveragePercent).toBe(100);
+  });
+
+  it('bounds a partial selection to the native raster-source budget', () => {
+    const candidates = Array.from(
+      { length: maximumSatelliteMosaicSceneCount + 1 },
+      (_, index) =>
+        scene(
+          `candidate-${String(index)}`,
+          '2026-07-20T10:00:00.000Z',
+          rectangle(
+            (2 * index) / (maximumSatelliteMosaicSceneCount + 1),
+            0,
+            (2 * (index + 1)) / (maximumSatelliteMosaicSceneCount + 1),
+            2,
+          ),
+        ),
+    );
+
+    const result = selectSatelliteMosaicScenes(viewport, [
+      group('2026-07-20', candidates),
+    ]);
+
+    expect(result.scenes).toHaveLength(maximumSatelliteMosaicSceneCount);
+    expect(result.coveragePercent).toBeLessThan(100);
+    const accumulator = new SatelliteMosaicSelectionAccumulator(viewport);
+    accumulator.addGroups([group('2026-07-20', candidates)]);
+    expect(accumulator.limitReached).toBe(true);
   });
 
   it('rejects invalid viewports and malformed or degenerate scene geometry', () => {

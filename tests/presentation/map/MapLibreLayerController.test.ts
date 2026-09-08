@@ -8,6 +8,7 @@ import {
 } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   importedTrackLayerIds,
@@ -1945,6 +1946,12 @@ describe('MapLibreLayerController', () => {
       scene('scene-b'),
       new AbortController().signal,
     );
+    const rendererTemplate = (
+      map.sources.get('sentinel-raster-a') as { readonly tiles: readonly string[] }
+    ).tiles[0];
+    if (rendererTemplate === undefined) {
+      throw new Error('Expected the staging Sentinel raster template.');
+    }
     const failureEvent = {
       tile: { tileID: { canonical: { x: 123, y: 456, z: 12 } } },
       error: { message: 'AJAXError: Too Many Requests', status: 429 },
@@ -1969,7 +1976,10 @@ describe('MapLibreLayerController', () => {
         error: {
           message: 'AJAXError: Too Many Requests',
           status: 429,
-          url: 'https://titiler.xyz/stac/tiles/WebMercatorQuad/12/123/456.webp',
+          url: rendererTemplate
+            .replace('{z}', '12')
+            .replace('{x}', '123')
+            .replace('{y}', '456'),
         },
       } as unknown as MapLibreErrorEvent),
     ).toEqual({
@@ -2376,6 +2386,200 @@ describe('MapLibreLayerController', () => {
     ]);
   });
 
+  it('stages the next Mosaic source without a per-source stability delay', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    const source1 = `${sentinelMosaicIdPrefixes.source}1`;
+    const source2 = `${sentinelMosaicIdPrefixes.source}2`;
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const application = controller.applyMosaic(
+      [
+        scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
+        scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
+      ],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+
+    expect(map.sources.has(source1)).toBe(true);
+    expect(map.sources.has(source2)).toBe(false);
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'loading',
+      renderProgress: { renderedSceneCount: 0, totalSceneCount: 2 },
+    });
+
+    map.fire('sourcedata', {
+      sourceId: source1,
+      sourceDataType: 'content',
+      isSourceLoaded: false,
+    });
+    expect(map.sources.has(source2)).toBe(false);
+    map.fire('sourcedata', {
+      sourceId: source1,
+      sourceDataType: 'content',
+      isSourceLoaded: true,
+    });
+    await vi.waitFor(() => {
+      expect(map.sources.has(source2)).toBe(true);
+    });
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'loading',
+      renderProgress: { renderedSceneCount: 1, totalSceneCount: 2 },
+    });
+
+    map.fire('sourcedata', {
+      sourceId: source2,
+      sourceDataType: 'content',
+      isSourceLoaded: true,
+    });
+    await expect(application).resolves.toEqual({ status: 'success' });
+  });
+
+  it('does not restore render progress after a pending Mosaic is cleared', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const application = controller.applyMosaic(
+      [scene('pending', [44, 42, 45, 43])],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'loading',
+      renderProgress: { renderedSceneCount: 0, totalSceneCount: 1 },
+    });
+
+    controller.clearMosaic();
+
+    await expect(application).resolves.toEqual({ status: 'cancelled' });
+    expect(mapLayerStore.getState().appliedMosaic).toEqual({ status: 'empty' });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('attributes a late source-less Mosaic error to its rendered item URL', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    const source1 = `${sentinelMosaicIdPrefixes.source}1`;
+    const source2 = `${sentinelMosaicIdPrefixes.source}2`;
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const application = controller.applyMosaic(
+      [
+        scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
+        scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
+      ],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    const source1Value = map.sources.get(source1);
+    if (
+      typeof source1Value !== 'object' ||
+      source1Value === null ||
+      !('tiles' in source1Value) ||
+      !Array.isArray(source1Value.tiles) ||
+      typeof source1Value.tiles[0] !== 'string'
+    ) {
+      throw new Error('Expected the first Mosaic raster source template.');
+    }
+    const source1Template = source1Value.tiles[0];
+
+    map.fire('sourcedata', {
+      sourceId: source1,
+      sourceDataType: 'content',
+      isSourceLoaded: true,
+    });
+    await vi.waitFor(() => {
+      expect(map.sources.has(source2)).toBe(true);
+    });
+
+    expect(
+      controller.getRasterSourceId({
+        error: {
+          message: 'AJAXError: Too Many Requests',
+          status: 429,
+          url: source1Template
+            .replace('{z}', '10')
+            .replace('{x}', '632')
+            .replace('{y}', '383'),
+        },
+      } as unknown as MapLibreErrorEvent),
+    ).toBe(source1);
+
+    map.fire('sourcedata', {
+      sourceId: source2,
+      sourceDataType: 'content',
+      isSourceLoaded: true,
+    });
+    await expect(application).resolves.toEqual({ status: 'success' });
+  });
+
+  it('rejects an over-budget mosaic before allocating native raster sources', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const candidates = Array.from(
+      { length: maximumSatelliteMosaicSceneCount + 1 },
+      (_, index) =>
+        scene(`candidate-${String(index)}`, [
+          44 + index / 100,
+          42,
+          44.5 + index / 100,
+          42.5,
+        ]),
+    );
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const result = await controller.applyMosaic(
+      candidates,
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+
+    expect(result).toEqual({
+      status: 'failed',
+      message: 'This area needs too many Sentinel images. Zoom in and try again.',
+    });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toHaveLength(0);
+    expect(
+      [...map.layers.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.layer),
+      ),
+    ).toHaveLength(0);
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'failed',
+      sceneKeys: [],
+      coveragePercent: 0,
+    });
+  });
+
   it('retains ready imagery and actual coverage when a mosaic replacement fails', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -2402,12 +2606,15 @@ describe('MapLibreLayerController', () => {
     );
 
     expect(result).toMatchObject({ status: 'failed' });
-    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+    const appliedMosaic = mapLayerStore.getState().appliedMosaic;
+    expect(appliedMosaic).toMatchObject({
       status: 'failed',
       selectedDate: '2026-07-21',
       sceneKeys: ['sentinel-2-l2a:original'],
-      coveragePercent: expect.closeTo(50, 5),
     });
+    expect(
+      appliedMosaic.status === 'empty' ? 0 : appliedMosaic.coveragePercent,
+    ).toBeCloseTo(50, 5);
     expect(
       [...map.sources.keys()].filter((id) =>
         id.startsWith(sentinelMosaicIdPrefixes.source),

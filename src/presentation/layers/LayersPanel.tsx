@@ -45,7 +45,7 @@ const sentinelControls = [
   {
     id: 'satellite-imagery',
     label: 'Satellite imagery',
-    description: 'The applied Sentinel true-color scene.',
+    description: 'The applied Sentinel true-color imagery.',
     requiresScene: true,
   },
   {
@@ -176,7 +176,12 @@ export function LayersPanel() {
     state.appliedImagery.status === 'hidden' ||
     (state.appliedImagery.status === 'failed' &&
       state.appliedImagery.previousSceneKey !== null);
+  const mosaicAvailable =
+    state.appliedMosaic.status !== 'empty' && state.appliedMosaic.sceneKeys.length > 0;
+  const sentinelImageryAvailable = sceneAvailable || mosaicAvailable;
   const satelliteImageryVisible =
+    (state.appliedMosaic.status !== 'empty' &&
+      state.appliedMosaic.sceneKeys.length > 0) ||
     state.appliedImagery.status === 'ready' ||
     state.appliedImagery.status === 'preview' ||
     ((state.appliedImagery.status === 'loading' ||
@@ -313,8 +318,13 @@ export function LayersPanel() {
               ) : null}
               <FormGroup aria-label={`${group.title} layers`} sx={{ mt: 1, gap: 1.5 }}>
                 {group.controls.map((control) => {
+                  const requiredImageryAvailable =
+                    control.id === 'satellite-imagery'
+                      ? sentinelImageryAvailable
+                      : sceneAvailable;
                   const disabled =
-                    mapLayers === null || (control.requiresScene && !sceneAvailable);
+                    mapLayers === null ||
+                    (control.requiresScene && !requiredImageryAvailable);
                   return (
                     <Box key={control.id}>
                       {group.id === 'satellites' &&
@@ -348,8 +358,10 @@ export function LayersPanel() {
                         color="text.secondary"
                         sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
                       >
-                        {control.requiresScene && !sceneAvailable
-                          ? 'Apply a Sentinel scene to enable this layer.'
+                        {control.requiresScene && !requiredImageryAvailable
+                          ? control.id === 'satellite-imagery'
+                            ? 'Apply Sentinel imagery to enable this layer.'
+                            : 'Apply a Sentinel scene to enable this layer.'
                           : control.description}
                       </Typography>
                       {control.id === 'elevation-isolines' ? (

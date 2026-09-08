@@ -375,15 +375,16 @@ Search stops when coverage is complete, the archive reaches 23 June 2015, or the
 128-scene native-source budget is reached. An exhausted archive can leave an explicit
 partial result or a non-error no-imagery result.
 
-Mosaic raster sources are staged progressively with their validated scene bounds and no
-cross-fade. The global Ready area under map search reports rendered images and a
-determinate progress bar; coverage, rendered-image count, and chronological acquisition
-range remain in Satellite after completion. Selecting a different upper-bound date
-immediately cancels catalog/render work, removes every current Mosaic source, and clears
-that progress before the next explicit **Show mosaic**. Map movement cancels obsolete
-work and refreshes the shown Mosaic for the next settled viewport. Closing the sidebar
-or visiting another rail destination preserves the active Mosaic and its settled-camera
-refresh behavior.
+Mosaic registers all selected raster sources without waiting for earlier imagery to
+load; each source reveals when its own content is ready, within validated scene bounds
+and with no cross-fade. The global Ready area under map search reports rendered images
+and a determinate progress bar; coverage, rendered-image count, and chronological
+acquisition range remain in Satellite after completion. Selecting a different
+upper-bound date immediately cancels catalog/render work, removes every current Mosaic
+source, and clears that progress before the next explicit **Show mosaic**. Map movement
+cancels obsolete work and refreshes the shown Mosaic for the next settled viewport.
+Closing the sidebar or visiting another rail destination preserves the active Mosaic and
+its settled-camera refresh behavior.
 
 Mosaic and a selected single scene are mutually exclusive. Mosaic entry flattens the map
 and disables the 3D control; leaving it re-enables 3D without restoring an earlier

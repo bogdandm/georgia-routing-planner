@@ -632,13 +632,14 @@ requests for one explicit user action, but does not create background prefetchin
 retries, credentials, or unbounded traversal.
 
 Each selected scene becomes one MapLibre raster source constrained to its validated
-WGS84 extrema. Sources stage newest-first and reveal as soon as their content is loaded,
-with zero raster fade and no artificial stability delay between sources. The existing
-vector basemap remains below partial imagery. A global rendered/total progress value is
-derived only from ready sources. Cancellation, a different selected date, mode exit, or
-supersession removes pending resources; date changes additionally remove every ready
-Mosaic source before another run. A sequence guard prevents cancelled work from
-restoring cleared progress.
+WGS84 extrema. All sources register newest-first before the controller waits for
+readiness, so one slow image cannot delay requests for the remaining images. Sources
+reveal independently as their content loads, with zero raster fade and no artificial
+stability delay. The existing vector basemap remains below partial imagery. A global
+rendered/total progress value is derived only from ready sources. Cancellation, a
+different selected date, mode exit, or supersession removes pending resources; date
+changes additionally remove every ready Mosaic source before another run. A sequence
+guard prevents cancelled work from restoring cleared progress.
 
 A 2026-07-19 current-Chrome smoke searched the live Georgia viewport, applied
 `S2A_38TLM_20260709_0_L2A`, and displayed the georeferenced true-color tiles plus the

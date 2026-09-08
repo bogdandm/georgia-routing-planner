@@ -2391,7 +2391,7 @@ describe('MapLibreLayerController', () => {
     ]);
   });
 
-  it('stages the next Mosaic source without a per-source stability delay', async () => {
+  it('starts every Mosaic source before waiting for tile readiness', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -2413,7 +2413,7 @@ describe('MapLibreLayerController', () => {
     );
 
     expect(map.sources.has(source1)).toBe(true);
-    expect(map.sources.has(source2)).toBe(false);
+    expect(map.sources.has(source2)).toBe(true);
     expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
       status: 'loading',
       renderProgress: { renderedSceneCount: 0, totalSceneCount: 2 },
@@ -2424,22 +2424,21 @@ describe('MapLibreLayerController', () => {
       sourceDataType: 'content',
       isSourceLoaded: false,
     });
-    expect(map.sources.has(source2)).toBe(false);
+    expect(map.sources.has(source2)).toBe(true);
     map.fire('sourcedata', {
-      sourceId: source1,
+      sourceId: source2,
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
     await vi.waitFor(() => {
-      expect(map.sources.has(source2)).toBe(true);
-    });
-    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
-      status: 'loading',
-      renderProgress: { renderedSceneCount: 1, totalSceneCount: 2 },
+      expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+        status: 'loading',
+        renderProgress: { renderedSceneCount: 1, totalSceneCount: 2 },
+      });
     });
 
     map.fire('sourcedata', {
-      sourceId: source2,
+      sourceId: source1,
       sourceDataType: 'content',
       isSourceLoaded: true,
     });
@@ -2536,14 +2535,14 @@ describe('MapLibreLayerController', () => {
 
     controller.beginMosaic('2026-07-20', mosaicViewport);
     const application = controller.applyMosaic(
-      [scene('pending', [44, 42, 45, 43])],
+      [scene('pending-a', [44, 42, 45, 43]), scene('pending-b', [45, 42, 46, 43])],
       mosaicViewport,
       '2026-07-20',
       new AbortController().signal,
     );
     expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
       status: 'loading',
-      renderProgress: { renderedSceneCount: 0, totalSceneCount: 1 },
+      renderProgress: { renderedSceneCount: 0, totalSceneCount: 2 },
     });
 
     controller.clearMosaic();
@@ -2593,9 +2592,6 @@ describe('MapLibreLayerController', () => {
       sourceId: source1,
       sourceDataType: 'content',
       isSourceLoaded: true,
-    });
-    await vi.waitFor(() => {
-      expect(map.sources.has(source2)).toBe(true);
     });
 
     expect(

@@ -46,7 +46,11 @@ export function SatelliteMosaicBrowser() {
   );
 
   const renderedSceneCount =
-    appliedMosaic.status === 'empty' ? 0 : appliedMosaic.sceneKeys.length;
+    appliedMosaic.status === 'empty'
+      ? 0
+      : appliedMosaic.status === 'loading'
+        ? (appliedMosaic.renderProgress?.renderedSceneCount ?? 0)
+        : appliedMosaic.sceneKeys.length;
   const hasRenderedScenes = renderedSceneCount > 0;
 
   return (

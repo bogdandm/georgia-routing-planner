@@ -646,8 +646,8 @@ sequenceDiagram
   end
   Search-->>Provider: bounded scenes, union coverage, archive state
   Provider->>Controller: applyMosaic(scenes, viewport, date)
-  loop each unique geometric boundary, newest first
-    Controller->>Map: add one bounded raster source/layer
+  Controller->>Map: add all bounded raster sources/layers newest first
+  loop source readiness in any completion order
     Map-->>Controller: source content loaded
     Controller->>State: increment rendered/total progress
   end
@@ -657,9 +657,9 @@ sequenceDiagram
 The coverage accumulator stops at 100% within `1e-6` percentage points, complete archive
 traversal, or the 128-scene source budget. It retains combined geometry rather than
 rebuilding every prior month and drops footprints that do not measurably increase
-coverage. Rendering uses the existing Auto, Server, or Direct provider path; sources are
-bounded to scene extrema and use zero fade so progressive staging does not overlap
-cross-fade textures.
+coverage. Rendering uses the existing Auto, Server, or Direct provider path; all
+selected sources are registered before readiness waits, then each reveals independently
+within its scene extrema. Zero fade prevents cross-fade texture overlap.
 
 `movestart` aborts only obsolete search/application work; already ready imagery remains
 available during movement. The next settled viewport starts one refresh whose

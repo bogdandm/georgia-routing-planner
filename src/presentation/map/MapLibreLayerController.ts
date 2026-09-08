@@ -399,7 +399,7 @@ export class MapLibreLayerController {
   #selectedScene: SatelliteScene | null = null;
   #stagingScene: SatelliteScene | null = null;
   readonly #mosaicEntries = new Map<string, MosaicRasterEntry>();
-  #stagingMosaicEntry: MosaicRasterEntry | null = null;
+  readonly #stagingMosaicEntries = new Map<string, MosaicRasterEntry>();
   #mosaicApplyController: AbortController | null = null;
   #mosaicSelectedDate: string | null = null;
   #mosaicViewport: SatelliteSearchViewport | null = null;
@@ -528,6 +528,8 @@ export class MapLibreLayerController {
     this.#mosaicApplyController = null;
     this.#activeApplyController = null;
     this.#stagingScene = null;
+    this.#stagingSourceId = null;
+    this.#stagingMosaicEntries.clear();
     this.#map = null;
     this.#progressiveRasterSourceId = null;
     this.#appliedVisualMode = null;
@@ -977,16 +979,11 @@ export class MapLibreLayerController {
     this.#mosaicApplyController = null;
     this.#mosaicSequence += 1;
     const map = this.#map;
-    const stagingEntry = this.#stagingMosaicEntry;
-    if (stagingEntry !== null) {
-      this.cancelRasterRecovery(stagingEntry.slot.sourceId);
-      if (map !== null) this.removeSlot(map, stagingEntry.slot);
+    for (const entry of this.#stagingMosaicEntries.values()) {
+      this.cancelRasterRecovery(entry.slot.sourceId);
+      if (map !== null) this.removeSlot(map, entry.slot);
     }
-    this.#stagingMosaicEntry = null;
-    if (this.#stagingSourceId === stagingEntry?.slot.sourceId) {
-      this.#stagingSourceId = null;
-      this.#stagingScene = null;
-    }
+    this.#stagingMosaicEntries.clear();
     for (const entry of this.#mosaicEntries.values()) {
       this.cancelRasterRecovery(entry.slot.sourceId);
       if (map !== null) this.removeSlot(map, entry.slot);
@@ -1725,36 +1722,39 @@ export class MapLibreLayerController {
     };
     publishRenderProgress();
 
+    const readinessTasks: Promise<void>[] = [];
+    const desiredNativeEntries: MosaicRasterEntry[] = [];
     for (const [boundsKey, scene] of desiredByBounds) {
-      if (signal.aborted || sequence !== this.#mosaicSequence) {
-        publishRenderProgress();
-        return { status: 'cancelled' };
-      }
+      if (signal.aborted || sequence !== this.#mosaicSequence) break;
       const existing = this.#mosaicEntries.get(boundsKey);
       const sceneKey = satelliteSceneKey(scene);
       if (!forceReplacement && existing?.sceneKey === sceneKey) {
+        desiredNativeEntries.push(existing);
         if (!renderedExistingSourceIds.has(existing.slot.sourceId)) {
-          try {
-            // Matching catalog identity does not mean MapLibre has finished loading
-            // this source's tiles for the current viewport after a camera move.
-            await this.waitForSource(map, existing.slot.sourceId, signal, 'loaded');
-            if (sequence !== this.#mosaicSequence || this.#map !== map) {
-              throw new DOMException('Superseded mosaic application.', 'AbortError');
-            }
-            renderedExistingSourceIds.add(existing.slot.sourceId);
-            renderedSceneCount += 1;
-          } catch (error) {
-            if (isAborted(signal, error)) {
-              publishRenderProgress();
-              return { status: 'cancelled' };
-            }
-            firstFailure ??=
-              error instanceof SentinelRasterLoadError
-                ? error.userMessage
-                : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
-          }
+          readinessTasks.push(
+            this.waitForSource(map, existing.slot.sourceId, signal, 'loaded')
+              .then(() => {
+                if (sequence !== this.#mosaicSequence || this.#map !== map) {
+                  throw new DOMException(
+                    'Superseded mosaic application.',
+                    'AbortError',
+                  );
+                }
+                renderedExistingSourceIds.add(existing.slot.sourceId);
+                renderedSceneCount += 1;
+                publishRenderProgress();
+              })
+              .catch((error: unknown) => {
+                if (!isAborted(signal, error)) {
+                  firstFailure ??=
+                    error instanceof SentinelRasterLoadError
+                      ? error.userMessage
+                      : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
+                }
+                publishRenderProgress();
+              }),
+          );
         }
-        publishRenderProgress();
         continue;
       }
 
@@ -1768,42 +1768,59 @@ export class MapLibreLayerController {
           layerId: `${sentinelMosaicIdPrefixes.layer}${suffix}`,
         },
       };
-      this.#stagingMosaicEntry = staged;
-      this.#stagingScene = scene;
-      this.#stagingSourceId = staged.slot.sourceId;
+      this.#stagingMosaicEntries.set(staged.slot.sourceId, staged);
       try {
-        await this.stageMosaicEntry(map, staged, signal);
-        if (sequence !== this.#mosaicSequence || this.#map !== map) {
-          throw new DOMException('Superseded mosaic application.', 'AbortError');
-        }
-        if (existing !== undefined) {
-          this.cancelRasterRecovery(existing.slot.sourceId);
-          this.removeSlot(map, existing.slot);
-        }
-        this.#mosaicEntries.set(boundsKey, staged);
-        renderedSceneCount += 1;
+        this.addMosaicNativeSource(map, staged);
       } catch (error) {
+        this.#stagingMosaicEntries.delete(staged.slot.sourceId);
         this.cancelRasterRecovery(staged.slot.sourceId);
         this.removeSlot(map, staged.slot);
-        if (isAborted(signal, error)) {
-          this.#stagingMosaicEntry = null;
-          this.#stagingScene = null;
-          this.#stagingSourceId = null;
-          publishRenderProgress();
-          return { status: 'cancelled' };
-        }
         firstFailure ??=
           error instanceof SentinelRasterLoadError
             ? error.userMessage
             : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
-      } finally {
-        if (this.#stagingMosaicEntry === staged) {
-          this.#stagingMosaicEntry = null;
-          this.#stagingScene = null;
-          this.#stagingSourceId = null;
-        }
+        continue;
       }
+      desiredNativeEntries.push(staged);
+      readinessTasks.push(
+        this.waitForSource(map, staged.slot.sourceId, signal, 'loaded')
+          .then(() => {
+            if (sequence !== this.#mosaicSequence || this.#map !== map) {
+              throw new DOMException('Superseded mosaic application.', 'AbortError');
+            }
+            this.#stagingMosaicEntries.delete(staged.slot.sourceId);
+            this.#mosaicEntries.set(boundsKey, staged);
+            if (existing !== undefined) {
+              this.cancelRasterRecovery(existing.slot.sourceId);
+              this.removeSlot(map, existing.slot);
+            }
+            renderedSceneCount += 1;
+            publishRenderProgress();
+          })
+          .catch((error: unknown) => {
+            this.#stagingMosaicEntries.delete(staged.slot.sourceId);
+            this.cancelRasterRecovery(staged.slot.sourceId);
+            this.removeSlot(map, staged.slot);
+            if (!isAborted(signal, error)) {
+              firstFailure ??=
+                error instanceof SentinelRasterLoadError
+                  ? error.userMessage
+                  : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
+            }
+            publishRenderProgress();
+          }),
+      );
+    }
+
+    for (const entry of desiredNativeEntries.toReversed()) {
+      if (map.getLayer(entry.slot.layerId) !== undefined) {
+        map.moveLayer(entry.slot.layerId, mapInsertionPoints.satelliteBeforeLayerId);
+      }
+    }
+    await Promise.all(readinessTasks);
+    if (signal.aborted || sequence !== this.#mosaicSequence || this.#map !== map) {
       publishRenderProgress();
+      return { status: 'cancelled' };
     }
 
     for (const [boundsKey, entry] of this.#mosaicEntries) {
@@ -1857,21 +1874,6 @@ export class MapLibreLayerController {
     }
     this.publishMosaicSnapshot('ready', selectedDate, viewport);
     return { status: 'success' };
-  }
-
-  private async stageMosaicEntry(
-    map: MapLibreMap,
-    entry: MosaicRasterEntry,
-    signal: AbortSignal,
-  ): Promise<void> {
-    if (entry.scene.visualAsset.kind !== 'sentinel-l2a') {
-      throw new SentinelRasterLoadError(
-        'This scene has no supported true-color asset.',
-      );
-    }
-    this.addMosaicNativeSource(map, entry);
-    await this.waitForSource(map, entry.slot.sourceId, signal, 'loaded');
-    map.setPaintProperty(entry.slot.layerId, 'raster-opacity', 1);
   }
 
   private addMosaicNativeSource(map: MapLibreMap, entry: MosaicRasterEntry): void {
@@ -3288,9 +3290,8 @@ export class MapLibreLayerController {
   private rasterSlotForSource(sourceId: string): RasterLayerSlot | null {
     const fixedSlot = rasterSlots.find((candidate) => candidate.sourceId === sourceId);
     if (fixedSlot !== undefined) return fixedSlot;
-    if (this.#stagingMosaicEntry?.slot.sourceId === sourceId) {
-      return this.#stagingMosaicEntry.slot;
-    }
+    const stagingEntry = this.#stagingMosaicEntries.get(sourceId);
+    if (stagingEntry !== undefined) return stagingEntry.slot;
     for (const entry of this.#mosaicEntries.values()) {
       if (entry.slot.sourceId === sourceId) return entry.slot;
     }
@@ -3300,9 +3301,8 @@ export class MapLibreLayerController {
   private sceneForRasterSource(sourceId: string): SatelliteScene | null {
     if (this.#stagingSourceId === sourceId) return this.#stagingScene;
     if (this.#activeSlot?.sourceId === sourceId) return this.#appliedScene;
-    if (this.#stagingMosaicEntry?.slot.sourceId === sourceId) {
-      return this.#stagingMosaicEntry.scene;
-    }
+    const stagingEntry = this.#stagingMosaicEntries.get(sourceId);
+    if (stagingEntry !== undefined) return stagingEntry.scene;
     for (const entry of this.#mosaicEntries.values()) {
       if (entry.slot.sourceId === sourceId) return entry.scene;
     }

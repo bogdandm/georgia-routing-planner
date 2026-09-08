@@ -1000,6 +1000,7 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('progressbar', { name: 'Rendering Mosaic images' }),
     ).toBeVisible();
+    expect(screen.getByText('Rendered images: 4')).toBeVisible();
     await user.click(screen.getByRole('gridcell', { name: '18 Jul 2026' }));
     expect(
       screen.getByRole('gridcell', {

@@ -2853,14 +2853,55 @@ describe('MapLibreLayerController', () => {
     ).toHaveLength(0);
   });
 
-  it('keeps older Mosaic imagery below newer imagery after direct fallback', async () => {
+  it('fails mixed retained and staged Mosaic waits on an ambiguous terminal error', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
+    const retained = scene('retained', [44, 42, 45, 43]);
+
     controller.beginMosaic('2026-07-20', mosaicViewport);
     await controller.applyMosaic(
+      [retained],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+    map.sourceLoaded = false;
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const refresh = controller.applyMosaic(
+      [retained, scene('staged', [45, 42, 46, 43])],
+      mosaicViewport,
+      '2026-07-20',
+      new AbortController().signal,
+    );
+
+    map.fire('error', {
+      error: { message: 'AJAXError: Too Many Requests', status: 429 },
+    });
+
+    await expect(refresh).resolves.toMatchObject({ status: 'failed' });
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'failed',
+      sceneKeys: ['sentinel-2-l2a:retained'],
+    });
+    expect(
+      [...map.sources.keys()].filter((id) =>
+        id.startsWith(sentinelMosaicIdPrefixes.source),
+      ),
+    ).toEqual([`${sentinelMosaicIdPrefixes.source}1`]);
+  });
+
+  it('keeps older staging imagery below newer imagery after direct fallback', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    map.sourceLoaded = false;
+    controller.attach(map as unknown as MapLibreMap);
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    const application = controller.applyMosaic(
       [
         scene('newest', [44, 42, 45, 43], '2026-07-20T10:00:00.000Z'),
         scene('older', [45, 42, 46, 43], '2026-07-19T10:00:00.000Z'),
@@ -2869,11 +2910,12 @@ describe('MapLibreLayerController', () => {
       '2026-07-20',
       new AbortController().signal,
     );
-    const olderSourceId = `${sentinelMosaicIdPrefixes.source}2`;
+    const source1 = `${sentinelMosaicIdPrefixes.source}1`;
+    const source2 = `${sentinelMosaicIdPrefixes.source}2`;
 
     expect(
       controller.handleRasterSourceFailure({
-        sourceId: olderSourceId,
+        sourceId: source2,
         error: { message: 'AJAXError: Too Many Requests', status: 429 },
       } as unknown as MapLibreErrorEvent),
     ).toEqual({
@@ -2889,6 +2931,16 @@ describe('MapLibreLayerController', () => {
       `${sentinelMosaicIdPrefixes.layer}2`,
       `${sentinelMosaicIdPrefixes.layer}1`,
     ]);
+
+    map.sourceLoaded = true;
+    for (const sourceId of [source1, source2]) {
+      map.fire('sourcedata', {
+        sourceId,
+        sourceDataType: 'content',
+        isSourceLoaded: true,
+      });
+    }
+    await expect(application).resolves.toEqual({ status: 'success' });
   });
 
   it('restarts every pending Mosaic source when rendering mode changes', async () => {

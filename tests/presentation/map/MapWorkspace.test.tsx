@@ -376,6 +376,103 @@ describe('MapWorkspace', () => {
     });
   });
 
+  it('ignores a shared scene that resolves after Mosaic entry', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&scene=sentinel-2-l2a%3Ashared-scene',
+    );
+    let resolveScene: (scene: SatelliteScene | null) => void = () => undefined;
+    const getScene = vi.fn(
+      () =>
+        new Promise<SatelliteScene | null>((resolve) => {
+          resolveScene = resolve;
+        }),
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene,
+      },
+    });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const selectScene = vi.spyOn(mapLayers, 'selectScene');
+    const applyScene = vi.spyOn(mapLayers, 'applyScene');
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={new FakeMapFacade()}
+            mapCanvas={<div>Pending shared scene map</div>}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+    await waitFor(() => {
+      expect(getScene).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    await act(async () => {
+      resolveScene(sharedScene);
+      await Promise.resolve();
+    });
+
+    expect(selectScene).not.toHaveBeenCalled();
+    expect(applyScene).not.toHaveBeenCalled();
+    expect(mapLayerStore.getState().selectedScene).toBeNull();
+  });
+
+  it('discards a queued shared scene when Mosaic becomes active', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&scene=sentinel-2-l2a%3Ashared-scene',
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene: () => Promise.resolve(sharedScene),
+      },
+    });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const applyScene = vi.spyOn(mapLayers, 'applyScene');
+    const facade = new FakeMapFacade();
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={facade}
+            mapCanvas={<div>Queued shared scene map</div>}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+    await waitFor(() => {
+      expect(mapLayerStore.getState().selectedScene).toEqual(sharedScene);
+    });
+    expect(applyScene).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(applyScene).not.toHaveBeenCalled();
+    expect(mapLayerStore.getState().selectedScene).toBeNull();
+  });
+
   it('delivers serializable search navigation commands through the facade', async () => {
     const facade = new FakeMapFacade();
     render(

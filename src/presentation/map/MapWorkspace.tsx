@@ -160,6 +160,7 @@ export function MapWorkspace({
   );
   const sharedTerrainStartRequested = useRef(false);
   const sharedSceneApplyController = useRef<AbortController | null>(null);
+  const sharedSceneRestorationCancelled = useRef(false);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
@@ -655,7 +656,12 @@ export function MapWorkspace({
 
   useEffect(() => {
     const shared = sharedMapView;
+    if (mosaicActive) {
+      sharedSceneRestorationCancelled.current = true;
+      return;
+    }
     if (
+      sharedSceneRestorationCancelled.current ||
       shared?.sceneKey === null ||
       shared === null ||
       mapLayers === null ||
@@ -697,9 +703,10 @@ export function MapWorkspace({
     return () => {
       controller.abort();
     };
-  }, [idGenerator, mapLayers, satelliteCatalogGateway, sharedMapView]);
+  }, [idGenerator, mapLayers, mosaicActive, satelliteCatalogGateway, sharedMapView]);
 
   useEffect(() => {
+    if (mosaicActive || sharedSceneRestorationCancelled.current) return;
     if (
       sharedSceneToApply === null ||
       snapshot.lifecycle !== 'ready' ||
@@ -725,7 +732,7 @@ export function MapWorkspace({
         controller.abort();
       }
     };
-  }, [mapLayers, sharedSceneToApply, snapshot.lifecycle]);
+  }, [mapLayers, mosaicActive, sharedSceneToApply, snapshot.lifecycle]);
 
   useEffect(() => {
     return () => {

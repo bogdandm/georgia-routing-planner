@@ -400,6 +400,7 @@ export class MapLibreLayerController {
   #stagingScene: SatelliteScene | null = null;
   readonly #mosaicEntries = new Map<string, MosaicRasterEntry>();
   readonly #stagingMosaicEntries = new Map<string, MosaicRasterEntry>();
+  readonly #pendingMosaicSourceIds = new Set<string>();
   #mosaicApplicationScenes: readonly SatelliteScene[] | null = null;
   #mosaicApplyController: AbortController | null = null;
   #mosaicSelectedDate: string | null = null;
@@ -531,6 +532,7 @@ export class MapLibreLayerController {
     this.#stagingScene = null;
     this.#stagingSourceId = null;
     this.#stagingMosaicEntries.clear();
+    this.#pendingMosaicSourceIds.clear();
     this.#mosaicApplicationScenes = null;
     this.#map = null;
     this.#progressiveRasterSourceId = null;
@@ -923,6 +925,7 @@ export class MapLibreLayerController {
   ): SatelliteImageryCommandResult {
     this.#mosaicApplyController?.abort();
     this.#mosaicApplyController = null;
+    this.#pendingMosaicSourceIds.clear();
     this.#mosaicApplicationScenes = null;
     this.#mosaicSequence += 1;
     this.clearSingleScene();
@@ -987,6 +990,7 @@ export class MapLibreLayerController {
       if (map !== null) this.removeSlot(map, entry.slot);
     }
     this.#stagingMosaicEntries.clear();
+    this.#pendingMosaicSourceIds.clear();
     this.#mosaicApplicationScenes = null;
     for (const entry of this.#mosaicEntries.values()) {
       this.cancelRasterRecovery(entry.slot.sourceId);
@@ -1086,14 +1090,14 @@ export class MapLibreLayerController {
       // readiness is currently pending.
       return this.#stagingSourceId;
     }
-    if (this.#stagingMosaicEntries.size === 1) {
-      const pendingEntry = this.#stagingMosaicEntries.values().next().value;
+    if (this.#pendingMosaicSourceIds.size === 1) {
+      const pendingSourceId = this.#pendingMosaicSourceIds.values().next().value;
       if (
-        pendingEntry !== undefined &&
+        pendingSourceId !== undefined &&
         (details.reason === 'rate-limit' || details.reason === 'no-response') &&
-        this.#map?.getSource(pendingEntry.slot.sourceId) !== undefined
+        this.#map?.getSource(pendingSourceId) !== undefined
       ) {
-        return pendingEntry.slot.sourceId;
+        return pendingSourceId;
       }
     }
     return null;
@@ -1654,6 +1658,7 @@ export class MapLibreLayerController {
     callerSignal: AbortSignal,
     forceReplacement: boolean,
   ): Promise<SatelliteImageryCommandResult> {
+    this.#pendingMosaicSourceIds.clear();
     this.#mosaicApplyController?.abort();
     const controller = new AbortController();
     this.#mosaicApplyController = controller;
@@ -1751,6 +1756,7 @@ export class MapLibreLayerController {
       if (!forceReplacement && existing?.sceneKey === sceneKey) {
         desiredNativeEntries.push(existing);
         if (!renderedExistingSourceIds.has(existing.slot.sourceId)) {
+          this.#pendingMosaicSourceIds.add(existing.slot.sourceId);
           readinessTasks.push(
             this.waitForSource(map, existing.slot.sourceId, signal, 'loaded')
               .then(() => {
@@ -1772,6 +1778,11 @@ export class MapLibreLayerController {
                       : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
                 }
                 publishRenderProgress();
+              })
+              .finally(() => {
+                if (sequence === this.#mosaicSequence) {
+                  this.#pendingMosaicSourceIds.delete(existing.slot.sourceId);
+                }
               }),
           );
         }
@@ -1802,6 +1813,7 @@ export class MapLibreLayerController {
         continue;
       }
       desiredNativeEntries.push(staged);
+      this.#pendingMosaicSourceIds.add(staged.slot.sourceId);
       readinessTasks.push(
         this.waitForSource(map, staged.slot.sourceId, signal, 'loaded')
           .then(() => {
@@ -1828,6 +1840,11 @@ export class MapLibreLayerController {
                   : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
             }
             publishRenderProgress();
+          })
+          .finally(() => {
+            if (sequence === this.#mosaicSequence) {
+              this.#pendingMosaicSourceIds.delete(staged.slot.sourceId);
+            }
           }),
       );
     }
@@ -2010,7 +2027,20 @@ export class MapLibreLayerController {
   }
 
   private orderMosaicLayers(map: MapLibreMap): void {
-    for (const entry of [...this.#mosaicEntries.values()].toReversed()) {
+    const entriesByBounds = new Map<string, MosaicRasterEntry>();
+    for (const entry of this.#mosaicEntries.values()) {
+      entriesByBounds.set(entry.boundsKey, entry);
+    }
+    for (const entry of this.#stagingMosaicEntries.values()) {
+      entriesByBounds.set(entry.boundsKey, entry);
+    }
+    const newestFirst = [...entriesByBounds.values()].sort((left, right) => {
+      if (left.scene.acquiredAt !== right.scene.acquiredAt) {
+        return left.scene.acquiredAt < right.scene.acquiredAt ? 1 : -1;
+      }
+      return left.sceneKey.localeCompare(right.sceneKey, 'en');
+    });
+    for (const entry of newestFirst.toReversed()) {
       if (map.getLayer(entry.slot.layerId) !== undefined) {
         map.moveLayer(entry.slot.layerId, mapInsertionPoints.satelliteBeforeLayerId);
       }
@@ -3282,8 +3312,8 @@ export class MapLibreLayerController {
             attributedSourceId === null &&
             sourceIdFromError(event) === null &&
             requestUrlFromError(event) === null &&
-            this.#stagingMosaicEntries.size > 1 &&
-            this.#stagingMosaicEntries.has(sourceId) &&
+            this.#pendingMosaicSourceIds.size > 1 &&
+            this.#pendingMosaicSourceIds.has(sourceId) &&
             (details.reason === 'rate-limit' || details.reason === 'no-response');
           if (!isAmbiguousTerminalMosaicFailure) return;
           fail(new SentinelRasterLoadError(safeRasterFailureMessage(event)));

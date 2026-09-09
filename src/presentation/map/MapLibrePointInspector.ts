@@ -17,6 +17,7 @@ const coordinateFormatter = new Intl.NumberFormat('en-US', {
 const measurementFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
+const POPUP_OFFSET = 10;
 
 export interface PointInspectorPopup {
   attach(map: MapLibreMap): void;
@@ -161,6 +162,8 @@ export class MapLibrePointInspector implements PointInspectorPopup {
   readonly #popup: Popup;
   readonly #marker: Marker;
   #map: MapLibreMap | null = null;
+  #placementFrame: number | null = null;
+  #placementWindow: Window | null = null;
 
   public constructor(private readonly actions: PointInspectorActions) {
     this.#content.className = 'map-point-inspector__content';
@@ -175,7 +178,7 @@ export class MapLibrePointInspector implements PointInspectorPopup {
       closeOnMove: false,
       focusAfterOpen: true,
       maxWidth: '300px',
-      offset: 10,
+      offset: POPUP_OFFSET,
       subpixelPositioning: true,
       locationOccludedOpacity: 0.2,
       className: 'map-point-inspector',
@@ -189,8 +192,29 @@ export class MapLibrePointInspector implements PointInspectorPopup {
     this.#anchor.setAttribute('tabindex', '-1');
   }
 
+  #cancelPlacementUpdate(): void {
+    if (this.#placementFrame === null) return;
+    this.#placementWindow?.cancelAnimationFrame(this.#placementFrame);
+    this.#placementFrame = null;
+    this.#placementWindow = null;
+  }
+
+  #schedulePlacementUpdate(map: MapLibreMap): void {
+    this.#cancelPlacementUpdate();
+    const placementWindow = map.getContainer().ownerDocument.defaultView ?? window;
+    this.#placementWindow = placementWindow;
+    this.#placementFrame = placementWindow.requestAnimationFrame(() => {
+      this.#placementFrame = null;
+      this.#placementWindow = null;
+      if (this.#map === map && this.#popup.isOpen()) {
+        this.#popup.setOffset(POPUP_OFFSET);
+      }
+    });
+  }
+
   public attach(map: MapLibreMap): void {
     if (this.#map === map) return;
+    this.#cancelPlacementUpdate();
     this.#marker.remove();
     this.#popup.remove();
     this.#map = map;
@@ -208,6 +232,7 @@ export class MapLibrePointInspector implements PointInspectorPopup {
     if (this.#marker.getElement().parentElement === null) this.#marker.addTo(map);
     this.#popup.setLngLat(lngLat);
     if (!this.#popup.isOpen()) this.#popup.addTo(map);
+    this.#schedulePlacementUpdate(map);
   }
 
   public isVisible(): boolean {
@@ -229,6 +254,7 @@ export class MapLibrePointInspector implements PointInspectorPopup {
   }
 
   public close(): void {
+    this.#cancelPlacementUpdate();
     this.#popup.remove();
     this.#marker.remove();
   }

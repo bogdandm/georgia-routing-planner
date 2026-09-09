@@ -182,13 +182,30 @@ describe('renderPointInspectorContent', () => {
 });
 
 describe('MapLibrePointInspector', () => {
-  it('flips the popup below a top-edge point and restores above-point placement', () => {
+  it('places the reported 3D target popup below the point after first layout', () => {
+    const scheduledFrames = new Map<number, FrameRequestCallback>();
+    let nextFrameId = 1;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      const frameId = nextFrameId;
+      nextFrameId += 1;
+      scheduledFrames.set(frameId, callback);
+      return frameId;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((frameId) => {
+      scheduledFrames.delete(frameId);
+    });
+    const runAnimationFrames = () => {
+      const callbacks = [...scheduledFrames.values()];
+      scheduledFrames.clear();
+      for (const callback of callbacks) callback(performance.now());
+    };
+
     const nativeMap = new FakeNativeMap();
     const inspector = new MapLibrePointInspector({ onClose: () => undefined });
     inspector.attach(nativeMap as unknown as MapLibreMap);
     inspector.show({
       status: 'open',
-      coordinate: { longitude: 44.8, latitude: 41.7 },
+      coordinate: { longitude: 44.51866, latitude: 42.69657 },
       elevation: { status: 'loading' },
       nearbyPoi: { status: 'loading' },
     });
@@ -202,7 +219,7 @@ describe('MapLibrePointInspector', () => {
       offsetHeight: { configurable: true, value: 250 },
     });
 
-    nativeMap.dispatchMove();
+    runAnimationFrames();
     expect(popup).toHaveClass('maplibregl-popup-anchor-top');
 
     nativeMap.setProjectedY(300);

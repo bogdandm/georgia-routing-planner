@@ -8,6 +8,7 @@ import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
+import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
   Badge,
   Box,
@@ -396,6 +397,7 @@ export function WorkspaceRail({
         <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
         <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
         <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
+        <Tab icon={<WbCloudyOutlinedIcon />} label="Weather" value="weather" />
       </Tabs>
 
       <ButtonBase

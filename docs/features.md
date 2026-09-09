@@ -12,8 +12,8 @@ presentation conventions. Repository documentation and code remain authoritative
 data, privacy, architecture, and failure contracts. Correct this document whenever it no
 longer describes the reviewed interface.
 
-- **Feature rail:** `Satellite`, `Tracks`, `Layers`, and `Markers` are the primary
-  top-level feature sections.
+- **Feature rail:** `Tracks`, `Markers`, `Layers`, `Satellite`, and `Weather` are the
+  primary top-level feature sections, in that order.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
   available when developer mode is enabled. The `About this site` action sits below
   Settings and opens public author, repository, API, and data-source information.
@@ -40,8 +40,10 @@ usable elevation profile, its grade-colored graph is drawn decoratively behind t
 compact stats without chart interaction. Expanding the disclosure reveals the full
 editor; collapsing preserves the active track, while closing clears it. Selecting
 Sentinel imagery closes the smartphone workspace so the map immediately shows the
-applied scene; reopening the workspace restores the existing imagery results. This
-transient presentation state is not stored as a navigation preference or URL entry.
+applied scene; reopening the workspace restores the existing imagery results. From
+Weather, **Show map** exposes the map for point selection, and **Open workspace**
+returns to the same loading or completed forecast. This transient presentation state is
+not stored as a navigation preference or URL entry.
 
 ## Desktop workspace
 
@@ -59,9 +61,9 @@ profile-and-stats summary sits between the fixed Trail Planner logo and the navi
 expansion affordance. Without an active track summary, the Trail Planner logo and
 expansion affordance remain the compact collapsed control.
 
-The current shell exposes Tracks, Satellite, Markers, Layers, and User as interactive
-rail destinations. It has no full-width app bar, empty global elevation placeholder, or
-generic always-visible privacy notice.
+The current shell exposes Tracks, Markers, Layers, Satellite, Weather, and User as
+interactive rail destinations. It has no full-width app bar, empty global elevation
+placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
@@ -392,9 +394,39 @@ terrain mode. Mosaic dates, request state, and applied layers are transient: the
 neither persisted nor added to map/share URLs. The existing single-scene sharing
 contract remains unchanged.
 
-Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
-`#markers`, `#layers`, or `#user`. Loading an anchored URL restores that tab, and
-changing tabs updates the anchor.
+### Weather
+
+Weather starts with a single instruction to select a point. While Weather is active, a
+primary map click opens or refreshes the ordinary point-inspection popup and sends the
+same WGS84 coordinate to the forecast workflow. Marker placement retains higher
+priority. A route draft hidden behind Weather does not capture clicks; returning to
+Tracks resumes route selection.
+
+The selected-point context shows the clicked coordinate, forecast elevation and its
+Trail Planner DEM or Open-Meteo fallback source, the provider-returned IANA time zone,
+and the instruction for changing points. The current card presents temperature,
+condition, next-three-hour precipitation, apparent temperature, wind, gusts, cloud
+cover, and visibility. A horizontally scrolling carousel contains exactly 24 ordered
+hourly slots from the current local forecast hour, including local weekday and time,
+condition, temperature, and precipitation.
+
+Seven rows are derived only from the returned hourly forecast, one for each selected
+location calendar day. Each row combines a fixed daily sky, precipitation, and
+visibility classification with daylight-only temperature and wind-speed ranges plus
+daylight precipitation. Night values cannot widen the displayed ranges or change the
+daily classification. All labels and the model-update time use the selected location's
+provider-returned time zone.
+
+Only the latest point request may update the panel. A new selection or unmount aborts
+the previous request, and Retry repeats the currently selected coordinate. Loading,
+ready, and error content scroll inside the Weather panel while the model metadata and
+`Weather data by Open-Meteo` attribution remain fixed at its bottom. Forecast state is
+ephemeral: navigating away keeps the mounted session, but reload does not persist it.
+ECMWF IFS values are deterministic model forecasts, not weather-station observations.
+
+Each primary workspace destination has a shareable URL anchor: `#tracks`, `#markers`,
+`#layers`, `#satellite`, `#weather`, or `#user`. Loading an anchored URL restores that
+tab, and changing tabs updates the anchor.
 
 Regular map sharing is always available and encodes a 2D center and zoom; context-menu
 point links follow the same flat-camera contract and do not include satellite imagery.

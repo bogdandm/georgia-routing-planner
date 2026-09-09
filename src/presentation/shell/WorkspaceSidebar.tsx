@@ -36,6 +36,7 @@ import {
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
 import { UserPanel } from '@/presentation/user/UserPanel';
+import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
@@ -60,6 +61,10 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
   satellite: {
     title: 'Satellite imagery',
+    actions: null,
+  },
+  weather: {
+    title: 'Weather',
     actions: null,
   },
   markers: {
@@ -273,7 +278,8 @@ export function WorkspaceSidebar({
           minHeight: 0,
           flex: 1,
           overflowX: 'hidden',
-          overflowY: activeTab === 'tracks' ? 'hidden' : 'auto',
+          overflowY:
+            activeTab === 'tracks' || activeTab === 'weather' ? 'hidden' : 'auto',
         }}
       >
         <Box
@@ -296,6 +302,14 @@ export function WorkspaceSidebar({
               {...(onSceneSelected === undefined ? {} : { onSceneSelected })}
             />
           )}
+        </Box>
+        <Box
+          sx={{
+            display: activeTab === 'weather' ? 'block' : 'none',
+            height: '100%',
+          }}
+        >
+          <WeatherPanel />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersPanel

@@ -50,6 +50,7 @@ import {
   completeMarkerPlacement,
   mapInteractionStore,
   resetMapInteractionStore,
+  requestWeatherForecast,
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
@@ -508,6 +509,7 @@ describe('WorkspaceShell', () => {
       'Markers',
       'Layers',
       'Satellite',
+      'Weather',
     ]);
 
     const satellite = within(navigation).getByRole('tab', { name: 'Satellite' });
@@ -599,6 +601,22 @@ describe('WorkspaceShell', () => {
         'Imagery: National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025',
       ),
     ).toBeVisible();
+    expect(
+      within(about).getByRole('link', { name: 'api.open-meteo.com' }),
+    ).toHaveAttribute('href', 'https://api.open-meteo.com/v1/forecast');
+    expect(within(about).getByText('Point weather forecast.')).toBeVisible();
+    expect(
+      within(about).getByRole('link', { name: 'ECMWF IFS via Open-Meteo' }),
+    ).toHaveAttribute('href', 'https://open-meteo.com/');
+    expect(
+      within(about).getByText(
+        'Deterministic 9 km model forecast; not a measured weather-station observation.',
+      ),
+    ).toBeVisible();
+    expect(within(about).getByRole('link', { name: 'Data licence' })).toHaveAttribute(
+      'href',
+      'https://creativecommons.org/licenses/by/4.0/',
+    );
     expect(about).not.toHaveTextContent('@');
     expect(about).toHaveStyle({
       top: '50%',
@@ -772,7 +790,7 @@ describe('WorkspaceShell', () => {
       screen
         .getAllByRole('tab')
         .map((tab) => tab.getAttribute('aria-label') ?? tab.textContent),
-    ).toEqual(['Tracks', 'Markers', 'Layers', 'Satellite']);
+    ).toEqual(['Tracks', 'Markers', 'Layers', 'Satellite', 'Weather']);
     expect(screen.getByRole('button', { name: 'User' })).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Tracks' })).not.toHaveAttribute(
       'aria-disabled',
@@ -875,7 +893,32 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+    expect(window.location.hash).toBe('#weather');
+    expect(screen.getByRole('heading', { name: 'Weather', level: 1 })).toBeVisible();
+    expect(screen.getByText('Select a forecast point')).toBeVisible();
   }, 10_000);
+  it('retains the loaded Weather forecast across workspace navigation', async () => {
+    const user = userEvent.setup();
+    const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+    act(() => {
+      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+    });
+    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(
+      screen.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+
+    expect(screen.getByText('All times: Asia/Tbilisi')).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+  });
   it('runs Mosaic from the fixed satellite header and retains it off-pane', async () => {
     const user = userEvent.setup();
     const mapLayers = services.mapLayers;
@@ -1301,6 +1344,28 @@ describe('WorkspaceShell', () => {
       'aria-hidden',
       'true',
     );
+  });
+  it('keeps Weather active through the smartphone map-selection round trip', async () => {
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+    await user.click(screen.getByRole('button', { name: 'Show map' }));
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'weather',
+      mobileWorkspaceOpen: false,
+    });
+    expect(screen.getByLabelText('Fake map')).toBeVisible();
+
+    act(() => {
+      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+    });
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+
+    expect(screen.getByRole('heading', { name: 'Weather', level: 1 })).toBeVisible();
+    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeVisible();
   });
   it('returns smartphone marker selection to the map', async () => {
     await services.database.saveSavedMarker({

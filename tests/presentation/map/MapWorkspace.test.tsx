@@ -13,6 +13,7 @@ import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
+  consumeWeatherForecastRequest,
   mapInteractionStore,
   requestMapFitBounds,
   requestMapNavigation,
@@ -29,6 +30,11 @@ import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
+
+const mapClickCoordinate = vi.hoisted(() => ({
+  longitude: 44.8,
+  latitude: 41.7,
+}));
 
 vi.mock('react-map-gl/maplibre', () => ({
   default: ({
@@ -57,7 +63,10 @@ vi.mock('react-map-gl/maplibre', () => ({
       onClick={(event) => {
         onClick?.({
           originalEvent: event.nativeEvent,
-          lngLat: { lng: 44.8, lat: 41.7 },
+          lngLat: {
+            lng: mapClickCoordinate.longitude,
+            lat: mapClickCoordinate.latitude,
+          },
         });
       }}
       onWheel={(event) => {
@@ -178,6 +187,8 @@ describe('MapWorkspace', () => {
   beforeEach(() => {
     resetMapInteractionStore();
     resetMapLayerStore();
+    mapClickCoordinate.longitude = 44.8;
+    mapClickCoordinate.latitude = 41.7;
     window.history.replaceState(null, '', '/');
     tracksWorkspaceMock.activeProfile = null;
     tracksWorkspaceMock.active = null;
@@ -1267,6 +1278,7 @@ describe('MapWorkspace', () => {
       queuedWaypoints: [],
       waypoints: [],
     };
+    useUiStore.setState({ activeTab: 'tracks' });
     render(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Planning map</div>} />
@@ -1281,6 +1293,90 @@ describe('MapWorkspace', () => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });
     expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
+  });
+
+  it('selects Weather forecast points while preserving interaction precedence', async () => {
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    tracksWorkspaceMock.active = {
+      kind: 'route-plan',
+      status: 'selecting-start',
+      queuedWaypoints: [],
+      waypoints: [],
+    };
+    useUiStore.setState({ activeTab: 'weather' });
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+
+    const nativeMap = await screen.findByTestId('native-map');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('default');
+    });
+    fireEvent.click(nativeMap, { button: 0 });
+    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+    });
+    await waitFor(() => {
+      expect(facade.pointInspectionRequests).toEqual([
+        { longitude: 44.8, latitude: 41.7 },
+      ]);
+    });
+    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+    });
+
+    mapClickCoordinate.longitude = -74.006;
+    mapClickCoordinate.latitude = 40.7128;
+    fireEvent.click(nativeMap, { button: 0 });
+    await waitFor(() => {
+      expect(facade.pointInspectionRequests).toEqual([
+        { longitude: 44.8, latitude: 41.7 },
+        { longitude: -74.006, latitude: 40.7128 },
+      ]);
+    });
+    const secondRequest = mapInteractionStore.getState().weatherForecastRequest;
+    expect(secondRequest).toMatchObject({
+      coordinate: { longitude: -74.006, latitude: 40.7128 },
+    });
+    if (secondRequest === null) throw new Error('Expected a Weather request.');
+    consumeWeatherForecastRequest(secondRequest.id);
+
+    fireEvent.click(nativeMap, { button: 1 });
+    fireEvent.contextMenu(nativeMap);
+    expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
+
+    act(() => {
+      useUiStore.setState({ activeTab: 'tracks' });
+    });
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('route-planning');
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
+
+    act(() => {
+      useUiStore.setState({ activeTab: 'weather' });
+      requestMarkerPlacement({ kind: 'saved-marker' });
+    });
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('marker-placement');
+    });
+    fireEvent.click(nativeMap, { button: 0 });
+    expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
+    expect(mapInteractionStore.getState().markerCreationCommand).toMatchObject({
+      coordinate: { longitude: -74.006, latitude: 40.7128 },
+      target: { kind: 'saved-marker' },
+    });
+    expect(facade.pointInspectionRequests).toHaveLength(2);
   });
 
   it('applies the Sentinel preset when an applied scene is hidden', async () => {

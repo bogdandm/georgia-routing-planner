@@ -19,6 +19,11 @@ describe('workspace tab location', () => {
     expect(workspaceTabFromHash('#USER')).toBe('user');
   });
 
+  it('round-trips the Weather anchor case-insensitively', () => {
+    expect(workspaceHashForTab('weather')).toBe('#weather');
+    expect(workspaceTabFromHash('#WEATHER')).toBe('weather');
+  });
+
   it('selects Tracks for valid and invalid share fragments', () => {
     expect(workspaceTabFromHash('#tracks/share/1.invalid')).toBe('tracks');
     expect(workspaceTabFromHash('#tracks/share/2.invalid')).toBe('tracks');

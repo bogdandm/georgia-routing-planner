@@ -1,5 +1,6 @@
 import type { GeocodingProviderConfigurationResult } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
 import type { MapProviderConfigurationResult } from '@/bootstrap/configuration/MapProviderConfiguration';
+import { weatherProviderConfiguration } from '@/bootstrap/configuration/WeatherProviderConfiguration';
 
 import GitHubIcon from '@mui/icons-material/GitHub';
 import CloseIcon from '@mui/icons-material/Close';
@@ -40,14 +41,20 @@ function originFor(endpoint: string): string {
   return new URL(endpoint).origin;
 }
 
+interface ServiceEntryLink {
+  readonly href: string;
+  readonly label: string;
+}
+
 interface ServiceEntryProps {
   readonly description: string;
   readonly details?: string | undefined;
+  readonly links?: readonly ServiceEntryLink[] | undefined;
   readonly href: string;
   readonly title: string;
 }
 
-function ServiceEntry({ description, details, href, title }: ServiceEntryProps) {
+function ServiceEntry({ description, details, href, links, title }: ServiceEntryProps) {
   return (
     <Box>
       <ExternalLink href={href}>{title}</ExternalLink>
@@ -62,6 +69,15 @@ function ServiceEntry({ description, details, href, title }: ServiceEntryProps) 
         >
           {details}
         </Typography>
+      )}
+      {links === undefined ? null : (
+        <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }}>
+          {links.map((link) => (
+            <ExternalLink key={link.href} href={link.href}>
+              {link.label}
+            </ExternalLink>
+          ))}
+        </Stack>
       )}
     </Box>
   );
@@ -141,6 +157,11 @@ export function AboutDialog({
       });
     }
   }
+  apiEntries.push({
+    description: 'Point weather forecast.',
+    href: weatherProviderConfiguration.forecastUrl,
+    title: new URL(weatherProviderConfiguration.forecastUrl).hostname,
+  });
   if (mapProviders !== null) {
     apiEntries.push(
       {
@@ -203,6 +224,19 @@ export function AboutDialog({
       });
     }
   }
+  dataEntries.push({
+    description: 'Weather forecast data',
+    details:
+      'Deterministic 9 km model forecast; not a measured weather-station observation.',
+    href: weatherProviderConfiguration.attributionUrl,
+    links: [
+      {
+        href: weatherProviderConfiguration.licenseUrl,
+        label: 'Data licence',
+      },
+    ],
+    title: `${weatherProviderConfiguration.models.ecmwf_ifs.displayName} via Open-Meteo`,
+  });
 
   return (
     <Paper

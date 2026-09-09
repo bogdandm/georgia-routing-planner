@@ -249,6 +249,48 @@ describe('selectSatelliteMosaicScenes', () => {
     expect(accumulator.limitReached).toBe(false);
   });
 
+  it('ignores a redundant candidate at capacity before evaluating an older contributor', () => {
+    const partialCandidates = Array.from(
+      { length: maximumSatelliteMosaicSceneCount },
+      (_, index) =>
+        scene(
+          `partial-${String(index)}`,
+          '2026-07-20T10:00:00.000Z',
+          rectangle(
+            index / maximumSatelliteMosaicSceneCount,
+            0,
+            (index + 1) / maximumSatelliteMosaicSceneCount,
+            2,
+          ),
+        ),
+    );
+    const redundant = scene(
+      'redundant-at-capacity',
+      '2026-07-20T09:00:00.000Z',
+      rectangle(-1, 0, 0.5, 2),
+    );
+    const olderContributor = scene(
+      'older-contributor',
+      '2026-07-19T10:00:00.000Z',
+      rectangle(1, 0, 2, 2),
+    );
+    const accumulator = new SatelliteMosaicSelectionAccumulator(viewport);
+
+    const current = accumulator.addGroups([
+      group('2026-07-20', [...partialCandidates, redundant]),
+    ]);
+
+    expect(current.scenes).toHaveLength(maximumSatelliteMosaicSceneCount);
+    expect(current.coveragePercent).toBeCloseTo(50, 5);
+    expect(accumulator.limitReached).toBe(false);
+
+    const older = accumulator.addGroups([group('2026-07-19', [olderContributor])]);
+
+    expect(older.scenes).toHaveLength(maximumSatelliteMosaicSceneCount);
+    expect(older.coveragePercent).toBeCloseTo(50, 5);
+    expect(accumulator.limitReached).toBe(true);
+  });
+
   it('rejects invalid viewports and malformed or degenerate scene geometry', () => {
     const invalidViewport = {
       ...viewport,

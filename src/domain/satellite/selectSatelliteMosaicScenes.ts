@@ -42,6 +42,11 @@ function createViewportFeature(viewport: SatelliteSearchViewport): Feature<Polyg
   ]);
 }
 
+interface MosaicCoverageUpdate {
+  readonly geometry: Feature<Polygon | MultiPolygon>;
+  readonly area: number;
+}
+
 class MosaicCoverageAccumulator {
   readonly #viewportFeature: Feature<Polygon>;
   readonly #viewportArea: number;
@@ -57,6 +62,18 @@ class MosaicCoverageAccumulator {
   }
 
   public add(scene: SatelliteScene): boolean {
+    const update = this.calculateUpdate(scene);
+    if (update === null) return false;
+    this.#coverageGeometry = update.geometry;
+    this.#coverageArea = update.area;
+    return true;
+  }
+
+  public wouldIncreaseCoverage(scene: SatelliteScene): boolean {
+    return this.calculateUpdate(scene) !== null;
+  }
+
+  private calculateUpdate(scene: SatelliteScene): MosaicCoverageUpdate | null {
     const footprintFeature = feature(scene.footprint);
     try {
       const footprintArea = area(footprintFeature);
@@ -69,7 +86,7 @@ class MosaicCoverageAccumulator {
           footprintFeature,
         ]),
       );
-      if (clipped === null) return false;
+      if (clipped === null) return null;
 
       const minimumIncreaseArea =
         (this.#viewportArea * (100 - satelliteMosaicCompleteCoveragePercent)) / 100;
@@ -78,10 +95,9 @@ class MosaicCoverageAccumulator {
         if (!Number.isFinite(clippedArea) || clippedArea < 0) {
           throw new SatelliteGeometryError('Scene footprint could not be measured.');
         }
-        if (clippedArea <= minimumIncreaseArea) return false;
-        this.#coverageGeometry = clipped;
-        this.#coverageArea = clippedArea;
-        return true;
+        return clippedArea <= minimumIncreaseArea
+          ? null
+          : { geometry: clipped, area: clippedArea };
       }
 
       const combined: Feature<Polygon | MultiPolygon> | null = union(
@@ -94,10 +110,9 @@ class MosaicCoverageAccumulator {
       if (!Number.isFinite(combinedArea) || combinedArea < 0) {
         throw new SatelliteGeometryError('Mosaic coverage could not be measured.');
       }
-      if (combinedArea - this.#coverageArea <= minimumIncreaseArea) return false;
-      this.#coverageGeometry = combined;
-      this.#coverageArea = combinedArea;
-      return true;
+      return combinedArea - this.#coverageArea <= minimumIncreaseArea
+        ? null
+        : { geometry: combined, area: combinedArea };
     } catch (error) {
       if (error instanceof SatelliteGeometryError) throw error;
       throw new SatelliteGeometryError('Scene footprint could not be composed.');
@@ -150,6 +165,7 @@ export class SatelliteMosaicSelectionAccumulator {
         const boundsKey = satelliteSceneBoundsKey(scene);
         if (this.#acceptedBounds.has(boundsKey)) continue;
         if (this.#scenes.length >= maximumSatelliteMosaicSceneCount) {
+          if (!this.#composition.wouldIncreaseCoverage(scene)) continue;
           this.#limitReached = true;
           break;
         }

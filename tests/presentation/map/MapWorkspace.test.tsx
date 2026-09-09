@@ -333,6 +333,67 @@ describe('MapWorkspace', () => {
     expect(facade.terrainModeRequests).toEqual(['flat']);
   });
 
+  it('queues Mosaic flattening behind an in-flight shared terrain restore', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5#satellite',
+    );
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    let resolveTerrain!: () => void;
+    const terrainCompletion = new Promise<void>((resolve) => {
+      resolveTerrain = resolve;
+    });
+    let terrainPending = true;
+    facade.terrainTransition = async (mode) => {
+      if (mode === 'terrain') {
+        await terrainCompletion;
+        terrainPending = false;
+        facade.setSnapshot({ terrainMode: 'terrain' });
+        return { status: 'success', mode };
+      }
+      if (terrainPending) {
+        return {
+          status: 'failed',
+          reason: 'Another terrain transition is already in progress.',
+        };
+      }
+      facade.setSnapshot({ terrainMode: 'flat' });
+      return { status: 'success', mode };
+    };
+
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={facade}
+            mapCanvas={<div>Queued Mosaic terrain map</div>}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Queued Mosaic terrain map');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    expect(facade.terrainModeRequests).toEqual(['terrain']);
+
+    resolveTerrain();
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain', 'flat']);
+      expect(facade.snapshot.terrainMode).toBe('flat');
+    });
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toBeEnabled();
+  });
+
   it('starts shared satellite and terrain restoration from the same ready state', async () => {
     window.history.replaceState(
       null,

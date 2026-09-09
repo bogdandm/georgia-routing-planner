@@ -158,6 +158,8 @@ export class SatelliteMosaicSelectionAccumulator {
         this.#acceptedBounds.add(boundsKey);
         this.#scenes.push(scene);
         acceptedFromGroup = true;
+        this.#coveragePercent = this.#composition.coveragePercent();
+        if (this.#coveragePercent >= satelliteMosaicCompleteCoveragePercent) break;
       }
 
       if (acceptedFromGroup) this.#oldestAcquisitionDate = group.date;

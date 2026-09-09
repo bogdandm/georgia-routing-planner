@@ -167,6 +167,7 @@ export function MapWorkspace({
     'flat' | 'terrain'
   > | null>(null);
   const terrainCommandAbort = useRef<AbortController | null>(null);
+  const terrainCommandTail = useRef<Promise<void>>(Promise.resolve());
   const [online, setOnline] = useState(() => navigator.onLine);
   const [contextMenu, setContextMenu] = useState<{
     readonly mouseX: number;
@@ -499,31 +500,36 @@ export function MapWorkspace({
   );
 
   const handleTerrainModeChange = useCallback(
-    async (mode: 'flat' | 'terrain') => {
+    (mode: 'flat' | 'terrain') => {
       terrainCommandAbort.current?.abort();
       const commandAbort = new AbortController();
       terrainCommandAbort.current = commandAbort;
       setTerrainCommandState(mode === 'terrain' ? 'enabling' : 'disabling');
       const attemptDelays = mode === 'terrain' ? [0, ...retryDelaysMs] : [0];
 
-      for (const delayMs of attemptDelays) {
-        if (delayMs > 0) await waitForRetry(delayMs, commandAbort.signal);
-        if (terrainCommandAbort.current !== commandAbort) return;
-        try {
-          const result = await facade.setTerrainMode(mode);
+      const run = async () => {
+        for (const delayMs of attemptDelays) {
+          if (delayMs > 0) await waitForRetry(delayMs, commandAbort.signal);
           if (terrainCommandAbort.current !== commandAbort) return;
-          if (result.status === 'success') {
-            terrainCommandAbort.current = null;
-            setTerrainCommandState(null);
-            return;
+          try {
+            const result = await facade.setTerrainMode(mode);
+            if (terrainCommandAbort.current !== commandAbort) return;
+            if (result.status === 'success') {
+              terrainCommandAbort.current = null;
+              setTerrainCommandState(null);
+              return;
+            }
+          } catch {
+            if (terrainCommandAbort.current !== commandAbort) return;
           }
-        } catch {
-          if (terrainCommandAbort.current !== commandAbort) return;
         }
-      }
 
-      terrainCommandAbort.current = null;
-      setTerrainCommandState('failed');
+        terrainCommandAbort.current = null;
+        setTerrainCommandState('failed');
+      };
+      const command = terrainCommandTail.current.then(run, run);
+      terrainCommandTail.current = command;
+      return command;
     },
     [facade, retryDelaysMs],
   );

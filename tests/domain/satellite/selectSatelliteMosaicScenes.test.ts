@@ -222,6 +222,33 @@ describe('selectSatelliteMosaicScenes', () => {
     expect(accumulator.limitReached).toBe(true);
   });
 
+  it('returns complete coverage when the final budgeted scene fills the viewport', () => {
+    const completingCandidates = Array.from(
+      { length: maximumSatelliteMosaicSceneCount },
+      (_, index) =>
+        scene(
+          `completing-${String(index)}`,
+          '2026-07-20T10:00:00.000Z',
+          rectangle(
+            (2 * index) / maximumSatelliteMosaicSceneCount,
+            0,
+            (2 * (index + 1)) / maximumSatelliteMosaicSceneCount,
+            2,
+          ),
+        ),
+    );
+    const extra = scene('extra', '2026-07-20T09:00:00.000Z', rectangle(-1, 0, 0.5, 2));
+    const accumulator = new SatelliteMosaicSelectionAccumulator(viewport);
+
+    const result = accumulator.addGroups([
+      group('2026-07-20', [...completingCandidates, extra]),
+    ]);
+
+    expect(result.scenes).toHaveLength(maximumSatelliteMosaicSceneCount);
+    expect(result.coveragePercent).toBe(100);
+    expect(accumulator.limitReached).toBe(false);
+  });
+
   it('rejects invalid viewports and malformed or degenerate scene geometry', () => {
     const invalidViewport = {
       ...viewport,

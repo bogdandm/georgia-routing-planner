@@ -14,12 +14,17 @@ import type {
 
 export type MapInteractionMode = 'default' | 'marker-placement' | 'route-planning';
 
+export type MapViewportMovement =
+  | { readonly phase: 'moving' }
+  | { readonly phase: 'settled'; readonly viewport: MapViewportSnapshot };
+
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
  * object. Consumers observe serializable snapshots and never receive the native map.
  */
 export interface MapFacade {
   subscribe(listener: () => void): () => void;
+  subscribeViewportMovement(listener: (event: MapViewportMovement) => void): () => void;
   subscribePlanningClicks(listener: (coordinate: MapCoordinate) => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;

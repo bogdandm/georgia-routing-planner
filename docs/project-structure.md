@@ -59,19 +59,21 @@ tools/                     Node-only audit, diagnostics, and E2E runners
 docs/                      maintainer-facing system documentation
 ```
 
-The satellite domain contains readonly criteria, scene, coverage, and grouped-result
-values plus deterministic Turf-backed coverage/edge calculations. The satellite
-application layer validates submitted UTC criteria, enforces result bounds and product
+The satellite domain contains readonly criteria, scene, coverage, grouped-result, and
+Mosaic-selection values plus deterministic Turf-backed intersection and union
+calculations. Its incremental Mosaic accumulator keeps only coverage-contributing scenes
+and combined geometry while older months arrive. The satellite application layer
+validates submitted UTC criteria and viewports, enforces result bounds and product
 separation, deduplicates scenes, and publishes correlated diagnostics through ports. It
 does not import React, MapLibre, `ky`, or STAC JSON.
 
 `infrastructure/stac/` owns the configured Earth Search adapter and Zod schemas. It
-builds allowlisted STAC requests, validates all returned items before mapping them,
-follows only same-origin POST pagination tokens within the configured cap, and converts
-transport/schema failures to safe catalog errors. The composition root exposes the
-adapter through the satellite search use case; React never receives its `ky` client. A
-serializable viewport snapshot store bridges settled map updates to Satellite controls
-without exposing MapLibre.
+builds allowlisted point or viewport-polygon STAC requests, validates all returned items
+before mapping them, follows only same-origin POST pagination tokens within the
+configured cap, and converts transport/schema failures to safe catalog errors. The
+composition root exposes the adapter through the scene and Mosaic search use cases;
+React never receives its `ky` client. A serializable viewport snapshot store bridges
+settled map updates to Satellite controls without exposing MapLibre.
 
 `infrastructure/satellite/` owns direct visual-COG range decoding, UTM-to-Web Mercator
 reprojection, and its validated worker RPC boundary. `SatelliteCogTileProvider`
@@ -121,8 +123,9 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Unsaved import/route plan, active selection, and list query    | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store       |
 | Map diagnostic snapshot                                        | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export       |
 | Current/last Sentinel step status and duration                 | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                      |
-| Submitted Sentinel criteria and derived grouped results        | `SatelliteBrowser` React state                        | Disposable, not persisted                                |
-| Selected/applied Sentinel scene                                | `MapLibreLayerController` plus `mapLayerStore`        | Transient selection/rendering state, never persisted     |
+| Submitted scene criteria and derived grouped results           | `SatelliteBrowser` React state                        | Disposable, not persisted                                |
+| Mosaic mode, draft/active dates, and request identity          | `SatelliteMosaicProvider` React state                 | Cross-surface transient workflow, not URL or preference  |
+| Selected/applied scene or applied Mosaic snapshot              | `MapLibreLayerController` plus `mapLayerStore`        | Mutually exclusive transient rendering state             |
 | Persistent account session and registration                    | Official Supabase client via `UserDataService`        | Optional email/password auth outside Zustand/Dexie       |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
@@ -202,30 +205,37 @@ diagnostic logger directly; UI and export consumers read the diagnostics service
 than subscribing through a terrain-specific bypass.
 
 `MapLibreLayerController` attaches to the same native map through the facade and owns
-Sentinel raster slots, the footprint, shared DEM relief, generated-contour source and
-layers, and allowlisted logical visibility commands. `ContourTileGenerator` wraps the
-MapLibre protocol that turns bounded DEM tile requests into vector contours; it does not
-expose caches, provider URLs, or the native map to React. The facade forwards camera
-movement state through the controller so the worker can prioritize DEM requests and
-defer new contour calculations until movement settles. It also forwards the worker's
-coordinate-free active and queued counts into the map-layer store for the operational
-status line. The controller validates persistent imagery mode/tuning and terrain-overlay
-preferences, atomically updates source tiles, and reconciles native order after style or
-satellite changes. Satellite and Layers consume its serializable Zustand snapshot, so
-relocated controls stay synchronized with restored preferences. Search results remain
-local React state in a mounted-but-hidden Satellite browser so rail navigation does not
-reset the session.
+single-scene raster slots, bounded Mosaic raster entries, the footprint, shared DEM
+relief, generated-contour source and layers, and allowlisted logical visibility
+commands. `ContourTileGenerator` wraps the MapLibre protocol that turns bounded DEM tile
+requests into vector contours; it does not expose caches, provider URLs, or the native
+map to React. The facade forwards camera movement state through the controller so the
+worker can prioritize DEM requests and defer new contour calculations until movement
+settles. It also publishes settled viewports through `MapViewportSnapshotStore`;
+`SatelliteMosaicProvider` cancels obsolete work while moving and refreshes a shown
+Mosaic after settlement. The controller forwards the worker's coordinate-free active and
+queued counts plus Mosaic render counts into the map-layer store for the operational
+status line.
+
+The controller validates persistent imagery mode/tuning and terrain-overlay preferences,
+atomically updates source tiles, and reconciles native order after style or satellite
+changes. Satellite and Layers consume its serializable Zustand snapshot, so relocated
+controls stay synchronized with restored preferences. Scene search results remain local
+React state in a mounted-but-hidden Satellite browser, while Mosaic workflow state lives
+in the provider mounted around both map and sidebar surfaces.
 
 `SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
-module worker. The provider retains at most two scene definitions, while the worker
-retains at most two corresponding GeoTIFF readers. `geotiff` performs bounded HTTP range
-reads and overview selection; `proj4` transforms each output pixel between WGS84 and the
-validated northern-UTM scene CRS. The controller persists the Auto, Server, or Direct
-rendering mode. Auto switches an existing raster source to this opaque protocol when the
-hosted renderer reports 429 or the browser exposes the response as status zero because
-CORS hid it; Direct starts on the protocol immediately, and Server does not switch. The
-worker preserves the provider's pre-rendered 8-bit RGB values and does not apply the
-hosted renderer's stretch controls. Raster readiness has no application deadline.
+module worker. Its bounded registry retains safe definitions for a complete 128-scene
+Mosaic plus replacement headroom; the worker deliberately retains only the two most
+recent GeoTIFF readers so direct fallback cannot multiply large per-file block caches.
+`geotiff` performs bounded HTTP range reads and overview selection; `proj4` transforms
+each output pixel between WGS84 and the validated northern-UTM scene CRS. The controller
+persists the Auto, Server, or Direct rendering mode. Auto switches an existing raster
+source to this opaque protocol when the hosted renderer reports 429 or the browser
+exposes the response as status zero because CORS hid it; Direct starts on the protocol
+immediately, and Server does not switch. The worker preserves the provider's
+pre-rendered 8-bit RGB values and does not apply the hosted renderer's stretch controls.
+Raster readiness has no application deadline.
 
 The facade returns a serializable snapshot of current WGS84 bounds and center, or `null`
 before a native map exists. `MapViewportSnapshotStore` publishes that value to search

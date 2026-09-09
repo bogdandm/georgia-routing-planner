@@ -14,6 +14,7 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
 import type { TrackShareService } from '@/application/tracks/TrackShareService';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
+import { SearchSatelliteMosaic } from '@/application/satellite/SearchSatelliteMosaic';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
@@ -101,6 +102,7 @@ export function createTestServices(
     );
   let demFilterEnabled = true;
   let demFilterRevision = 0;
+  const registeredSatelliteScenes = new Set<string>();
   const mapLayers = new MapLibreLayerController(
     parsedMapProviderConfiguration.satellite.renderer,
     parsedMapProviderConfiguration.terrain,
@@ -128,15 +130,28 @@ export function createTestServices(
       dispose: () => undefined,
     } satisfies ContourTileGenerator,
     {
-      registerScene: () => undefined,
-      createTileUrl: (sceneKey) =>
-        `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`,
+      registerScene: (sceneKey) => {
+        registeredSatelliteScenes.add(sceneKey);
+      },
+      createTileUrl: (sceneKey) => {
+        if (!registeredSatelliteScenes.has(sceneKey)) {
+          throw new Error('The direct satellite scene is not registered.');
+        }
+        return `test-satellite-cog://tiles/${encodeURIComponent(sceneKey)}/{z}/{x}/{y}.webp`;
+      },
       dispose: () => undefined,
     } satisfies SatelliteCogTileProvider,
     logger,
     idGenerator,
     sentinelQueryDiagnostics,
     database,
+  );
+  const searchSatelliteScenes = new SearchSatelliteScenes(
+    satelliteCatalogGateway,
+    sentinelQueryDiagnostics,
+    logger,
+    idGenerator,
+    clock,
   );
 
   return {
@@ -179,13 +194,8 @@ export function createTestServices(
       value: parsedMapProviderConfiguration,
     },
     satelliteCatalogGateway,
-    searchSatelliteScenes: new SearchSatelliteScenes(
-      satelliteCatalogGateway,
-      sentinelQueryDiagnostics,
-      logger,
-      idGenerator,
-      clock,
-    ),
+    searchSatelliteScenes,
+    searchSatelliteMosaic: new SearchSatelliteMosaic(searchSatelliteScenes),
     searchPlaces: new SearchPlaces(
       { search: () => Promise.resolve([]) },
       logger,

@@ -9,6 +9,7 @@ import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatal
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import type { TrackContentHasher } from '@/application/ports/TrackContentHasher';
 import type { TrailRouter } from '@/application/ports/TrailRouter';
+import { SearchSatelliteMosaic } from '@/application/satellite/SearchSatelliteMosaic';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import type { TrackShareService } from '@/application/tracks/TrackShareService';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
@@ -73,6 +74,7 @@ export interface RuntimeServices {
   readonly mapLayers: MapLibreLayerController | null;
   readonly savedMarkers: SavedMarkerRepository;
   readonly satelliteCatalogGateway: SatelliteCatalogGateway | null;
+  readonly searchSatelliteMosaic: SearchSatelliteMosaic | null;
   readonly searchSatelliteScenes: SearchSatelliteScenes | null;
   readonly searchPlaces: SearchPlaces | null;
   readonly sentinelQueryDiagnostics: SentinelQueryDiagnosticsStore;
@@ -264,6 +266,10 @@ export function createRuntimeServices(): RuntimeServices {
           idGenerator,
           clock,
         );
+  const searchSatelliteMosaic =
+    searchSatelliteScenes === null
+      ? null
+      : new SearchSatelliteMosaic(searchSatelliteScenes);
   const healthChecks = new HealthCheckService(
     clock,
     database,
@@ -310,6 +316,7 @@ export function createRuntimeServices(): RuntimeServices {
     mapLayers,
     mapProviderConfiguration,
     satelliteCatalogGateway,
+    searchSatelliteMosaic,
     searchSatelliteScenes,
     searchPlaces,
     savedMarkers: database,

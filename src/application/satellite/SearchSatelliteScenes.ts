@@ -95,8 +95,23 @@ export class SearchSatelliteScenes {
     private readonly clock: Clock,
   ) {}
 
-  public async execute(
+  public execute(
     input: SatelliteSearchCriteriaInput,
+    signal: AbortSignal,
+  ): Promise<SatelliteSearchResult> {
+    return this.executeForScope(input, 'center', signal);
+  }
+
+  public executeViewport(
+    input: SatelliteSearchCriteriaInput,
+    signal: AbortSignal,
+  ): Promise<SatelliteSearchResult> {
+    return this.executeForScope(input, 'viewport', signal);
+  }
+
+  private async executeForScope(
+    input: SatelliteSearchCriteriaInput,
+    spatialScope: 'center' | 'viewport',
     signal: AbortSignal,
   ): Promise<SatelliteSearchResult> {
     const operation = new SentinelQueryOperation(
@@ -121,7 +136,11 @@ export class SearchSatelliteScenes {
       operation.completeStep();
 
       const catalogResult = await this.gateway.search(
-        { criteria, maximumItems: maximumSatelliteSearchResults },
+        {
+          criteria,
+          maximumItems: maximumSatelliteSearchResults,
+          spatialScope,
+        },
         { operationId: operation.id, signal },
       );
       signal.throwIfAborted();
@@ -133,7 +152,7 @@ export class SearchSatelliteScenes {
       ) {
         throw new SatelliteSearchError(
           'result-limit-exceeded',
-          'This point matches more imagery than can be loaded safely.',
+          'This area matches more imagery than can be loaded safely.',
         );
       }
 

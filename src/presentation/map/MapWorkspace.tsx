@@ -34,7 +34,7 @@ import type {
   MapCamera as PersistedMapCamera,
   MapViewState,
 } from '@/application/ports/MapCameraRepository';
-import type { MapFacade } from '@/presentation/map/MapFacade';
+import type { MapFacade, MapViewportMovement } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
@@ -42,6 +42,7 @@ import {
   MapViewControlsControl,
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
+import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
   defaultGeorgiaCamera,
@@ -147,6 +148,8 @@ export function MapWorkspace({
     satelliteCatalogGateway,
     idGenerator,
   } = useRuntimeServices();
+  const satelliteMode = useSatelliteMode();
+  const mosaicActive = satelliteMode === 'mosaic';
   const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
   const [sharedTerrainUrlIntentActive, setSharedTerrainUrlIntentActive] = useState(
@@ -157,12 +160,14 @@ export function MapWorkspace({
   );
   const sharedTerrainStartRequested = useRef(false);
   const sharedSceneApplyController = useRef<AbortController | null>(null);
+  const sharedSceneRestorationCancelled = useRef(false);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
     'flat' | 'terrain'
   > | null>(null);
   const terrainCommandAbort = useRef<AbortController | null>(null);
+  const terrainCommandTail = useRef<Promise<void>>(Promise.resolve());
   const [online, setOnline] = useState(() => navigator.onLine);
   const [contextMenu, setContextMenu] = useState<{
     readonly mouseX: number;
@@ -209,6 +214,7 @@ export function MapWorkspace({
     (state) => state.openStreetMapOpacity,
   );
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
+  const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const tracksWorkspace = useOptionalTracksWorkspace();
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const routePlanningActive =
@@ -333,16 +339,22 @@ export function MapWorkspace({
   const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
   const terrainState: TerrainControlState =
     terrainCommandState ??
-    (sharedTerrainRequested &&
-    sharedTerrainUrlIntentActive &&
-    snapshot.lifecycle === 'loading'
-      ? 'terrain'
-      : snapshot.terrainMode);
-  const satelliteImageryVisible =
+    (mosaicActive
+      ? 'flat'
+      : sharedTerrainRequested &&
+          sharedTerrainUrlIntentActive &&
+          snapshot.lifecycle === 'loading'
+        ? 'terrain'
+        : snapshot.terrainMode);
+  const singleSceneImageryVisible =
     appliedImagery.status === 'preview' || appliedImagery.status === 'ready'
       ? true
       : (appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
         appliedImagery.previousSceneKey !== null;
+  const mosaicImageryAvailable =
+    appliedMosaic.status !== 'empty' && appliedMosaic.sceneKeys.length > 0;
+  const satelliteImageryVisible =
+    singleSceneImageryVisible || (satelliteImagerySelected && mosaicImageryAvailable);
   let activeLayerPreset: MapLayerPreset | null = null;
   if (!googleSatelliteVisible && !naprOrthophotoVisible && !satelliteImageryVisible) {
     activeLayerPreset = 'vector-osm';
@@ -372,11 +384,18 @@ export function MapWorkspace({
     const publishViewport = () => {
       mapViewport.update(facade.getViewportSnapshot());
     };
+    const publishMovement = (event: MapViewportMovement) => {
+      if (event.phase === 'moving') mapViewport.markMoving();
+      else mapViewport.settle(event.viewport);
+    };
     publishViewport();
     const unsubscribe = facade.subscribe(publishViewport);
+    const unsubscribeMovement = facade.subscribeViewportMovement(publishMovement);
     return () => {
       unsubscribe();
+      unsubscribeMovement();
       mapViewport.update(null);
+      mapViewport.clearMovement();
     };
   }, [facade, mapViewport]);
 
@@ -481,48 +500,69 @@ export function MapWorkspace({
   );
 
   const handleTerrainModeChange = useCallback(
-    async (mode: 'flat' | 'terrain') => {
+    (mode: 'flat' | 'terrain') => {
       terrainCommandAbort.current?.abort();
       const commandAbort = new AbortController();
       terrainCommandAbort.current = commandAbort;
       setTerrainCommandState(mode === 'terrain' ? 'enabling' : 'disabling');
       const attemptDelays = mode === 'terrain' ? [0, ...retryDelaysMs] : [0];
 
-      for (const delayMs of attemptDelays) {
-        if (delayMs > 0) await waitForRetry(delayMs, commandAbort.signal);
-        if (terrainCommandAbort.current !== commandAbort) return;
-        try {
-          const result = await facade.setTerrainMode(mode);
+      const run = async () => {
+        for (const delayMs of attemptDelays) {
+          if (delayMs > 0) await waitForRetry(delayMs, commandAbort.signal);
           if (terrainCommandAbort.current !== commandAbort) return;
-          if (result.status === 'success') {
-            terrainCommandAbort.current = null;
-            setTerrainCommandState(null);
-            return;
+          try {
+            const result = await facade.setTerrainMode(mode);
+            if (terrainCommandAbort.current !== commandAbort) return;
+            if (result.status === 'success') {
+              terrainCommandAbort.current = null;
+              setTerrainCommandState(null);
+              return;
+            }
+          } catch {
+            if (terrainCommandAbort.current !== commandAbort) return;
           }
-        } catch {
-          if (terrainCommandAbort.current !== commandAbort) return;
         }
-      }
 
-      terrainCommandAbort.current = null;
-      setTerrainCommandState('failed');
+        terrainCommandAbort.current = null;
+        setTerrainCommandState('failed');
+      };
+      const command = terrainCommandTail.current.then(run, run);
+      terrainCommandTail.current = command;
+      return command;
     },
     [facade, retryDelaysMs],
   );
 
   const handleTerrainControlChange = useCallback(
     (mode: 'flat' | 'terrain') => {
+      if (mosaicActive && mode === 'terrain') return;
       // A direct user choice supersedes the startup intent from a shared URL, including
       // while MapLibre is still loading and its diagnostics snapshot remains stale.
       setSharedTerrainUrlIntentActive(false);
       void handleTerrainModeChange(mode);
     },
-    [handleTerrainModeChange],
+    [handleTerrainModeChange, mosaicActive],
   );
+
+  useEffect(() => {
+    if (!mosaicActive) return;
+    let active = true;
+    sharedTerrainStartRequested.current = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setSharedTerrainUrlIntentActive(false);
+      void handleTerrainModeChange('flat');
+    });
+    return () => {
+      active = false;
+    };
+  }, [handleTerrainModeChange, mosaicActive]);
 
   useEffect(() => {
     if (
       !sharedTerrainRequested ||
+      mosaicActive ||
       !sharedTerrainUrlIntentActive ||
       sharedTerrainStartRequested.current ||
       snapshot.lifecycle !== 'ready' ||
@@ -536,6 +576,7 @@ export function MapWorkspace({
     sharedTerrainStartRequested.current = true;
     void handleTerrainModeChange('terrain');
   }, [
+    mosaicActive,
     handleTerrainModeChange,
     sharedTerrainRequested,
     sharedTerrainUrlIntentActive,
@@ -621,7 +662,12 @@ export function MapWorkspace({
 
   useEffect(() => {
     const shared = sharedMapView;
+    if (mosaicActive) {
+      sharedSceneRestorationCancelled.current = true;
+      return;
+    }
     if (
+      sharedSceneRestorationCancelled.current ||
       shared?.sceneKey === null ||
       shared === null ||
       mapLayers === null ||
@@ -663,9 +709,10 @@ export function MapWorkspace({
     return () => {
       controller.abort();
     };
-  }, [idGenerator, mapLayers, satelliteCatalogGateway, sharedMapView]);
+  }, [idGenerator, mapLayers, mosaicActive, satelliteCatalogGateway, sharedMapView]);
 
   useEffect(() => {
+    if (mosaicActive || sharedSceneRestorationCancelled.current) return;
     if (
       sharedSceneToApply === null ||
       snapshot.lifecycle !== 'ready' ||
@@ -691,7 +738,7 @@ export function MapWorkspace({
         controller.abort();
       }
     };
-  }, [mapLayers, sharedSceneToApply, snapshot.lifecycle]);
+  }, [mapLayers, mosaicActive, sharedSceneToApply, snapshot.lifecycle]);
 
   useEffect(() => {
     return () => {
@@ -781,7 +828,11 @@ export function MapWorkspace({
   const handleLayerPresetChange = useCallback(
     (preset: MapLayerPreset): boolean => {
       if (mapLayers === null) return false;
-      if (preset === 'sentinel-2-hybrid' && mapLayers.getAppliedScene() === null) {
+      if (
+        preset === 'sentinel-2-hybrid' &&
+        mapLayers.getAppliedScene() === null &&
+        !mosaicImageryAvailable
+      ) {
         setActiveTab('satellite');
         setMobileWorkspaceOpen(true);
         setNavigationCollapsed(false);
@@ -795,7 +846,13 @@ export function MapWorkspace({
       setPresetErrorMessage(result.message);
       return false;
     },
-    [mapLayers, setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed],
+    [
+      mapLayers,
+      mosaicImageryAvailable,
+      setActiveTab,
+      setMobileWorkspaceOpen,
+      setNavigationCollapsed,
+    ],
   );
 
   return (
@@ -849,6 +906,7 @@ export function MapWorkspace({
             />
             <MapViewControlsControl
               activeLayerPreset={activeLayerPreset}
+              terrainDisabled={mosaicActive}
               layerPresetDisabled={layerPresetDisabled}
               onLayerPresetChange={handleLayerPresetChange}
               onTerrainModeChange={handleTerrainControlChange}
@@ -874,6 +932,7 @@ export function MapWorkspace({
       resolvedMapCanvas !== undefined ? (
         <MapViewControls
           activeLayerPreset={activeLayerPreset}
+          terrainDisabled={mosaicActive}
           layerPresetDisabled={layerPresetDisabled}
           onLayerPresetChange={handleLayerPresetChange}
           onTerrainModeChange={handleTerrainControlChange}

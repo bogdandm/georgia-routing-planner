@@ -66,23 +66,28 @@ function scene(
 }
 
 class FakeGateway implements SatelliteCatalogGateway {
+  public readonly queries: SatelliteCatalogQuery[] = [];
+
   public constructor(private readonly result: SatelliteCatalogResult) {}
 
   public search(
-    _query: SatelliteCatalogQuery,
+    query: SatelliteCatalogQuery,
     context: SatelliteCatalogRequestContext,
   ): Promise<SatelliteCatalogResult> {
     context.signal.throwIfAborted();
+    this.queries.push(query);
     return Promise.resolve(this.result);
   }
 }
 
 function createUseCase(result: SatelliteCatalogResult) {
   const services = createTestServices();
+  const gateway = new FakeGateway(result);
   return {
+    gateway,
     services,
     useCase: new SearchSatelliteScenes(
-      new FakeGateway(result),
+      gateway,
       services.sentinelQueryDiagnostics,
       services.logger,
       services.idGenerator,
@@ -106,6 +111,15 @@ describe('validateSatelliteSearchCriteria', () => {
       inclusiveDayCount: 1,
       productLevel: 'L1C',
     });
+  });
+
+  it('accepts null as an intentional absence of a cloud predicate', () => {
+    expect(
+      validateSatelliteSearchCriteria({
+        ...criteria,
+        maxCloudCoverPercent: null,
+      }).maxCloudCoverPercent,
+    ).toBeNull();
   });
 
   it.each([
@@ -171,6 +185,39 @@ describe('SearchSatelliteScenes', () => {
     ]);
     expect(services.sentinelQueryDiagnostics.getSnapshot().status).toBe('success');
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('44.1');
+  });
+
+  it('keeps point searches and marks viewport searches explicitly', async () => {
+    const { gateway, useCase } = createUseCase({ scenes: [], totalMatched: 0 });
+
+    await useCase.execute(criteria, new AbortController().signal);
+    await useCase.executeViewport(
+      { ...criteria, maxCloudCoverPercent: null },
+      new AbortController().signal,
+    );
+
+    expect(gateway.queries).toMatchObject([
+      { spatialScope: 'center', criteria: { maxCloudCoverPercent: 25 } },
+      { spatialScope: 'viewport', criteria: { maxCloudCoverPercent: null } },
+    ]);
+  });
+
+  it('rejects an unsupported viewport before a viewport catalog request', async () => {
+    const { gateway, useCase } = createUseCase({ scenes: [], totalMatched: 0 });
+
+    await expect(
+      useCase.executeViewport(
+        {
+          ...criteria,
+          viewport: {
+            bounds: { west: -90, south: -10, east: 90, north: 10 },
+            center: { longitude: 0, latitude: 0 },
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'invalid-viewport' });
+    expect(gateway.queries).toHaveLength(0);
   });
 
   it('rejects a provider result that silently mixes product levels', async () => {

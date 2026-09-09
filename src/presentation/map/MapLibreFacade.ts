@@ -10,11 +10,16 @@ import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
-import type { MapFacade, MapInteractionMode } from '@/presentation/map/MapFacade';
+import type {
+  MapFacade,
+  MapInteractionMode,
+  MapViewportMovement,
+} from '@/presentation/map/MapFacade';
 import {
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoSourceIds,
+  sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -118,7 +123,8 @@ function getErrorSourceId(event: MapLibreErrorEvent): string | null {
 function isSatelliteSourceId(sourceId: string): boolean {
   return (
     sourceId === mapSourceIds.sentinelRasterA ||
-    sourceId === mapSourceIds.sentinelRasterB
+    sourceId === mapSourceIds.sentinelRasterB ||
+    sourceId.startsWith(sentinelMosaicIdPrefixes.source)
   );
 }
 function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
@@ -147,8 +153,7 @@ function categorizeMapError(
     return 'base-vector';
   }
   if (
-    sourceId === mapSourceIds.sentinelRasterA ||
-    sourceId === mapSourceIds.sentinelRasterB ||
+    (sourceId !== null && isSatelliteSourceId(sourceId)) ||
     sourceId === mapSourceIds.satelliteBasemap ||
     Object.values(naprOrthophotoSourceIds).includes(
       sourceId as (typeof naprOrthophotoSourceIds)[keyof typeof naprOrthophotoSourceIds],
@@ -217,6 +222,7 @@ function recoverableMessage(
 export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
+  readonly #viewportMovementListeners = new Set<(event: MapViewportMovement) => void>();
   #map: MapLibreMap | null = null;
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
   #firstIdleRecorded = false;
@@ -234,6 +240,7 @@ export class MapLibreFacade implements MapFacade {
   #mountedAt = 0;
   #lastCameraDiagnosticAt = 0;
   #styleSnapshotQueued = false;
+  #initialViewportSettled = false;
   #pointInspection: MapPointInspection = { status: 'closed' };
   #pointInspectionSequence = 0;
   #pointInspectionAbort: AbortController | null = null;
@@ -340,6 +347,15 @@ export class MapLibreFacade implements MapFacade {
       this.#listeners.delete(listener);
     };
   }
+  public subscribeViewportMovement(
+    listener: (event: MapViewportMovement) => void,
+  ): () => void {
+    this.#viewportMovementListeners.add(listener);
+    return () => {
+      this.#viewportMovementListeners.delete(listener);
+    };
+  }
+
   public subscribePlanningClicks(
     listener: (coordinate: MapCoordinate) => void,
   ): () => void {
@@ -586,6 +602,7 @@ export class MapLibreFacade implements MapFacade {
     this.detachMap();
     this.#pointInspector.destroy();
     this.#listeners.clear();
+    this.#viewportMovementListeners.clear();
     this.#planningClickListeners.clear();
   }
 
@@ -595,6 +612,10 @@ export class MapLibreFacade implements MapFacade {
       return;
     }
     this.publishReadySnapshot(map);
+    if (!this.#initialViewportSettled) {
+      this.#initialViewportSettled = true;
+      this.emitSettledViewport(map);
+    }
     const durationMs = Math.max(0, performance.now() - this.#mountedAt);
     this.logger.log({
       level: 'info',
@@ -676,6 +697,7 @@ export class MapLibreFacade implements MapFacade {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
       this.onViewSettled({ camera, terrainMode: this.#snapshot.terrainMode });
+      this.emitSettledViewport(this.#map);
       const now = Date.now();
       if (now - this.#lastCameraDiagnosticAt >= 5_000) {
         this.#lastCameraDiagnosticAt = now;
@@ -690,6 +712,9 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMoveStart = (): void => {
     this.layerController?.setTerrainInteractionActive(true);
+    for (const listener of this.#viewportMovementListeners) {
+      listener({ phase: 'moving' });
+    }
   };
 
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
@@ -1362,6 +1387,14 @@ export class MapLibreFacade implements MapFacade {
     }
   }
 
+  private emitSettledViewport(map: MapLibreMap): void {
+    const viewport = this.getViewportSnapshot();
+    if (this.#map !== map || viewport === null) return;
+    for (const listener of this.#viewportMovementListeners) {
+      listener({ phase: 'settled', viewport });
+    }
+  }
+
   private updateSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.#snapshot = { ...this.#snapshot, ...changed };
     this.#pointerGestures.setTerrainOrbitEnabled(
@@ -1392,6 +1425,7 @@ export class MapLibreFacade implements MapFacade {
 
   private detach(): void {
     this.cancelAllSourceRecoveries();
+    this.#initialViewportSettled = false;
     const map = this.#map;
     if (map === null) {
       return;

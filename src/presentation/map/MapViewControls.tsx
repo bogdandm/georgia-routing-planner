@@ -29,6 +29,7 @@ export type TerrainControlState =
 
 interface MapViewControlsProps {
   readonly terrainState: TerrainControlState;
+  readonly terrainDisabled: boolean;
   readonly activeLayerPreset: MapLayerPreset | null;
   readonly layerPresetDisabled: boolean;
   readonly onTerrainModeChange: (mode: TerrainMode) => void;
@@ -90,6 +91,7 @@ class MapViewControlHost implements IControl {
 
 export function MapViewControls({
   terrainState,
+  terrainDisabled,
   activeLayerPreset,
   layerPresetDisabled,
   onTerrainModeChange,
@@ -106,7 +108,12 @@ export function MapViewControls({
     _event: MouseEvent<HTMLElement>,
     value: TerrainMode | null,
   ) => {
-    if (value !== null && !pending && value !== selectedMode) {
+    if (
+      value !== null &&
+      !pending &&
+      !(terrainDisabled && value === 'terrain') &&
+      value !== selectedMode
+    ) {
       onTerrainModeChange(value);
     }
   };
@@ -155,22 +162,30 @@ export function MapViewControls({
               </span>
             </Tooltip>
           </ToggleButton>
-          <ToggleButton
-            value="terrain"
-            aria-label="Show 3D terrain map"
-            disabled={pending}
-            sx={{ width: 40, height: 36, p: 0 }}
+          <Tooltip
+            title={
+              terrainDisabled
+                ? '3D terrain is unavailable while Sentinel Mosaic is active.'
+                : '3D terrain'
+            }
           >
-            <Tooltip title="3D terrain">
-              <span>
-                {terrainState === 'enabling' ? (
-                  <CircularProgress size={18} aria-hidden />
-                ) : (
-                  '3D'
-                )}
-              </span>
-            </Tooltip>
-          </ToggleButton>
+            <span>
+              <ToggleButton
+                value="terrain"
+                aria-label="Show 3D terrain map"
+                disabled={pending || terrainDisabled}
+                sx={{ width: 40, height: 36, p: 0 }}
+              >
+                <span>
+                  {terrainState === 'enabling' ? (
+                    <CircularProgress size={18} aria-hidden />
+                  ) : (
+                    '3D'
+                  )}
+                </span>
+              </ToggleButton>
+            </span>
+          </Tooltip>
         </ToggleButtonGroup>
         <Tooltip title="Choose map layer preset">
           <span>

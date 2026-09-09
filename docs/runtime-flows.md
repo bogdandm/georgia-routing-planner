@@ -615,6 +615,60 @@ exported diagnostics. The footprint is updated only after the replacement raster
 usable. `Fit footprint` derives bounds from the validated polygon while preserving
 current pitch and bearing.
 
+### Sentinel Mosaic application
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Provider as SatelliteMosaicProvider
+  participant Search as SearchSatelliteMosaic
+  participant Catalog as Earth Search gateway
+  participant Selector as Mosaic coverage accumulator
+  participant Controller as MapLibreLayerController
+  participant Map as MapLibre
+  participant State as Map layer store
+
+  User->>Provider: select a different upper-bound date
+  Provider->>Provider: abort obsolete request
+  Provider->>Controller: clearMosaic()
+  Controller->>Map: remove staging and ready Mosaic sources
+  Controller->>State: empty; remove Ready-area progress
+  User->>Provider: Show mosaic
+  Provider->>Controller: beginMosaic(date, settled viewport)
+  Controller->>Controller: prune outside exact viewport
+  Controller->>State: loading
+  Provider->>Search: execute(viewport polygon, date, L2A)
+  loop selected partial month, then complete earlier months
+    Search->>Catalog: viewport query without cloud predicate
+    Catalog-->>Search: validated descending acquisition groups
+    Search->>Selector: addGroups(groups)
+    Selector->>Selector: clip, union, and retain coverage contributors
+  end
+  Search-->>Provider: bounded scenes, union coverage, archive state
+  Provider->>Controller: applyMosaic(scenes, viewport, date)
+  Controller->>Map: add all bounded raster sources/layers newest first
+  loop source readiness in any completion order
+    Map-->>Controller: source content loaded
+    Controller->>State: increment rendered/total progress
+  end
+  Controller->>State: ready with actual rendered union coverage
+```
+
+The coverage accumulator stops at 100% within `1e-6` percentage points, complete archive
+traversal, or the 128-scene source budget. It retains combined geometry rather than
+rebuilding every prior month and drops footprints that do not measurably increase
+coverage. Rendering uses the existing Auto, Server, or Direct provider path; all
+selected sources are registered before readiness waits, then each reveals independently
+within its scene extrema. Zero fade prevents cross-fade texture overlap.
+
+`movestart` aborts only obsolete search/application work; already ready imagery remains
+available during movement. The next settled viewport starts one refresh whose
+`beginMosaic` call owns pruning and rendered-coverage recalculation. Selecting a
+different calendar date instead performs the full clear path before another explicit
+**Show mosaic**, so no earlier-date layers or progress can survive. Sequence guards
+prevent cancelled source waits from publishing a stale loading snapshot after either
+clear or replacement.
+
 Layers commands use logical IDs. The Natural features command expands to land-cover,
 glacier, and water-polygon layers; restricted-area, hiking, road, and place commands
 expand to their fixed native style groups. Satellite and footprint commands target only

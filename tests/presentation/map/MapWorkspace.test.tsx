@@ -21,6 +21,10 @@ import {
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
 import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
+import {
+  SatelliteMosaicProvider,
+  useSatelliteMosaic,
+} from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -208,6 +212,11 @@ describe('MapWorkspace', () => {
     ).toBeVisible();
   });
 
+  function MosaicModeButton() {
+    const { toggleMosaicMode } = useSatelliteMosaic();
+    return <button onClick={toggleMosaicMode}>Toggle Mosaic mode</button>;
+  }
+
   it('starts shared 3D terrain after the base map becomes ready', async () => {
     window.history.replaceState(
       null,
@@ -287,6 +296,104 @@ describe('MapWorkspace', () => {
     expect(facade.terrainModeRequests).toEqual(['flat']);
   });
 
+  it('forces 2D and suppresses shared 3D startup while Mosaic is active', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5#satellite',
+    );
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace facade={facade} mapCanvas={<div>Mosaic terrain map</div>} />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Mosaic terrain map');
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['flat']);
+    });
+    const terrainButton = screen.getByRole('button', {
+      name: 'Show 3D terrain map',
+    });
+    expect(terrainButton).toBeDisabled();
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    expect(terrainButton).toBeEnabled();
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+  });
+
+  it('queues Mosaic flattening behind an in-flight shared terrain restore', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5#satellite',
+    );
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    let resolveTerrain!: () => void;
+    const terrainCompletion = new Promise<void>((resolve) => {
+      resolveTerrain = resolve;
+    });
+    let terrainPending = true;
+    facade.terrainTransition = async (mode) => {
+      if (mode === 'terrain') {
+        await terrainCompletion;
+        terrainPending = false;
+        facade.setSnapshot({ terrainMode: 'terrain' });
+        return { status: 'success', mode };
+      }
+      if (terrainPending) {
+        return {
+          status: 'failed',
+          reason: 'Another terrain transition is already in progress.',
+        };
+      }
+      facade.setSnapshot({ terrainMode: 'flat' });
+      return { status: 'success', mode };
+    };
+
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={facade}
+            mapCanvas={<div>Queued Mosaic terrain map</div>}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Queued Mosaic terrain map');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    expect(facade.terrainModeRequests).toEqual(['terrain']);
+
+    resolveTerrain();
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain', 'flat']);
+      expect(facade.snapshot.terrainMode).toBe('flat');
+    });
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toBeEnabled();
+  });
+
   it('starts shared satellite and terrain restoration from the same ready state', async () => {
     window.history.replaceState(
       null,
@@ -328,6 +435,103 @@ describe('MapWorkspace', () => {
       expect(applyScene).toHaveBeenCalledWith(sharedScene, expect.any(AbortSignal));
       expect(facade.terrainModeRequests).toEqual(['terrain']);
     });
+  });
+
+  it('ignores a shared scene that resolves after Mosaic entry', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&scene=sentinel-2-l2a%3Ashared-scene',
+    );
+    let resolveScene: (scene: SatelliteScene | null) => void = () => undefined;
+    const getScene = vi.fn(
+      () =>
+        new Promise<SatelliteScene | null>((resolve) => {
+          resolveScene = resolve;
+        }),
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene,
+      },
+    });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const selectScene = vi.spyOn(mapLayers, 'selectScene');
+    const applyScene = vi.spyOn(mapLayers, 'applyScene');
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={new FakeMapFacade()}
+            mapCanvas={<div>Pending shared scene map</div>}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+    await waitFor(() => {
+      expect(getScene).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    await act(async () => {
+      resolveScene(sharedScene);
+      await Promise.resolve();
+    });
+
+    expect(selectScene).not.toHaveBeenCalled();
+    expect(applyScene).not.toHaveBeenCalled();
+    expect(mapLayerStore.getState().selectedScene).toBeNull();
+  });
+
+  it('discards a queued shared scene when Mosaic becomes active', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&scene=sentinel-2-l2a%3Ashared-scene',
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene: () => Promise.resolve(sharedScene),
+      },
+    });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const applyScene = vi.spyOn(mapLayers, 'applyScene');
+    const facade = new FakeMapFacade();
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={facade}
+            mapCanvas={<div>Queued shared scene map</div>}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+    await waitFor(() => {
+      expect(mapLayerStore.getState().selectedScene).toEqual(sharedScene);
+    });
+    expect(applyScene).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(applyScene).not.toHaveBeenCalled();
+    expect(mapLayerStore.getState().selectedScene).toBeNull();
   });
 
   it('delivers serializable search navigation commands through the facade', async () => {
@@ -1108,6 +1312,51 @@ describe('MapWorkspace', () => {
 
     await screen.findByText('Hidden Sentinel map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+
+    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
+  });
+
+  it('recognizes a hidden Mosaic and reapplies the Sentinel preset', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': false,
+          'napr-orthophoto': false,
+          'satellite-imagery': false,
+        },
+        appliedMosaic: {
+          status: 'ready',
+          selectedDate: '2026-07-20',
+          sceneKeys: ['sentinel-2-l2a:mosaic-scene'],
+          coveragePercent: 100,
+          oldestAcquisitionDate: '2026-07-20',
+        },
+      });
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Hidden Mosaic map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Hidden Mosaic map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Vector OSM' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
 
     expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');

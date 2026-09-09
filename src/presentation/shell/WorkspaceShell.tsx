@@ -30,6 +30,7 @@ import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
+import { SatelliteMosaicProvider } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
 import { WorkspaceSidebar } from '@/presentation/shell/WorkspaceSidebar';
@@ -908,7 +909,9 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
   return (
     <TracksWorkspaceProvider>
       <MarkersWorkspaceProvider>
-        <WorkspaceShellContent {...props} />
+        <SatelliteMosaicProvider>
+          <WorkspaceShellContent {...props} />
+        </SatelliteMosaicProvider>
       </MarkersWorkspaceProvider>
     </TracksWorkspaceProvider>
   );

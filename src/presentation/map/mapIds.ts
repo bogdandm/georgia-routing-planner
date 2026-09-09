@@ -16,6 +16,11 @@ export const mapSourceIds = {
   savedMarkers: 'saved-markers',
 } as const;
 
+export const sentinelMosaicIdPrefixes = {
+  source: 'sentinel-mosaic-source-',
+  layer: 'sentinel-mosaic-layer-',
+} as const;
+
 export const naprOrthophotoSourceIds = {
   national2016To2017: 'napr-orthophoto-2016-2017',
   westernGeorgia2020: 'napr-orthophoto-2020-west',

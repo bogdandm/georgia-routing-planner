@@ -1,5 +1,8 @@
-import type { MapFacade } from '@/presentation/map/MapFacade';
-import type { MapInteractionMode } from '@/presentation/map/MapFacade';
+import type {
+  MapFacade,
+  MapInteractionMode,
+  MapViewportMovement,
+} from '@/presentation/map/MapFacade';
 import {
   defaultGeorgiaCamera,
   type MapCoordinate,
@@ -18,6 +21,7 @@ import {
 export class FakeMapFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
+  readonly #movementListeners = new Set<(event: MapViewportMovement) => void>();
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
@@ -60,6 +64,13 @@ export class FakeMapFacade implements MapFacade {
     recoverableFailures: [],
     message: null,
   };
+  public viewportSnapshot: MapViewportSnapshot = {
+    bounds: { west: 42.8, south: 41.6, east: 44, north: 42.6 },
+    center: {
+      longitude: defaultGeorgiaCamera.longitude,
+      latitude: defaultGeorgiaCamera.latitude,
+    },
+  };
 
   public subscribe(listener: () => void): () => void {
     this.#listeners.add(listener);
@@ -67,6 +78,15 @@ export class FakeMapFacade implements MapFacade {
       this.#listeners.delete(listener);
     };
   }
+  public subscribeViewportMovement(
+    listener: (event: MapViewportMovement) => void,
+  ): () => void {
+    this.#movementListeners.add(listener);
+    return () => {
+      this.#movementListeners.delete(listener);
+    };
+  }
+
   public subscribePlanningClicks(
     listener: (coordinate: MapCoordinate) => void,
   ): () => void {
@@ -85,13 +105,7 @@ export class FakeMapFacade implements MapFacade {
   }
 
   public getViewportSnapshot(): MapViewportSnapshot {
-    return {
-      bounds: { west: 42.8, south: 41.6, east: 44, north: 42.6 },
-      center: {
-        longitude: this.snapshot.camera.longitude,
-        latitude: this.snapshot.camera.latitude,
-      },
-    };
+    return this.viewportSnapshot;
   }
 
   public getDiagnosticsSnapshot(): MapDiagnosticsSnapshot {
@@ -177,11 +191,25 @@ export class FakeMapFacade implements MapFacade {
     this.destroyed = true;
     this.#listeners.clear();
     this.#planningClickListeners.clear();
+    this.#movementListeners.clear();
   }
 
   public setSnapshot(changed: Partial<MapDiagnosticsSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...changed };
     this.notify();
+  }
+
+  public emitViewportMoving(): void {
+    for (const listener of this.#movementListeners) listener({ phase: 'moving' });
+  }
+
+  public emitViewportSettled(
+    viewport: MapViewportSnapshot = this.viewportSnapshot,
+  ): void {
+    this.viewportSnapshot = viewport;
+    for (const listener of this.#movementListeners) {
+      listener({ phase: 'settled', viewport });
+    }
   }
 
   private notify(): void {

@@ -46,6 +46,9 @@ importers:
       '@turf/point-to-line-distance':
         specifier: 7.3.5
         version: 7.3.5
+      '@turf/union':
+        specifier: 7.3.5
+        version: 7.3.5
       '@waysidemapping/pinhead':
         specifier: 15.25.0
         version: 15.25.0
@@ -1705,6 +1708,12 @@ packages:
     resolution:
       {
         integrity: sha512-dBFxmKrjRaAdwc4SCmGyAS2BDPCH35IBNl++Ypd1RB8JR2D3khl3zrTvxrlJ5qoN1WDvyPbvDYCrt2UnTX+8Nw==,
+      }
+
+  '@turf/union@7.3.5':
+    resolution:
+      {
+        integrity: sha512-/FSKhl+LX4+M7L/Trmiln0CDPWS8vCneGnQktt1o5XbCY/zIpH1JdxHEBFXhFZg4beAyXCz0uuxRyW9N/DH+KA==,
       }
 
   '@tybys/wasm-util@0.10.3':
@@ -5426,6 +5435,14 @@ snapshots:
       '@turf/helpers': 7.3.5
       '@turf/invariant': 7.3.5
       '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/union@7.3.5':
+    dependencies:
+      '@turf/helpers': 7.3.5
+      '@turf/meta': 7.3.5
+      '@types/geojson': 7946.0.16
+      polyclip-ts: 0.16.8
       tslib: 2.8.1
 
   '@tybys/wasm-util@0.10.3':

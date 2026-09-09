@@ -47,6 +47,30 @@ export type AppliedSatelliteImagerySnapshot =
       readonly message: string;
     };
 
+interface AppliedSatelliteMosaicFields {
+  readonly selectedDate: string;
+  readonly sceneKeys: readonly string[];
+  readonly coveragePercent: number;
+  readonly oldestAcquisitionDate: string | null;
+}
+
+export interface SatelliteMosaicRenderProgress {
+  readonly renderedSceneCount: number;
+  readonly totalSceneCount: number;
+}
+
+export type AppliedSatelliteMosaicSnapshot =
+  | { readonly status: 'empty' }
+  | ({
+      readonly status: 'loading';
+      readonly renderProgress: SatelliteMosaicRenderProgress | null;
+    } & AppliedSatelliteMosaicFields)
+  | ({ readonly status: 'ready' } & AppliedSatelliteMosaicFields)
+  | ({
+      readonly status: 'failed';
+      readonly message: string;
+    } & AppliedSatelliteMosaicFields);
+
 interface TerrainOverlaySnapshot {
   readonly initialized: boolean;
   readonly preferences: TerrainOverlayPreferences;
@@ -55,6 +79,7 @@ interface TerrainOverlaySnapshot {
 
 interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
+  readonly appliedMosaic: AppliedSatelliteMosaicSnapshot;
   readonly automaticAlternativeProviderState: 'inactive' | 'switching' | 'active';
   readonly errorMessage: string | null;
   readonly terrainComputeStatus: TerrainComputeStatus;
@@ -70,6 +95,7 @@ interface MapLayerState {
 
 const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
+  appliedMosaic: { status: 'empty' },
   automaticAlternativeProviderState: 'inactive',
   errorMessage: null,
   terrainComputeStatus: 'worker',

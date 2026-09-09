@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
-import { naprOrthophotoSourceIds } from '@/presentation/map/mapIds';
+import type { MapViewportMovement } from '@/presentation/map/MapFacade';
+import {
+  naprOrthophotoSourceIds,
+  sentinelMosaicIdPrefixes,
+} from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type TestListener = (event?: unknown) => void;
@@ -208,6 +212,7 @@ describe('MapLibreFacade', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const onCameraSettled = vi.fn();
+    const viewportMovement = vi.fn<(event: MapViewportMovement) => void>();
     const setTerrainInteractionActive = vi.fn();
     const layerController = {
       attach: vi.fn(),
@@ -227,6 +232,7 @@ describe('MapLibreFacade', () => {
       undefined,
       layerController,
     );
+    facade.subscribeViewportMovement(viewportMovement);
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
@@ -244,6 +250,23 @@ describe('MapLibreFacade', () => {
 
     expect(setTerrainInteractionActive).toHaveBeenNthCalledWith(1, true);
     expect(setTerrainInteractionActive).toHaveBeenNthCalledWith(2, false);
+    expect(viewportMovement.mock.calls.map(([event]) => event)).toEqual([
+      {
+        phase: 'settled',
+        viewport: {
+          bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
+          center: { longitude: 44.8, latitude: 41.7 },
+        },
+      },
+      { phase: 'moving' },
+      {
+        phase: 'settled',
+        viewport: {
+          bounds: { west: 44.2, south: 41.4, east: 45.4, north: 42.2 },
+          center: { longitude: 44.8, latitude: 41.7 },
+        },
+      },
+    ]);
 
     expect(facade.getDiagnosticsSnapshot()).toMatchObject({
       lifecycle: 'ready',
@@ -763,6 +786,40 @@ describe('MapLibreFacade', () => {
       expect(handleRasterSourceFailure).not.toHaveBeenCalled();
     },
   );
+
+  it('ignores late failures from removed Mosaic raster sources', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const handleRasterSourceFailure = vi.fn();
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      handleRasterSourceFailure,
+      handleRasterSourceData: vi.fn(() => false),
+      isRasterSourceRecoveryComplete: vi.fn(() => false),
+      handleRasterSourceRecovered: vi.fn(),
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+
+    nativeMap.fire('error', {
+      error: { message: 'A removed Mosaic tile failed late.' },
+      sourceId: `${sentinelMosaicIdPrefixes.source}removed`,
+    });
+
+    expect(facade.getDiagnosticsSnapshot()).toMatchObject({
+      lifecycle: 'ready',
+      recoverableFailures: [],
+    });
+    expect(handleRasterSourceFailure).not.toHaveBeenCalled();
+  });
 
   it('clears a cancelled source failure instead of leaving the map degraded', () => {
     const services = createTestServices();

@@ -30,12 +30,25 @@ import {
 
 interface EarthSearchRequestBody {
   readonly collections: readonly string[];
-  readonly intersects: {
-    readonly type: 'Point';
-    readonly coordinates: readonly [number, number];
-  };
+  readonly intersects:
+    | {
+        readonly type: 'Point';
+        readonly coordinates: readonly [number, number];
+      }
+    | {
+        readonly type: 'Polygon';
+        readonly coordinates: readonly [
+          readonly [
+            readonly [number, number],
+            readonly [number, number],
+            readonly [number, number],
+            readonly [number, number],
+            readonly [number, number],
+          ],
+        ];
+      };
   readonly datetime: string;
-  readonly query: Readonly<Record<'eo:cloud_cover', { readonly lte: number }>>;
+  readonly query?: Readonly<Record<'eo:cloud_cover', { readonly lte: number }>>;
   readonly sortby: readonly [{ readonly field: string; readonly direction: 'desc' }];
   readonly fields: {
     readonly include: readonly string[];
@@ -73,23 +86,42 @@ function createRequestBody(
   collection: string,
 ): EarthSearchRequestBody {
   const { criteria } = query;
-  return {
+  const { west, south, east, north } = criteria.viewport.bounds;
+  const intersects: EarthSearchRequestBody['intersects'] =
+    query.spatialScope === 'center'
+      ? {
+          type: 'Point',
+          coordinates: [
+            criteria.viewport.center.longitude,
+            criteria.viewport.center.latitude,
+          ],
+        }
+      : {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [west, south],
+              [east, south],
+              [east, north],
+              [west, north],
+              [west, south],
+            ],
+          ],
+        };
+  const body = {
     collections: [collection],
-    // Search only for scenes containing the immutable anchor. The full submitted
-    // viewport is intentionally retained for client-side coverage calculations.
-    intersects: {
-      type: 'Point',
-      coordinates: [
-        criteria.viewport.center.longitude,
-        criteria.viewport.center.latitude,
-      ],
-    },
+    intersects,
     datetime: `${criteria.startDate}T00:00:00.000Z/${criteria.endDate}T23:59:59.999Z`,
-    query: { 'eo:cloud_cover': { lte: criteria.maxCloudCoverPercent } },
     sortby: [{ field: 'properties.datetime', direction: 'desc' }],
     fields: { include: includedFields },
     // Keep provider pages small and follow validated next links under the hood.
     limit: Math.min(query.maximumItems, 100),
+  } satisfies EarthSearchRequestBody;
+
+  if (criteria.maxCloudCoverPercent === null) return body;
+  return {
+    ...body,
+    query: { 'eo:cloud_cover': { lte: criteria.maxCloudCoverPercent } },
   };
 }
 

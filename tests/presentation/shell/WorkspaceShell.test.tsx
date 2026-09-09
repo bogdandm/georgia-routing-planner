@@ -25,6 +25,7 @@ import {
   type SatelliteCatalogGateway,
   type SatelliteCatalogResult,
 } from '@/application/ports/SatelliteCatalogGateway';
+import type { SatelliteMosaicResult } from '@/application/satellite/SearchSatelliteMosaic';
 import type {
   UserDataService,
   UserDataSnapshot,
@@ -874,6 +875,208 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/Imported tracks will stay in this browser/u),
     ).not.toBeInTheDocument();
+  }, 10_000);
+  it('runs Mosaic from the fixed satellite header and retains it off-pane', async () => {
+    const user = userEvent.setup();
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const searchSatelliteMosaic = services.searchSatelliteMosaic;
+    expect(searchSatelliteMosaic).not.toBeNull();
+    if (searchSatelliteMosaic === null) return;
+    const scene = syntheticSatelliteScene('mosaic-scene', '2026-07-17T10:12:00.000Z');
+    services.mapViewport.settle(testViewport);
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+      terrainMode: 'flat',
+    });
+    const clearScene = vi
+      .spyOn(mapLayers, 'clearScene')
+      .mockReturnValue({ status: 'success' });
+    const clearMosaic = vi.spyOn(mapLayers, 'clearMosaic').mockImplementation(() => {
+      mapLayerStore.setState({ appliedMosaic: { status: 'empty' } });
+      return { status: 'success' };
+    });
+    const pruneMosaic = vi.spyOn(mapLayers, 'pruneMosaic');
+    vi.spyOn(mapLayers, 'beginMosaic').mockImplementation((selectedDate) => {
+      mapLayerStore.setState({
+        appliedMosaic: {
+          status: 'loading',
+          selectedDate,
+          sceneKeys: [],
+          coveragePercent: 0,
+          oldestAcquisitionDate: null,
+          renderProgress: null,
+        },
+      });
+      return { status: 'success' };
+    });
+    const applyMosaic = vi
+      .spyOn(mapLayers, 'applyMosaic')
+      .mockImplementation((_scenes, _viewport, selectedDate) => {
+        mapLayerStore.setState({
+          appliedMosaic: {
+            status: 'ready',
+            selectedDate,
+            sceneKeys: ['sentinel-2-l2a:mosaic-scene'],
+            coveragePercent: 100,
+            oldestAcquisitionDate: '2026-07-17',
+          },
+        });
+        return Promise.resolve({ status: 'success' });
+      });
+    const mosaicResult: SatelliteMosaicResult = {
+      scenes: [scene],
+      coveragePercent: 100,
+      oldestAcquisitionDate: '2026-07-17',
+      archiveExhausted: false,
+    };
+    const firstSearch = deferred<SatelliteMosaicResult>();
+    const searchMosaic = vi
+      .spyOn(searchSatelliteMosaic, 'execute')
+      .mockImplementationOnce(() => firstSearch.promise)
+      .mockResolvedValue(mosaicResult);
+
+    renderWorkspaceShell();
+
+    const mosaicToggle = screen.getByRole('button', { name: 'Mosaic' });
+    expect(mosaicToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(mosaicToggle.querySelector('svg')).toBeVisible();
+    await user.hover(mosaicToggle);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Switch to Sentinel Mosaic',
+    );
+    await user.click(mosaicToggle);
+
+    expect(clearScene).toHaveBeenCalledTimes(1);
+    expect(mosaicToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByRole('button', { name: 'Search images' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('slider', { name: 'Maximum cloud' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('All dates before it will be selected.')).toBeVisible();
+    expect(
+      screen.getByText(
+        'Imagery: Copernicus Sentinel data via Element 84 Earth Search.',
+      ),
+    ).toBeVisible();
+
+    const showMosaic = screen.getByRole('button', { name: 'Show mosaic' });
+    expect(showMosaic).toBeDisabled();
+    await user.click(screen.getByRole('gridcell', { name: '17 Jul 2026' }));
+    expect(
+      screen.getByRole('gridcell', {
+        name: '17 Jul 2026, included in Mosaic range, selected upper bound',
+      }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(showMosaic).toBeEnabled();
+    await user.click(showMosaic);
+
+    await waitFor(() => {
+      expect(searchMosaic).toHaveBeenCalledTimes(1);
+    });
+    expect(searchMosaic).toHaveBeenCalledWith(
+      { viewport: testViewport, selectedDate: '2026-07-17', productLevel: 'L2A' },
+      expect.any(AbortSignal),
+    );
+    const firstSignal = searchMosaic.mock.calls[0]?.[1];
+    expect(firstSignal).toBeInstanceOf(AbortSignal);
+    expect(screen.getByText('Searching Sentinel archive…')).toBeVisible();
+    act(() => {
+      mapLayerStore.setState({
+        appliedMosaic: {
+          status: 'loading',
+          selectedDate: '2026-07-17',
+          sceneKeys: ['sentinel-2-l2a:mosaic-scene'],
+          coveragePercent: 100,
+          oldestAcquisitionDate: '2026-07-17',
+          renderProgress: { renderedSceneCount: 4, totalSceneCount: 29 },
+        },
+      });
+    });
+    expect(
+      screen.getByRole('progressbar', { name: 'Rendering Mosaic images' }),
+    ).toBeVisible();
+    expect(screen.getByText('Rendered images: 4')).toBeVisible();
+    await user.click(screen.getByRole('gridcell', { name: '18 Jul 2026' }));
+    expect(
+      screen.getByRole('gridcell', {
+        name: '18 Jul 2026, included in Mosaic range, selected upper bound',
+      }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(firstSignal?.aborted).toBe(true);
+    expect(clearMosaic).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('progressbar', { name: 'Rendering Mosaic images' }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(showMosaic).toBeEnabled();
+    });
+    await user.click(showMosaic);
+    await waitFor(() => {
+      expect(searchMosaic).toHaveBeenCalledTimes(2);
+      expect(applyMosaic).toHaveBeenCalledWith(
+        [scene],
+        testViewport,
+        '2026-07-18',
+        expect.any(AbortSignal),
+      );
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Scene footprint' })).toBeDisabled();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const refreshedViewport = {
+      bounds: { west: 44.2, south: 42.1, east: 44.8, north: 42.7 },
+      center: { longitude: 44.5, latitude: 42.4 },
+    } as const;
+    pruneMosaic.mockClear();
+    act(() => {
+      services.mapViewport.markMoving();
+    });
+    act(() => {
+      services.mapViewport.settle(refreshedViewport);
+    });
+    await waitFor(() => {
+      expect(searchMosaic).toHaveBeenCalledTimes(3);
+      expect(applyMosaic).toHaveBeenCalledWith(
+        [scene],
+        refreshedViewport,
+        '2026-07-18',
+        expect.any(AbortSignal),
+      );
+    });
+    expect(searchMosaic.mock.calls[2]?.[0]).toMatchObject({
+      selectedDate: '2026-07-18',
+      viewport: refreshedViewport,
+    });
+    expect(pruneMosaic).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Scene footprint' })).toBeDisabled();
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+    expect(screen.getByText('Coverage: 100.0%')).toBeVisible();
+    expect(screen.getByText('Rendered images: 1')).toBeVisible();
+    expect(screen.getByText('Date range: 17 Jul 2026 to 18 Jul 2026')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Mosaic' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Mosaic' }));
+    expect(clearMosaic).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole('button', { name: 'Mosaic' }));
+    expect(screen.getByRole('button', { name: 'Show mosaic' })).toBeDisabled();
+    expect(screen.getByRole('gridcell', { name: '17 Jul 2026' })).not.toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   }, 10_000);
 
   it('sorts saved tracks within favorite groups and persists the selected order', async () => {
@@ -4676,6 +4879,37 @@ describe('WorkspaceShell', () => {
     expect(screen.getByLabelText('Terrain compute queue state')).toHaveTextContent(
       'Terrain worker · queue 4/32 · 1 active',
     );
+  });
+
+  it('shows determinate Mosaic render progress in the map Ready area', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    mapLayerStore.setState({
+      appliedMosaic: {
+        status: 'loading',
+        selectedDate: '2026-07-20',
+        sceneKeys: ['sentinel-2-l2a:first', 'sentinel-2-l2a:second'],
+        coveragePercent: 25,
+        oldestAcquisitionDate: '2026-07-20',
+        renderProgress: { renderedSceneCount: 2, totalSceneCount: 8 },
+      },
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Rendering Mosaic images · 2/8',
+    );
+    expect(
+      screen.getByRole('progressbar', { name: 'Rendering Mosaic images' }),
+    ).toHaveAttribute('aria-valuenow', '25');
   });
 
   it('replaces Ready with a warning after automatic provider fallback', () => {

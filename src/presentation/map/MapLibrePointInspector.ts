@@ -170,7 +170,6 @@ export class MapLibrePointInspector implements PointInspectorPopup {
     this.#anchor.className = 'map-point-inspector__anchor';
     this.#anchor.setAttribute('aria-hidden', 'true');
     this.#popup = new Popup({
-      anchor: 'bottom',
       closeButton: false,
       closeOnClick: false,
       closeOnMove: false,

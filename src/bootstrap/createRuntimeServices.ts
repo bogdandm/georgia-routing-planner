@@ -6,6 +6,7 @@ import type { MapCameraRepository } from '@/application/ports/MapCameraRepositor
 import type { SavedMarkerRepository } from '@/application/ports/SavedMarkerRepository';
 import { SearchPlaces } from '@/application/map/SearchPlaces';
 import type { SatelliteCatalogGateway } from '@/application/ports/SatelliteCatalogGateway';
+import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import type { TrackContentHasher } from '@/application/ports/TrackContentHasher';
 import type { TrailRouter } from '@/application/ports/TrailRouter';
@@ -30,6 +31,7 @@ import {
   loadGeocodingProviderConfiguration,
   type GeocodingProviderConfigurationResult,
 } from '@/bootstrap/configuration/GeocodingProviderConfiguration';
+import { weatherProviderConfiguration } from '@/bootstrap/configuration/WeatherProviderConfiguration';
 import { DiagnosticsService } from '@/diagnostics/export/DiagnosticsService';
 import { BoundedDiagnosticLogger } from '@/diagnostics/logging/BoundedDiagnosticLogger';
 import { HealthCheckService } from '@/diagnostics/snapshots/HealthCheckService';
@@ -46,6 +48,7 @@ import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
 import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
+import { OpenMeteoWeatherForecastGateway } from '@/infrastructure/weather/OpenMeteoWeatherForecastGateway';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
@@ -66,6 +69,7 @@ export interface RuntimeServices {
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
+  readonly pointWeatherForecast: GetPointWeatherForecast;
   readonly geocodingProviderConfiguration: GeocodingProviderConfigurationResult;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
   readonly mapCameraRepository: MapCameraRepository;
@@ -226,6 +230,18 @@ export function createRuntimeServices(): RuntimeServices {
           filteredTerrariumTiles,
         )
       : null;
+  const pointWeatherForecast = new GetPointWeatherForecast(
+    new OpenMeteoWeatherForecastGateway(
+      httpClient,
+      weatherProviderConfiguration,
+      clock,
+      idGenerator,
+    ),
+    elevationProvider,
+    logger,
+    idGenerator,
+    clock,
+  );
   const geocodingConfiguration = loadGeocodingProviderConfiguration(
     import.meta.env.VITE_GEOCODING_PROVIDER_CONFIGURATION,
   );
@@ -309,6 +325,7 @@ export function createRuntimeServices(): RuntimeServices {
     idGenerator,
     logger,
     elevationProvider,
+    pointWeatherForecast,
     geocodingProviderConfiguration: geocodingConfiguration,
     mapCameraRepository: database,
     mapDiagnostics,

@@ -936,6 +936,7 @@ export class MapLibreLayerController {
       return this.failMosaic(selectedDate, viewport, 'The map is not ready yet.');
     }
     this.publishMosaicSnapshot('loading', selectedDate, viewport);
+    this.applyMapVisualMode();
     return { status: 'success' };
   }
 
@@ -963,6 +964,7 @@ export class MapLibreLayerController {
     this.#mosaicViewport = viewport;
     this.pruneMosaicEntries(viewport);
     this.publishMosaicSnapshot('failed', selectedDate, viewport, message);
+    this.applyMapVisualMode();
     return { status: 'failed', message };
   }
 
@@ -1022,6 +1024,7 @@ export class MapLibreLayerController {
     this.#activeApplyController?.abort();
     this.#activeApplyController = null;
     this.#stagingScene = null;
+    this.#stagingSourceId = null;
     this.#applySequence += 1;
     const map = this.#map;
     if (map !== null) {
@@ -1453,6 +1456,7 @@ export class MapLibreLayerController {
 
     const slot = this.#activeSlot === rasterSlots[0] ? rasterSlots[1] : rasterSlots[0];
     this.#stagingSourceId = slot.sourceId;
+    this.applyMapVisualMode();
     try {
       operation.beginStep('select-visual-asset');
       this.satelliteCogTiles.registerScene(sceneKey, scene.visualAsset);
@@ -1573,6 +1577,7 @@ export class MapLibreLayerController {
         this.#stagingSourceId = null;
         this.#stagingScene = null;
         this.removeSlot(map, slot);
+        this.applyMapVisualMode();
       }
       if (signal.aborted || error instanceof DOMException) {
         operation.cancel();
@@ -1907,9 +1912,11 @@ export class MapLibreLayerController {
 
     if (firstFailure !== null) {
       this.publishMosaicSnapshot('failed', selectedDate, viewport, firstFailure);
+      this.applyMapVisualMode();
       return { status: 'failed', message: firstFailure };
     }
     this.publishMosaicSnapshot('ready', selectedDate, viewport);
+    this.applyMapVisualMode();
     return { status: 'success' };
   }
 
@@ -3129,9 +3136,11 @@ export class MapLibreLayerController {
 
   private currentMapVisualMode(): MapVisualMode {
     const state = mapLayerStore.getState();
-    const sentinelReadyAndVisible =
+    const sentinelLoadingOrReadyAndVisible =
       state.visibility['satellite-imagery'] &&
-      (this.#progressiveRasterSourceId !== null ||
+      (this.#stagingSourceId !== null ||
+        state.appliedMosaic.status === 'loading' ||
+        this.#progressiveRasterSourceId !== null ||
         [...this.#mosaicEntries.values()].some(
           (entry) => !this.#waitingForRasterData.has(entry.slot.sourceId),
         ) ||
@@ -3145,7 +3154,7 @@ export class MapLibreLayerController {
         satelliteBasemapSourceIds
           .filter((sourceId) => sourceId !== mapSourceIds.satelliteBasemap)
           .some((sourceId) => this.#readySatelliteBasemapSourceIds.has(sourceId)));
-    return sentinelReadyAndVisible || staticBasemapReadyAndVisible
+    return sentinelLoadingOrReadyAndVisible || staticBasemapReadyAndVisible
       ? 'satellite'
       : 'vector';
   }

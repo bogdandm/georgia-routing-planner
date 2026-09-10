@@ -1569,6 +1569,9 @@ describe('MapLibreLayerController', () => {
       status: 'failed',
       previousSceneKey: null,
     });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
     expect(JSON.stringify(services.logger.getEvents())).not.toContain(
       'private provider detail',
     );
@@ -1596,6 +1599,9 @@ describe('MapLibreLayerController', () => {
 
     await expect(staleRequest).resolves.toEqual({ status: 'cancelled' });
     expect(map.layers.has(sentinelMapLayerIds.rasterA)).toBe(true);
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
     map.sourceLoaded = true;
     map.fire('sourcedata', {
       sourceId: 'sentinel-raster-a',
@@ -1729,10 +1735,9 @@ describe('MapLibreLayerController', () => {
     await controller.setRenderingMode('direct', new AbortController().signal);
     map.sourceLoaded = false;
 
-    const abortController = new AbortController();
     const request = controller.applyScene(
       scene('slow-direct-render'),
-      abortController.signal,
+      new AbortController().signal,
     );
     expect(
       (
@@ -1741,11 +1746,11 @@ describe('MapLibreLayerController', () => {
       )?.['raster-opacity'],
     ).toBe(1);
     expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
-      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
     );
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(mapLayerStore.getState().appliedImagery.status).toBe('loading');
-    abortController.abort();
+    controller.clearScene();
     await expect(request).resolves.toEqual({ status: 'cancelled' });
     expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
       mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
@@ -1770,7 +1775,7 @@ describe('MapLibreLayerController', () => {
       map.paintProperties.get(`${sentinelMapLayerIds.rasterA}.raster-opacity`),
     ).toBe(1);
     expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
-      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
     );
     map.fire('error', {
       sourceId: 'sentinel-raster-a',
@@ -1853,7 +1858,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has('sentinel-raster-a')).toBe(true);
     expect(map.sources.has('sentinel-raster-b')).toBe(false);
     expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
-      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
     );
     map.sourceLoaded = true;
     map.fire('sourcedata', {
@@ -1913,7 +1918,7 @@ describe('MapLibreLayerController', () => {
       map.paintProperties.get(`${sentinelMapLayerIds.rasterA}.raster-opacity`),
     ).toBe(1);
     expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
-      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
     );
     expect(
       (map.sources.get('sentinel-raster-a') as { readonly tiles: readonly string[] })
@@ -2414,6 +2419,19 @@ describe('MapLibreLayerController', () => {
 
     expect(map.sources.has(source1)).toBe(true);
     expect(map.sources.has(source2)).toBe(true);
+    for (const layerId of [
+      `${sentinelMosaicIdPrefixes.layer}1`,
+      `${sentinelMosaicIdPrefixes.layer}2`,
+    ]) {
+      expect(
+        (map.layers.get(layerId)?.paint as Record<string, unknown> | undefined)?.[
+          'raster-opacity'
+        ],
+      ).toBe(1);
+    }
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
     expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
       status: 'loading',
       renderProgress: { renderedSceneCount: 0, totalSceneCount: 2 },
@@ -2659,6 +2677,56 @@ describe('MapLibreLayerController', () => {
       sceneKeys: [],
       coveragePercent: 0,
     });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
+  });
+
+  it('restores vector paints when an initial Mosaic cannot add a raster source', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    map.failNextRasterSourceAdd = true;
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await expect(
+      controller.applyMosaic(
+        [scene('unavailable')],
+        mosaicViewport,
+        '2026-07-20',
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({ status: 'failed' });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
+  });
+
+  it('restores vector paints when an initial Mosaic has no scenes', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.beginMosaic('2026-07-20', mosaicViewport);
+    await expect(
+      controller.applyMosaic(
+        [],
+        mosaicViewport,
+        '2026-07-20',
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({ status: 'success' });
+    expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
+      status: 'ready',
+      sceneKeys: [],
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
+    );
   });
 
   it('retains ready imagery and actual coverage when a mosaic replacement fails', async () => {

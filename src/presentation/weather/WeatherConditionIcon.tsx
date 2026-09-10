@@ -9,15 +9,87 @@ import SevereColdOutlinedIcon from '@mui/icons-material/SevereColdOutlined';
 import ThunderstormOutlinedIcon from '@mui/icons-material/ThunderstormOutlined';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
-import { Box, type SvgIconProps } from '@mui/material';
-import type { ReactElement } from 'react';
+import { Box, ClickAwayListener, Tooltip, type SvgIconProps } from '@mui/material';
+import { useRef, useState, type ReactElement } from 'react';
 
-import type { WeatherIcon } from '@/domain/weather/aggregateDailyWeatherStatus';
+import type {
+  VisibilityStatus,
+  WeatherIcon,
+} from '@/domain/weather/aggregateDailyWeatherStatus';
+import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 
 interface WeatherConditionIconProps {
   readonly code: number;
   readonly isDay: boolean;
   readonly size?: number;
+}
+
+interface WeatherIconTooltipProps {
+  readonly children: ReactElement;
+  readonly label: string;
+}
+
+export function WeatherIconTooltip({ children, label }: WeatherIconTooltipProps) {
+  const [open, setOpen] = useState(false);
+  const touchPointer = useRef(false);
+
+  return (
+    <ClickAwayListener
+      onClickAway={() => {
+        setOpen(false);
+      }}
+    >
+      <Tooltip
+        title={label}
+        arrow
+        open={open}
+        onOpen={() => {
+          setOpen(true);
+        }}
+        onClose={() => {
+          setOpen(false);
+        }}
+        disableFocusListener
+        disableTouchListener
+      >
+        <Box
+          component="span"
+          aria-label={label}
+          tabIndex={0}
+          onFocus={() => {
+            if (!touchPointer.current) setOpen(true);
+          }}
+          onBlur={() => {
+            setOpen(false);
+          }}
+          onPointerDown={(event) => {
+            touchPointer.current = event.pointerType === 'touch';
+          }}
+          onPointerUp={(event) => {
+            if (event.pointerType !== 'touch') return;
+            setOpen((isOpen) => !isOpen);
+            queueMicrotask(() => {
+              touchPointer.current = false;
+            });
+          }}
+          onPointerCancel={() => {
+            touchPointer.current = false;
+            setOpen(false);
+          }}
+          sx={{
+            display: 'inline-grid',
+            placeItems: 'center',
+            flexShrink: 0,
+            lineHeight: 0,
+            cursor: 'help',
+            outlineOffset: 2,
+          }}
+        >
+          {children}
+        </Box>
+      </Tooltip>
+    </ClickAwayListener>
+  );
 }
 
 function iconForWmoCode(code: number, isDay: boolean): ReactElement<SvgIconProps> {
@@ -56,19 +128,21 @@ export function WeatherConditionIcon({
   size = 28,
 }: WeatherConditionIconProps) {
   return (
-    <Box
-      aria-hidden="true"
-      sx={{
-        width: size,
-        height: size,
-        display: 'grid',
-        placeItems: 'center',
-        flexShrink: 0,
-        '& .MuiSvgIcon-root': { fontSize: size },
-      }}
-    >
-      {iconForWmoCode(code, isDay)}
-    </Box>
+    <WeatherIconTooltip label={describeWmoWeatherCode(code)}>
+      <Box
+        aria-hidden="true"
+        sx={{
+          width: size,
+          height: size,
+          display: 'grid',
+          placeItems: 'center',
+          flexShrink: 0,
+          '& .MuiSvgIcon-root': { fontSize: size },
+        }}
+      >
+        {iconForWmoCode(code, isDay)}
+      </Box>
+    </WeatherIconTooltip>
   );
 }
 
@@ -87,7 +161,13 @@ function layerSx(
   };
 }
 
-export function DailyWeatherIcon({ icon }: { readonly icon: WeatherIcon }) {
+export function DailyWeatherIcon({
+  icon,
+  label,
+}: {
+  readonly icon: WeatherIcon;
+  readonly label: string;
+}) {
   const skyLayers: ReactElement[] = [];
   switch (icon.sky) {
     case 'clear':
@@ -131,13 +211,15 @@ export function DailyWeatherIcon({ icon }: { readonly icon: WeatherIcon }) {
   switch (icon.phenomenon) {
     case null:
       break;
-    case 'light_rain':
+    case 'isolated_showers':
+    case 'showers':
+    case 'occasional_rain':
     case 'rain':
     case 'heavy_rain':
-    case 'showers':
       phenomenon = <WaterDropOutlinedIcon sx={layerSx(15, 18, 21, 'info.main')} />;
       break;
     case 'snow_showers':
+    case 'occasional_snow':
     case 'snow':
       phenomenon = <AcUnitOutlinedIcon sx={layerSx(16, 18, 20, 'info.light')} />;
       break;
@@ -154,21 +236,38 @@ export function DailyWeatherIcon({ icon }: { readonly icon: WeatherIcon }) {
       break;
   }
 
-  const visibility =
-    icon.visibility === 'fog' ? (
-      <FoggyIcon sx={layerSx(19, 0, 18, 'text.secondary')} />
-    ) : icon.visibility === 'haze' || icon.visibility === 'poor' ? (
-      <AirOutlinedIcon sx={layerSx(17, 0, 20, 'text.secondary')} />
-    ) : null;
+  return (
+    <WeatherIconTooltip label={label}>
+      <Box
+        aria-hidden="true"
+        sx={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}
+      >
+        {skyLayers}
+        {phenomenon}
+      </Box>
+    </WeatherIconTooltip>
+  );
+}
+
+export function VisibilityStatusIcon({
+  status,
+}: {
+  readonly status: VisibilityStatus;
+}) {
+  if (status.icon === null || status.label === null) return null;
 
   return (
-    <Box
-      aria-hidden="true"
-      sx={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}
-    >
-      {skyLayers}
-      {phenomenon}
-      {visibility}
-    </Box>
+    <WeatherIconTooltip label={status.label}>
+      <Box
+        aria-hidden="true"
+        sx={{ display: 'inline-grid', placeItems: 'center', width: 16, height: 16 }}
+      >
+        {status.icon === 'fog' ? (
+          <FoggyIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+        ) : (
+          <AirOutlinedIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
+        )}
+      </Box>
+    </WeatherIconTooltip>
   );
 }

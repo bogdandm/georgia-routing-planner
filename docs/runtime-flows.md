@@ -739,11 +739,13 @@ No forecast state is written to Zustand, IndexedDB, or a share URL.
 
 `GetPointWeatherForecast` first asks the existing local terrain provider for the clicked
 point. A finite sample is sent as the forecast elevation; otherwise the Open-Meteo
-response elevation is retained and disclosed as the fallback. The gateway requests
-`timezone=auto`, so hourly grouping, day labels, and model-update formatting follow the
-selected location rather than the browser. Only hourly values are requested. The
-application derives all seven day rows and their daylight temperature/wind ranges
-locally; it never requests provider `daily` values or precipitation probability.
+response elevation is retained. The gateway requests `timezone=auto`, so hourly
+grouping, day labels, and model-update formatting follow the selected location rather
+than the browser. Only hourly values are requested. The application derives all seven
+day rows, their daylight temperature/wind ranges, and complete daylight precipitation
+locally. Primary sky and precipitation use per-hour duration and dominance; visibility
+is a separate severity and daylight-period result and cannot replace primary weather.
+The application never requests provider `daily` values or precipitation probability.
 
 The same primary click queues point inspection. Weather explicitly refreshes that popup
 for the selected coordinate instead of using the ordinary second-click close behavior.

@@ -197,7 +197,7 @@ describe('GetPointWeatherForecast', () => {
       daylightWindSpeedMaxKmh: 18,
       daylightPrecipitationMm: 1,
       status: {
-        precipitation: 'rain',
+        primary: { precipitation: 'occasional_rain' },
         debug: { daylightHours: 14, precipTotal: 1 },
       },
     });

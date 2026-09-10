@@ -3,24 +3,42 @@ export type Sky =
 
 export type Precipitation =
   | 'none'
-  | 'light_rain'
+  | 'isolated_showers'
   | 'showers'
+  | 'occasional_rain'
   | 'rain'
   | 'heavy_rain'
   | 'snow_showers'
+  | 'occasional_snow'
   | 'snow'
   | 'mixed'
   | 'freezing';
 
 export type Visibility = 'normal' | 'haze' | 'poor' | 'fog';
 
+export type VisibilityPeriod =
+  | 'none'
+  | 'brief'
+  | 'morning'
+  | 'afternoon'
+  | 'evening'
+  | 'intermittent'
+  | 'most_of_day';
+
 export interface WeatherIcon {
   readonly sky: Sky;
   readonly phenomenon: Exclude<Precipitation, 'none'> | null;
-  readonly visibility: Exclude<Visibility, 'normal'> | null;
+}
+
+export interface VisibilityStatus {
+  readonly level: Visibility;
+  readonly period: VisibilityPeriod;
+  readonly label: string | null;
+  readonly icon: Exclude<Visibility, 'normal'> | null;
 }
 
 export interface DailyWeatherHour {
+  readonly time: string;
   readonly precipitationMm: number;
   readonly rainMm: number;
   readonly showersMm: number;
@@ -30,6 +48,14 @@ export interface DailyWeatherHour {
   readonly cloudCoverPercent: number;
   readonly visibilityMeters: number;
   readonly isDay: boolean;
+}
+
+export interface VisibilityDurationDebug {
+  readonly affectedHours: number;
+  readonly affectedFraction: number;
+  readonly longestAffectedRun: number;
+  readonly firstAffectedHour: string | null;
+  readonly lastAffectedHour: string | null;
 }
 
 export interface DailyWeatherStatusDebug {
@@ -42,28 +68,32 @@ export interface DailyWeatherStatusDebug {
   readonly showersTotal: number;
   readonly snowfallTotal: number;
   readonly longestWetRun: number;
-  readonly longestFogRun: number;
-  readonly fogFraction: number;
-  readonly hazeFraction: number;
-  readonly medianVisibility: number;
-  readonly hazeMedianVisibility: number;
-  readonly minVisibility: number;
-  readonly fractionBelow10km: number;
-  readonly fractionBelow5km: number;
-  readonly fractionBelow1km: number;
+  readonly clearFraction: number;
+  readonly mostlyClearFraction: number;
+  readonly partlyCloudyFraction: number;
+  readonly mostlyCloudyFraction: number;
+  readonly overcastFraction: number;
+  readonly sunnyFraction: number;
+  readonly cloudyFraction: number;
+  readonly clearishFraction: number;
   readonly meanCloudCover: number;
   readonly showerRatio: number;
   readonly mixedHours: number;
   readonly snowTypeHours: number;
   readonly freezingHours: number;
+  readonly visibility: Readonly<
+    Record<Exclude<Visibility, 'normal'>, VisibilityDurationDebug>
+  >;
 }
 
 export interface DailyWeatherStatus {
-  readonly sky: Sky;
-  readonly precipitation: Precipitation;
-  readonly visibility: Visibility;
-  readonly label: string;
-  readonly icon: WeatherIcon;
+  readonly primary: {
+    readonly sky: Sky;
+    readonly precipitation: Precipitation;
+    readonly label: string;
+    readonly icon: WeatherIcon;
+  };
+  readonly visibility: VisibilityStatus;
   readonly debug: DailyWeatherStatusDebug;
 }
 
@@ -71,46 +101,38 @@ export const DAILY_WEATHER_STATUS_THRESHOLDS = {
   meaningfulWetMm: 0.1,
   traceTotalMm: 0.2,
   traceMaximumWetHours: 1,
-  fogVisibilityMeters: 1_000,
-  hazeVisibilityMeters: 10_000,
   clearCloudCoverMaximum: 20,
   mostlyClearCloudCoverMaximum: 40,
   partlyCloudyCloudCoverMaximum: 65,
   mostlyCloudyCloudCoverMaximum: 85,
+  clearFractionMinimum: 0.75,
+  clearCloudyFractionMaximum: 0.15,
+  mostlyClearSunnyFractionMinimum: 0.65,
+  overcastFractionMinimum: 0.7,
+  mostlyCloudyFractionMinimum: 0.65,
   ratioEpsilonMm: 0.000_001,
   mixedWetHourFraction: 0.25,
   snowDominanceWetHourFraction: 0.5,
-  intermittentWetFractionMaximum: 0.35,
+  isolatedWetFractionMaximum: 0.2,
+  isolatedWetRunMaximum: 1,
+  intermittentWetFractionMaximum: 0.3,
   intermittentWetRunMaximum: 2,
   showerRatioMinimum: 0.4,
-  showerWetFractionMaximum: 0.5,
+  showerWetFractionMaximum: 0.45,
   showerWetRunMaximum: 2,
-  lightRainTotalMm: 1,
-  lightRainHourlyMaximumMm: 0.5,
   heavyRainHourlyMinimumMm: 4,
   heavyRainTotalMinimumMm: 12,
-  fogFractionMinimum: 0.25,
-  fogRunMinimum: 2,
-  fogMedianVisibilityMeters: 1_000,
-  poorMedianVisibilityMeters: 5_000,
-  poorFractionBelow5kmMinimum: 0.33,
-  hazeMedianVisibilityMeters: 10_000,
-  hazeFractionMinimum: 0.33,
+  fogVisibilityMeters: 1_000,
+  poorVisibilityMeters: 5_000,
+  hazeVisibilityMeters: 10_000,
+  visibilitySignificantFractionMinimum: 0.25,
+  visibilitySignificantRunMinimum: 2,
+  visibilityMostOfDayFractionMinimum: 0.6,
+  visibilitySegmentFractionMinimum: 2 / 3,
 } as const;
 
 function mean(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0) / values.length;
-}
-
-function median(values: readonly number[]): number {
-  const ordered = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(ordered.length / 2);
-  const middleValue = ordered[middle];
-  if (middleValue === undefined) throw new RangeError('Median requires a value.');
-  if (ordered.length % 2 === 1) return middleValue;
-  const previousValue = ordered[middle - 1];
-  if (previousValue === undefined) throw new RangeError('Median requires two values.');
-  return (previousValue + middleValue) / 2;
 }
 
 function longestRun<T>(values: readonly T[], matches: (value: T) => boolean): number {
@@ -127,20 +149,85 @@ function longestRun<T>(values: readonly T[], matches: (value: T) => boolean): nu
   return longest;
 }
 
-function classifySky(meanCloudCover: number): Sky {
-  if (meanCloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.clearCloudCoverMaximum) {
+function classifyHourlySky(cloudCover: number): Sky {
+  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.clearCloudCoverMaximum) {
     return 'clear';
   }
-  if (meanCloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyClearCloudCoverMaximum) {
+  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyClearCloudCoverMaximum) {
     return 'mostly_clear';
   }
-  if (meanCloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.partlyCloudyCloudCoverMaximum) {
+  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.partlyCloudyCloudCoverMaximum) {
     return 'partly_cloudy';
   }
-  if (meanCloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyCloudyCloudCoverMaximum) {
+  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyCloudyCloudCoverMaximum) {
     return 'mostly_cloudy';
   }
   return 'overcast';
+}
+
+interface SkyDistribution {
+  readonly clearFraction: number;
+  readonly mostlyClearFraction: number;
+  readonly partlyCloudyFraction: number;
+  readonly mostlyCloudyFraction: number;
+  readonly overcastFraction: number;
+  readonly sunnyFraction: number;
+  readonly cloudyFraction: number;
+  readonly clearishFraction: number;
+}
+
+function classifySky(hours: readonly DailyWeatherHour[]): {
+  readonly sky: Sky;
+  readonly distribution: SkyDistribution;
+} {
+  const hourlySkies = hours.map((hour) => classifyHourlySky(hour.cloudCoverPercent));
+  const fraction = (sky: Sky) =>
+    hourlySkies.filter((hourlySky) => hourlySky === sky).length / hourlySkies.length;
+  const clearFraction = fraction('clear');
+  const mostlyClearFraction = fraction('mostly_clear');
+  const partlyCloudyFraction = fraction('partly_cloudy');
+  const mostlyCloudyFraction = fraction('mostly_cloudy');
+  const overcastFraction = fraction('overcast');
+  const sunnyFraction = clearFraction + mostlyClearFraction;
+  const cloudyFraction = mostlyCloudyFraction + overcastFraction;
+  const clearishFraction =
+    clearFraction + mostlyClearFraction + partlyCloudyFraction * 0.5;
+
+  let sky: Sky;
+  if (
+    clearFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.clearFractionMinimum &&
+    cloudyFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.clearCloudyFractionMaximum
+  ) {
+    sky = 'clear';
+  } else if (
+    sunnyFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyClearSunnyFractionMinimum
+  ) {
+    sky = 'mostly_clear';
+  } else if (
+    overcastFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.overcastFractionMinimum
+  ) {
+    sky = 'overcast';
+  } else if (
+    cloudyFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyCloudyFractionMinimum
+  ) {
+    sky = 'mostly_cloudy';
+  } else {
+    sky = 'partly_cloudy';
+  }
+
+  return {
+    sky,
+    distribution: {
+      clearFraction,
+      mostlyClearFraction,
+      partlyCloudyFraction,
+      mostlyCloudyFraction,
+      overcastFraction,
+      sunnyFraction,
+      cloudyFraction,
+      clearishFraction,
+    },
+  };
 }
 
 const skyLabels: Readonly<Record<Sky, string>> = {
@@ -155,20 +242,22 @@ function precipitationLabel(precipitation: Precipitation, sky: Sky): string {
   switch (precipitation) {
     case 'none':
       return skyLabels[sky];
+    case 'isolated_showers':
+      return `${skyLabels[sky]} with isolated showers`;
     case 'showers':
       return `${skyLabels[sky]} with showers`;
-    case 'light_rain':
-      return 'Light rain';
+    case 'occasional_rain':
+      return `${sky === 'clear' ? skyLabels.mostly_clear : skyLabels[sky]} with occasional rain`;
     case 'rain':
       return sky === 'clear' || sky === 'mostly_clear' || sky === 'partly_cloudy'
         ? 'Rain with sunny intervals'
-        : 'Overcast with rain';
+        : 'Rain';
     case 'heavy_rain':
       return 'Heavy rain';
     case 'snow_showers':
-      return sky === 'clear' || sky === 'mostly_clear' || sky === 'partly_cloudy'
-        ? 'Snow showers'
-        : 'Mostly cloudy with snow showers';
+      return 'Snow showers';
+    case 'occasional_snow':
+      return 'Occasional snow';
     case 'snow':
       return 'Snow';
     case 'mixed':
@@ -176,6 +265,269 @@ function precipitationLabel(precipitation: Precipitation, sky: Sky): string {
     case 'freezing':
       return 'Freezing precipitation';
   }
+}
+
+function classifyPrecipitation(input: {
+  readonly precipTotal: number;
+  readonly maxHourlyPrecip: number;
+  readonly wetHours: number;
+  readonly wetFraction: number;
+  readonly longestWetRun: number;
+  readonly showerRatio: number;
+  readonly mixedHours: number;
+  readonly rainTypeHours: number;
+  readonly snowTypeHours: number;
+  readonly freezingHours: number;
+}): Precipitation {
+  if (
+    input.precipTotal < DAILY_WEATHER_STATUS_THRESHOLDS.traceTotalMm &&
+    input.wetHours <= DAILY_WEATHER_STATUS_THRESHOLDS.traceMaximumWetHours
+  ) {
+    return 'none';
+  }
+  if (input.freezingHours > 0) return 'freezing';
+  if (
+    (input.wetHours > 0 &&
+      input.mixedHours >=
+        DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours) ||
+    (input.rainTypeHours >=
+      DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours &&
+      input.snowTypeHours >=
+        DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours)
+  ) {
+    return 'mixed';
+  }
+  if (
+    input.wetHours > 0 &&
+    input.snowTypeHours >=
+      DAILY_WEATHER_STATUS_THRESHOLDS.snowDominanceWetHourFraction * input.wetHours
+  ) {
+    if (
+      input.wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetFractionMaximum &&
+      input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetRunMaximum
+    ) {
+      return 'snow_showers';
+    }
+    if (
+      input.wetFraction <=
+        DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
+      input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetRunMaximum
+    ) {
+      return 'occasional_snow';
+    }
+    return 'snow';
+  }
+  if (
+    input.showerRatio >= DAILY_WEATHER_STATUS_THRESHOLDS.showerRatioMinimum &&
+    input.wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetFractionMaximum &&
+    input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetRunMaximum
+  ) {
+    return 'isolated_showers';
+  }
+  if (
+    input.showerRatio >= DAILY_WEATHER_STATUS_THRESHOLDS.showerRatioMinimum &&
+    (input.wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.showerWetFractionMaximum ||
+      input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.showerWetRunMaximum)
+  ) {
+    return 'showers';
+  }
+  if (
+    input.wetFraction <=
+      DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
+    input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetRunMaximum
+  ) {
+    return 'occasional_rain';
+  }
+  if (
+    input.maxHourlyPrecip >= DAILY_WEATHER_STATUS_THRESHOLDS.heavyRainHourlyMinimumMm ||
+    input.precipTotal >= DAILY_WEATHER_STATUS_THRESHOLDS.heavyRainTotalMinimumMm
+  ) {
+    return 'heavy_rain';
+  }
+  return 'rain';
+}
+
+function classifyHourlyVisibility(hour: DailyWeatherHour): Visibility {
+  if (
+    hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.fogVisibilityMeters ||
+    hour.weatherCode === 45 ||
+    hour.weatherCode === 48
+  ) {
+    return 'fog';
+  }
+  if (hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.poorVisibilityMeters) {
+    return 'poor';
+  }
+  if (hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.hazeVisibilityMeters) {
+    return 'haze';
+  }
+  return 'normal';
+}
+
+interface VisibilityAnalysis {
+  readonly debug: VisibilityDurationDebug;
+  readonly affectedIndices: readonly number[];
+  readonly affectedRuns: number;
+}
+
+function analyzeVisibility(
+  daylight: readonly DailyWeatherHour[],
+  hourlyVisibility: readonly Visibility[],
+  level: Exclude<Visibility, 'normal'>,
+): VisibilityAnalysis {
+  const affectedIndices: number[] = [];
+  let affectedRuns = 0;
+  let inRun = false;
+
+  hourlyVisibility.forEach((hourlyLevel, index) => {
+    if (hourlyLevel === level) {
+      affectedIndices.push(index);
+      if (!inRun) affectedRuns += 1;
+      inRun = true;
+    } else {
+      inRun = false;
+    }
+  });
+  const firstAffectedIndex = affectedIndices[0];
+  const lastAffectedIndex = affectedIndices.at(-1);
+
+  return {
+    debug: {
+      affectedHours: affectedIndices.length,
+      affectedFraction: affectedIndices.length / hourlyVisibility.length,
+      longestAffectedRun: longestRun(hourlyVisibility, (value) => value === level),
+      firstAffectedHour:
+        firstAffectedIndex === undefined
+          ? null
+          : (daylight[firstAffectedIndex]?.time ?? null),
+      lastAffectedHour:
+        lastAffectedIndex === undefined
+          ? null
+          : (daylight[lastAffectedIndex]?.time ?? null),
+    },
+    affectedIndices,
+    affectedRuns,
+  };
+}
+
+function isSignificantVisibility(analysis: VisibilityAnalysis): boolean {
+  return (
+    analysis.debug.affectedFraction >=
+      DAILY_WEATHER_STATUS_THRESHOLDS.visibilitySignificantFractionMinimum ||
+    analysis.debug.longestAffectedRun >=
+      DAILY_WEATHER_STATUS_THRESHOLDS.visibilitySignificantRunMinimum
+  );
+}
+
+function classifyVisibilityPeriod(
+  analysis: VisibilityAnalysis,
+  daylightHours: number,
+): Exclude<VisibilityPeriod, 'none'> {
+  if (
+    analysis.debug.affectedFraction >=
+    DAILY_WEATHER_STATUS_THRESHOLDS.visibilityMostOfDayFractionMinimum
+  ) {
+    return 'most_of_day';
+  }
+  if (analysis.affectedRuns > 1) return 'intermittent';
+
+  const segmentCounts = [0, 0, 0];
+  for (const index of analysis.affectedIndices) {
+    const segment = Math.min(2, Math.floor((index * 3) / daylightHours));
+    segmentCounts[segment] = (segmentCounts[segment] ?? 0) + 1;
+  }
+  const dominantCount = Math.max(...segmentCounts);
+  if (
+    dominantCount / analysis.debug.affectedHours <
+    DAILY_WEATHER_STATUS_THRESHOLDS.visibilitySegmentFractionMinimum
+  ) {
+    return 'brief';
+  }
+
+  const dominantSegment = segmentCounts.indexOf(dominantCount);
+  if (dominantSegment === 0) return 'morning';
+  if (dominantSegment === 1) return 'afternoon';
+  return 'evening';
+}
+
+function visibilityLabel(
+  level: Exclude<Visibility, 'normal'>,
+  period: Exclude<VisibilityPeriod, 'none'>,
+): string {
+  if (level === 'fog') {
+    switch (period) {
+      case 'brief':
+        return 'Brief fog';
+      case 'morning':
+        return 'Morning fog';
+      case 'afternoon':
+        return 'Afternoon fog';
+      case 'evening':
+        return 'Evening fog';
+      case 'intermittent':
+        return 'Intermittent fog';
+      case 'most_of_day':
+        return 'Fog for most of the day';
+    }
+  }
+
+  const description = level === 'poor' ? 'Poor visibility' : 'Reduced visibility';
+  switch (period) {
+    case 'brief':
+      return `Brief ${description.toLocaleLowerCase('en')}`;
+    case 'morning':
+      return `${description} in the morning`;
+    case 'afternoon':
+      return `${description} in the afternoon`;
+    case 'evening':
+      return `${description} in the evening`;
+    case 'intermittent':
+      return 'Intermittent reduced visibility';
+    case 'most_of_day':
+      return `${description} for most of the day`;
+  }
+}
+
+function classifyVisibility(daylight: readonly DailyWeatherHour[]): {
+  readonly status: VisibilityStatus;
+  readonly debug: Readonly<
+    Record<Exclude<Visibility, 'normal'>, VisibilityDurationDebug>
+  >;
+} {
+  const hourlyVisibility = daylight.map(classifyHourlyVisibility);
+  const analyses = {
+    fog: analyzeVisibility(daylight, hourlyVisibility, 'fog'),
+    poor: analyzeVisibility(daylight, hourlyVisibility, 'poor'),
+    haze: analyzeVisibility(daylight, hourlyVisibility, 'haze'),
+  } as const;
+  const level = (['fog', 'poor', 'haze'] as const).find((candidate) =>
+    isSignificantVisibility(analyses[candidate]),
+  );
+
+  let status: VisibilityStatus = {
+    level: 'normal',
+    period: 'none',
+    label: null,
+    icon: null,
+  };
+  if (level !== undefined) {
+    const period = classifyVisibilityPeriod(analyses[level], daylight.length);
+    status = {
+      level,
+      period,
+      label: visibilityLabel(level, period),
+      icon: level,
+    };
+  }
+
+  return {
+    status,
+    debug: {
+      fog: analyses.fog.debug,
+      poor: analyses.poor.debug,
+      haze: analyses.haze.debug,
+    },
+  };
 }
 
 export function aggregateDailyWeatherStatus(
@@ -188,23 +540,9 @@ export function aggregateDailyWeatherStatus(
 
   const isWet = (hour: DailyWeatherHour) =>
     hour.precipitationMm >= DAILY_WEATHER_STATUS_THRESHOLDS.meaningfulWetMm;
-  const isFog = (hour: DailyWeatherHour) =>
-    hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.fogVisibilityMeters ||
-    hour.weatherCode === 45 ||
-    hour.weatherCode === 48;
   const wet = daylight.filter(isWet);
   const dry = daylight.filter((hour) => !isWet(hour));
   const skyHours = dry.length > 0 ? dry : daylight;
-  const fog = daylight.filter(isFog);
-  const haze = daylight.filter(
-    (hour) =>
-      !isWet(hour) &&
-      !isFog(hour) &&
-      hour.visibilityMeters >= DAILY_WEATHER_STATUS_THRESHOLDS.fogVisibilityMeters &&
-      hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.hazeVisibilityMeters,
-  );
-  const dryNonFog = daylight.filter((hour) => !isWet(hour) && !isFog(hour));
-  const visibilities = daylight.map((hour) => hour.visibilityMeters);
   const daylightHours = daylight.length;
   const wetHours = wet.length;
   const wetFraction = wetHours / daylightHours;
@@ -214,131 +552,49 @@ export function aggregateDailyWeatherStatus(
   const showersTotal = daylight.reduce((total, hour) => total + hour.showersMm, 0);
   const snowfallTotal = daylight.reduce((total, hour) => total + hour.snowfallCm, 0);
   const longestWetRun = longestRun(daylight, isWet);
-  const longestFogRun = longestRun(daylight, isFog);
-  const fogFraction = fog.length / daylightHours;
-  const hazeFraction = haze.length / daylightHours;
-  const medianVisibility = median(visibilities);
-  const hazeMedianVisibility =
-    dryNonFog.length > 0
-      ? median(dryNonFog.map((hour) => hour.visibilityMeters))
-      : medianVisibility;
-  const minVisibility = Math.min(...visibilities);
-  const fractionBelow10km =
-    daylight.filter((hour) => hour.visibilityMeters < 10_000).length / daylightHours;
-  const fractionBelow5km =
-    daylight.filter((hour) => hour.visibilityMeters < 5_000).length / daylightHours;
-  const fractionBelow1km =
-    daylight.filter((hour) => hour.visibilityMeters < 1_000).length / daylightHours;
-  const meanCloudCover = mean(skyHours.map((hour) => hour.cloudCoverPercent));
   const showerRatio =
     showersTotal /
     Math.max(precipTotal, DAILY_WEATHER_STATUS_THRESHOLDS.ratioEpsilonMm);
-  const meaningfulTypeHours = wet;
-  const mixedHours = meaningfulTypeHours.filter(
+  const mixedHours = wet.filter(
     (hour) => hour.precipitationType === 6 || hour.precipitationType === 7,
   ).length;
-  const rainTypeHours = meaningfulTypeHours.filter(
-    (hour) => hour.precipitationType === 1,
-  ).length;
-  const snowTypeHours = meaningfulTypeHours.filter(
+  const rainTypeHours = wet.filter((hour) => hour.precipitationType === 1).length;
+  const snowTypeHours = wet.filter(
     (hour) => hour.precipitationType === 5 || hour.precipitationType === 6,
   ).length;
-  const freezingHours = meaningfulTypeHours.filter(
+  const freezingHours = wet.filter(
     (hour) =>
       hour.precipitationType === 3 ||
       hour.precipitationType === 8 ||
       hour.precipitationType === 12,
   ).length;
-  const sky = classifySky(meanCloudCover);
-
-  let precipitation: Precipitation;
-  if (
-    precipTotal < DAILY_WEATHER_STATUS_THRESHOLDS.traceTotalMm &&
-    wetHours <= DAILY_WEATHER_STATUS_THRESHOLDS.traceMaximumWetHours
-  ) {
-    precipitation = 'none';
-  } else if (freezingHours > 0) {
-    precipitation = 'freezing';
-  } else if (
-    (wetHours > 0 &&
-      mixedHours >= DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * wetHours) ||
-    (rainTypeHours >= DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * wetHours &&
-      snowTypeHours >= DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * wetHours)
-  ) {
-    precipitation = 'mixed';
-  } else if (
-    wetHours > 0 &&
-    snowTypeHours >=
-      DAILY_WEATHER_STATUS_THRESHOLDS.snowDominanceWetHourFraction * wetHours
-  ) {
-    precipitation =
-      wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
-      longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetRunMaximum
-        ? 'snow_showers'
-        : 'snow';
-  } else if (
-    showerRatio >= DAILY_WEATHER_STATUS_THRESHOLDS.showerRatioMinimum &&
-    (wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.showerWetFractionMaximum ||
-      longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.showerWetRunMaximum)
-  ) {
-    precipitation = 'showers';
-  } else if (
-    precipTotal < DAILY_WEATHER_STATUS_THRESHOLDS.lightRainTotalMm &&
-    maxHourlyPrecip < DAILY_WEATHER_STATUS_THRESHOLDS.lightRainHourlyMaximumMm
-  ) {
-    precipitation = 'light_rain';
-  } else if (
-    maxHourlyPrecip >= DAILY_WEATHER_STATUS_THRESHOLDS.heavyRainHourlyMinimumMm ||
-    precipTotal >= DAILY_WEATHER_STATUS_THRESHOLDS.heavyRainTotalMinimumMm
-  ) {
-    precipitation = 'heavy_rain';
-  } else {
-    precipitation = 'rain';
-  }
-
-  let visibility: Visibility;
-  if (
-    fogFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.fogFractionMinimum ||
-    longestFogRun >= DAILY_WEATHER_STATUS_THRESHOLDS.fogRunMinimum ||
-    medianVisibility < DAILY_WEATHER_STATUS_THRESHOLDS.fogMedianVisibilityMeters
-  ) {
-    visibility = 'fog';
-  } else if (
-    medianVisibility < DAILY_WEATHER_STATUS_THRESHOLDS.poorMedianVisibilityMeters ||
-    fractionBelow5km >= DAILY_WEATHER_STATUS_THRESHOLDS.poorFractionBelow5kmMinimum
-  ) {
-    visibility = 'poor';
-  } else if (
-    hazeMedianVisibility < DAILY_WEATHER_STATUS_THRESHOLDS.hazeMedianVisibilityMeters ||
-    hazeFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.hazeFractionMinimum
-  ) {
-    visibility = 'haze';
-  } else {
-    visibility = 'normal';
-  }
-
-  const baseLabel = precipitationLabel(precipitation, sky);
-  const label =
-    visibility === 'fog'
-      ? precipitation === 'none'
-        ? 'Fog'
-        : `${baseLabel} · Fog`
-      : visibility === 'poor'
-        ? `${baseLabel} · Poor visibility`
-        : visibility === 'haze'
-          ? `${baseLabel} · Haze`
-          : baseLabel;
+  const skyResult = classifySky(skyHours);
+  const precipitation = classifyPrecipitation({
+    precipTotal,
+    maxHourlyPrecip,
+    wetHours,
+    wetFraction,
+    longestWetRun,
+    showerRatio,
+    mixedHours,
+    rainTypeHours,
+    snowTypeHours,
+    freezingHours,
+  });
+  const visibility = classifyVisibility(daylight);
+  const label = precipitationLabel(precipitation, skyResult.sky);
 
   return {
-    sky,
-    precipitation,
-    visibility,
-    label,
-    icon: {
-      sky,
-      phenomenon: precipitation === 'none' ? null : precipitation,
-      visibility: visibility === 'normal' ? null : visibility,
+    primary: {
+      sky: skyResult.sky,
+      precipitation,
+      label,
+      icon: {
+        sky: skyResult.sky,
+        phenomenon: precipitation === 'none' ? null : precipitation,
+      },
     },
+    visibility: visibility.status,
     debug: {
       daylightHours,
       wetHours,
@@ -349,20 +605,13 @@ export function aggregateDailyWeatherStatus(
       showersTotal,
       snowfallTotal,
       longestWetRun,
-      longestFogRun,
-      fogFraction,
-      hazeFraction,
-      medianVisibility,
-      hazeMedianVisibility,
-      minVisibility,
-      fractionBelow10km,
-      fractionBelow5km,
-      fractionBelow1km,
-      meanCloudCover,
+      ...skyResult.distribution,
+      meanCloudCover: mean(skyHours.map((hour) => hour.cloudCoverPercent)),
       showerRatio,
       mixedHours,
       snowTypeHours,
       freezingHours,
+      visibility: visibility.debug,
     },
   };
 }

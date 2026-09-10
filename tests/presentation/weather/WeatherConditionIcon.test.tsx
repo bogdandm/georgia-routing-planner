@@ -1,9 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import type { WeatherIcon } from '@/domain/weather/aggregateDailyWeatherStatus';
+import type {
+  VisibilityStatus,
+  WeatherIcon,
+} from '@/domain/weather/aggregateDailyWeatherStatus';
 import {
   DailyWeatherIcon,
+  VisibilityStatusIcon,
   WeatherConditionIcon,
 } from '@/presentation/weather/WeatherConditionIcon';
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
@@ -49,14 +53,10 @@ describe('WeatherConditionIcon', () => {
   });
 
   it.each([
-    { isDay: true, label: 'Daytime clear sky' },
-    { isDay: false, label: 'Night-time clear sky' },
-  ])('keeps $label artwork decorative beside its text label', ({ isDay, label }) => {
-    render(
-      <div aria-label={label}>
-        <WeatherConditionIcon code={0} isDay={isDay} />
-      </div>,
-    );
+    { isDay: true, label: 'Clear sky' },
+    { isDay: false, label: 'Clear sky' },
+  ])('labels $label artwork while keeping its SVG decorative', ({ isDay, label }) => {
+    render(<WeatherConditionIcon code={0} isDay={isDay} />);
 
     expect(screen.getByLabelText(label)).toBeInTheDocument();
     expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
@@ -65,29 +65,87 @@ describe('WeatherConditionIcon', () => {
 
   it.each([
     {
-      label: 'Partly cloudy with rain and fog',
-      icon: { sky: 'partly_cloudy', phenomenon: 'rain', visibility: 'fog' },
+      label: 'Partly cloudy with rain',
+      icon: { sky: 'partly_cloudy', phenomenon: 'rain' },
     },
     {
-      label: 'Overcast with mixed precipitation and poor visibility',
-      icon: { sky: 'overcast', phenomenon: 'mixed', visibility: 'poor' },
+      label: 'Overcast with mixed precipitation',
+      icon: { sky: 'overcast', phenomenon: 'mixed' },
     },
     {
-      label: 'Mostly clear with freezing precipitation and haze',
-      icon: { sky: 'mostly_clear', phenomenon: 'freezing', visibility: 'haze' },
+      label: 'Mostly clear with freezing precipitation',
+      icon: { sky: 'mostly_clear', phenomenon: 'freezing' },
     },
   ] satisfies readonly { readonly label: string; readonly icon: WeatherIcon }[])(
-    'keeps layered artwork decorative for $label',
+    'labels layered artwork as $label',
     ({ label, icon }) => {
-      render(
-        <div aria-label={label}>
-          <DailyWeatherIcon icon={icon} />
-        </div>,
-      );
+      render(<DailyWeatherIcon icon={icon} label={label} />);
 
       expect(screen.getByLabelText(label)).toBeInTheDocument();
       expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    },
+  );
+
+  it('shows condition details on mouse hover', async () => {
+    render(<WeatherConditionIcon code={63} isDay />);
+    const icon = screen.getByLabelText('Moderate rain');
+
+    fireEvent.mouseOver(icon);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Moderate rain');
+
+    fireEvent.mouseLeave(icon);
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  it('toggles daily details when tapped on a touch screen', async () => {
+    render(
+      <DailyWeatherIcon
+        icon={{ sky: 'overcast', phenomenon: 'rain' }}
+        label="Overcast with rain"
+      />,
+    );
+    const icon = screen.getByLabelText('Overcast with rain');
+
+    fireEvent.pointerDown(icon, { pointerType: 'touch' });
+    fireEvent.pointerUp(icon, { pointerType: 'touch' });
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Overcast with rain');
+
+    fireEvent.pointerDown(icon, { pointerType: 'touch' });
+    fireEvent.pointerUp(icon, { pointerType: 'touch' });
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  it.each([
+    {
+      level: 'fog',
+      period: 'morning',
+      label: 'Morning fog',
+      icon: 'fog',
+    },
+    {
+      level: 'poor',
+      period: 'afternoon',
+      label: 'Poor visibility in the afternoon',
+      icon: 'poor',
+    },
+    {
+      level: 'haze',
+      period: 'intermittent',
+      label: 'Intermittent reduced visibility',
+      icon: 'haze',
+    },
+  ] satisfies readonly VisibilityStatus[])(
+    'labels the secondary $level visibility icon independently',
+    (status) => {
+      render(<VisibilityStatusIcon status={status} />);
+
+      expect(screen.getByLabelText(status.label)).toBeInTheDocument();
+      expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
     },
   );
 });

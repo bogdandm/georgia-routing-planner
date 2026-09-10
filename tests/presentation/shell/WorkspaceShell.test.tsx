@@ -908,7 +908,7 @@ describe('WorkspaceShell', () => {
     act(() => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
-    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeVisible();
+    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeVisible();
 
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(
@@ -916,7 +916,7 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Weather' }));
 
-    expect(screen.getByText('All times: Asia/Tbilisi')).toBeVisible();
+    expect(screen.getByText('41.71510, 44.82710 · 1,234 m')).toBeVisible();
     expect(execute).toHaveBeenCalledOnce();
   });
   it('runs Mosaic from the fixed satellite header and retains it off-pane', async () => {
@@ -1365,7 +1365,7 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
 
     expect(screen.getByRole('heading', { name: 'Weather', level: 1 })).toBeVisible();
-    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeVisible();
+    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeVisible();
   });
   it('returns smartphone marker selection to the map', async () => {
     await services.database.saveSavedMarker({

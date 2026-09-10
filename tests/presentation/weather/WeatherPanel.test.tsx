@@ -107,6 +107,15 @@ describe('WeatherPanel', () => {
               daylightWindSpeedMinKmh: 3,
               daylightWindSpeedMaxKmh: 18,
               daylightPrecipitationMm: 1.25,
+              status: {
+                ...day.status,
+                visibility: {
+                  level: 'fog',
+                  period: 'morning',
+                  label: 'Morning fog',
+                  icon: 'fog',
+                },
+              },
             }
           : day,
       ),
@@ -121,18 +130,23 @@ describe('WeatherPanel', () => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
 
-    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeInTheDocument();
-    expect(screen.getByText('41.71510, 44.82710')).toBeInTheDocument();
+    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeInTheDocument();
     expect(execute).toHaveBeenCalledOnce();
     expect(execute.mock.calls[0]?.[0]).toEqual({
       coordinate: { longitude: 44.8271, latitude: 41.7151 },
       model: 'ecmwf_ifs',
     });
-    expect(
-      screen.getByText('Forecast elevation 1,234 m · Trail Planner terrain'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/All times:/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Click another map point/u)).not.toBeInTheDocument();
     expect(screen.getByText('Clear sky')).toBeInTheDocument();
-    expect(screen.getByText('Next 3 hours 10 mm')).toBeInTheDocument();
+    expect(screen.queryByText(/Next 3 hours/u)).not.toBeInTheDocument();
+    expect(screen.getByText('2.8 m/s S')).toBeInTheDocument();
+    expect(screen.getByText('4.2 m/s')).toBeInTheDocument();
+    expect(screen.getByLabelText('Feels like')).toBeInTheDocument();
+    expect(screen.getByLabelText('Wind')).toBeInTheDocument();
+    expect(screen.getByLabelText('Gusts')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cloud')).toBeInTheDocument();
+    expect(screen.getByLabelText('Visibility')).toBeInTheDocument();
 
     const hourlyRegion = screen.getByRole('region', { name: 'Hourly forecast' });
     const hourlyCards = within(hourlyRegion).getAllByRole('article');
@@ -147,15 +161,19 @@ describe('WeatherPanel', () => {
     const dailyList = screen.getByRole('list', { name: 'Seven-day forecast' });
     expect(within(dailyList).getAllByRole('listitem')).toHaveLength(7);
     expect(within(dailyList).getAllByText('Clear')).toHaveLength(7);
+    expect(within(dailyList).getByText('Morning fog')).toBeInTheDocument();
+    expect(within(dailyList).getByLabelText('Morning fog')).toBeInTheDocument();
     expect(
       screen.getByLabelText('Daytime temperature 7 to 24 degrees Celsius'),
     ).toHaveTextContent('7…24 °C');
     expect(
-      screen.getByLabelText('Daytime wind 3 to 18 kilometres per hour'),
-    ).toHaveTextContent('Wind 3…18 km/h');
+      screen.getByLabelText('Daytime wind 0.8 to 5.0 metres per second'),
+    ).toHaveTextContent('0.8…5.0 m/s');
     expect(
       screen.getByLabelText('Daylight precipitation 1.25 millimetres'),
     ).toHaveTextContent('1.3 mm');
+    expect(screen.getAllByLabelText('Daylight wind')).toHaveLength(7);
+    expect(screen.getAllByLabelText('Daylight precipitation')).toHaveLength(7);
 
     expect(screen.getByText('ECMWF IFS · Updated 18 Jul, 04:00')).toBeInTheDocument();
     expect(
@@ -163,7 +181,7 @@ describe('WeatherPanel', () => {
     ).toHaveAttribute('href', 'https://open-meteo.com/');
   });
 
-  it('uses each provider time zone and keeps metadata and DEM fallbacks explicit', async () => {
+  it('formats update metadata in the provider time zone without expanding the header', async () => {
     const baseline = await testForecast();
     const services = createTestServices();
     vi.spyOn(services.pointWeatherForecast, 'execute')
@@ -184,20 +202,16 @@ describe('WeatherPanel', () => {
     act(() => {
       requestWeatherForecast({ longitude: -74.006, latitude: 40.7128 });
     });
-    expect(await screen.findByText('All times: America/New_York')).toBeInTheDocument();
+    expect(await screen.findByText('40.71280, -74.00600 · 590 m')).toBeInTheDocument();
     expect(screen.getByText('ECMWF IFS · Updated 17 Jul, 20:00')).toBeInTheDocument();
-    expect(
-      screen.getByText('Forecast elevation 590 m · Open-Meteo terrain'),
-    ).toBeInTheDocument();
 
     act(() => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
-    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeInTheDocument();
+    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeInTheDocument();
     expect(screen.getByText('ECMWF IFS · Update time unavailable')).toBeInTheDocument();
-    expect(
-      screen.getByText('Forecast elevation 1,234 m · Trail Planner terrain'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/Trail Planner terrain/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Open-Meteo terrain/u)).not.toBeInTheDocument();
   });
 
   it('aborts the previous point and shows the replacement while it loads', async () => {
@@ -239,9 +253,8 @@ describe('WeatherPanel', () => {
       selectedCoordinate: { longitude: 45.25, latitude: 42.125 },
       forecastCoordinate: { longitude: 45.25, latitude: 42.125 },
     });
-    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeInTheDocument();
+    expect(await screen.findByText('42.12500, 45.25000 · 1,234 m')).toBeInTheDocument();
     first.resolve(baseline);
-    expect(screen.getByText('42.12500, 45.25000')).toBeInTheDocument();
   });
 
   it('maps provider failures to safe copy and retries the selected point', async () => {
@@ -275,7 +288,7 @@ describe('WeatherPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('All times: Asia/Tbilisi')).toBeInTheDocument();
+    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeInTheDocument();
     expect(execute).toHaveBeenCalledTimes(2);
     expect(execute.mock.calls[1]?.[0].coordinate).toEqual({
       longitude: 44.8271,

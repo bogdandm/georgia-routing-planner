@@ -402,20 +402,26 @@ same WGS84 coordinate to the forecast workflow. Marker placement retains higher
 priority. A route draft hidden behind Weather does not capture clicks; returning to
 Tracks resumes route selection.
 
-The selected-point context shows the clicked coordinate, forecast elevation and its
-Trail Planner DEM or Open-Meteo fallback source, the provider-returned IANA time zone,
-and the instruction for changing points. The current card presents temperature,
-condition, next-three-hour precipitation, apparent temperature, wind, gusts, cloud
-cover, and visibility. A horizontally scrolling carousel contains exactly 24 ordered
-hourly slots from the current local forecast hour, including local weekday and time,
-condition, temperature, and precipitation.
+The selected-point context is one compact line containing only the clicked coordinate
+and forecast elevation. The current card presents temperature and condition above a
+two-column metric grid for apparent temperature, wind, gusts, cloud cover, and
+visibility. Wind and gust values are displayed in metres per second. Every forecast and
+metric icon exposes its label on pointer hover, keyboard focus, and a touch-screen tap.
+A horizontally scrolling carousel contains exactly 24 ordered hourly slots from the
+current local forecast hour, including local weekday and time, condition, temperature,
+and precipitation.
 
 Seven rows are derived only from the returned hourly forecast, one for each selected
-location calendar day. Each row combines a fixed daily sky, precipitation, and
-visibility classification with daylight-only temperature and wind-speed ranges plus
-daylight precipitation. Night values cannot widen the displayed ranges or change the
-daily classification. All labels and the model-update time use the selected location's
-provider-returned time zone.
+location calendar day. Each row classifies every dry daylight hour before choosing the
+dominant sky from duration thresholds; a short cloudy window cannot redefine an
+otherwise sunny day. Precipitation is likewise separated into isolated, intermittent,
+and persistent patterns before it is combined with the dominant sky label. Significant
+fog, poor visibility, or reduced visibility is displayed as a secondary, time-qualified
+condition such as `Morning fog`; visibility never replaces the primary weather label or
+icon. Each row also shows daylight-only temperature and wind-speed ranges plus the
+complete daylight precipitation total. Night values cannot affect any of those results.
+Wind ranges are displayed in metres per second. Day labels and the model-update time use
+the selected location's provider-returned time zone.
 
 Only the latest point request may update the panel. A new selection or unmount aborts
 the previous request, and Retry repeats the currently selected coordinate. Loading,

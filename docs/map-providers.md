@@ -678,16 +678,19 @@ replaced with the browser fetch time.
 
 Each point request sends the selected latitude and longitude, `timezone=auto`,
 `forecast_days=7`, explicit Celsius/km/h/mm units, and the allowlisted current and
-hourly fields. A successful local DEM sample is also transmitted as `elevation` for
-provider downscaling. If local sampling is unavailable, the elevation in Open-Meteo's
-response is used and identified in the UI. This transmission is necessary for a
-location-specific forecast; neither the coordinate nor response is persisted or added to
-diagnostics.
+hourly fields. The UI converts the provider's wind values to metres per second. A
+successful local DEM sample is also transmitted as `elevation` for provider downscaling.
+If local sampling is unavailable, the elevation in Open-Meteo's response is used for the
+displayed forecast elevation. This transmission is necessary for a location-specific
+forecast; neither the coordinate nor response is persisted or added to diagnostics.
 
 The request deliberately omits `daily` and `precipitation_probability`. Current values
 and the next 24 slots are displayed from the normalized hourly forecast. Seven
 calendar-day statuses, daylight temperature/wind ranges, and daylight precipitation are
-derived locally from the same location-local hourly rows. These are deterministic model
+derived locally from the same location-local hourly rows. Daily sky and precipitation
+use duration and dominance across usable daylight hours. Visibility is classified
+separately by severity and daylight period, so a short fog or reduced-visibility event
+can be disclosed without replacing the dominant weather. These are deterministic model
 values, not measured weather-station observations.
 
 Anonymous free access is suitable only under Open-Meteo's documented non-commercial

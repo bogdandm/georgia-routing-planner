@@ -1,10 +1,7 @@
 import AirOutlinedIcon from '@mui/icons-material/AirOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
-import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
-import ThermostatOutlinedIcon from '@mui/icons-material/ThermostatOutlined';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
@@ -18,13 +15,14 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
 import {
   DEFAULT_WEATHER_MODEL,
   type PointWeatherForecast,
   type PointWeatherForecastDay,
+  type PointWeatherForecastPeriod,
 } from '@/application/weather/GetPointWeatherForecast';
 import {
   PointWeatherForecastError,
@@ -39,7 +37,7 @@ import {
 } from '@/presentation/map/mapInteractionStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import {
-  DailyWeatherIcon,
+  WeatherPeriodIcon,
   VisibilityStatusIcon,
   WeatherConditionIcon,
   WeatherIconTooltip,
@@ -60,24 +58,6 @@ const months = [
   'Oct',
   'Nov',
   'Dec',
-] as const;
-const compassDirections = [
-  'N',
-  'NNE',
-  'NE',
-  'ENE',
-  'E',
-  'ESE',
-  'SE',
-  'SSE',
-  'S',
-  'SSW',
-  'SW',
-  'WSW',
-  'W',
-  'WNW',
-  'NW',
-  'NNW',
 ] as const;
 
 type WeatherPanelState =
@@ -128,27 +108,10 @@ function formatMillimetres(value: number): string {
   return value < 10 ? `${value.toFixed(1)} mm` : `${Math.round(value).toString()} mm`;
 }
 
-function formatVisibility(value: number): string {
-  return value < 1_000
-    ? `${Math.round(value).toString()} m`
-    : `${(value / 1_000).toFixed(1)} km`;
-}
-
-function compassDirection(degrees: number): string {
-  const normalized = ((degrees % 360) + 360) % 360;
-  const direction = compassDirections[Math.round(normalized / 22.5) % 16];
-  if (direction === undefined) throw new RangeError('Invalid wind direction.');
-  return direction;
-}
-
 function formatRange(minimum: number, maximum: number, unit: string): string {
   const low = Math.round(minimum).toString();
   const high = Math.round(maximum).toString();
   return low === high ? `${low} ${unit}` : `${low}…${high} ${unit}`;
-}
-
-function formatWindSpeed(kilometresPerHour: number): string {
-  return `${(kilometresPerHour / 3.6).toFixed(1)} m/s`;
 }
 
 function formatWindRange(
@@ -210,129 +173,187 @@ function LoadingForecast({ coordinate }: { readonly coordinate: MapCoordinate })
   );
 }
 
-interface CurrentMetric {
-  readonly icon: ReactElement;
+interface IntervalWeatherWidgetProps {
+  readonly isDay: boolean;
   readonly label: string;
-  readonly value: string;
+  readonly period: PointWeatherForecastPeriod;
+  readonly showLabel?: boolean;
 }
 
-function CurrentForecast({ forecast }: { readonly forecast: PointWeatherForecast }) {
-  const current = forecast.current;
-  const metrics: readonly CurrentMetric[] = [
-    {
-      icon: <ThermostatOutlinedIcon />,
-      label: 'Feels like',
-      value: `${Math.round(current.apparentTemperatureCelsius).toString()} °C`,
-    },
-    {
-      icon: <AirOutlinedIcon />,
-      label: 'Wind',
-      value: `${formatWindSpeed(current.windSpeedKmh)} ${compassDirection(current.windDirectionDegrees)}`,
-    },
-    {
-      icon: <SpeedOutlinedIcon />,
-      label: 'Gusts',
-      value: formatWindSpeed(current.windGustsKmh),
-    },
-    {
-      icon: <CloudOutlinedIcon />,
-      label: 'Cloud',
-      value: `${Math.round(current.cloudCoverPercent).toString()}%`,
-    },
-    {
-      icon: <VisibilityOutlinedIcon />,
-      label: 'Visibility',
-      value: formatVisibility(current.visibilityMeters),
-    },
-  ];
+function IntervalWeatherWidget({
+  isDay,
+  label,
+  period,
+  showLabel = false,
+}: IntervalWeatherWidgetProps) {
+  const temperature = formatRange(
+    period.temperatureMinCelsius,
+    period.temperatureMaxCelsius,
+    '°C',
+  );
+  const wind = formatWindRange(period.windSpeedMinKmh, period.windSpeedMaxKmh);
+  const gusts = formatWindRange(period.windGustsMinKmh, period.windGustsMaxKmh);
+  const precipitation = formatMillimetres(period.precipitationMm);
+  const temperatureMinimum = Math.round(period.temperatureMinCelsius).toString();
+  const temperatureMaximum = Math.round(period.temperatureMaxCelsius).toString();
+  const windMinimum = (period.windSpeedMinKmh / 3.6).toFixed(1);
+  const windMaximum = (period.windSpeedMaxKmh / 3.6).toFixed(1);
+  const gustMinimum = (period.windGustsMinKmh / 3.6).toFixed(1);
+  const gustMaximum = (period.windGustsMaxKmh / 3.6).toFixed(1);
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+    <Box
+      component="article"
+      aria-label={`${label} forecast`}
+      sx={{ minWidth: 0, px: 1, py: 0.75 }}
+    >
+      {showLabel ? (
         <Typography
-          aria-label={`${Math.round(current.temperatureCelsius).toString()} degrees Celsius`}
-          sx={{
-            fontSize: 40,
-            fontWeight: 750,
-            lineHeight: 1,
-            fontVariantNumeric: 'tabular-nums',
-          }}
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}
         >
-          {Math.round(current.temperatureCelsius)}°
+          {label}
         </Typography>
-        <WeatherConditionIcon
-          code={current.weatherCode}
-          isDay={current.isDay}
-          size={56}
-        />
-        <Stack spacing={0.25} sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {describeWmoWeatherCode(current.weatherCode)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Current conditions
-          </Typography>
-        </Stack>
-      </Stack>
-      <Divider sx={{ my: 2 }} />
+      ) : null}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 1,
+          gridTemplateColumns: '36px minmax(0, 1fr)',
+          gap: 0.75,
+          alignItems: 'center',
         }}
       >
-        {metrics.map(({ icon, label, value }) => (
-          <Box
-            key={label}
-            sx={{
-              minWidth: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              p: 1,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-            }}
-          >
-            <WeatherIconTooltip label={label}>
-              <Box
-                aria-hidden="true"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 1,
-                  color: 'primary.main',
-                  bgcolor: 'background.paper',
-                  '& .MuiSvgIcon-root': { fontSize: 18 },
-                }}
-              >
-                {icon}
-              </Box>
-            </WeatherIconTooltip>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', lineHeight: 1.2 }}
-              >
-                {label}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 600,
-                  fontVariantNumeric: 'tabular-nums',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {value}
-              </Typography>
+        <Box sx={{ position: 'relative', width: 36, height: 36 }}>
+          <WeatherPeriodIcon
+            icon={period.status.primary.icon}
+            isDay={isDay}
+            label={`${label}: ${period.status.primary.label}`}
+          />
+          {period.status.visibility.label === null ? null : (
+            <Box
+              sx={{
+                position: 'absolute',
+                right: -2,
+                bottom: -2,
+                display: 'grid',
+                placeItems: 'center',
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <VisibilityStatusIcon status={period.status.visibility} />
             </Box>
-          </Box>
-        ))}
+          )}
+        </Box>
+        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            aria-label={`${label} temperature ${temperatureMinimum} to ${temperatureMaximum} degrees Celsius`}
+            sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+          >
+            {temperature}
+          </Typography>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ alignItems: 'center', minWidth: 0, whiteSpace: 'nowrap' }}
+          >
+            <WeatherIconTooltip label={`${label} wind`}>
+              <AirOutlinedIcon
+                aria-hidden="true"
+                sx={{ fontSize: 15, color: 'text.secondary' }}
+              />
+            </WeatherIconTooltip>
+            <Typography
+              variant="caption"
+              aria-label={`${label} wind ${windMinimum} to ${windMaximum} metres per second`}
+              sx={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {wind}
+            </Typography>
+          </Stack>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ alignItems: 'center', minWidth: 0, whiteSpace: 'nowrap' }}
+          >
+            <WeatherIconTooltip label={`${label} gusts`}>
+              <SpeedOutlinedIcon
+                aria-hidden="true"
+                sx={{ fontSize: 15, color: 'text.secondary' }}
+              />
+            </WeatherIconTooltip>
+            <Typography
+              variant="caption"
+              aria-label={`${label} gusts ${gustMinimum} to ${gustMaximum} metres per second`}
+              sx={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {gusts}
+            </Typography>
+          </Stack>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ alignItems: 'center', minWidth: 0, whiteSpace: 'nowrap' }}
+          >
+            <WeatherIconTooltip label={`${label} precipitation`}>
+              <WaterDropOutlinedIcon
+                aria-hidden="true"
+                sx={{ fontSize: 15, color: 'info.main' }}
+              />
+            </WeatherIconTooltip>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              aria-label={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+              sx={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {precipitation}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Box>
+    </Box>
+  );
+}
+
+function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast }) {
+  const firstDay = forecast.days[0];
+  if (firstDay === undefined) {
+    throw new RangeError('Forecast summary requires the current local day.');
+  }
+  return (
+    <Paper
+      variant="outlined"
+      role="region"
+      aria-label="Current, day, and night summary"
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
+      }}
+    >
+      <Box sx={{ display: 'grid', alignItems: 'center' }}>
+        <IntervalWeatherWidget
+          label="Now · 3 h"
+          period={forecast.currentThreeHours}
+          isDay={forecast.current.isDay}
+          showLabel
+        />
+      </Box>
+      <Box sx={{ borderLeft: 1, borderColor: 'divider' }}>
+        <IntervalWeatherWidget label="Day" period={firstDay.day} isDay showLabel />
+        <Divider />
+        <IntervalWeatherWidget
+          label="Night"
+          period={firstDay.night}
+          isDay={false}
+          showLabel
+        />
       </Box>
     </Paper>
   );
@@ -468,35 +489,17 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
 }
 
 function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
-  const temperature = formatRange(
-    day.daylightTemperatureMinCelsius,
-    day.daylightTemperatureMaxCelsius,
-    '°C',
-  );
-  const wind = formatWindRange(
-    day.daylightWindSpeedMinKmh,
-    day.daylightWindSpeedMaxKmh,
-  );
-  const roundedTemperatureMin = Math.round(
-    day.daylightTemperatureMinCelsius,
-  ).toString();
-  const roundedTemperatureMax = Math.round(
-    day.daylightTemperatureMaxCelsius,
-  ).toString();
-  const windMinimum = (day.daylightWindSpeedMinKmh / 3.6).toFixed(1);
-  const windMaximum = (day.daylightWindSpeedMaxKmh / 3.6).toFixed(1);
-  const precipitation = formatMillimetres(day.daylightPrecipitationMm);
-
   return (
     <Box
-      component="article"
+      role="group"
+      aria-label={`${localWeekday(day.date)} ${localDateLabel(day.date)}`}
       sx={{
-        minHeight: 72,
+        minHeight: 112,
         display: 'grid',
-        gridTemplateColumns: '64px 36px minmax(0, 1fr) 108px',
-        gap: 1,
+        gridTemplateColumns: '56px repeat(2, minmax(0, 1fr))',
+        gap: 0.5,
         alignItems: 'center',
-        py: 1,
+        py: 0.5,
       }}
     >
       <Box>
@@ -507,70 +510,8 @@ function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
           {localDateLabel(day.date)}
         </Typography>
       </Box>
-      <DailyWeatherIcon
-        icon={day.status.primary.icon}
-        label={day.status.primary.label}
-      />
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2">{day.status.primary.label}</Typography>
-        {day.status.visibility.label === null ? null : (
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <VisibilityStatusIcon status={day.status.visibility} />
-            <Typography variant="caption" color="text.secondary">
-              {day.status.visibility.label}
-            </Typography>
-          </Stack>
-        )}
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          aria-label={`Daytime temperature ${roundedTemperatureMin} to ${roundedTemperatureMax} degrees Celsius`}
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
-          {temperature}
-        </Typography>
-      </Box>
-      <Stack spacing={0.5} sx={{ alignItems: 'flex-end', minWidth: 108 }}>
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}
-        >
-          <WeatherIconTooltip label="Daylight wind">
-            <AirOutlinedIcon
-              aria-hidden="true"
-              sx={{ fontSize: 15, color: 'text.secondary' }}
-            />
-          </WeatherIconTooltip>
-          <Typography
-            variant="caption"
-            aria-label={`Daytime wind ${windMinimum} to ${windMaximum} metres per second`}
-            sx={{ fontVariantNumeric: 'tabular-nums' }}
-          >
-            {wind}
-          </Typography>
-        </Stack>
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}
-        >
-          <WeatherIconTooltip label="Daylight precipitation">
-            <WaterDropOutlinedIcon
-              aria-hidden="true"
-              sx={{ fontSize: 15, color: 'info.main' }}
-            />
-          </WeatherIconTooltip>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            aria-label={`Daylight precipitation ${day.daylightPrecipitationMm.toString()} millimetres`}
-            sx={{ fontVariantNumeric: 'tabular-nums' }}
-          >
-            {precipitation}
-          </Typography>
-        </Stack>
-      </Stack>
+      <IntervalWeatherWidget label="Day" period={day.day} isDay />
+      <IntervalWeatherWidget label="Night" period={day.night} isDay={false} />
     </Box>
   );
 }
@@ -585,6 +526,23 @@ function SevenDayForecast({
       <Typography component="h2" variant="subtitle2">
         7-day forecast
       </Typography>
+      <Box
+        aria-hidden="true"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '56px repeat(2, minmax(0, 1fr))',
+          gap: 0.5,
+          px: 1,
+        }}
+      >
+        <Box />
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          Day
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          Night
+        </Typography>
+      </Box>
       <Box role="list" aria-label="Seven-day forecast">
         {days.map((day, index) => (
           <Box key={day.date} role="listitem">
@@ -762,7 +720,7 @@ export function WeatherPanel() {
         ) : (
           <Stack spacing={2}>
             <SelectedPoint coordinate={state.coordinate} forecast={state.forecast} />
-            <CurrentForecast forecast={state.forecast} />
+            <ForecastSummary forecast={state.forecast} />
             <HourlyForecast forecast={state.forecast} />
             <SevenDayForecast days={state.forecast.days} />
           </Stack>

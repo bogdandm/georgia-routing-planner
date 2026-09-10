@@ -15,7 +15,7 @@ const hourlyFields =
 function responseFixture(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  const time = Array.from({ length: 168 }, (_, index) => {
+  const time = Array.from({ length: 192 }, (_, index) => {
     const day = 18 + Math.floor(index / 24);
     const hour = index % 24;
     return `2026-07-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00`;
@@ -152,7 +152,7 @@ describe('OpenMeteoWeatherForecastGateway', () => {
       longitude: '-74.00600',
       models: 'ecmwf_ifs',
       timezone: 'auto',
-      forecast_days: '7',
+      forecast_days: '8',
       timeformat: 'iso8601',
       temperature_unit: 'celsius',
       wind_speed_unit: 'kmh',
@@ -175,7 +175,7 @@ describe('OpenMeteoWeatherForecastGateway', () => {
       modelRunAt: '2025-07-18T00:00:00.000Z',
       current: { temperatureCelsius: 21.5, isDay: true },
     });
-    expect(result.hourly).toHaveLength(168);
+    expect(result.hourly).toHaveLength(192);
     expect(result.hourly[0]).toMatchObject({
       time: '2026-07-18T00:00',
       temperatureCelsius: 20,

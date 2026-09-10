@@ -677,21 +677,23 @@ when available. Metadata failure does not invalidate forecast values and is neve
 replaced with the browser fetch time.
 
 Each point request sends the selected latitude and longitude, `timezone=auto`,
-`forecast_days=7`, explicit Celsius/km/h/mm units, and the allowlisted current and
-hourly fields. The UI converts the provider's wind values to metres per second. A
-successful local DEM sample is also transmitted as `elevation` for provider downscaling.
-If local sampling is unavailable, the elevation in Open-Meteo's response is used for the
-displayed forecast elevation. This transmission is necessary for a location-specific
-forecast; neither the coordinate nor response is persisted or added to diagnostics.
+`forecast_days=8`, explicit Celsius/km/h/mm units, and the allowlisted current and
+hourly fields. The eighth location-local date completes the night beginning on the
+seventh displayed date. The UI converts the provider's wind values to metres per second.
+A successful local DEM sample is also transmitted as `elevation` for provider
+downscaling. If local sampling is unavailable, the elevation in Open-Meteo's response is
+used for the displayed forecast elevation. This transmission is necessary for a
+location-specific forecast; neither the coordinate nor response is persisted or added to
+diagnostics.
 
-The request deliberately omits `daily` and `precipitation_probability`. Current values
-and the next 24 slots are displayed from the normalized hourly forecast. Seven
-calendar-day statuses, daylight temperature/wind ranges, and daylight precipitation are
-derived locally from the same location-local hourly rows. Daily sky and precipitation
-use duration and dominance across usable daylight hours. Visibility is classified
-separately by severity and daylight period, so a short fog or reduced-visibility event
-can be disclosed without replacing the dominant weather. These are deterministic model
-values, not measured weather-station observations.
+The request deliberately omits `daily` and `precipitation_probability`. The next
+three-hour summary and 24 hourly slots are displayed from normalized hourly values.
+Seven date rows each contain an independent daylight summary and a complete physical
+night summary running from post-daylight hours through the next date's pre-daylight
+hours. Sky and precipitation use the same duration and dominance policy for both
+intervals. Visibility is classified separately by severity and interval position, so fog
+or reduced visibility remains secondary and cannot replace the primary weather. These
+are deterministic model values, not measured weather-station observations.
 
 Anonymous free access is suitable only under Open-Meteo's documented non-commercial
 limits: 600 calls per minute, 5,000 per hour, and 10,000 per day. The deployment sends

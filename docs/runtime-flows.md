@@ -715,7 +715,7 @@ sequenceDiagram
   participant UseCase as GetPointWeatherForecast
   participant DEM as ElevationProvider
   participant Gateway as OpenMeteoWeatherForecastGateway
-  participant Daily as Daily weather aggregator
+  participant Period as Weather period aggregator
 
   Map->>Command: selected WGS84 coordinate
   Map->>Command: point-inspection command
@@ -724,10 +724,10 @@ sequenceDiagram
   UseCase->>DEM: sample coordinate
   DEM-->>UseCase: terrain elevation or unavailable
   UseCase->>Gateway: coordinate + optional elevation + model
-  Gateway-->>UseCase: normalized current and local hourly values
-  UseCase->>Daily: seven location-local hourly groups
-  Daily-->>UseCase: daylight summaries and statuses
-  UseCase-->>Panel: current, 24+ hourly values, and seven days
+  Gateway-->>UseCase: normalized current and eight local dates
+  UseCase->>Period: current 3 h, daylight, and anchored night samples
+  Period-->>UseCase: interval metrics and primary/secondary statuses
+  UseCase-->>Panel: compact summary, 24+ hourly values, and seven date rows
 ```
 
 Weather uses a serializable one-shot command because the persistent map and contextual
@@ -740,12 +740,14 @@ No forecast state is written to Zustand, IndexedDB, or a share URL.
 `GetPointWeatherForecast` first asks the existing local terrain provider for the clicked
 point. A finite sample is sent as the forecast elevation; otherwise the Open-Meteo
 response elevation is retained. The gateway requests `timezone=auto`, so hourly
-grouping, day labels, and model-update formatting follow the selected location rather
-than the browser. Only hourly values are requested. The application derives all seven
-day rows, their daylight temperature/wind ranges, and complete daylight precipitation
-locally. Primary sky and precipitation use per-hour duration and dominance; visibility
-is a separate severity and daylight-period result and cannot replace primary weather.
-The application never requests provider `daily` values or precipitation probability.
+grouping, date labels, and model-update formatting follow the selected location rather
+than the browser. Only current and hourly values are requested. Eight location-local
+dates provide seven complete displayed nights. For each date, post-daylight samples are
+combined with the following date's pre-daylight samples before aggregation, so midnight
+does not split the night. Day, night, and current three-hour intervals share one metrics
+and status contract. Primary sky and precipitation use per-hour duration and dominance;
+visibility remains a separate severity and interval-position result. The application
+never requests provider `daily` values or precipitation probability.
 
 The same primary click queues point inspection. Weather explicitly refreshes that popup
 for the selected coordinate instead of using the ordinary second-click close behavior.

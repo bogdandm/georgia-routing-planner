@@ -28,25 +28,34 @@ function forecastData(
     readonly coordinate?: ElevationCoordinate;
   } = {},
 ): WeatherForecastData {
-  const hourly = Array.from({ length: 7 * 24 }, (_, index) => {
+  const hourly = Array.from({ length: 8 * 24 }, (_, index) => {
     const day = 18 + Math.floor(index / 24);
     const hour = index % 24;
     const isDay = hour >= 6 && hour < 20;
+    const preDawnExtreme = !isDay && hour === 2;
+    const firstDatePreDawn = preDawnExtreme && day === 18;
+    const nightFog = !isDay && day === 19 && (hour === 1 || hour === 2);
     return {
       time: localTimestamp(day, hour),
-      temperatureCelsius: isDay ? 10 + (hour - 6) / 2 : hour === 2 ? -40 : 5,
+      temperatureCelsius: isDay
+        ? 10 + (hour - 6) / 2
+        : preDawnExtreme
+          ? firstDatePreDawn
+            ? -90
+            : -40
+          : 5,
       apparentTemperatureCelsius: 10,
-      precipitationMm: isDay && hour === 12 ? 1 : hour === 2 ? 20 : 0,
-      rainMm: isDay && hour === 12 ? 1 : hour === 2 ? 20 : 0,
+      precipitationMm: isDay && hour === 12 ? 1 : preDawnExtreme ? 20 : 0,
+      rainMm: isDay && hour === 12 ? 1 : preDawnExtreme ? 20 : 0,
       showersMm: 0,
       snowfallCm: 0,
-      precipitationType: isDay && hour === 12 ? 1 : 0,
-      weatherCode: 1,
-      cloudCoverPercent: 30,
-      visibilityMeters: 20_000,
-      windSpeedKmh: isDay ? 5 + (hour - 6) : hour === 2 ? 150 : 2,
+      precipitationType: isDay && hour === 12 ? 1 : preDawnExtreme ? 1 : 0,
+      weatherCode: nightFog ? 45 : 1,
+      cloudCoverPercent: nightFog ? 100 : 30,
+      visibilityMeters: nightFog ? 500 : 20_000,
+      windSpeedKmh: isDay ? 5 + (hour - 6) : preDawnExtreme ? 150 : 2,
       windDirectionDegrees: 180,
-      windGustsKmh: 20,
+      windGustsKmh: preDawnExtreme ? 180 : 20,
       isDay,
     };
   });
@@ -173,7 +182,7 @@ describe('GetPointWeatherForecast', () => {
     });
   });
 
-  it('groups seven provider-local days and excludes every night extreme', async () => {
+  it('anchors complete nights to the local date on which they begin', async () => {
     const data = forecastData();
     const result = await createUseCase(
       { fetch: vi.fn().mockResolvedValue(data) },
@@ -191,19 +200,43 @@ describe('GetPointWeatherForecast', () => {
       '2026-07-24',
     ]);
     expect(result.days[0]).toMatchObject({
-      daylightTemperatureMinCelsius: 10,
-      daylightTemperatureMaxCelsius: 16.5,
-      daylightWindSpeedMinKmh: 5,
-      daylightWindSpeedMaxKmh: 18,
-      daylightPrecipitationMm: 1,
-      status: {
-        primary: { precipitation: 'occasional_rain' },
-        debug: { daylightHours: 14, precipTotal: 1 },
+      day: {
+        temperatureMinCelsius: 10,
+        temperatureMaxCelsius: 16.5,
+        windSpeedMinKmh: 5,
+        windSpeedMaxKmh: 18,
+        windGustsMinKmh: 20,
+        windGustsMaxKmh: 20,
+        precipitationMm: 1,
+        status: {
+          primary: { precipitation: 'occasional_rain' },
+          debug: { periodHours: 14, precipTotal: 1 },
+        },
+      },
+      night: {
+        temperatureMinCelsius: -40,
+        temperatureMaxCelsius: 5,
+        windSpeedMinKmh: 2,
+        windSpeedMaxKmh: 150,
+        windGustsMinKmh: 20,
+        windGustsMaxKmh: 180,
+        precipitationMm: 20,
+        status: {
+          primary: { precipitation: 'occasional_rain' },
+          visibility: { level: 'fog', period: 'overnight', label: 'Fog overnight' },
+          debug: { periodHours: 10, precipTotal: 20 },
+        },
       },
     });
-    expect(result.days[0]?.daylightTemperatureMinCelsius).not.toBe(-40);
-    expect(result.days[0]?.daylightWindSpeedMaxKmh).not.toBe(150);
-    expect(result.days[0]?.daylightPrecipitationMm).not.toBe(21);
+    expect(result.days[0]?.night.temperatureMinCelsius).not.toBe(-90);
+    expect(result.currentThreeHours).toMatchObject({
+      temperatureMinCelsius: -90,
+      temperatureMaxCelsius: 5,
+      precipitationMm: 20,
+      windGustsMaxKmh: 180,
+      status: { primary: { precipitation: 'heavy_rain' } },
+    });
+    expect(result.days[0]?.night.status.primary.label).not.toContain('fog');
   });
 
   it('preserves the selected location time-zone metadata for independent points', async () => {
@@ -329,7 +362,7 @@ describe('GetPointWeatherForecast', () => {
     expect(completedEvent?.data).toMatchObject({
       operationId: 'weather-operation',
       model: 'ecmwf_ifs',
-      hourlyCount: 168,
+      hourlyCount: 192,
       dayCount: 7,
       elevationSource: 'open-meteo-dem',
       modelUpdateAvailable: true,

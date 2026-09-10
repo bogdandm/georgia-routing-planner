@@ -195,8 +195,8 @@ function validateHourlyShape(response: ForecastResponse): void {
     }
   }
   const localDates = new Set(response.hourly.time.map((time) => time.slice(0, 10)));
-  if (localDates.size !== 7) {
-    throw invalidResponse('Open-Meteo did not return seven local forecast days.');
+  if (localDates.size !== 8) {
+    throw invalidResponse('Open-Meteo did not return eight local forecast days.');
   }
   const futureSlots = response.hourly.time.filter(
     (time) => time >= response.current.time,
@@ -372,7 +372,7 @@ export class OpenMeteoWeatherForecastGateway implements WeatherForecastGateway {
       longitude: input.coordinate.longitude.toFixed(5),
       models: model.requestIdentifier,
       timezone: 'auto',
-      forecast_days: '7',
+      forecast_days: '8',
       timeformat: 'iso8601',
       temperature_unit: 'celsius',
       wind_speed_unit: 'kmh',

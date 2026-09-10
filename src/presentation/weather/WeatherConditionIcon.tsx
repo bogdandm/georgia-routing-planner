@@ -15,7 +15,7 @@ import { useRef, useState, type ReactElement } from 'react';
 import type {
   VisibilityStatus,
   WeatherIcon,
-} from '@/domain/weather/aggregateDailyWeatherStatus';
+} from '@/domain/weather/aggregateWeatherPeriodStatus';
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 
 interface WeatherConditionIconProps {
@@ -161,29 +161,43 @@ function layerSx(
   };
 }
 
-export function DailyWeatherIcon({
+export function WeatherPeriodIcon({
   icon,
+  isDay,
   label,
 }: {
   readonly icon: WeatherIcon;
+  readonly isDay: boolean;
   readonly label: string;
 }) {
   const skyLayers: ReactElement[] = [];
   switch (icon.sky) {
     case 'clear':
       skyLayers.push(
-        <WbSunnyOutlinedIcon key="sun" sx={layerSx(24, 6, 2, 'warning.main')} />,
+        isDay ? (
+          <WbSunnyOutlinedIcon key="sky" sx={layerSx(24, 6, 2, 'warning.main')} />
+        ) : (
+          <NightsStayOutlinedIcon key="sky" sx={layerSx(24, 6, 2, 'info.light')} />
+        ),
       );
       break;
     case 'mostly_clear':
       skyLayers.push(
-        <WbSunnyOutlinedIcon key="sun" sx={layerSx(20, 2, 1, 'warning.main')} />,
+        isDay ? (
+          <WbSunnyOutlinedIcon key="sky" sx={layerSx(20, 2, 1, 'warning.main')} />
+        ) : (
+          <NightsStayOutlinedIcon key="sky" sx={layerSx(20, 2, 1, 'info.light')} />
+        ),
         <CloudOutlinedIcon key="cloud" sx={layerSx(22, 13, 8, 'text.secondary')} />,
       );
       break;
     case 'partly_cloudy':
       skyLayers.push(
-        <WbSunnyOutlinedIcon key="sun" sx={layerSx(18, 1, 1, 'warning.main')} />,
+        isDay ? (
+          <WbSunnyOutlinedIcon key="sky" sx={layerSx(18, 1, 1, 'warning.main')} />
+        ) : (
+          <NightsStayOutlinedIcon key="sky" sx={layerSx(18, 1, 1, 'info.light')} />
+        ),
         <FilterDramaOutlinedIcon
           key="cloud"
           sx={layerSx(27, 8, 6, 'text.secondary')}

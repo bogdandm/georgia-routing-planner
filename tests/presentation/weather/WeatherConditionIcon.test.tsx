@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 import type {
   VisibilityStatus,
   WeatherIcon,
-} from '@/domain/weather/aggregateDailyWeatherStatus';
+} from '@/domain/weather/aggregateWeatherPeriodStatus';
 import {
-  DailyWeatherIcon,
   VisibilityStatusIcon,
   WeatherConditionIcon,
+  WeatherPeriodIcon,
 } from '@/presentation/weather/WeatherConditionIcon';
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 
@@ -79,13 +79,27 @@ describe('WeatherConditionIcon', () => {
   ] satisfies readonly { readonly label: string; readonly icon: WeatherIcon }[])(
     'labels layered artwork as $label',
     ({ label, icon }) => {
-      render(<DailyWeatherIcon icon={icon} label={label} />);
+      render(<WeatherPeriodIcon icon={icon} isDay label={label} />);
 
       expect(screen.getByLabelText(label)).toBeInTheDocument();
       expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
     },
   );
+
+  it('uses moon artwork for a clear night period', () => {
+    render(
+      <WeatherPeriodIcon
+        icon={{ sky: 'clear', phenomenon: null }}
+        isDay={false}
+        label="Night: Clear"
+      />,
+    );
+
+    expect(screen.getByLabelText('Night: Clear')).toBeInTheDocument();
+    expect(screen.getByTestId('NightsStayOutlinedIcon')).toBeInTheDocument();
+    expect(screen.queryByTestId('WbSunnyOutlinedIcon')).not.toBeInTheDocument();
+  });
 
   it('shows condition details on mouse hover', async () => {
     render(<WeatherConditionIcon code={63} isDay />);
@@ -102,8 +116,9 @@ describe('WeatherConditionIcon', () => {
 
   it('toggles daily details when tapped on a touch screen', async () => {
     render(
-      <DailyWeatherIcon
+      <WeatherPeriodIcon
         icon={{ sky: 'overcast', phenomenon: 'rain' }}
+        isDay
         label="Overcast with rain"
       />,
     );

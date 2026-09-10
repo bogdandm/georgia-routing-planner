@@ -102,18 +102,42 @@ describe('WeatherPanel', () => {
         index === 0
           ? {
               ...day,
-              daylightTemperatureMinCelsius: 7,
-              daylightTemperatureMaxCelsius: 24,
-              daylightWindSpeedMinKmh: 3,
-              daylightWindSpeedMaxKmh: 18,
-              daylightPrecipitationMm: 1.25,
-              status: {
-                ...day.status,
-                visibility: {
-                  level: 'fog',
-                  period: 'morning',
-                  label: 'Morning fog',
-                  icon: 'fog',
+              day: {
+                ...day.day,
+                temperatureMinCelsius: 7,
+                temperatureMaxCelsius: 24,
+                windSpeedMinKmh: 3,
+                windSpeedMaxKmh: 18,
+                windGustsMinKmh: 9,
+                windGustsMaxKmh: 27,
+                precipitationMm: 1.25,
+                status: {
+                  ...day.day.status,
+                  visibility: {
+                    level: 'fog',
+                    period: 'morning',
+                    label: 'Morning fog',
+                    icon: 'fog',
+                  },
+                },
+              },
+              night: {
+                ...day.night,
+                temperatureMinCelsius: -3,
+                temperatureMaxCelsius: 8,
+                windSpeedMinKmh: 4,
+                windSpeedMaxKmh: 20,
+                windGustsMinKmh: 8,
+                windGustsMaxKmh: 30,
+                precipitationMm: 2.5,
+                status: {
+                  ...day.night.status,
+                  visibility: {
+                    level: 'fog',
+                    period: 'overnight',
+                    label: 'Fog overnight',
+                    icon: 'fog',
+                  },
                 },
               },
             }
@@ -138,15 +162,34 @@ describe('WeatherPanel', () => {
     });
     expect(screen.queryByText(/All times:/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/Click another map point/u)).not.toBeInTheDocument();
-    expect(screen.getByText('Clear sky')).toBeInTheDocument();
-    expect(screen.queryByText(/Next 3 hours/u)).not.toBeInTheDocument();
-    expect(screen.getByText('2.8 m/s S')).toBeInTheDocument();
-    expect(screen.getByText('4.2 m/s')).toBeInTheDocument();
-    expect(screen.getByLabelText('Feels like')).toBeInTheDocument();
-    expect(screen.getByLabelText('Wind')).toBeInTheDocument();
-    expect(screen.getByLabelText('Gusts')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cloud')).toBeInTheDocument();
-    expect(screen.getByLabelText('Visibility')).toBeInTheDocument();
+    const summary = screen.getByRole('region', {
+      name: 'Current, day, and night summary',
+    });
+    const currentSummary = within(summary).getByRole('article', {
+      name: 'Now · 3 h forecast',
+    });
+    expect(
+      within(currentSummary).getByLabelText('Now · 3 h: Clear'),
+    ).toBeInTheDocument();
+    expect(
+      within(currentSummary).getByLabelText(
+        'Now · 3 h wind 2.8 to 2.8 metres per second',
+      ),
+    ).toHaveTextContent('2.8 m/s');
+    expect(
+      within(currentSummary).getByLabelText(
+        'Now · 3 h gusts 4.2 to 4.2 metres per second',
+      ),
+    ).toHaveTextContent('4.2 m/s');
+    expect(
+      within(summary).getByRole('article', { name: 'Day forecast' }),
+    ).toBeVisible();
+    expect(
+      within(summary).getByRole('article', { name: 'Night forecast' }),
+    ).toBeVisible();
+    expect(screen.queryByLabelText('Feels like')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Cloud')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument();
 
     const hourlyRegion = screen.getByRole('region', { name: 'Hourly forecast' });
     const hourlyCards = within(hourlyRegion).getAllByRole('article');
@@ -159,21 +202,45 @@ describe('WeatherPanel', () => {
     );
 
     const dailyList = screen.getByRole('list', { name: 'Seven-day forecast' });
-    expect(within(dailyList).getAllByRole('listitem')).toHaveLength(7);
-    expect(within(dailyList).getAllByText('Clear')).toHaveLength(7);
-    expect(within(dailyList).getByText('Morning fog')).toBeInTheDocument();
-    expect(within(dailyList).getByLabelText('Morning fog')).toBeInTheDocument();
+    const dailyRows = within(dailyList).getAllByRole('listitem');
+    expect(dailyRows).toHaveLength(7);
+    const firstDailyRow = dailyRows[0];
+    if (firstDailyRow === undefined) throw new Error('Expected the first daily row.');
+    const dayForecast = within(firstDailyRow).getByRole('article', {
+      name: 'Day forecast',
+    });
+    const nightForecast = within(firstDailyRow).getByRole('article', {
+      name: 'Night forecast',
+    });
+    expect(within(dayForecast).getByLabelText('Day: Clear')).toBeInTheDocument();
+    expect(within(dayForecast).getByLabelText('Morning fog')).toBeInTheDocument();
     expect(
-      screen.getByLabelText('Daytime temperature 7 to 24 degrees Celsius'),
+      within(dayForecast).getByLabelText('Day temperature 7 to 24 degrees Celsius'),
     ).toHaveTextContent('7…24 °C');
     expect(
-      screen.getByLabelText('Daytime wind 0.8 to 5.0 metres per second'),
+      within(dayForecast).getByLabelText('Day wind 0.8 to 5.0 metres per second'),
     ).toHaveTextContent('0.8…5.0 m/s');
     expect(
-      screen.getByLabelText('Daylight precipitation 1.25 millimetres'),
+      within(dayForecast).getByLabelText('Day gusts 2.5 to 7.5 metres per second'),
+    ).toHaveTextContent('2.5…7.5 m/s');
+    expect(
+      within(dayForecast).getByLabelText('Day precipitation 1.25 millimetres'),
     ).toHaveTextContent('1.3 mm');
-    expect(screen.getAllByLabelText('Daylight wind')).toHaveLength(7);
-    expect(screen.getAllByLabelText('Daylight precipitation')).toHaveLength(7);
+    expect(within(nightForecast).getByLabelText('Night: Clear')).toBeInTheDocument();
+    expect(within(nightForecast).getByLabelText('Fog overnight')).toBeInTheDocument();
+    expect(
+      within(nightForecast).getByLabelText('Night temperature -3 to 8 degrees Celsius'),
+    ).toHaveTextContent('-3…8 °C');
+    expect(
+      within(nightForecast).getByLabelText('Night wind 1.1 to 5.6 metres per second'),
+    ).toHaveTextContent('1.1…5.6 m/s');
+    expect(
+      within(nightForecast).getByLabelText('Night gusts 2.2 to 8.3 metres per second'),
+    ).toHaveTextContent('2.2…8.3 m/s');
+    expect(
+      within(nightForecast).getByLabelText('Night precipitation 2.5 millimetres'),
+    ).toHaveTextContent('2.5 mm');
+    expect(within(dailyList).queryByText('Clear')).not.toBeInTheDocument();
 
     expect(screen.getByText('ECMWF IFS · Updated 18 Jul, 04:00')).toBeInTheDocument();
     expect(

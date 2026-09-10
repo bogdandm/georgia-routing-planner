@@ -5,8 +5,8 @@ import type { WeatherIcon } from '@/domain/weather/aggregateDailyWeatherStatus';
 import {
   DailyWeatherIcon,
   WeatherConditionIcon,
-  describeWmoWeatherCode,
 } from '@/presentation/weather/WeatherConditionIcon';
+import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 
 const conditionCases: readonly [readonly number[], string][] = [
   [[0], 'Clear sky'],

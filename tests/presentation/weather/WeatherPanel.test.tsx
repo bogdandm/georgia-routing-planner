@@ -312,6 +312,8 @@ describe('WeatherPanel', () => {
     expect(signal).not.toBeNull();
     expect((signal as unknown as AbortSignal).aborted).toBe(true);
     pending.reject(new DOMException('cancelled', 'AbortError'));
-    await waitFor(() => expect((signal as unknown as AbortSignal).aborted).toBe(true));
+    await waitFor(() => {
+      expect((signal as unknown as AbortSignal).aborted).toBe(true);
+    });
   });
 });

@@ -179,6 +179,14 @@ function invalidResponse(message: string): PointWeatherForecastError {
   return new PointWeatherForecastError('invalid-response', message);
 }
 
+function hourlyValueAt<T>(values: readonly T[], index: number): T {
+  const value = values[index];
+  if (value === undefined) {
+    throw invalidResponse('Open-Meteo returned mismatched hourly arrays.');
+  }
+  return value;
+}
+
 function validateHourlyShape(response: ForecastResponse): void {
   const length = response.hourly.time.length;
   for (const field of hourlyVariables) {
@@ -253,21 +261,24 @@ function derivePrecipitationType(
 
 function normalizeHourly(response: ForecastResponse): readonly HourlyWeatherForecast[] {
   return response.hourly.time.map((time, index) => {
-    const precipitationMm = response.hourly.precipitation[index] as number;
-    const rainMm = response.hourly.rain[index] as number;
-    const showersMm = response.hourly.showers[index] as number;
-    const snowfallCm = response.hourly.snowfall[index] as number;
-    const weatherCode = response.hourly.weather_code[index] as number;
+    const precipitationMm = hourlyValueAt(response.hourly.precipitation, index);
+    const rainMm = hourlyValueAt(response.hourly.rain, index);
+    const showersMm = hourlyValueAt(response.hourly.showers, index);
+    const snowfallCm = hourlyValueAt(response.hourly.snowfall, index);
+    const weatherCode = hourlyValueAt(response.hourly.weather_code, index);
     return {
       time,
-      temperatureCelsius: response.hourly.temperature_2m[index] as number,
-      apparentTemperatureCelsius: response.hourly.apparent_temperature[index] as number,
+      temperatureCelsius: hourlyValueAt(response.hourly.temperature_2m, index),
+      apparentTemperatureCelsius: hourlyValueAt(
+        response.hourly.apparent_temperature,
+        index,
+      ),
       precipitationMm,
       rainMm,
       showersMm,
       snowfallCm,
       precipitationType: derivePrecipitationType(
-        response.hourly.precipitation_type[index] as number | null,
+        hourlyValueAt(response.hourly.precipitation_type, index),
         precipitationMm,
         rainMm,
         showersMm,
@@ -275,12 +286,12 @@ function normalizeHourly(response: ForecastResponse): readonly HourlyWeatherFore
         weatherCode,
       ),
       weatherCode,
-      cloudCoverPercent: response.hourly.cloud_cover[index] as number,
-      visibilityMeters: response.hourly.visibility[index] as number,
-      windSpeedKmh: response.hourly.wind_speed_10m[index] as number,
-      windDirectionDegrees: response.hourly.wind_direction_10m[index] as number,
-      windGustsKmh: response.hourly.wind_gusts_10m[index] as number,
-      isDay: response.hourly.is_day[index] === 1,
+      cloudCoverPercent: hourlyValueAt(response.hourly.cloud_cover, index),
+      visibilityMeters: hourlyValueAt(response.hourly.visibility, index),
+      windSpeedKmh: hourlyValueAt(response.hourly.wind_speed_10m, index),
+      windDirectionDegrees: hourlyValueAt(response.hourly.wind_direction_10m, index),
+      windGustsKmh: hourlyValueAt(response.hourly.wind_gusts_10m, index),
+      isDay: hourlyValueAt(response.hourly.is_day, index) === 1,
     };
   });
 }

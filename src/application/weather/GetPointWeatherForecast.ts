@@ -91,14 +91,20 @@ function deriveDays(
   }
 
   const dates = [...groups.keys()];
-  if (dates.some((date, index) => index > 0 && date <= (dates[index - 1] as string))) {
-    throw invalidResponse('The forecast local calendar days are not ordered.');
+  let previousDate: string | null = null;
+  for (const date of dates) {
+    if (previousDate !== null && date <= previousDate) {
+      throw invalidResponse('The forecast local calendar days are not ordered.');
+    }
+    previousDate = date;
   }
 
   return dates.map((date) => {
-    const daylight = (groups.get(date) as HourlyWeatherForecast[]).filter(
-      (hour) => hour.isDay,
-    );
+    const group = groups.get(date);
+    if (group === undefined) {
+      throw invalidResponse('The forecast local calendar day is missing.');
+    }
+    const daylight = group.filter((hour) => hour.isDay);
     if (daylight.length === 0) {
       throw invalidResponse(`The local forecast day ${date} has no daylight hours.`);
     }

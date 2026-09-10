@@ -36,8 +36,8 @@ import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import {
   DailyWeatherIcon,
   WeatherConditionIcon,
-  describeWmoWeatherCode,
 } from '@/presentation/weather/WeatherConditionIcon';
+import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const months = [
@@ -100,12 +100,16 @@ function parseLocalDate(value: string): {
 
 function localWeekday(date: string): string {
   const { year, month, day } = parseLocalDate(date);
-  return weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()] as string;
+  const weekday = weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
+  return weekday;
 }
 
 function localDateLabel(date: string): string {
   const { month, day } = parseLocalDate(date);
-  return `${day} ${months[month - 1] as string}`;
+  const monthLabel = months[month - 1];
+  if (monthLabel === undefined) throw new RangeError('Invalid local forecast month.');
+  return `${day.toString()} ${monthLabel}`;
 }
 
 function fullLocalDateTime(timestamp: string): string {
@@ -114,21 +118,25 @@ function fullLocalDateTime(timestamp: string): string {
 
 function formatMillimetres(value: number): string {
   if (value === 0) return '0 mm';
-  return value < 10 ? `${value.toFixed(1)} mm` : `${Math.round(value)} mm`;
+  return value < 10 ? `${value.toFixed(1)} mm` : `${Math.round(value).toString()} mm`;
 }
 
 function formatVisibility(value: number): string {
-  return value < 1_000 ? `${Math.round(value)} m` : `${(value / 1_000).toFixed(1)} km`;
+  return value < 1_000
+    ? `${Math.round(value).toString()} m`
+    : `${(value / 1_000).toFixed(1)} km`;
 }
 
 function compassDirection(degrees: number): string {
   const normalized = ((degrees % 360) + 360) % 360;
-  return compassDirections[Math.round(normalized / 22.5) % 16] as string;
+  const direction = compassDirections[Math.round(normalized / 22.5) % 16];
+  if (direction === undefined) throw new RangeError('Invalid wind direction.');
+  return direction;
 }
 
 function formatRange(minimum: number, maximum: number, unit: string): string {
-  const low = Math.round(minimum);
-  const high = Math.round(maximum);
+  const low = Math.round(minimum).toString();
+  const high = Math.round(maximum).toString();
   return low === high ? `${low} ${unit}` : `${low}…${high} ${unit}`;
 }
 
@@ -204,13 +212,13 @@ function CurrentForecast({ forecast }: { readonly forecast: PointWeatherForecast
     .reduce((total, hour) => total + hour.precipitationMm, 0);
   const current = forecast.current;
   const metrics: readonly [string, ReactNode][] = [
-    ['Feels like', `${Math.round(current.apparentTemperatureCelsius)} °C`],
+    ['Feels like', `${Math.round(current.apparentTemperatureCelsius).toString()} °C`],
     [
       'Wind',
-      `${Math.round(current.windSpeedKmh)} km/h ${compassDirection(current.windDirectionDegrees)}`,
+      `${Math.round(current.windSpeedKmh).toString()} km/h ${compassDirection(current.windDirectionDegrees)}`,
     ],
-    ['Gusts', `${Math.round(current.windGustsKmh)} km/h`],
-    ['Cloud', `${Math.round(current.cloudCoverPercent)}%`],
+    ['Gusts', `${Math.round(current.windGustsKmh).toString()} km/h`],
+    ['Cloud', `${Math.round(current.cloudCoverPercent).toString()}%`],
     ['Visibility', formatVisibility(current.visibilityMeters)],
   ];
 
@@ -218,7 +226,7 @@ function CurrentForecast({ forecast }: { readonly forecast: PointWeatherForecast
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
         <Typography
-          aria-label={`${Math.round(current.temperatureCelsius)} degrees Celsius`}
+          aria-label={`${Math.round(current.temperatureCelsius).toString()} degrees Celsius`}
           sx={{
             fontSize: 40,
             fontWeight: 750,
@@ -284,7 +292,7 @@ function HourlyCard({
   readonly currentTime: string;
 }) {
   const condition = describeWmoWeatherCode(hour.weatherCode);
-  const temperature = Math.round(hour.temperatureCelsius);
+  const temperature = Math.round(hour.temperatureCelsius).toString();
   const precipitation = formatMillimetres(hour.precipitationMm);
   return (
     <Paper
@@ -340,10 +348,17 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
   useEffect(() => {
     updateScrollState();
     const region = scrollRef.current;
-    if (region === null || globalThis.ResizeObserver === undefined) return undefined;
-    const observer = new ResizeObserver(updateScrollState);
+    const ResizeObserverConstructor = (
+      globalThis as unknown as {
+        ResizeObserver?: typeof ResizeObserver;
+      }
+    ).ResizeObserver;
+    if (region === null || ResizeObserverConstructor === undefined) return undefined;
+    const observer = new ResizeObserverConstructor(updateScrollState);
     observer.observe(region);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [hours.length, updateScrollState]);
   const scroll = (direction: -1 | 1) => {
     scrollRef.current?.scrollBy({ left: direction * 240, behavior: 'smooth' });
@@ -359,7 +374,9 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
           size="small"
           aria-label="Scroll hourly forecast backward"
           disabled={!canScrollBackward}
-          onClick={() => scroll(-1)}
+          onClick={() => {
+            scroll(-1);
+          }}
         >
           <ChevronLeftOutlinedIcon fontSize="small" />
         </IconButton>
@@ -367,7 +384,9 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
           size="small"
           aria-label="Scroll hourly forecast forward"
           disabled={!canScrollForward}
-          onClick={() => scroll(1)}
+          onClick={() => {
+            scroll(1);
+          }}
         >
           <ChevronRightOutlinedIcon fontSize="small" />
         </IconButton>
@@ -405,10 +424,14 @@ function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
     day.daylightWindSpeedMaxKmh,
     'km/h',
   );
-  const roundedTemperatureMin = Math.round(day.daylightTemperatureMinCelsius);
-  const roundedTemperatureMax = Math.round(day.daylightTemperatureMaxCelsius);
-  const roundedWindMin = Math.round(day.daylightWindSpeedMinKmh);
-  const roundedWindMax = Math.round(day.daylightWindSpeedMaxKmh);
+  const roundedTemperatureMin = Math.round(
+    day.daylightTemperatureMinCelsius,
+  ).toString();
+  const roundedTemperatureMax = Math.round(
+    day.daylightTemperatureMaxCelsius,
+  ).toString();
+  const roundedWindMin = Math.round(day.daylightWindSpeedMinKmh).toString();
+  const roundedWindMax = Math.round(day.daylightWindSpeedMaxKmh).toString();
   const precipitation = formatMillimetres(day.daylightPrecipitationMm);
 
   return (
@@ -458,7 +481,7 @@ function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
         <Typography
           variant="caption"
           color="text.secondary"
-          aria-label={`Daylight precipitation ${day.daylightPrecipitationMm} millimetres`}
+          aria-label={`Daylight precipitation ${day.daylightPrecipitationMm.toString()} millimetres`}
           sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
         >
           {precipitation}
@@ -572,9 +595,16 @@ export function WeatherPanel() {
   );
 
   useEffect(() => {
-    if (request === null) return;
-    consumeWeatherForecastRequest(request.id);
-    loadForecast(request.coordinate);
+    if (request === null) return undefined;
+    let shouldStart = true;
+    queueMicrotask(() => {
+      if (!shouldStart) return;
+      consumeWeatherForecastRequest(request.id);
+      loadForecast(request.coordinate);
+    });
+    return () => {
+      shouldStart = false;
+    };
   }, [loadForecast, request]);
 
   useEffect(
@@ -634,7 +664,9 @@ export function WeatherPanel() {
                 <Typography variant="body2">{errorMessage(state.code)}</Typography>
                 <Button
                   variant="outlined"
-                  onClick={() => loadForecast(state.coordinate)}
+                  onClick={() => {
+                    loadForecast(state.coordinate);
+                  }}
                 >
                   Retry
                 </Button>

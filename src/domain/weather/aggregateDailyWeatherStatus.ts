@@ -105,8 +105,12 @@ function mean(values: readonly number[]): number {
 function median(values: readonly number[]): number {
   const ordered = [...values].sort((left, right) => left - right);
   const middle = Math.floor(ordered.length / 2);
-  if (ordered.length % 2 === 1) return ordered[middle] as number;
-  return ((ordered[middle - 1] as number) + (ordered[middle] as number)) / 2;
+  const middleValue = ordered[middle];
+  if (middleValue === undefined) throw new RangeError('Median requires a value.');
+  if (ordered.length % 2 === 1) return middleValue;
+  const previousValue = ordered[middle - 1];
+  if (previousValue === undefined) throw new RangeError('Median requires two values.');
+  return (previousValue + middleValue) / 2;
 }
 
 function longestRun<T>(values: readonly T[], matches: (value: T) => boolean): number {

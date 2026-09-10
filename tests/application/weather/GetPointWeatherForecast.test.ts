@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
-import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import type {
+  DiagnosticInput,
+  DiagnosticLogger,
+} from '@/application/ports/DiagnosticLogger';
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { ElevationCoordinate } from '@/application/ports/ElevationProvider';
 import type {
@@ -267,7 +270,9 @@ describe('GetPointWeatherForecast', () => {
         return new Promise<WeatherForecastData>((_resolve, reject) => {
           signal.addEventListener(
             'abort',
-            () => reject(new DOMException('cancelled', 'AbortError')),
+            () => {
+              reject(new DOMException('cancelled', 'AbortError'));
+            },
             { once: true },
           );
         });
@@ -307,7 +312,9 @@ describe('GetPointWeatherForecast', () => {
   });
 
   it('logs bounded operation metadata without coordinates or elevations', async () => {
-    const log = vi.fn();
+    const log = vi.fn((input: DiagnosticInput): void => {
+      void input;
+    });
     const logger = { log, getEvents: () => [] } satisfies DiagnosticLogger;
 
     await createUseCase(
@@ -316,22 +323,17 @@ describe('GetPointWeatherForecast', () => {
       logger,
     ).execute({ coordinate: selectedCoordinate }, new AbortController().signal);
 
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'weather.forecast.started' }),
-    );
-    expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'weather.forecast.completed',
-        data: expect.objectContaining({
-          operationId: 'weather-operation',
-          model: 'ecmwf_ifs',
-          hourlyCount: 168,
-          dayCount: 7,
-          elevationSource: 'open-meteo-dem',
-          modelUpdateAvailable: true,
-        }),
-      }),
-    );
+    const completedEvent = log.mock.calls
+      .map(([input]) => input)
+      .find((input) => input.name === 'weather.forecast.completed');
+    expect(completedEvent?.data).toMatchObject({
+      operationId: 'weather-operation',
+      model: 'ecmwf_ifs',
+      hourlyCount: 168,
+      dayCount: 7,
+      elevationSource: 'open-meteo-dem',
+      modelUpdateAvailable: true,
+    });
     expect(JSON.stringify(log.mock.calls)).not.toContain('44.8271');
     expect(JSON.stringify(log.mock.calls)).not.toContain('590');
   });

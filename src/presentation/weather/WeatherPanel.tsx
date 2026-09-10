@@ -179,32 +179,218 @@ function SelectedPoint({
   );
 }
 
+function LoadingSummaryPeriod() {
+  return (
+    <Box
+      sx={{
+        minWidth: 0,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        px: 1.25,
+        py: 0.5,
+      }}
+    >
+      <Skeleton variant="text" width={36} height={16} />
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: '44px minmax(0, 1fr)',
+          gap: 0.5,
+          alignItems: 'center',
+          mt: 0.25,
+        }}
+      >
+        <Skeleton variant="circular" width={40} height={40} />
+        <Stack spacing={0.125}>
+          <Skeleton variant="text" width="56%" height={14} />
+          <Skeleton variant="text" width="72%" height={14} />
+          <Skeleton variant="text" width="82%" height={14} />
+          <Skeleton variant="text" width="76%" height={14} />
+          <Skeleton variant="text" width="52%" height={14} />
+        </Stack>
+      </Box>
+    </Box>
+  );
+}
+
+function LoadingSummary() {
+  return (
+    <Paper
+      variant="outlined"
+      aria-label="Loading current, day, and night summary"
+      sx={{
+        minHeight: 220,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
+        '@media (max-width: 359px)': {
+          gridTemplateColumns: 'minmax(0, 1fr)',
+        },
+      }}
+    >
+      <Box sx={{ p: 1.25, bgcolor: appColors.surface.subtle }}>
+        <Skeleton variant="text" width={108} height={24} />
+        <Skeleton variant="text" width={148} height={20} />
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: '60px minmax(0, 1fr)',
+            gap: 0.75,
+            alignItems: 'center',
+            mt: 0.75,
+          }}
+        >
+          <Skeleton variant="circular" width={52} height={52} />
+          <Skeleton variant="text" width="76%" height={24} />
+        </Box>
+        <Skeleton variant="text" width={104} height={38} sx={{ mt: 0.375, mb: 0.75 }} />
+        <Stack spacing={0.25}>
+          {[72, 64, 88].map((labelWidth) => (
+            <Stack
+              key={labelWidth}
+              direction="row"
+              spacing={0.75}
+              sx={{ alignItems: 'center' }}
+            >
+              <Skeleton variant="circular" width={15} height={15} />
+              <Skeleton variant="text" width={labelWidth} height={18} />
+              <Skeleton variant="text" width={52} height={18} sx={{ ml: 'auto' }} />
+            </Stack>
+          ))}
+        </Stack>
+      </Box>
+      <Stack
+        sx={{
+          minWidth: 0,
+          my: 1,
+          borderLeft: 1,
+          borderColor: 'divider',
+          '@media (max-width: 359px)': {
+            mx: 1,
+            my: 0,
+            borderTop: 1,
+            borderLeft: 0,
+          },
+        }}
+      >
+        <LoadingSummaryPeriod />
+        <Divider sx={{ mx: 1.25 }} />
+        <LoadingSummaryPeriod />
+      </Stack>
+    </Paper>
+  );
+}
+
+function LoadingDailyPeriodRow() {
+  return (
+    <Box
+      sx={{
+        minWidth: 0,
+        display: 'grid',
+        gridTemplateColumns: '30px 30px minmax(0, 1fr) max-content max-content',
+        gridTemplateAreas:
+          '"label icon condition . temperature" "label icon wind gust precipitation"',
+        alignItems: 'center',
+        columnGap: 0.375,
+        rowGap: 0.125,
+        px: 0.75,
+        py: 0.375,
+        '@media (max-width: 359px)': {
+          gridTemplateColumns: '30px 30px minmax(0, 1fr) max-content',
+          gridTemplateAreas:
+            '"label icon condition temperature" "label icon wind gust" "label icon precipitation precipitation"',
+          rowGap: 0.25,
+        },
+      }}
+    >
+      <Skeleton variant="text" width={22} height={16} sx={{ gridArea: 'label' }} />
+      <Skeleton variant="circular" width={28} height={28} sx={{ gridArea: 'icon' }} />
+      <Skeleton variant="text" width="74%" height={16} sx={{ gridArea: 'condition' }} />
+      <Skeleton
+        variant="text"
+        width={48}
+        height={16}
+        sx={{ gridArea: 'temperature' }}
+      />
+      <Skeleton variant="text" width={58} height={14} sx={{ gridArea: 'wind' }} />
+      <Skeleton variant="text" width={58} height={14} sx={{ gridArea: 'gust' }} />
+      <Skeleton
+        variant="text"
+        width={38}
+        height={14}
+        sx={{ gridArea: 'precipitation' }}
+      />
+    </Box>
+  );
+}
+
+function LoadingDayForecastRow() {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        minHeight: 84,
+        display: 'grid',
+        gridTemplateColumns: '64px minmax(0, 1fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
+      }}
+    >
+      <Stack
+        spacing={0.25}
+        sx={{
+          my: 1,
+          px: 1,
+          justifyContent: 'center',
+          borderRight: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Skeleton variant="text" width={30} height={20} />
+        <Skeleton variant="text" width={42} height={18} />
+      </Stack>
+      <Stack sx={{ minWidth: 0, py: 0.25 }}>
+        <LoadingDailyPeriodRow />
+        <Divider sx={{ mx: 0.75 }} />
+        <LoadingDailyPeriodRow />
+      </Stack>
+    </Paper>
+  );
+}
+
 function LoadingForecast({ coordinate }: { readonly coordinate: MapCoordinate }) {
   return (
     <Stack spacing={2}>
       <SelectedPoint coordinate={coordinate} />
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.05fr)',
-          gap: 1,
-        }}
-      >
-        <Skeleton variant="rounded" height={272} />
-        <Stack spacing={1}>
-          <Skeleton variant="rounded" height={132} />
-          <Skeleton variant="rounded" height={132} />
+      <LoadingSummary />
+      <Stack spacing={1}>
+        <Skeleton variant="text" width={120} height={24} />
+        <Stack
+          direction="row"
+          spacing={1}
+          aria-label="Loading hourly forecast"
+          sx={{ overflow: 'hidden' }}
+        >
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton
+              key={index}
+              variant="rounded"
+              height={116}
+              sx={{ minWidth: 64, flex: '0 0 calc((100% - 32px) / 5)' }}
+            />
+          ))}
         </Stack>
-      </Box>
-      <Stack direction="row" spacing={1} aria-label="Loading hourly forecast">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} variant="rounded" width={72} height={116} />
-        ))}
       </Stack>
-      <Stack spacing={0.5} aria-label="Loading seven-day forecast">
-        {Array.from({ length: 7 }, (_, index) => (
-          <Skeleton key={index} variant="rounded" height={112} />
-        ))}
+      <Stack spacing={1}>
+        <Skeleton variant="text" width={112} height={24} />
+        <Stack spacing={1} aria-label="Loading seven-day forecast">
+          {Array.from({ length: 7 }, (_, index) => (
+            <LoadingDayForecastRow key={index} />
+          ))}
+        </Stack>
       </Stack>
     </Stack>
   );
@@ -291,7 +477,8 @@ function CompactMetricValue({
         aria-label={ariaLabel}
         sx={{
           minWidth: 0,
-          fontSize: compact ? '0.55rem' : '0.68rem',
+          fontSize: compact ? '0.6rem' : '0.68rem',
+          lineHeight: 1.3,
           fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -313,12 +500,12 @@ function CurrentMetricRow({
   readonly ariaLabel: string;
 }) {
   return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-      <WeatherMetricIcon kind={kind} label={label} size={17} />
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <WeatherMetricIcon kind={kind} label={label} size={15} />
       <Typography
         variant="caption"
         color="text.secondary"
-        sx={{ minWidth: 0, flex: 1 }}
+        sx={{ minWidth: 0, flex: 1, fontSize: '0.7rem', lineHeight: 1.3 }}
       >
         {label}
       </Typography>
@@ -326,41 +513,13 @@ function CurrentMetricRow({
         variant="body2"
         aria-label={ariaLabel}
         sx={{
-          fontSize: '0.75rem',
+          fontSize: '0.7rem',
+          lineHeight: 1.3,
           fontVariantNumeric: 'tabular-nums',
           whiteSpace: 'nowrap',
         }}
       >
         {value}
-      </Typography>
-    </Stack>
-  );
-}
-
-function VisibilityBadge({ period }: { readonly period: PointWeatherForecastPeriod }) {
-  const label = period.status.visibility.label;
-  if (label === null) return null;
-  return (
-    <Stack
-      direction="row"
-      spacing={0.375}
-      sx={{
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        maxWidth: '100%',
-        px: 0.75,
-        py: 0.25,
-        borderRadius: 999,
-        bgcolor: 'background.paper',
-      }}
-    >
-      <VisibilityStatusIcon status={period.status.visibility} />
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ minWidth: 0, fontSize: '0.65rem', lineHeight: 1.2 }}
-      >
-        {label}
       </Typography>
     </Stack>
   );
@@ -395,8 +554,8 @@ function PeriodGraphic({
             bottom: -2,
             display: 'grid',
             placeItems: 'center',
-            width: 18,
-            height: 18,
+            width: 16,
+            height: 16,
             borderRadius: '50%',
             bgcolor: 'background.paper',
           }}
@@ -408,24 +567,19 @@ function PeriodGraphic({
   );
 }
 
-function CurrentForecastCard({
-  forecast,
-}: {
-  readonly forecast: PointWeatherForecast;
-}) {
+function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast }) {
   const label = 'Now · next 3 h';
   const period = forecast.currentThreeHours;
   const values = periodDisplayValues(period);
   return (
-    <Paper
+    <Box
       component="article"
-      variant="outlined"
       aria-label={`${label} forecast`}
       sx={{
         height: '100%',
-        p: 1.5,
-        borderRadius: 1.25,
-        bgcolor: appColors.surface.selected,
+        px: 1.5,
+        py: 1.25,
+        bgcolor: appColors.surface.subtle,
       }}
     >
       <Typography variant="subtitle2">{label}</Typography>
@@ -439,33 +593,31 @@ function CurrentForecastCard({
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: '64px minmax(0, 1fr)',
+          gridTemplateColumns: '60px minmax(0, 1fr)',
           gap: 0.75,
           alignItems: 'center',
-          mt: 1,
+          mt: 0.75,
         }}
       >
         <PeriodGraphic
           isDay={forecast.current.isDay}
           label={label}
           period={period}
-          size={56}
+          size={52}
+          showVisibilityBadge
         />
-        <Stack spacing={0.5} sx={{ minWidth: 0 }}>
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}
-          >
-            {period.status.primary.label}
-          </Typography>
-          <VisibilityBadge period={period} />
-        </Stack>
+        <Typography
+          variant="body2"
+          sx={{ minWidth: 0, fontWeight: 700, lineHeight: 1.25 }}
+        >
+          {period.status.primary.label}
+        </Typography>
       </Box>
       <Typography
         aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
         sx={{
-          mt: 0.5,
-          mb: 1.25,
+          mt: 0.375,
+          mb: 0.75,
           fontSize: '1.45rem',
           fontWeight: 750,
           lineHeight: 1.2,
@@ -475,7 +627,7 @@ function CurrentForecastCard({
       >
         {values.temperature}
       </Typography>
-      <Stack spacing={0.5}>
+      <Stack spacing={0.25}>
         <CurrentMetricRow
           kind="wind"
           label="Wind"
@@ -495,11 +647,11 @@ function CurrentForecastCard({
           ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
         />
       </Stack>
-    </Paper>
+    </Box>
   );
 }
 
-function SummaryPeriodCard({
+function SummaryPeriod({
   isDay,
   label,
   period,
@@ -510,86 +662,90 @@ function SummaryPeriodCard({
 }) {
   const values = periodDisplayValues(period);
   return (
-    <Paper
+    <Box
       component="article"
-      variant="outlined"
       aria-label={`${label} forecast`}
       sx={{
-        minHeight: 132,
+        minWidth: 0,
+        flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        p: 1.25,
-        borderRadius: 1.25,
+        justifyContent: 'center',
+        px: 1.25,
+        py: 0.5,
       }}
     >
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'baseline' }}>
-        <Typography variant="body2" sx={{ flex: 1, fontWeight: 700 }}>
-          {label}
-        </Typography>
-        <Typography
-          variant="caption"
-          aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
-          sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
-        >
-          {values.temperature}
-        </Typography>
-      </Stack>
+      <Typography
+        variant="body2"
+        sx={{ fontSize: '0.75rem', fontWeight: 700, lineHeight: 1.3 }}
+      >
+        {label}
+      </Typography>
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: '48px minmax(0, 1fr)',
+          gridTemplateColumns: '44px minmax(0, 1fr)',
           gap: 0.5,
           alignItems: 'center',
-          mt: 0.5,
+          mt: 0.25,
         }}
       >
-        <PeriodGraphic isDay={isDay} label={label} period={period} size={44} />
-        <Stack spacing={0.375} sx={{ minWidth: 0 }}>
+        <PeriodGraphic
+          isDay={isDay}
+          label={label}
+          period={period}
+          size={40}
+          showVisibilityBadge
+        />
+        <Stack spacing={0.125} sx={{ minWidth: 0 }}>
           <Typography
             variant="caption"
-            sx={{ fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' }}
+            aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+            sx={{
+              fontSize: '0.68rem',
+              lineHeight: 1.3,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {values.temperature}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              overflowWrap: 'anywhere',
+            }}
           >
             {period.status.primary.label}
           </Typography>
-          <VisibilityBadge period={period} />
+          <CompactMetricValue
+            kind="wind"
+            label={`${label} wind`}
+            value={values.wind}
+            ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          />
+          <CompactMetricValue
+            kind="gusts"
+            label={`${label} gusts`}
+            value={values.gusts}
+            ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          />
+          <CompactMetricValue
+            kind="precipitation"
+            label={`${label} precipitation`}
+            value={values.precipitation}
+            ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          />
         </Stack>
       </Box>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 0.25,
-          mt: 'auto',
-          pt: 0.5,
-        }}
-      >
-        <CompactMetricValue
-          kind="wind"
-          label={`${label} wind`}
-          value={values.wind}
-          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-          compact
-        />
-        <CompactMetricValue
-          kind="gusts"
-          label={`${label} gusts`}
-          value={values.gusts}
-          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-          compact
-        />
-        <CompactMetricValue
-          kind="precipitation"
-          label={`${label} precipitation`}
-          value={values.precipitation}
-          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-          compact
-        />
-      </Box>
-    </Paper>
+    </Box>
   );
 }
 
-function DailyPeriodCard({
+function DailyPeriodRow({
   isDay,
   label,
   period,
@@ -600,41 +756,71 @@ function DailyPeriodCard({
 }) {
   const values = periodDisplayValues(period);
   return (
-    <Paper
+    <Box
       component="article"
-      variant="outlined"
       aria-label={`${label} forecast`}
       sx={{
-        minHeight: 108,
+        minWidth: 0,
         display: 'grid',
-        gridTemplateColumns: '40px minmax(0, 1fr)',
-        gap: 0.5,
-        alignItems: 'start',
-        p: 1,
-        borderRadius: 1.25,
+        gridTemplateColumns: '30px 30px minmax(0, 1fr) max-content max-content',
+        gridTemplateAreas:
+          '"label icon condition . temperature" "label icon wind gust precipitation"',
+        alignItems: 'center',
+        columnGap: 0.375,
+        rowGap: 0.125,
+        px: 0.75,
+        py: 0.375,
+        '@media (max-width: 359px)': {
+          gridTemplateColumns: '30px 30px minmax(0, 1fr) max-content',
+          gridTemplateAreas:
+            '"label icon condition temperature" "label icon wind gust" "label icon precipitation precipitation"',
+          rowGap: 0.25,
+        },
       }}
     >
-      <PeriodGraphic
-        isDay={isDay}
-        label={label}
-        period={period}
-        size={36}
-        showVisibilityBadge
-      />
-      <Stack spacing={0.125} sx={{ minWidth: 0 }}>
-        <Typography
-          variant="caption"
-          sx={{ fontSize: '0.7rem', fontWeight: 700, lineHeight: 1.2 }}
-        >
-          {period.status.primary.label}
-        </Typography>
-        <Typography
-          variant="body2"
-          aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
-          sx={{ fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}
-        >
-          {values.temperature}
-        </Typography>
+      <Typography
+        variant="caption"
+        sx={{ gridArea: 'label', alignSelf: 'start', pt: 0.125 }}
+      >
+        {label}
+      </Typography>
+      <Box sx={{ gridArea: 'icon' }}>
+        <PeriodGraphic
+          isDay={isDay}
+          label={label}
+          period={period}
+          size={28}
+          showVisibilityBadge
+        />
+      </Box>
+      <Typography
+        variant="caption"
+        sx={{
+          gridArea: 'condition',
+          minWidth: 0,
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          lineHeight: 1.2,
+        }}
+      >
+        {period.status.primary.label}
+      </Typography>
+      <Typography
+        variant="caption"
+        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+        sx={{
+          gridArea: 'temperature',
+          justifySelf: 'end',
+          fontSize: '0.7rem',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {values.temperature}
+      </Typography>
+      <Box sx={{ gridArea: 'wind', minWidth: 0 }}>
         <CompactMetricValue
           kind="wind"
           label={`${label} wind`}
@@ -642,6 +828,8 @@ function DailyPeriodCard({
           ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
           compact
         />
+      </Box>
+      <Box sx={{ gridArea: 'gust' }}>
         <CompactMetricValue
           kind="gusts"
           label={`${label} gusts`}
@@ -649,6 +837,8 @@ function DailyPeriodCard({
           ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
           compact
         />
+      </Box>
+      <Box sx={{ gridArea: 'precipitation', justifySelf: 'end' }}>
         <CompactMetricValue
           kind="precipitation"
           label={`${label} precipitation`}
@@ -656,8 +846,8 @@ function DailyPeriodCard({
           ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
           compact
         />
-      </Stack>
-    </Paper>
+      </Box>
+    </Box>
   );
 }
 
@@ -667,33 +857,41 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
     throw new RangeError('Forecast summary requires the current local day.');
   }
   return (
-    <Box
+    <Paper
+      variant="outlined"
       role="region"
       aria-label="Current, day, and night summary"
       sx={{
+        minHeight: 220,
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.05fr)',
-        gap: 1,
-        alignItems: 'stretch',
+        gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
         '@media (max-width: 359px)': {
           gridTemplateColumns: 'minmax(0, 1fr)',
         },
       }}
     >
-      <CurrentForecastCard forecast={forecast} />
+      <CurrentSummary forecast={forecast} />
       <Stack
-        spacing={1}
         sx={{
+          minWidth: 0,
+          my: 1,
+          borderLeft: 1,
+          borderColor: 'divider',
           '@media (max-width: 359px)': {
-            flexDirection: 'row',
-            '& > *': { minWidth: 0, flex: 1 },
+            mx: 1,
+            my: 0,
+            borderTop: 1,
+            borderLeft: 0,
           },
         }}
       >
-        <SummaryPeriodCard label="Day" period={firstDay.day} isDay />
-        <SummaryPeriodCard label="Night" period={firstDay.night} isDay={false} />
+        <SummaryPeriod label="Day" period={firstDay.day} isDay />
+        <Divider sx={{ mx: 1.25 }} />
+        <SummaryPeriod label="Night" period={firstDay.night} isDay={false} />
       </Stack>
-    </Box>
+    </Paper>
   );
 }
 
@@ -713,7 +911,8 @@ function HourlyCard({
       variant="outlined"
       aria-label={`${fullLocalDateTime(hour.time)}, ${condition}, ${temperature} degrees Celsius, ${precipitation} precipitation`}
       sx={{
-        minWidth: 72,
+        minWidth: 64,
+        flex: '0 0 calc((100% - 32px) / 5)',
         px: 1.25,
         py: 1,
         scrollSnapAlign: 'start',
@@ -815,7 +1014,9 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
           overflowX: 'auto',
           overflowY: 'hidden',
           pb: 0.5,
+          scrollbarWidth: 'none',
           scrollSnapType: 'x mandatory',
+          '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
         {hours.map((hour) => (
@@ -828,42 +1029,47 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
 
 function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
   return (
-    <Box
+    <Paper
       role="group"
+      variant="outlined"
       aria-label={`${localWeekday(day.date)} ${localDateLabel(day.date)}`}
       sx={{
-        minHeight: 116,
+        minHeight: 84,
         display: 'grid',
-        gridTemplateColumns: '48px repeat(2, minmax(0, 1fr))',
-        gap: 0.5,
-        alignItems: 'center',
-        py: 0.5,
-        '@media (max-width: 359px)': {
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-        },
+        gridTemplateColumns: '64px minmax(0, 1fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
       }}
     >
       <Box
         sx={{
-          '@media (max-width: 359px)': {
-            gridColumn: '1 / -1',
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 0.5,
-            pl: 0.5,
-          },
+          minWidth: 0,
+          my: 1,
+          px: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          borderRight: 1,
+          borderColor: 'divider',
         }}
       >
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
           {localWeekday(day.date)}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ whiteSpace: 'nowrap' }}
+        >
           {localDateLabel(day.date)}
         </Typography>
       </Box>
-      <DailyPeriodCard label="Day" period={day.day} isDay />
-      <DailyPeriodCard label="Night" period={day.night} isDay={false} />
-    </Box>
+      <Stack sx={{ minWidth: 0, py: 0.25 }}>
+        <DailyPeriodRow label="Day" period={day.day} isDay />
+        <Divider sx={{ mx: 0.75 }} />
+        <DailyPeriodRow label="Night" period={day.night} isDay={false} />
+      </Stack>
+    </Paper>
   );
 }
 
@@ -877,43 +1083,13 @@ function SevenDayForecast({
       <Typography component="h2" variant="subtitle2">
         7-day forecast
       </Typography>
-      <Box
-        aria-hidden="true"
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: '48px repeat(2, minmax(0, 1fr))',
-          gap: 0.5,
-          px: 1,
-          '@media (max-width: 359px)': {
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            '& > :first-of-type': { display: 'none' },
-          },
-        }}
-      >
-        <Box />
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontWeight: 700, textAlign: 'center' }}
-        >
-          Day
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontWeight: 700, textAlign: 'center' }}
-        >
-          Night
-        </Typography>
-      </Box>
-      <Box role="list" aria-label="Seven-day forecast">
-        {days.map((day, index) => (
+      <Stack role="list" aria-label="Seven-day forecast" spacing={1}>
+        {days.map((day) => (
           <Box key={day.date} role="listitem">
-            {index === 0 ? null : <Divider />}
             <DayForecastRow day={day} />
           </Box>
         ))}
-      </Box>
+      </Stack>
     </Stack>
   );
 }

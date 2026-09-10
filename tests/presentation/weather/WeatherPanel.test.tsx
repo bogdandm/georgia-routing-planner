@@ -214,6 +214,8 @@ describe('WeatherPanel', () => {
     const nightForecast = within(firstDailyRow).getByRole('article', {
       name: 'Night forecast',
     });
+    expect(within(firstDailyRow).getByText('Day')).toBeVisible();
+    expect(within(firstDailyRow).getByText('Night')).toBeVisible();
     expect(within(dayForecast).getByLabelText('Day: Clear')).toBeInTheDocument();
     expect(within(dayForecast).getByLabelText('Morning fog')).toBeInTheDocument();
     expect(

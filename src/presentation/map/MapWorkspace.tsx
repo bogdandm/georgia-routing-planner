@@ -428,6 +428,17 @@ export function MapWorkspace({
 
   useEffect(() => {
     if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
+    const currentInspection = facade.getPointInspection();
+    if (
+      currentInspection.status === 'open' &&
+      currentInspection.coordinate.longitude ===
+        pointInspectionCommand.coordinate.longitude &&
+      currentInspection.coordinate.latitude ===
+        pointInspectionCommand.coordinate.latitude
+    ) {
+      consumeMapPointInspectionCommand(pointInspectionCommand.id);
+      return;
+    }
     facade.openPointInspection(pointInspectionCommand.coordinate, {
       refreshNearbyPoiOnIdle: pointInspectionCommand.refreshNearbyPoiOnIdle,
     });

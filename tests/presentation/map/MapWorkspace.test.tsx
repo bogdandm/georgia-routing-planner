@@ -1315,25 +1315,33 @@ describe('MapWorkspace', () => {
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('default');
     });
+    act(() => {
+      facade.setPointInspection({
+        status: 'open',
+        coordinate: { longitude: 44.8, latitude: 41.7 },
+        elevation: { status: 'loading' },
+        nearbyPoi: { status: 'loading' },
+      });
+    });
     fireEvent.click(nativeMap, { button: 0 });
     expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
       coordinate: { longitude: 44.8, latitude: 41.7 },
     });
     await waitFor(() => {
-      expect(facade.pointInspectionRequests).toEqual([
-        { longitude: 44.8, latitude: 41.7 },
-      ]);
+      expect(facade.pointInspectionRequests).toEqual([]);
     });
     expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
       coordinate: { longitude: 44.8, latitude: 41.7 },
     });
 
+    act(() => {
+      facade.closePointInspection();
+    });
     mapClickCoordinate.longitude = -74.006;
     mapClickCoordinate.latitude = 40.7128;
     fireEvent.click(nativeMap, { button: 0 });
     await waitFor(() => {
       expect(facade.pointInspectionRequests).toEqual([
-        { longitude: 44.8, latitude: 41.7 },
         { longitude: -74.006, latitude: 40.7128 },
       ]);
     });
@@ -1376,7 +1384,7 @@ describe('MapWorkspace', () => {
       coordinate: { longitude: -74.006, latitude: 40.7128 },
       target: { kind: 'saved-marker' },
     });
-    expect(facade.pointInspectionRequests).toHaveLength(2);
+    expect(facade.pointInspectionRequests).toHaveLength(1);
   });
 
   it('applies the Sentinel preset when an applied scene is hidden', async () => {

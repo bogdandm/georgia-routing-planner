@@ -187,27 +187,41 @@ function LoadingSummaryPeriod() {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'center',
         px: 1,
         py: 0.5,
       }}
     >
       <Skeleton variant="text" width={36} height={16} />
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{ alignItems: 'flex-start', minWidth: 0, mt: 0.5 }}
+      <Box
+        sx={{
+          minWidth: 0,
+          display: 'grid',
+          gridTemplateColumns: '44px minmax(0, 1fr)',
+          columnGap: 1,
+          mt: 0.5,
+        }}
       >
-        <Skeleton variant="circular" width={36} height={36} sx={{ flexShrink: 0 }} />
-        <Stack spacing={0} sx={{ minWidth: 0, flex: 1 }}>
+        <Box
+          sx={{
+            height: '100%',
+            display: 'grid',
+            placeItems: 'center',
+            borderRight: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <Skeleton variant="circular" width={36} height={36} />
+        </Box>
+        <Stack spacing={0}>
           <Skeleton variant="text" width="72%" height={18} />
-          <Skeleton variant="text" width="60%" height={18} />
+          <Stack spacing={0} sx={{ mt: 0.5 }}>
+            <Skeleton variant="text" width="88%" height={15} />
+            <Skeleton variant="text" width="82%" height={15} />
+            <Skeleton variant="text" width="56%" height={15} />
+          </Stack>
         </Stack>
-      </Stack>
-      <Stack spacing={0} sx={{ mt: 0.5 }}>
-        <Skeleton variant="text" width="88%" height={15} />
-        <Skeleton variant="text" width="82%" height={15} />
-        <Skeleton variant="text" width="56%" height={15} />
-      </Stack>
+      </Box>
     </Box>
   );
 }
@@ -218,7 +232,7 @@ function LoadingSummary() {
       variant="outlined"
       aria-label="Loading current, day, and night summary"
       sx={{
-        minHeight: 220,
+        minHeight: 200,
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
         borderRadius: 1.25,
@@ -229,19 +243,19 @@ function LoadingSummary() {
       }}
     >
       <Box sx={{ px: 1.5, py: 1, bgcolor: appColors.surface.subtle }}>
-        <Skeleton variant="text" width={108} height={24} />
+        <Skeleton variant="text" width={108} height={20} />
         <Skeleton variant="text" width={148} height={20} />
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
           <Skeleton variant="circular" width={48} height={48} />
           <Skeleton variant="text" width="52%" height={24} />
         </Stack>
-        <Skeleton variant="text" width={108} height={32} sx={{ mt: 0.5, mb: 0.5 }} />
-        <Stack spacing={0} divider={<Divider flexItem />}>
+        <Skeleton variant="text" width={108} height={28} sx={{ mt: 0.5, mb: 0.5 }} />
+        <Stack spacing={0}>
           {[72, 64, 88].map((labelWidth) => (
             <Box
               key={labelWidth}
               sx={{
-                minHeight: 20,
+                minHeight: 16,
                 display: 'grid',
                 gridTemplateColumns: '16px minmax(0, 1fr) 52px',
                 columnGap: 0.5,
@@ -494,7 +508,7 @@ function CurrentMetricRow({
   return (
     <Box
       sx={{
-        minHeight: 20,
+        minHeight: 16,
         display: 'grid',
         gridTemplateColumns: '16px minmax(0, 1fr) max-content',
         columnGap: 0.5,
@@ -510,7 +524,7 @@ function CurrentMetricRow({
         aria-label={ariaLabel}
         sx={{
           justifySelf: 'end',
-          fontWeight: 600,
+          fontWeight: 500,
           lineHeight: 1.25,
           fontVariantNumeric: 'tabular-nums',
           textAlign: 'right',
@@ -617,7 +631,7 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
       >
         {values.temperature}
       </Typography>
-      <Stack spacing={0} divider={<Divider flexItem />}>
+      <Stack spacing={0}>
         <CurrentMetricRow
           kind="wind"
           label="Wind"
@@ -660,6 +674,7 @@ function SummaryPeriod({
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'center',
         px: 1,
         py: 0.5,
       }}
@@ -671,19 +686,33 @@ function SummaryPeriod({
       >
         {label}
       </Typography>
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{ alignItems: 'flex-start', minWidth: 0, mt: 0.5 }}
+      <Box
+        sx={{
+          minWidth: 0,
+          display: 'grid',
+          gridTemplateColumns: '44px minmax(0, 1fr)',
+          columnGap: 1,
+          mt: 0.5,
+        }}
       >
-        <PeriodGraphic
-          isDay={isDay}
-          label={label}
-          period={period}
-          size={36}
-          showVisibilityBadge
-        />
-        <Stack spacing={0} sx={{ minWidth: 0, flex: 1 }}>
+        <Box
+          sx={{
+            height: '100%',
+            display: 'grid',
+            placeItems: 'center',
+            borderRight: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <PeriodGraphic
+            isDay={isDay}
+            label={label}
+            period={period}
+            size={36}
+            showVisibilityBadge
+          />
+        </Box>
+        <Stack spacing={0} sx={{ minWidth: 0 }}>
           <Typography
             variant="body2"
             aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
@@ -696,34 +725,28 @@ function SummaryPeriod({
           >
             {values.temperature}
           </Typography>
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}
-          >
-            {period.status.primary.label}
-          </Typography>
+          <Stack spacing={0} sx={{ mt: 0.5 }}>
+            <CompactMetricValue
+              kind="wind"
+              label={`${label} wind`}
+              value={values.wind}
+              ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+            />
+            <CompactMetricValue
+              kind="gusts"
+              label={`${label} gusts`}
+              value={values.gusts}
+              ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+            />
+            <CompactMetricValue
+              kind="precipitation"
+              label={`${label} precipitation`}
+              value={values.precipitation}
+              ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+            />
+          </Stack>
         </Stack>
-      </Stack>
-      <Stack spacing={0} sx={{ mt: 0.5 }}>
-        <CompactMetricValue
-          kind="wind"
-          label={`${label} wind`}
-          value={values.wind}
-          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-        />
-        <CompactMetricValue
-          kind="gusts"
-          label={`${label} gusts`}
-          value={values.gusts}
-          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-        />
-        <CompactMetricValue
-          kind="precipitation"
-          label={`${label} precipitation`}
-          value={values.precipitation}
-          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-        />
-      </Stack>
+      </Box>
     </Box>
   );
 }
@@ -845,7 +868,7 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
       role="region"
       aria-label="Current, day, and night summary"
       sx={{
-        minHeight: 220,
+        minHeight: 200,
         display: 'grid',
         gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 0.9fr)',
         borderRadius: 1.25,

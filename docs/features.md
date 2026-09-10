@@ -407,16 +407,17 @@ clicked coordinate, and forecast elevation. The summary is one bordered card: a 
 tinted current-period section fills the left side, while daytime and night forecasts
 stack on the right behind inset dividers. The current section gives the local date and
 time, primary condition, temperature range, and visibly labelled wind, gust, and
-precipitation rows. Each Day and Night section places its condition and temperature
-beside the weather icon, with wind, gust, and precipitation values stacked beneath.
-Significant reduced visibility appears separately and never replaces the primary
-condition. The former large apparent-temperature, cloud-cover, visibility, wind, and
-gust metric cards are not rendered. Every weather and metric icon exposes its label on
-pointer hover, keyboard focus, and a touch-screen tap. A horizontally scrolling carousel
-contains exactly 24 ordered hourly slots from the current local forecast hour, including
-local weekday and time, condition, temperature, and precipitation. While loading,
-placeholders retain the same split summary and seven-row geometry; the hourly viewport
-uses the same card sizing as the ready state to avoid reflow as the response arrives.
+precipitation rows. Each Day and Night section places its temperature beside a weather
+icon, whose tooltip carries the primary condition without repeating it as visible text;
+wind, gust, and precipitation values stack beneath. Significant reduced visibility
+appears separately and never replaces the primary condition. The former large
+apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
+rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
+focus, and a touch-screen tap. A horizontally scrolling carousel contains exactly 24
+ordered hourly slots from the current local forecast hour, including local weekday and
+time, condition, temperature, and precipitation. While loading, placeholders retain the
+same split summary and seven-row geometry; the hourly viewport uses the same card sizing
+as the ready state to avoid reflow as the response arrives.
 
 Seven rows are derived from location-local hourly forecast data. Each date owns one
 full-width bordered card with a fixed date column and stacked Day and Night rows. A

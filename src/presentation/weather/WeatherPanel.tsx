@@ -640,18 +640,21 @@ function DailyPeriodCard({
           label={`${label} wind`}
           value={values.wind}
           ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          compact
         />
         <CompactMetricValue
           kind="gusts"
           label={`${label} gusts`}
           value={values.gusts}
           ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          compact
         />
         <CompactMetricValue
           kind="precipitation"
           label={`${label} precipitation`}
           value={values.precipitation}
           ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          compact
         />
       </Stack>
     </Paper>

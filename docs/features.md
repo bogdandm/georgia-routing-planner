@@ -402,24 +402,28 @@ same WGS84 coordinate to the forecast workflow. Marker placement retains higher
 priority. A route draft hidden behind Weather does not capture clicks; returning to
 Tracks resumes route selection.
 
-The selected-point context is one compact line containing only the clicked coordinate
-and forecast elevation. The summary header uses one compact interval widget throughout:
-the left column shows the next three hours, while the right column stacks the current
-local date's daytime forecast above its night forecast. Each widget contains only a
-condition icon, temperature range, precipitation total, wind-speed range, and a separate
-gust range. The former large apparent-temperature, cloud-cover, visibility, wind, and
-gust metric cards are not rendered. Every weather and metric icon exposes its label on
-pointer hover, keyboard focus, and a touch-screen tap. A horizontally scrolling carousel
-contains exactly 24 ordered hourly slots from the current local forecast hour, including
-local weekday and time, condition, temperature, and precipitation.
+The selected-point context is one compact location row containing a pin icon, the
+clicked coordinate, and forecast elevation. The summary uses a dedicated, softly tinted
+card for the next three hours beside two stacked white cards for the current local
+date's daytime and night forecasts. The current card gives the local date and time,
+primary condition, temperature range, and visibly labelled wind, gust, and precipitation
+rows. Day and night keep those metrics in one compact footer row beneath the condition.
+Significant reduced visibility appears as a separate compact status badge and never
+replaces the primary condition. The former large apparent-temperature, cloud-cover,
+visibility, wind, and gust metric cards are not rendered. Every weather and metric icon
+exposes its label on pointer hover, keyboard focus, and a touch-screen tap. A
+horizontally scrolling carousel contains exactly 24 ordered hourly slots from the
+current local forecast hour, including local weekday and time, condition, temperature,
+and precipitation.
 
 Seven rows are derived from location-local hourly forecast data. Each row places the
-local date beside the same compact widget for daylight and for the night beginning on
-that date. Night `D` includes all non-daylight samples after date `D`'s daylight period
-and all non-daylight samples before date `D+1`'s daylight period. Pre-sunrise samples on
-date `D` therefore belong to night `D-1`; local midnight never splits a physical night.
-An eighth fetched calendar date supplies the pre-sunrise samples needed to complete the
-seventh displayed night.
+local date beside matching bordered cards for daylight and for the night beginning on
+that date. Each card keeps the condition and temperature visible beside its weather
+icon, then stacks wind speed, gust, and precipitation beneath them. Night `D` includes
+all non-daylight samples after date `D`'s daylight period and all non-daylight samples
+before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore belong to
+night `D-1`; local midnight never splits a physical night. An eighth fetched calendar
+date supplies the pre-sunrise samples needed to complete the seventh displayed night.
 
 Day and night independently classify every dry sample before choosing the dominant sky
 from duration thresholds; a short cloudy window cannot redefine an otherwise clear

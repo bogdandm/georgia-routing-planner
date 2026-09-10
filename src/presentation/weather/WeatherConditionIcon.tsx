@@ -165,10 +165,12 @@ export function WeatherPeriodIcon({
   icon,
   isDay,
   label,
+  size = 36,
 }: {
   readonly icon: WeatherIcon;
   readonly isDay: boolean;
   readonly label: string;
+  readonly size?: number;
 }) {
   const skyLayers: ReactElement[] = [];
   switch (icon.sky) {
@@ -254,10 +256,21 @@ export function WeatherPeriodIcon({
     <WeatherIconTooltip label={label}>
       <Box
         aria-hidden="true"
-        sx={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}
+        sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
       >
-        {skyLayers}
-        {phenomenon}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            width: 36,
+            height: 36,
+            transform: `translate(-50%, -50%) scale(${(size / 36).toString()})`,
+          }}
+        >
+          {skyLayers}
+          {phenomenon}
+        </Box>
       </Box>
     </WeatherIconTooltip>
   );

@@ -166,19 +166,21 @@ describe('WeatherPanel', () => {
       name: 'Current, day, and night summary',
     });
     const currentSummary = within(summary).getByRole('article', {
-      name: 'Now · 3 h forecast',
+      name: 'Now · next 3 h forecast',
     });
     expect(
-      within(currentSummary).getByLabelText('Now · 3 h: Clear'),
+      within(currentSummary).getByLabelText('Now · next 3 h: Clear'),
     ).toBeInTheDocument();
+    expect(within(currentSummary).getByText('Saturday, 18 Jul · 18:00')).toBeVisible();
+    expect(within(currentSummary).getByText('Clear')).toBeVisible();
     expect(
       within(currentSummary).getByLabelText(
-        'Now · 3 h wind 2.8 to 2.8 metres per second',
+        'Now · next 3 h wind 2.8 to 2.8 metres per second',
       ),
     ).toHaveTextContent('2.8 m/s');
     expect(
       within(currentSummary).getByLabelText(
-        'Now · 3 h gusts 4.2 to 4.2 metres per second',
+        'Now · next 3 h gusts 4.2 to 4.2 metres per second',
       ),
     ).toHaveTextContent('4.2 m/s');
     expect(
@@ -240,7 +242,7 @@ describe('WeatherPanel', () => {
     expect(
       within(nightForecast).getByLabelText('Night precipitation 2.5 millimetres'),
     ).toHaveTextContent('2.5 mm');
-    expect(within(dailyList).queryByText('Clear')).not.toBeInTheDocument();
+    expect(within(dayForecast).getByText('Clear')).toBeVisible();
 
     expect(screen.getByText('ECMWF IFS · Updated 18 Jul, 04:00')).toBeInTheDocument();
     expect(

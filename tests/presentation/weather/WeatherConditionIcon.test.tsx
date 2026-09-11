@@ -58,8 +58,9 @@ describe('WeatherConditionIcon', () => {
   ])('labels $label artwork while keeping its SVG decorative', ({ isDay, label }) => {
     render(<WeatherConditionIcon code={0} isDay={isDay} />);
 
-    expect(screen.getByLabelText(label)).toBeInTheDocument();
-    expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+    const icon = screen.getByLabelText(label);
+    expect(icon).toBeInTheDocument();
+    expect(icon.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
@@ -81,8 +82,9 @@ describe('WeatherConditionIcon', () => {
     ({ label, icon }) => {
       render(<WeatherPeriodIcon icon={icon} isDay label={label} />);
 
-      expect(screen.getByLabelText(label)).toBeInTheDocument();
-      expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+      const artwork = screen.getByLabelText(label);
+      expect(artwork).toBeInTheDocument();
+      expect(artwork.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
       expect(screen.queryByRole('img')).not.toBeInTheDocument();
     },
   );
@@ -159,8 +161,9 @@ describe('WeatherConditionIcon', () => {
     (status) => {
       render(<VisibilityStatusIcon status={status} />);
 
-      expect(screen.getByLabelText(status.label)).toBeInTheDocument();
-      expect(document.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+      const icon = screen.getByLabelText(status.label);
+      expect(icon).toBeInTheDocument();
+      expect(icon.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
     },
   );
 });

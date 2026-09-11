@@ -409,17 +409,19 @@ stack on the right behind inset dividers. The current section gives the local da
 time, then keeps the weather icon beside a top-aligned temperature with the primary
 condition directly beneath it. Visibly labelled wind, gust, and precipitation rows
 follow without separators. Each Day and Night section groups its plain period label with
-the weather icon in a small left column; the temperature and compact wind, gust, and
-precipitation rows occupy the adjacent column without an internal divider. Significant
-visibility appears separately and never replaces the primary condition. The former large
-apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
-rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
-focus, and a touch-screen tap. A horizontally scrolling carousel contains exactly 24
-ordered hourly slots from the current local forecast hour, including local weekday and
-time, condition, temperature, and precipitation. While loading, placeholders retain the
-same split summary and seven-row geometry; the hourly viewport uses the same card sizing
-as the ready state to avoid reflow as the response arrives. At narrow mobile workspace
-widths, each seven-day period places its primary condition beneath its temperature,
+the weather icon. Wider viewports keep the temperature and compact metrics in an
+adjacent column. At narrow mobile widths, the period expands into a prominent
+temperature with its primary condition, precipitation beside it, and separate labelled
+wind and gust groups below. Significant visibility appears separately and never replaces
+the primary condition. The former large apparent-temperature, cloud-cover, visibility,
+wind, and gust metric cards are not rendered. Every weather and metric icon exposes its
+label on pointer hover, keyboard focus, and a touch-screen tap. A horizontally scrolling
+carousel contains exactly 24 ordered hourly slots from the current local forecast hour,
+including local weekday and time, condition, temperature, and precipitation. While
+loading, placeholders retain the same split summary and seven-row geometry; the hourly
+viewport uses the same card sizing as the ready state to avoid reflow as the response
+arrives. At narrow mobile workspace widths, the summary stacks its current and Day/Night
+areas. Each seven-day period places its primary condition beneath its temperature,
 precipitation immediately to their right, and the two-line wind/gust group at the far
 edge so words do not compress or overflow the card.
 

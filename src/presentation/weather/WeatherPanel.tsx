@@ -190,6 +190,10 @@ function LoadingSummaryPeriod() {
         justifyContent: 'center',
         px: 1,
         py: 0.75,
+        '@media (max-width: 479px)': {
+          px: 2,
+          py: 1.5,
+        },
       }}
     >
       <Box
@@ -199,20 +203,111 @@ function LoadingSummaryPeriod() {
           gridTemplateColumns: '44px minmax(0, 1fr)',
           columnGap: 1,
           alignItems: 'start',
+          '@media (max-width: 479px)': {
+            gridTemplateColumns: '64px minmax(0, 1fr)',
+            columnGap: 1.5,
+          },
         }}
       >
         <Stack spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
           <Skeleton variant="text" width={36} height={16} />
           <Skeleton variant="circular" width={36} height={36} />
         </Stack>
-        <Stack spacing={0} sx={{ minWidth: 0 }}>
-          <Skeleton variant="text" width="72%" height={18} />
-          <Stack spacing={0} sx={{ mt: 0.5 }}>
-            <Skeleton variant="text" width="88%" height={15} />
-            <Skeleton variant="text" width="82%" height={15} />
-            <Skeleton variant="text" width="56%" height={15} />
+        <Box
+          sx={{
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            '@media (max-width: 479px)': {
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) max-content',
+              gridTemplateAreas:
+                '"temperature precipitation" "condition precipitation" "metrics metrics"',
+              columnGap: 1,
+              rowGap: 0.5,
+            },
+          }}
+        >
+          <Skeleton
+            variant="text"
+            sx={{
+              gridArea: 'temperature',
+              width: '72%',
+              height: 18,
+              '@media (max-width: 479px)': { width: 104, maxWidth: '100%', height: 28 },
+            }}
+          />
+          <Skeleton
+            variant="text"
+            width={96}
+            height={18}
+            sx={{
+              gridArea: 'condition',
+              display: 'none',
+              '@media (max-width: 479px)': { display: 'block' },
+            }}
+          />
+          <Box
+            sx={{
+              gridArea: 'metrics',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              mt: 0.5,
+              '@media (max-width: 479px)': {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                columnGap: 1,
+                mt: 0.75,
+              },
+            }}
+          >
+            {[64, 72].map((valueWidth, index) => (
+              <Stack
+                key={valueWidth}
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  minWidth: 0,
+                  alignItems: 'center',
+                  '@media (max-width: 479px)': {
+                    minHeight: 36,
+                    pl: index === 1 ? 1 : 0,
+                    borderLeft: index === 1 ? 1 : 0,
+                    borderColor: 'divider',
+                  },
+                }}
+              >
+                <Skeleton variant="circular" width={16} height={16} />
+                <Stack spacing={0} sx={{ minWidth: 0 }}>
+                  <Skeleton
+                    variant="text"
+                    width={40}
+                    height={15}
+                    sx={{
+                      display: 'none',
+                      '@media (max-width: 479px)': { display: 'block' },
+                    }}
+                  />
+                  <Skeleton variant="text" width={valueWidth} height={15} />
+                </Stack>
+              </Stack>
+            ))}
+          </Box>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{
+              gridArea: 'precipitation',
+              alignItems: 'center',
+              minWidth: 0,
+              '@media (max-width: 479px)': { mt: 0.25 },
+            }}
+          >
+            <Skeleton variant="circular" width={16} height={16} />
+            <Skeleton variant="text" width={40} height={15} />
           </Stack>
-        </Stack>
+        </Box>
       </Box>
     </Box>
   );
@@ -229,7 +324,7 @@ function LoadingSummary() {
         gridTemplateColumns: 'minmax(0, 1.06fr) minmax(0, 0.94fr)',
         borderRadius: 1.25,
         overflow: 'hidden',
-        '@media (max-width: 359px)': {
+        '@media (max-width: 479px)': {
           gridTemplateColumns: 'minmax(0, 1fr)',
         },
       }}
@@ -268,7 +363,7 @@ function LoadingSummary() {
           minWidth: 0,
           borderLeft: 1,
           borderColor: 'divider',
-          '@media (max-width: 359px)': {
+          '@media (max-width: 479px)': {
             mx: 1,
             my: 0,
             borderTop: 1,
@@ -457,13 +552,30 @@ function CompactMetricValue({
   value,
   ariaLabel,
   compact = false,
+  narrowLabel,
 }: {
   readonly kind: WeatherMetricKind;
   readonly label: string;
   readonly value: string;
   readonly ariaLabel: string;
   readonly compact?: boolean;
+  readonly narrowLabel?: string;
 }) {
+  const valueText = (
+    <Typography
+      variant="caption"
+      color="text.secondary"
+      aria-label={ariaLabel}
+      sx={{
+        minWidth: 0,
+        fontSize: compact ? '0.6rem' : undefined,
+        lineHeight: compact ? 1.3 : 1.25,
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {value}
+    </Typography>
+  );
   return (
     <Stack
       direction="row"
@@ -471,19 +583,24 @@ function CompactMetricValue({
       sx={{ alignItems: 'center', minWidth: 0, whiteSpace: 'nowrap' }}
     >
       <WeatherMetricIcon kind={kind} label={label} size={compact ? 12 : 16} />
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        aria-label={ariaLabel}
-        sx={{
-          minWidth: 0,
-          fontSize: compact ? '0.6rem' : undefined,
-          lineHeight: compact ? 1.3 : 1.25,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {value}
-      </Typography>
+      {narrowLabel !== undefined ? (
+        <Stack spacing={0} sx={{ minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'none',
+              fontWeight: 600,
+              lineHeight: 1.2,
+              '@media (max-width: 479px)': { display: 'block' },
+            }}
+          >
+            {narrowLabel}
+          </Typography>
+          {valueText}
+        </Stack>
+      ) : (
+        valueText
+      )}
     </Stack>
   );
 }
@@ -671,6 +788,10 @@ function SummaryPeriod({
         justifyContent: 'center',
         px: 1,
         py: 0.75,
+        '@media (max-width: 479px)': {
+          px: 2,
+          py: 1.5,
+        },
       }}
     >
       <Box
@@ -680,13 +801,24 @@ function SummaryPeriod({
           gridTemplateColumns: '44px minmax(0, 1fr)',
           columnGap: 1,
           alignItems: 'start',
+          '@media (max-width: 479px)': {
+            gridTemplateColumns: '64px minmax(0, 1fr)',
+            columnGap: 1.5,
+          },
         }}
       >
         <Stack spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
           <Typography
             variant="caption"
             color="text.secondary"
-            sx={{ fontWeight: 700, lineHeight: 1.25 }}
+            sx={{
+              fontWeight: 700,
+              lineHeight: 1.25,
+              '@media (max-width: 479px)': {
+                color: 'text.primary',
+                fontSize: '0.95rem',
+              },
+            }}
           >
             {label}
           </Typography>
@@ -698,40 +830,120 @@ function SummaryPeriod({
             showVisibilityBadge
           />
         </Stack>
-        <Stack spacing={0} sx={{ minWidth: 0 }}>
+        <Box
+          sx={{
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            '@media (max-width: 479px)': {
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) max-content',
+              gridTemplateAreas:
+                '"temperature precipitation" "condition precipitation" "metrics metrics"',
+              columnGap: 1,
+              rowGap: 0.5,
+            },
+          }}
+        >
           <Typography
             variant="body2"
             aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
             sx={{
+              gridArea: 'temperature',
               fontWeight: 700,
               lineHeight: 1.25,
               fontVariantNumeric: 'tabular-nums',
               whiteSpace: 'nowrap',
+              '@media (max-width: 479px)': {
+                fontSize: '1.35rem',
+                lineHeight: 1.15,
+              },
             }}
           >
             {values.temperature}
           </Typography>
-          <Stack spacing={0} sx={{ mt: 0.5 }}>
-            <CompactMetricValue
-              kind="wind"
-              label={`${label} wind`}
-              value={values.wind}
-              ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-            />
-            <CompactMetricValue
-              kind="gusts"
-              label={`${label} gusts`}
-              value={values.gusts}
-              ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-            />
+          <Typography
+            variant="body2"
+            sx={{
+              gridArea: 'condition',
+              display: 'none',
+              minWidth: 0,
+              lineHeight: 1.25,
+              '@media (max-width: 479px)': { display: 'block' },
+            }}
+          >
+            {period.status.primary.label}
+          </Typography>
+          <Box
+            sx={{
+              gridArea: 'metrics',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              mt: 0.5,
+              '@media (max-width: 479px)': {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                columnGap: 1,
+                mt: 0.75,
+              },
+            }}
+          >
+            <Box
+              sx={{
+                minWidth: 0,
+                '@media (max-width: 479px)': {
+                  minHeight: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                },
+              }}
+            >
+              <CompactMetricValue
+                kind="wind"
+                label={`${label} wind`}
+                value={values.wind}
+                ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+                narrowLabel="Wind"
+              />
+            </Box>
+            <Box
+              sx={{
+                minWidth: 0,
+                '@media (max-width: 479px)': {
+                  minHeight: 36,
+                  pl: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderLeft: 1,
+                  borderColor: 'divider',
+                },
+              }}
+            >
+              <CompactMetricValue
+                kind="gusts"
+                label={`${label} gusts`}
+                value={values.gusts}
+                ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+                narrowLabel="Gusts"
+              />
+            </Box>
+          </Box>
+          <Box
+            sx={{
+              gridArea: 'precipitation',
+              minWidth: 0,
+              '@media (max-width: 479px)': { mt: 0.25 },
+            }}
+          >
             <CompactMetricValue
               kind="precipitation"
               label={`${label} precipitation`}
               value={values.precipitation}
               ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
             />
-          </Stack>
-        </Stack>
+          </Box>
+        </Box>
       </Box>
     </Box>
   );
@@ -850,7 +1062,7 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
         gridTemplateColumns: 'minmax(0, 1.06fr) minmax(0, 0.94fr)',
         borderRadius: 1.25,
         overflow: 'hidden',
-        '@media (max-width: 359px)': {
+        '@media (max-width: 479px)': {
           gridTemplateColumns: 'minmax(0, 1fr)',
         },
       }}
@@ -861,7 +1073,7 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
           minWidth: 0,
           borderLeft: 1,
           borderColor: 'divider',
-          '@media (max-width: 359px)': {
+          '@media (max-width: 479px)': {
             mx: 1,
             my: 0,
             borderTop: 1,

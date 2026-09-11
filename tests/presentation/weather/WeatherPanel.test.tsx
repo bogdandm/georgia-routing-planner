@@ -183,6 +183,11 @@ describe('WeatherPanel', () => {
         'Now · next 3 h gusts 4.2 to 4.2 metres per second',
       ),
     ).toHaveTextContent('4.2 m/s');
+    expect(
+      within(currentSummary).getByLabelText(
+        'Now · next 3 h precipitation 0 millimetres',
+      ),
+    ).toHaveTextContent('0 mm');
     const daySummary = within(summary).getByRole('article', { name: 'Day forecast' });
     const nightSummary = within(summary).getByRole('article', {
       name: 'Night forecast',
@@ -193,8 +198,19 @@ describe('WeatherPanel', () => {
     expect(within(nightSummary).getByText('Night')).toBeVisible();
     expect(within(daySummary).getByLabelText('Day: Clear')).toBeInTheDocument();
     expect(within(nightSummary).getByLabelText('Night: Clear')).toBeInTheDocument();
-    expect(within(daySummary).queryByText('Clear')).not.toBeInTheDocument();
-    expect(within(nightSummary).queryByText('Clear')).not.toBeInTheDocument();
+    expect(within(daySummary).getByText('Clear')).toBeInTheDocument();
+    expect(within(nightSummary).getByText('Clear')).toBeInTheDocument();
+    expect(within(daySummary).getByText('Wind')).toBeInTheDocument();
+    expect(within(daySummary).getByText('Gusts')).toBeInTheDocument();
+    expect(
+      within(daySummary).getByLabelText('Day wind 0.8 to 5.0 metres per second'),
+    ).toHaveTextContent('0.8…5.0 m/s');
+    expect(
+      within(daySummary).getByLabelText('Day gusts 2.5 to 7.5 metres per second'),
+    ).toHaveTextContent('2.5…7.5 m/s');
+    expect(
+      within(daySummary).getByLabelText('Day precipitation 1.25 millimetres'),
+    ).toHaveTextContent('1.3 mm');
     expect(screen.queryByLabelText('Feels like')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Cloud')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument();

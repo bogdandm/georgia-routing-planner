@@ -91,11 +91,11 @@ location or acquisition metadata is sent to a time-zone service.
 The Weather boundary follows the same dependency direction. `WeatherForecastGateway`
 describes provider-neutral current and hourly values; `GetPointWeatherForecast`
 validates one coordinate, samples the existing local DEM, falls back to provider terrain
-elevation when necessary, and derives seven local-day summaries through the pure
-`domain/weather` aggregator. `OpenMeteoWeatherForecastGateway` alone owns Open-Meteo
-query parameters, response validation, ECMWF metadata caching, and safe transport
-failures. Presentation receives only normalized forecast values and never imports the
-HTTP client.
+elevation when necessary, and derives the current three-hour, daylight, and
+midnight-spanning night summaries through the pure `domain/weather` period aggregator.
+`OpenMeteoWeatherForecastGateway` alone owns Open-Meteo query parameters, response
+validation, ECMWF metadata caching, and safe transport failures. Presentation receives
+only normalized forecast values and never imports the HTTP client.
 
 ## Composition root
 

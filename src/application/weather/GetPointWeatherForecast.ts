@@ -14,22 +14,30 @@ import {
   type WeatherModel,
 } from '@/application/ports/WeatherForecastGateway';
 import {
-  aggregateDailyWeatherStatus,
-  type DailyWeatherStatus,
-} from '@/domain/weather/aggregateDailyWeatherStatus';
+  aggregateWeatherPeriodStatus,
+  type WeatherPeriodStatus,
+  type WeatherPeriodKind,
+} from '@/domain/weather/aggregateWeatherPeriodStatus';
 
 export const DEFAULT_WEATHER_MODEL: WeatherModel = 'ecmwf_ifs';
 
 export type ForecastElevationSource = 'trail-planner-dem' | 'open-meteo-dem';
 
+export interface PointWeatherForecastPeriod {
+  readonly temperatureMinCelsius: number;
+  readonly temperatureMaxCelsius: number;
+  readonly windSpeedMinKmh: number;
+  readonly windSpeedMaxKmh: number;
+  readonly windGustsMinKmh: number;
+  readonly windGustsMaxKmh: number;
+  readonly precipitationMm: number;
+  readonly status: WeatherPeriodStatus;
+}
+
 export interface PointWeatherForecastDay {
   readonly date: string;
-  readonly daylightTemperatureMinCelsius: number;
-  readonly daylightTemperatureMaxCelsius: number;
-  readonly daylightWindSpeedMinKmh: number;
-  readonly daylightWindSpeedMaxKmh: number;
-  readonly daylightPrecipitationMm: number;
-  readonly status: DailyWeatherStatus;
+  readonly day: PointWeatherForecastPeriod;
+  readonly night: PointWeatherForecastPeriod;
 }
 
 export interface PointWeatherForecast {
@@ -45,6 +53,7 @@ export interface PointWeatherForecast {
   readonly fetchedAt: string;
   readonly current: CurrentWeatherForecast;
   readonly hourly: readonly HourlyWeatherForecast[];
+  readonly currentThreeHours: PointWeatherForecastPeriod;
   readonly days: readonly PointWeatherForecastDay[];
 }
 
@@ -75,50 +84,94 @@ function invalidResponse(message: string): PointWeatherForecastError {
   return new PointWeatherForecastError('invalid-response', message);
 }
 
+function summarizePeriod(
+  hours: readonly HourlyWeatherForecast[],
+  kind: WeatherPeriodKind,
+): PointWeatherForecastPeriod {
+  if (hours.length === 0) {
+    throw invalidResponse('The forecast weather period has no hourly samples.');
+  }
+  const temperatures = hours.map((hour) => hour.temperatureCelsius);
+  const windSpeeds = hours.map((hour) => hour.windSpeedKmh);
+  const windGusts = hours.map((hour) => hour.windGustsKmh);
+  const status = aggregateWeatherPeriodStatus(hours, kind);
+  return {
+    temperatureMinCelsius: Math.min(...temperatures),
+    temperatureMaxCelsius: Math.max(...temperatures),
+    windSpeedMinKmh: Math.min(...windSpeeds),
+    windSpeedMaxKmh: Math.max(...windSpeeds),
+    windGustsMinKmh: Math.min(...windGusts),
+    windGustsMaxKmh: Math.max(...windGusts),
+    precipitationMm: status.debug.precipTotal,
+    status,
+  };
+}
+
+function deriveCurrentThreeHours(
+  hourly: readonly HourlyWeatherForecast[],
+  currentTime: string,
+): PointWeatherForecastPeriod {
+  const currentHour = `${currentTime.slice(0, 13)}:00`;
+  const hours = hourly.filter((hour) => hour.time >= currentHour).slice(0, 3);
+  if (hours.length !== 3) {
+    throw invalidResponse(
+      'The forecast does not contain the current three-hour period.',
+    );
+  }
+  return summarizePeriod(hours, 'current');
+}
+
 function deriveDays(
   hourly: readonly HourlyWeatherForecast[],
 ): readonly PointWeatherForecastDay[] {
   const groups = new Map<string, HourlyWeatherForecast[]>();
+  let previousTime: string | null = null;
   for (const hour of hourly) {
+    if (previousTime !== null && hour.time <= previousTime) {
+      throw invalidResponse('The forecast local hourly samples are not ordered.');
+    }
+    previousTime = hour.time;
     const date = hour.time.slice(0, 10);
     const group = groups.get(date);
     if (group === undefined) groups.set(date, [hour]);
     else group.push(hour);
   }
 
-  if (groups.size !== 7) {
-    throw invalidResponse('The forecast does not contain seven local calendar days.');
+  if (groups.size !== 8) {
+    throw invalidResponse('The forecast does not contain eight local calendar days.');
   }
 
   const dates = [...groups.keys()];
-  let previousDate: string | null = null;
-  for (const date of dates) {
-    if (previousDate !== null && date <= previousDate) {
-      throw invalidResponse('The forecast local calendar days are not ordered.');
-    }
-    previousDate = date;
-  }
-
-  return dates.map((date) => {
+  return dates.slice(0, 7).map((date, index) => {
     const group = groups.get(date);
-    if (group === undefined) {
+    const nextDate = dates[index + 1];
+    const nextGroup = nextDate === undefined ? undefined : groups.get(nextDate);
+    if (group === undefined || nextGroup === undefined) {
       throw invalidResponse('The forecast local calendar day is missing.');
     }
+    const followingDate = new Date(`${date}T00:00:00.000Z`);
+    followingDate.setUTCDate(followingDate.getUTCDate() + 1);
+    if (nextDate !== followingDate.toISOString().slice(0, 10)) {
+      throw invalidResponse('The forecast local calendar days are not consecutive.');
+    }
     const daylight = group.filter((hour) => hour.isDay);
-    if (daylight.length === 0) {
+    const nextDaylight = nextGroup.filter((hour) => hour.isDay);
+    const firstNextDaylight = nextDaylight[0];
+    const lastDaylight = daylight.at(-1);
+    if (lastDaylight === undefined || firstNextDaylight === undefined) {
       throw invalidResponse(`The local forecast day ${date} has no daylight hours.`);
     }
-    const temperatures = daylight.map((hour) => hour.temperatureCelsius);
-    const windSpeeds = daylight.map((hour) => hour.windSpeedKmh);
-    const status = aggregateDailyWeatherStatus(daylight);
+    const night = [
+      ...group.filter((hour) => !hour.isDay && hour.time > lastDaylight.time),
+      ...nextGroup.filter((hour) => !hour.isDay && hour.time < firstNextDaylight.time),
+    ];
+    if (night.length === 0) {
+      throw invalidResponse(`The local forecast night ${date} has no hourly samples.`);
+    }
     return {
       date,
-      daylightTemperatureMinCelsius: Math.min(...temperatures),
-      daylightTemperatureMaxCelsius: Math.max(...temperatures),
-      daylightWindSpeedMinKmh: Math.min(...windSpeeds),
-      daylightWindSpeedMaxKmh: Math.max(...windSpeeds),
-      daylightPrecipitationMm: status.debug.precipTotal,
-      status,
+      day: summarizePeriod(daylight, 'day'),
+      night: summarizePeriod(night, 'night'),
     };
   });
 }
@@ -141,6 +194,7 @@ function toResult(
     modelRunAt: data.modelRunAt,
     fetchedAt: data.fetchedAt,
     current: data.current,
+    currentThreeHours: deriveCurrentThreeHours(data.hourly, data.current.time),
     hourly: data.hourly,
     days: deriveDays(data.hourly),
   };

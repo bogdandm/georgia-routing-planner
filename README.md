@@ -85,9 +85,9 @@ is applied to the map. The selected imagery remains aligned with terrain in both
 ## Weather
 
 Open Weather and click the map to keep the ordinary point inspection popup while loading
-the same coordinate's current conditions, next 24 hourly forecast slots, and seven local
-calendar-day summaries. The day summaries are derived from hourly rows and report
-daylight-only temperature and wind ranges.
+the same coordinate's next three hours, next 24 hourly forecast slots, and seven local
+calendar-day summaries. Each daily summary keeps daylight and the following physical
+night separate, with temperature, wind, gust, precipitation, and condition values.
 
 Weather times follow the selected location's time zone. The values are deterministic
 ECMWF IFS model forecasts delivered by Open-Meteo, not measured weather-station

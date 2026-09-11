@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  aggregateDailyWeatherStatus,
-  type DailyWeatherHour,
+  aggregateWeatherPeriodStatus,
+  type WeatherPeriodHour,
   type Precipitation,
   type Sky,
-} from '@/domain/weather/aggregateDailyWeatherStatus';
+} from '@/domain/weather/aggregateWeatherPeriodStatus';
 
-function hour(overrides: Partial<DailyWeatherHour> = {}): DailyWeatherHour {
+function hour(overrides: Partial<WeatherPeriodHour> = {}): WeatherPeriodHour {
   return {
     time: '2026-07-18T12:00',
     precipitationMm: 0,
@@ -23,14 +23,14 @@ function hour(overrides: Partial<DailyWeatherHour> = {}): DailyWeatherHour {
   };
 }
 
-function repeat(count: number, overrides: Partial<DailyWeatherHour> = {}) {
+function repeat(count: number, overrides: Partial<WeatherPeriodHour> = {}) {
   return Array.from({ length: count }, () => hour(overrides));
 }
 
 function rain(
   precipitationMm: number,
-  overrides: Partial<DailyWeatherHour> = {},
-): DailyWeatherHour {
+  overrides: Partial<WeatherPeriodHour> = {},
+): WeatherPeriodHour {
   return hour({
     precipitationMm,
     rainMm: precipitationMm,
@@ -39,28 +39,28 @@ function rain(
   });
 }
 
-function shower(precipitationMm = 1): DailyWeatherHour {
+function shower(precipitationMm = 1): WeatherPeriodHour {
   return rain(precipitationMm, { showersMm: precipitationMm });
 }
 
-function snow(precipitationMm = 1): DailyWeatherHour {
+function snow(precipitationMm = 1): WeatherPeriodHour {
   return hour({ precipitationMm, snowfallCm: precipitationMm, precipitationType: 5 });
 }
 
 function expectPrimary(
-  hours: readonly DailyWeatherHour[],
+  hours: readonly WeatherPeriodHour[],
   expected: {
     readonly sky: Sky;
     readonly precipitation: Precipitation;
     readonly label: string;
   },
 ) {
-  expect(aggregateDailyWeatherStatus(hours).primary).toMatchObject(expected);
+  expect(aggregateWeatherPeriodStatus(hours).primary).toMatchObject(expected);
 }
 
-describe('aggregateDailyWeatherStatus', () => {
-  it('ignores night conditions and classifies each dry daylight hour', () => {
-    const status = aggregateDailyWeatherStatus([
+describe('aggregateWeatherPeriodStatus', () => {
+  it('aggregates every hourly sample supplied for one period', () => {
+    const status = aggregateWeatherPeriodStatus([
       rain(20, { isDay: false, cloudCoverPercent: 100, visibilityMeters: 100 }),
       hour({ cloudCoverPercent: 20 }),
       hour({ cloudCoverPercent: 40 }),
@@ -70,12 +70,16 @@ describe('aggregateDailyWeatherStatus', () => {
     ]);
 
     expect(status).toMatchObject({
-      primary: { sky: 'partly_cloudy', precipitation: 'none', label: 'Partly cloudy' },
+      primary: {
+        sky: 'partly_cloudy',
+        precipitation: 'occasional_rain',
+        label: 'Partly cloudy with occasional rain',
+      },
       visibility: { level: 'normal', period: 'none', label: null, icon: null },
       debug: {
-        daylightHours: 5,
-        wetHours: 0,
-        precipTotal: 0,
+        periodHours: 6,
+        wetHours: 1,
+        precipTotal: 20,
         clearFraction: 0.2,
         mostlyClearFraction: 0.2,
         partlyCloudyFraction: 0.2,
@@ -125,11 +129,11 @@ describe('aggregateDailyWeatherStatus', () => {
       expected: 'overcast',
     },
   ])('$name', ({ hours, expected }) => {
-    expect(aggregateDailyWeatherStatus(hours).primary.sky).toBe(expected);
+    expect(aggregateWeatherPeriodStatus(hours).primary.sky).toBe(expected);
   });
 
   it('excludes meaningful precipitation hours from the background sky distribution', () => {
-    const status = aggregateDailyWeatherStatus([...repeat(11), shower(1)]);
+    const status = aggregateWeatherPeriodStatus([...repeat(11), shower(1)]);
 
     expect(status.primary).toMatchObject({
       sky: 'clear',
@@ -158,7 +162,7 @@ describe('aggregateDailyWeatherStatus', () => {
 
   it.each<{
     name: string;
-    hours: readonly DailyWeatherHour[];
+    hours: readonly WeatherPeriodHour[];
     precipitation: Precipitation;
     label: string;
   }>([
@@ -239,7 +243,7 @@ describe('aggregateDailyWeatherStatus', () => {
       label: 'Freezing precipitation',
     },
   ])('$name', ({ hours, precipitation, label }) => {
-    expect(aggregateDailyWeatherStatus(hours).primary).toMatchObject({
+    expect(aggregateWeatherPeriodStatus(hours).primary).toMatchObject({
       precipitation,
       label,
     });
@@ -267,11 +271,11 @@ describe('aggregateDailyWeatherStatus', () => {
       label: 'Overcast with occasional rain',
     },
   ])('composes occasional rain with $sky background', ({ hours, label }) => {
-    expect(aggregateDailyWeatherStatus(hours).primary.label).toBe(label);
+    expect(aggregateWeatherPeriodStatus(hours).primary.label).toBe(label);
   });
 
   it('keeps two early foggy hours secondary to the dominant sky', () => {
-    const status = aggregateDailyWeatherStatus([
+    const status = aggregateWeatherPeriodStatus([
       hour({
         time: '2026-07-18T07:00',
         cloudCoverPercent: 100,
@@ -308,7 +312,7 @@ describe('aggregateDailyWeatherStatus', () => {
   });
 
   it('does not report one isolated low-visibility hour', () => {
-    const status = aggregateDailyWeatherStatus([
+    const status = aggregateWeatherPeriodStatus([
       hour({ weatherCode: 45, visibilityMeters: 20_000 }),
       ...repeat(11),
     ]);
@@ -354,7 +358,7 @@ describe('aggregateDailyWeatherStatus', () => {
       hours: [...repeat(8, { visibilityMeters: 6_000 }), ...repeat(4)],
       expected: {
         level: 'haze',
-        period: 'most_of_day',
+        period: 'most_of_period',
         label: 'Reduced visibility for most of the day',
         icon: 'haze',
       },
@@ -370,7 +374,7 @@ describe('aggregateDailyWeatherStatus', () => {
       },
     },
   ])('$name remains secondary', ({ hours, expected }) => {
-    const status = aggregateDailyWeatherStatus(hours);
+    const status = aggregateWeatherPeriodStatus(hours);
 
     expect(status.visibility).toEqual(expected);
     expect(status.primary).toMatchObject({
@@ -380,8 +384,27 @@ describe('aggregateDailyWeatherStatus', () => {
     });
   });
 
+  it('keeps overnight visibility secondary to the night primary status', () => {
+    const status = aggregateWeatherPeriodStatus(
+      [...repeat(4), ...repeat(4, { visibilityMeters: 500 }), ...repeat(4)],
+      'night',
+    );
+
+    expect(status.primary).toMatchObject({
+      sky: 'clear',
+      precipitation: 'none',
+      label: 'Clear',
+    });
+    expect(status.visibility).toEqual({
+      level: 'fog',
+      period: 'overnight',
+      label: 'Fog overnight',
+      icon: 'fog',
+    });
+  });
+
   it('selects the most severe significant visibility level', () => {
-    const status = aggregateDailyWeatherStatus([
+    const status = aggregateWeatherPeriodStatus([
       ...repeat(2, { visibilityMeters: 500 }),
       ...repeat(6, { visibilityMeters: 4_000 }),
       ...repeat(4),
@@ -396,7 +419,7 @@ describe('aggregateDailyWeatherStatus', () => {
   });
 
   it('uses exact visibility severity boundaries without changing primary weather', () => {
-    const status = aggregateDailyWeatherStatus([
+    const status = aggregateWeatherPeriodStatus([
       ...repeat(2, { visibilityMeters: 1_000 }),
       ...repeat(2, { visibilityMeters: 5_000 }),
       ...repeat(2, { visibilityMeters: 10_000 }),
@@ -412,9 +435,9 @@ describe('aggregateDailyWeatherStatus', () => {
     expect(status.visibility.level).toBe('poor');
   });
 
-  it('rejects a day without daylight instead of fabricating status', () => {
-    expect(() => aggregateDailyWeatherStatus([hour({ isDay: false })])).toThrow(
-      'requires at least one daylight hour',
+  it('rejects an empty period instead of fabricating status', () => {
+    expect(() => aggregateWeatherPeriodStatus([])).toThrow(
+      'requires at least one hourly sample',
     );
   });
 });

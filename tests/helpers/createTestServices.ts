@@ -65,7 +65,7 @@ const testElevationProvider: ElevationProvider = {
 function createTestWeatherForecastGateway(clock: Clock): WeatherForecastGateway {
   return {
     fetch: (input) => {
-      const hourly = Array.from({ length: 7 * 24 }, (_, index) => {
+      const hourly = Array.from({ length: 8 * 24 }, (_, index) => {
         const day = Math.floor(index / 24) + 18;
         const hour = index % 24;
         return {

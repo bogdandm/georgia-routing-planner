@@ -16,14 +16,17 @@ export type Precipitation =
 
 export type Visibility = 'normal' | 'haze' | 'poor' | 'fog';
 
+export type WeatherPeriodKind = 'current' | 'day' | 'night';
+
 export type VisibilityPeriod =
   | 'none'
   | 'brief'
   | 'morning'
   | 'afternoon'
   | 'evening'
+  | 'overnight'
   | 'intermittent'
-  | 'most_of_day';
+  | 'most_of_period';
 
 export interface WeatherIcon {
   readonly sky: Sky;
@@ -37,7 +40,7 @@ export interface VisibilityStatus {
   readonly icon: Exclude<Visibility, 'normal'> | null;
 }
 
-export interface DailyWeatherHour {
+export interface WeatherPeriodHour {
   readonly time: string;
   readonly precipitationMm: number;
   readonly rainMm: number;
@@ -58,8 +61,8 @@ export interface VisibilityDurationDebug {
   readonly lastAffectedHour: string | null;
 }
 
-export interface DailyWeatherStatusDebug {
-  readonly daylightHours: number;
+export interface WeatherPeriodStatusDebug {
+  readonly periodHours: number;
   readonly wetHours: number;
   readonly wetFraction: number;
   readonly precipTotal: number;
@@ -86,7 +89,7 @@ export interface DailyWeatherStatusDebug {
   >;
 }
 
-export interface DailyWeatherStatus {
+export interface WeatherPeriodStatus {
   readonly primary: {
     readonly sky: Sky;
     readonly precipitation: Precipitation;
@@ -94,10 +97,10 @@ export interface DailyWeatherStatus {
     readonly icon: WeatherIcon;
   };
   readonly visibility: VisibilityStatus;
-  readonly debug: DailyWeatherStatusDebug;
+  readonly debug: WeatherPeriodStatusDebug;
 }
 
-export const DAILY_WEATHER_STATUS_THRESHOLDS = {
+export const WEATHER_PERIOD_STATUS_THRESHOLDS = {
   meaningfulWetMm: 0.1,
   traceTotalMm: 0.2,
   traceMaximumWetHours: 1,
@@ -127,7 +130,7 @@ export const DAILY_WEATHER_STATUS_THRESHOLDS = {
   hazeVisibilityMeters: 10_000,
   visibilitySignificantFractionMinimum: 0.25,
   visibilitySignificantRunMinimum: 2,
-  visibilityMostOfDayFractionMinimum: 0.6,
+  visibilityMostOfPeriodFractionMinimum: 0.6,
   visibilitySegmentFractionMinimum: 2 / 3,
 } as const;
 
@@ -150,16 +153,16 @@ function longestRun<T>(values: readonly T[], matches: (value: T) => boolean): nu
 }
 
 function classifyHourlySky(cloudCover: number): Sky {
-  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.clearCloudCoverMaximum) {
+  if (cloudCover <= WEATHER_PERIOD_STATUS_THRESHOLDS.clearCloudCoverMaximum) {
     return 'clear';
   }
-  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyClearCloudCoverMaximum) {
+  if (cloudCover <= WEATHER_PERIOD_STATUS_THRESHOLDS.mostlyClearCloudCoverMaximum) {
     return 'mostly_clear';
   }
-  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.partlyCloudyCloudCoverMaximum) {
+  if (cloudCover <= WEATHER_PERIOD_STATUS_THRESHOLDS.partlyCloudyCloudCoverMaximum) {
     return 'partly_cloudy';
   }
-  if (cloudCover <= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyCloudyCloudCoverMaximum) {
+  if (cloudCover <= WEATHER_PERIOD_STATUS_THRESHOLDS.mostlyCloudyCloudCoverMaximum) {
     return 'mostly_cloudy';
   }
   return 'overcast';
@@ -176,7 +179,7 @@ interface SkyDistribution {
   readonly clearishFraction: number;
 }
 
-function classifySky(hours: readonly DailyWeatherHour[]): {
+function classifySky(hours: readonly WeatherPeriodHour[]): {
   readonly sky: Sky;
   readonly distribution: SkyDistribution;
 } {
@@ -195,20 +198,20 @@ function classifySky(hours: readonly DailyWeatherHour[]): {
 
   let sky: Sky;
   if (
-    clearFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.clearFractionMinimum &&
-    cloudyFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.clearCloudyFractionMaximum
+    clearFraction >= WEATHER_PERIOD_STATUS_THRESHOLDS.clearFractionMinimum &&
+    cloudyFraction <= WEATHER_PERIOD_STATUS_THRESHOLDS.clearCloudyFractionMaximum
   ) {
     sky = 'clear';
   } else if (
-    sunnyFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyClearSunnyFractionMinimum
+    sunnyFraction >= WEATHER_PERIOD_STATUS_THRESHOLDS.mostlyClearSunnyFractionMinimum
   ) {
     sky = 'mostly_clear';
   } else if (
-    overcastFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.overcastFractionMinimum
+    overcastFraction >= WEATHER_PERIOD_STATUS_THRESHOLDS.overcastFractionMinimum
   ) {
     sky = 'overcast';
   } else if (
-    cloudyFraction >= DAILY_WEATHER_STATUS_THRESHOLDS.mostlyCloudyFractionMinimum
+    cloudyFraction >= WEATHER_PERIOD_STATUS_THRESHOLDS.mostlyCloudyFractionMinimum
   ) {
     sky = 'mostly_cloudy';
   } else {
@@ -280,8 +283,8 @@ function classifyPrecipitation(input: {
   readonly freezingHours: number;
 }): Precipitation {
   if (
-    input.precipTotal < DAILY_WEATHER_STATUS_THRESHOLDS.traceTotalMm &&
-    input.wetHours <= DAILY_WEATHER_STATUS_THRESHOLDS.traceMaximumWetHours
+    input.precipTotal < WEATHER_PERIOD_STATUS_THRESHOLDS.traceTotalMm &&
+    input.wetHours <= WEATHER_PERIOD_STATUS_THRESHOLDS.traceMaximumWetHours
   ) {
     return 'none';
   }
@@ -289,76 +292,78 @@ function classifyPrecipitation(input: {
   if (
     (input.wetHours > 0 &&
       input.mixedHours >=
-        DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours) ||
+        WEATHER_PERIOD_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours) ||
     (input.rainTypeHours >=
-      DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours &&
+      WEATHER_PERIOD_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours &&
       input.snowTypeHours >=
-        DAILY_WEATHER_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours)
+        WEATHER_PERIOD_STATUS_THRESHOLDS.mixedWetHourFraction * input.wetHours)
   ) {
     return 'mixed';
   }
   if (
     input.wetHours > 0 &&
     input.snowTypeHours >=
-      DAILY_WEATHER_STATUS_THRESHOLDS.snowDominanceWetHourFraction * input.wetHours
+      WEATHER_PERIOD_STATUS_THRESHOLDS.snowDominanceWetHourFraction * input.wetHours
   ) {
     if (
-      input.wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetFractionMaximum &&
-      input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetRunMaximum
+      input.wetFraction <=
+        WEATHER_PERIOD_STATUS_THRESHOLDS.isolatedWetFractionMaximum &&
+      input.longestWetRun <= WEATHER_PERIOD_STATUS_THRESHOLDS.isolatedWetRunMaximum
     ) {
       return 'snow_showers';
     }
     if (
       input.wetFraction <=
-        DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
-      input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetRunMaximum
+        WEATHER_PERIOD_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
+      input.longestWetRun <= WEATHER_PERIOD_STATUS_THRESHOLDS.intermittentWetRunMaximum
     ) {
       return 'occasional_snow';
     }
     return 'snow';
   }
   if (
-    input.showerRatio >= DAILY_WEATHER_STATUS_THRESHOLDS.showerRatioMinimum &&
-    input.wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetFractionMaximum &&
-    input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.isolatedWetRunMaximum
+    input.showerRatio >= WEATHER_PERIOD_STATUS_THRESHOLDS.showerRatioMinimum &&
+    input.wetFraction <= WEATHER_PERIOD_STATUS_THRESHOLDS.isolatedWetFractionMaximum &&
+    input.longestWetRun <= WEATHER_PERIOD_STATUS_THRESHOLDS.isolatedWetRunMaximum
   ) {
     return 'isolated_showers';
   }
   if (
-    input.showerRatio >= DAILY_WEATHER_STATUS_THRESHOLDS.showerRatioMinimum &&
-    (input.wetFraction <= DAILY_WEATHER_STATUS_THRESHOLDS.showerWetFractionMaximum ||
-      input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.showerWetRunMaximum)
+    input.showerRatio >= WEATHER_PERIOD_STATUS_THRESHOLDS.showerRatioMinimum &&
+    (input.wetFraction <= WEATHER_PERIOD_STATUS_THRESHOLDS.showerWetFractionMaximum ||
+      input.longestWetRun <= WEATHER_PERIOD_STATUS_THRESHOLDS.showerWetRunMaximum)
   ) {
     return 'showers';
   }
   if (
     input.wetFraction <=
-      DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
-    input.longestWetRun <= DAILY_WEATHER_STATUS_THRESHOLDS.intermittentWetRunMaximum
+      WEATHER_PERIOD_STATUS_THRESHOLDS.intermittentWetFractionMaximum &&
+    input.longestWetRun <= WEATHER_PERIOD_STATUS_THRESHOLDS.intermittentWetRunMaximum
   ) {
     return 'occasional_rain';
   }
   if (
-    input.maxHourlyPrecip >= DAILY_WEATHER_STATUS_THRESHOLDS.heavyRainHourlyMinimumMm ||
-    input.precipTotal >= DAILY_WEATHER_STATUS_THRESHOLDS.heavyRainTotalMinimumMm
+    input.maxHourlyPrecip >=
+      WEATHER_PERIOD_STATUS_THRESHOLDS.heavyRainHourlyMinimumMm ||
+    input.precipTotal >= WEATHER_PERIOD_STATUS_THRESHOLDS.heavyRainTotalMinimumMm
   ) {
     return 'heavy_rain';
   }
   return 'rain';
 }
 
-function classifyHourlyVisibility(hour: DailyWeatherHour): Visibility {
+function classifyHourlyVisibility(hour: WeatherPeriodHour): Visibility {
   if (
-    hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.fogVisibilityMeters ||
+    hour.visibilityMeters < WEATHER_PERIOD_STATUS_THRESHOLDS.fogVisibilityMeters ||
     hour.weatherCode === 45 ||
     hour.weatherCode === 48
   ) {
     return 'fog';
   }
-  if (hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.poorVisibilityMeters) {
+  if (hour.visibilityMeters < WEATHER_PERIOD_STATUS_THRESHOLDS.poorVisibilityMeters) {
     return 'poor';
   }
-  if (hour.visibilityMeters < DAILY_WEATHER_STATUS_THRESHOLDS.hazeVisibilityMeters) {
+  if (hour.visibilityMeters < WEATHER_PERIOD_STATUS_THRESHOLDS.hazeVisibilityMeters) {
     return 'haze';
   }
   return 'normal';
@@ -371,7 +376,7 @@ interface VisibilityAnalysis {
 }
 
 function analyzeVisibility(
-  daylight: readonly DailyWeatherHour[],
+  hours: readonly WeatherPeriodHour[],
   hourlyVisibility: readonly Visibility[],
   level: Exclude<Visibility, 'normal'>,
 ): VisibilityAnalysis {
@@ -399,11 +404,11 @@ function analyzeVisibility(
       firstAffectedHour:
         firstAffectedIndex === undefined
           ? null
-          : (daylight[firstAffectedIndex]?.time ?? null),
+          : (hours[firstAffectedIndex]?.time ?? null),
       lastAffectedHour:
         lastAffectedIndex === undefined
           ? null
-          : (daylight[lastAffectedIndex]?.time ?? null),
+          : (hours[lastAffectedIndex]?.time ?? null),
     },
     affectedIndices,
     affectedRuns,
@@ -413,38 +418,45 @@ function analyzeVisibility(
 function isSignificantVisibility(analysis: VisibilityAnalysis): boolean {
   return (
     analysis.debug.affectedFraction >=
-      DAILY_WEATHER_STATUS_THRESHOLDS.visibilitySignificantFractionMinimum ||
+      WEATHER_PERIOD_STATUS_THRESHOLDS.visibilitySignificantFractionMinimum ||
     analysis.debug.longestAffectedRun >=
-      DAILY_WEATHER_STATUS_THRESHOLDS.visibilitySignificantRunMinimum
+      WEATHER_PERIOD_STATUS_THRESHOLDS.visibilitySignificantRunMinimum
   );
 }
 
 function classifyVisibilityPeriod(
   analysis: VisibilityAnalysis,
-  daylightHours: number,
+  periodHours: number,
+  periodKind: WeatherPeriodKind,
 ): Exclude<VisibilityPeriod, 'none'> {
   if (
     analysis.debug.affectedFraction >=
-    DAILY_WEATHER_STATUS_THRESHOLDS.visibilityMostOfDayFractionMinimum
+    WEATHER_PERIOD_STATUS_THRESHOLDS.visibilityMostOfPeriodFractionMinimum
   ) {
-    return 'most_of_day';
+    return 'most_of_period';
   }
   if (analysis.affectedRuns > 1) return 'intermittent';
 
   const segmentCounts = [0, 0, 0];
   for (const index of analysis.affectedIndices) {
-    const segment = Math.min(2, Math.floor((index * 3) / daylightHours));
+    const segment = Math.min(2, Math.floor((index * 3) / periodHours));
     segmentCounts[segment] = (segmentCounts[segment] ?? 0) + 1;
   }
   const dominantCount = Math.max(...segmentCounts);
   if (
+    periodKind === 'current' ||
     dominantCount / analysis.debug.affectedHours <
-    DAILY_WEATHER_STATUS_THRESHOLDS.visibilitySegmentFractionMinimum
+      WEATHER_PERIOD_STATUS_THRESHOLDS.visibilitySegmentFractionMinimum
   ) {
     return 'brief';
   }
 
   const dominantSegment = segmentCounts.indexOf(dominantCount);
+  if (periodKind === 'night') {
+    if (dominantSegment === 0) return 'evening';
+    if (dominantSegment === 1) return 'overnight';
+    return 'morning';
+  }
   if (dominantSegment === 0) return 'morning';
   if (dominantSegment === 1) return 'afternoon';
   return 'evening';
@@ -453,6 +465,7 @@ function classifyVisibilityPeriod(
 function visibilityLabel(
   level: Exclude<Visibility, 'normal'>,
   period: Exclude<VisibilityPeriod, 'none'>,
+  periodKind: WeatherPeriodKind,
 ): string {
   if (level === 'fog') {
     switch (period) {
@@ -464,10 +477,12 @@ function visibilityLabel(
         return 'Afternoon fog';
       case 'evening':
         return 'Evening fog';
+      case 'overnight':
+        return 'Fog overnight';
       case 'intermittent':
         return 'Intermittent fog';
-      case 'most_of_day':
-        return 'Fog for most of the day';
+      case 'most_of_period':
+        return `Fog for most of ${periodKind === 'current' ? 'the interval' : `the ${periodKind}`}`;
     }
   }
 
@@ -481,24 +496,29 @@ function visibilityLabel(
       return `${description} in the afternoon`;
     case 'evening':
       return `${description} in the evening`;
+    case 'overnight':
+      return `${description} overnight`;
     case 'intermittent':
       return 'Intermittent reduced visibility';
-    case 'most_of_day':
-      return `${description} for most of the day`;
+    case 'most_of_period':
+      return `${description} for most of ${periodKind === 'current' ? 'the interval' : `the ${periodKind}`}`;
   }
 }
 
-function classifyVisibility(daylight: readonly DailyWeatherHour[]): {
+function classifyVisibility(
+  hours: readonly WeatherPeriodHour[],
+  periodKind: WeatherPeriodKind,
+): {
   readonly status: VisibilityStatus;
   readonly debug: Readonly<
     Record<Exclude<Visibility, 'normal'>, VisibilityDurationDebug>
   >;
 } {
-  const hourlyVisibility = daylight.map(classifyHourlyVisibility);
+  const hourlyVisibility = hours.map(classifyHourlyVisibility);
   const analyses = {
-    fog: analyzeVisibility(daylight, hourlyVisibility, 'fog'),
-    poor: analyzeVisibility(daylight, hourlyVisibility, 'poor'),
-    haze: analyzeVisibility(daylight, hourlyVisibility, 'haze'),
+    fog: analyzeVisibility(hours, hourlyVisibility, 'fog'),
+    poor: analyzeVisibility(hours, hourlyVisibility, 'poor'),
+    haze: analyzeVisibility(hours, hourlyVisibility, 'haze'),
   } as const;
   const level = (['fog', 'poor', 'haze'] as const).find((candidate) =>
     isSignificantVisibility(analyses[candidate]),
@@ -511,11 +531,11 @@ function classifyVisibility(daylight: readonly DailyWeatherHour[]): {
     icon: null,
   };
   if (level !== undefined) {
-    const period = classifyVisibilityPeriod(analyses[level], daylight.length);
+    const period = classifyVisibilityPeriod(analyses[level], hours.length, periodKind);
     status = {
       level,
       period,
-      label: visibilityLabel(level, period),
+      label: visibilityLabel(level, period, periodKind),
       icon: level,
     };
   }
@@ -530,31 +550,42 @@ function classifyVisibility(daylight: readonly DailyWeatherHour[]): {
   };
 }
 
-export function aggregateDailyWeatherStatus(
-  orderedLocalDayHours: readonly DailyWeatherHour[],
-): DailyWeatherStatus {
-  const daylight = orderedLocalDayHours.filter((hour) => hour.isDay);
-  if (daylight.length === 0) {
-    throw new RangeError('Daily weather status requires at least one daylight hour.');
+export function aggregateWeatherPeriodStatus(
+  orderedPeriodHours: readonly WeatherPeriodHour[],
+  periodKind: WeatherPeriodKind = 'day',
+): WeatherPeriodStatus {
+  if (orderedPeriodHours.length === 0) {
+    throw new RangeError('Weather period status requires at least one hourly sample.');
   }
 
-  const isWet = (hour: DailyWeatherHour) =>
-    hour.precipitationMm >= DAILY_WEATHER_STATUS_THRESHOLDS.meaningfulWetMm;
-  const wet = daylight.filter(isWet);
-  const dry = daylight.filter((hour) => !isWet(hour));
-  const skyHours = dry.length > 0 ? dry : daylight;
-  const daylightHours = daylight.length;
+  const isWet = (hour: WeatherPeriodHour) =>
+    hour.precipitationMm >= WEATHER_PERIOD_STATUS_THRESHOLDS.meaningfulWetMm;
+  const wet = orderedPeriodHours.filter(isWet);
+  const dry = orderedPeriodHours.filter((hour) => !isWet(hour));
+  const skyHours = dry.length > 0 ? dry : orderedPeriodHours;
+  const periodHours = orderedPeriodHours.length;
   const wetHours = wet.length;
-  const wetFraction = wetHours / daylightHours;
-  const precipTotal = daylight.reduce((total, hour) => total + hour.precipitationMm, 0);
-  const maxHourlyPrecip = Math.max(...daylight.map((hour) => hour.precipitationMm));
-  const rainTotal = daylight.reduce((total, hour) => total + hour.rainMm, 0);
-  const showersTotal = daylight.reduce((total, hour) => total + hour.showersMm, 0);
-  const snowfallTotal = daylight.reduce((total, hour) => total + hour.snowfallCm, 0);
-  const longestWetRun = longestRun(daylight, isWet);
+  const wetFraction = wetHours / periodHours;
+  const precipTotal = orderedPeriodHours.reduce(
+    (total, hour) => total + hour.precipitationMm,
+    0,
+  );
+  const maxHourlyPrecip = Math.max(
+    ...orderedPeriodHours.map((hour) => hour.precipitationMm),
+  );
+  const rainTotal = orderedPeriodHours.reduce((total, hour) => total + hour.rainMm, 0);
+  const showersTotal = orderedPeriodHours.reduce(
+    (total, hour) => total + hour.showersMm,
+    0,
+  );
+  const snowfallTotal = orderedPeriodHours.reduce(
+    (total, hour) => total + hour.snowfallCm,
+    0,
+  );
+  const longestWetRun = longestRun(orderedPeriodHours, isWet);
   const showerRatio =
     showersTotal /
-    Math.max(precipTotal, DAILY_WEATHER_STATUS_THRESHOLDS.ratioEpsilonMm);
+    Math.max(precipTotal, WEATHER_PERIOD_STATUS_THRESHOLDS.ratioEpsilonMm);
   const mixedHours = wet.filter(
     (hour) => hour.precipitationType === 6 || hour.precipitationType === 7,
   ).length;
@@ -581,7 +612,7 @@ export function aggregateDailyWeatherStatus(
     snowTypeHours,
     freezingHours,
   });
-  const visibility = classifyVisibility(daylight);
+  const visibility = classifyVisibility(orderedPeriodHours, periodKind);
   const label = precipitationLabel(precipitation, skyResult.sky);
 
   return {
@@ -596,7 +627,7 @@ export function aggregateDailyWeatherStatus(
     },
     visibility: visibility.status,
     debug: {
-      daylightHours,
+      periodHours,
       wetHours,
       wetFraction,
       precipTotal,

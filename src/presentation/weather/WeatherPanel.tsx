@@ -1,10 +1,8 @@
 import AirOutlinedIcon from '@mui/icons-material/AirOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
-import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
-import ThermostatOutlinedIcon from '@mui/icons-material/ThermostatOutlined';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
@@ -18,13 +16,14 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
 import {
   DEFAULT_WEATHER_MODEL,
   type PointWeatherForecast,
   type PointWeatherForecastDay,
+  type PointWeatherForecastPeriod,
 } from '@/application/weather/GetPointWeatherForecast';
 import {
   PointWeatherForecastError,
@@ -38,8 +37,9 @@ import {
   mapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
+import { appColors } from '@/presentation/theme/appColors';
 import {
-  DailyWeatherIcon,
+  WeatherPeriodIcon,
   VisibilityStatusIcon,
   WeatherConditionIcon,
   WeatherIconTooltip,
@@ -47,6 +47,15 @@ import {
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const fullWeekdays = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
 const months = [
   'Jan',
   'Feb',
@@ -60,24 +69,6 @@ const months = [
   'Oct',
   'Nov',
   'Dec',
-] as const;
-const compassDirections = [
-  'N',
-  'NNE',
-  'NE',
-  'ENE',
-  'E',
-  'ESE',
-  'SE',
-  'SSE',
-  'S',
-  'SSW',
-  'SW',
-  'WSW',
-  'W',
-  'WNW',
-  'NW',
-  'NNW',
 ] as const;
 
 type WeatherPanelState =
@@ -123,32 +114,23 @@ function fullLocalDateTime(timestamp: string): string {
   return `${localWeekday(timestamp.slice(0, 10))} ${localDateLabel(timestamp.slice(0, 10))} ${timestamp.slice(0, 4)}, ${timestamp.slice(11, 16)}`;
 }
 
+function currentPeriodDateTime(timestamp: string): string {
+  const date = timestamp.slice(0, 10);
+  const { year, month, day } = parseLocalDate(date);
+  const weekday = fullWeekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
+  if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
+  return `${weekday}, ${localDateLabel(date)} · ${timestamp.slice(11, 16)}`;
+}
+
 function formatMillimetres(value: number): string {
   if (value === 0) return '0 mm';
   return value < 10 ? `${value.toFixed(1)} mm` : `${Math.round(value).toString()} mm`;
-}
-
-function formatVisibility(value: number): string {
-  return value < 1_000
-    ? `${Math.round(value).toString()} m`
-    : `${(value / 1_000).toFixed(1)} km`;
-}
-
-function compassDirection(degrees: number): string {
-  const normalized = ((degrees % 360) + 360) % 360;
-  const direction = compassDirections[Math.round(normalized / 22.5) % 16];
-  if (direction === undefined) throw new RangeError('Invalid wind direction.');
-  return direction;
 }
 
 function formatRange(minimum: number, maximum: number, unit: string): string {
   const low = Math.round(minimum).toString();
   const high = Math.round(maximum).toString();
   return low === high ? `${low} ${unit}` : `${low}…${high} ${unit}`;
-}
-
-function formatWindSpeed(kilometresPerHour: number): string {
-  return `${(kilometresPerHour / 3.6).toFixed(1)} m/s`;
 }
 
 function formatWindRange(
@@ -178,16 +160,299 @@ function SelectedPoint({
   readonly forecast?: PointWeatherForecast;
 }) {
   return (
-    <Typography
-      variant="body2"
-      color="text.secondary"
-      sx={{ fontVariantNumeric: 'tabular-nums' }}
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <LocationOnOutlinedIcon
+        aria-hidden="true"
+        sx={{ flexShrink: 0, fontSize: 18, color: 'text.secondary' }}
+      />
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
+      >
+        {coordinate.latitude.toFixed(5)}, {coordinate.longitude.toFixed(5)}
+        {forecast === undefined
+          ? null
+          : ` · ${Math.round(forecast.elevationMeters).toLocaleString('en-US')} m`}
+      </Typography>
+    </Stack>
+  );
+}
+
+function LoadingSummaryPeriod() {
+  return (
+    <Box
+      sx={{
+        minWidth: 0,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        px: 1,
+        py: 0.75,
+        '@media (max-width: 479px)': {
+          px: 2,
+          py: 1.5,
+        },
+      }}
     >
-      {coordinate.latitude.toFixed(5)}, {coordinate.longitude.toFixed(5)}
-      {forecast === undefined
-        ? null
-        : ` · ${Math.round(forecast.elevationMeters).toLocaleString('en-US')} m`}
-    </Typography>
+      <Box
+        sx={{
+          minWidth: 0,
+          display: 'grid',
+          gridTemplateColumns: '44px minmax(0, 1fr)',
+          columnGap: 1,
+          alignItems: 'start',
+          '@media (max-width: 479px)': {
+            gridTemplateColumns: '64px minmax(0, 1fr)',
+            columnGap: 1.5,
+          },
+        }}
+      >
+        <Stack spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
+          <Skeleton variant="text" width={36} height={16} />
+          <Skeleton variant="circular" width={36} height={36} />
+        </Stack>
+        <Box
+          sx={{
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            '@media (max-width: 479px)': {
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) max-content',
+              gridTemplateAreas:
+                '"temperature precipitation" "condition precipitation" "metrics metrics"',
+              columnGap: 1,
+              rowGap: 0.5,
+            },
+          }}
+        >
+          <Skeleton
+            variant="text"
+            sx={{
+              gridArea: 'temperature',
+              width: '72%',
+              height: 18,
+              '@media (max-width: 479px)': { width: 104, maxWidth: '100%', height: 28 },
+            }}
+          />
+          <Skeleton
+            variant="text"
+            width={96}
+            height={18}
+            sx={{
+              gridArea: 'condition',
+              display: 'none',
+              '@media (max-width: 479px)': { display: 'block' },
+            }}
+          />
+          <Box
+            sx={{
+              gridArea: 'metrics',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              mt: 0.5,
+              '@media (max-width: 479px)': {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                columnGap: 1,
+                mt: 0.75,
+              },
+            }}
+          >
+            {[64, 72].map((valueWidth, index) => (
+              <Stack
+                key={valueWidth}
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  minWidth: 0,
+                  alignItems: 'center',
+                  '@media (max-width: 479px)': {
+                    minHeight: 36,
+                    pl: index === 1 ? 1 : 0,
+                    borderLeft: index === 1 ? 1 : 0,
+                    borderColor: 'divider',
+                  },
+                }}
+              >
+                <Skeleton variant="circular" width={16} height={16} />
+                <Stack spacing={0} sx={{ minWidth: 0 }}>
+                  <Skeleton
+                    variant="text"
+                    width={40}
+                    height={15}
+                    sx={{
+                      display: 'none',
+                      '@media (max-width: 479px)': { display: 'block' },
+                    }}
+                  />
+                  <Skeleton variant="text" width={valueWidth} height={15} />
+                </Stack>
+              </Stack>
+            ))}
+          </Box>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{
+              gridArea: 'precipitation',
+              alignItems: 'center',
+              minWidth: 0,
+              '@media (max-width: 479px)': { mt: 0.25 },
+            }}
+          >
+            <Skeleton variant="circular" width={16} height={16} />
+            <Skeleton variant="text" width={40} height={15} />
+          </Stack>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function LoadingSummary() {
+  return (
+    <Paper
+      variant="outlined"
+      aria-label="Loading current, day, and night summary"
+      sx={{
+        minHeight: 176,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.06fr) minmax(0, 0.94fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
+        '@media (max-width: 479px)': {
+          gridTemplateColumns: 'minmax(0, 1fr)',
+        },
+      }}
+    >
+      <Box sx={{ px: 1.5, py: 1, bgcolor: appColors.surface.subtle }}>
+        <Skeleton variant="text" width={108} height={20} />
+        <Skeleton variant="text" width={148} height={20} />
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mt: 1 }}>
+          <Skeleton variant="circular" width={48} height={48} />
+          <Stack spacing={0} sx={{ minWidth: 0, flex: 1 }}>
+            <Skeleton variant="text" width={108} height={28} />
+            <Skeleton variant="text" width="52%" height={18} />
+          </Stack>
+        </Stack>
+        <Stack spacing={0} sx={{ mt: 1 }}>
+          {[72, 64, 88].map((labelWidth) => (
+            <Box
+              key={labelWidth}
+              sx={{
+                minHeight: 16,
+                display: 'grid',
+                gridTemplateColumns: '16px minmax(0, 1fr) 52px',
+                columnGap: 0.5,
+                alignItems: 'center',
+              }}
+            >
+              <Skeleton variant="circular" width={16} height={16} />
+              <Skeleton variant="text" width={labelWidth} height={15} />
+              <Skeleton variant="text" width={52} height={15} />
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+      <Stack
+        sx={{
+          minWidth: 0,
+          borderLeft: 1,
+          borderColor: 'divider',
+          '@media (max-width: 479px)': {
+            mx: 1,
+            my: 0,
+            borderTop: 1,
+            borderLeft: 0,
+          },
+        }}
+      >
+        <LoadingSummaryPeriod />
+        <Divider sx={{ mx: 1 }} />
+        <LoadingSummaryPeriod />
+      </Stack>
+    </Paper>
+  );
+}
+
+function LoadingDailyPeriodRow() {
+  return (
+    <Box
+      sx={{
+        minWidth: 0,
+        minHeight: 36,
+        display: 'grid',
+        gridTemplateColumns: '28px 58px minmax(0, 1fr) 52px 76px',
+        gridTemplateAreas: '"icon temperature condition precipitation metrics"',
+        alignItems: 'center',
+        columnGap: 0.5,
+        px: 1,
+        py: 0.375,
+        '@media (max-width: 479px)': {
+          gridTemplateColumns: '28px minmax(0, 1fr) 52px 76px',
+          gridTemplateAreas:
+            '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+          rowGap: 0,
+        },
+      }}
+    >
+      <Skeleton variant="circular" width={28} height={28} sx={{ gridArea: 'icon' }} />
+      <Skeleton
+        variant="text"
+        width={52}
+        height={16}
+        sx={{ gridArea: 'temperature' }}
+      />
+      <Skeleton variant="text" width="80%" height={14} sx={{ gridArea: 'condition' }} />
+      <Skeleton
+        variant="text"
+        width={40}
+        height={14}
+        sx={{ gridArea: 'precipitation' }}
+      />
+      <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
+        <Skeleton variant="text" width={68} height={12} />
+        <Skeleton variant="text" width={68} height={12} />
+      </Stack>
+    </Box>
+  );
+}
+
+function LoadingDayForecastRow() {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        minHeight: 80,
+        display: 'grid',
+        gridTemplateColumns: '52px minmax(0, 1fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
+      }}
+    >
+      <Stack
+        spacing={0.25}
+        sx={{
+          my: 1,
+          px: 1,
+          justifyContent: 'center',
+          borderRight: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Skeleton variant="text" width={30} height={20} />
+        <Skeleton variant="text" width={36} height={18} />
+      </Stack>
+      <Stack sx={{ minWidth: 0, py: 0.25 }}>
+        <LoadingDailyPeriodRow />
+        <Divider sx={{ mx: 0.75 }} />
+        <LoadingDailyPeriodRow />
+      </Stack>
+    </Paper>
   );
 }
 
@@ -195,145 +460,721 @@ function LoadingForecast({ coordinate }: { readonly coordinate: MapCoordinate })
   return (
     <Stack spacing={2}>
       <SelectedPoint coordinate={coordinate} />
-      <Skeleton variant="rounded" height={196} />
-      <Stack direction="row" spacing={1} aria-label="Loading hourly forecast">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} variant="rounded" width={72} height={116} />
-        ))}
+      <LoadingSummary />
+      <Stack spacing={1}>
+        <Skeleton variant="text" width={120} height={24} />
+        <Stack
+          direction="row"
+          spacing={1}
+          aria-label="Loading hourly forecast"
+          sx={{ overflow: 'hidden' }}
+        >
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton
+              key={index}
+              variant="rounded"
+              height={116}
+              sx={{ minWidth: 64, flex: '0 0 calc((100% - 32px) / 5)' }}
+            />
+          ))}
+        </Stack>
       </Stack>
-      <Stack spacing={0.5} aria-label="Loading seven-day forecast">
-        {Array.from({ length: 7 }, (_, index) => (
-          <Skeleton key={index} variant="rounded" height={72} />
-        ))}
+      <Stack spacing={1}>
+        <Skeleton variant="text" width={112} height={24} />
+        <Stack spacing={1} aria-label="Loading seven-day forecast">
+          {Array.from({ length: 7 }, (_, index) => (
+            <LoadingDayForecastRow key={index} />
+          ))}
+        </Stack>
       </Stack>
     </Stack>
   );
 }
 
-interface CurrentMetric {
-  readonly icon: ReactElement;
-  readonly label: string;
-  readonly value: string;
+type WeatherMetricKind = 'wind' | 'gusts' | 'precipitation';
+
+interface PeriodDisplayValues {
+  readonly temperature: string;
+  readonly temperatureMinimum: string;
+  readonly temperatureMaximum: string;
+  readonly wind: string;
+  readonly windMinimum: string;
+  readonly windMaximum: string;
+  readonly gusts: string;
+  readonly gustMinimum: string;
+  readonly gustMaximum: string;
+  readonly precipitation: string;
 }
 
-function CurrentForecast({ forecast }: { readonly forecast: PointWeatherForecast }) {
-  const current = forecast.current;
-  const metrics: readonly CurrentMetric[] = [
-    {
-      icon: <ThermostatOutlinedIcon />,
-      label: 'Feels like',
-      value: `${Math.round(current.apparentTemperatureCelsius).toString()} °C`,
-    },
-    {
-      icon: <AirOutlinedIcon />,
-      label: 'Wind',
-      value: `${formatWindSpeed(current.windSpeedKmh)} ${compassDirection(current.windDirectionDegrees)}`,
-    },
-    {
-      icon: <SpeedOutlinedIcon />,
-      label: 'Gusts',
-      value: formatWindSpeed(current.windGustsKmh),
-    },
-    {
-      icon: <CloudOutlinedIcon />,
-      label: 'Cloud',
-      value: `${Math.round(current.cloudCoverPercent).toString()}%`,
-    },
-    {
-      icon: <VisibilityOutlinedIcon />,
-      label: 'Visibility',
-      value: formatVisibility(current.visibilityMeters),
-    },
-  ];
+function periodDisplayValues(period: PointWeatherForecastPeriod): PeriodDisplayValues {
+  return {
+    temperature: formatRange(
+      period.temperatureMinCelsius,
+      period.temperatureMaxCelsius,
+      '°C',
+    ),
+    temperatureMinimum: Math.round(period.temperatureMinCelsius).toString(),
+    temperatureMaximum: Math.round(period.temperatureMaxCelsius).toString(),
+    wind: formatWindRange(period.windSpeedMinKmh, period.windSpeedMaxKmh),
+    windMinimum: (period.windSpeedMinKmh / 3.6).toFixed(1),
+    windMaximum: (period.windSpeedMaxKmh / 3.6).toFixed(1),
+    gusts: formatWindRange(period.windGustsMinKmh, period.windGustsMaxKmh),
+    gustMinimum: (period.windGustsMinKmh / 3.6).toFixed(1),
+    gustMaximum: (period.windGustsMaxKmh / 3.6).toFixed(1),
+    precipitation: formatMillimetres(period.precipitationMm),
+  };
+}
 
+function WeatherMetricIcon({
+  kind,
+  label,
+  size = 15,
+}: {
+  readonly kind: WeatherMetricKind;
+  readonly label: string;
+  readonly size?: number;
+}) {
+  const color = kind === 'precipitation' ? 'info.main' : 'text.secondary';
+  const icon =
+    kind === 'wind' ? (
+      <AirOutlinedIcon aria-hidden="true" sx={{ fontSize: size, color }} />
+    ) : kind === 'gusts' ? (
+      <SpeedOutlinedIcon aria-hidden="true" sx={{ fontSize: size, color }} />
+    ) : (
+      <WaterDropOutlinedIcon aria-hidden="true" sx={{ fontSize: size, color }} />
+    );
+  return <WeatherIconTooltip label={label}>{icon}</WeatherIconTooltip>;
+}
+
+function CompactMetricValue({
+  kind,
+  label,
+  value,
+  ariaLabel,
+  compact = false,
+  narrowLabel,
+}: {
+  readonly kind: WeatherMetricKind;
+  readonly label: string;
+  readonly value: string;
+  readonly ariaLabel: string;
+  readonly compact?: boolean;
+  readonly narrowLabel?: string;
+}) {
+  const valueText = (
+    <Typography
+      variant="caption"
+      color="text.secondary"
+      aria-label={ariaLabel}
+      sx={{
+        minWidth: 0,
+        fontSize: compact ? '0.6rem' : undefined,
+        lineHeight: compact ? 1.3 : 1.25,
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {value}
+    </Typography>
+  );
   return (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-        <Typography
-          aria-label={`${Math.round(current.temperatureCelsius).toString()} degrees Celsius`}
+    <Stack
+      direction="row"
+      spacing={compact ? 0.25 : 0.5}
+      sx={{ alignItems: 'center', minWidth: 0, whiteSpace: 'nowrap' }}
+    >
+      <WeatherMetricIcon kind={kind} label={label} size={compact ? 12 : 16} />
+      {narrowLabel !== undefined ? (
+        <Stack spacing={0} sx={{ minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'none',
+              fontWeight: 600,
+              lineHeight: 1.2,
+              '@media (max-width: 479px)': { display: 'block' },
+            }}
+          >
+            {narrowLabel}
+          </Typography>
+          {valueText}
+        </Stack>
+      ) : (
+        valueText
+      )}
+    </Stack>
+  );
+}
+
+function CurrentMetricRow({
+  kind,
+  label,
+  value,
+  ariaLabel,
+}: {
+  readonly kind: WeatherMetricKind;
+  readonly label: string;
+  readonly value: string;
+  readonly ariaLabel: string;
+}) {
+  return (
+    <Box
+      sx={{
+        minHeight: 16,
+        display: 'grid',
+        gridTemplateColumns: '16px minmax(0, 1fr) max-content',
+        columnGap: 0.5,
+        alignItems: 'center',
+        '@media (max-width: 239px)': {
+          gridTemplateColumns: '16px minmax(0, 1fr)',
+        },
+      }}
+    >
+      <WeatherMetricIcon kind={kind} label={label} size={16} />
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          lineHeight: 1.25,
+          '@media (max-width: 239px)': {
+            display: 'none',
+          },
+        }}
+      >
+        {label}
+      </Typography>
+      <Typography
+        variant="caption"
+        aria-label={ariaLabel}
+        sx={{
+          justifySelf: 'end',
+          fontWeight: 500,
+          lineHeight: 1.25,
+          fontVariantNumeric: 'tabular-nums',
+          textAlign: 'right',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {value}
+      </Typography>
+    </Box>
+  );
+}
+
+function PeriodGraphic({
+  isDay,
+  label,
+  period,
+  size,
+  showVisibilityBadge = false,
+}: {
+  readonly isDay: boolean;
+  readonly label: string;
+  readonly period: PointWeatherForecastPeriod;
+  readonly size: number;
+  readonly showVisibilityBadge?: boolean;
+}) {
+  return (
+    <Box sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <WeatherPeriodIcon
+        icon={period.status.primary.icon}
+        isDay={isDay}
+        label={`${label}: ${period.status.primary.label}`}
+        size={size}
+      />
+      {showVisibilityBadge && period.status.visibility.label !== null ? (
+        <Box
           sx={{
-            fontSize: 40,
-            fontWeight: 750,
-            lineHeight: 1,
-            fontVariantNumeric: 'tabular-nums',
+            position: 'absolute',
+            right: -2,
+            bottom: -2,
+            display: 'grid',
+            placeItems: 'center',
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            bgcolor: 'background.paper',
           }}
         >
-          {Math.round(current.temperatureCelsius)}°
-        </Typography>
-        <WeatherConditionIcon
-          code={current.weatherCode}
-          isDay={current.isDay}
-          size={56}
+          <VisibilityStatusIcon status={period.status.visibility} />
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast }) {
+  const label = 'Now · next 3 h';
+  const period = forecast.currentThreeHours;
+  const values = periodDisplayValues(period);
+  return (
+    <Box
+      component="article"
+      aria-label={`${label} forecast`}
+      sx={{
+        height: '100%',
+        px: 1.5,
+        py: 1,
+        bgcolor: appColors.surface.subtle,
+        '@media (max-width: 319px)': {
+          px: 1,
+        },
+      }}
+    >
+      <Typography variant="subtitle2">{label}</Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        {currentPeriodDateTime(forecast.current.time)}
+      </Typography>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'flex-start',
+          minWidth: 0,
+          mt: 1,
+          '@media (max-width: 319px)': {
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 0.5,
+          },
+        }}
+      >
+        <PeriodGraphic
+          isDay={forecast.current.isDay}
+          label={label}
+          period={period}
+          size={48}
+          showVisibilityBadge
         />
-        <Stack spacing={0.25} sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {describeWmoWeatherCode(current.weatherCode)}
+        <Stack
+          spacing={0}
+          sx={{
+            minWidth: 0,
+            flex: 1,
+            '@media (max-width: 319px)': {
+              flex: 'initial',
+              alignItems: 'center',
+              textAlign: 'center',
+            },
+          }}
+        >
+          <Typography
+            aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+            sx={{
+              fontSize: '1.5rem',
+              fontWeight: 750,
+              lineHeight: 1.15,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+              '@media (max-width: 239px)': {
+                fontSize: '1.25rem',
+              },
+            }}
+          >
+            {values.temperature}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Current conditions
+          <Typography
+            variant="body2"
+            sx={{ minWidth: 0, fontWeight: 700, lineHeight: 1.25 }}
+          >
+            {period.status.primary.label}
           </Typography>
         </Stack>
       </Stack>
-      <Divider sx={{ my: 2 }} />
+      <Stack spacing={0} sx={{ mt: 1 }}>
+        <CurrentMetricRow
+          kind="wind"
+          label="Wind"
+          value={values.wind}
+          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+        />
+        <CurrentMetricRow
+          kind="gusts"
+          label="Gusts"
+          value={values.gusts}
+          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+        />
+        <CurrentMetricRow
+          kind="precipitation"
+          label="Precipitation"
+          value={values.precipitation}
+          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+        />
+      </Stack>
+    </Box>
+  );
+}
+
+function SummaryPeriod({
+  isDay,
+  label,
+  period,
+}: {
+  readonly isDay: boolean;
+  readonly label: string;
+  readonly period: PointWeatherForecastPeriod;
+}) {
+  const values = periodDisplayValues(period);
+  return (
+    <Box
+      component="article"
+      aria-label={`${label} forecast`}
+      sx={{
+        minWidth: 0,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        px: 1,
+        py: 0.75,
+        '@media (max-width: 479px)': {
+          px: 2,
+          py: 1.5,
+        },
+        '@media (max-width: 279px)': {
+          px: 1,
+        },
+      }}
+    >
       <Box
         sx={{
+          minWidth: 0,
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 1,
+          gridTemplateColumns: '44px minmax(0, 1fr)',
+          columnGap: 1,
+          alignItems: 'start',
+          '@media (max-width: 479px)': {
+            gridTemplateColumns: '36px minmax(0, 1fr) max-content',
+            gridTemplateAreas:
+              '"label label precipitation" "graphic temperature temperature" "graphic condition condition" "metrics metrics metrics"',
+            columnGap: 1,
+            rowGap: 0.5,
+            alignItems: 'center',
+          },
+          '@media (max-width: 279px)': {
+            gridTemplateColumns: '36px minmax(0, 1fr)',
+            gridTemplateAreas:
+              '"label precipitation" "temperature temperature" "graphic condition" "metrics metrics"',
+          },
         }}
       >
-        {metrics.map(({ icon, label, value }) => (
-          <Box
-            key={label}
+        <Stack
+          spacing={1}
+          sx={{
+            minWidth: 0,
+            alignItems: 'center',
+            '@media (max-width: 479px)': {
+              display: 'contents',
+              '& > :nth-child(2)': {
+                gridArea: 'graphic',
+                justifySelf: 'start',
+              },
+            },
+            '@media (max-width: 239px)': {
+              '& > :nth-child(2) > :last-child': {
+                right: 0,
+                bottom: 0,
+              },
+            },
+          }}
+        >
+          <Typography
+            variant="caption"
+            color="text.secondary"
             sx={{
-              minWidth: 0,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              p: 1,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
+              fontWeight: 700,
+              lineHeight: 1.25,
+              '@media (max-width: 479px)': {
+                gridArea: 'label',
+                justifySelf: 'start',
+                color: 'text.primary',
+                fontSize: '0.95rem',
+              },
             }}
           >
-            <WeatherIconTooltip label={label}>
-              <Box
-                aria-hidden="true"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 1,
-                  color: 'primary.main',
-                  bgcolor: 'background.paper',
-                  '& .MuiSvgIcon-root': { fontSize: 18 },
-                }}
-              >
-                {icon}
-              </Box>
-            </WeatherIconTooltip>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', lineHeight: 1.2 }}
-              >
-                {label}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  fontWeight: 600,
-                  fontVariantNumeric: 'tabular-nums',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {value}
-              </Typography>
+            {label}
+          </Typography>
+          <PeriodGraphic
+            isDay={isDay}
+            label={label}
+            period={period}
+            size={36}
+            showVisibilityBadge
+          />
+        </Stack>
+        <Box
+          sx={{
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            '@media (max-width: 479px)': {
+              display: 'contents',
+            },
+          }}
+        >
+          <Typography
+            variant="body2"
+            aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+            sx={{
+              gridArea: 'temperature',
+              fontWeight: 700,
+              lineHeight: 1.25,
+              fontVariantNumeric: 'tabular-nums',
+              whiteSpace: 'nowrap',
+              '@media (max-width: 479px)': {
+                fontSize: '1.35rem',
+                lineHeight: 1.15,
+              },
+              '@media (max-width: 239px)': {
+                fontSize: '1.15rem',
+              },
+            }}
+          >
+            {values.temperature}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              gridArea: 'condition',
+              display: 'none',
+              minWidth: 0,
+              lineHeight: 1.25,
+              '@media (max-width: 479px)': { display: 'block' },
+            }}
+          >
+            {period.status.primary.label}
+          </Typography>
+          <Box
+            sx={{
+              gridArea: 'metrics',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              mt: 0.5,
+              '@media (max-width: 479px)': {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                columnGap: 1,
+                mt: 0.25,
+              },
+              '@media (max-width: 359px)': {
+                gridTemplateColumns: 'minmax(0, 1fr)',
+              },
+              '@media (max-width: 239px)': {
+                '& .MuiSvgIcon-root': {
+                  fontSize: 12,
+                },
+                '& .MuiTypography-root': {
+                  fontSize: '0.7rem',
+                },
+                '& .MuiStack-root': {
+                  columnGap: 0.25,
+                },
+              },
+            }}
+          >
+            <Box
+              sx={{
+                minWidth: 0,
+                '@media (max-width: 479px)': {
+                  minHeight: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                },
+              }}
+            >
+              <CompactMetricValue
+                kind="wind"
+                label={`${label} wind`}
+                value={values.wind}
+                ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+                narrowLabel="Wind"
+              />
+            </Box>
+            <Box
+              sx={{
+                minWidth: 0,
+                '@media (max-width: 479px)': {
+                  minHeight: 36,
+                  pl: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderLeft: 1,
+                  borderColor: 'divider',
+                },
+                '@media (max-width: 359px)': {
+                  pl: 0,
+                  borderTop: 1,
+                  borderLeft: 0,
+                },
+              }}
+            >
+              <CompactMetricValue
+                kind="gusts"
+                label={`${label} gusts`}
+                value={values.gusts}
+                ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+                narrowLabel="Gusts"
+              />
             </Box>
           </Box>
-        ))}
+          <Box
+            sx={{
+              gridArea: 'precipitation',
+              minWidth: 0,
+              '@media (max-width: 479px)': {
+                justifySelf: 'end',
+              },
+            }}
+          >
+            <CompactMetricValue
+              kind="precipitation"
+              label={`${label} precipitation`}
+              value={values.precipitation}
+              ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+            />
+          </Box>
+        </Box>
       </Box>
+    </Box>
+  );
+}
+
+function DailyPeriodRow({
+  isDay,
+  label,
+  period,
+}: {
+  readonly isDay: boolean;
+  readonly label: string;
+  readonly period: PointWeatherForecastPeriod;
+}) {
+  const values = periodDisplayValues(period);
+  return (
+    <Box
+      component="article"
+      aria-label={`${label} forecast`}
+      sx={{
+        minWidth: 0,
+        minHeight: 36,
+        display: 'grid',
+        gridTemplateColumns: '28px 58px minmax(0, 1fr) 52px 76px',
+        gridTemplateAreas: '"icon temperature condition precipitation metrics"',
+        alignItems: 'center',
+        columnGap: 0.5,
+        px: 1,
+        py: 0.375,
+        '@media (max-width: 479px)': {
+          gridTemplateColumns: '28px minmax(0, 1fr) 52px 76px',
+          gridTemplateAreas:
+            '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+          rowGap: 0,
+        },
+      }}
+    >
+      <Box sx={{ gridArea: 'icon' }}>
+        <PeriodGraphic
+          isDay={isDay}
+          label={label}
+          period={period}
+          size={28}
+          showVisibilityBadge
+        />
+      </Box>
+      <Typography
+        variant="caption"
+        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+        sx={{
+          gridArea: 'temperature',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+          lineHeight: 1.25,
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {values.temperature}
+      </Typography>
+      <Typography
+        variant="caption"
+        sx={{
+          gridArea: 'condition',
+          minWidth: 0,
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+          fontSize: '0.68rem',
+          lineHeight: 1.2,
+        }}
+      >
+        {period.status.primary.label}
+      </Typography>
+      <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
+        <CompactMetricValue
+          kind="precipitation"
+          label={`${label} precipitation`}
+          value={values.precipitation}
+          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          compact
+        />
+      </Box>
+      <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
+        <CompactMetricValue
+          kind="wind"
+          label={`${label} wind`}
+          value={values.wind}
+          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          compact
+        />
+        <CompactMetricValue
+          kind="gusts"
+          label={`${label} gusts`}
+          value={values.gusts}
+          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          compact
+        />
+      </Stack>
+    </Box>
+  );
+}
+
+function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast }) {
+  const firstDay = forecast.days[0];
+  if (firstDay === undefined) {
+    throw new RangeError('Forecast summary requires the current local day.');
+  }
+  return (
+    <Paper
+      variant="outlined"
+      role="region"
+      aria-label="Current, day, and night summary"
+      sx={{
+        minHeight: 176,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.06fr) minmax(0, 0.94fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
+        '@media (max-width: 479px)': {
+          gridTemplateColumns: 'minmax(0, 1fr)',
+        },
+      }}
+    >
+      <CurrentSummary forecast={forecast} />
+      <Stack
+        sx={{
+          minWidth: 0,
+          borderLeft: 1,
+          borderColor: 'divider',
+          '@media (max-width: 479px)': {
+            mx: 1,
+            my: 0,
+            borderTop: 1,
+            borderLeft: 0,
+          },
+        }}
+      >
+        <SummaryPeriod label="Day" period={firstDay.day} isDay />
+        <Divider sx={{ mx: 1 }} />
+        <SummaryPeriod label="Night" period={firstDay.night} isDay={false} />
+      </Stack>
     </Paper>
   );
 }
@@ -354,7 +1195,8 @@ function HourlyCard({
       variant="outlined"
       aria-label={`${fullLocalDateTime(hour.time)}, ${condition}, ${temperature} degrees Celsius, ${precipitation} precipitation`}
       sx={{
-        minWidth: 72,
+        minWidth: 64,
+        flex: '0 0 calc((100% - 32px) / 5)',
         px: 1.25,
         py: 1,
         scrollSnapAlign: 'start',
@@ -456,7 +1298,9 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
           overflowX: 'auto',
           overflowY: 'hidden',
           pb: 0.5,
+          scrollbarWidth: 'none',
           scrollSnapType: 'x mandatory',
+          '&::-webkit-scrollbar': { display: 'none' },
         }}
       >
         {hours.map((hour) => (
@@ -468,110 +1312,48 @@ function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast 
 }
 
 function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
-  const temperature = formatRange(
-    day.daylightTemperatureMinCelsius,
-    day.daylightTemperatureMaxCelsius,
-    '°C',
-  );
-  const wind = formatWindRange(
-    day.daylightWindSpeedMinKmh,
-    day.daylightWindSpeedMaxKmh,
-  );
-  const roundedTemperatureMin = Math.round(
-    day.daylightTemperatureMinCelsius,
-  ).toString();
-  const roundedTemperatureMax = Math.round(
-    day.daylightTemperatureMaxCelsius,
-  ).toString();
-  const windMinimum = (day.daylightWindSpeedMinKmh / 3.6).toFixed(1);
-  const windMaximum = (day.daylightWindSpeedMaxKmh / 3.6).toFixed(1);
-  const precipitation = formatMillimetres(day.daylightPrecipitationMm);
-
   return (
-    <Box
-      component="article"
+    <Paper
+      role="group"
+      variant="outlined"
+      aria-label={`${localWeekday(day.date)} ${localDateLabel(day.date)}`}
       sx={{
-        minHeight: 72,
+        minHeight: 80,
         display: 'grid',
-        gridTemplateColumns: '64px 36px minmax(0, 1fr) 108px',
-        gap: 1,
-        alignItems: 'center',
-        py: 1,
+        gridTemplateColumns: '52px minmax(0, 1fr)',
+        borderRadius: 1.25,
+        overflow: 'hidden',
       }}
     >
-      <Box>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+      <Box
+        sx={{
+          minWidth: 0,
+          my: 1,
+          px: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          borderRight: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
           {localWeekday(day.date)}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {localDateLabel(day.date)}
-        </Typography>
-      </Box>
-      <DailyWeatherIcon
-        icon={day.status.primary.icon}
-        label={day.status.primary.label}
-      />
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2">{day.status.primary.label}</Typography>
-        {day.status.visibility.label === null ? null : (
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <VisibilityStatusIcon status={day.status.visibility} />
-            <Typography variant="caption" color="text.secondary">
-              {day.status.visibility.label}
-            </Typography>
-          </Stack>
-        )}
         <Typography
           variant="caption"
           color="text.secondary"
-          aria-label={`Daytime temperature ${roundedTemperatureMin} to ${roundedTemperatureMax} degrees Celsius`}
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
+          sx={{ whiteSpace: 'nowrap' }}
         >
-          {temperature}
+          {localDateLabel(day.date)}
         </Typography>
       </Box>
-      <Stack spacing={0.5} sx={{ alignItems: 'flex-end', minWidth: 108 }}>
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}
-        >
-          <WeatherIconTooltip label="Daylight wind">
-            <AirOutlinedIcon
-              aria-hidden="true"
-              sx={{ fontSize: 15, color: 'text.secondary' }}
-            />
-          </WeatherIconTooltip>
-          <Typography
-            variant="caption"
-            aria-label={`Daytime wind ${windMinimum} to ${windMaximum} metres per second`}
-            sx={{ fontVariantNumeric: 'tabular-nums' }}
-          >
-            {wind}
-          </Typography>
-        </Stack>
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}
-        >
-          <WeatherIconTooltip label="Daylight precipitation">
-            <WaterDropOutlinedIcon
-              aria-hidden="true"
-              sx={{ fontSize: 15, color: 'info.main' }}
-            />
-          </WeatherIconTooltip>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            aria-label={`Daylight precipitation ${day.daylightPrecipitationMm.toString()} millimetres`}
-            sx={{ fontVariantNumeric: 'tabular-nums' }}
-          >
-            {precipitation}
-          </Typography>
-        </Stack>
+      <Stack sx={{ minWidth: 0, py: 0.25 }}>
+        <DailyPeriodRow label="Day" period={day.day} isDay />
+        <Divider sx={{ mx: 0.75 }} />
+        <DailyPeriodRow label="Night" period={day.night} isDay={false} />
       </Stack>
-    </Box>
+    </Paper>
   );
 }
 
@@ -585,14 +1367,13 @@ function SevenDayForecast({
       <Typography component="h2" variant="subtitle2">
         7-day forecast
       </Typography>
-      <Box role="list" aria-label="Seven-day forecast">
-        {days.map((day, index) => (
+      <Stack role="list" aria-label="Seven-day forecast" spacing={1}>
+        {days.map((day) => (
           <Box key={day.date} role="listitem">
-            {index === 0 ? null : <Divider />}
             <DayForecastRow day={day} />
           </Box>
         ))}
-      </Box>
+      </Stack>
     </Stack>
   );
 }
@@ -619,14 +1400,18 @@ function ForecastFooter({
     <Box
       sx={{
         flexShrink: 0,
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 0.5,
         px: 2,
-        py: 1.5,
+        py: 1.25,
         borderTop: 1,
         borderColor: 'divider',
-        bgcolor: 'background.paper',
+        bgcolor: appColors.surface.subtle,
       }}
     >
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+      <Typography variant="caption" color="text.secondary">
         {modelName} · {updateText}
       </Typography>
       <Link
@@ -634,6 +1419,7 @@ function ForecastFooter({
         href={weatherProviderConfiguration.attributionUrl}
         target="_blank"
         rel="noreferrer"
+        sx={{ whiteSpace: 'nowrap' }}
       >
         Weather data by Open-Meteo
       </Link>
@@ -728,7 +1514,13 @@ export function WeatherPanel() {
   const readyForecast = state.status === 'ready' ? state.forecast : null;
   return (
     <Box
-      sx={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+      sx={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: appColors.surface.subtle,
+      }}
     >
       <Box
         sx={{
@@ -762,7 +1554,7 @@ export function WeatherPanel() {
         ) : (
           <Stack spacing={2}>
             <SelectedPoint coordinate={state.coordinate} forecast={state.forecast} />
-            <CurrentForecast forecast={state.forecast} />
+            <ForecastSummary forecast={state.forecast} />
             <HourlyForecast forecast={state.forecast} />
             <SevenDayForecast days={state.forecast.days} />
           </Stack>

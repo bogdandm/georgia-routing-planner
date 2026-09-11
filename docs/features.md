@@ -402,26 +402,50 @@ same WGS84 coordinate to the forecast workflow. Marker placement retains higher
 priority. A route draft hidden behind Weather does not capture clicks; returning to
 Tracks resumes route selection.
 
-The selected-point context is one compact line containing only the clicked coordinate
-and forecast elevation. The current card presents temperature and condition above a
-two-column metric grid for apparent temperature, wind, gusts, cloud cover, and
-visibility. Wind and gust values are displayed in metres per second. Every forecast and
-metric icon exposes its label on pointer hover, keyboard focus, and a touch-screen tap.
-A horizontally scrolling carousel contains exactly 24 ordered hourly slots from the
-current local forecast hour, including local weekday and time, condition, temperature,
-and precipitation.
+The selected-point context is one compact location row containing a pin icon, the
+clicked coordinate, and forecast elevation. The summary is one bordered card: a softly
+tinted current-period section fills the left side, while daytime and night forecasts
+stack on the right behind inset dividers. The current section gives the local date and
+time, then keeps the weather icon beside a top-aligned temperature with the primary
+condition directly beneath it. Visibly labelled wind, gust, and precipitation rows
+follow without separators. Each Day and Night section groups its plain period label with
+the weather icon. Wider viewports keep the temperature and compact metrics in an
+adjacent column. At narrow mobile widths, the period expands into a prominent
+temperature with its primary condition, precipitation beside it, and separate labelled
+wind and gust groups below. Significant visibility appears separately and never replaces
+the primary condition. The former large apparent-temperature, cloud-cover, visibility,
+wind, and gust metric cards are not rendered. Every weather and metric icon exposes its
+label on pointer hover, keyboard focus, and a touch-screen tap. A horizontally scrolling
+carousel contains exactly 24 ordered hourly slots from the current local forecast hour,
+including local weekday and time, condition, temperature, and precipitation. While
+loading, placeholders retain the same split summary and seven-row geometry; the hourly
+viewport uses the same card sizing as the ready state to avoid reflow as the response
+arrives. At narrow mobile workspace widths, the summary stacks its current and Day/Night
+areas. Each seven-day period places its primary condition beneath its temperature,
+precipitation immediately to their right, and the two-line wind/gust group at the far
+edge so words do not compress or overflow the card.
 
-Seven rows are derived only from the returned hourly forecast, one for each selected
-location calendar day. Each row classifies every dry daylight hour before choosing the
-dominant sky from duration thresholds; a short cloudy window cannot redefine an
-otherwise sunny day. Precipitation is likewise separated into isolated, intermittent,
-and persistent patterns before it is combined with the dominant sky label. Significant
-fog, poor visibility, or reduced visibility is displayed as a secondary, time-qualified
-condition such as `Morning fog`; visibility never replaces the primary weather label or
-icon. Each row also shows daylight-only temperature and wind-speed ranges plus the
-complete daylight precipitation total. Night values cannot affect any of those results.
-Wind ranges are displayed in metres per second. Day labels and the model-update time use
-the selected location's provider-returned time zone.
+Seven rows are derived from location-local hourly forecast data. Each date owns one
+full-width bordered card with a fixed date column and two stacked weather-period rows.
+The rows omit repeated Day and Night text while their article names and icon tooltips
+retain those accessible distinctions. Each row aligns the weather icon, temperature
+range, primary condition, precipitation, and a two-line wind and gust group; its only
+internal divider separates the two periods without crossing the date column. Night `D`
+includes all non-daylight samples after date `D`'s daylight period and all non-daylight
+samples before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore
+belong to night `D-1`; local midnight never splits a physical night. An eighth fetched
+calendar date supplies the pre-sunrise samples needed to complete the seventh displayed
+night.
+
+Day and night independently classify every dry sample before choosing the dominant sky
+from duration thresholds; a short cloudy window cannot redefine an otherwise clear
+period. Precipitation is likewise separated into isolated, intermittent, and persistent
+patterns before it is combined with the dominant sky. Significant fog, poor visibility,
+or reduced visibility remains a secondary, time-qualified icon and never replaces the
+primary weather icon. Each interval shows temperature, wind-speed, and gust ranges plus
+its complete precipitation total. Wind and gust ranges are displayed in metres per
+second. Date labels and the model-update time use the selected location's
+provider-returned time zone.
 
 Only the latest point request may update the panel. A new selection or unmount aborts
 the previous request, and Retry repeats the currently selected coordinate. Loading,

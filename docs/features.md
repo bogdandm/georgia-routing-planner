@@ -406,23 +406,26 @@ The selected-point context is one compact location row containing a pin icon, th
 clicked coordinate, and forecast elevation. The summary is one bordered card: a softly
 tinted current-period section fills the left side, while daytime and night forecasts
 stack on the right behind inset dividers. The current section gives the local date and
-time, primary condition, temperature range, and visibly labelled wind, gust, and
-precipitation rows. Each Day and Night section places its temperature beside a weather
-icon, whose tooltip carries the primary condition without repeating it as visible text;
-wind, gust, and precipitation values stack beneath. Significant reduced visibility
-appears separately and never replaces the primary condition. The former large
-apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
-rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
-focus, and a touch-screen tap. A horizontally scrolling carousel contains exactly 24
-ordered hourly slots from the current local forecast hour, including local weekday and
-time, condition, temperature, and precipitation. While loading, placeholders retain the
-same split summary and seven-row geometry; the hourly viewport uses the same card sizing
-as the ready state to avoid reflow as the response arrives.
+time, then keeps the weather icon beside a top-aligned temperature with the primary
+condition directly beneath it. Visibly labelled wind, gust, and precipitation rows
+follow without separators. Each Day and Night section groups its plain period label with
+the weather icon in a small left column; the temperature and compact wind, gust, and
+precipitation rows occupy the adjacent column without an internal divider. Significant
+reduced visibility appears separately and never replaces the primary condition. The
+former large apparent-temperature, cloud-cover, visibility, wind, and gust metric cards
+are not rendered. Every weather and metric icon exposes its label on pointer hover,
+keyboard focus, and a touch-screen tap. A horizontally scrolling carousel contains
+exactly 24 ordered hourly slots from the current local forecast hour, including local
+weekday and time, condition, temperature, and precipitation. While loading, placeholders
+retain the same split summary and seven-row geometry; the hourly viewport uses the same
+card sizing as the ready state to avoid reflow as the response arrives.
 
 Seven rows are derived from location-local hourly forecast data. Each date owns one
-full-width bordered card with a fixed date column and stacked Day and Night rows. A
-period row keeps the label, weather icon, primary condition, and temperature on its
-first line, then aligns wind speed, gust, and precipitation beneath them. Night `D`
+full-width bordered card with a fixed date column and two stacked weather-period rows.
+The rows omit repeated Day and Night text while their article names and icon tooltips
+retain those accessible distinctions. Each row aligns the weather icon, temperature
+range, primary condition, precipitation, and a two-line wind and gust group; its only
+internal divider separates the two periods without crossing the date column. Night `D`
 includes all non-daylight samples after date `D`'s daylight period and all non-daylight
 samples before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore
 belong to night `D-1`; local midnight never splits a physical night. An eighth fetched

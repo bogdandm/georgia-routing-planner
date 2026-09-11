@@ -411,14 +411,17 @@ condition directly beneath it. Visibly labelled wind, gust, and precipitation ro
 follow without separators. Each Day and Night section groups its plain period label with
 the weather icon in a small left column; the temperature and compact wind, gust, and
 precipitation rows occupy the adjacent column without an internal divider. Significant
-reduced visibility appears separately and never replaces the primary condition. The
-former large apparent-temperature, cloud-cover, visibility, wind, and gust metric cards
-are not rendered. Every weather and metric icon exposes its label on pointer hover,
-keyboard focus, and a touch-screen tap. A horizontally scrolling carousel contains
-exactly 24 ordered hourly slots from the current local forecast hour, including local
-weekday and time, condition, temperature, and precipitation. While loading, placeholders
-retain the same split summary and seven-row geometry; the hourly viewport uses the same
-card sizing as the ready state to avoid reflow as the response arrives.
+visibility appears separately and never replaces the primary condition. The former large
+apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
+rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
+focus, and a touch-screen tap. A horizontally scrolling carousel contains exactly 24
+ordered hourly slots from the current local forecast hour, including local weekday and
+time, condition, temperature, and precipitation. While loading, placeholders retain the
+same split summary and seven-row geometry; the hourly viewport uses the same card sizing
+as the ready state to avoid reflow as the response arrives. At narrow mobile workspace
+widths, each seven-day period places its primary condition beneath its temperature,
+precipitation immediately to their right, and the two-line wind/gust group at the far
+edge so words do not compress or overflow the card.
 
 Seven rows are derived from location-local hourly forecast data. Each date owns one
 full-width bordered card with a fixed date column and two stacked weather-period rows.

@@ -297,11 +297,11 @@ function LoadingDailyPeriodRow() {
         columnGap: 0.5,
         px: 1,
         py: 0.375,
-        '@media (max-width: 359px)': {
-          gridTemplateColumns: '28px 54px minmax(0, 1fr) 52px',
+        '@media (max-width: 479px)': {
+          gridTemplateColumns: '28px minmax(0, 1fr) 52px 76px',
           gridTemplateAreas:
-            '"icon temperature condition precipitation" "icon metrics metrics metrics"',
-          rowGap: 0.25,
+            '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+          rowGap: 0,
         },
       }}
     >
@@ -761,11 +761,11 @@ function DailyPeriodRow({
         columnGap: 0.5,
         px: 1,
         py: 0.375,
-        '@media (max-width: 359px)': {
-          gridTemplateColumns: '28px 54px minmax(0, 1fr) 52px',
+        '@media (max-width: 479px)': {
+          gridTemplateColumns: '28px minmax(0, 1fr) 52px 76px',
           gridTemplateAreas:
-            '"icon temperature condition precipitation" "icon metrics metrics metrics"',
-          rowGap: 0.25,
+            '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+          rowGap: 0,
         },
       }}
     >

@@ -624,10 +624,22 @@ function CurrentMetricRow({
         gridTemplateColumns: '16px minmax(0, 1fr) max-content',
         columnGap: 0.5,
         alignItems: 'center',
+        '@media (max-width: 239px)': {
+          gridTemplateColumns: '16px minmax(0, 1fr)',
+        },
       }}
     >
       <WeatherMetricIcon kind={kind} label={label} size={16} />
-      <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.25 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          lineHeight: 1.25,
+          '@media (max-width: 239px)': {
+            display: 'none',
+          },
+        }}
+      >
         {label}
       </Typography>
       <Typography
@@ -703,6 +715,9 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
         px: 1.5,
         py: 1,
         bgcolor: appColors.surface.subtle,
+        '@media (max-width: 319px)': {
+          px: 1,
+        },
       }}
     >
       <Typography variant="subtitle2">{label}</Typography>
@@ -712,7 +727,16 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
       <Stack
         direction="row"
         spacing={1}
-        sx={{ alignItems: 'flex-start', minWidth: 0, mt: 1 }}
+        sx={{
+          alignItems: 'flex-start',
+          minWidth: 0,
+          mt: 1,
+          '@media (max-width: 319px)': {
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 0.5,
+          },
+        }}
       >
         <PeriodGraphic
           isDay={forecast.current.isDay}
@@ -721,7 +745,18 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
           size={48}
           showVisibilityBadge
         />
-        <Stack spacing={0} sx={{ minWidth: 0, flex: 1 }}>
+        <Stack
+          spacing={0}
+          sx={{
+            minWidth: 0,
+            flex: 1,
+            '@media (max-width: 319px)': {
+              flex: 'initial',
+              alignItems: 'center',
+              textAlign: 'center',
+            },
+          }}
+        >
           <Typography
             aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
             sx={{
@@ -730,6 +765,9 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
               lineHeight: 1.15,
               fontVariantNumeric: 'tabular-nums',
               whiteSpace: 'nowrap',
+              '@media (max-width: 239px)': {
+                fontSize: '1.25rem',
+              },
             }}
           >
             {values.temperature}
@@ -792,6 +830,9 @@ function SummaryPeriod({
           px: 2,
           py: 1.5,
         },
+        '@media (max-width: 279px)': {
+          px: 1,
+        },
       }}
     >
       <Box
@@ -802,12 +843,40 @@ function SummaryPeriod({
           columnGap: 1,
           alignItems: 'start',
           '@media (max-width: 479px)': {
-            gridTemplateColumns: '64px minmax(0, 1fr)',
-            columnGap: 1.5,
+            gridTemplateColumns: '36px minmax(0, 1fr) max-content',
+            gridTemplateAreas:
+              '"label label precipitation" "graphic temperature temperature" "graphic condition condition" "metrics metrics metrics"',
+            columnGap: 1,
+            rowGap: 0.5,
+            alignItems: 'center',
+          },
+          '@media (max-width: 279px)': {
+            gridTemplateColumns: '36px minmax(0, 1fr)',
+            gridTemplateAreas:
+              '"label precipitation" "temperature temperature" "graphic condition" "metrics metrics"',
           },
         }}
       >
-        <Stack spacing={1} sx={{ minWidth: 0, alignItems: 'center' }}>
+        <Stack
+          spacing={1}
+          sx={{
+            minWidth: 0,
+            alignItems: 'center',
+            '@media (max-width: 479px)': {
+              display: 'contents',
+              '& > :nth-child(2)': {
+                gridArea: 'graphic',
+                justifySelf: 'start',
+              },
+            },
+            '@media (max-width: 239px)': {
+              '& > :nth-child(2) > :last-child': {
+                right: 0,
+                bottom: 0,
+              },
+            },
+          }}
+        >
           <Typography
             variant="caption"
             color="text.secondary"
@@ -815,6 +884,8 @@ function SummaryPeriod({
               fontWeight: 700,
               lineHeight: 1.25,
               '@media (max-width: 479px)': {
+                gridArea: 'label',
+                justifySelf: 'start',
                 color: 'text.primary',
                 fontSize: '0.95rem',
               },
@@ -836,12 +907,7 @@ function SummaryPeriod({
             display: 'flex',
             flexDirection: 'column',
             '@media (max-width: 479px)': {
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) max-content',
-              gridTemplateAreas:
-                '"temperature precipitation" "condition precipitation" "metrics metrics"',
-              columnGap: 1,
-              rowGap: 0.5,
+              display: 'contents',
             },
           }}
         >
@@ -857,6 +923,9 @@ function SummaryPeriod({
               '@media (max-width: 479px)': {
                 fontSize: '1.35rem',
                 lineHeight: 1.15,
+              },
+              '@media (max-width: 239px)': {
+                fontSize: '1.15rem',
               },
             }}
           >
@@ -885,7 +954,21 @@ function SummaryPeriod({
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                 columnGap: 1,
-                mt: 0.75,
+                mt: 0.25,
+              },
+              '@media (max-width: 359px)': {
+                gridTemplateColumns: 'minmax(0, 1fr)',
+              },
+              '@media (max-width: 239px)': {
+                '& .MuiSvgIcon-root': {
+                  fontSize: 12,
+                },
+                '& .MuiTypography-root': {
+                  fontSize: '0.7rem',
+                },
+                '& .MuiStack-root': {
+                  columnGap: 0.25,
+                },
               },
             }}
           >
@@ -918,6 +1001,11 @@ function SummaryPeriod({
                   borderLeft: 1,
                   borderColor: 'divider',
                 },
+                '@media (max-width: 359px)': {
+                  pl: 0,
+                  borderTop: 1,
+                  borderLeft: 0,
+                },
               }}
             >
               <CompactMetricValue
@@ -933,7 +1021,9 @@ function SummaryPeriod({
             sx={{
               gridArea: 'precipitation',
               minWidth: 0,
-              '@media (max-width: 479px)': { mt: 0.25 },
+              '@media (max-width: 479px)': {
+                justifySelf: 'end',
+              },
             }}
           >
             <CompactMetricValue

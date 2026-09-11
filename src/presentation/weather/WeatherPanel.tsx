@@ -1,7 +1,6 @@
 import AirOutlinedIcon from '@mui/icons-material/AirOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
-import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
@@ -71,6 +70,11 @@ const months = [
   'Dec',
 ] as const;
 
+export interface WeatherHeaderPoint {
+  readonly coordinate: MapCoordinate;
+  readonly elevationMeters?: number;
+}
+
 type WeatherPanelState =
   | { readonly status: 'idle' }
   | { readonly status: 'loading'; readonly coordinate: MapCoordinate }
@@ -84,6 +88,10 @@ type WeatherPanelState =
       readonly coordinate: MapCoordinate;
       readonly code: PointWeatherForecastErrorCode;
     };
+
+interface WeatherPanelProps {
+  readonly onSelectedPointChange: (point: WeatherHeaderPoint | null) => void;
+}
 
 function parseLocalDate(value: string): {
   readonly year: number;
@@ -150,33 +158,6 @@ function errorMessage(code: PointWeatherForecastErrorCode): string {
     return 'Weather forecast could not be loaded. Check your connection and try again.';
   }
   return 'Weather data could not be read. Try another point or try again later.';
-}
-
-function SelectedPoint({
-  coordinate,
-  forecast,
-}: {
-  readonly coordinate: MapCoordinate;
-  readonly forecast?: PointWeatherForecast;
-}) {
-  return (
-    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-      <LocationOnOutlinedIcon
-        aria-hidden="true"
-        sx={{ flexShrink: 0, fontSize: 18, color: 'text.secondary' }}
-      />
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{ minWidth: 0, fontVariantNumeric: 'tabular-nums' }}
-      >
-        {coordinate.latitude.toFixed(5)}, {coordinate.longitude.toFixed(5)}
-        {forecast === undefined
-          ? null
-          : ` · ${Math.round(forecast.elevationMeters).toLocaleString('en-US')} m`}
-      </Typography>
-    </Stack>
-  );
 }
 
 function LoadingSummaryPeriod() {
@@ -456,10 +437,9 @@ function LoadingDayForecastRow() {
   );
 }
 
-function LoadingForecast({ coordinate }: { readonly coordinate: MapCoordinate }) {
+function LoadingForecast() {
   return (
     <Stack spacing={2}>
-      <SelectedPoint coordinate={coordinate} />
       <LoadingSummary />
       <Stack spacing={1}>
         <Skeleton variant="text" width={120} height={24} />
@@ -1427,13 +1407,27 @@ function ForecastFooter({
   );
 }
 
-export function WeatherPanel() {
+export function WeatherPanel({ onSelectedPointChange }: WeatherPanelProps) {
   const { pointWeatherForecast } = useRuntimeServices();
   const request = useStore(
     mapInteractionStore,
     (state) => state.weatherForecastRequest,
   );
   const [state, setState] = useState<WeatherPanelState>({ status: 'idle' });
+  useEffect(() => {
+    if (state.status === 'idle') {
+      onSelectedPointChange(null);
+      return;
+    }
+    if (state.status === 'ready') {
+      onSelectedPointChange({
+        coordinate: state.coordinate,
+        elevationMeters: state.forecast.elevationMeters,
+      });
+      return;
+    }
+    onSelectedPointChange({ coordinate: state.coordinate });
+  }, [onSelectedPointChange, state]);
   const activeController = useRef<AbortController | null>(null);
 
   const loadForecast = useCallback(
@@ -1533,27 +1527,23 @@ export function WeatherPanel() {
         }}
       >
         {state.status === 'loading' ? (
-          <LoadingForecast coordinate={state.coordinate} />
+          <LoadingForecast />
         ) : state.status === 'error' ? (
-          <Stack spacing={2}>
-            <SelectedPoint coordinate={state.coordinate} />
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
-              <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-                <Typography variant="body2">{errorMessage(state.code)}</Typography>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    loadForecast(state.coordinate);
-                  }}
-                >
-                  Retry
-                </Button>
-              </Stack>
-            </Paper>
-          </Stack>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
+            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+              <Typography variant="body2">{errorMessage(state.code)}</Typography>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  loadForecast(state.coordinate);
+                }}
+              >
+                Retry
+              </Button>
+            </Stack>
+          </Paper>
         ) : (
           <Stack spacing={2}>
-            <SelectedPoint coordinate={state.coordinate} forecast={state.forecast} />
             <ForecastSummary forecast={state.forecast} />
             <HourlyForecast forecast={state.forecast} />
             <SevenDayForecast days={state.forecast.days} />

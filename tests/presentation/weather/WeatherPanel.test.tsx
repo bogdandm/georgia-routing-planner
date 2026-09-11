@@ -23,7 +23,7 @@ function renderPanel(services = createTestServices()) {
     ...render(
       <RuntimeServicesProvider services={services}>
         <ThemeProvider theme={createAppTheme()}>
-          <WeatherPanel />
+          <WeatherPanel onSelectedPointChange={() => undefined} />
         </ThemeProvider>
       </RuntimeServicesProvider>,
     ),
@@ -154,7 +154,11 @@ describe('WeatherPanel', () => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
 
-    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('region', {
+        name: 'Current, day, and night summary',
+      }),
+    ).toBeInTheDocument();
     expect(execute).toHaveBeenCalledOnce();
     expect(execute.mock.calls[0]?.[0]).toEqual({
       coordinate: { longitude: 44.8271, latitude: 41.7151 },
@@ -295,19 +299,21 @@ describe('WeatherPanel', () => {
     act(() => {
       requestWeatherForecast({ longitude: -74.006, latitude: 40.7128 });
     });
-    expect(await screen.findByText('40.71280, -74.00600 · 590 m')).toBeInTheDocument();
-    expect(screen.getByText('ECMWF IFS · Updated 17 Jul, 20:00')).toBeInTheDocument();
+    expect(
+      await screen.findByText('ECMWF IFS · Updated 17 Jul, 20:00'),
+    ).toBeInTheDocument();
 
     act(() => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
-    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeInTheDocument();
-    expect(screen.getByText('ECMWF IFS · Update time unavailable')).toBeInTheDocument();
+    expect(
+      await screen.findByText('ECMWF IFS · Update time unavailable'),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Trail Planner terrain/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/Open-Meteo terrain/u)).not.toBeInTheDocument();
   });
 
-  it('aborts the previous point and shows the replacement while it loads', async () => {
+  it('aborts the previous point and completes the replacement forecast', async () => {
     const first = deferred<PointWeatherForecast>();
     const second = deferred<PointWeatherForecast>();
     const baseline = await testForecast();
@@ -328,17 +334,21 @@ describe('WeatherPanel', () => {
       },
     );
     renderPanel(services);
-
     act(() => {
       requestWeatherForecast({ longitude: 44.8, latitude: 41.7 });
     });
-    expect(await screen.findByText('41.70000, 44.80000')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(signals).toHaveLength(1);
+    });
     expect(screen.getByText('ECMWF IFS · Update time unavailable')).toBeInTheDocument();
 
     act(() => {
       requestWeatherForecast({ longitude: 45.25, latitude: 42.125 });
     });
-    expect(await screen.findByText('42.12500, 45.25000')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(signals).toHaveLength(2);
+    });
     expect(signals[0]?.aborted).toBe(true);
 
     second.resolve({
@@ -346,7 +356,11 @@ describe('WeatherPanel', () => {
       selectedCoordinate: { longitude: 45.25, latitude: 42.125 },
       forecastCoordinate: { longitude: 45.25, latitude: 42.125 },
     });
-    expect(await screen.findByText('42.12500, 45.25000 · 1,234 m')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByLabelText('Loading hourly forecast'),
+      ).not.toBeInTheDocument();
+    });
     first.resolve(baseline);
   });
 
@@ -381,7 +395,11 @@ describe('WeatherPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('41.71510, 44.82710 · 1,234 m')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('region', {
+        name: 'Current, day, and night summary',
+      }),
+    ).toBeInTheDocument();
     expect(execute).toHaveBeenCalledTimes(2);
     expect(execute.mock.calls[1]?.[0].coordinate).toEqual({
       longitude: 44.8271,
@@ -412,7 +430,9 @@ describe('WeatherPanel', () => {
     act(() => {
       requestWeatherForecast({ longitude: 44.8, latitude: 41.7 });
     });
-    await screen.findByText('41.70000, 44.80000');
+    await waitFor(() => {
+      expect(signal).not.toBeNull();
+    });
     unmount();
 
     expect(signal).not.toBeNull();

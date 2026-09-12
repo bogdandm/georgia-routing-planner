@@ -348,44 +348,48 @@ describe('HourlyForecastTable', () => {
     );
   });
 
-  it('classifies wind text and renders continuous gradients before rounding', async () => {
+  it('rounds wind text while classifying and coloring from exact values', async () => {
     const { container } = await renderTable();
 
     const neutralWind = screen.getByRole('cell', {
-      name: '2026-07-18T00:00 wind 14.9 metres per second',
+      name: '2026-07-18T00:00 wind 15 metres per second',
     });
     const strongWind = screen.getByRole('cell', {
-      name: '2026-07-18T01:00 wind 15.0 metres per second, strong',
+      name: '2026-07-18T01:00 wind 15 metres per second, strong',
     });
     const upperStrongWind = screen.getByRole('cell', {
-      name: '2026-07-18T02:00 wind 24.9 metres per second, strong',
+      name: '2026-07-18T02:00 wind 25 metres per second, strong',
     });
     const criticalWind = screen.getByRole('cell', {
-      name: '2026-07-18T03:00 wind 25.0 metres per second, critical',
+      name: '2026-07-18T03:00 wind 25 metres per second, critical',
     });
     expect(neutralWind).not.toHaveAccessibleName(/neutral/iu);
     expect(strongWind).toHaveStyle({ color: theme.palette.warning.dark });
     expect(upperStrongWind).toHaveStyle({ color: theme.palette.warning.dark });
     expect(criticalWind).toHaveStyle({ color: theme.palette.error.main });
+    expect(neutralWind).toHaveTextContent(/^15$/u);
+    expect(strongWind).toHaveTextContent(/^15$/u);
+    expect(upperStrongWind).toHaveTextContent(/^25$/u);
+    expect(criticalWind).toHaveTextContent(/^25$/u);
 
     expect(
       screen.getByRole('cell', {
-        name: '2026-07-18T04:00 gusts 14.9 metres per second',
+        name: '2026-07-18T04:00 gusts 15 metres per second',
       }),
     ).not.toHaveAccessibleName(/neutral/iu);
     expect(
       screen.getByRole('cell', {
-        name: '2026-07-18T05:00 gusts 15.0 metres per second, strong',
+        name: '2026-07-18T05:00 gusts 15 metres per second, strong',
       }),
     ).toHaveStyle({ color: theme.palette.warning.dark });
     expect(
       screen.getByRole('cell', {
-        name: '2026-07-18T06:00 gusts 24.9 metres per second, strong',
+        name: '2026-07-18T06:00 gusts 25 metres per second, strong',
       }),
     ).toHaveStyle({ color: theme.palette.warning.dark });
     expect(
       screen.getByRole('cell', {
-        name: '2026-07-18T07:00 gusts 25.0 metres per second, critical',
+        name: '2026-07-18T07:00 gusts 25 metres per second, critical',
       }),
     ).toHaveStyle({ color: theme.palette.error.main });
 

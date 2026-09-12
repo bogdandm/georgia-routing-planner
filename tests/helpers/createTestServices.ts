@@ -81,7 +81,6 @@ function createTestWeatherForecastGateway(clock: Clock): WeatherForecastGateway 
           cloudCoverPercent: 10,
           visibilityMeters: 20_000,
           windSpeedKmh: 10,
-          windDirectionDegrees: 180,
           windGustsKmh: 15,
           isDay: hour >= 6 && hour < 20,
         };
@@ -110,7 +109,6 @@ function createTestWeatherForecastGateway(clock: Clock): WeatherForecastGateway 
           cloudCoverPercent: current.cloudCoverPercent,
           visibilityMeters: current.visibilityMeters,
           windSpeedKmh: current.windSpeedKmh,
-          windDirectionDegrees: current.windDirectionDegrees,
           windGustsKmh: current.windGustsKmh,
           isDay: current.isDay,
         },

@@ -417,6 +417,10 @@ the primary condition. The former large apparent-temperature, cloud-cover, visib
 wind, and gust metric cards are not rendered. Every weather and metric icon exposes its
 label on pointer hover, keyboard focus, and a touch-screen tap.
 
+All forecast-condition artwork is one flat static Meteocon selected from the hourly WMO
+code or aggregated primary condition, using day/night variants where available.
+Visibility, wind, gust, and precipitation remain separate indicators.
+
 The hourly forecast is one compact bordered, horizontally scrolling table with a leading
 label column that scrolls with exactly 24 consecutive one-hour columns from the current
 local forecast hour. Vertical rules mark calendar-day boundaries rather than separating

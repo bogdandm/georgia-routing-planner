@@ -31,6 +31,8 @@ async function syntheticForecast(startIndex = 0): Promise<PointWeatherForecast> 
     .slice(startIndex, startIndex + 24)
     .map((hour, index) => ({
       ...hour,
+      weatherCode: index === 0 || index === 8 ? 0 : hour.weatherCode,
+      isDay: index === 8 ? true : index === 0 ? false : hour.isDay,
       temperatureCelsius: temperatureCelsius[index] ?? 12,
       precipitationMm: index === 4 ? 0.6 : index === 5 ? 0.3 : 0,
       snowfallCm: index === 4 ? 0.2 : 0,
@@ -93,6 +95,27 @@ describe('HourlyForecastTable', () => {
     expect(hours[1]).not.toHaveTextContent('Sat');
     expect(hours[23]).toHaveAccessibleName('2026-07-18T23:00 local time');
     expect(within(table).queryByRole('rowheader', { name: /direction/iu })).toBeNull();
+  });
+
+  it('selects one day or night Meteocon for each hourly weather sample', async () => {
+    await renderTable();
+
+    const nightArtwork = screen.getByRole('cell', {
+      name: '2026-07-18T00:00 weather Clear sky',
+    });
+    const dayArtwork = screen.getByRole('cell', {
+      name: '2026-07-18T08:00 weather Clear sky',
+    });
+    expect(nightArtwork.querySelectorAll('img')).toHaveLength(1);
+    expect(nightArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/flat/clear-night.svg'),
+    );
+    expect(dayArtwork.querySelectorAll('img')).toHaveLength(1);
+    expect(dayArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/flat/clear-day.svg'),
+    );
   });
 
   it('uses vertical dividers only when the local calendar day changes', async () => {

@@ -42,6 +42,17 @@ const conditionCases: readonly [readonly number[], string][] = [
   [[96, 99], 'Thunderstorm with hail'],
 ];
 
+function expectMeteoconArtwork(artwork: HTMLElement, name: string) {
+  const images = artwork.querySelectorAll('img');
+  expect(images).toHaveLength(1);
+  const image = images[0];
+  if (image === undefined) throw new Error('Expected one Meteocon image.');
+  expect(image).toHaveAttribute('src', expect.stringContaining(`/flat/${name}.svg`));
+  expect(image).toHaveAttribute('alt', '');
+  expect(image).toHaveAttribute('aria-hidden', 'true');
+  expect(artwork.querySelectorAll('svg')).toHaveLength(0);
+}
+
 describe('WeatherConditionIcon', () => {
   it.each(conditionCases)('describes WMO codes %j as %s', (codes, expected) => {
     for (const code of codes) expect(describeWmoWeatherCode(code)).toBe(expected);
@@ -53,54 +64,104 @@ describe('WeatherConditionIcon', () => {
   });
 
   it.each([
-    { isDay: true, label: 'Clear sky' },
-    { isDay: false, label: 'Clear sky' },
-  ])('labels $label artwork while keeping its SVG decorative', ({ isDay, label }) => {
-    render(<WeatherConditionIcon code={0} isDay={isDay} />);
-
-    const icon = screen.getByLabelText(label);
-    expect(icon).toBeInTheDocument();
-    expect(icon.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    { codes: [0], isDay: true, name: 'clear-day' },
+    { codes: [0], isDay: false, name: 'clear-night' },
+    { codes: [1], isDay: true, name: 'mostly-clear-day' },
+    { codes: [2], isDay: false, name: 'partly-cloudy-night' },
+    { codes: [3], isDay: true, name: 'overcast-day' },
+    { codes: [45, 48], isDay: false, name: 'fog-night' },
+    { codes: [51, 53, 55], isDay: true, name: 'overcast-day-drizzle' },
+    { codes: [56, 57], isDay: false, name: 'overcast-night-sleet' },
+    { codes: [61, 63], isDay: true, name: 'overcast-day-rain' },
+    { codes: [65, 82], isDay: false, name: 'extreme-night-rain' },
+    { codes: [66], isDay: true, name: 'overcast-day-sleet' },
+    { codes: [67], isDay: false, name: 'extreme-night-sleet' },
+    { codes: [71, 73, 77], isDay: true, name: 'overcast-day-snow' },
+    { codes: [75, 86], isDay: false, name: 'extreme-night-snow' },
+    { codes: [80, 81], isDay: true, name: 'partly-cloudy-day-rain' },
+    { codes: [85], isDay: false, name: 'partly-cloudy-night-snow' },
+    { codes: [95], isDay: true, name: 'thunderstorms-day' },
+    { codes: [96], isDay: false, name: 'thunderstorms-night-hail' },
+    { codes: [99], isDay: false, name: 'extreme-thunderstorms-night-hail' },
+    { codes: [100], isDay: true, name: 'not-available' },
+  ])('selects flat $name artwork for WMO codes $codes', ({ codes, isDay, name }) => {
+    for (const code of codes) {
+      const { unmount } = render(<WeatherConditionIcon code={code} isDay={isDay} />);
+      expectMeteoconArtwork(screen.getByLabelText(describeWmoWeatherCode(code)), name);
+      unmount();
+    }
   });
 
   it.each([
     {
-      label: 'Partly cloudy with rain',
-      icon: { sky: 'partly_cloudy', phenomenon: 'rain' },
+      icon: { sky: 'clear', phenomenon: null },
+      isDay: true,
+      label: 'Clear',
+      name: 'clear-day',
     },
     {
-      label: 'Overcast with mixed precipitation',
+      icon: { sky: 'mostly_clear', phenomenon: null },
+      isDay: false,
+      label: 'Mostly clear',
+      name: 'mostly-clear-night',
+    },
+    {
+      icon: { sky: 'partly_cloudy', phenomenon: null },
+      isDay: true,
+      label: 'Partly cloudy',
+      name: 'partly-cloudy-day',
+    },
+    {
+      icon: { sky: 'mostly_cloudy', phenomenon: null },
+      isDay: false,
+      label: 'Mostly cloudy',
+      name: 'cloudy',
+    },
+    {
+      icon: { sky: 'overcast', phenomenon: null },
+      isDay: true,
+      label: 'Overcast',
+      name: 'overcast-day',
+    },
+    {
+      icon: { sky: 'clear', phenomenon: 'isolated_showers' },
+      isDay: true,
+      label: 'Isolated showers',
+      name: 'mostly-clear-day-rain',
+    },
+    {
+      icon: { sky: 'partly_cloudy', phenomenon: 'snow_showers' },
+      isDay: false,
+      label: 'Snow showers',
+      name: 'partly-cloudy-night-snow',
+    },
+    {
       icon: { sky: 'overcast', phenomenon: 'mixed' },
+      isDay: true,
+      label: 'Mixed precipitation',
+      name: 'overcast-day-sleet',
     },
     {
-      label: 'Mostly clear with freezing precipitation',
       icon: { sky: 'mostly_clear', phenomenon: 'freezing' },
+      isDay: false,
+      label: 'Freezing precipitation',
+      name: 'mostly-clear-night-sleet',
     },
-  ] satisfies readonly { readonly label: string; readonly icon: WeatherIcon }[])(
-    'labels layered artwork as $label',
-    ({ label, icon }) => {
-      render(<WeatherPeriodIcon icon={icon} isDay label={label} />);
-
-      const artwork = screen.getByLabelText(label);
-      expect(artwork).toBeInTheDocument();
-      expect(artwork.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
-      expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    {
+      icon: { sky: 'overcast', phenomenon: 'heavy_rain' },
+      isDay: false,
+      label: 'Heavy rain',
+      name: 'extreme-night-rain',
     },
-  );
+  ] satisfies readonly {
+    readonly icon: WeatherIcon;
+    readonly isDay: boolean;
+    readonly label: string;
+    readonly name: string;
+  }[])('selects $name for $label', ({ icon, isDay, label, name }) => {
+    render(<WeatherPeriodIcon icon={icon} isDay={isDay} label={label} />);
 
-  it('uses moon artwork for a clear night period', () => {
-    render(
-      <WeatherPeriodIcon
-        icon={{ sky: 'clear', phenomenon: null }}
-        isDay={false}
-        label="Night: Clear"
-      />,
-    );
-
-    expect(screen.getByLabelText('Night: Clear')).toBeInTheDocument();
-    expect(screen.getByTestId('NightsStayOutlinedIcon')).toBeInTheDocument();
-    expect(screen.queryByTestId('WbSunnyOutlinedIcon')).not.toBeInTheDocument();
+    expectMeteoconArtwork(screen.getByLabelText(label), name);
   });
 
   it('shows condition details on mouse hover', async () => {

@@ -39,7 +39,10 @@ import {
   WeatherIconTooltip,
 } from '@/presentation/weather/WeatherConditionIcon';
 import { HourlyForecastTable } from '@/presentation/weather/HourlyForecastTable';
-import { formatWeatherMillimetres } from '@/presentation/weather/weatherFormatters';
+import {
+  formatWeatherMillimetres,
+  formatWeatherWindMetresPerSecond,
+} from '@/presentation/weather/weatherFormatters';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const fullWeekdays = [
@@ -133,8 +136,8 @@ function formatWindRange(
   minimumKilometresPerHour: number,
   maximumKilometresPerHour: number,
 ): string {
-  const minimum = (minimumKilometresPerHour / 3.6).toFixed(1);
-  const maximum = (maximumKilometresPerHour / 3.6).toFixed(1);
+  const minimum = formatWeatherWindMetresPerSecond(minimumKilometresPerHour / 3.6);
+  const maximum = formatWeatherWindMetresPerSecond(maximumKilometresPerHour / 3.6);
   return minimum === maximum ? `${minimum} m/s` : `${minimum}…${maximum} m/s`;
 }
 
@@ -475,11 +478,11 @@ function periodDisplayValues(period: PointWeatherForecastPeriod): PeriodDisplayV
     temperatureMinimum: Math.round(period.temperatureMinCelsius).toString(),
     temperatureMaximum: Math.round(period.temperatureMaxCelsius).toString(),
     wind: formatWindRange(period.windSpeedMinKmh, period.windSpeedMaxKmh),
-    windMinimum: (period.windSpeedMinKmh / 3.6).toFixed(1),
-    windMaximum: (period.windSpeedMaxKmh / 3.6).toFixed(1),
+    windMinimum: formatWeatherWindMetresPerSecond(period.windSpeedMinKmh / 3.6),
+    windMaximum: formatWeatherWindMetresPerSecond(period.windSpeedMaxKmh / 3.6),
     gusts: formatWindRange(period.windGustsMinKmh, period.windGustsMaxKmh),
-    gustMinimum: (period.windGustsMinKmh / 3.6).toFixed(1),
-    gustMaximum: (period.windGustsMaxKmh / 3.6).toFixed(1),
+    gustMinimum: formatWeatherWindMetresPerSecond(period.windGustsMinKmh / 3.6),
+    gustMaximum: formatWeatherWindMetresPerSecond(period.windGustsMaxKmh / 3.6),
     precipitation: formatWeatherMillimetres(period.precipitationMm),
   };
 }
@@ -511,30 +514,13 @@ function CompactMetricValue({
   value,
   ariaLabel,
   compact = false,
-  narrowLabel,
 }: {
   readonly kind: WeatherMetricKind;
   readonly label: string;
   readonly value: string;
   readonly ariaLabel: string;
   readonly compact?: boolean;
-  readonly narrowLabel?: string;
 }) {
-  const valueText = (
-    <Typography
-      variant="caption"
-      color="text.secondary"
-      aria-label={ariaLabel}
-      sx={{
-        minWidth: 0,
-        fontSize: compact ? '0.6rem' : undefined,
-        lineHeight: compact ? 1.3 : 1.25,
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    >
-      {value}
-    </Typography>
-  );
   return (
     <Stack
       direction="row"
@@ -542,24 +528,19 @@ function CompactMetricValue({
       sx={{ alignItems: 'center', minWidth: 0, whiteSpace: 'nowrap' }}
     >
       <WeatherMetricIcon kind={kind} label={label} size={compact ? 12 : 16} />
-      {narrowLabel !== undefined ? (
-        <Stack spacing={0} sx={{ minWidth: 0 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              display: 'none',
-              fontWeight: 600,
-              lineHeight: 1.2,
-              '@media (max-width: 479px)': { display: 'block' },
-            }}
-          >
-            {narrowLabel}
-          </Typography>
-          {valueText}
-        </Stack>
-      ) : (
-        valueText
-      )}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        aria-label={ariaLabel}
+        sx={{
+          minWidth: 0,
+          fontSize: compact ? '0.6rem' : undefined,
+          lineHeight: compact ? 1.3 : 1.25,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </Typography>
     </Stack>
   );
 }
@@ -788,15 +769,10 @@ function SummaryPeriod({
           '@media (max-width: 479px)': {
             gridTemplateColumns: '44px minmax(0, 1fr) max-content',
             gridTemplateAreas:
-              '"label label precipitation" "graphic temperature temperature" "graphic condition condition" "metrics metrics metrics"',
+              '"label label precipitation" "graphic temperature metrics" "graphic condition metrics"',
             columnGap: 1,
             rowGap: 0.5,
             alignItems: 'center',
-          },
-          '@media (max-width: 279px)': {
-            gridTemplateColumns: '44px minmax(0, 1fr)',
-            gridTemplateAreas:
-              '"label precipitation" "temperature temperature" "graphic condition" "metrics metrics"',
           },
         }}
       >
@@ -874,21 +850,16 @@ function SummaryPeriod({
           >
             {period.status.primary.label}
           </Typography>
-          <Box
+          <Stack
+            spacing={0}
             sx={{
               gridArea: 'metrics',
               minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
               mt: 0.5,
               '@media (max-width: 479px)': {
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                columnGap: 1,
-                mt: 0.25,
-              },
-              '@media (max-width: 359px)': {
-                gridTemplateColumns: 'minmax(0, 1fr)',
+                mt: 0,
+                alignSelf: 'start',
+                justifySelf: 'end',
               },
               '@media (max-width: 239px)': {
                 '& .MuiSvgIcon-root': {
@@ -903,51 +874,19 @@ function SummaryPeriod({
               },
             }}
           >
-            <Box
-              sx={{
-                minWidth: 0,
-                '@media (max-width: 479px)': {
-                  minHeight: 36,
-                  display: 'flex',
-                  alignItems: 'center',
-                },
-              }}
-            >
-              <CompactMetricValue
-                kind="wind"
-                label={`${label} wind`}
-                value={values.wind}
-                ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-                narrowLabel="Wind"
-              />
-            </Box>
-            <Box
-              sx={{
-                minWidth: 0,
-                '@media (max-width: 479px)': {
-                  minHeight: 36,
-                  pl: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  borderLeft: 1,
-                  borderColor: 'divider',
-                },
-                '@media (max-width: 359px)': {
-                  pl: 0,
-                  borderTop: 1,
-                  borderLeft: 0,
-                },
-              }}
-            >
-              <CompactMetricValue
-                kind="gusts"
-                label={`${label} gusts`}
-                value={values.gusts}
-                ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-                narrowLabel="Gusts"
-              />
-            </Box>
-          </Box>
+            <CompactMetricValue
+              kind="wind"
+              label={`${label} wind`}
+              value={values.wind}
+              ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+            />
+            <CompactMetricValue
+              kind="gusts"
+              label={`${label} gusts`}
+              value={values.gusts}
+              ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+            />
+          </Stack>
           <Box
             sx={{
               gridArea: 'precipitation',

@@ -411,12 +411,12 @@ condition directly beneath it. Visibly labelled wind, gust, and precipitation ro
 follow without separators. Each Day and Night section groups its plain period label with
 the weather icon. Wider viewports keep the temperature and compact metrics in an
 adjacent column. At narrow mobile widths, the period expands into a prominent
-temperature with its primary condition, precipitation beside it, and separate labelled
-wind and gust groups below. Significant visibility is folded into the single condition
-Meteocon only when no precipitation phenomenon takes priority. The former large
-apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
-rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
-focus, and a touch-screen tap.
+temperature with its primary condition while precipitation, icon-only wind, and
+icon-only gust ranges form a compact vertical metrics column on the right. Significant
+visibility is folded into the single condition Meteocon only when no precipitation
+phenomenon takes priority. The former large apparent-temperature, cloud-cover,
+visibility, wind, and gust metric cards are not rendered. Every weather and metric icon
+exposes its label on pointer hover, keyboard focus, and a touch-screen tap.
 
 All forecast-condition artwork is one monochrome static Meteocon selected from the
 hourly WMO code or aggregated status, using day/night variants where available.
@@ -477,8 +477,8 @@ patterns before it is combined with the dominant sky. Significant fog, poor visi
 or reduced visibility remains a secondary, time-qualified icon and never replaces the
 primary weather icon. Each interval shows temperature, wind-speed, and gust ranges plus
 its complete precipitation total. Wind and gust ranges are displayed in metres per
-second. Date labels and the model-update time use the selected location's
-provider-returned time zone.
+second, rounded to the nearest whole number. Date labels and the model-update time use
+the selected location's provider-returned time zone.
 
 Only the latest point request may update the panel. A new selection or unmount aborts
 the previous request, and Retry repeats the currently selected coordinate. Loading,

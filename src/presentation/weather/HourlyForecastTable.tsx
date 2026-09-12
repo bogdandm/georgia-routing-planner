@@ -524,15 +524,17 @@ export function HourlyForecastTable({
   useEffect(() => {
     if (expansionPhase !== 'opening') return undefined;
     const frame = requestAnimationFrame(() => {
+      if (sidebarCollapsed) {
+        setExpandedLayout(null);
+        setExpansionPhase('compact');
+        return;
+      }
       setExpansionPhase('open');
     });
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [expansionPhase]);
-  useEffect(() => {
-    if (sidebarCollapsed) collapseExpanded();
-  }, [collapseExpanded, sidebarCollapsed]);
+  }, [expansionPhase, sidebarCollapsed]);
   useEffect(() => {
     if (!isExpanded) return undefined;
     const scrollRegion = containerRef.current?.closest('[data-weather-scroll-region]');
@@ -560,7 +562,7 @@ export function HourlyForecastTable({
 
   const moveMouseDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = mouseDragRef.current;
-    if (drag === null || drag.pointerId !== event.pointerId) return;
+    if (drag?.pointerId !== event.pointerId) return;
     event.currentTarget.scrollLeft =
       drag.startScrollLeft - (event.clientX - drag.startClientX);
     updateScrollState();
@@ -569,7 +571,7 @@ export function HourlyForecastTable({
 
   const finishMouseDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = mouseDragRef.current;
-    if (drag === null || drag.pointerId !== event.pointerId) return;
+    if (drag?.pointerId !== event.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -594,11 +596,15 @@ export function HourlyForecastTable({
     setExpansionPhase('opening');
   };
   const finishWidthTransition = (event: ReactTransitionEvent<HTMLDivElement>) => {
-    if (event.propertyName !== 'width' || expansionPhase !== 'closing') return;
+    if (
+      event.propertyName !== 'width' ||
+      (expansionPhase !== 'closing' && !sidebarCollapsed)
+    ) {
+      return;
+    }
     setExpandedLayout(null);
     setExpansionPhase('compact');
   };
-
   const header = (
     <Stack direction="row" sx={{ alignItems: 'center' }}>
       <Typography component="h2" variant="subtitle2" sx={{ flex: 1 }}>
@@ -656,7 +662,7 @@ export function HourlyForecastTable({
         width:
           expandedLayout === null
             ? 'auto'
-            : expansionPhase === 'open'
+            : expansionPhase === 'open' && !sidebarCollapsed
               ? expandedPanelWidth
               : expandedLayout.compactWidth,
         transition:

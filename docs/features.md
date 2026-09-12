@@ -412,10 +412,19 @@ follow without separators. Each Day and Night section groups its plain period la
 the weather icon. Wider viewports keep the temperature and compact metrics in an
 adjacent column. At narrow mobile widths, the period expands into a prominent
 temperature with its primary condition, precipitation beside it, and separate labelled
-wind and gust groups below. Significant visibility appears separately and never replaces
-the primary condition. The former large apparent-temperature, cloud-cover, visibility,
-wind, and gust metric cards are not rendered. Every weather and metric icon exposes its
-label on pointer hover, keyboard focus, and a touch-screen tap.
+wind and gust groups below. Significant visibility is folded into the single condition
+Meteocon only when no precipitation phenomenon takes priority. The former large
+apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
+rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
+focus, and a touch-screen tap.
+
+All forecast-condition artwork is one monochrome static Meteocon selected from the
+hourly WMO code or aggregated status, using day/night variants where available.
+Precipitation always has priority when the aggregate includes rain, snow, sleet,
+showers, or freezing precipitation. Significant fog, haze, or poor visibility selects a
+ready-made complete Meteocon only when there is no precipitation phenomenon, instead of
+layering another badge over the primary-condition artwork. Wind, gust, and precipitation
+remain separate indicators.
 
 The hourly forecast is one compact bordered, horizontally scrolling table with a leading
 label column that scrolls with exactly 24 consecutive one-hour columns from the current

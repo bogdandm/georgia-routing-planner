@@ -36,7 +36,6 @@ import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import {
   WeatherPeriodIcon,
-  VisibilityStatusIcon,
   WeatherIconTooltip,
 } from '@/presentation/weather/WeatherConditionIcon';
 import { HourlyForecastTable } from '@/presentation/weather/HourlyForecastTable';
@@ -625,40 +624,25 @@ function PeriodGraphic({
   label,
   period,
   size,
-  showVisibilityBadge = false,
 }: {
   readonly isDay: boolean;
   readonly label: string;
   readonly period: PointWeatherForecastPeriod;
   readonly size: number;
-  readonly showVisibilityBadge?: boolean;
 }) {
   return (
-    <Box sx={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-      <WeatherPeriodIcon
-        icon={period.status.primary.icon}
-        isDay={isDay}
-        label={`${label}: ${period.status.primary.label}`}
-        size={size}
-      />
-      {showVisibilityBadge && period.status.visibility.label !== null ? (
-        <Box
-          sx={{
-            position: 'absolute',
-            right: -2,
-            bottom: -2,
-            display: 'grid',
-            placeItems: 'center',
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            bgcolor: 'background.paper',
-          }}
-        >
-          <VisibilityStatusIcon status={period.status.visibility} />
-        </Box>
-      ) : null}
-    </Box>
+    <WeatherPeriodIcon
+      icon={period.status.primary.icon}
+      visibility={period.status.visibility}
+      isDay={isDay}
+      label={
+        period.status.primary.icon.phenomenon === null &&
+        period.status.visibility.label !== null
+          ? period.status.visibility.label
+          : `${label}: ${period.status.primary.label}`
+      }
+      size={size}
+    />
   );
 }
 
@@ -703,7 +687,6 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
           label={label}
           period={period}
           size={48}
-          showVisibilityBadge
         />
         <Stack
           spacing={0}
@@ -803,7 +786,7 @@ function SummaryPeriod({
           columnGap: 1,
           alignItems: 'start',
           '@media (max-width: 479px)': {
-            gridTemplateColumns: '36px minmax(0, 1fr) max-content',
+            gridTemplateColumns: '44px minmax(0, 1fr) max-content',
             gridTemplateAreas:
               '"label label precipitation" "graphic temperature temperature" "graphic condition condition" "metrics metrics metrics"',
             columnGap: 1,
@@ -811,7 +794,7 @@ function SummaryPeriod({
             alignItems: 'center',
           },
           '@media (max-width: 279px)': {
-            gridTemplateColumns: '36px minmax(0, 1fr)',
+            gridTemplateColumns: '44px minmax(0, 1fr)',
             gridTemplateAreas:
               '"label precipitation" "temperature temperature" "graphic condition" "metrics metrics"',
           },
@@ -827,12 +810,6 @@ function SummaryPeriod({
               '& > :nth-child(2)': {
                 gridArea: 'graphic',
                 justifySelf: 'start',
-              },
-            },
-            '@media (max-width: 239px)': {
-              '& > :nth-child(2) > :last-child': {
-                right: 0,
-                bottom: 0,
               },
             },
           }}
@@ -853,13 +830,7 @@ function SummaryPeriod({
           >
             {label}
           </Typography>
-          <PeriodGraphic
-            isDay={isDay}
-            label={label}
-            period={period}
-            size={36}
-            showVisibilityBadge
-          />
+          <PeriodGraphic isDay={isDay} label={label} period={period} size={44} />
         </Stack>
         <Box
           sx={{
@@ -1015,30 +986,24 @@ function DailyPeriodRow({
       aria-label={`${label} forecast`}
       sx={{
         minWidth: 0,
-        minHeight: 36,
+        minHeight: 44,
         display: 'grid',
-        gridTemplateColumns: '28px 58px minmax(0, 1fr) 52px 76px',
+        gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
         gridTemplateAreas: '"icon temperature condition precipitation metrics"',
         alignItems: 'center',
         columnGap: 0.5,
         px: 1,
         py: 0.375,
         '@media (max-width: 479px)': {
-          gridTemplateColumns: '28px minmax(0, 1fr) 52px 76px',
+          gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
           gridTemplateAreas:
             '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
           rowGap: 0,
         },
       }}
     >
-      <Box sx={{ gridArea: 'icon' }}>
-        <PeriodGraphic
-          isDay={isDay}
-          label={label}
-          period={period}
-          size={28}
-          showVisibilityBadge
-        />
+      <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
+        <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
       </Box>
       <Typography
         variant="caption"

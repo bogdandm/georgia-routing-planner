@@ -715,7 +715,7 @@ export function HourlyForecastTable({
           `${hour.time} weather ${describeWmoWeatherCode(hour.weatherCode)}`
         }
         renderCell={(hour) => (
-          <WeatherConditionIcon code={hour.weatherCode} isDay={hour.isDay} size={28} />
+          <WeatherConditionIcon code={hour.weatherCode} isDay={hour.isDay} size={32} />
         )}
       />
       <HourlyRow

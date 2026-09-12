@@ -720,6 +720,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           <WorkspaceSidebar
             activeTab={activeTab}
             auxiliaryOverlay={auxiliaryOverlay}
+            collapsed={desktopNavigationCollapsed}
             fullWidth={smartphoneViewport}
             onMarkerSortChange={handleMarkerSortChange}
             onTrackSortChange={handleTrackSortChange}

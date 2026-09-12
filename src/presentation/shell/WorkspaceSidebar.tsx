@@ -41,6 +41,7 @@ import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
   readonly auxiliaryOverlay: boolean;
+  readonly collapsed: boolean;
   readonly fullWidth: boolean;
   readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
   readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
@@ -84,6 +85,7 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
 export function WorkspaceSidebar({
   activeTab,
   auxiliaryOverlay,
+  collapsed,
   fullWidth,
   onMarkerSortChange,
   onTrackSortChange,
@@ -309,7 +311,7 @@ export function WorkspaceSidebar({
             height: '100%',
           }}
         >
-          <WeatherPanel />
+          <WeatherPanel sidebarCollapsed={collapsed} />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersPanel

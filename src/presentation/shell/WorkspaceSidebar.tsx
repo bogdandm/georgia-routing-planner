@@ -45,6 +45,7 @@ import {
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
   readonly auxiliaryOverlay: boolean;
+  readonly collapsed: boolean;
   readonly fullWidth: boolean;
   readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
   readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
@@ -129,6 +130,7 @@ function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }
 export function WorkspaceSidebar({
   activeTab,
   auxiliaryOverlay,
+  collapsed,
   fullWidth,
   onMarkerSortChange,
   onTrackSortChange,
@@ -360,7 +362,10 @@ export function WorkspaceSidebar({
             height: '100%',
           }}
         >
-          <WeatherPanel onSelectedPointChange={setWeatherHeaderPoint} />
+          <WeatherPanel
+            sidebarCollapsed={collapsed}
+            onSelectedPointChange={setWeatherHeaderPoint}
+          />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersPanel

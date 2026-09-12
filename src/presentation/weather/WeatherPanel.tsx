@@ -1,6 +1,5 @@
 import AirOutlinedIcon from '@mui/icons-material/AirOutlined';
-import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
-import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
+
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
@@ -8,7 +7,6 @@ import {
   Box,
   Button,
   Divider,
-  IconButton,
   Link,
   Paper,
   Skeleton,
@@ -26,7 +24,6 @@ import {
 } from '@/application/weather/GetPointWeatherForecast';
 import {
   PointWeatherForecastError,
-  type HourlyWeatherForecast,
   type PointWeatherForecastErrorCode,
 } from '@/application/ports/WeatherForecastGateway';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -40,10 +37,10 @@ import { appColors } from '@/presentation/theme/appColors';
 import {
   WeatherPeriodIcon,
   VisibilityStatusIcon,
-  WeatherConditionIcon,
   WeatherIconTooltip,
 } from '@/presentation/weather/WeatherConditionIcon';
-import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
+import { HourlyForecastTable } from '@/presentation/weather/HourlyForecastTable';
+import { formatWeatherMillimetres } from '@/presentation/weather/weatherFormatters';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const fullWeekdays = [
@@ -91,6 +88,7 @@ type WeatherPanelState =
 
 interface WeatherPanelProps {
   readonly onSelectedPointChange: (point: WeatherHeaderPoint | null) => void;
+  readonly sidebarCollapsed: boolean;
 }
 
 function parseLocalDate(value: string): {
@@ -118,21 +116,12 @@ function localDateLabel(date: string): string {
   return `${day.toString()} ${monthLabel}`;
 }
 
-function fullLocalDateTime(timestamp: string): string {
-  return `${localWeekday(timestamp.slice(0, 10))} ${localDateLabel(timestamp.slice(0, 10))} ${timestamp.slice(0, 4)}, ${timestamp.slice(11, 16)}`;
-}
-
 function currentPeriodDateTime(timestamp: string): string {
   const date = timestamp.slice(0, 10);
   const { year, month, day } = parseLocalDate(date);
   const weekday = fullWeekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
   if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
   return `${weekday}, ${localDateLabel(date)} · ${timestamp.slice(11, 16)}`;
-}
-
-function formatMillimetres(value: number): string {
-  if (value === 0) return '0 mm';
-  return value < 10 ? `${value.toFixed(1)} mm` : `${Math.round(value).toString()} mm`;
 }
 
 function formatRange(minimum: number, maximum: number, unit: string): string {
@@ -443,21 +432,12 @@ function LoadingForecast() {
       <LoadingSummary />
       <Stack spacing={1}>
         <Skeleton variant="text" width={120} height={24} />
-        <Stack
-          direction="row"
-          spacing={1}
+        <Skeleton
+          variant="rounded"
+          width="100%"
+          height={272}
           aria-label="Loading hourly forecast"
-          sx={{ overflow: 'hidden' }}
-        >
-          {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton
-              key={index}
-              variant="rounded"
-              height={116}
-              sx={{ minWidth: 64, flex: '0 0 calc((100% - 32px) / 5)' }}
-            />
-          ))}
-        </Stack>
+        />
       </Stack>
       <Stack spacing={1}>
         <Skeleton variant="text" width={112} height={24} />
@@ -501,7 +481,7 @@ function periodDisplayValues(period: PointWeatherForecastPeriod): PeriodDisplayV
     gusts: formatWindRange(period.windGustsMinKmh, period.windGustsMaxKmh),
     gustMinimum: (period.windGustsMinKmh / 3.6).toFixed(1),
     gustMaximum: (period.windGustsMaxKmh / 3.6).toFixed(1),
-    precipitation: formatMillimetres(period.precipitationMm),
+    precipitation: formatWeatherMillimetres(period.precipitationMm),
   };
 }
 
@@ -1159,138 +1139,6 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
   );
 }
 
-function HourlyCard({
-  hour,
-  currentTime,
-}: {
-  readonly hour: HourlyWeatherForecast;
-  readonly currentTime: string;
-}) {
-  const condition = describeWmoWeatherCode(hour.weatherCode);
-  const temperature = Math.round(hour.temperatureCelsius).toString();
-  const precipitation = formatMillimetres(hour.precipitationMm);
-  return (
-    <Paper
-      component="article"
-      variant="outlined"
-      aria-label={`${fullLocalDateTime(hour.time)}, ${condition}, ${temperature} degrees Celsius, ${precipitation} precipitation`}
-      sx={{
-        minWidth: 64,
-        flex: '0 0 calc((100% - 32px) / 5)',
-        px: 1.25,
-        py: 1,
-        scrollSnapAlign: 'start',
-        textAlign: 'center',
-      }}
-    >
-      <Typography variant="caption" sx={{ display: 'block' }}>
-        {hour.time === currentTime ? 'Now' : hour.time.slice(11, 16)}
-      </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {localWeekday(hour.time.slice(0, 10))}
-      </Typography>
-      <Box sx={{ display: 'grid', placeItems: 'center', my: 0.5 }}>
-        <WeatherConditionIcon code={hour.weatherCode} isDay={hour.isDay} size={28} />
-      </Box>
-      <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-        {temperature}°
-      </Typography>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ fontVariantNumeric: 'tabular-nums' }}
-      >
-        {precipitation}
-      </Typography>
-    </Paper>
-  );
-}
-
-function HourlyForecast({ forecast }: { readonly forecast: PointWeatherForecast }) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollBackward, setCanScrollBackward] = useState(false);
-  const [canScrollForward, setCanScrollForward] = useState(false);
-  const hours = forecast.hourly
-    .filter((hour) => hour.time >= forecast.current.time)
-    .slice(0, 24);
-  const updateScrollState = useCallback(() => {
-    const region = scrollRef.current;
-    if (region === null) return;
-    setCanScrollBackward(region.scrollLeft > 0);
-    setCanScrollForward(
-      region.scrollLeft + region.clientWidth < region.scrollWidth - 1,
-    );
-  }, []);
-  useEffect(() => {
-    updateScrollState();
-    const region = scrollRef.current;
-    const ResizeObserverConstructor = (
-      globalThis as unknown as {
-        ResizeObserver?: typeof ResizeObserver;
-      }
-    ).ResizeObserver;
-    if (region === null || ResizeObserverConstructor === undefined) return undefined;
-    const observer = new ResizeObserverConstructor(updateScrollState);
-    observer.observe(region);
-    return () => {
-      observer.disconnect();
-    };
-  }, [hours.length, updateScrollState]);
-  const scroll = (direction: -1 | 1) => {
-    scrollRef.current?.scrollBy({ left: direction * 240, behavior: 'smooth' });
-  };
-
-  return (
-    <Stack spacing={1}>
-      <Stack direction="row" sx={{ alignItems: 'center' }}>
-        <Typography component="h2" variant="subtitle2" sx={{ flex: 1 }}>
-          Next 24 hours
-        </Typography>
-        <IconButton
-          size="small"
-          aria-label="Scroll hourly forecast backward"
-          disabled={!canScrollBackward}
-          onClick={() => {
-            scroll(-1);
-          }}
-        >
-          <ChevronLeftOutlinedIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label="Scroll hourly forecast forward"
-          disabled={!canScrollForward}
-          onClick={() => {
-            scroll(1);
-          }}
-        >
-          <ChevronRightOutlinedIcon fontSize="small" />
-        </IconButton>
-      </Stack>
-      <Box
-        ref={scrollRef}
-        role="region"
-        aria-label="Hourly forecast"
-        onScroll={updateScrollState}
-        sx={{
-          display: 'flex',
-          gap: 1,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          pb: 0.5,
-          scrollbarWidth: 'none',
-          scrollSnapType: 'x mandatory',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        {hours.map((hour) => (
-          <HourlyCard key={hour.time} hour={hour} currentTime={forecast.current.time} />
-        ))}
-      </Box>
-    </Stack>
-  );
-}
-
 function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
   return (
     <Paper
@@ -1407,7 +1255,10 @@ function ForecastFooter({
   );
 }
 
-export function WeatherPanel({ onSelectedPointChange }: WeatherPanelProps) {
+export function WeatherPanel({
+  onSelectedPointChange,
+  sidebarCollapsed,
+}: WeatherPanelProps) {
   const { pointWeatherForecast } = useRuntimeServices();
   const request = useStore(
     mapInteractionStore,
@@ -1517,6 +1368,7 @@ export function WeatherPanel({ onSelectedPointChange }: WeatherPanelProps) {
       }}
     >
       <Box
+        data-weather-scroll-region
         sx={{
           minHeight: 0,
           flex: 1,
@@ -1545,7 +1397,10 @@ export function WeatherPanel({ onSelectedPointChange }: WeatherPanelProps) {
         ) : (
           <Stack spacing={2}>
             <ForecastSummary forecast={state.forecast} />
-            <HourlyForecast forecast={state.forecast} />
+            <HourlyForecastTable
+              forecast={state.forecast}
+              sidebarCollapsed={sidebarCollapsed}
+            />
             <SevenDayForecast days={state.forecast.days} />
           </Stack>
         )}

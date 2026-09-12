@@ -54,7 +54,6 @@ function forecastData(
       cloudCoverPercent: nightFog ? 100 : 30,
       visibilityMeters: nightFog ? 500 : 20_000,
       windSpeedKmh: isDay ? 5 + (hour - 6) : preDawnExtreme ? 150 : 2,
-      windDirectionDegrees: 180,
       windGustsKmh: preDawnExtreme ? 180 : 20,
       isDay,
     };
@@ -83,7 +82,6 @@ function forecastData(
       cloudCoverPercent: first.cloudCoverPercent,
       visibilityMeters: first.visibilityMeters,
       windSpeedKmh: first.windSpeedKmh,
-      windDirectionDegrees: first.windDirectionDegrees,
       windGustsKmh: first.windGustsKmh,
       isDay: first.isDay,
     },

@@ -1,5 +1,12 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,7 +30,10 @@ function renderPanel(services = createTestServices()) {
     ...render(
       <RuntimeServicesProvider services={services}>
         <ThemeProvider theme={createAppTheme()}>
-          <WeatherPanel onSelectedPointChange={() => undefined} />
+          <WeatherPanel
+            sidebarCollapsed={false}
+            onSelectedPointChange={() => undefined}
+          />
         </ThemeProvider>
       </RuntimeServicesProvider>,
     ),
@@ -181,7 +191,7 @@ describe('WeatherPanel', () => {
       within(currentSummary).getByLabelText(
         'Now · next 3 h wind 2.8 to 2.8 metres per second',
       ),
-    ).toHaveTextContent('2.8 m/s');
+    ).toHaveTextContent(/^2\.8 m\/s$/u);
     expect(
       within(currentSummary).getByLabelText(
         'Now · next 3 h gusts 4.2 to 4.2 metres per second',
@@ -219,15 +229,37 @@ describe('WeatherPanel', () => {
     expect(screen.queryByLabelText('Cloud')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument();
 
-    const hourlyRegion = screen.getByRole('region', { name: 'Hourly forecast' });
-    const hourlyCards = within(hourlyRegion).getAllByRole('article');
-    expect(hourlyCards).toHaveLength(24);
-    expect(hourlyCards[0]).toHaveAccessibleName(
-      'Sat 18 Jul 2026, 18:00, Clear sky, 20 degrees Celsius, 99 mm precipitation',
-    );
-    expect(hourlyCards[23]).toHaveAccessibleName(
-      'Sun 19 Jul 2026, 17:00, Clear sky, 20 degrees Celsius, 0 mm precipitation',
-    );
+    const hourlyTable = screen.getByRole('table', { name: 'Hourly forecast' });
+    expect(within(hourlyTable).getAllByRole('row')).toHaveLength(6);
+    expect(within(hourlyTable).getAllByRole('columnheader')).toHaveLength(24);
+    expect(
+      within(hourlyTable).getByRole('columnheader', {
+        name: '2026-07-18T18:00 local time',
+      }),
+    ).toHaveTextContent('Sat');
+    expect(
+      within(hourlyTable).getByRole('columnheader', {
+        name: '2026-07-19T17:00 local time',
+      }),
+    ).toHaveTextContent('17:00');
+    expect(
+      within(hourlyTable).queryByRole('rowheader', { name: /direction/iu }),
+    ).toBeNull();
+
+    const scrollBy = vi.fn();
+    Object.defineProperties(hourlyTable, {
+      clientWidth: { configurable: true, value: 400 },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+      scrollWidth: { configurable: true, value: 1_024 },
+      scrollBy: { configurable: true, value: scrollBy },
+    });
+    fireEvent.scroll(hourlyTable);
+    const forwardButton = screen.getByRole('button', {
+      name: 'Scroll hourly forecast forward',
+    });
+    expect(forwardButton).toBeEnabled();
+    fireEvent.click(forwardButton);
+    expect(scrollBy).toHaveBeenCalledWith({ left: 240, behavior: 'smooth' });
 
     const dailyList = screen.getByRole('list', { name: 'Seven-day forecast' });
     const dailyRows = within(dailyList).getAllByRole('listitem');

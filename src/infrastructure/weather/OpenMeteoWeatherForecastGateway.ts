@@ -24,7 +24,6 @@ const currentVariables = [
   'cloud_cover',
   'visibility',
   'wind_speed_10m',
-  'wind_direction_10m',
   'wind_gusts_10m',
   'is_day',
 ] as const;
@@ -41,7 +40,6 @@ const hourlyVariables = [
   'cloud_cover',
   'visibility',
   'wind_speed_10m',
-  'wind_direction_10m',
   'wind_gusts_10m',
   'is_day',
 ] as const;
@@ -84,7 +82,6 @@ const currentSchema = z
     cloud_cover: z.number(),
     visibility: z.number(),
     wind_speed_10m: z.number(),
-    wind_direction_10m: z.number(),
     wind_gusts_10m: z.number(),
     is_day: z.union([z.literal(0), z.literal(1)]),
   })
@@ -104,7 +101,6 @@ const hourlySchema = z
     cloud_cover: finiteNumberArray,
     visibility: finiteNumberArray,
     wind_speed_10m: finiteNumberArray,
-    wind_direction_10m: finiteNumberArray,
     wind_gusts_10m: finiteNumberArray,
     is_day: isDayArray,
   })
@@ -123,7 +119,6 @@ const forecastUnitsSchema = z
     cloud_cover: z.literal('%'),
     visibility: z.literal('m'),
     wind_speed_10m: z.literal('km/h'),
-    wind_direction_10m: z.literal('°'),
     wind_gusts_10m: z.literal('km/h'),
     is_day: z.literal(''),
   })
@@ -220,7 +215,6 @@ function normalizeCurrent(response: ForecastResponse): CurrentWeatherForecast {
     cloudCoverPercent: current.cloud_cover,
     visibilityMeters: current.visibility,
     windSpeedKmh: current.wind_speed_10m,
-    windDirectionDegrees: current.wind_direction_10m,
     windGustsKmh: current.wind_gusts_10m,
     isDay: current.is_day === 1,
   };
@@ -289,7 +283,6 @@ function normalizeHourly(response: ForecastResponse): readonly HourlyWeatherFore
       cloudCoverPercent: hourlyValueAt(response.hourly.cloud_cover, index),
       visibilityMeters: hourlyValueAt(response.hourly.visibility, index),
       windSpeedKmh: hourlyValueAt(response.hourly.wind_speed_10m, index),
-      windDirectionDegrees: hourlyValueAt(response.hourly.wind_direction_10m, index),
       windGustsKmh: hourlyValueAt(response.hourly.wind_gusts_10m, index),
       isDay: hourlyValueAt(response.hourly.is_day, index) === 1,
     };

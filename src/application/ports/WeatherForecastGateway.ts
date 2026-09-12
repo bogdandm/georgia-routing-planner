@@ -13,7 +13,6 @@ export interface WeatherForecastValues {
   readonly cloudCoverPercent: number;
   readonly visibilityMeters: number;
   readonly windSpeedKmh: number;
-  readonly windDirectionDegrees: number;
   readonly windGustsKmh: number;
   readonly isDay: boolean;
 }

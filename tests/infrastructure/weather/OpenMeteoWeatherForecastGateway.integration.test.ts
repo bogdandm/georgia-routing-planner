@@ -8,9 +8,9 @@ import { createTestServices } from '@test/helpers/createTestServices';
 import { mswServer } from '@test/setup/mswServer';
 
 const currentFields =
-  'temperature_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day';
+  'temperature_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,is_day';
 const hourlyFields =
-  'temperature_2m,apparent_temperature,precipitation,rain,showers,snowfall,precipitation_type,weather_code,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day';
+  'temperature_2m,apparent_temperature,precipitation,rain,showers,snowfall,precipitation_type,weather_code,cloud_cover,visibility,wind_speed_10m,wind_gusts_10m,is_day';
 
 function responseFixture(
   overrides: Record<string, unknown> = {},
@@ -40,7 +40,6 @@ function responseFixture(
       cloud_cover: '%',
       visibility: 'm',
       wind_speed_10m: 'km/h',
-      wind_direction_10m: '°',
       wind_gusts_10m: 'km/h',
       is_day: '',
     },
@@ -57,7 +56,6 @@ function responseFixture(
       cloud_cover: 35,
       visibility: 18_000,
       wind_speed_10m: 12.3,
-      wind_direction_10m: 225,
       wind_gusts_10m: 20.4,
       is_day: 1,
     },
@@ -74,7 +72,6 @@ function responseFixture(
       cloud_cover: '%',
       visibility: 'm',
       wind_speed_10m: 'km/h',
-      wind_direction_10m: '°',
       wind_gusts_10m: 'km/h',
       is_day: '',
     },
@@ -91,7 +88,6 @@ function responseFixture(
       cloud_cover: numbers(35),
       visibility: numbers(18_000),
       wind_speed_10m: numbers(12),
-      wind_direction_10m: numbers(225),
       wind_gusts_10m: numbers(20),
       is_day: time.map((_, index) => (index % 24 >= 6 && index % 24 < 20 ? 1 : 0)),
     },
@@ -164,6 +160,8 @@ describe('OpenMeteoWeatherForecastGateway', () => {
     expect(url?.searchParams.has('daily')).toBe(false);
     expect(url?.searchParams.has('precipitation_probability')).toBe(false);
     expect(url?.searchParams.toString()).not.toContain('America%2FNew_York');
+    expect(url?.searchParams.get('current')).not.toContain('wind_direction_10m');
+    expect(url?.searchParams.get('hourly')).not.toContain('wind_direction_10m');
     expect(result).toMatchObject({
       requestedCoordinate: { longitude: -74.006, latitude: 40.7128 },
       resolvedCoordinate: { longitude: -74.01, latitude: 40.71 },

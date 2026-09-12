@@ -6,11 +6,17 @@ import type {
   WeatherIcon,
 } from '@/domain/weather/aggregateWeatherPeriodStatus';
 import {
-  VisibilityStatusIcon,
   WeatherConditionIcon,
   WeatherPeriodIcon,
 } from '@/presentation/weather/WeatherConditionIcon';
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
+
+const normalVisibility: VisibilityStatus = {
+  level: 'normal',
+  period: 'none',
+  label: null,
+  icon: null,
+};
 
 const conditionCases: readonly [readonly number[], string][] = [
   [[0], 'Clear sky'],
@@ -47,7 +53,10 @@ function expectMeteoconArtwork(artwork: HTMLElement, name: string) {
   expect(images).toHaveLength(1);
   const image = images[0];
   if (image === undefined) throw new Error('Expected one Meteocon image.');
-  expect(image).toHaveAttribute('src', expect.stringContaining(`/flat/${name}.svg`));
+  expect(image).toHaveAttribute(
+    'src',
+    expect.stringContaining(`/monochrome/${name}.svg`),
+  );
   expect(image).toHaveAttribute('alt', '');
   expect(image).toHaveAttribute('aria-hidden', 'true');
   expect(artwork.querySelectorAll('svg')).toHaveLength(0);
@@ -84,13 +93,19 @@ describe('WeatherConditionIcon', () => {
     { codes: [96], isDay: false, name: 'thunderstorms-night-hail' },
     { codes: [99], isDay: false, name: 'extreme-thunderstorms-night-hail' },
     { codes: [100], isDay: true, name: 'not-available' },
-  ])('selects flat $name artwork for WMO codes $codes', ({ codes, isDay, name }) => {
-    for (const code of codes) {
-      const { unmount } = render(<WeatherConditionIcon code={code} isDay={isDay} />);
-      expectMeteoconArtwork(screen.getByLabelText(describeWmoWeatherCode(code)), name);
-      unmount();
-    }
-  });
+  ])(
+    'selects monochrome $name artwork for WMO codes $codes',
+    ({ codes, isDay, name }) => {
+      for (const code of codes) {
+        const { unmount } = render(<WeatherConditionIcon code={code} isDay={isDay} />);
+        expectMeteoconArtwork(
+          screen.getByLabelText(describeWmoWeatherCode(code)),
+          name,
+        );
+        unmount();
+      }
+    },
+  );
 
   it.each([
     {
@@ -159,7 +174,14 @@ describe('WeatherConditionIcon', () => {
     readonly label: string;
     readonly name: string;
   }[])('selects $name for $label', ({ icon, isDay, label, name }) => {
-    render(<WeatherPeriodIcon icon={icon} isDay={isDay} label={label} />);
+    render(
+      <WeatherPeriodIcon
+        icon={icon}
+        visibility={normalVisibility}
+        isDay={isDay}
+        label={label}
+      />,
+    );
 
     expectMeteoconArtwork(screen.getByLabelText(label), name);
   });
@@ -181,6 +203,7 @@ describe('WeatherConditionIcon', () => {
     render(
       <WeatherPeriodIcon
         icon={{ sky: 'overcast', phenomenon: 'rain' }}
+        visibility={normalVisibility}
         isDay
         label="Overcast with rain"
       />,
@@ -201,31 +224,143 @@ describe('WeatherConditionIcon', () => {
 
   it.each([
     {
-      level: 'fog',
-      period: 'morning',
+      icon: { sky: 'clear', phenomenon: null },
+      visibility: {
+        level: 'fog',
+        period: 'morning',
+        label: 'Morning fog',
+        icon: 'fog',
+      },
+      isDay: true,
       label: 'Morning fog',
-      icon: 'fog',
+      name: 'mostly-clear-day-fog',
     },
     {
-      level: 'poor',
-      period: 'afternoon',
-      label: 'Poor visibility in the afternoon',
-      icon: 'poor',
+      icon: { sky: 'mostly_clear', phenomenon: null },
+      visibility: {
+        level: 'haze',
+        period: 'overnight',
+        label: 'Reduced visibility overnight',
+        icon: 'haze',
+      },
+      isDay: false,
+      label: 'Reduced visibility overnight',
+      name: 'mostly-clear-night-haze',
     },
     {
-      level: 'haze',
-      period: 'intermittent',
-      label: 'Intermittent reduced visibility',
-      icon: 'haze',
+      icon: { sky: 'partly_cloudy', phenomenon: null },
+      visibility: {
+        level: 'fog',
+        period: 'evening',
+        label: 'Evening fog',
+        icon: 'fog',
+      },
+      isDay: false,
+      label: 'Evening fog',
+      name: 'partly-cloudy-night-fog',
     },
-  ] satisfies readonly VisibilityStatus[])(
-    'labels the secondary $level visibility icon independently',
-    (status) => {
-      render(<VisibilityStatusIcon status={status} />);
+    {
+      icon: { sky: 'overcast', phenomenon: null },
+      visibility: {
+        level: 'haze',
+        period: 'afternoon',
+        label: 'Reduced visibility in the afternoon',
+        icon: 'haze',
+      },
+      isDay: true,
+      label: 'Reduced visibility in the afternoon',
+      name: 'overcast-day-haze',
+    },
+    {
+      icon: { sky: 'mostly_cloudy', phenomenon: null },
+      visibility: {
+        level: 'poor',
+        period: 'most_of_period',
+        label: 'Poor visibility for most of the day',
+        icon: 'poor',
+      },
+      isDay: true,
+      label: 'Poor visibility for most of the day',
+      name: 'mist',
+    },
+  ] satisfies readonly {
+    readonly icon: WeatherIcon;
+    readonly visibility: VisibilityStatus;
+    readonly isDay: boolean;
+    readonly label: string;
+    readonly name: string;
+  }[])(
+    'selects one monochrome $name for $label instead of layering status icons',
+    ({ icon, visibility, isDay, label, name }) => {
+      render(
+        <WeatherPeriodIcon
+          icon={icon}
+          visibility={visibility}
+          isDay={isDay}
+          label={label}
+        />,
+      );
 
-      const icon = screen.getByLabelText(status.label);
-      expect(icon).toBeInTheDocument();
-      expect(icon.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+      expectMeteoconArtwork(screen.getByLabelText(label), name);
+    },
+  );
+
+  it.each([
+    {
+      icon: { sky: 'clear', phenomenon: 'rain' },
+      visibility: {
+        level: 'fog',
+        period: 'morning',
+        label: 'Morning fog',
+        icon: 'fog',
+      },
+      isDay: true,
+      label: 'Rain',
+      name: 'mostly-clear-day-rain',
+    },
+    {
+      icon: { sky: 'partly_cloudy', phenomenon: 'snow' },
+      visibility: {
+        level: 'haze',
+        period: 'overnight',
+        label: 'Reduced visibility overnight',
+        icon: 'haze',
+      },
+      isDay: false,
+      label: 'Snow',
+      name: 'partly-cloudy-night-snow',
+    },
+    {
+      icon: { sky: 'overcast', phenomenon: 'mixed' },
+      visibility: {
+        level: 'poor',
+        period: 'afternoon',
+        label: 'Poor visibility in the afternoon',
+        icon: 'poor',
+      },
+      isDay: true,
+      label: 'Mixed precipitation',
+      name: 'overcast-day-sleet',
+    },
+  ] satisfies readonly {
+    readonly icon: WeatherIcon;
+    readonly visibility: VisibilityStatus;
+    readonly isDay: boolean;
+    readonly label: string;
+    readonly name: string;
+  }[])(
+    'keeps precipitation $name ahead of concurrent visibility status',
+    ({ icon, visibility, isDay, label, name }) => {
+      render(
+        <WeatherPeriodIcon
+          icon={icon}
+          visibility={visibility}
+          isDay={isDay}
+          label={label}
+        />,
+      );
+
+      expectMeteoconArtwork(screen.getByLabelText(label), name);
     },
   );
 });

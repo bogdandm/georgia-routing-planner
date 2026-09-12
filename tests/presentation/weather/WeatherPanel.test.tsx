@@ -123,6 +123,15 @@ describe('WeatherPanel', () => {
                 precipitationMm: 1.25,
                 status: {
                   ...day.day.status,
+                  primary: {
+                    ...day.day.status.primary,
+                    precipitation: 'rain',
+                    label: 'Rain',
+                    icon: {
+                      ...day.day.status.primary.icon,
+                      phenomenon: 'rain',
+                    },
+                  },
                   visibility: {
                     level: 'fog',
                     period: 'morning',
@@ -193,7 +202,7 @@ describe('WeatherPanel', () => {
     expect(currentArtwork.querySelectorAll('img')).toHaveLength(1);
     expect(currentArtwork.querySelector('img')).toHaveAttribute(
       'src',
-      expect.stringContaining('/flat/clear-day.svg'),
+      expect.stringContaining('/monochrome/clear-day.svg'),
     );
     expect(currentArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(
@@ -219,21 +228,25 @@ describe('WeatherPanel', () => {
     expect(nightSummary).toBeVisible();
     expect(within(daySummary).getByText('Day')).toBeVisible();
     expect(within(nightSummary).getByText('Night')).toBeVisible();
-    expect(within(daySummary).getByLabelText('Day: Clear')).toBeInTheDocument();
-    expect(within(nightSummary).getByLabelText('Night: Clear')).toBeInTheDocument();
-    const daySummaryArtwork = within(daySummary).getByLabelText('Day: Clear');
-    const nightSummaryArtwork = within(nightSummary).getByLabelText('Night: Clear');
+    const daySummaryArtwork = within(daySummary).getByLabelText('Day: Rain');
+    const nightSummaryArtwork = within(nightSummary).getByLabelText('Fog overnight');
+    expect(daySummaryArtwork.querySelectorAll('img')).toHaveLength(1);
     expect(daySummaryArtwork.querySelector('img')).toHaveAttribute(
       'src',
-      expect.stringContaining('/flat/clear-day.svg'),
+      expect.stringContaining('/monochrome/mostly-clear-day-rain.svg'),
     );
+    expect(daySummaryArtwork.querySelector('img')).toHaveAttribute('width', '44');
+    expect(daySummaryArtwork.querySelector('img')).toHaveAttribute('height', '44');
     expect(daySummaryArtwork.querySelectorAll('svg')).toHaveLength(0);
+    expect(nightSummaryArtwork.querySelectorAll('img')).toHaveLength(1);
     expect(nightSummaryArtwork.querySelector('img')).toHaveAttribute(
       'src',
-      expect.stringContaining('/flat/clear-night.svg'),
+      expect.stringContaining('/monochrome/mostly-clear-night-fog.svg'),
     );
+    expect(nightSummaryArtwork.querySelector('img')).toHaveAttribute('width', '44');
+    expect(nightSummaryArtwork.querySelector('img')).toHaveAttribute('height', '44');
     expect(nightSummaryArtwork.querySelectorAll('svg')).toHaveLength(0);
-    expect(within(daySummary).getByText('Clear')).toBeInTheDocument();
+    expect(within(daySummary).getByText('Rain')).toBeInTheDocument();
     expect(within(nightSummary).getByText('Clear')).toBeInTheDocument();
     expect(within(daySummary).getByText('Wind')).toBeInTheDocument();
     expect(within(daySummary).getByText('Gusts')).toBeInTheDocument();
@@ -295,8 +308,24 @@ describe('WeatherPanel', () => {
     });
     expect(within(firstDailyRow).queryByText('Day')).not.toBeInTheDocument();
     expect(within(firstDailyRow).queryByText('Night')).not.toBeInTheDocument();
-    expect(within(dayForecast).getByLabelText('Day: Clear')).toBeInTheDocument();
-    expect(within(dayForecast).getByLabelText('Morning fog')).toBeInTheDocument();
+    const dayForecastArtwork = within(dayForecast).getByLabelText('Day: Rain');
+    const nightForecastArtwork = within(nightForecast).getByLabelText('Fog overnight');
+    expect(dayForecastArtwork.querySelectorAll('img')).toHaveLength(1);
+    expect(dayForecastArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/monochrome/mostly-clear-day-rain.svg'),
+    );
+    expect(dayForecastArtwork.querySelector('img')).toHaveAttribute('width', '36');
+    expect(dayForecastArtwork.querySelector('img')).toHaveAttribute('height', '36');
+    expect(dayForecastArtwork.querySelectorAll('svg')).toHaveLength(0);
+    expect(nightForecastArtwork.querySelectorAll('img')).toHaveLength(1);
+    expect(nightForecastArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/monochrome/mostly-clear-night-fog.svg'),
+    );
+    expect(nightForecastArtwork.querySelector('img')).toHaveAttribute('width', '36');
+    expect(nightForecastArtwork.querySelector('img')).toHaveAttribute('height', '36');
+    expect(nightForecastArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(
       within(dayForecast).getByLabelText('Day temperature 7 to 24 degrees Celsius'),
     ).toHaveTextContent('7…24 °C');
@@ -309,20 +338,6 @@ describe('WeatherPanel', () => {
     expect(
       within(dayForecast).getByLabelText('Day precipitation 1.25 millimetres'),
     ).toHaveTextContent('1.3 mm');
-    expect(within(nightForecast).getByLabelText('Night: Clear')).toBeInTheDocument();
-    expect(within(nightForecast).getByLabelText('Fog overnight')).toBeInTheDocument();
-    const dayForecastArtwork = within(dayForecast).getByLabelText('Day: Clear');
-    const nightForecastArtwork = within(nightForecast).getByLabelText('Night: Clear');
-    expect(dayForecastArtwork.querySelector('img')).toHaveAttribute(
-      'src',
-      expect.stringContaining('/flat/clear-day.svg'),
-    );
-    expect(dayForecastArtwork.querySelectorAll('svg')).toHaveLength(0);
-    expect(nightForecastArtwork.querySelector('img')).toHaveAttribute(
-      'src',
-      expect.stringContaining('/flat/clear-night.svg'),
-    );
-    expect(nightForecastArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(
       within(nightForecast).getByLabelText('Night temperature -3 to 8 degrees Celsius'),
     ).toHaveTextContent('-3…8 °C');
@@ -335,7 +350,7 @@ describe('WeatherPanel', () => {
     expect(
       within(nightForecast).getByLabelText('Night precipitation 2.5 millimetres'),
     ).toHaveTextContent('2.5 mm');
-    expect(within(dayForecast).getByText('Clear')).toBeVisible();
+    expect(within(dayForecast).getByText('Rain')).toBeVisible();
 
     expect(screen.getByText('ECMWF IFS · Updated 18 Jul, 04:00')).toBeInTheDocument();
     expect(

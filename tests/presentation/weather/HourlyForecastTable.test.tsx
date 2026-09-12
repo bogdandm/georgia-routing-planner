@@ -109,14 +109,18 @@ describe('HourlyForecastTable', () => {
     expect(nightArtwork.querySelectorAll('img')).toHaveLength(1);
     expect(nightArtwork.querySelector('img')).toHaveAttribute(
       'src',
-      expect.stringContaining('/flat/clear-night.svg'),
+      expect.stringContaining('/monochrome/clear-night.svg'),
     );
+    expect(nightArtwork.querySelector('img')).toHaveAttribute('width', '32');
+    expect(nightArtwork.querySelector('img')).toHaveAttribute('height', '32');
     expect(nightArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(dayArtwork.querySelectorAll('img')).toHaveLength(1);
     expect(dayArtwork.querySelector('img')).toHaveAttribute(
       'src',
-      expect.stringContaining('/flat/clear-day.svg'),
+      expect.stringContaining('/monochrome/clear-day.svg'),
     );
+    expect(dayArtwork.querySelector('img')).toHaveAttribute('width', '32');
+    expect(dayArtwork.querySelector('img')).toHaveAttribute('height', '32');
     expect(dayArtwork.querySelectorAll('svg')).toHaveLength(0);
   });
 

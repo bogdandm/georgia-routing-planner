@@ -1,52 +1,63 @@
-import AirOutlinedIcon from '@mui/icons-material/AirOutlined';
-import FoggyIcon from '@mui/icons-material/Foggy';
 import { Box, ClickAwayListener, Tooltip } from '@mui/material';
 import { useRef, useState, type ReactElement } from 'react';
 
-import clearDay from '@meteocons/svg-static/flat/clear-day.svg?no-inline';
-import clearNight from '@meteocons/svg-static/flat/clear-night.svg?no-inline';
-import cloudy from '@meteocons/svg-static/flat/cloudy.svg?no-inline';
-import extremeDayRain from '@meteocons/svg-static/flat/extreme-day-rain.svg?no-inline';
-import extremeDaySleet from '@meteocons/svg-static/flat/extreme-day-sleet.svg?no-inline';
-import extremeDaySnow from '@meteocons/svg-static/flat/extreme-day-snow.svg?no-inline';
-import extremeNightRain from '@meteocons/svg-static/flat/extreme-night-rain.svg?no-inline';
-import extremeNightSleet from '@meteocons/svg-static/flat/extreme-night-sleet.svg?no-inline';
-import extremeNightSnow from '@meteocons/svg-static/flat/extreme-night-snow.svg?no-inline';
-import extremeThunderstormsDayHail from '@meteocons/svg-static/flat/extreme-thunderstorms-day-hail.svg?no-inline';
-import extremeThunderstormsNightHail from '@meteocons/svg-static/flat/extreme-thunderstorms-night-hail.svg?no-inline';
-import fogDay from '@meteocons/svg-static/flat/fog-day.svg?no-inline';
-import fogNight from '@meteocons/svg-static/flat/fog-night.svg?no-inline';
-import mostlyClearDay from '@meteocons/svg-static/flat/mostly-clear-day.svg?no-inline';
-import mostlyClearDayRain from '@meteocons/svg-static/flat/mostly-clear-day-rain.svg?no-inline';
-import mostlyClearDaySleet from '@meteocons/svg-static/flat/mostly-clear-day-sleet.svg?no-inline';
-import mostlyClearDaySnow from '@meteocons/svg-static/flat/mostly-clear-day-snow.svg?no-inline';
-import mostlyClearNight from '@meteocons/svg-static/flat/mostly-clear-night.svg?no-inline';
-import mostlyClearNightRain from '@meteocons/svg-static/flat/mostly-clear-night-rain.svg?no-inline';
-import mostlyClearNightSleet from '@meteocons/svg-static/flat/mostly-clear-night-sleet.svg?no-inline';
-import mostlyClearNightSnow from '@meteocons/svg-static/flat/mostly-clear-night-snow.svg?no-inline';
-import notAvailable from '@meteocons/svg-static/flat/not-available.svg?no-inline';
-import overcastDay from '@meteocons/svg-static/flat/overcast-day.svg?no-inline';
-import overcastDayDrizzle from '@meteocons/svg-static/flat/overcast-day-drizzle.svg?no-inline';
-import overcastDayRain from '@meteocons/svg-static/flat/overcast-day-rain.svg?no-inline';
-import overcastDaySleet from '@meteocons/svg-static/flat/overcast-day-sleet.svg?no-inline';
-import overcastDaySnow from '@meteocons/svg-static/flat/overcast-day-snow.svg?no-inline';
-import overcastNight from '@meteocons/svg-static/flat/overcast-night.svg?no-inline';
-import overcastNightDrizzle from '@meteocons/svg-static/flat/overcast-night-drizzle.svg?no-inline';
-import overcastNightRain from '@meteocons/svg-static/flat/overcast-night-rain.svg?no-inline';
-import overcastNightSleet from '@meteocons/svg-static/flat/overcast-night-sleet.svg?no-inline';
-import overcastNightSnow from '@meteocons/svg-static/flat/overcast-night-snow.svg?no-inline';
-import partlyCloudyDay from '@meteocons/svg-static/flat/partly-cloudy-day.svg?no-inline';
-import partlyCloudyDayRain from '@meteocons/svg-static/flat/partly-cloudy-day-rain.svg?no-inline';
-import partlyCloudyDaySleet from '@meteocons/svg-static/flat/partly-cloudy-day-sleet.svg?no-inline';
-import partlyCloudyDaySnow from '@meteocons/svg-static/flat/partly-cloudy-day-snow.svg?no-inline';
-import partlyCloudyNight from '@meteocons/svg-static/flat/partly-cloudy-night.svg?no-inline';
-import partlyCloudyNightRain from '@meteocons/svg-static/flat/partly-cloudy-night-rain.svg?no-inline';
-import partlyCloudyNightSleet from '@meteocons/svg-static/flat/partly-cloudy-night-sleet.svg?no-inline';
-import partlyCloudyNightSnow from '@meteocons/svg-static/flat/partly-cloudy-night-snow.svg?no-inline';
-import thunderstormsDay from '@meteocons/svg-static/flat/thunderstorms-day.svg?no-inline';
-import thunderstormsDayHail from '@meteocons/svg-static/flat/thunderstorms-day-hail.svg?no-inline';
-import thunderstormsNight from '@meteocons/svg-static/flat/thunderstorms-night.svg?no-inline';
-import thunderstormsNightHail from '@meteocons/svg-static/flat/thunderstorms-night-hail.svg?no-inline';
+import clearDay from '@meteocons/svg-static/monochrome/clear-day.svg?no-inline';
+import clearNight from '@meteocons/svg-static/monochrome/clear-night.svg?no-inline';
+import cloudy from '@meteocons/svg-static/monochrome/cloudy.svg?no-inline';
+import extremeDayRain from '@meteocons/svg-static/monochrome/extreme-day-rain.svg?no-inline';
+import extremeDaySleet from '@meteocons/svg-static/monochrome/extreme-day-sleet.svg?no-inline';
+import extremeDaySnow from '@meteocons/svg-static/monochrome/extreme-day-snow.svg?no-inline';
+import extremeNightRain from '@meteocons/svg-static/monochrome/extreme-night-rain.svg?no-inline';
+import extremeNightSleet from '@meteocons/svg-static/monochrome/extreme-night-sleet.svg?no-inline';
+import extremeNightSnow from '@meteocons/svg-static/monochrome/extreme-night-snow.svg?no-inline';
+import extremeThunderstormsDayHail from '@meteocons/svg-static/monochrome/extreme-thunderstorms-day-hail.svg?no-inline';
+import extremeThunderstormsNightHail from '@meteocons/svg-static/monochrome/extreme-thunderstorms-night-hail.svg?no-inline';
+import fogDay from '@meteocons/svg-static/monochrome/fog-day.svg?no-inline';
+import fogNight from '@meteocons/svg-static/monochrome/fog-night.svg?no-inline';
+import mist from '@meteocons/svg-static/monochrome/mist.svg?no-inline';
+import mostlyClearDay from '@meteocons/svg-static/monochrome/mostly-clear-day.svg?no-inline';
+import mostlyClearDayFog from '@meteocons/svg-static/monochrome/mostly-clear-day-fog.svg?no-inline';
+import mostlyClearDayHaze from '@meteocons/svg-static/monochrome/mostly-clear-day-haze.svg?no-inline';
+import mostlyClearDayRain from '@meteocons/svg-static/monochrome/mostly-clear-day-rain.svg?no-inline';
+import mostlyClearDaySleet from '@meteocons/svg-static/monochrome/mostly-clear-day-sleet.svg?no-inline';
+import mostlyClearDaySnow from '@meteocons/svg-static/monochrome/mostly-clear-day-snow.svg?no-inline';
+import mostlyClearNight from '@meteocons/svg-static/monochrome/mostly-clear-night.svg?no-inline';
+import mostlyClearNightFog from '@meteocons/svg-static/monochrome/mostly-clear-night-fog.svg?no-inline';
+import mostlyClearNightHaze from '@meteocons/svg-static/monochrome/mostly-clear-night-haze.svg?no-inline';
+import mostlyClearNightRain from '@meteocons/svg-static/monochrome/mostly-clear-night-rain.svg?no-inline';
+import mostlyClearNightSleet from '@meteocons/svg-static/monochrome/mostly-clear-night-sleet.svg?no-inline';
+import mostlyClearNightSnow from '@meteocons/svg-static/monochrome/mostly-clear-night-snow.svg?no-inline';
+import notAvailable from '@meteocons/svg-static/monochrome/not-available.svg?no-inline';
+import overcastDay from '@meteocons/svg-static/monochrome/overcast-day.svg?no-inline';
+import overcastDayFog from '@meteocons/svg-static/monochrome/overcast-day-fog.svg?no-inline';
+import overcastDayHaze from '@meteocons/svg-static/monochrome/overcast-day-haze.svg?no-inline';
+import overcastDayDrizzle from '@meteocons/svg-static/monochrome/overcast-day-drizzle.svg?no-inline';
+import overcastDayRain from '@meteocons/svg-static/monochrome/overcast-day-rain.svg?no-inline';
+import overcastDaySleet from '@meteocons/svg-static/monochrome/overcast-day-sleet.svg?no-inline';
+import overcastDaySnow from '@meteocons/svg-static/monochrome/overcast-day-snow.svg?no-inline';
+import overcastNight from '@meteocons/svg-static/monochrome/overcast-night.svg?no-inline';
+import overcastNightFog from '@meteocons/svg-static/monochrome/overcast-night-fog.svg?no-inline';
+import overcastNightHaze from '@meteocons/svg-static/monochrome/overcast-night-haze.svg?no-inline';
+import overcastNightDrizzle from '@meteocons/svg-static/monochrome/overcast-night-drizzle.svg?no-inline';
+import overcastNightRain from '@meteocons/svg-static/monochrome/overcast-night-rain.svg?no-inline';
+import overcastNightSleet from '@meteocons/svg-static/monochrome/overcast-night-sleet.svg?no-inline';
+import overcastNightSnow from '@meteocons/svg-static/monochrome/overcast-night-snow.svg?no-inline';
+import partlyCloudyDay from '@meteocons/svg-static/monochrome/partly-cloudy-day.svg?no-inline';
+import partlyCloudyDayFog from '@meteocons/svg-static/monochrome/partly-cloudy-day-fog.svg?no-inline';
+import partlyCloudyDayHaze from '@meteocons/svg-static/monochrome/partly-cloudy-day-haze.svg?no-inline';
+import partlyCloudyDayRain from '@meteocons/svg-static/monochrome/partly-cloudy-day-rain.svg?no-inline';
+import partlyCloudyDaySleet from '@meteocons/svg-static/monochrome/partly-cloudy-day-sleet.svg?no-inline';
+import partlyCloudyDaySnow from '@meteocons/svg-static/monochrome/partly-cloudy-day-snow.svg?no-inline';
+import partlyCloudyNight from '@meteocons/svg-static/monochrome/partly-cloudy-night.svg?no-inline';
+import partlyCloudyNightFog from '@meteocons/svg-static/monochrome/partly-cloudy-night-fog.svg?no-inline';
+import partlyCloudyNightHaze from '@meteocons/svg-static/monochrome/partly-cloudy-night-haze.svg?no-inline';
+import partlyCloudyNightRain from '@meteocons/svg-static/monochrome/partly-cloudy-night-rain.svg?no-inline';
+import partlyCloudyNightSleet from '@meteocons/svg-static/monochrome/partly-cloudy-night-sleet.svg?no-inline';
+import partlyCloudyNightSnow from '@meteocons/svg-static/monochrome/partly-cloudy-night-snow.svg?no-inline';
+import thunderstormsDay from '@meteocons/svg-static/monochrome/thunderstorms-day.svg?no-inline';
+import thunderstormsDayHail from '@meteocons/svg-static/monochrome/thunderstorms-day-hail.svg?no-inline';
+import thunderstormsNight from '@meteocons/svg-static/monochrome/thunderstorms-night.svg?no-inline';
+import thunderstormsNightHail from '@meteocons/svg-static/monochrome/thunderstorms-night-hail.svg?no-inline';
 
 import type {
   VisibilityStatus,
@@ -128,8 +139,8 @@ export function WeatherIconTooltip({ children, label }: WeatherIconTooltipProps)
   );
 }
 
-// Weather-condition artwork must be one flat static Meteocon selected here. Do not compose it from MUI icons or icons from any other library; wind, gust, precipitation, and visibility remain separate UI indicators.
-const flatMeteoconSources = {
+// Weather-condition artwork must be one monochrome static Meteocon selected here. Do not compose it from MUI icons or icons from any other library; wind, gust, and precipitation remain separate UI indicators, while significant visibility selects one complete Meteocon instead of an overlaid badge.
+const meteoconSources = {
   'clear-day': clearDay,
   'clear-night': clearNight,
   cloudy,
@@ -143,30 +154,43 @@ const flatMeteoconSources = {
   'extreme-thunderstorms-night-hail': extremeThunderstormsNightHail,
   'fog-day': fogDay,
   'fog-night': fogNight,
+  mist,
   'mostly-clear-day': mostlyClearDay,
+  'mostly-clear-day-fog': mostlyClearDayFog,
+  'mostly-clear-day-haze': mostlyClearDayHaze,
   'mostly-clear-day-rain': mostlyClearDayRain,
   'mostly-clear-day-sleet': mostlyClearDaySleet,
   'mostly-clear-day-snow': mostlyClearDaySnow,
   'mostly-clear-night': mostlyClearNight,
+  'mostly-clear-night-fog': mostlyClearNightFog,
+  'mostly-clear-night-haze': mostlyClearNightHaze,
   'mostly-clear-night-rain': mostlyClearNightRain,
   'mostly-clear-night-sleet': mostlyClearNightSleet,
   'mostly-clear-night-snow': mostlyClearNightSnow,
   'not-available': notAvailable,
   'overcast-day': overcastDay,
+  'overcast-day-fog': overcastDayFog,
+  'overcast-day-haze': overcastDayHaze,
   'overcast-day-drizzle': overcastDayDrizzle,
   'overcast-day-rain': overcastDayRain,
   'overcast-day-sleet': overcastDaySleet,
   'overcast-day-snow': overcastDaySnow,
   'overcast-night': overcastNight,
+  'overcast-night-fog': overcastNightFog,
+  'overcast-night-haze': overcastNightHaze,
   'overcast-night-drizzle': overcastNightDrizzle,
   'overcast-night-rain': overcastNightRain,
   'overcast-night-sleet': overcastNightSleet,
   'overcast-night-snow': overcastNightSnow,
   'partly-cloudy-day': partlyCloudyDay,
+  'partly-cloudy-day-fog': partlyCloudyDayFog,
+  'partly-cloudy-day-haze': partlyCloudyDayHaze,
   'partly-cloudy-day-rain': partlyCloudyDayRain,
   'partly-cloudy-day-sleet': partlyCloudyDaySleet,
   'partly-cloudy-day-snow': partlyCloudyDaySnow,
   'partly-cloudy-night': partlyCloudyNight,
+  'partly-cloudy-night-fog': partlyCloudyNightFog,
+  'partly-cloudy-night-haze': partlyCloudyNightHaze,
   'partly-cloudy-night-rain': partlyCloudyNightRain,
   'partly-cloudy-night-sleet': partlyCloudyNightSleet,
   'partly-cloudy-night-snow': partlyCloudyNightSnow,
@@ -176,13 +200,13 @@ const flatMeteoconSources = {
   'thunderstorms-night-hail': thunderstormsNightHail,
 } as const satisfies Readonly<Record<string, string>>;
 
-type FlatMeteoconName = keyof typeof flatMeteoconSources;
+type MeteoconName = keyof typeof meteoconSources;
 type DayNight = 'day' | 'night';
 type PrecipitationSuffix = 'rain' | 'sleet' | 'snow';
-type PrecipitationPrefix =
+type ConditionPrefix =
   `mostly-clear-${DayNight}` | `overcast-${DayNight}` | `partly-cloudy-${DayNight}`;
 
-function iconForWmoCode(code: number, isDay: boolean): FlatMeteoconName {
+function iconForWmoCode(code: number, isDay: boolean): MeteoconName {
   const dayNight = isDay ? 'day' : 'night';
   switch (code) {
     case 0:
@@ -236,9 +260,25 @@ function iconForWmoCode(code: number, isDay: boolean): FlatMeteoconName {
   }
 }
 
-function iconForPeriod(icon: WeatherIcon, isDay: boolean): FlatMeteoconName {
+function periodConditionPrefix(icon: WeatherIcon, dayNight: DayNight): ConditionPrefix {
+  if (icon.sky === 'clear' || icon.sky === 'mostly_clear') {
+    return `mostly-clear-${dayNight}`;
+  }
+  if (icon.sky === 'partly_cloudy') return `partly-cloudy-${dayNight}`;
+  return `overcast-${dayNight}`;
+}
+
+function iconForPeriod(
+  icon: WeatherIcon,
+  visibility: VisibilityStatus,
+  isDay: boolean,
+): MeteoconName {
   const dayNight = isDay ? 'day' : 'night';
   if (icon.phenomenon === null) {
+    if (visibility.icon === 'poor') return 'mist';
+    if (visibility.icon === 'fog' || visibility.icon === 'haze') {
+      return `${periodConditionPrefix(icon, dayNight)}-${visibility.icon}`;
+    }
     switch (icon.sky) {
       case 'clear':
         return `clear-${dayNight}`;
@@ -265,26 +305,20 @@ function iconForPeriod(icon: WeatherIcon, isDay: boolean): FlatMeteoconName {
           icon.phenomenon === 'snow'
         ? 'snow'
         : 'sleet';
-  const prefix: PrecipitationPrefix =
-    icon.sky === 'clear' || icon.sky === 'mostly_clear'
-      ? `mostly-clear-${dayNight}`
-      : icon.sky === 'partly_cloudy'
-        ? `partly-cloudy-${dayNight}`
-        : `overcast-${dayNight}`;
-  return `${prefix}-${suffix}`;
+  return `${periodConditionPrefix(icon, dayNight)}-${suffix}`;
 }
 
 function StaticMeteocon({
   name,
   size,
 }: {
-  readonly name: FlatMeteoconName;
+  readonly name: MeteoconName;
   readonly size: number;
 }) {
   return (
     <Box
       component="img"
-      src={flatMeteoconSources[name]}
+      src={meteoconSources[name]}
       alt=""
       aria-hidden="true"
       width={size}
@@ -308,41 +342,20 @@ export function WeatherConditionIcon({
 
 export function WeatherPeriodIcon({
   icon,
+  visibility,
   isDay,
   label,
   size = 36,
 }: {
   readonly icon: WeatherIcon;
+  readonly visibility: VisibilityStatus;
   readonly isDay: boolean;
   readonly label: string;
   readonly size?: number;
 }) {
   return (
     <WeatherIconTooltip label={label}>
-      <StaticMeteocon name={iconForPeriod(icon, isDay)} size={size} />
-    </WeatherIconTooltip>
-  );
-}
-
-export function VisibilityStatusIcon({
-  status,
-}: {
-  readonly status: VisibilityStatus;
-}) {
-  if (status.icon === null || status.label === null) return null;
-
-  return (
-    <WeatherIconTooltip label={status.label}>
-      <Box
-        aria-hidden="true"
-        sx={{ display: 'inline-grid', placeItems: 'center', width: 16, height: 16 }}
-      >
-        {status.icon === 'fog' ? (
-          <FoggyIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-        ) : (
-          <AirOutlinedIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
-        )}
-      </Box>
+      <StaticMeteocon name={iconForPeriod(icon, visibility, isDay)} size={size} />
     </WeatherIconTooltip>
   );
 }

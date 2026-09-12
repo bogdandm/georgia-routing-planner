@@ -12,8 +12,8 @@ presentation conventions. Repository documentation and code remain authoritative
 data, privacy, architecture, and failure contracts. Correct this document whenever it no
 longer describes the reviewed interface.
 
-- **Feature rail:** `Satellite`, `Tracks`, `Layers`, and `Markers` are the primary
-  top-level feature sections.
+- **Feature rail:** `Tracks`, `Markers`, `Layers`, `Satellite`, and `Weather` are the
+  primary top-level feature sections, in that order.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
   available when developer mode is enabled. The `About this site` action sits below
   Settings and opens public author, repository, API, and data-source information.
@@ -40,8 +40,10 @@ usable elevation profile, its grade-colored graph is drawn decoratively behind t
 compact stats without chart interaction. Expanding the disclosure reveals the full
 editor; collapsing preserves the active track, while closing clears it. Selecting
 Sentinel imagery closes the smartphone workspace so the map immediately shows the
-applied scene; reopening the workspace restores the existing imagery results. This
-transient presentation state is not stored as a navigation preference or URL entry.
+applied scene; reopening the workspace restores the existing imagery results. From
+Weather, **Show map** exposes the map for point selection, and **Open workspace**
+returns to the same loading or completed forecast. This transient presentation state is
+not stored as a navigation preference or URL entry.
 
 ## Desktop workspace
 
@@ -59,9 +61,9 @@ profile-and-stats summary sits between the fixed Trail Planner logo and the navi
 expansion affordance. Without an active track summary, the Trail Planner logo and
 expansion affordance remain the compact collapsed control.
 
-The current shell exposes Tracks, Satellite, Markers, Layers, and User as interactive
-rail destinations. It has no full-width app bar, empty global elevation placeholder, or
-generic always-visible privacy notice.
+The current shell exposes Tracks, Markers, Layers, Satellite, Weather, and User as
+interactive rail destinations. It has no full-width app bar, empty global elevation
+placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
@@ -392,9 +394,102 @@ terrain mode. Mosaic dates, request state, and applied layers are transient: the
 neither persisted nor added to map/share URLs. The existing single-scene sharing
 contract remains unchanged.
 
-Each primary workspace destination has a shareable URL anchor: `#tracks`, `#satellite`,
-`#markers`, `#layers`, or `#user`. Loading an anchored URL restores that tab, and
-changing tabs updates the anchor.
+### Weather
+
+Weather starts with a single instruction to select a point. While Weather is active, a
+primary map click opens or refreshes the ordinary point-inspection popup and sends the
+same WGS84 coordinate to the forecast workflow. Marker placement retains higher
+priority. A route draft hidden behind Weather does not capture clicks; returning to
+Tracks resumes route selection.
+
+The selected-point context is one compact location row containing a pin icon, the
+clicked coordinate, and forecast elevation. The summary is one bordered card: a softly
+tinted current-period section fills the left side, while daytime and night forecasts
+stack on the right behind inset dividers. The current section gives the local date and
+time, then keeps the weather icon beside a top-aligned temperature with the primary
+condition directly beneath it. Visibly labelled wind, gust, and precipitation rows
+follow without separators. Each Day and Night section groups its plain period label with
+the weather icon. Wider viewports keep the temperature and compact metrics in an
+adjacent column. At narrow mobile widths, the period expands into a prominent
+temperature with its primary condition, precipitation beside it, and separate labelled
+wind and gust groups below. Significant visibility is folded into the single condition
+Meteocon only when no precipitation phenomenon takes priority. The former large
+apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
+rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
+focus, and a touch-screen tap.
+
+All forecast-condition artwork is one monochrome static Meteocon selected from the
+hourly WMO code or aggregated status, using day/night variants where available.
+Precipitation always has priority when the aggregate includes rain, snow, sleet,
+showers, or freezing precipitation. Significant fog, haze, or poor visibility selects a
+ready-made complete Meteocon only when there is no precipitation phenomenon, instead of
+layering another badge over the primary-condition artwork. Wind, gust, and precipitation
+remain separate indicators.
+
+The hourly forecast is one compact bordered, horizontally scrolling table with a leading
+label column that scrolls with exactly 24 consecutive one-hour columns from the current
+local forecast hour. Vertical rules mark calendar-day boundaries rather than separating
+every hourly column; no horizontal rules separate metric rows. Its rows are `Time`,
+`Weather`, `Temp (°C)`, `Precip (mm)`, `Wind (m/s)`, and `Gusts (m/s)`. The time row
+stays on one line: the first column of each local calendar-day section shows its weekday
+instead of the hour, whose value is implicit from its neighbours, and the other columns
+use local `HH:00`. Weather keeps one condition icon per unmodified hourly sample.
+Temperature and precipitation values stay column-aligned immediately above their
+corresponding chart shape. Temperature moves through blue `#0288D1` at 0 °C and below,
+green `#2EAD5B` at 10 °C, amber `#FFB703` at 20 °C, and red `#E53935` at 30 °C and
+above; those colors fill a point-free polygon through the hourly values and extend the
+first and last values to the chart edges. Precipitation cells omit the repeated `mm`
+suffix because the row label owns the unit. Precipitation is drawn as vertical blue bars
+whose zero baseline meets the row boundary; a snowflake appears between a snowy value
+and its bar. Wind and gust row backgrounds form continuous horizontal gradients through
+their hourly values. The color anchors are white at 0 m/s, green at 8 m/s, yellow at 15
+m/s, orange at 20 m/s, and red at 25 m/s; values between anchors are linearly
+interpolated and higher values remain red. Wind direction is not requested or shown in
+either the current or hourly forecast. The left and right controls scroll this unchanged
+hourly cadence without grouping or sampling it. An expand icon to their right leaves
+that header in the sidebar while widening only the table rightward until all 24 columns
+are visible; the same control contracts it back to the compact scrollable layout.
+Collapsing the workspace sidebar or scrolling the Weather panel also contracts an
+expanded table. A mouse can drag the compact table directly; table text is not
+selectable during that interaction. While loading, one rounded placeholder retains the
+table-and-chart geometry; the summary and seven-day placeholders remain unchanged. At
+narrow mobile workspace widths, the summary stacks its current and Day/Night areas. Each
+seven-day period places its primary condition beneath its temperature, precipitation
+immediately to their right, and the two-line wind/gust group at the far edge so words do
+not compress or overflow the card.
+
+Seven rows are derived from location-local hourly forecast data. Each date owns one
+full-width bordered card with a fixed date column and two stacked weather-period rows.
+The rows omit repeated Day and Night text while their article names and icon tooltips
+retain those accessible distinctions. Each row aligns the weather icon, temperature
+range, primary condition, precipitation, and a two-line wind and gust group; its only
+internal divider separates the two periods without crossing the date column. Night `D`
+includes all non-daylight samples after date `D`'s daylight period and all non-daylight
+samples before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore
+belong to night `D-1`; local midnight never splits a physical night. An eighth fetched
+calendar date supplies the pre-sunrise samples needed to complete the seventh displayed
+night.
+
+Day and night independently classify every dry sample before choosing the dominant sky
+from duration thresholds; a short cloudy window cannot redefine an otherwise clear
+period. Precipitation is likewise separated into isolated, intermittent, and persistent
+patterns before it is combined with the dominant sky. Significant fog, poor visibility,
+or reduced visibility remains a secondary, time-qualified icon and never replaces the
+primary weather icon. Each interval shows temperature, wind-speed, and gust ranges plus
+its complete precipitation total. Wind and gust ranges are displayed in metres per
+second. Date labels and the model-update time use the selected location's
+provider-returned time zone.
+
+Only the latest point request may update the panel. A new selection or unmount aborts
+the previous request, and Retry repeats the currently selected coordinate. Loading,
+ready, and error content scroll inside the Weather panel while the model metadata and
+`Weather data by Open-Meteo` attribution remain fixed at its bottom. Forecast state is
+ephemeral: navigating away keeps the mounted session, but reload does not persist it.
+ECMWF IFS values are deterministic model forecasts, not weather-station observations.
+
+Each primary workspace destination has a shareable URL anchor: `#tracks`, `#markers`,
+`#layers`, `#satellite`, `#weather`, or `#user`. Loading an anchored URL restores that
+tab, and changing tabs updates the anchor.
 
 Regular map sharing is always available and encodes a 2D center and zoom; context-menu
 point links follow the same flat-camera contract and do not include satellite imagery.

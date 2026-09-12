@@ -665,6 +665,54 @@ implemented independently, but the application must label its visual asset as
 unsupported until a bounded adapter or an approved raster tile service is selected. It
 must never apply the corresponding L2A scene as a substitute.
 
+## Weather forecast: Open-Meteo ECMWF IFS
+
+The Weather workspace uses the anonymous Open-Meteo generic forecast endpoint,
+`https://api.open-meteo.com/v1/forecast`, with the explicit model identifier
+`models=ecmwf_ifs`. Open-Meteo's
+[ECMWF API documentation](https://open-meteo.com/en/docs/ecmwf-api) identifies IFS HRES
+as the default global deterministic model at 9 km resolution. ECMWF initializes the
+model at six-hour intervals; the separately fetched model metadata supplies the run time
+when available. Metadata failure does not invalidate forecast values and is never
+replaced with the browser fetch time.
+
+Each point request sends the selected latitude and longitude, `timezone=auto`,
+`forecast_days=8`, explicit Celsius/km/h/mm units, and the allowlisted current and
+hourly fields. The eighth location-local date completes the night beginning on the
+seventh displayed date. The UI converts the provider's wind values to metres per second.
+A successful local DEM sample is also transmitted as `elevation` for provider
+downscaling. If local sampling is unavailable, the elevation in Open-Meteo's response is
+used for the displayed forecast elevation. This transmission is necessary for a
+location-specific forecast; neither the coordinate nor response is persisted or added to
+diagnostics.
+
+The request deliberately omits `daily` and `precipitation_probability`. The next
+three-hour summary and 24 hourly slots are displayed from normalized hourly values.
+Seven date rows each contain an independent daylight summary and a complete physical
+night summary running from post-daylight hours through the next date's pre-daylight
+hours. Sky and precipitation use the same duration and dominance policy for both
+intervals. Visibility is classified separately by severity and interval position, so fog
+or reduced visibility remains secondary and cannot replace the primary weather. These
+are deterministic model values, not measured weather-station observations.
+
+Anonymous free access is suitable only under Open-Meteo's documented non-commercial
+limits: 600 calls per minute, 5,000 per hour, and 10,000 per day. The deployment sends
+no API key. Commercial use requires a separately configured customer endpoint and
+licence rather than a secret embedded in this static client. Displayed data keeps the
+required [Open-Meteo attribution](https://open-meteo.com/) adjacent to the forecast and
+links the configured [CC BY 4.0 licence](https://creativecommons.org/licenses/by/4.0/)
+from About.
+
+Direct anonymous endpoint reads on **2026-09-09** returned JSON for a synthetic
+Tbilisi-area coordinate. The generic endpoint returned the requested current values and
+visibility, but its hourly `precipitation_type` values were null. The dedicated
+`/v1/ecmwf` endpoint returned numeric precipitation types while omitting the required
+current contract and usable visibility. The runtime therefore uses the generic endpoint
+and derives a missing precipitation phase deterministically from precipitation, rain,
+showers, snowfall, and freezing/snow WMO codes. This evidence confirms the observed
+schema only; browser CORS and ongoing availability were not revalidated in this
+workstream.
+
 ## Verification record
 
 The required Chromium suite uses generated local vector, glyph, and DEM fixtures. The

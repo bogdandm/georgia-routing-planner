@@ -40,9 +40,11 @@ src/
   bootstrap/               one-time dependency construction and React service context
   domain/satellite/        framework-free Sentinel values and geometry calculations
   domain/markers/          framework-free saved-marker schema and catalog keys
+  domain/weather/          framework-free hourly-to-daily forecast aggregation
   application/satellite/   cancellable Sentinel search and result orchestration
+  application/weather/     point forecast orchestration and daily summaries
   application/ports/       framework-free catalog, diagnostics, storage, and runtime ports
-  infrastructure/          HTTP, STAC, routing/elevation/satellite workers, IndexedDB, clock, and ID adapters
+  infrastructure/          HTTP, STAC, weather, routing/elevation/satellite workers, IndexedDB, clock, and ID adapters
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   presentation/
     shell/                 feature rail, contextual sidebars, settings, and shell state
@@ -50,6 +52,7 @@ src/
     markers/               saved-marker library, editor, sorting, and map commands
     layers/                logical visibility checkbox presentation
     satellite-browser/     live search controls and date-grouped scene presentation
+    weather/               point forecast states, hourly/day presentation, and condition icons
     developer-tools/       local support and diagnostic UI
     theme/                 shared color tokens and Material UI theme
     styles/                application-level CSS
@@ -85,17 +88,27 @@ Satellite presentation uses the CC0-licensed `@photostructure/tz-lookup` data re
 to map the submitted anchor coordinates to an IANA time zone entirely in the browser. No
 location or acquisition metadata is sent to a time-zone service.
 
+The Weather boundary follows the same dependency direction. `WeatherForecastGateway`
+describes provider-neutral current and hourly values; `GetPointWeatherForecast`
+validates one coordinate, samples the existing local DEM, falls back to provider terrain
+elevation when necessary, and derives the current three-hour, daylight, and
+midnight-spanning night summaries through the pure `domain/weather` period aggregator.
+`OpenMeteoWeatherForecastGateway` alone owns Open-Meteo query parameters, response
+validation, ECMWF metadata caching, and safe transport failures. Presentation receives
+only normalized forecast values and never imports the HTTP client.
+
 ## Composition root
 
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It creates the clock, ID generator, bounded
-logger, Dexie database and saved-marker repository, validated provider and optional
-public Supabase configuration, map snapshot store, Sentinel query timeline store, HTTP
-client, and health/diagnostics services. When Supabase is configured, it also owns the
-official browser client's persistent session lifecycle and ordinary email/password
-registration; confirmation is performed by Supabase before the user signs in. Otherwise
-it supplies a deterministic local-only user service without creating a client. Password
-reset is intentionally unavailable.
+logger, Dexie database and saved-marker repository, validated map/geocoding providers,
+static Weather provider configuration, map snapshot store, Sentinel query timeline
+store, HTTP client, and health/diagnostics services. It composes the Open-Meteo gateway
+and point-weather use case with the existing DEM provider. When Supabase is configured,
+it also owns the official browser client's persistent session lifecycle and ordinary
+email/password registration; confirmation is performed by Supabase before the user signs
+in. Otherwise it supplies a deterministic local-only user service without creating a
+client. Password reset is intentionally unavailable.
 
 [`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
 this order: runtime services, MUI theme, error boundary, and workspace shell. Tests
@@ -120,6 +133,8 @@ replace the whole `RuntimeServices` object at the context boundary.
 | Saved marker records                                           | `AppDatabase` through `SavedMarkerRepository`         | Validated local-only points with atomic IndexedDB writes |
 | Marker collection, editor draft, and distance anchor           | `MarkersWorkspaceProvider` React state                | One feature owner while map commands stay serializable   |
 | Marker placement and one-shot creation command                 | `mapInteractionStore`                                 | Cross-component map interaction without native objects   |
+| One-shot selected Weather coordinate                           | `mapInteractionStore`                                 | Serializable map-to-panel request without native objects |
+| Selected point and Weather request/result lifecycle            | `WeatherPanel` React state                            | Ephemeral latest-request state retained across rail tabs |
 | Unsaved import/route plan, active selection, and list query    | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store       |
 | Map diagnostic snapshot                                        | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export       |
 | Current/last Sentinel step status and duration                 | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                      |
@@ -159,12 +174,14 @@ the GeoJSON source, and the symbol layer; React supplies serializable marker val
 rather than native map objects.
 
 `WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
-`WorkspaceRail` owns the Tracks, Satellite, Markers, Layers, and User destinations plus
-global Diagnostics and Settings actions. `WorkspaceSidebar` owns each section's
-implemented, disabled, or empty presentation. Route planning and the disabled manual GPX
-authoring action belong to Tracks and are never rail sections. Shared palette values
-live in `appColors.ts` so the MUI theme and pure MapLibre style use the same visual
-vocabulary without introducing a second styling system.
+`WorkspaceRail` owns the Tracks, Markers, Layers, Satellite, Weather, and User
+destinations plus global Diagnostics and Settings actions. `WorkspaceSidebar` keeps the
+Satellite, Tracks, and Weather feature sessions mounted while changing their
+presentation visibility; Weather owns its inner scroller and fixed provider footer.
+Route planning and the disabled manual GPX authoring action belong to Tracks and are
+never rail sections. Shared palette values live in `appColors.ts` so the MUI theme and
+pure MapLibre style use the same visual vocabulary without introducing a second styling
+system.
 
 `BrowserStorageUsageReader` implements the small `StorageUsageReader` application port.
 It combines the origin storage estimate, Chromium's optional per-category details,

@@ -16,6 +16,7 @@ _This project was built 100% with LLMs._
 
 - Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
 - Search for places or coordinates and inspect recent Sentinel-2 satellite imagery.
+- Select a map point for a location-local ECMWF IFS forecast delivered by Open-Meteo.
 - Import GPX tracks with their root waypoints, plus FIT and KML tracks, directly in the
   browser.
 - Plan multi-point routes over available roads and trails or add direct line segments.
@@ -80,6 +81,17 @@ The Satellite workspace searches recent Sentinel-2 scenes around the selected po
 Results show acquisition time, cloud cover, and scene coverage before true-color imagery
 is applied to the map. The selected imagery remains aligned with terrain in both 2D and
 3D.
+
+## Weather
+
+Open Weather and click the map to keep the ordinary point inspection popup while loading
+the same coordinate's next three hours, next 24 hourly forecast slots, and seven local
+calendar-day summaries. Each daily summary keeps daylight and the following physical
+night separate, with temperature, wind, gust, precipitation, and condition values.
+
+Weather times follow the selected location's time zone. The values are deterministic
+ECMWF IFS model forecasts delivered by Open-Meteo, not measured weather-station
+observations. Forecast selection and results are session-only and are not persisted.
 
 ## Local-first data
 

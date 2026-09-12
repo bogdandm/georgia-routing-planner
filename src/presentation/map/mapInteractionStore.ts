@@ -31,6 +31,10 @@ interface MapPointInspectionCommand {
 interface SatelliteSearchRequest {
   readonly id: number;
 }
+export interface WeatherForecastRequest {
+  readonly id: number;
+  readonly coordinate: MapCoordinate;
+}
 export type MarkerPlacementTarget =
   | { readonly kind: 'saved-marker' }
   | { readonly kind: 'track-marker'; readonly trackId: string };
@@ -53,6 +57,7 @@ interface MapInteractionState {
   readonly pointInspectionCommand: MapPointInspectionCommand | null;
   readonly satelliteSearchAnchor: MapCoordinate | null;
   readonly satelliteSearchRequest: SatelliteSearchRequest | null;
+  readonly weatherForecastRequest: WeatherForecastRequest | null;
   readonly markerPlacement: MarkerPlacement | null;
   readonly markerCreationCommand: MarkerCreationCommand | null;
 }
@@ -63,6 +68,7 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   satelliteSearchAnchor: null,
   pointInspectionCommand: null,
   satelliteSearchRequest: null,
+  weatherForecastRequest: null,
   markerPlacement: null,
   markerCreationCommand: null,
 }));
@@ -70,6 +76,7 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
 let nextCommandId = 0;
 let nextSatelliteSearchRequestId = 0;
 let nextMarkerCommandId = 0;
+let nextWeatherForecastRequestId = 0;
 
 export function requestMapNavigation(target: MapNavigationTarget): void {
   nextCommandId += 1;
@@ -146,6 +153,21 @@ export function consumeSatelliteSearchRequest(requestId: number): void {
   mapInteractionStore.setState({ satelliteSearchRequest: null });
 }
 
+export function requestWeatherForecast(coordinate: MapCoordinate): void {
+  nextWeatherForecastRequestId += 1;
+  mapInteractionStore.setState({
+    weatherForecastRequest: {
+      id: nextWeatherForecastRequestId,
+      coordinate: { ...coordinate },
+    },
+  });
+}
+
+export function consumeWeatherForecastRequest(requestId: number): void {
+  if (mapInteractionStore.getState().weatherForecastRequest?.id !== requestId) return;
+  mapInteractionStore.setState({ weatherForecastRequest: null });
+}
+
 export function requestMarkerPlacement(target: MarkerPlacementTarget): void {
   nextMarkerCommandId += 1;
   mapInteractionStore.setState({
@@ -214,12 +236,14 @@ export function resetMapInteractionStore(): void {
   nextCommandId = 0;
   nextSatelliteSearchRequestId = 0;
   nextMarkerCommandId = 0;
+  nextWeatherForecastRequestId = 0;
   mapInteractionStore.setState({
     navigationCommand: null,
     fitBoundsCommand: null,
     pointInspectionCommand: null,
     satelliteSearchAnchor: null,
     satelliteSearchRequest: null,
+    weatherForecastRequest: null,
     markerPlacement: null,
     markerCreationCommand: null,
   });

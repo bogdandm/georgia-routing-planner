@@ -195,6 +195,7 @@ describe('WeatherPanel', () => {
       'src',
       expect.stringContaining('/flat/clear-day.svg'),
     );
+    expect(currentArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(
       within(currentSummary).getByLabelText(
         'Now · next 3 h wind 2.8 to 2.8 metres per second',
@@ -220,12 +221,18 @@ describe('WeatherPanel', () => {
     expect(within(nightSummary).getByText('Night')).toBeVisible();
     expect(within(daySummary).getByLabelText('Day: Clear')).toBeInTheDocument();
     expect(within(nightSummary).getByLabelText('Night: Clear')).toBeInTheDocument();
-    expect(
-      within(daySummary).getByLabelText('Day: Clear').querySelector('img'),
-    ).toHaveAttribute('src', expect.stringContaining('/flat/clear-day.svg'));
-    expect(
-      within(nightSummary).getByLabelText('Night: Clear').querySelector('img'),
-    ).toHaveAttribute('src', expect.stringContaining('/flat/clear-night.svg'));
+    const daySummaryArtwork = within(daySummary).getByLabelText('Day: Clear');
+    const nightSummaryArtwork = within(nightSummary).getByLabelText('Night: Clear');
+    expect(daySummaryArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/flat/clear-day.svg'),
+    );
+    expect(daySummaryArtwork.querySelectorAll('svg')).toHaveLength(0);
+    expect(nightSummaryArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/flat/clear-night.svg'),
+    );
+    expect(nightSummaryArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(within(daySummary).getByText('Clear')).toBeInTheDocument();
     expect(within(nightSummary).getByText('Clear')).toBeInTheDocument();
     expect(within(daySummary).getByText('Wind')).toBeInTheDocument();
@@ -304,12 +311,18 @@ describe('WeatherPanel', () => {
     ).toHaveTextContent('1.3 mm');
     expect(within(nightForecast).getByLabelText('Night: Clear')).toBeInTheDocument();
     expect(within(nightForecast).getByLabelText('Fog overnight')).toBeInTheDocument();
-    expect(
-      within(dayForecast).getByLabelText('Day: Clear').querySelector('img'),
-    ).toHaveAttribute('src', expect.stringContaining('/flat/clear-day.svg'));
-    expect(
-      within(nightForecast).getByLabelText('Night: Clear').querySelector('img'),
-    ).toHaveAttribute('src', expect.stringContaining('/flat/clear-night.svg'));
+    const dayForecastArtwork = within(dayForecast).getByLabelText('Day: Clear');
+    const nightForecastArtwork = within(nightForecast).getByLabelText('Night: Clear');
+    expect(dayForecastArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/flat/clear-day.svg'),
+    );
+    expect(dayForecastArtwork.querySelectorAll('svg')).toHaveLength(0);
+    expect(nightForecastArtwork.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/flat/clear-night.svg'),
+    );
+    expect(nightForecastArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(
       within(nightForecast).getByLabelText('Night temperature -3 to 8 degrees Celsius'),
     ).toHaveTextContent('-3…8 °C');

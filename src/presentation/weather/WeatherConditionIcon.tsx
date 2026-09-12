@@ -129,7 +129,7 @@ export function WeatherIconTooltip({ children, label }: WeatherIconTooltipProps)
 }
 
 // Weather-condition artwork must be one flat static Meteocon selected here. Do not compose it from MUI icons or icons from any other library; wind, gust, precipitation, and visibility remain separate UI indicators.
-const flatMeteoconSources: Readonly<Record<string, string>> = {
+const flatMeteoconSources = {
   'clear-day': clearDay,
   'clear-night': clearNight,
   cloudy,
@@ -174,9 +174,15 @@ const flatMeteoconSources: Readonly<Record<string, string>> = {
   'thunderstorms-day-hail': thunderstormsDayHail,
   'thunderstorms-night': thunderstormsNight,
   'thunderstorms-night-hail': thunderstormsNightHail,
-};
+} as const satisfies Readonly<Record<string, string>>;
 
-function iconForWmoCode(code: number, isDay: boolean): string {
+type FlatMeteoconName = keyof typeof flatMeteoconSources;
+type DayNight = 'day' | 'night';
+type PrecipitationSuffix = 'rain' | 'sleet' | 'snow';
+type PrecipitationPrefix =
+  `mostly-clear-${DayNight}` | `overcast-${DayNight}` | `partly-cloudy-${DayNight}`;
+
+function iconForWmoCode(code: number, isDay: boolean): FlatMeteoconName {
   const dayNight = isDay ? 'day' : 'night';
   switch (code) {
     case 0:
@@ -230,7 +236,7 @@ function iconForWmoCode(code: number, isDay: boolean): string {
   }
 }
 
-function iconForPeriod(icon: WeatherIcon, isDay: boolean): string {
+function iconForPeriod(icon: WeatherIcon, isDay: boolean): FlatMeteoconName {
   const dayNight = isDay ? 'day' : 'night';
   if (icon.phenomenon === null) {
     switch (icon.sky) {
@@ -248,7 +254,7 @@ function iconForPeriod(icon: WeatherIcon, isDay: boolean): string {
   }
   if (icon.phenomenon === 'heavy_rain') return `extreme-${dayNight}-rain`;
 
-  const suffix =
+  const suffix: PrecipitationSuffix =
     icon.phenomenon === 'isolated_showers' ||
     icon.phenomenon === 'showers' ||
     icon.phenomenon === 'occasional_rain' ||
@@ -259,7 +265,7 @@ function iconForPeriod(icon: WeatherIcon, isDay: boolean): string {
           icon.phenomenon === 'snow'
         ? 'snow'
         : 'sleet';
-  const prefix =
+  const prefix: PrecipitationPrefix =
     icon.sky === 'clear' || icon.sky === 'mostly_clear'
       ? `mostly-clear-${dayNight}`
       : icon.sky === 'partly_cloudy'
@@ -272,7 +278,7 @@ function StaticMeteocon({
   name,
   size,
 }: {
-  readonly name: string;
+  readonly name: FlatMeteoconName;
   readonly size: number;
 }) {
   return (

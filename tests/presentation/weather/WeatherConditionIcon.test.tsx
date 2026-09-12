@@ -186,6 +186,7 @@ describe('WeatherConditionIcon', () => {
       />,
     );
     const icon = screen.getByLabelText('Overcast with rain');
+    expectMeteoconArtwork(icon, 'overcast-day-rain');
 
     fireEvent.pointerDown(icon, { pointerType: 'touch' });
     fireEvent.pointerUp(icon, { pointerType: 'touch' });

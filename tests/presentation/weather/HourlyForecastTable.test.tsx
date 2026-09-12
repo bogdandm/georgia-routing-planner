@@ -111,11 +111,13 @@ describe('HourlyForecastTable', () => {
       'src',
       expect.stringContaining('/flat/clear-night.svg'),
     );
+    expect(nightArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(dayArtwork.querySelectorAll('img')).toHaveLength(1);
     expect(dayArtwork.querySelector('img')).toHaveAttribute(
       'src',
       expect.stringContaining('/flat/clear-day.svg'),
     );
+    expect(dayArtwork.querySelectorAll('svg')).toHaveLength(0);
   });
 
   it('uses vertical dividers only when the local calendar day changes', async () => {

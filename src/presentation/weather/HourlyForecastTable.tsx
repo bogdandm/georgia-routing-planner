@@ -74,11 +74,13 @@ interface ExpandedLayout {
 }
 interface FloatingPanelLayout {
   readonly compactHeight: number;
+  readonly compactLeft: number;
+  readonly compactTop: number;
   readonly compactWidth: number;
   readonly expandedHeight: number;
+  readonly expandedLeft: number;
+  readonly expandedTop: number;
   readonly expandedWidth: number;
-  readonly left: number;
-  readonly top: number;
 }
 
 function floatingPanelLayout(anchorElement: HTMLElement): FloatingPanelLayout {
@@ -99,11 +101,13 @@ function floatingPanelLayout(anchorElement: HTMLElement): FloatingPanelLayout {
   );
   return {
     compactHeight,
+    compactLeft: bounds.left,
+    compactTop: bounds.top,
     compactWidth,
     expandedHeight,
+    expandedLeft: Math.max(floatingViewportMargin, Math.min(bounds.left, maximumLeft)),
+    expandedTop: Math.max(floatingViewportMargin, Math.min(bounds.top, maximumTop)),
     expandedWidth,
-    left: Math.max(floatingViewportMargin, Math.min(bounds.left, maximumLeft)),
-    top: Math.max(floatingViewportMargin, Math.min(bounds.top, maximumTop)),
   };
 }
 
@@ -1076,8 +1080,8 @@ export function FloatingHourlyForecastPanel({
       sx={{
         position: 'fixed',
         zIndex: (theme) => theme.zIndex.modal,
-        top: layout.top,
-        left: layout.left,
+        top: phase === 'open' ? layout.expandedTop : layout.compactTop,
+        left: phase === 'open' ? layout.expandedLeft : layout.compactLeft,
         height:
           phase === 'open'
             ? layout.expandedHeight
@@ -1094,7 +1098,7 @@ export function FloatingHourlyForecastPanel({
         display: 'flex',
         flexDirection: 'column',
         transition: (theme) =>
-          theme.transitions.create(['width', 'height'], {
+          theme.transitions.create(['left', 'top', 'width', 'height'], {
             duration: theme.transitions.duration.short,
           }),
         overflow: 'hidden',

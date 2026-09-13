@@ -490,17 +490,28 @@ describe('WeatherPanel', () => {
     const left = Math.max(12, window.innerWidth - expandedWidth - 12);
     expect(panel).toHaveStyle({
       height: '80px',
-      left: `${left.toString()}px`,
+      left: `${anchorLeft.toString()}px`,
       maxHeight: `${expandedHeight.toString()}px`,
-      top: `${top.toString()}px`,
+      top: `${anchorTop.toString()}px`,
       width: '420px',
     });
     await waitFor(() => {
       expect(panel).toHaveStyle({
         height: `${expandedHeight.toString()}px`,
+        left: `${left.toString()}px`,
+        top: `${top.toString()}px`,
         width: `${expandedWidth.toString()}px`,
       });
     });
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(panel).toHaveStyle({
+      height: '0px',
+      left: `${anchorLeft.toString()}px`,
+      top: `${anchorTop.toString()}px`,
+      width: '0px',
+    });
+    fireEvent.transitionEnd(panel, { propertyName: 'height' });
+    expect(panel).not.toBeInTheDocument();
   });
 
   it('formats update metadata in the provider time zone without expanding the header', async () => {

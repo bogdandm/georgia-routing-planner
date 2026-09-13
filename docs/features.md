@@ -483,8 +483,8 @@ before the post-daylight period starts. The panel opens at the selected date car
 position and expands horizontally to the full 24-column width; its final position and
 maximum height remain inside the viewport when lower or edge-adjacent cards trigger it.
 Closing with Escape, the close control, an outside click, or source-panel scrolling
-animates its width and height to zero at the anchored top-left corner before returning
-focus.
+animates back to the source card's top-left corner while its width and height reach
+zero, then returns focus to the triggering row.
 
 Day and night independently classify every dry sample before choosing the dominant sky
 from duration thresholds; a short cloudy window cannot redefine an otherwise clear

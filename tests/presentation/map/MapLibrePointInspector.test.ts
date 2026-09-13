@@ -120,7 +120,7 @@ describe('renderPointInspectorContent', () => {
       onCopyLink,
       onCreateMarker,
     });
-    expect(container.textContent).toContain('44.80123, 41.71235');
+    expect(container.textContent).toContain('41.71235, 44.80123');
     expect(container.textContent).toContain('1,234 m');
     expect(container.textContent).toContain(
       '<script>fixture hut</script> (alpine hut), 42 m away',

@@ -207,14 +207,14 @@ describe('WeatherPanel', () => {
     expect(currentArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(
       within(currentSummary).getByLabelText(
-        'Now · next 3 h wind 2.8 to 2.8 metres per second',
+        'Now · next 3 h wind 3 to 3 metres per second',
       ),
-    ).toHaveTextContent(/^2\.8 m\/s$/u);
+    ).toHaveTextContent(/^3 m\/s$/u);
     expect(
       within(currentSummary).getByLabelText(
-        'Now · next 3 h gusts 4.2 to 4.2 metres per second',
+        'Now · next 3 h gusts 4 to 4 metres per second',
       ),
-    ).toHaveTextContent('4.2 m/s');
+    ).toHaveTextContent('4 m/s');
     expect(
       within(currentSummary).getByLabelText(
         'Now · next 3 h precipitation 0 millimetres',
@@ -248,14 +248,14 @@ describe('WeatherPanel', () => {
     expect(nightSummaryArtwork.querySelectorAll('svg')).toHaveLength(0);
     expect(within(daySummary).getByText('Rain')).toBeInTheDocument();
     expect(within(nightSummary).getByText('Clear')).toBeInTheDocument();
-    expect(within(daySummary).getByText('Wind')).toBeInTheDocument();
-    expect(within(daySummary).getByText('Gusts')).toBeInTheDocument();
+    expect(within(daySummary).queryByText('Wind')).not.toBeInTheDocument();
+    expect(within(daySummary).queryByText('Gusts')).not.toBeInTheDocument();
     expect(
-      within(daySummary).getByLabelText('Day wind 0.8 to 5.0 metres per second'),
-    ).toHaveTextContent('0.8…5.0 m/s');
+      within(daySummary).getByLabelText('Day wind 1 to 5 metres per second'),
+    ).toHaveTextContent('1…5 m/s');
     expect(
-      within(daySummary).getByLabelText('Day gusts 2.5 to 7.5 metres per second'),
-    ).toHaveTextContent('2.5…7.5 m/s');
+      within(daySummary).getByLabelText('Day gusts 3 to 8 metres per second'),
+    ).toHaveTextContent('3…8 m/s');
     expect(
       within(daySummary).getByLabelText('Day precipitation 1.25 millimetres'),
     ).toHaveTextContent('1.3 mm');
@@ -330,11 +330,11 @@ describe('WeatherPanel', () => {
       within(dayForecast).getByLabelText('Day temperature 7 to 24 degrees Celsius'),
     ).toHaveTextContent('7…24 °C');
     expect(
-      within(dayForecast).getByLabelText('Day wind 0.8 to 5.0 metres per second'),
-    ).toHaveTextContent('0.8…5.0 m/s');
+      within(dayForecast).getByLabelText('Day wind 1 to 5 metres per second'),
+    ).toHaveTextContent('1…5 m/s');
     expect(
-      within(dayForecast).getByLabelText('Day gusts 2.5 to 7.5 metres per second'),
-    ).toHaveTextContent('2.5…7.5 m/s');
+      within(dayForecast).getByLabelText('Day gusts 3 to 8 metres per second'),
+    ).toHaveTextContent('3…8 m/s');
     expect(
       within(dayForecast).getByLabelText('Day precipitation 1.25 millimetres'),
     ).toHaveTextContent('1.3 mm');
@@ -342,11 +342,11 @@ describe('WeatherPanel', () => {
       within(nightForecast).getByLabelText('Night temperature -3 to 8 degrees Celsius'),
     ).toHaveTextContent('-3…8 °C');
     expect(
-      within(nightForecast).getByLabelText('Night wind 1.1 to 5.6 metres per second'),
-    ).toHaveTextContent('1.1…5.6 m/s');
+      within(nightForecast).getByLabelText('Night wind 1 to 6 metres per second'),
+    ).toHaveTextContent('1…6 m/s');
     expect(
-      within(nightForecast).getByLabelText('Night gusts 2.2 to 8.3 metres per second'),
-    ).toHaveTextContent('2.2…8.3 m/s');
+      within(nightForecast).getByLabelText('Night gusts 2 to 8 metres per second'),
+    ).toHaveTextContent('2…8 m/s');
     expect(
       within(nightForecast).getByLabelText('Night precipitation 2.5 millimetres'),
     ).toHaveTextContent('2.5 mm');

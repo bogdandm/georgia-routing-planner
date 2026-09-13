@@ -3,6 +3,10 @@ export function formatWeatherMillimetresValue(value: number): string {
   return value < 10 ? value.toFixed(1) : Math.round(value).toString();
 }
 
+export function formatWeatherWindMetresPerSecond(value: number): string {
+  return Math.round(value).toString();
+}
+
 export function formatWeatherMillimetres(value: number): string {
   return `${formatWeatherMillimetresValue(value)} mm`;
 }

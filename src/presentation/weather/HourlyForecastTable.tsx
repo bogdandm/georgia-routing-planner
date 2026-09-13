@@ -23,7 +23,10 @@ import type { HourlyWeatherForecast } from '@/application/ports/WeatherForecastG
 import { appColors } from '@/presentation/theme/appColors';
 import { WeatherConditionIcon } from '@/presentation/weather/WeatherConditionIcon';
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
-import { formatWeatherMillimetresValue } from '@/presentation/weather/weatherFormatters';
+import {
+  formatWeatherMillimetresValue,
+  formatWeatherWindMetresPerSecond,
+} from '@/presentation/weather/weatherFormatters';
 
 const labelColumnWidth = 64;
 const hourColumnWidth = 40;
@@ -781,12 +784,12 @@ export function HourlyForecastTable({
         cellLabel={(hour) => {
           const metresPerSecond = windMetricMetresPerSecond(hour, 'wind');
           const severity = windSeverity(metresPerSecond);
-          return `${hour.time} wind ${metresPerSecond.toFixed(1)} metres per second${severity === 'neutral' ? '' : `, ${severity}`}`;
+          return `${hour.time} wind ${formatWeatherWindMetresPerSecond(metresPerSecond)} metres per second${severity === 'neutral' ? '' : `, ${severity}`}`;
         }}
         cellStyle={(hour) => windCellStyle(windMetricMetresPerSecond(hour, 'wind'))}
         renderCell={(hour) => (
           <Typography variant="caption">
-            {windMetricMetresPerSecond(hour, 'wind').toFixed(1)}
+            {formatWeatherWindMetresPerSecond(windMetricMetresPerSecond(hour, 'wind'))}
           </Typography>
         )}
       />
@@ -798,12 +801,12 @@ export function HourlyForecastTable({
         cellLabel={(hour) => {
           const metresPerSecond = windMetricMetresPerSecond(hour, 'gusts');
           const severity = windSeverity(metresPerSecond);
-          return `${hour.time} gusts ${metresPerSecond.toFixed(1)} metres per second${severity === 'neutral' ? '' : `, ${severity}`}`;
+          return `${hour.time} gusts ${formatWeatherWindMetresPerSecond(metresPerSecond)} metres per second${severity === 'neutral' ? '' : `, ${severity}`}`;
         }}
         cellStyle={(hour) => windCellStyle(windMetricMetresPerSecond(hour, 'gusts'))}
         renderCell={(hour) => (
           <Typography variant="caption">
-            {windMetricMetresPerSecond(hour, 'gusts').toFixed(1)}
+            {formatWeatherWindMetresPerSecond(windMetricMetresPerSecond(hour, 'gusts'))}
           </Typography>
         )}
       />

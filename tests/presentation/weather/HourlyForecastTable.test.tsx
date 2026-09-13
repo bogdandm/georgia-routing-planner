@@ -1,6 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_WEATHER_MODEL,
@@ -12,6 +12,18 @@ import { HourlyForecastTable } from '@/presentation/weather/HourlyForecastTable'
 import { createTestServices } from '@test/helpers/createTestServices';
 
 const theme = createAppTheme();
+const originalInnerWidth = window.innerWidth;
+
+beforeEach(() => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1_440 });
+});
+
+afterEach(() => {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: originalInnerWidth,
+  });
+});
 
 async function syntheticForecast(startIndex = 0): Promise<PointWeatherForecast> {
   const services = createTestServices();
@@ -239,6 +251,21 @@ describe('HourlyForecastTable', () => {
     expect(releasePointerCapture).toHaveBeenCalledWith(7);
     expect(table).toHaveStyle({ cursor: 'grab' });
   });
+  it('hides expansion until the full table fits inside the viewport', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1_049 });
+    await renderTable();
+
+    expect(
+      screen.queryByRole('button', { name: 'Expand hourly forecast' }),
+    ).not.toBeInTheDocument();
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1_050 });
+    fireEvent(window, new Event('resize'));
+    expect(
+      await screen.findByRole('button', { name: 'Expand hourly forecast' }),
+    ).toBeVisible();
+  });
+
   it('expands beyond its container with all 24 hours visible', async () => {
     await renderTable();
 

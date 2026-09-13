@@ -476,6 +476,16 @@ belong to night `D-1`; local midnight never splits a physical night. An eighth f
 calendar date supplies the pre-sunrise samples needed to complete the seventh displayed
 night.
 
+Each Day or Night row is a keyboard-accessible forecast trigger. Activating it opens a
+non-modal floating 24-hour table using the same hourly visualization as the current
+forecast. Day windows begin at local midnight. Night windows begin six hourly samples
+before the post-daylight period starts. The panel opens at the selected date card's
+position and expands horizontally to the full 24-column width; its final position and
+maximum height remain inside the viewport when lower or edge-adjacent cards trigger it.
+Closing with Escape, the close control, an outside click, or source-panel scrolling
+animates its width and height to zero at the anchored top-left corner before returning
+focus.
+
 Day and night independently classify every dry sample before choosing the dominant sky
 from duration thresholds; a short cloudy window cannot redefine an otherwise clear
 period. Precipitation is likewise separated into isolated, intermittent, and persistent

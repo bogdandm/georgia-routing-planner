@@ -1,3 +1,4 @@
+import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import CloseFullscreenOutlinedIcon from '@mui/icons-material/CloseFullscreenOutlined';
 import AcUnitOutlinedIcon from '@mui/icons-material/AcUnitOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
@@ -34,6 +35,8 @@ const hourColumnWidth = 40;
 const visibleHourCount = 24;
 const dataWidth = hourColumnWidth * visibleHourCount;
 const tableWidth = labelColumnWidth + dataWidth;
+const floatingPanelHeight = 378;
+const floatingViewportMargin = 12;
 const expandedPanelWidth = tableWidth + 2;
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const hourlyChartBottom = 56;
@@ -68,6 +71,40 @@ interface ExpandedLayout {
   readonly top: number;
   readonly height: number;
   readonly compactWidth: number;
+}
+interface FloatingPanelLayout {
+  readonly compactHeight: number;
+  readonly compactWidth: number;
+  readonly expandedHeight: number;
+  readonly expandedWidth: number;
+  readonly left: number;
+  readonly top: number;
+}
+
+function floatingPanelLayout(anchorElement: HTMLElement): FloatingPanelLayout {
+  const bounds = anchorElement.getBoundingClientRect();
+  const availableHeight = Math.max(1, window.innerHeight - floatingViewportMargin * 2);
+  const availableWidth = Math.max(1, window.innerWidth - floatingViewportMargin * 2);
+  const expandedHeight = Math.min(floatingPanelHeight, availableHeight);
+  const expandedWidth = Math.min(expandedPanelWidth, availableWidth);
+  const compactHeight = Math.min(expandedHeight, Math.max(1, bounds.height));
+  const compactWidth = Math.min(expandedWidth, Math.max(1, bounds.width));
+  const maximumLeft = Math.max(
+    floatingViewportMargin,
+    window.innerWidth - expandedWidth - floatingViewportMargin,
+  );
+  const maximumTop = Math.max(
+    floatingViewportMargin,
+    window.innerHeight - expandedHeight - floatingViewportMargin,
+  );
+  return {
+    compactHeight,
+    compactWidth,
+    expandedHeight,
+    expandedWidth,
+    left: Math.max(floatingViewportMargin, Math.min(bounds.left, maximumLeft)),
+    top: Math.max(floatingViewportMargin, Math.min(bounds.top, maximumTop)),
+  };
 }
 
 interface HourlyRowProps {
@@ -518,30 +555,37 @@ function isResizeObserverConstructor(value: unknown): value is typeof ResizeObse
 export function HourlyForecastTable({
   sidebarCollapsed,
   forecast,
+  showHeader = true,
+  startTime,
 }: {
   readonly forecast: PointWeatherForecast;
   readonly sidebarCollapsed: boolean;
+  readonly showHeader?: boolean;
+  readonly startTime?: string;
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollBackward, setCanScrollBackward] = useState(false);
   const [canScrollForward, setCanScrollForward] = useState(false);
+  const [canExpand, setCanExpand] = useState(
+    () => window.innerWidth >= expandedPanelWidth + floatingViewportMargin * 2,
+  );
   const mouseDragRef = useRef<MouseDragState | null>(null);
   const [isMouseDragging, setIsMouseDragging] = useState(false);
   const [expandedLayout, setExpandedLayout] = useState<ExpandedLayout | null>(null);
   const [expansionPhase, setExpansionPhase] = useState<ExpansionPhase>('compact');
   const isExpanded = expandedLayout !== null;
-  const currentTime = forecast.current.time;
+  const windowStartTime = startTime ?? forecast.current.time;
   const hourlyForecast = forecast.hourly;
   const hours = useMemo(() => {
     const nextHours: HourlyWeatherForecast[] = [];
     for (const hour of hourlyForecast) {
-      if (hour.time < currentTime) continue;
+      if (hour.time < windowStartTime) continue;
       nextHours.push(hour);
       if (nextHours.length === visibleHourCount) break;
     }
     return nextHours;
-  }, [currentTime, hourlyForecast]);
+  }, [hourlyForecast, windowStartTime]);
   const temperatureRange = useMemo(() => temperatureDomain(hours), [hours]);
   const precipitationMaximumMm = useMemo(() => precipitationMaximum(hours), [hours]);
   const collapseExpanded = useCallback(() => {
@@ -578,7 +622,7 @@ export function HourlyForecastTable({
     return () => {
       observer.disconnect();
     };
-  }, [hours.length, isExpanded, updateScrollState]);
+  }, [hours, isExpanded, updateScrollState]);
   useEffect(() => {
     if (expansionPhase !== 'opening') return undefined;
     const frame = requestAnimationFrame(() => {
@@ -602,6 +646,17 @@ export function HourlyForecastTable({
       scrollRegion.removeEventListener('scroll', collapseExpanded);
     };
   }, [collapseExpanded, isExpanded]);
+  useEffect(() => {
+    const updateExpansionAvailability = () => {
+      const fits = window.innerWidth >= expandedPanelWidth + floatingViewportMargin * 2;
+      setCanExpand(fits);
+      if (!fits) collapseExpanded();
+    };
+    window.addEventListener('resize', updateExpansionAvailability);
+    return () => {
+      window.removeEventListener('resize', updateExpansionAvailability);
+    };
+  }, [collapseExpanded]);
 
   const scroll = (direction: -1 | 1) => {
     scrollRef.current?.scrollBy({ left: direction * 240, behavior: 'smooth' });
@@ -638,6 +693,7 @@ export function HourlyForecastTable({
     event.preventDefault();
   };
   const toggleExpanded = () => {
+    if (!canExpand) return;
     if (expandedLayout !== null) {
       collapseExpanded();
       return;
@@ -688,18 +744,22 @@ export function HourlyForecastTable({
       >
         <ChevronRightOutlinedIcon fontSize="small" />
       </IconButton>
-      <IconButton
-        size="small"
-        aria-label={isExpanded ? 'Collapse hourly forecast' : 'Expand hourly forecast'}
-        aria-expanded={isExpanded}
-        onClick={toggleExpanded}
-      >
-        {isExpanded ? (
-          <CloseFullscreenOutlinedIcon fontSize="small" />
-        ) : (
-          <OpenInFullOutlinedIcon fontSize="small" />
-        )}
-      </IconButton>
+      {canExpand ? (
+        <IconButton
+          size="small"
+          aria-label={
+            isExpanded ? 'Collapse hourly forecast' : 'Expand hourly forecast'
+          }
+          aria-expanded={isExpanded}
+          onClick={toggleExpanded}
+        >
+          {isExpanded ? (
+            <CloseFullscreenOutlinedIcon fontSize="small" />
+          ) : (
+            <OpenInFullOutlinedIcon fontSize="small" />
+          )}
+        </IconButton>
+      ) : null}
     </Stack>
   );
   const table = (
@@ -715,7 +775,8 @@ export function HourlyForecastTable({
         left: expandedLayout?.left,
         top: expandedLayout?.top,
         zIndex: expandedLayout === null ? 'auto' : (theme) => theme.zIndex.modal,
-        borderRadius: 1.25,
+        border: showHeader ? undefined : 0,
+        borderRadius: showHeader ? 1.25 : 0,
         boxShadow: expandedLayout === null ? 0 : 8,
         width:
           expandedLayout === null
@@ -897,8 +958,8 @@ export function HourlyForecastTable({
   );
 
   return (
-    <Stack spacing={1}>
-      {header}
+    <Stack spacing={showHeader ? 1 : 0}>
+      {showHeader ? header : null}
       <Box
         ref={containerRef}
         sx={{ height: expandedLayout === null ? 'auto' : expandedLayout.height }}
@@ -906,5 +967,171 @@ export function HourlyForecastTable({
         {expandedLayout === null ? table : createPortal(table, document.body)}
       </Box>
     </Stack>
+  );
+}
+
+export interface FloatingHourlyForecastPanelProps {
+  readonly anchorElement: HTMLElement;
+  readonly forecast: PointWeatherForecast;
+  readonly onClose: () => void;
+  readonly startTime: string;
+  readonly title: string;
+  readonly triggerElement: HTMLElement | null;
+}
+
+/**
+ * Presents any 24-hour window from an existing point forecast without owning the
+ * interaction that selected it.
+ */
+export function FloatingHourlyForecastPanel({
+  anchorElement,
+  forecast,
+  onClose,
+  startTime,
+  title,
+  triggerElement,
+}: FloatingHourlyForecastPanelProps): ReactElement {
+  const titleId = `floating-hourly-forecast-${useId().replaceAll(':', '')}`;
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState(() => floatingPanelLayout(anchorElement));
+  const [phase, setPhase] = useState<'opening' | 'open' | 'closing'>('opening');
+  const completeClose = useCallback(() => {
+    onClose();
+    window.requestAnimationFrame(() => {
+      triggerElement?.focus();
+    });
+  }, [onClose, triggerElement]);
+  const handleClose = useCallback(() => {
+    if (phase === 'closing') return;
+    if (phase === 'opening') {
+      completeClose();
+      return;
+    }
+    setPhase('closing');
+  }, [completeClose, phase]);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    const frame = window.requestAnimationFrame(() => {
+      setPhase('open');
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'closing') return undefined;
+    const fallback = window.setTimeout(completeClose, 300);
+    return () => {
+      window.clearTimeout(fallback);
+    };
+  }, [completeClose, phase]);
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setLayout(floatingPanelLayout(anchorElement));
+    };
+    const scrollRegion = anchorElement.closest('[data-weather-scroll-region]');
+    window.addEventListener('resize', updateLayout);
+    scrollRegion?.addEventListener('scroll', handleClose, { passive: true });
+    return () => {
+      window.removeEventListener('resize', updateLayout);
+      scrollRegion?.removeEventListener('scroll', handleClose);
+    };
+  }, [anchorElement, handleClose]);
+
+  useEffect(() => {
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && panelRef.current?.contains(target) === true) return;
+      handleClose();
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+    };
+  }, [handleClose]);
+
+  return createPortal(
+    <Paper
+      ref={panelRef}
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={titleId}
+      elevation={8}
+      onTransitionEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.propertyName === 'height' &&
+          phase === 'closing'
+        ) {
+          completeClose();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') handleClose();
+      }}
+      sx={{
+        position: 'fixed',
+        zIndex: (theme) => theme.zIndex.modal,
+        top: layout.top,
+        left: layout.left,
+        height:
+          phase === 'open'
+            ? layout.expandedHeight
+            : phase === 'closing'
+              ? 0
+              : layout.compactHeight,
+        width:
+          phase === 'open'
+            ? layout.expandedWidth
+            : phase === 'closing'
+              ? 0
+              : layout.compactWidth,
+        maxHeight: layout.expandedHeight,
+        display: 'flex',
+        flexDirection: 'column',
+        transition: (theme) =>
+          theme.transitions.create(['width', 'height'], {
+            duration: theme.transitions.duration.short,
+          }),
+        overflow: 'hidden',
+      }}
+    >
+      <Stack
+        direction="row"
+        sx={{
+          minHeight: 44,
+          alignItems: 'center',
+          gap: 1,
+          px: 1.5,
+          borderBottom: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <Typography id={titleId} component="h2" variant="subtitle2" sx={{ flex: 1 }}>
+          {title}
+        </Typography>
+        <IconButton
+          ref={closeButtonRef}
+          size="small"
+          aria-label="Close hourly forecast"
+          onClick={handleClose}
+        >
+          <CloseOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Stack>
+      <Box sx={{ minHeight: 0, overflow: 'auto' }}>
+        <HourlyForecastTable
+          forecast={forecast}
+          sidebarCollapsed={false}
+          showHeader={false}
+          startTime={startTime}
+        />
+      </Box>
+    </Paper>,
+    document.body,
   );
 }

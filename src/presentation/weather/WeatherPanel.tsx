@@ -6,6 +6,7 @@ import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
   Box,
   Button,
+  ButtonBase,
   Divider,
   Link,
   Paper,
@@ -38,7 +39,10 @@ import {
   WeatherPeriodIcon,
   WeatherIconTooltip,
 } from '@/presentation/weather/WeatherConditionIcon';
-import { HourlyForecastTable } from '@/presentation/weather/HourlyForecastTable';
+import {
+  FloatingHourlyForecastPanel,
+  HourlyForecastTable,
+} from '@/presentation/weather/HourlyForecastTable';
 import {
   formatWeatherMillimetres,
   formatWeatherWindMetresPerSecond,
@@ -91,6 +95,60 @@ type WeatherPanelState =
 interface WeatherPanelProps {
   readonly onSelectedPointChange: (point: WeatherHeaderPoint | null) => void;
   readonly sidebarCollapsed: boolean;
+}
+
+interface FloatingHourlyForecastRequest {
+  readonly anchorElement: HTMLElement;
+  readonly startTime: string;
+  readonly title: string;
+  readonly triggerElement: HTMLElement;
+}
+
+type OpenDailyHourlyForecast = (
+  day: PointWeatherForecastDay,
+  isDay: boolean,
+  triggerElement: HTMLElement,
+) => void;
+
+function floatingForecastRequest(
+  forecast: PointWeatherForecast,
+  day: PointWeatherForecastDay,
+  isDay: boolean,
+  triggerElement: HTMLElement,
+): FloatingHourlyForecastRequest {
+  let periodStartIndex = forecast.hourly.findIndex(
+    (hour) => hour.time === `${day.date}T00:00`,
+  );
+  if (!isDay) {
+    let foundDaylight = false;
+    periodStartIndex = -1;
+    for (const [index, hour] of forecast.hourly.entries()) {
+      if (hour.time.slice(0, 10) !== day.date) continue;
+      if (hour.isDay) {
+        foundDaylight = true;
+        continue;
+      }
+      if (foundDaylight) {
+        periodStartIndex = index - 6;
+        break;
+      }
+    }
+  }
+  if (periodStartIndex < 0) {
+    throw new RangeError(`Forecast period ${day.date} has no hourly boundary.`);
+  }
+  const startHour = forecast.hourly[periodStartIndex];
+  const anchorElement = triggerElement.closest('[data-weather-day-card]');
+  if (startHour === undefined || !(anchorElement instanceof HTMLElement)) {
+    throw new RangeError(`Forecast period ${day.date} has no hourly context.`);
+  }
+  const periodLabel = isDay ? 'Day' : 'Night';
+  return {
+    anchorElement,
+    startTime: startHour.time,
+    title: `24-hour forecast · ${periodLabel} · ${localWeekday(day.date)}, ${localDateLabel(day.date)}`,
+    triggerElement,
+  };
 }
 
 function parseLocalDate(value: string): {
@@ -919,92 +977,108 @@ function SummaryPeriod({
 }
 
 function DailyPeriodRow({
+  dateLabel,
   isDay,
   label,
+  onOpen,
   period,
 }: {
+  readonly dateLabel: string;
   readonly isDay: boolean;
   readonly label: string;
+  readonly onOpen: (triggerElement: HTMLElement) => void;
   readonly period: PointWeatherForecastPeriod;
 }) {
   const values = periodDisplayValues(period);
   return (
-    <Box
-      component="article"
-      aria-label={`${label} forecast`}
-      sx={{
-        minWidth: 0,
-        minHeight: 44,
-        display: 'grid',
-        gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
-        gridTemplateAreas: '"icon temperature condition precipitation metrics"',
-        alignItems: 'center',
-        columnGap: 0.5,
-        px: 1,
-        py: 0.375,
-        '@media (max-width: 479px)': {
-          gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
-          gridTemplateAreas:
-            '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
-          rowGap: 0,
-        },
-      }}
-    >
-      <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
-        <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
-      </Box>
-      <Typography
-        variant="caption"
-        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
-        sx={{
-          gridArea: 'temperature',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          lineHeight: 1.25,
-          fontVariantNumeric: 'tabular-nums',
-          whiteSpace: 'nowrap',
+    <Box component="article" aria-label={`${label} forecast`}>
+      <ButtonBase
+        type="button"
+        aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
+        onClick={(event) => {
+          onOpen(event.currentTarget);
         }}
-      >
-        {values.temperature}
-      </Typography>
-      <Typography
-        variant="caption"
         sx={{
-          gridArea: 'condition',
+          width: '100%',
           minWidth: 0,
-          whiteSpace: 'normal',
-          overflowWrap: 'anywhere',
-          fontSize: '0.68rem',
-          lineHeight: 1.2,
+          minHeight: 44,
+          display: 'grid',
+          gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
+          gridTemplateAreas: '"icon temperature condition precipitation metrics"',
+          alignItems: 'center',
+          columnGap: 0.5,
+          px: 1,
+          py: 0.375,
+          color: 'text.primary',
+          textAlign: 'left',
+          '@media (max-width: 479px)': {
+            gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
+            gridTemplateAreas:
+              '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+            rowGap: 0,
+          },
+          '&:hover': { bgcolor: 'action.hover' },
+          '&.Mui-focusVisible': {
+            boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
+          },
         }}
       >
-        {period.status.primary.label}
-      </Typography>
-      <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
-        <CompactMetricValue
-          kind="precipitation"
-          label={`${label} precipitation`}
-          value={values.precipitation}
-          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-          compact
-        />
-      </Box>
-      <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
-        <CompactMetricValue
-          kind="wind"
-          label={`${label} wind`}
-          value={values.wind}
-          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-          compact
-        />
-        <CompactMetricValue
-          kind="gusts"
-          label={`${label} gusts`}
-          value={values.gusts}
-          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-          compact
-        />
-      </Stack>
+        <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
+          <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
+        </Box>
+        <Typography
+          variant="caption"
+          aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+          sx={{
+            gridArea: 'temperature',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            lineHeight: 1.25,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {values.temperature}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{
+            gridArea: 'condition',
+            minWidth: 0,
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
+            fontSize: '0.68rem',
+            lineHeight: 1.2,
+          }}
+        >
+          {period.status.primary.label}
+        </Typography>
+        <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
+          <CompactMetricValue
+            kind="precipitation"
+            label={`${label} precipitation`}
+            value={values.precipitation}
+            ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+            compact
+          />
+        </Box>
+        <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
+          <CompactMetricValue
+            kind="wind"
+            label={`${label} wind`}
+            value={values.wind}
+            ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+            compact
+          />
+          <CompactMetricValue
+            kind="gusts"
+            label={`${label} gusts`}
+            value={values.gusts}
+            ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+            compact
+          />
+        </Stack>
+      </ButtonBase>
     </Box>
   );
 }
@@ -1051,9 +1125,17 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
   );
 }
 
-function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
+function DayForecastRow({
+  day,
+  onOpenHourly,
+}: {
+  readonly day: PointWeatherForecastDay;
+  readonly onOpenHourly: OpenDailyHourlyForecast;
+}) {
+  const dateLabel = `${localWeekday(day.date)} ${localDateLabel(day.date)}`;
   return (
     <Paper
+      data-weather-day-card
       role="group"
       variant="outlined"
       aria-label={`${localWeekday(day.date)} ${localDateLabel(day.date)}`}
@@ -1089,18 +1171,36 @@ function DayForecastRow({ day }: { readonly day: PointWeatherForecastDay }) {
         </Typography>
       </Box>
       <Stack sx={{ minWidth: 0, py: 0.25 }}>
-        <DailyPeriodRow label="Day" period={day.day} isDay />
+        <DailyPeriodRow
+          dateLabel={dateLabel}
+          label="Day"
+          period={day.day}
+          isDay
+          onOpen={(triggerElement) => {
+            onOpenHourly(day, true, triggerElement);
+          }}
+        />
         <Divider sx={{ mx: 0.75 }} />
-        <DailyPeriodRow label="Night" period={day.night} isDay={false} />
+        <DailyPeriodRow
+          dateLabel={dateLabel}
+          label="Night"
+          period={day.night}
+          isDay={false}
+          onOpen={(triggerElement) => {
+            onOpenHourly(day, false, triggerElement);
+          }}
+        />
       </Stack>
     </Paper>
   );
 }
 
 function SevenDayForecast({
-  days,
+  forecast,
+  onOpenHourly,
 }: {
-  readonly days: readonly PointWeatherForecastDay[];
+  readonly forecast: PointWeatherForecast;
+  readonly onOpenHourly: OpenDailyHourlyForecast;
 }) {
   return (
     <Stack spacing={1}>
@@ -1108,9 +1208,9 @@ function SevenDayForecast({
         7-day forecast
       </Typography>
       <Stack role="list" aria-label="Seven-day forecast" spacing={1}>
-        {days.map((day) => (
+        {forecast.days.map((day) => (
           <Box key={day.date} role="listitem">
-            <DayForecastRow day={day} />
+            <DayForecastRow day={day} onOpenHourly={onOpenHourly} />
           </Box>
         ))}
       </Stack>
@@ -1177,6 +1277,8 @@ export function WeatherPanel({
     (state) => state.weatherForecastRequest,
   );
   const [state, setState] = useState<WeatherPanelState>({ status: 'idle' });
+  const [hourlyPanelRequest, setHourlyPanelRequest] =
+    useState<FloatingHourlyForecastRequest | null>(null);
   useEffect(() => {
     if (state.status === 'idle') {
       onSelectedPointChange(null);
@@ -1192,12 +1294,22 @@ export function WeatherPanel({
     onSelectedPointChange({ coordinate: state.coordinate });
   }, [onSelectedPointChange, state]);
   const activeController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!sidebarCollapsed) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      setHourlyPanelRequest(null);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [sidebarCollapsed]);
 
   const loadForecast = useCallback(
     (coordinate: MapCoordinate) => {
       activeController.current?.abort();
       const controller = new AbortController();
       activeController.current = controller;
+      setHourlyPanelRequest(null);
       setState({ status: 'loading', coordinate: { ...coordinate } });
       void pointWeatherForecast
         .execute({ coordinate, model: DEFAULT_WEATHER_MODEL }, controller.signal)
@@ -1270,54 +1382,75 @@ export function WeatherPanel({
 
   const readyForecast = state.status === 'ready' ? state.forecast : null;
   return (
-    <Box
-      sx={{
-        height: '100%',
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        bgcolor: appColors.surface.subtle,
-      }}
-    >
+    <>
       <Box
-        data-weather-scroll-region
         sx={{
+          height: '100%',
           minHeight: 0,
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          px: 2,
-          py: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          bgcolor: appColors.surface.subtle,
         }}
       >
-        {state.status === 'loading' ? (
-          <LoadingForecast />
-        ) : state.status === 'error' ? (
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
-            <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-              <Typography variant="body2">{errorMessage(state.code)}</Typography>
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  loadForecast(state.coordinate);
+        <Box
+          data-weather-scroll-region
+          sx={{
+            minHeight: 0,
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            px: 2,
+            py: 2,
+          }}
+        >
+          {state.status === 'loading' ? (
+            <LoadingForecast />
+          ) : state.status === 'error' ? (
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
+              <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                <Typography variant="body2">{errorMessage(state.code)}</Typography>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    loadForecast(state.coordinate);
+                  }}
+                >
+                  Retry
+                </Button>
+              </Stack>
+            </Paper>
+          ) : (
+            <Stack spacing={2}>
+              <ForecastSummary forecast={state.forecast} />
+              <HourlyForecastTable
+                forecast={state.forecast}
+                sidebarCollapsed={sidebarCollapsed}
+              />
+              <SevenDayForecast
+                forecast={state.forecast}
+                onOpenHourly={(day, isDay, triggerElement) => {
+                  setHourlyPanelRequest(
+                    floatingForecastRequest(state.forecast, day, isDay, triggerElement),
+                  );
                 }}
-              >
-                Retry
-              </Button>
+              />
             </Stack>
-          </Paper>
-        ) : (
-          <Stack spacing={2}>
-            <ForecastSummary forecast={state.forecast} />
-            <HourlyForecastTable
-              forecast={state.forecast}
-              sidebarCollapsed={sidebarCollapsed}
-            />
-            <SevenDayForecast days={state.forecast.days} />
-          </Stack>
-        )}
+          )}
+        </Box>
+        <ForecastFooter forecast={readyForecast} />
       </Box>
-      <ForecastFooter forecast={readyForecast} />
-    </Box>
+      {state.status === 'ready' && !sidebarCollapsed && hourlyPanelRequest !== null ? (
+        <FloatingHourlyForecastPanel
+          anchorElement={hourlyPanelRequest.anchorElement}
+          forecast={state.forecast}
+          startTime={hourlyPanelRequest.startTime}
+          title={hourlyPanelRequest.title}
+          triggerElement={hourlyPanelRequest.triggerElement}
+          onClose={() => {
+            setHourlyPanelRequest(null);
+          }}
+        />
+      ) : null}
+    </>
   );
 }

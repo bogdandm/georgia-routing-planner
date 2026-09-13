@@ -358,6 +358,151 @@ describe('WeatherPanel', () => {
     ).toHaveAttribute('href', 'https://open-meteo.com/');
   });
 
+  it('opens reusable 24-hour panels from midnight or six hours before night', async () => {
+    const user = userEvent.setup();
+    const forecast = await testForecast();
+    const services = createTestServices();
+    vi.spyOn(services.pointWeatherForecast, 'execute').mockResolvedValue(forecast);
+    renderPanel(services);
+
+    act(() => {
+      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+    });
+
+    const dailyList = await screen.findByRole('list', {
+      name: 'Seven-day forecast',
+    });
+    const firstDailyRow = within(dailyList).getAllByRole('listitem')[0];
+    if (firstDailyRow === undefined) throw new Error('Expected the first daily row.');
+    const dayTrigger = within(firstDailyRow).getByRole('button', {
+      name: 'Open 24-hour forecast for Day, Sat 18 Jul',
+    });
+    const nightTrigger = within(firstDailyRow).getByRole('button', {
+      name: 'Open 24-hour forecast for Night, Sat 18 Jul',
+    });
+
+    await user.click(dayTrigger);
+    const dayPanel = screen.getByRole('dialog', {
+      name: '24-hour forecast · Day · Sat, 18 Jul',
+    });
+    const dayHours = within(
+      within(dayPanel).getByRole('table', { name: 'Hourly forecast' }),
+    ).getAllByRole('columnheader');
+    expect(dayHours).toHaveLength(24);
+    expect(dayHours[0]).toHaveAccessibleName('2026-07-18T00:00 local time');
+    expect(dayHours[23]).toHaveAccessibleName('2026-07-18T23:00 local time');
+    expect(
+      within(dayPanel).getByRole('button', { name: 'Close hourly forecast' }),
+    ).toHaveFocus();
+    const expandedWidth = Math.min(1_026, Math.max(1, window.innerWidth - 24));
+    await waitFor(() => {
+      expect(dayPanel).toHaveStyle({ width: `${expandedWidth.toString()}px` });
+    });
+    fireEvent.transitionEnd(
+      within(dayPanel).getByRole('table', { name: 'Hourly forecast' }),
+      { propertyName: 'height' },
+    );
+    expect(dayPanel).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(dayPanel).toBeInTheDocument();
+    expect(dayPanel).toHaveStyle({ height: '0px', width: '0px' });
+    fireEvent.transitionEnd(dayPanel, { propertyName: 'height' });
+    expect(
+      screen.queryByRole('dialog', {
+        name: '24-hour forecast · Day · Sat, 18 Jul',
+      }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(dayTrigger).toHaveFocus();
+    });
+
+    await user.click(nightTrigger);
+    const nightPanel = screen.getByRole('dialog', {
+      name: '24-hour forecast · Night · Sat, 18 Jul',
+    });
+    const nightHours = within(
+      within(nightPanel).getByRole('table', { name: 'Hourly forecast' }),
+    ).getAllByRole('columnheader');
+    expect(nightHours).toHaveLength(24);
+    expect(nightHours[0]).toHaveAccessibleName('2026-07-18T14:00 local time');
+    expect(nightHours[23]).toHaveAccessibleName('2026-07-19T13:00 local time');
+    await waitFor(() => {
+      expect(nightPanel).toHaveStyle({ width: `${expandedWidth.toString()}px` });
+    });
+
+    await user.click(document.body);
+    expect(nightPanel).toBeInTheDocument();
+    expect(nightPanel).toHaveStyle({ height: '0px', width: '0px' });
+    fireEvent.transitionEnd(nightPanel, { propertyName: 'height' });
+    expect(
+      screen.queryByRole('dialog', {
+        name: '24-hour forecast · Night · Sat, 18 Jul',
+      }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(nightTrigger).toHaveFocus();
+    });
+  });
+
+  it('expands from a lower daily card without leaving the viewport', async () => {
+    const forecast = await testForecast();
+    const services = createTestServices();
+    vi.spyOn(services.pointWeatherForecast, 'execute').mockResolvedValue(forecast);
+    renderPanel(services);
+
+    act(() => {
+      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+    });
+
+    const dailyList = await screen.findByRole('list', {
+      name: 'Seven-day forecast',
+    });
+    const lastDailyRow = within(dailyList).getAllByRole('listitem').at(-1);
+    if (lastDailyRow === undefined) throw new Error('Expected the last daily row.');
+    const dayCard = within(lastDailyRow).getByRole('group', { name: 'Fri 24 Jul' });
+    const anchorLeft = window.innerWidth - 10;
+    const anchorTop = window.innerHeight - 20;
+    vi.spyOn(dayCard, 'getBoundingClientRect').mockReturnValue({
+      bottom: anchorTop + 80,
+      height: 80,
+      left: anchorLeft,
+      right: anchorLeft + 420,
+      top: anchorTop,
+      width: 420,
+      x: anchorLeft,
+      y: anchorTop,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(
+      within(lastDailyRow).getByRole('button', {
+        name: 'Open 24-hour forecast for Day, Fri 24 Jul',
+      }),
+    );
+
+    const panel = screen.getByRole('dialog', {
+      name: '24-hour forecast · Day · Fri, 24 Jul',
+    });
+    const expandedWidth = Math.min(1_026, Math.max(1, window.innerWidth - 24));
+    const expandedHeight = Math.min(378, Math.max(1, window.innerHeight - 24));
+    const top = Math.max(12, window.innerHeight - expandedHeight - 12);
+    const left = Math.max(12, window.innerWidth - expandedWidth - 12);
+    expect(panel).toHaveStyle({
+      height: '80px',
+      left: `${left.toString()}px`,
+      maxHeight: `${expandedHeight.toString()}px`,
+      top: `${top.toString()}px`,
+      width: '420px',
+    });
+    await waitFor(() => {
+      expect(panel).toHaveStyle({
+        height: `${expandedHeight.toString()}px`,
+        width: `${expandedWidth.toString()}px`,
+      });
+    });
+  });
+
   it('formats update metadata in the provider time zone without expanding the header', async () => {
     const baseline = await testForecast();
     const services = createTestServices();

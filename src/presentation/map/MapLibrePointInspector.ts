@@ -116,7 +116,7 @@ export function renderPointInspectorContent(
   appendLabelValue(
     container,
     'Coordinates',
-    `${coordinateFormatter.format(inspection.coordinate.longitude)}, ${coordinateFormatter.format(inspection.coordinate.latitude)}`,
+    `${coordinateFormatter.format(inspection.coordinate.latitude)}, ${coordinateFormatter.format(inspection.coordinate.longitude)}`,
   );
   appendLabelValue(container, 'Terrain elevation', elevationText(inspection));
   const nearbyFeature = appendLabelValue(

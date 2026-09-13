@@ -918,6 +918,7 @@ export function MapWorkspace({
             />
             <GeolocateControl
               position="top-right"
+              fitBoundsOptions={{ duration: 650, linear: true, maxZoom: 15 }}
               positionOptions={{ enableHighAccuracy: true }}
               showAccuracyCircle
               showUserLocation

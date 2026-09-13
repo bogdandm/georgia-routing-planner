@@ -436,7 +436,7 @@ function LoadingForecast() {
         <Skeleton
           variant="rounded"
           width="100%"
-          height={272}
+          height={344}
           aria-label="Loading hourly forecast"
         />
       </Stack>

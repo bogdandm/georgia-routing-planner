@@ -25,6 +25,7 @@ import { WeatherConditionIcon } from '@/presentation/weather/WeatherConditionIco
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
 import {
   formatWeatherMillimetresValue,
+  formatWeatherVisibilityKilometres,
   formatWeatherWindMetresPerSecond,
 } from '@/presentation/weather/weatherFormatters';
 
@@ -41,6 +42,8 @@ const precipitationChartTop = 32;
 const precipitationBarWidth = 10;
 type WindSeverity = 'neutral' | 'strong' | 'critical';
 type WindMetric = 'wind' | 'gusts';
+type WeatherGradientMetric = 'cloud' | 'visibility';
+type HourlyGradientMetric = WindMetric | WeatherGradientMetric;
 
 interface HourlyCellStyle {
   readonly color: string;
@@ -132,6 +135,12 @@ const amberRgb = { red: 255, green: 183, blue: 3 } as const;
 const redRgb = { red: 229, green: 57, blue: 53 } as const;
 const orangeRgb = { red: 251, green: 133, blue: 0 } as const;
 const panelRgb = { red: 255, green: 255, blue: 255 } as const;
+const cloudLightGrayRgb = { red: 225, green: 231, blue: 234 } as const;
+const cloudDarkGrayRgb = { red: 138, green: 154, blue: 161 } as const;
+const mapRgb = { red: 216, green: 216, blue: 211 } as const;
+const skyRgb = { red: 142, green: 202, blue: 230 } as const;
+const cloudLightGray = '#E1E7EA';
+const cloudDarkGray = '#8A9AA1';
 
 function interpolateColor(start: RgbColor, end: RgbColor, progress: number): string {
   const red = Math.round(start.red + (end.red - start.red) * progress);
@@ -154,6 +163,52 @@ function windGradientColor(metresPerSecond: number): string {
     return interpolateColor(orangeRgb, redRgb, (metresPerSecond - 20) / 5);
   }
   return appColors.marker.red;
+}
+function weatherGradientValue(
+  hour: HourlyWeatherForecast,
+  metric: WeatherGradientMetric,
+): number {
+  return metric === 'cloud' ? hour.cloudCoverPercent : hour.visibilityMeters / 1_000;
+}
+function cloudGradientColor(percent: number): string {
+  if (percent <= 0) return appColors.surface.panel;
+  if (percent < 25) {
+    return interpolateColor(panelRgb, cloudLightGrayRgb, percent / 25);
+  }
+  if (percent === 25) return cloudLightGray;
+  if (percent < 100) {
+    return interpolateColor(cloudLightGrayRgb, cloudDarkGrayRgb, (percent - 25) / 75);
+  }
+  return cloudDarkGray;
+}
+function visibilityGradientColor(kilometres: number): string {
+  if (kilometres <= 5) return appColors.surface.map;
+  if (kilometres < 30) {
+    return interpolateColor(mapRgb, panelRgb, (kilometres - 5) / 25);
+  }
+  if (kilometres === 30) return appColors.surface.panel;
+  if (kilometres < 100) {
+    return interpolateColor(panelRgb, skyRgb, (kilometres - 30) / 70);
+  }
+  return appColors.brand.sky;
+}
+function weatherGradientColor(metric: WeatherGradientMetric, value: number): string {
+  return metric === 'cloud'
+    ? cloudGradientColor(value)
+    : visibilityGradientColor(value);
+}
+function hourlyGradientValue(
+  hour: HourlyWeatherForecast,
+  metric: HourlyGradientMetric,
+): number {
+  return metric === 'wind' || metric === 'gusts'
+    ? windMetricMetresPerSecond(hour, metric)
+    : weatherGradientValue(hour, metric);
+}
+function hourlyGradientColor(metric: HourlyGradientMetric, value: number): string {
+  return metric === 'wind' || metric === 'gusts'
+    ? windGradientColor(value)
+    : weatherGradientColor(metric, value);
 }
 
 function temperatureColor(temperatureCelsius: number): string {
@@ -310,13 +365,13 @@ function PrecipitationChart({
     </svg>
   );
 }
-function WindGradient({
+function HourlyGradient({
   hours,
   metric,
   height,
 }: {
   readonly hours: readonly HourlyWeatherForecast[];
-  readonly metric: WindMetric;
+  readonly metric: HourlyGradientMetric;
   readonly height: number;
 }): ReactElement {
   const gradientId = `hourly-${metric}-${useId().replaceAll(':', '')}`;
@@ -329,7 +384,7 @@ function WindGradient({
       width={dataWidth}
       height={height}
       style={{ display: 'block', pointerEvents: 'none' }}
-      data-wind-gradient={metric}
+      data-hourly-gradient={metric}
     >
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
@@ -338,17 +393,17 @@ function WindGradient({
             stopColor={
               first === undefined
                 ? appColors.surface.panel
-                : windGradientColor(windMetricMetresPerSecond(first, metric))
+                : hourlyGradientColor(metric, hourlyGradientValue(first, metric))
             }
           />
           {hours.map((hour, index) => {
-            const speed = windMetricMetresPerSecond(hour, metric);
+            const value = hourlyGradientValue(hour, metric);
             return (
               <stop
                 key={hour.time}
                 offset={`${(((index + 0.5) / hours.length) * 100).toString()}%`}
-                stopColor={windGradientColor(speed)}
-                data-wind-speed={speed}
+                stopColor={hourlyGradientColor(metric, value)}
+                data-hourly-value={value}
               />
             );
           })}
@@ -357,7 +412,7 @@ function WindGradient({
             stopColor={
               last === undefined
                 ? appColors.surface.panel
-                : windGradientColor(windMetricMetresPerSecond(last, metric))
+                : hourlyGradientColor(metric, hourlyGradientValue(last, metric))
             }
           />
         </linearGradient>
@@ -366,7 +421,7 @@ function WindGradient({
         width={dataWidth}
         height={height}
         fill={`url(#${gradientId})`}
-        fillOpacity={0.72}
+        fillOpacity={metric === 'wind' || metric === 'gusts' ? 0.72 : 1}
       />
     </svg>
   );
@@ -780,7 +835,7 @@ export function HourlyForecastTable({
         label="Wind (m/s)"
         hours={hours}
         height={36}
-        chart={<WindGradient hours={hours} metric="wind" height={36} />}
+        chart={<HourlyGradient hours={hours} metric="wind" height={36} />}
         cellLabel={(hour) => {
           const metresPerSecond = windMetricMetresPerSecond(hour, 'wind');
           const severity = windSeverity(metresPerSecond);
@@ -797,7 +852,7 @@ export function HourlyForecastTable({
         label="Gusts (m/s)"
         hours={hours}
         height={36}
-        chart={<WindGradient hours={hours} metric="gusts" height={36} />}
+        chart={<HourlyGradient hours={hours} metric="gusts" height={36} />}
         cellLabel={(hour) => {
           const metresPerSecond = windMetricMetresPerSecond(hour, 'gusts');
           const severity = windSeverity(metresPerSecond);
@@ -807,6 +862,34 @@ export function HourlyForecastTable({
         renderCell={(hour) => (
           <Typography variant="caption">
             {formatWeatherWindMetresPerSecond(windMetricMetresPerSecond(hour, 'gusts'))}
+          </Typography>
+        )}
+      />
+      <HourlyRow
+        label="Cloud (%)"
+        hours={hours}
+        height={36}
+        chart={<HourlyGradient hours={hours} metric="cloud" height={36} />}
+        cellLabel={(hour) =>
+          `${hour.time} cloud cover ${Math.round(hour.cloudCoverPercent).toString()} percent`
+        }
+        renderCell={(hour) => (
+          <Typography variant="caption">
+            {Math.round(hour.cloudCoverPercent).toString()}
+          </Typography>
+        )}
+      />
+      <HourlyRow
+        label="Visibility (km)"
+        hours={hours}
+        height={36}
+        chart={<HourlyGradient hours={hours} metric="visibility" height={36} />}
+        cellLabel={(hour) =>
+          `${hour.time} visibility ${formatWeatherVisibilityKilometres(hour.visibilityMeters)} kilometres`
+        }
+        renderCell={(hour) => (
+          <Typography variant="caption">
+            {formatWeatherVisibilityKilometres(hour.visibilityMeters)}
           </Typography>
         )}
       />

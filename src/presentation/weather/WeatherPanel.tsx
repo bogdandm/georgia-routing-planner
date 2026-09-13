@@ -338,7 +338,6 @@ function LoadingSummary() {
           '@media (max-width: 479px)': {
             mx: 1,
             my: 0,
-            borderTop: 1,
             borderLeft: 0,
           },
         }}
@@ -696,10 +695,7 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
           >
             {values.temperature}
           </Typography>
-          <Typography
-            variant="body2"
-            sx={{ minWidth: 0, fontWeight: 700, lineHeight: 1.25 }}
-          >
+          <Typography variant="body2" sx={{ minWidth: 0, lineHeight: 1.25 }}>
             {period.status.primary.label}
           </Typography>
         </Stack>
@@ -769,10 +765,10 @@ function SummaryPeriod({
           '@media (max-width: 479px)': {
             gridTemplateColumns: '44px minmax(0, 1fr) max-content',
             gridTemplateAreas:
-              '"label label precipitation" "graphic temperature metrics" "graphic condition metrics"',
+              '"label label ." "graphic temperature metrics" "graphic condition metrics"',
             columnGap: 1,
             rowGap: 0.5,
-            alignItems: 'center',
+            alignItems: 'start',
           },
         }}
       >
@@ -786,6 +782,7 @@ function SummaryPeriod({
               '& > :nth-child(2)': {
                 gridArea: 'graphic',
                 justifySelf: 'start',
+                alignSelf: 'center',
               },
             },
           }}
@@ -845,63 +842,75 @@ function SummaryPeriod({
               display: 'none',
               minWidth: 0,
               lineHeight: 1.25,
-              '@media (max-width: 479px)': { display: 'block' },
+              '@media (max-width: 479px)': {
+                display: 'block',
+                alignSelf: 'start',
+              },
             }}
           >
             {period.status.primary.label}
           </Typography>
-          <Stack
-            spacing={0}
+          <Box
             sx={{
-              gridArea: 'metrics',
-              minWidth: 0,
-              mt: 0.5,
+              display: 'contents',
               '@media (max-width: 479px)': {
-                mt: 0,
+                gridArea: 'metrics',
+                display: 'flex',
+                flexDirection: 'column',
                 alignSelf: 'start',
                 justifySelf: 'end',
               },
-              '@media (max-width: 239px)': {
-                '& .MuiSvgIcon-root': {
-                  fontSize: 12,
-                },
-                '& .MuiTypography-root': {
-                  fontSize: '0.7rem',
-                },
-                '& .MuiStack-root': {
-                  columnGap: 0.25,
-                },
-              },
             }}
           >
-            <CompactMetricValue
-              kind="wind"
-              label={`${label} wind`}
-              value={values.wind}
-              ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-            />
-            <CompactMetricValue
-              kind="gusts"
-              label={`${label} gusts`}
-              value={values.gusts}
-              ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-            />
-          </Stack>
-          <Box
-            sx={{
-              gridArea: 'precipitation',
-              minWidth: 0,
-              '@media (max-width: 479px)': {
-                justifySelf: 'end',
-              },
-            }}
-          >
-            <CompactMetricValue
-              kind="precipitation"
-              label={`${label} precipitation`}
-              value={values.precipitation}
-              ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-            />
+            <Stack
+              spacing={0}
+              sx={{
+                minWidth: 0,
+                mt: 0.5,
+                '@media (max-width: 479px)': {
+                  mt: 0,
+                },
+                '@media (max-width: 239px)': {
+                  '& .MuiSvgIcon-root': {
+                    fontSize: 12,
+                  },
+                  '& .MuiTypography-root': {
+                    fontSize: '0.7rem',
+                  },
+                  '& .MuiStack-root': {
+                    columnGap: 0.25,
+                  },
+                },
+              }}
+            >
+              <CompactMetricValue
+                kind="wind"
+                label={`${label} wind`}
+                value={values.wind}
+                ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+              />
+              <CompactMetricValue
+                kind="gusts"
+                label={`${label} gusts`}
+                value={values.gusts}
+                ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+              />
+            </Stack>
+            <Box
+              sx={{
+                minWidth: 0,
+                '@media (max-width: 479px)': {
+                  order: -1,
+                },
+              }}
+            >
+              <CompactMetricValue
+                kind="precipitation"
+                label={`${label} precipitation`}
+                value={values.precipitation}
+                ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+              />
+            </Box>
           </Box>
         </Box>
       </Box>
@@ -1030,7 +1039,6 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
           '@media (max-width: 479px)': {
             mx: 1,
             my: 0,
-            borderTop: 1,
             borderLeft: 0,
           },
         }}

@@ -430,33 +430,39 @@ The hourly forecast is one compact bordered, horizontally scrolling table with a
 label column that scrolls with exactly 24 consecutive one-hour columns from the current
 local forecast hour. Vertical rules mark calendar-day boundaries rather than separating
 every hourly column; no horizontal rules separate metric rows. Its rows are `Time`,
-`Weather`, `Temp (°C)`, `Precip (mm)`, `Wind (m/s)`, and `Gusts (m/s)`. The time row
-stays on one line: the first column of each local calendar-day section shows its weekday
-instead of the hour, whose value is implicit from its neighbours, and the other columns
-use local `HH:00`. Weather keeps one condition icon per unmodified hourly sample.
-Temperature and precipitation values stay column-aligned immediately above their
-corresponding chart shape. Temperature moves through blue `#0288D1` at 0 °C and below,
-green `#2EAD5B` at 10 °C, amber `#FFB703` at 20 °C, and red `#E53935` at 30 °C and
-above; those colors fill a point-free polygon through the hourly values and extend the
-first and last values to the chart edges. Precipitation cells omit the repeated `mm`
-suffix because the row label owns the unit. Precipitation is drawn as vertical blue bars
-whose zero baseline meets the row boundary; a snowflake appears between a snowy value
-and its bar. Wind and gust row backgrounds form continuous horizontal gradients through
-their hourly values. The color anchors are white at 0 m/s, green at 8 m/s, yellow at 15
-m/s, orange at 20 m/s, and red at 25 m/s; values between anchors are linearly
-interpolated and higher values remain red. Wind direction is not requested or shown in
-either the current or hourly forecast. The left and right controls scroll this unchanged
-hourly cadence without grouping or sampling it. An expand icon to their right leaves
-that header in the sidebar while widening only the table rightward until all 24 columns
-are visible; the same control contracts it back to the compact scrollable layout.
-Collapsing the workspace sidebar or scrolling the Weather panel also contracts an
-expanded table. A mouse can drag the compact table directly; table text is not
-selectable during that interaction. While loading, one rounded placeholder retains the
-table-and-chart geometry; the summary and seven-day placeholders remain unchanged. At
-narrow mobile workspace widths, the summary stacks its current and Day/Night areas. Each
-seven-day period places its primary condition beneath its temperature, precipitation
-immediately to their right, and the two-line wind/gust group at the far edge so words do
-not compress or overflow the card.
+`Weather`, `Temp (°C)`, `Precip (mm)`, `Wind (m/s)`, `Gusts (m/s)`, `Cloud (%)`, and
+`Visibility (km)`. The time row stays on one line: the first column of each local
+calendar-day section shows its weekday instead of the hour, whose value is implicit from
+its neighbours, and the other columns use local `HH:00`. Weather keeps one condition
+icon per unmodified hourly sample. Cloud cover and visibility close the table after
+gusts. Cloud cover is rounded to the nearest percentage point, and its background
+interpolates from white at 0% through light grey `#E1E7EA` at 25% to the darker
+`#8A9AA1` at 100%. Visibility is rounded to the nearest whole kilometre. In descending
+visibility order, its background runs from sky blue at 100 km through white at 30 km to
+grey at 5 km, retaining the endpoint colours outside that range. Both rows omit repeated
+units because their labels own them. Temperature and precipitation values stay
+column-aligned immediately above their corresponding chart shape. Temperature moves
+through blue `#0288D1` at 0 °C and below, green `#2EAD5B` at 10 °C, amber `#FFB703` at
+20 °C, and red `#E53935` at 30 °C and above; those colors fill a point-free polygon
+through the hourly values and extend the first and last values to the chart edges.
+Precipitation cells omit the repeated `mm` suffix because the row label owns the unit.
+Precipitation is drawn as vertical blue bars whose zero baseline meets the row boundary;
+a snowflake appears between a snowy value and its bar. Wind and gust row backgrounds
+form continuous horizontal gradients through their hourly values. The color anchors are
+white at 0 m/s, green at 8 m/s, yellow at 15 m/s, orange at 20 m/s, and red at 25 m/s;
+values between anchors are linearly interpolated and higher values remain red. Wind
+direction is not requested or shown in either the current or hourly forecast. The left
+and right controls scroll this unchanged hourly cadence without grouping or sampling it.
+An expand icon to their right leaves that header in the sidebar while widening only the
+table rightward until all 24 columns are visible; the same control contracts it back to
+the compact scrollable layout. Collapsing the workspace sidebar or scrolling the Weather
+panel also contracts an expanded table. A mouse can drag the compact table directly;
+table text is not selectable during that interaction. While loading, one rounded
+placeholder retains the table-and-chart geometry; the summary and seven-day placeholders
+remain unchanged. At narrow mobile workspace widths, the summary stacks its current and
+Day/Night areas. Each seven-day period places its primary condition beneath its
+temperature, precipitation immediately to their right, and the two-line wind/gust group
+at the far edge so words do not compress or overflow the card.
 
 Seven rows are derived from location-local hourly forecast data. Each date owns one
 full-width bordered card with a fixed date column and two stacked weather-period rows.

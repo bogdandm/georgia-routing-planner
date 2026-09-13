@@ -7,6 +7,10 @@ export function formatWeatherWindMetresPerSecond(value: number): string {
   return Math.round(value).toString();
 }
 
+export function formatWeatherVisibilityKilometres(valueInMeters: number): string {
+  return Math.round(valueInMeters / 1_000).toString();
+}
+
 export function formatWeatherMillimetres(value: number): string {
   return `${formatWeatherMillimetresValue(value)} mm`;
 }

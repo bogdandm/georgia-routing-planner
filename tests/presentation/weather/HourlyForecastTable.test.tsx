@@ -27,6 +27,8 @@ async function syntheticForecast(startIndex = 0): Promise<PointWeatherForecast> 
   const temperatureCelsius = [-5, 10, 20, 30] as const;
   const windMetresPerSecond = [14.9, 15, 24.9, 25, 5, 5, 5, 5, 20] as const;
   const gustMetresPerSecond = [14.9, 15, 24.9, 25] as const;
+  const cloudCoverPercent = [0, 25, 100] as const;
+  const visibilityMeters = [5_000, 30_000, 100_000, 12_340] as const;
   const hourly = baseline.hourly
     .slice(startIndex, startIndex + 24)
     .map((hour, index) => ({
@@ -35,6 +37,8 @@ async function syntheticForecast(startIndex = 0): Promise<PointWeatherForecast> 
       isDay: index === 8 ? true : index === 0 ? false : hour.isDay,
       temperatureCelsius: temperatureCelsius[index] ?? 12,
       precipitationMm: index === 4 ? 0.6 : index === 5 ? 0.3 : 0,
+      cloudCoverPercent: cloudCoverPercent[index] ?? hour.cloudCoverPercent,
+      visibilityMeters: visibilityMeters[index] ?? hour.visibilityMeters,
       snowfallCm: index === 4 ? 0.2 : 0,
       windSpeedKmh: (windMetresPerSecond[index] ?? 5) * 3.6,
       windGustsKmh: (gustMetresPerSecond[index - 4] ?? 8) * 3.6,
@@ -65,11 +69,11 @@ async function renderTable(startIndex = 0) {
 }
 
 describe('HourlyForecastTable', () => {
-  it('keeps 24 consecutive hours aligned across the six semantic rows', async () => {
+  it('keeps 24 consecutive hours aligned across the eight semantic rows', async () => {
     await renderTable();
 
     const table = screen.getByRole('table', { name: 'Hourly forecast' });
-    expect(within(table).getAllByRole('row')).toHaveLength(6);
+    expect(within(table).getAllByRole('row')).toHaveLength(8);
     expect(
       within(table)
         .getAllByRole('rowheader')
@@ -81,6 +85,8 @@ describe('HourlyForecastTable', () => {
       'Precip (mm)',
       'Wind (m/s)',
       'Gusts (m/s)',
+      'Cloud (%)',
+      'Visibility (km)',
     ]);
     const hours = within(table).getAllByRole('columnheader');
     expect(hours).toHaveLength(24);
@@ -95,6 +101,53 @@ describe('HourlyForecastTable', () => {
     expect(hours[1]).not.toHaveTextContent('Sat');
     expect(hours[23]).toHaveAccessibleName('2026-07-18T23:00 local time');
     expect(within(table).queryByRole('rowheader', { name: /direction/iu })).toBeNull();
+  });
+
+  it('rounds the added metrics and colors their hourly gradients', async () => {
+    const { container } = await renderTable();
+
+    expect(
+      screen.getByRole('cell', {
+        name: '2026-07-18T00:00 cloud cover 0 percent',
+      }),
+    ).toHaveTextContent(/^0$/u);
+    expect(
+      screen.getByRole('cell', {
+        name: '2026-07-18T03:00 visibility 12 kilometres',
+      }),
+    ).toHaveTextContent(/^12$/u);
+
+    const cloudGradientStops = [
+      ...container.querySelectorAll(
+        'svg[data-hourly-gradient="cloud"] stop[data-hourly-value]',
+      ),
+    ];
+    expect(cloudGradientStops).toHaveLength(24);
+    expect(cloudGradientStops[0]).toHaveAttribute(
+      'stop-color',
+      appColors.surface.panel,
+    );
+    expect(cloudGradientStops[1]).toHaveAttribute('stop-color', '#E1E7EA');
+    expect(cloudGradientStops[2]).toHaveAttribute('stop-color', '#8A9AA1');
+
+    const visibilityGradientStops = [
+      ...container.querySelectorAll(
+        'svg[data-hourly-gradient="visibility"] stop[data-hourly-value]',
+      ),
+    ];
+    expect(visibilityGradientStops).toHaveLength(24);
+    expect(visibilityGradientStops[0]).toHaveAttribute(
+      'stop-color',
+      appColors.surface.map,
+    );
+    expect(visibilityGradientStops[1]).toHaveAttribute(
+      'stop-color',
+      appColors.surface.panel,
+    );
+    expect(visibilityGradientStops[2]).toHaveAttribute(
+      'stop-color',
+      appColors.brand.sky,
+    );
   });
 
   it('selects one day or night Meteocon for each hourly weather sample', async () => {
@@ -395,7 +448,7 @@ describe('HourlyForecastTable', () => {
 
     const windGradientStops = [
       ...container.querySelectorAll(
-        'svg[data-wind-gradient="wind"] stop[data-wind-speed]',
+        'svg[data-hourly-gradient="wind"] stop[data-hourly-value]',
       ),
     ];
     expect(windGradientStops).toHaveLength(24);
@@ -404,7 +457,7 @@ describe('HourlyForecastTable', () => {
     expect(windGradientStops[8]).toHaveAttribute('stop-color', 'rgb(251, 133, 0)');
     const gustGradientStops = [
       ...container.querySelectorAll(
-        'svg[data-wind-gradient="gusts"] stop[data-wind-speed]',
+        'svg[data-hourly-gradient="gusts"] stop[data-hourly-value]',
       ),
     ];
     expect(gustGradientStops).toHaveLength(24);

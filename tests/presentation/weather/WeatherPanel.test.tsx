@@ -264,7 +264,7 @@ describe('WeatherPanel', () => {
     expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument();
 
     const hourlyTable = screen.getByRole('table', { name: 'Hourly forecast' });
-    expect(within(hourlyTable).getAllByRole('row')).toHaveLength(6);
+    expect(within(hourlyTable).getAllByRole('row')).toHaveLength(8);
     expect(within(hourlyTable).getAllByRole('columnheader')).toHaveLength(24);
     expect(
       within(hourlyTable).getByRole('columnheader', {

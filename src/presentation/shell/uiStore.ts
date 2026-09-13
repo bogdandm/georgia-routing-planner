@@ -5,7 +5,8 @@ import type { TrackSort } from '@/domain/tracks/localTrack';
 
 import type { MapDebugOptions } from '@/presentation/map/mapTypes';
 
-export type WorkspaceTab = 'tracks' | 'satellite' | 'markers' | 'layers' | 'user';
+export type WorkspaceTab =
+  'tracks' | 'satellite' | 'weather' | 'markers' | 'layers' | 'user';
 
 interface UiState {
   readonly activeTab: WorkspaceTab;

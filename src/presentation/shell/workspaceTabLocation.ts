@@ -3,6 +3,7 @@ import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 const hashByTab: Readonly<Record<WorkspaceTab, string>> = {
   tracks: '#tracks',
   satellite: '#satellite',
+  weather: '#weather',
   markers: '#markers',
   layers: '#layers',
   user: '#user',

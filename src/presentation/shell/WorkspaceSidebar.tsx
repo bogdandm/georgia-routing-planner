@@ -2,6 +2,7 @@ import AddIcon from '@mui/icons-material/Add';
 import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
 import {
   Box,
@@ -12,7 +13,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
 import type { TrackSort } from '@/domain/tracks/localTrack';
@@ -36,10 +37,15 @@ import {
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
 import { UserPanel } from '@/presentation/user/UserPanel';
+import {
+  WeatherPanel,
+  type WeatherHeaderPoint,
+} from '@/presentation/weather/WeatherPanel';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
   readonly auxiliaryOverlay: boolean;
+  readonly collapsed: boolean;
   readonly fullWidth: boolean;
   readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
   readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
@@ -62,6 +68,10 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
     title: 'Satellite imagery',
     actions: null,
   },
+  weather: {
+    title: 'Weather',
+    actions: null,
+  },
   markers: {
     title: 'Markers',
     actions: null,
@@ -76,9 +86,51 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
   },
 };
 
+function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }) {
+  return (
+    <Stack
+      direction="row"
+      spacing={0.5}
+      aria-label="Forecast location"
+      sx={{ alignItems: 'center', minWidth: 0 }}
+    >
+      <LocationOnOutlinedIcon
+        aria-hidden="true"
+        sx={{ flexShrink: 0, fontSize: 18, color: 'text.secondary' }}
+      />
+      <Stack spacing={0} sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          noWrap
+          sx={{ fontVariantNumeric: 'tabular-nums' }}
+        >
+          {point.coordinate.latitude.toFixed(5)},{' '}
+          {point.coordinate.longitude.toFixed(5)}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          noWrap
+          aria-hidden={point.elevationMeters === undefined}
+          sx={{
+            visibility: point.elevationMeters === undefined ? 'hidden' : 'visible',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {point.elevationMeters === undefined
+            ? '\u00a0'
+            : `${Math.round(point.elevationMeters).toLocaleString('en-US')} m`}
+        </Typography>
+      </Stack>
+    </Stack>
+  );
+}
+
 export function WorkspaceSidebar({
   activeTab,
   auxiliaryOverlay,
+  collapsed,
   fullWidth,
   onMarkerSortChange,
   onTrackSortChange,
@@ -121,6 +173,8 @@ export function WorkspaceSidebar({
   const { loadState } = useMarkersWorkspace();
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
+  const [weatherHeaderPoint, setWeatherHeaderPoint] =
+    useState<WeatherHeaderPoint | null>(null);
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
   const markerCreationMessage =
     mapViewportSnapshot === null
@@ -165,11 +219,15 @@ export function WorkspaceSidebar({
           borderBottom: `1px solid ${appColors.brand.sky}`,
         }}
       >
-        <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
           <Typography component="h1" variant="h6" noWrap>
             {definition.title}
           </Typography>
         </Box>
+        {activeTab === 'weather' && weatherHeaderPoint !== null ? (
+          <WeatherLocationHeader point={weatherHeaderPoint} />
+        ) : null}
+        <Box sx={{ flex: 1 }} />
         {activeTab === 'satellite' ? (
           <Tooltip
             title={
@@ -273,7 +331,8 @@ export function WorkspaceSidebar({
           minHeight: 0,
           flex: 1,
           overflowX: 'hidden',
-          overflowY: activeTab === 'tracks' ? 'hidden' : 'auto',
+          overflowY:
+            activeTab === 'tracks' || activeTab === 'weather' ? 'hidden' : 'auto',
         }}
       >
         <Box
@@ -296,6 +355,17 @@ export function WorkspaceSidebar({
               {...(onSceneSelected === undefined ? {} : { onSceneSelected })}
             />
           )}
+        </Box>
+        <Box
+          sx={{
+            display: activeTab === 'weather' ? 'block' : 'none',
+            height: '100%',
+          }}
+        >
+          <WeatherPanel
+            sidebarCollapsed={collapsed}
+            onSelectedPointChange={setWeatherHeaderPoint}
+          />
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersPanel

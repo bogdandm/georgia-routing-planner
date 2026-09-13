@@ -60,7 +60,9 @@ import {
   consumeMapPointInspectionCommand,
   mapInteractionStore,
   requestMarkerCreationAt,
+  requestMapPointInspection,
   requestSatelliteSearch,
+  requestWeatherForecast,
 } from '@/presentation/map/mapInteractionStore';
 import {
   applySharedMapView,
@@ -216,8 +218,11 @@ export function MapWorkspace({
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const tracksWorkspace = useOptionalTracksWorkspace();
+  const activeTab = useUiStore((state) => state.activeTab);
+  const weatherSelectionActive = activeTab === 'weather';
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const routePlanningActive =
+    activeTab === 'tracks' &&
     tracksWorkspace?.active?.kind === 'route-plan' &&
     tracksWorkspace.active.status !== 'saving';
   const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
@@ -423,6 +428,17 @@ export function MapWorkspace({
 
   useEffect(() => {
     if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
+    const currentInspection = facade.getPointInspection();
+    if (
+      currentInspection.status === 'open' &&
+      currentInspection.coordinate.longitude ===
+        pointInspectionCommand.coordinate.longitude &&
+      currentInspection.coordinate.latitude ===
+        pointInspectionCommand.coordinate.latitude
+    ) {
+      consumeMapPointInspectionCommand(pointInspectionCommand.id);
+      return;
+    }
     facade.openPointInspection(pointInspectionCommand.coordinate, {
       refreshNearbyPoiOnIdle: pointInspectionCommand.refreshNearbyPoiOnIdle,
     });
@@ -774,18 +790,21 @@ export function MapWorkspace({
   };
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
-    if (markerPlacement === null) {
-      return;
-    }
-    event.originalEvent.preventDefault();
     const coordinate = {
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
     };
-    completeMarkerPlacement(
-      coordinate,
-      facade.getNearestPoi(coordinate)?.name ?? undefined,
-    );
+    if (markerPlacement !== null) {
+      event.originalEvent.preventDefault();
+      completeMarkerPlacement(
+        coordinate,
+        facade.getNearestPoi(coordinate)?.name ?? undefined,
+      );
+      return;
+    }
+    if (event.originalEvent.button !== 0 || !weatherSelectionActive) return;
+    requestWeatherForecast(coordinate);
+    requestMapPointInspection(coordinate);
   };
 
   const copyCoordinates = () => {

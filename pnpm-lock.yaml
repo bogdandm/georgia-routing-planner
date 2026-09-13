@@ -19,6 +19,9 @@ importers:
       '@mapbox/vector-tile':
         specifier: 2.0.5
         version: 2.0.5
+      '@meteocons/svg-static':
+        specifier: 0.1.0
+        version: 0.1.0
       '@mui/icons-material':
         specifier: 9.2.0
         version: 9.2.0(@mui/material@9.2.0(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@types/react@19.2.17)(react@19.2.7))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/react@19.2.17)(react@19.2.7)
@@ -1087,6 +1090,12 @@ packages:
     resolution:
       {
         integrity: sha512-j6p0AdjvAR19Z3XaCysle7A4ZSo08tYOzxD0Y9NQylwPAkwJJeYub5b2eVucdeDh7erhv69DahoLOevDRERRUw==,
+      }
+
+  '@meteocons/svg-static@0.1.0':
+    resolution:
+      {
+        integrity: sha512-dnuXOkt1W5q+XZbyj54dzjuBcKmsC0eLv51IVaW9kzzvzwnhwv9KgNXHKgpvmdN6cX2stMo+k95iMFbcyM4x5Q==,
       }
 
   '@mswjs/interceptors@0.41.9':
@@ -5040,6 +5049,8 @@ snapshots:
       '@mapbox/point-geometry': 1.1.0
       '@types/geojson': 7946.0.16
       pbf: 5.1.2
+
+  '@meteocons/svg-static@0.1.0': {}
 
   '@mswjs/interceptors@0.41.9':
     dependencies:

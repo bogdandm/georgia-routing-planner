@@ -1441,6 +1441,7 @@ export function WeatherPanel({
       </Box>
       {state.status === 'ready' && !sidebarCollapsed && hourlyPanelRequest !== null ? (
         <FloatingHourlyForecastPanel
+          key={hourlyPanelRequest.startTime}
           anchorElement={hourlyPanelRequest.anchorElement}
           forecast={state.forecast}
           startTime={hourlyPanelRequest.startTime}

@@ -445,6 +445,51 @@ describe('WeatherPanel', () => {
     });
   });
 
+  it('switches directly to another daily period while the panel is open', async () => {
+    const user = userEvent.setup();
+    const forecast = await testForecast();
+    const services = createTestServices();
+    vi.spyOn(services.pointWeatherForecast, 'execute').mockResolvedValue(forecast);
+    renderPanel(services);
+
+    act(() => {
+      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+    });
+
+    const dailyList = await screen.findByRole('list', {
+      name: 'Seven-day forecast',
+    });
+    const firstDailyRow = within(dailyList).getAllByRole('listitem')[0];
+    if (firstDailyRow === undefined) throw new Error('Expected the first daily row.');
+    const dayTrigger = within(firstDailyRow).getByRole('button', {
+      name: 'Open 24-hour forecast for Day, Sat 18 Jul',
+    });
+    const nightTrigger = within(firstDailyRow).getByRole('button', {
+      name: 'Open 24-hour forecast for Night, Sat 18 Jul',
+    });
+
+    await user.click(dayTrigger);
+    const dayPanel = screen.getByRole('dialog', {
+      name: '24-hour forecast · Day · Sat, 18 Jul',
+    });
+    await waitFor(() => {
+      expect(dayPanel).toHaveStyle({
+        width: `${Math.min(1_026, Math.max(1, window.innerWidth - 24)).toString()}px`,
+      });
+    });
+
+    await user.click(nightTrigger);
+    expect(dayPanel).not.toBeInTheDocument();
+    const nightPanel = screen.getByRole('dialog', {
+      name: '24-hour forecast · Night · Sat, 18 Jul',
+    });
+    fireEvent.transitionEnd(nightPanel, { propertyName: 'height' });
+    expect(nightPanel).toBeInTheDocument();
+    expect(within(nightPanel).getAllByRole('columnheader')[0]).toHaveAccessibleName(
+      '2026-07-18T14:00 local time',
+    );
+  });
+
   it('expands from a lower daily card without leaving the viewport', async () => {
     const forecast = await testForecast();
     const services = createTestServices();

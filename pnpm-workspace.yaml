@@ -6,3 +6,7 @@ nodeVersion: 24.14.0
 engineStrict: true
 enableGlobalVirtualStore: false
 verifyDepsBeforeRun: warn
+# The audit plugin's newer utility graph references unpublished parser packages.
+# Version 8.67 provides the same rule API and resolves reproducibly.
+overrides:
+  eslint-plugin-lingui>@typescript-eslint/utils: 8.67.0

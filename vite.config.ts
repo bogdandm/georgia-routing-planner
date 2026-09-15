@@ -2,7 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
+import babel from '@rolldown/plugin-babel';
 import react from '@vitejs/plugin-react';
+import { lingui, linguiTransformerBabelPreset } from '@lingui/vite-plugin';
 import { defineConfig, loadEnv } from 'vite';
 
 interface PackageMetadata {
@@ -38,7 +40,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
-    plugins: [react()],
+    plugins: [react(), lingui(), babel({ presets: [linguiTransformerBabelPreset()] })],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

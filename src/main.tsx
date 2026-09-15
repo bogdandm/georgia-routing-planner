@@ -1,3 +1,4 @@
+import { I18nProvider } from '@lingui/react';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,6 +9,8 @@ import { registerPageLifecycleDisposal } from '@/bootstrap/registerPageLifecycle
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { WorkspaceErrorBoundary } from '@/presentation/shell/WorkspaceErrorBoundary';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
+import { resolveAppLocale } from '@/domain/localization/appLocale';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
 import type { TrackSort } from '@/domain/tracks/localTrack';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -22,6 +25,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
   let elevationGradeLegendDismissed = false;
   let markerSort: MarkerSort = 'created';
   let trackSort: TrackSort = 'created';
+  let locale = resolveAppLocale(null, navigator.languages);
 
   try {
     const preferences = await services.database.loadUiPreferences();
@@ -30,9 +34,12 @@ void runApplicationBootstrap(async (rootElement, services) => {
     elevationGradeLegendDismissed = preferences.elevationGradeLegendDismissed;
     markerSort = preferences.markerSort;
     trackSort = preferences.trackSort;
+    locale = resolveAppLocale(preferences.locale, navigator.languages);
   } catch {
     services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
   }
+
+  activateAppLocale(locale);
 
   useUiStore.setState({
     developerMode,
@@ -49,17 +56,19 @@ void runApplicationBootstrap(async (rootElement, services) => {
   import.meta.hot?.dispose(dispose);
   root.render(
     <StrictMode>
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <CssBaseline />
-          <WorkspaceErrorBoundary
-            diagnostics={services.diagnostics}
-            logger={services.logger}
-          >
-            <WorkspaceShell />
-          </WorkspaceErrorBoundary>
-        </ThemeProvider>
-      </RuntimeServicesProvider>
+      <I18nProvider i18n={appI18n}>
+        <RuntimeServicesProvider services={services}>
+          <ThemeProvider theme={createAppTheme()}>
+            <CssBaseline />
+            <WorkspaceErrorBoundary
+              diagnostics={services.diagnostics}
+              logger={services.logger}
+            >
+              <WorkspaceShell />
+            </WorkspaceErrorBoundary>
+          </ThemeProvider>
+        </RuntimeServicesProvider>
+      </I18nProvider>
     </StrictMode>,
   );
 });

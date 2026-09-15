@@ -1,6 +1,8 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { z } from 'zod';
 
+import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
+
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import {
   SavedMarkerStorageError,
@@ -200,6 +202,7 @@ const trackSyncUsageSchema: z.ZodType<TrackSyncUsage> = z
 const uiPreferencesSchema = z
   .object({
     developerMode: z.boolean(),
+    locale: z.enum(APP_LOCALES).nullable().default(null),
     navigationCollapsed: z.boolean().default(false),
     elevationGradeLegendDismissed: z.boolean().default(false),
     markerSort: z.enum(markerSorts).default('created'),
@@ -209,6 +212,7 @@ const uiPreferencesSchema = z
 
 interface UiPreferences {
   readonly developerMode: boolean;
+  readonly locale: AppLocale | null;
   readonly navigationCollapsed: boolean;
   readonly elevationGradeLegendDismissed: boolean;
   readonly markerSort: MarkerSort;
@@ -217,6 +221,7 @@ interface UiPreferences {
 
 const defaultUiPreferences: UiPreferences = {
   developerMode: false,
+  locale: null,
   navigationCollapsed: false,
   elevationGradeLegendDismissed: false,
   markerSort: 'created',

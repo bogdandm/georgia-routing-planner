@@ -1,0 +1,75 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-09-14 21:45+0400\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#. js-lingui-id: DPfwMq
+#: src/presentation/shell/SettingsDialog.tsx:184
+msgid "Done"
+msgstr "Done"
+
+#. js-lingui-id: 3tUqN7
+#: src/presentation/shell/SettingsDialog.tsx:140
+msgid "Enable developer diagnostics"
+msgstr "Enable developer diagnostics"
+
+#. js-lingui-id: lYGfRP
+#: src/presentation/shell/SettingsDialog.tsx:165
+msgid "English"
+msgstr "English"
+
+#. js-lingui-id: BmFfQn
+#: src/presentation/shell/SettingsDialog.tsx:147
+msgid "Exposes local logs, health checks, and diagnostics export. Nothing is uploaded automatically."
+msgstr "Exposes local logs, health checks, and diagnostics export. Nothing is uploaded automatically."
+
+#. js-lingui-id: Weq9zb
+#: src/presentation/shell/SettingsDialog.tsx:120
+msgid "General"
+msgstr "General"
+
+#. js-lingui-id: Ye6I4I
+#: src/presentation/shell/SettingsDialog.tsx:126
+msgid "General settings"
+msgstr "General settings"
+
+#. js-lingui-id: vXIe7J
+#: src/presentation/shell/SettingsDialog.tsx:154
+#: src/presentation/shell/SettingsDialog.tsx:159
+msgid "Language"
+msgstr "Language"
+
+#. js-lingui-id: Tz0i8g
+#: src/presentation/shell/SettingsDialog.tsx:75
+msgid "Settings"
+msgstr "Settings"
+
+#. js-lingui-id: 9f9WPO
+#: src/presentation/shell/SettingsDialog.tsx:82
+msgid "Settings tabs"
+msgstr "Settings tabs"
+
+#. js-lingui-id: BrrIs8
+#: src/presentation/shell/SettingsDialog.tsx:121
+msgid "Storage"
+msgstr "Storage"
+
+#. js-lingui-id: KeCqZE
+#: src/presentation/shell/SettingsDialog.tsx:176
+msgid "Storage usage settings"
+msgstr "Storage usage settings"
+
+#. js-lingui-id: FX4c9a
+#: src/presentation/shell/SettingsDialog.tsx:168
+msgid "Русский"
+msgstr "Русский"

@@ -5,23 +5,32 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Tab,
   Tabs,
   Typography,
 } from '@mui/material';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
-
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
+import type { AppLocale } from '@/domain/localization/appLocale';
 import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
 
 type SettingsTab = 'general' | 'storage';
+const defaultSettingsTab: SettingsTab = 'general';
+const settingsPanelTitleId = 'settings-panel-title';
 
 interface SettingsDialogProps {
   readonly developerMode: boolean;
+  readonly locale: AppLocale;
   readonly onClose: () => void;
+  readonly onLocaleChange: (locale: AppLocale) => void;
   readonly onDeveloperModeChange: (value: boolean) => void;
   readonly open: boolean;
   readonly storageUsage: StorageUsageReader;
@@ -29,20 +38,23 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({
   developerMode,
+  locale,
   onClose,
   onDeveloperModeChange,
+  onLocaleChange,
   open,
   storageUsage,
 }: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultSettingsTab);
+  const { t } = useLingui();
 
   if (!open) return null;
 
   return (
     <Paper
       role="dialog"
-      aria-modal="false"
-      aria-labelledby="settings-panel-title"
+      aria-modal={false}
+      aria-labelledby={settingsPanelTitleId}
       elevation={8}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
@@ -59,15 +71,15 @@ export function SettingsDialog({
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <DialogTitle id="settings-panel-title" sx={{ px: 2, py: 1.5 }}>
-        Settings
+      <DialogTitle id={settingsPanelTitleId} sx={{ px: 2, py: 1.5 }}>
+        <Trans>Settings</Trans>
       </DialogTitle>
       <Tabs
         value={activeTab}
         onChange={(_event, value: SettingsTab) => {
           setActiveTab(value);
         }}
-        aria-label="Settings tabs"
+        aria-label={t`Settings tabs`}
         sx={{
           minHeight: 42,
           px: 1,
@@ -105,13 +117,13 @@ export function SettingsDialog({
           },
         }}
       >
-        <Tab disableRipple value="general" label="General" />
-        <Tab disableRipple value="storage" label="Storage" />
+        <Tab disableRipple value="general" label={t`General`} />
+        <Tab disableRipple value="storage" label={t`Storage`} />
       </Tabs>
 
       <DialogContent sx={{ minHeight: 120, px: 2, py: 1.5 }}>
         {activeTab === 'general' ? (
-          <Stack spacing={0} role="tabpanel" aria-label="General settings">
+          <Stack spacing={0} role="tabpanel" aria-label={t`General settings`}>
             <FormControlLabel
               sx={{ m: 0 }}
               slotProps={{ typography: { variant: 'body2' } }}
@@ -125,21 +137,43 @@ export function SettingsDialog({
                   }}
                 />
               }
-              label="Enable developer diagnostics"
+              label={t`Enable developer diagnostics`}
             />
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ pl: 3.5, mt: 0.5 }}
             >
-              Exposes local logs, health checks, and diagnostics export. Nothing is
-              uploaded automatically.
+              <Trans>
+                Exposes local logs, health checks, and diagnostics export. Nothing is
+                uploaded automatically.
+              </Trans>
             </Typography>
+            <FormControl size="small" sx={{ mt: 2, maxWidth: 240 }}>
+              <InputLabel id="settings-language-label">
+                <Trans>Language</Trans>
+              </InputLabel>
+              <Select<AppLocale>
+                labelId="settings-language-label"
+                value={locale}
+                label={t`Language`}
+                onChange={(event) => {
+                  onLocaleChange(event.target.value);
+                }}
+              >
+                <MenuItem value="en">
+                  <Trans>English</Trans>
+                </MenuItem>
+                <MenuItem value="ru">
+                  <Trans>Русский</Trans>
+                </MenuItem>
+              </Select>
+            </FormControl>
           </Stack>
         ) : null}
 
         {activeTab === 'storage' ? (
-          <Box role="tabpanel" aria-label="Storage usage settings">
+          <Box role="tabpanel" aria-label={t`Storage usage settings`}>
             <StorageUsagePanel reader={storageUsage} />
           </Box>
         ) : null}
@@ -147,7 +181,7 @@ export function SettingsDialog({
 
       <DialogActions sx={{ px: 1.5, py: 1 }}>
         <Button size="small" onClick={onClose}>
-          Done
+          <Trans>Done</Trans>
         </Button>
       </DialogActions>
     </Paper>

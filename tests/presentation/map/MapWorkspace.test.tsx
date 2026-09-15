@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { act, type ReactNode } from 'react';
+import { Children, act, isValidElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 
@@ -38,6 +38,28 @@ const mapClickCoordinate = vi.hoisted(() => ({
   latitude: 41.7,
 }));
 
+interface GeolocateControlProps {
+  readonly fitBoundsOptions?: {
+    readonly duration?: number;
+    readonly linear?: boolean;
+    readonly maxZoom?: number;
+  };
+  readonly trackUserLocation?: boolean;
+}
+
+function describeGeolocateTransition(children: ReactNode): string {
+  const control = Children.toArray(children).find(
+    (child) =>
+      isValidElement<GeolocateControlProps>(child) &&
+      child.props.trackUserLocation === false,
+  );
+  if (!isValidElement<GeolocateControlProps>(control)) return 'missing';
+  const options = control.props.fitBoundsOptions;
+  return `${options?.linear === true ? 'linear' : 'flight'}:${String(
+    options?.duration ?? 'default',
+  )}:${String(options?.maxZoom ?? 'default')}`;
+}
+
 vi.mock('react-map-gl/maplibre', () => ({
   default: ({
     boxZoom,
@@ -62,6 +84,7 @@ vi.mock('react-map-gl/maplibre', () => ({
   }) => (
     <div
       data-box-zoom={String(boxZoom)}
+      data-geolocate-transition={describeGeolocateTransition(children)}
       data-drag-rotate={String(dragRotate)}
       data-testid="native-map"
       onClick={(event) => {
@@ -901,6 +924,19 @@ describe('MapWorkspace', () => {
     });
     expect(map).toHaveAttribute('data-box-zoom', 'false');
     expect(map).toHaveAttribute('data-drag-rotate', 'false');
+  });
+
+  it('uses a bounded linear transition for My location', async () => {
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={new FakeMapFacade()} />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(await screen.findByTestId('native-map')).toHaveAttribute(
+      'data-geolocate-transition',
+      'linear:650:15',
+    );
   });
 
   it('falls back to the Georgia overview when camera storage never settles', async () => {

@@ -68,12 +68,16 @@ placeholder, or generic always-visible privacy notice.
 
 - Owner: `src/presentation/shell`.
 - Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable preferences: developer mode, collapsed navigation, marker sorting, Sentinel
-  imagery rendering, and terrain overlays in Dexie.
-- Settings uses compact `General` and `Storage` tabs. Storage shows only the
-  measurements the browser supplies: origin usage and quota, IndexedDB, Cache Storage,
-  localStorage, residual origin data, and Chromium's optional JavaScript heap estimate
-  in megabytes.
+- Durable preferences: language, developer mode, collapsed navigation, marker sorting,
+  Sentinel imagery rendering, and terrain overlays in Dexie.
+- Settings uses compact `General` and `Storage` tabs. General exposes immediate
+  English/Русский language selection and the developer-diagnostics preference. An
+  explicit language choice is stored in the existing UI-preferences record; otherwise
+  the first English or Russian entry in the browser language list is used, with English
+  as the fallback.
+- Storage shows only the measurements the browser supplies: origin usage and quota,
+  IndexedDB, Cache Storage, localStorage, residual origin data, and Chromium's optional
+  JavaScript heap estimate in megabytes.
 - Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
 - Failure boundary: uncaught React errors render a support-bundle fallback.
 

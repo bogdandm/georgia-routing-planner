@@ -25,7 +25,12 @@ import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 
-function renderPanel(services = createTestServices()) {
+function renderPanel(
+  services = createTestServices(),
+  onSelectedPointChange: Parameters<
+    typeof WeatherPanel
+  >[0]['onSelectedPointChange'] = () => undefined,
+) {
   return {
     services,
     ...render(
@@ -33,7 +38,7 @@ function renderPanel(services = createTestServices()) {
         <ThemeProvider theme={createAppTheme()}>
           <WeatherPanel
             sidebarCollapsed={false}
-            onSelectedPointChange={() => undefined}
+            onSelectedPointChange={onSelectedPointChange}
           />
         </ThemeProvider>
       </RuntimeServicesProvider>,
@@ -652,7 +657,7 @@ describe('WeatherPanel', () => {
     first.resolve(baseline);
   });
 
-  it('maps provider failures to safe copy and retries the selected point', async () => {
+  it('preserves a selected POI through provider failure and retry', async () => {
     const user = userEvent.setup();
     const baseline = await testForecast();
     const services = createTestServices();
@@ -665,10 +670,14 @@ describe('WeatherPanel', () => {
         ),
       )
       .mockResolvedValueOnce(baseline);
-    renderPanel(services);
+    const onSelectedPointChange = vi.fn();
+    renderPanel(services, onSelectedPointChange);
 
     act(() => {
-      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+      requestWeatherForecast(
+        { longitude: 44.8271, latitude: 41.7151 },
+        'Narikala Fortress',
+      );
     });
 
     expect(
@@ -680,6 +689,10 @@ describe('WeatherPanel', () => {
     expect(
       screen.getByRole('link', { name: 'Weather data by Open-Meteo' }),
     ).toBeInTheDocument();
+    expect(onSelectedPointChange).toHaveBeenLastCalledWith({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      placeLabel: 'Narikala Fortress',
+    });
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
@@ -692,6 +705,11 @@ describe('WeatherPanel', () => {
     expect(execute.mock.calls[1]?.[0].coordinate).toEqual({
       longitude: 44.8271,
       latitude: 41.7151,
+    });
+    expect(onSelectedPointChange).toHaveBeenLastCalledWith({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      elevationMeters: 1_234,
+      placeLabel: 'Narikala Fortress',
     });
   });
 

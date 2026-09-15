@@ -1281,20 +1281,16 @@ export function WeatherPanel({
       onSelectedPointChange(null);
       return;
     }
+    const point: {
+      coordinate: MapCoordinate;
+      elevationMeters?: number;
+      placeLabel?: string;
+    } = { coordinate: state.coordinate };
     if (state.status === 'ready') {
-      const point: {
-        coordinate: MapCoordinate;
-        elevationMeters: number;
-        placeLabel?: string;
-      } = {
-        coordinate: state.coordinate,
-        elevationMeters: state.forecast.elevationMeters,
-      };
-      if (nearbyPlaceLabel !== null) point.placeLabel = nearbyPlaceLabel;
-      onSelectedPointChange(point);
-      return;
+      point.elevationMeters = state.forecast.elevationMeters;
     }
-    onSelectedPointChange({ coordinate: state.coordinate });
+    if (nearbyPlaceLabel !== null) point.placeLabel = nearbyPlaceLabel;
+    onSelectedPointChange(point);
   }, [nearbyPlaceLabel, onSelectedPointChange, state]);
   const activeController = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -1421,7 +1417,7 @@ export function WeatherPanel({
                 <Button
                   variant="outlined"
                   onClick={() => {
-                    loadForecast(state.coordinate);
+                    loadForecast(state.coordinate, nearbyPlaceLabel ?? undefined);
                   }}
                 >
                   Retry

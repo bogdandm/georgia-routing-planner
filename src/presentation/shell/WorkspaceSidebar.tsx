@@ -1,3 +1,4 @@
+import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import AddIcon from '@mui/icons-material/Add';
 import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
@@ -7,19 +8,33 @@ import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOu
 import {
   Box,
   Button,
+  ButtonBase,
   IconButton,
   Stack,
   ToggleButton,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { useStore } from 'zustand';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
 import type { TrackSort } from '@/domain/tracks/localTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
-import { requestMarkerPlacement } from '@/presentation/map/mapInteractionStore';
+import {
+  cancelWeatherPointSelection,
+  mapInteractionStore,
+  requestMapNavigation,
+  requestMarkerPlacement,
+  startWeatherPointSelection,
+} from '@/presentation/map/mapInteractionStore';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 import {
   MarkersPanel,
@@ -88,42 +103,57 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
 
 function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }) {
   return (
-    <Stack
-      direction="row"
-      spacing={0.5}
-      aria-label="Forecast location"
-      sx={{ alignItems: 'center', minWidth: 0 }}
+    <ButtonBase
+      aria-label="Center map on forecast location"
+      onClick={() => {
+        requestMapNavigation(point.coordinate);
+      }}
+      sx={{
+        minWidth: 0,
+        px: 0.5,
+        py: 0.25,
+        borderRadius: 1,
+        textAlign: 'left',
+        transition: (theme) => theme.transitions.create('background-color'),
+        '&:hover': { bgcolor: 'action.hover' },
+        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
+      }}
     >
-      <LocationOnOutlinedIcon
-        aria-hidden="true"
-        sx={{ flexShrink: 0, fontSize: 18, color: 'text.secondary' }}
-      />
-      <Stack spacing={0} sx={{ minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          noWrap
-          sx={{ fontVariantNumeric: 'tabular-nums' }}
-        >
-          {point.coordinate.latitude.toFixed(5)},{' '}
-          {point.coordinate.longitude.toFixed(5)}
-        </Typography>
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          noWrap
-          aria-hidden={point.elevationMeters === undefined}
-          sx={{
-            visibility: point.elevationMeters === undefined ? 'hidden' : 'visible',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {point.elevationMeters === undefined
-            ? '\u00a0'
-            : `${Math.round(point.elevationMeters).toLocaleString('en-US')} m`}
-        </Typography>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+        <LocationOnOutlinedIcon
+          aria-hidden="true"
+          sx={{ flexShrink: 0, fontSize: 18, color: 'text.secondary' }}
+        />
+        <Stack spacing={0} sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            color={point.placeLabel === undefined ? 'text.secondary' : 'text.primary'}
+            noWrap
+            sx={{
+              fontWeight: point.placeLabel === undefined ? 400 : 600,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {point.placeLabel ??
+              `${point.coordinate.latitude.toFixed(5)}, ${point.coordinate.longitude.toFixed(5)}`}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            aria-hidden={point.elevationMeters === undefined}
+            sx={{
+              visibility: point.elevationMeters === undefined ? 'hidden' : 'visible',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {point.elevationMeters === undefined
+              ? '\u00a0'
+              : `${Math.round(point.elevationMeters).toLocaleString('en-US')} m`}
+          </Typography>
+        </Stack>
       </Stack>
-    </Stack>
+    </ButtonBase>
   );
 }
 
@@ -175,6 +205,13 @@ export function WorkspaceSidebar({
   const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
     useState<WeatherHeaderPoint | null>(null);
+  const weatherPointSelectionActive = useStore(
+    mapInteractionStore,
+    (state) => state.weatherPointSelectionActive,
+  );
+  useEffect(() => {
+    if (activeTab !== 'weather') cancelWeatherPointSelection();
+  }, [activeTab]);
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
   const markerCreationMessage =
     mapViewportSnapshot === null
@@ -185,6 +222,14 @@ export function WorkspaceSidebar({
   const startMarkerPlacement = () => {
     if (fullWidth) onShowMap();
     requestMarkerPlacement({ kind: 'saved-marker' });
+  };
+  const toggleWeatherPointSelection = () => {
+    if (weatherPointSelectionActive) {
+      cancelWeatherPointSelection();
+      return;
+    }
+    startWeatherPointSelection();
+    if (fullWidth) onShowMap();
   };
 
   return (
@@ -228,6 +273,29 @@ export function WorkspaceSidebar({
           <WeatherLocationHeader point={weatherHeaderPoint} />
         ) : null}
         <Box sx={{ flex: 1 }} />
+        {activeTab === 'weather' ? (
+          <Tooltip
+            title={
+              weatherPointSelectionActive
+                ? 'Cancel forecast point selection'
+                : 'Select a forecast point on the map'
+            }
+          >
+            <ToggleButton
+              size="small"
+              value="weather-point"
+              selected={weatherPointSelectionActive}
+              aria-label={
+                weatherPointSelectionActive
+                  ? 'Cancel forecast point selection'
+                  : 'Select forecast point'
+              }
+              onClick={toggleWeatherPointSelection}
+            >
+              <AddLocationAltIcon fontSize="small" />
+            </ToggleButton>
+          </Tooltip>
+        ) : null}
         {activeTab === 'satellite' ? (
           <Tooltip
             title={

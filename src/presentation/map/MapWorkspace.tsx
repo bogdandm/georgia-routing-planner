@@ -1,3 +1,4 @@
+import WaterDropIcon from '@mui/icons-material/WaterDrop';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
@@ -10,6 +11,8 @@ import {
   Menu,
   MenuItem,
   Snackbar,
+  Stack,
+  Typography,
   useMediaQuery,
 } from '@mui/material';
 import type { MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
@@ -25,6 +28,7 @@ import {
 import Map, {
   GeolocateControl,
   NavigationControl,
+  Marker,
   type MapRef,
 } from 'react-map-gl/maplibre';
 import { useStore } from 'zustand';
@@ -54,15 +58,16 @@ import {
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
   cancelMarkerPlacement,
+  cancelWeatherPointSelection,
   completeMarkerPlacement,
+  completeWeatherPointSelection,
   consumeMapFitBoundsCommand,
   consumeMapNavigationCommand,
   consumeMapPointInspectionCommand,
   mapInteractionStore,
   requestMarkerCreationAt,
-  requestMapPointInspection,
   requestSatelliteSearch,
-  requestWeatherForecast,
+  type WeatherMapForecastMarker,
 } from '@/presentation/map/mapInteractionStore';
 import {
   applySharedMapView,
@@ -74,6 +79,11 @@ import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
+import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
+import {
+  formatWeatherMillimetres,
+  formatWeatherTemperatureRange,
+} from '@/presentation/weather/weatherFormatters';
 
 interface MapWorkspaceProps {
   readonly facade?: MapFacade;
@@ -92,6 +102,82 @@ const unavailableMapStyle: StyleSpecification = {
 
 const cameraRestoreTimeoutMs = 2_000;
 const terrainRetryDelaysMs = [1_000, 3_000] as const;
+
+function WeatherForecastMapMarker({
+  marker,
+}: {
+  readonly marker: WeatherMapForecastMarker;
+}) {
+  const temperature = formatWeatherTemperatureRange(
+    marker.period.temperatureMinCelsius,
+    marker.period.temperatureMaxCelsius,
+  );
+  const precipitation = formatWeatherMillimetres(marker.period.precipitationMm);
+  const label = `Current weather: ${temperature}, ${precipitation} precipitation`;
+  return (
+    <Marker
+      longitude={marker.coordinate.longitude}
+      latitude={marker.coordinate.latitude}
+      anchor="bottom"
+    >
+      <Box
+        role="img"
+        aria-label={label}
+        sx={{
+          display: 'flex',
+          minWidth: 64,
+          flexDirection: 'column',
+          alignItems: 'center',
+          px: 0.75,
+          py: 0.5,
+          pointerEvents: 'none',
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1.5,
+          bgcolor: 'rgba(255, 255, 255, 0.94)',
+          boxShadow: 3,
+        }}
+      >
+        <MonochromeWeatherPeriodIcon
+          icon={marker.period.status.primary.icon}
+          visibility={marker.period.status.visibility}
+          isDay={marker.isDay}
+          size={48}
+        />
+        <Stack spacing={0} sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: 'grey.900',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {temperature}
+          </Typography>
+          <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
+            <WaterDropIcon
+              aria-hidden="true"
+              sx={{ fontSize: 13, color: 'info.dark' }}
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'grey.900',
+                fontWeight: 600,
+                lineHeight: 1.2,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {precipitation}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Box>
+    </Marker>
+  );
+}
 
 function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve();
@@ -189,6 +275,14 @@ export function MapWorkspace({
     mapInteractionStore,
     (state) => state.markerPlacement,
   );
+  const weatherPointSelectionActive = useStore(
+    mapInteractionStore,
+    (state) => state.weatherPointSelectionActive,
+  );
+  const weatherMapForecastMarker = useStore(
+    mapInteractionStore,
+    (state) => state.weatherMapForecastMarker,
+  );
   const terrainComputeStatus = useStore(
     mapLayerStore,
     (state) => state.terrainComputeStatus,
@@ -219,7 +313,6 @@ export function MapWorkspace({
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const tracksWorkspace = useOptionalTracksWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
-  const weatherSelectionActive = activeTab === 'weather';
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const routePlanningActive =
     activeTab === 'tracks' &&
@@ -451,13 +544,17 @@ export function MapWorkspace({
         ? 'marker-placement'
         : routePlanningActive
           ? 'route-planning'
-          : 'default';
+          : weatherPointSelectionActive
+            ? 'weather-point-selection'
+            : 'default';
     facade.setInteractionMode(mode);
-    if (mode === 'route-planning') facade.closePointInspection();
+    if (mode === 'route-planning' || mode === 'weather-point-selection') {
+      facade.closePointInspection();
+    }
     return () => {
       facade.setInteractionMode('default');
     };
-  }, [facade, markerPlacement, routePlanningActive]);
+  }, [facade, markerPlacement, routePlanningActive, weatherPointSelectionActive]);
 
   useEffect(() => {
     if (!routePlanningActive || addRoutePlanPoint === undefined) return undefined;
@@ -483,21 +580,23 @@ export function MapWorkspace({
   useEffect(() => {
     return () => {
       cancelMarkerPlacement();
+      cancelWeatherPointSelection();
     };
   }, []);
 
   useEffect(() => {
-    if (markerPlacement === null) return;
+    if (markerPlacement === null && !weatherPointSelectionActive) return;
     const cancelOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
       cancelMarkerPlacement();
+      cancelWeatherPointSelection();
     };
     window.addEventListener('keydown', cancelOnEscape);
     return () => {
       window.removeEventListener('keydown', cancelOnEscape);
     };
-  }, [markerPlacement]);
+  }, [markerPlacement, weatherPointSelectionActive]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
     return createHikingMapStyle(mapProviderConfiguration.value);
@@ -781,6 +880,10 @@ export function MapWorkspace({
       cancelMarkerPlacement();
       return;
     }
+    if (weatherPointSelectionActive) {
+      cancelWeatherPointSelection();
+      return;
+    }
     setContextMenu({
       mouseX: event.originalEvent.clientX,
       mouseY: event.originalEvent.clientY,
@@ -802,9 +905,17 @@ export function MapWorkspace({
       );
       return;
     }
-    if (event.originalEvent.button !== 0 || !weatherSelectionActive) return;
-    requestWeatherForecast(coordinate);
-    requestMapPointInspection(coordinate);
+    if (event.originalEvent.button !== 0 || !weatherPointSelectionActive) return;
+    event.originalEvent.preventDefault();
+    const nearestPoi = facade.getNearestPoi(coordinate);
+    completeWeatherPointSelection(
+      coordinate,
+      nearestPoi !== null &&
+        nearestPoi.name !== null &&
+        nearestPoi.distanceMeters <= 500
+        ? nearestPoi.name
+        : undefined,
+    );
   };
 
   const copyCoordinates = () => {
@@ -931,6 +1042,9 @@ export function MapWorkspace({
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
             />
+            {weatherMapForecastMarker === null ? null : (
+              <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
+            )}
           </Map>
         ))
       )}

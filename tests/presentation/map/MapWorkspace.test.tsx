@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 
@@ -20,6 +20,8 @@ import {
   requestMapPointInspection,
   requestMarkerPlacement,
   resetMapInteractionStore,
+  setWeatherMapForecastMarker,
+  startWeatherPointSelection,
 } from '@/presentation/map/mapInteractionStore';
 import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
 import {
@@ -39,12 +41,14 @@ const mapClickCoordinate = vi.hoisted(() => ({
 vi.mock('react-map-gl/maplibre', () => ({
   default: ({
     boxZoom,
+    children,
     dragRotate,
     onClick,
     onContextMenu,
     onMoveStart,
   }: {
     readonly boxZoom?: boolean;
+    readonly children?: ReactNode;
     readonly dragRotate?: boolean;
     readonly onClick?: (event: {
       readonly originalEvent: MouseEvent;
@@ -78,10 +82,30 @@ vi.mock('react-map-gl/maplibre', () => ({
           lngLat: { lng: 44.8, lat: 41.7 },
         });
       }}
-    />
+    >
+      {children}
+    </div>
   ),
   GeolocateControl: () => null,
   NavigationControl: () => null,
+  Marker: ({
+    children,
+    latitude,
+    longitude,
+  }: {
+    readonly children?: ReactNode;
+    readonly latitude: number;
+    readonly longitude: number;
+  }) => (
+    <div
+      data-testid="weather-map-marker"
+      data-latitude={latitude}
+      data-longitude={longitude}
+    >
+      {children}
+    </div>
+  ),
+  useControl: (createControl: () => unknown) => createControl(),
 }));
 
 const tracksWorkspaceMock = vi.hoisted(() => ({
@@ -1295,7 +1319,7 @@ describe('MapWorkspace', () => {
     expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
   });
 
-  it('selects Weather forecast points while preserving interaction precedence', async () => {
+  it('selects a Weather forecast point only through the one-shot header mode', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });
     tracksWorkspaceMock.active = {
@@ -1312,79 +1336,106 @@ describe('MapWorkspace', () => {
     );
 
     const nativeMap = await screen.findByTestId('native-map');
+    fireEvent.click(nativeMap, { button: 0 });
+    expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
+    expect(facade.interactionModes.at(-1)).toBe('default');
+    facade.nearestPoi = {
+      name: 'Nearby weather POI',
+      category: 'tourism',
+      distanceMeters: 500,
+    };
+
+    act(() => {
+      startWeatherPointSelection();
+    });
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
+    });
+
+    fireEvent.click(nativeMap, { button: 0 });
+    const request = mapInteractionStore.getState().weatherForecastRequest;
+    expect(request).toMatchObject({
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      placeLabel: 'Nearby weather POI',
+    });
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
+    expect(facade.pointInspectionRequests).toEqual([]);
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('default');
     });
+    if (request === null) throw new Error('Expected a Weather request.');
+    consumeWeatherForecastRequest(request.id);
+    facade.nearestPoi = {
+      name: 'Distant weather POI',
+      category: 'tourism',
+      distanceMeters: 500.01,
+    };
     act(() => {
-      facade.setPointInspection({
-        status: 'open',
-        coordinate: { longitude: 44.8, latitude: 41.7 },
-        elevation: { status: 'loading' },
-        nearbyPoi: { status: 'loading' },
-      });
+      startWeatherPointSelection();
     });
     fireEvent.click(nativeMap, { button: 0 });
-    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
-      coordinate: { longitude: 44.8, latitude: 41.7 },
-    });
-    await waitFor(() => {
-      expect(facade.pointInspectionRequests).toEqual([]);
-    });
-    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
-      coordinate: { longitude: 44.8, latitude: 41.7 },
-    });
+    const distantRequest = mapInteractionStore.getState().weatherForecastRequest;
+    expect(distantRequest).not.toHaveProperty('placeLabel');
+    if (distantRequest === null) throw new Error('Expected a Weather request.');
+    consumeWeatherForecastRequest(distantRequest.id);
 
     act(() => {
-      facade.closePointInspection();
-    });
-    mapClickCoordinate.longitude = -74.006;
-    mapClickCoordinate.latitude = 40.7128;
-    fireEvent.click(nativeMap, { button: 0 });
-    await waitFor(() => {
-      expect(facade.pointInspectionRequests).toEqual([
-        { longitude: -74.006, latitude: 40.7128 },
-      ]);
-    });
-    const secondRequest = mapInteractionStore.getState().weatherForecastRequest;
-    expect(secondRequest).toMatchObject({
-      coordinate: { longitude: -74.006, latitude: 40.7128 },
-    });
-    if (secondRequest === null) throw new Error('Expected a Weather request.');
-    consumeWeatherForecastRequest(secondRequest.id);
-
-    fireEvent.click(nativeMap, { button: 1 });
-    fireEvent.contextMenu(nativeMap);
-    expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
-    act(() => {
-      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
-    });
-    expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
-
-    act(() => {
-      useUiStore.setState({ activeTab: 'tracks' });
-    });
-    await waitFor(() => {
-      expect(facade.interactionModes.at(-1)).toBe('route-planning');
-    });
-    act(() => {
-      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
-    });
-    expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
-
-    act(() => {
-      useUiStore.setState({ activeTab: 'weather' });
+      startWeatherPointSelection();
       requestMarkerPlacement({ kind: 'saved-marker' });
     });
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('marker-placement');
     });
     fireEvent.click(nativeMap, { button: 0 });
     expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
     expect(mapInteractionStore.getState().markerCreationCommand).toMatchObject({
-      coordinate: { longitude: -74.006, latitude: 40.7128 },
+      coordinate: { longitude: 44.8, latitude: 41.7 },
       target: { kind: 'saved-marker' },
     });
-    expect(facade.pointInspectionRequests).toHaveLength(1);
+  });
+
+  it('shows a monochrome current-weather marker with temperature and precipitation', async () => {
+    const services = createTestServices();
+    const forecast = await services.pointWeatherForecast.execute(
+      {
+        coordinate: { longitude: 44.8271, latitude: 41.7151 },
+        model: 'ecmwf_ifs',
+      },
+      new AbortController().signal,
+    );
+    act(() => {
+      setWeatherMapForecastMarker({
+        coordinate: forecast.selectedCoordinate,
+        isDay: forecast.current.isDay,
+        period: forecast.currentThreeHours,
+      });
+    });
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={new FakeMapFacade()} />
+      </RuntimeServicesProvider>,
+    );
+
+    const marker = await screen.findByTestId('weather-map-marker');
+    expect(marker).toHaveAttribute('data-latitude', '41.7151');
+    expect(marker).toHaveAttribute('data-longitude', '44.8271');
+    expect(
+      within(marker).getByRole('img', {
+        name: 'Current weather: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
+    expect(within(marker).getByText('20 °C')).toBeVisible();
+    expect(within(marker).getByText('0 mm')).toBeVisible();
+    expect(marker.querySelector('img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/monochrome/clear-night.svg'),
+    );
+    expect(marker.querySelector('img')).toHaveAttribute('width', '48');
+    expect(within(marker).getByRole('img')).toHaveStyle({
+      backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    });
   });
 
   it('applies the Sentinel preset when an applied scene is hidden', async () => {

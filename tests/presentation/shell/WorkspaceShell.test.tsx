@@ -898,6 +898,9 @@ describe('WorkspaceShell', () => {
     expect(window.location.hash).toBe('#weather');
     expect(screen.getByRole('heading', { name: 'Weather', level: 1 })).toBeVisible();
     expect(screen.getByText('Select a forecast point')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Select forecast point' })).toBeVisible();
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
+    expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
   }, 10_000);
   it('retains the loaded Weather forecast across workspace navigation', async () => {
     const user = userEvent.setup();
@@ -908,7 +911,9 @@ describe('WorkspaceShell', () => {
     act(() => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
-    const location = await screen.findByLabelText('Forecast location');
+    const location = await screen.findByRole('button', {
+      name: 'Center map on forecast location',
+    });
     expect(within(location).getByText('41.71510, 44.82710')).toBeVisible();
     expect(within(location).getByText('1,234 m')).toBeVisible();
 
@@ -918,10 +923,36 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Weather' }));
 
-    const retainedLocation = screen.getByLabelText('Forecast location');
+    const retainedLocation = screen.getByRole('button', {
+      name: 'Center map on forecast location',
+    });
     expect(within(retainedLocation).getByText('41.71510, 44.82710')).toBeVisible();
     expect(within(retainedLocation).getByText('1,234 m')).toBeVisible();
     expect(execute).toHaveBeenCalledOnce();
+  });
+  it('shows a nearby POI in the Weather header and centers the map from it', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+    act(() => {
+      requestWeatherForecast(
+        { longitude: 44.8073, latitude: 41.6918 },
+        'Narikala Fortress',
+      );
+    });
+
+    const location = await screen.findByRole('button', {
+      name: 'Center map on forecast location',
+    });
+    expect(within(location).getByText('Narikala Fortress')).toBeVisible();
+    expect(within(location).queryByText('41.69180, 44.80730')).not.toBeInTheDocument();
+    expect(within(location).getByText('1,234 m')).toBeVisible();
+
+    await user.click(location);
+    expect(mapInteractionStore.getState().navigationCommand).toMatchObject({
+      target: { longitude: 44.8073, latitude: 41.6918 },
+    });
   });
   it('runs Mosaic from the fixed satellite header and retains it off-pane', async () => {
     const user = userEvent.setup();
@@ -1356,20 +1387,24 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     await user.click(screen.getByRole('tab', { name: 'Weather' }));
-    await user.click(screen.getByRole('button', { name: 'Show map' }));
+    await user.click(screen.getByRole('button', { name: 'Select forecast point' }));
     expect(useUiStore.getState()).toMatchObject({
       activeTab: 'weather',
       mobileWorkspaceOpen: false,
     });
     expect(screen.getByLabelText('Fake map')).toBeVisible();
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(true);
 
     act(() => {
       requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
     });
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
 
     expect(screen.getByRole('heading', { name: 'Weather', level: 1 })).toBeVisible();
-    const location = await screen.findByLabelText('Forecast location');
+    const location = await screen.findByRole('button', {
+      name: 'Center map on forecast location',
+    });
     expect(within(location).getByText('41.71510, 44.82710')).toBeVisible();
     expect(within(location).getByText('1,234 m')).toBeVisible();
   });

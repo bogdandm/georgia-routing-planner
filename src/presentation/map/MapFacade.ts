@@ -12,7 +12,8 @@ import type {
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
 
-export type MapInteractionMode = 'default' | 'marker-placement' | 'route-planning';
+export type MapInteractionMode =
+  'default' | 'marker-placement' | 'route-planning' | 'weather-point-selection';
 
 export type MapViewportMovement =
   | { readonly phase: 'moving' }

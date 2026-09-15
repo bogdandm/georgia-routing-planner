@@ -32,6 +32,7 @@ import { weatherProviderConfiguration } from '@/bootstrap/configuration/WeatherP
 import {
   consumeWeatherForecastRequest,
   mapInteractionStore,
+  setWeatherMapForecastMarker,
 } from '@/presentation/map/mapInteractionStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
@@ -45,6 +46,7 @@ import {
 } from '@/presentation/weather/HourlyForecastTable';
 import {
   formatWeatherMillimetres,
+  formatWeatherTemperatureRange,
   formatWeatherWindMetresPerSecond,
 } from '@/presentation/weather/weatherFormatters';
 
@@ -76,6 +78,7 @@ const months = [
 export interface WeatherHeaderPoint {
   readonly coordinate: MapCoordinate;
   readonly elevationMeters?: number;
+  readonly placeLabel?: string;
 }
 
 type WeatherPanelState =
@@ -182,12 +185,6 @@ function currentPeriodDateTime(timestamp: string): string {
   const weekday = fullWeekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
   if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
   return `${weekday}, ${localDateLabel(date)} · ${timestamp.slice(11, 16)}`;
-}
-
-function formatRange(minimum: number, maximum: number, unit: string): string {
-  const low = Math.round(minimum).toString();
-  const high = Math.round(maximum).toString();
-  return low === high ? `${low} ${unit}` : `${low}…${high} ${unit}`;
 }
 
 function formatWindRange(
@@ -527,10 +524,9 @@ interface PeriodDisplayValues {
 
 function periodDisplayValues(period: PointWeatherForecastPeriod): PeriodDisplayValues {
   return {
-    temperature: formatRange(
+    temperature: formatWeatherTemperatureRange(
       period.temperatureMinCelsius,
       period.temperatureMaxCelsius,
-      '°C',
     ),
     temperatureMinimum: Math.round(period.temperatureMinCelsius).toString(),
     temperatureMaximum: Math.round(period.temperatureMaxCelsius).toString(),
@@ -1279,20 +1275,27 @@ export function WeatherPanel({
   const [state, setState] = useState<WeatherPanelState>({ status: 'idle' });
   const [hourlyPanelRequest, setHourlyPanelRequest] =
     useState<FloatingHourlyForecastRequest | null>(null);
+  const [nearbyPlaceLabel, setNearbyPlaceLabel] = useState<string | null>(null);
   useEffect(() => {
     if (state.status === 'idle') {
       onSelectedPointChange(null);
       return;
     }
     if (state.status === 'ready') {
-      onSelectedPointChange({
+      const point: {
+        coordinate: MapCoordinate;
+        elevationMeters: number;
+        placeLabel?: string;
+      } = {
         coordinate: state.coordinate,
         elevationMeters: state.forecast.elevationMeters,
-      });
+      };
+      if (nearbyPlaceLabel !== null) point.placeLabel = nearbyPlaceLabel;
+      onSelectedPointChange(point);
       return;
     }
     onSelectedPointChange({ coordinate: state.coordinate });
-  }, [onSelectedPointChange, state]);
+  }, [nearbyPlaceLabel, onSelectedPointChange, state]);
   const activeController = useRef<AbortController | null>(null);
   useEffect(() => {
     if (!sidebarCollapsed) return undefined;
@@ -1305,24 +1308,30 @@ export function WeatherPanel({
   }, [sidebarCollapsed]);
 
   const loadForecast = useCallback(
-    (coordinate: MapCoordinate) => {
+    (coordinate: MapCoordinate, placeLabel?: string) => {
       activeController.current?.abort();
       const controller = new AbortController();
       activeController.current = controller;
       setHourlyPanelRequest(null);
+      setNearbyPlaceLabel(placeLabel ?? null);
+      setWeatherMapForecastMarker(null);
       setState({ status: 'loading', coordinate: { ...coordinate } });
       void pointWeatherForecast
         .execute({ coordinate, model: DEFAULT_WEATHER_MODEL }, controller.signal)
         .then((forecast) => {
           if (controller.signal.aborted || activeController.current !== controller)
             return;
-          activeController.current = null;
+          setWeatherMapForecastMarker({
+            coordinate,
+            isDay: forecast.current.isDay,
+            period: forecast.currentThreeHours,
+          });
           setState({ status: 'ready', coordinate: { ...coordinate }, forecast });
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted || activeController.current !== controller)
             return;
-          activeController.current = null;
+          setWeatherMapForecastMarker(null);
           const code =
             error instanceof PointWeatherForecastError
               ? error.code
@@ -1339,7 +1348,7 @@ export function WeatherPanel({
     queueMicrotask(() => {
       if (!shouldStart) return;
       consumeWeatherForecastRequest(request.id);
-      loadForecast(request.coordinate);
+      loadForecast(request.coordinate, request.placeLabel);
     });
     return () => {
       shouldStart = false;
@@ -1373,7 +1382,7 @@ export function WeatherPanel({
           </WeatherIconTooltip>
           <Typography variant="subtitle1">Select a forecast point</Typography>
           <Typography variant="body2" color="text.secondary">
-            Click a point on the map to load its ECMWF IFS forecast.
+            Use the header action, then click the map to load its ECMWF IFS forecast.
           </Typography>
         </Stack>
       </Box>

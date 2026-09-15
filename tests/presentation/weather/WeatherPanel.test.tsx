@@ -17,6 +17,7 @@ import {
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import {
+  mapInteractionStore,
   requestWeatherForecast,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
@@ -80,7 +81,9 @@ describe('WeatherPanel', () => {
 
     expect(screen.getByText('Select a forecast point')).toBeInTheDocument();
     expect(
-      screen.getByText('Click a point on the map to load its ECMWF IFS forecast.'),
+      screen.getByText(
+        'Use the header action, then click the map to load its ECMWF IFS forecast.',
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Weather data by Open-Meteo' }),
@@ -182,6 +185,10 @@ describe('WeatherPanel', () => {
     expect(execute.mock.calls[0]?.[0]).toEqual({
       coordinate: { longitude: 44.8271, latitude: 41.7151 },
       model: 'ecmwf_ifs',
+    });
+    expect(mapInteractionStore.getState().weatherMapForecastMarker).toMatchObject({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      isDay: true,
     });
     expect(screen.queryByText(/All times:/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/Click another map point/u)).not.toBeInTheDocument();

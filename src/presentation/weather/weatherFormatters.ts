@@ -14,3 +14,12 @@ export function formatWeatherVisibilityKilometres(valueInMeters: number): string
 export function formatWeatherMillimetres(value: number): string {
   return `${formatWeatherMillimetresValue(value)} mm`;
 }
+
+export function formatWeatherTemperatureRange(
+  minimumCelsius: number,
+  maximumCelsius: number,
+): string {
+  const minimum = Math.round(minimumCelsius).toString();
+  const maximum = Math.round(maximumCelsius).toString();
+  return minimum === maximum ? `${minimum} °C` : `${minimum}…${maximum} °C`;
+}

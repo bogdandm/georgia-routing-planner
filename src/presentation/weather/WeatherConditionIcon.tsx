@@ -311,14 +311,16 @@ function iconForPeriod(
 function StaticMeteocon({
   name,
   size,
+  sources = meteoconSources,
 }: {
   readonly name: MeteoconName;
   readonly size: number;
+  readonly sources?: Readonly<Record<MeteoconName, string>>;
 }) {
   return (
     <Box
       component="img"
-      src={meteoconSources[name]}
+      src={sources[name]}
       alt=""
       aria-hidden="true"
       width={size}
@@ -358,4 +360,18 @@ export function WeatherPeriodIcon({
       <StaticMeteocon name={iconForPeriod(icon, visibility, isDay)} size={size} />
     </WeatherIconTooltip>
   );
+}
+
+export function MonochromeWeatherPeriodIcon({
+  icon,
+  visibility,
+  isDay,
+  size = 36,
+}: {
+  readonly icon: WeatherIcon;
+  readonly visibility: VisibilityStatus;
+  readonly isDay: boolean;
+  readonly size?: number;
+}) {
+  return <StaticMeteocon name={iconForPeriod(icon, visibility, isDay)} size={size} />;
 }

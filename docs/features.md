@@ -41,9 +41,10 @@ compact stats without chart interaction. Expanding the disclosure reveals the fu
 editor; collapsing preserves the active track, while closing clears it. Selecting
 Sentinel imagery closes the smartphone workspace so the map immediately shows the
 applied scene; reopening the workspace restores the existing imagery results. From
-Weather, **Show map** exposes the map for point selection, and **Open workspace**
-returns to the same loading or completed forecast. This transient presentation state is
-not stored as a navigation preference or URL entry.
+Weather, the header's **Select forecast point** action closes the workspace and gives
+the next primary map click to Weather; **Open workspace** returns to the same loading or
+completed forecast. This transient presentation state is not stored as a navigation
+preference or URL entry.
 
 ## Desktop workspace
 
@@ -400,27 +401,39 @@ contract remains unchanged.
 
 ### Weather
 
-Weather starts with a single instruction to select a point. While Weather is active, a
-primary map click opens or refreshes the ordinary point-inspection popup and sends the
-same WGS84 coordinate to the forecast workflow. Marker placement retains higher
-priority. A route draft hidden behind Weather does not capture clicks; returning to
-Tracks resumes route selection.
+Opening Weather does not change the map cursor or map-click behavior. Its header exposes
+one **Select forecast point** icon action. Activating it changes the cursor to a
+crosshair and gives the next primary map click to Weather instead of the ordinary
+point-inspection workflow; the mode then ends. Marker placement and Weather point
+selection are mutually exclusive, and a route draft hidden behind Weather does not
+capture clicks. On smartphones, activating the action also reveals the map.
 
-The selected-point context is one compact location row containing a pin icon, the
-clicked coordinate, and forecast elevation. The summary is one bordered card: a softly
-tinted current-period section fills the left side, while daytime and night forecasts
-stack on the right behind inset dividers. The current section gives the local date and
-time, then keeps the weather icon beside a top-aligned temperature with the primary
-condition directly beneath it. Visibly labelled wind, gust, and precipitation rows
-follow without separators. Each Day and Night section groups its plain period label with
-the weather icon. Wider viewports keep the temperature and compact metrics in an
-adjacent column. At narrow mobile widths, the period expands into a prominent
-temperature with its primary condition while precipitation, icon-only wind, and
-icon-only gust ranges form a compact vertical metrics column on the right. Significant
-visibility is folded into the single condition Meteocon only when no precipitation
-phenomenon takes priority. The former large apparent-temperature, cloud-cover,
-visibility, wind, and gust metric cards are not rendered. Every weather and metric icon
-exposes its label on pointer hover, keyboard focus, and a touch-screen tap.
+A completed forecast renders one map marker at the clicked WGS84 coordinate. It uses the
+monochrome Meteocon selected for **Now · next 3 h** at the visual scale of saved map
+markers. Temperature and precipitation stack below the icon inside one compact white
+card so the complete marker stays legible over every basemap. The panel and map marker
+therefore share the same monochrome artwork.
+
+The selected-point context is one compact clickable location row containing a pin icon,
+forecast elevation, and either the named POI selected by the map's existing
+nearest-object lookup within 500 metres or the clicked coordinate when no such POI is
+available. Hover and keyboard-focus treatments expose the row's interactivity.
+Activating it recenters the map on the forecast point without changing its zoom.
+
+The summary is one bordered card: a softly tinted current-period section fills the left
+side, while daytime and night forecasts stack on the right behind inset dividers. The
+current section gives the local date and time, then keeps the weather icon beside a
+top-aligned temperature with the primary condition directly beneath it. Visibly labelled
+wind, gust, and precipitation rows follow without separators. Each Day and Night section
+groups its plain period label with the weather icon. Wider viewports keep the
+temperature and compact metrics in an adjacent column. At narrow mobile widths, the
+period expands into a prominent temperature with its primary condition while
+precipitation, icon-only wind, and icon-only gust ranges form a compact vertical metrics
+column on the right. Significant visibility is folded into the single condition Meteocon
+only when no precipitation phenomenon takes priority. The former large
+apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
+rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
+focus, and a touch-screen tap.
 
 All forecast-condition artwork is one monochrome static Meteocon selected from the
 hourly WMO code or aggregated status, using day/night variants where available.

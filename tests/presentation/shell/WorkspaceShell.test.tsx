@@ -1,5 +1,6 @@
 import { strFromU8, unzipSync } from 'fflate';
 
+import { I18nProvider } from '@lingui/react';
 import { ThemeProvider } from '@mui/material';
 import {
   act,
@@ -43,6 +44,7 @@ import {
   type LocalTrackContent,
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
+import { resolveAppLocale } from '@/domain/localization/appLocale';
 
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
@@ -54,6 +56,7 @@ import {
   setSatelliteSearchAnchor,
 } from '@/presentation/map/mapInteractionStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
@@ -151,6 +154,7 @@ beforeEach(async () => {
   resetMapLayerStore();
   resetMapInteractionStore();
   resetSatelliteRequestStatus();
+  activateAppLocale('en');
   services = createTestServices();
   await services.database.delete();
   services = createTestServices();
@@ -178,11 +182,13 @@ function renderWorkspaceShell(
   mapSurface: ReactNode = <div aria-label="Fake map">Local map ready</div>,
 ) {
   return render(
-    <RuntimeServicesProvider services={services}>
-      <ThemeProvider theme={createAppTheme()}>
-        <WorkspaceShell mapSurface={mapSurface} />
-      </ThemeProvider>
-    </RuntimeServicesProvider>,
+    <I18nProvider i18n={appI18n}>
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <WorkspaceShell mapSurface={mapSurface} />
+        </ThemeProvider>
+      </RuntimeServicesProvider>
+    </I18nProvider>,
   );
 }
 
@@ -4431,6 +4437,7 @@ describe('WorkspaceShell', () => {
     await waitFor(async () => {
       await expect(services.database.loadUiPreferences()).resolves.toEqual({
         developerMode: true,
+        locale: 'en',
         navigationCollapsed: false,
         elevationGradeLegendDismissed: false,
         markerSort: 'created',
@@ -4543,6 +4550,62 @@ describe('WorkspaceShell', () => {
     expect(screen.getByText('4.00 MB')).toBeVisible();
     expect(screen.getByText('48.00 MB')).toBeVisible();
     expect(screen.getByText(/HTTP and MapLibre tile caches/i)).toBeVisible();
+  });
+
+  it('switches Settings to Russian without remounting the map and persists it', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell(<div aria-label="Localized map">Map identity</div>);
+    const mapSurface = screen.getByLabelText('Localized map');
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Settings' });
+    expect(within(settings).getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await user.click(screen.getByRole('combobox', { name: 'Language' }));
+    await user.click(screen.getByRole('option', { name: 'Русский' }));
+
+    expect(
+      await within(settings).findByRole('heading', { name: 'Настройки' }),
+    ).toBeVisible();
+    expect(screen.getByLabelText('Localized map')).toBe(mapSurface);
+    await waitFor(async () => {
+      await expect(services.database.loadUiPreferences()).resolves.toMatchObject({
+        locale: 'ru',
+      });
+    });
+  });
+
+  it('keeps a selected locale active when preference persistence fails', async () => {
+    vi.spyOn(services.database, 'saveUiPreferences').mockRejectedValueOnce(
+      new Error('write unavailable'),
+    );
+    const log = vi.spyOn(services.logger, 'log');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('combobox', { name: 'Language' }));
+    await user.click(screen.getByRole('option', { name: 'Русский' }));
+
+    expect(await screen.findByRole('heading', { name: 'Настройки' })).toBeVisible();
+    await waitFor(() => {
+      expect(log).toHaveBeenCalledWith({
+        level: 'warn',
+        name: 'storage.settings.save-failed',
+      });
+    });
+  });
+
+  it('starts Settings in Russian from browser languages without a saved locale', async () => {
+    vi.spyOn(window.navigator, 'languages', 'get').mockReturnValue(['ka-GE', 'ru-RU']);
+    const preferences = await services.database.loadUiPreferences();
+    activateAppLocale(resolveAppLocale(preferences.locale, navigator.languages));
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+
+    expect(screen.getByRole('heading', { name: 'Настройки' })).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Язык' })).toHaveTextContent('Русский');
   });
 
   it.each([900, 1900])(

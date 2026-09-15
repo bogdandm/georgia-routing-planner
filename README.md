@@ -162,14 +162,17 @@ local track functionality continues to work.
 
 ### Development commands
 
-| Command                 | Purpose                                    |
-| ----------------------- | ------------------------------------------ |
-| `pnpm dev`              | Start the local development server.        |
-| `pnpm test`             | Run unit and component tests.              |
-| `pnpm test:integration` | Run adapter and persistence tests.         |
-| `pnpm e2e`              | Run browser and accessibility checks.      |
-| `pnpm build`            | Create the production build.               |
-| `pnpm check`            | Run the complete non-browser verification. |
+| Command                 | Purpose                                                     |
+| ----------------------- | ----------------------------------------------------------- |
+| `pnpm dev`              | Start the local development server.                         |
+| `pnpm test`             | Run unit and component tests.                               |
+| `pnpm test:integration` | Run adapter and persistence tests.                          |
+| `pnpm e2e`              | Run browser and accessibility checks.                       |
+| `pnpm build`            | Create the production build.                                |
+| `pnpm check`            | Run the complete non-browser verification.                  |
+| `pnpm i18n:extract`     | Update feature-split PO catalogs from source messages.      |
+| `pnpm i18n:compile`     | Strictly compile catalogs into temporary validation output. |
+| `pnpm i18n:check`       | Reject stale, malformed, incomplete, or drifting catalogs.  |
 
 The complete command list is maintained in [`package.json`](./package.json).
 

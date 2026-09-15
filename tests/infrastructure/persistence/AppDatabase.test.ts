@@ -105,6 +105,7 @@ describe('AppDatabase', () => {
   it('uses safe defaults and persists validated UI preferences', async () => {
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: false,
+      locale: null,
       navigationCollapsed: false,
       elevationGradeLegendDismissed: false,
       markerSort: 'created',
@@ -113,6 +114,7 @@ describe('AppDatabase', () => {
 
     await database.saveUiPreferences({
       developerMode: true,
+      locale: 'ru',
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
       markerSort: 'distance',
@@ -121,6 +123,7 @@ describe('AppDatabase', () => {
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: true,
+      locale: 'ru',
       navigationCollapsed: true,
       elevationGradeLegendDismissed: true,
       markerSort: 'distance',
@@ -130,6 +133,7 @@ describe('AppDatabase', () => {
     await database.saveElevationGradeLegendDismissed(false);
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: true,
+      locale: 'ru',
       navigationCollapsed: true,
       elevationGradeLegendDismissed: false,
       markerSort: 'distance',
@@ -150,6 +154,7 @@ describe('AppDatabase', () => {
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
       developerMode: true,
+      locale: null,
       navigationCollapsed: true,
       elevationGradeLegendDismissed: false,
       markerSort: 'created',

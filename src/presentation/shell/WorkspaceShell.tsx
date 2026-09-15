@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
@@ -20,7 +21,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
 import type { TrackSort } from '@/domain/tracks/localTrack';
+import { resolveAppLocale, type AppLocale } from '@/domain/localization/appLocale';
 import { AboutDialog } from '@/presentation/shell/AboutDialog';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { cancelMarkerPlacement } from '@/presentation/map/mapInteractionStore';
@@ -56,6 +59,15 @@ interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
 }
 
+interface UiPreferenceValues {
+  readonly developerMode: boolean;
+  readonly elevationGradeLegendDismissed: boolean;
+  readonly locale: AppLocale;
+  readonly markerSort: MarkerSort;
+  readonly navigationCollapsed: boolean;
+  readonly trackSort: TrackSort;
+}
+
 const mapCameraMargin = 56;
 
 function ControlledFailure(): never {
@@ -63,6 +75,8 @@ function ControlledFailure(): never {
 }
 
 function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
+  const { i18n } = useLingui();
+  const locale = resolveAppLocale(null, [i18n.locale]);
   const {
     database,
     geocodingProviderConfiguration,
@@ -235,21 +249,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   }, [setActiveTab]);
 
   const persistUiPreferences = useCallback(
-    async (
-      nextDeveloperMode: boolean,
-      nextNavigationCollapsed: boolean,
-      nextElevationGradeLegendDismissed: boolean,
-      nextMarkerSort: typeof markerSort,
-      nextTrackSort: typeof trackSort,
-    ): Promise<boolean> => {
+    async (nextPreferences: UiPreferenceValues): Promise<boolean> => {
       try {
-        await database.saveUiPreferences({
-          developerMode: nextDeveloperMode,
-          navigationCollapsed: nextNavigationCollapsed,
-          elevationGradeLegendDismissed: nextElevationGradeLegendDismissed,
-          markerSort: nextMarkerSort,
-          trackSort: nextTrackSort,
-        });
+        await database.saveUiPreferences(nextPreferences);
         return true;
       } catch {
         logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
@@ -272,18 +274,20 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const handleNavigationCollapsedChange = useCallback(
     (value: boolean) => {
       setNavigationCollapsed(value);
-      void persistUiPreferences(
+      void persistUiPreferences({
         developerMode,
-        value,
+        navigationCollapsed: value,
         elevationGradeLegendDismissed,
+        locale,
         markerSort,
         trackSort,
-      );
+      });
     },
     [
       developerMode,
       elevationGradeLegendDismissed,
       markerSort,
+      locale,
       trackSort,
       persistUiPreferences,
       setNavigationCollapsed,
@@ -299,46 +303,62 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         showTileBoundaries: false,
       });
     }
-    void persistUiPreferences(
-      value,
+    void persistUiPreferences({
+      developerMode: value,
       navigationCollapsed,
       elevationGradeLegendDismissed,
+      locale,
       markerSort,
       trackSort,
-    );
+    });
   };
 
   const handleElevationGradeLegendDismissedChange = (value: boolean) => {
     setElevationGradeLegendDismissed(value);
-    void persistUiPreferences(
+    void persistUiPreferences({
       developerMode,
       navigationCollapsed,
-      value,
+      elevationGradeLegendDismissed: value,
+      locale,
       markerSort,
       trackSort,
-    );
+    });
   };
 
   const handleMarkerSortChange = async (value: MarkerSort): Promise<boolean> => {
     setMarkerSort(value);
-    return persistUiPreferences(
+    return persistUiPreferences({
       developerMode,
       navigationCollapsed,
       elevationGradeLegendDismissed,
-      value,
+      locale,
+      markerSort: value,
       trackSort,
-    );
+    });
   };
 
   const handleTrackSortChange = async (value: TrackSort): Promise<boolean> => {
     setTrackSort(value);
-    return persistUiPreferences(
+    return persistUiPreferences({
       developerMode,
       navigationCollapsed,
       elevationGradeLegendDismissed,
+      locale,
       markerSort,
-      value,
-    );
+      trackSort: value,
+    });
+  };
+
+  const handleLocaleChange = (nextLocale: AppLocale) => {
+    activateAppLocale(nextLocale);
+    void persistUiPreferences({
+      developerMode,
+      navigationCollapsed,
+      elevationGradeLegendDismissed,
+      locale: nextLocale,
+      markerSort,
+      trackSort,
+    });
   };
   useEffect(() => {
     if (importState !== 'preparing') {
@@ -879,11 +899,13 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       />
       <SettingsDialog
         developerMode={developerMode}
+        locale={locale}
         open={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
         }}
         onDeveloperModeChange={handleDeveloperModeChange}
+        onLocaleChange={handleLocaleChange}
         storageUsage={storageUsage}
       />
       <ShareMapDialog

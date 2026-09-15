@@ -1432,7 +1432,7 @@ describe('MapWorkspace', () => {
       'src',
       expect.stringContaining('/monochrome/clear-night.svg'),
     );
-    expect(marker.querySelector('img')).toHaveAttribute('width', '48');
+    expect(marker.querySelector('img')).toHaveAttribute('width', '56');
     expect(within(marker).getByRole('img')).toHaveStyle({
       backgroundColor: 'rgba(255, 255, 255, 0.94)',
     });

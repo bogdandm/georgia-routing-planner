@@ -129,7 +129,8 @@ function WeatherForecastMapMarker({
           flexDirection: 'column',
           alignItems: 'center',
           px: 0.75,
-          py: 0.5,
+          pt: 0.5,
+          pb: 0.75,
           pointerEvents: 'none',
           border: 1,
           borderColor: 'divider',
@@ -138,13 +139,29 @@ function WeatherForecastMapMarker({
           boxShadow: 3,
         }}
       >
-        <MonochromeWeatherPeriodIcon
-          icon={marker.period.status.primary.icon}
-          visibility={marker.period.status.visibility}
-          isDay={marker.isDay}
-          size={48}
-        />
-        <Stack spacing={0} sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}>
+        <Box
+          sx={{
+            position: 'relative',
+            width: 48,
+            height: 40,
+            flexShrink: 0,
+            overflow: 'hidden',
+            '& > img': {
+              position: 'absolute',
+              top: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+            },
+          }}
+        >
+          <MonochromeWeatherPeriodIcon
+            icon={marker.period.status.primary.icon}
+            visibility={marker.period.status.visibility}
+            isDay={marker.isDay}
+            size={56}
+          />
+        </Box>
+        <Stack spacing={0.25} sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}>
           <Typography
             variant="body2"
             sx={{

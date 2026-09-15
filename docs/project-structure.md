@@ -38,6 +38,7 @@ frameworks.
 src/
   main.tsx                 browser entry and provider nesting
   bootstrap/               one-time dependency construction and React service context
+  domain/localization/     supported locale values and initial-locale resolution
   domain/satellite/        framework-free Sentinel values and geometry calculations
   domain/markers/          framework-free saved-marker schema and catalog keys
   domain/weather/          framework-free hourly-to-daily forecast aggregation
@@ -46,7 +47,9 @@ src/
   application/ports/       framework-free catalog, diagnostics, storage, and runtime ports
   infrastructure/          HTTP, STAC, weather, routing/elevation/satellite workers, IndexedDB, clock, and ID adapters
   diagnostics/             bounded logging, redaction, health, snapshots, and export
+  locales/{en,ru}/         reviewable feature-split Lingui PO catalogs
   presentation/
+    localization/          shared Lingui runtime and document metadata activation
     shell/                 feature rail, contextual sidebars, settings, and shell state
     map/                   map UI, pure style, facade, terrain, and camera coordination
     markers/               saved-marker library, editor, sorting, and map commands
@@ -58,7 +61,7 @@ src/
     styles/                application-level CSS
 e2e/                       built-app Chromium workflows and provider fixtures
 tests/                     unit, component, and integration tests mirroring `src/`, plus shared test support
-tools/                     Node-only audit, diagnostics, and E2E runners
+tools/                     Node-only audit, diagnostics, E2E, and localization runners
 docs/                      maintainer-facing system documentation
 ```
 
@@ -110,9 +113,31 @@ email/password registration; confirmation is performed by Supabase before the us
 in. Otherwise it supplies a deterministic local-only user service without creating a
 client. Password reset is intentionally unavailable.
 
-[`main.tsx`](../src/main.tsx) installs global failure capture and nests providers in
-this order: runtime services, MUI theme, error boundary, and workspace shell. Tests
-replace the whole `RuntimeServices` object at the context boundary.
+[`main.tsx`](../src/main.tsx) loads UI preferences, resolves and activates the locale
+before the first React render, then installs global failure capture and nests providers
+in this order: Lingui, runtime services, MUI theme, error boundary, and workspace shell.
+Tests replace the whole `RuntimeServices` object at the context boundary.
+
+## Localization ownership
+
+English is the source and fallback locale; Russian is the target locale.
+[`lingui.config.ts`](../lingui.config.ts) fixes eight feature-owned catalog shards:
+`core`, `shell`, `map`, `tracks`, `satellite`, `markers`, `layers`, and `user`. The
+`satellite` shard maps to `presentation/satellite-browser`; Developer Diagnostics and
+the pre-React bootstrap fallback remain outside the localized source set.
+
+`presentation/localization/appI18n.ts` owns the single Lingui instance. It statically
+loads every English and Russian shard once so language switching remains available
+offline, then updates the document language, title, and description on activation.
+`domain/localization/appLocale.ts` owns the supported-locale type and deterministic
+saved-preference/browser fallback rule. `AppDatabase` persists an explicit locale in the
+existing `ui.preferences` record without a Dexie schema migration.
+
+PO files under `src/locales/{en,ru}` are the only committed catalog artifacts. Vite
+compiles imported shards on demand; strict merged validation output stays under
+`node_modules/.tmp/locales`. `tools/localization` owns extraction freshness, ICU
+structure, translation completeness, equality-allowlist, and scoped source-string
+checks.
 
 ## State ownership
 

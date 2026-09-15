@@ -28,6 +28,8 @@
     "src",
     "tests",
     "tools/diagnostics/summarizeDiagnostics.ts",
-    "tools/repository/artifactPolicy.ts"
+    "tools/repository/artifactPolicy.ts",
+    "tools/localization/catalogValidator.ts",
+    "tools/localization/translationAllowlist.ts"
   ]
 }

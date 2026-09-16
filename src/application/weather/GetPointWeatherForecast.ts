@@ -21,7 +21,8 @@ import {
 
 export const DEFAULT_WEATHER_MODEL: WeatherModel = 'ecmwf_ifs';
 
-export type ForecastElevationSource = 'trail-planner-dem' | 'open-meteo-dem';
+export type ForecastElevationSource =
+  'provided' | 'trail-planner-dem' | 'open-meteo-dem';
 
 export interface PointWeatherForecastPeriod {
   readonly temperatureMinCelsius: number;
@@ -84,7 +85,7 @@ function invalidResponse(message: string): PointWeatherForecastError {
   return new PointWeatherForecastError('invalid-response', message);
 }
 
-function summarizePeriod(
+export function summarizeWeatherPeriod(
   hours: readonly HourlyWeatherForecast[],
   kind: WeatherPeriodKind,
 ): PointWeatherForecastPeriod {
@@ -118,7 +119,7 @@ function deriveCurrentThreeHours(
       'The forecast does not contain the current three-hour period.',
     );
   }
-  return summarizePeriod(hours, 'current');
+  return summarizeWeatherPeriod(hours, 'current');
 }
 
 function deriveDays(
@@ -170,8 +171,8 @@ function deriveDays(
     }
     return {
       date,
-      day: summarizePeriod(daylight, 'day'),
-      night: summarizePeriod(night, 'night'),
+      day: summarizeWeatherPeriod(daylight, 'day'),
+      night: summarizeWeatherPeriod(night, 'night'),
     };
   });
 }
@@ -179,14 +180,14 @@ function deriveDays(
 function toResult(
   data: WeatherForecastData,
   selectedCoordinate: ElevationCoordinate,
-  localElevationMeters: number | null,
+  elevationMeters: number | null,
+  elevationSource: ForecastElevationSource,
 ): PointWeatherForecast {
   return {
     selectedCoordinate: { ...selectedCoordinate },
     forecastCoordinate: { ...data.resolvedCoordinate },
-    elevationMeters: localElevationMeters ?? data.elevationMeters,
-    elevationSource:
-      localElevationMeters === null ? 'open-meteo-dem' : 'trail-planner-dem',
+    elevationMeters: elevationMeters ?? data.elevationMeters,
+    elevationSource,
     timezone: data.timezone,
     timezoneAbbreviation: data.timezoneAbbreviation,
     utcOffsetSeconds: data.utcOffsetSeconds,
@@ -213,6 +214,7 @@ export class GetPointWeatherForecast {
   public async execute(
     input: {
       readonly coordinate: ElevationCoordinate;
+      readonly elevationMeters?: number;
       readonly model?: WeatherModel;
     },
     signal: AbortSignal,
@@ -229,13 +231,27 @@ export class GetPointWeatherForecast {
     try {
       validateCoordinate(input.coordinate);
       signal.throwIfAborted();
-      let localElevationMeters: number | null = null;
-      if (this.elevationProvider !== null) {
+      let elevationMeters = input.elevationMeters ?? null;
+      let elevationSource: ForecastElevationSource =
+        input.elevationMeters === undefined ? 'open-meteo-dem' : 'provided';
+      if (
+        input.elevationMeters !== undefined &&
+        (!Number.isFinite(input.elevationMeters) ||
+          input.elevationMeters < -12_000 ||
+          input.elevationMeters > 12_000)
+      ) {
+        throw new PointWeatherForecastError(
+          'invalid-request',
+          'The forecast elevation is outside the supported range.',
+        );
+      }
+      if (input.elevationMeters === undefined && this.elevationProvider !== null) {
         try {
           const sample = await this.elevationProvider.sample(input.coordinate, signal);
           signal.throwIfAborted();
           if (sample.status === 'available' && Number.isFinite(sample.meters)) {
-            localElevationMeters = sample.meters;
+            elevationMeters = sample.meters;
+            elevationSource = 'trail-planner-dem';
           }
         } catch (error) {
           if (signal.aborted || isAbortError(error)) throw error;
@@ -245,13 +261,13 @@ export class GetPointWeatherForecast {
       const data = await this.gateway.fetch(
         {
           coordinate: input.coordinate,
-          elevationMeters: localElevationMeters,
+          elevationMeters,
           model,
         },
         signal,
       );
       signal.throwIfAborted();
-      const result = toResult(data, input.coordinate, localElevationMeters);
+      const result = toResult(data, input.coordinate, elevationMeters, elevationSource);
       this.logger.log({
         level: 'info',
         name: 'weather.forecast.completed',

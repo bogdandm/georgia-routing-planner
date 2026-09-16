@@ -108,6 +108,7 @@ function marker(overrides: Partial<SavedMarker> = {}): SavedMarker {
     name: 'Tbilisi view',
     normalizedName: 'tbilisi view',
     coordinate: [44.8, 41.7],
+    elevationMeters: null,
     iconKey: 'place',
     colorKey: 'blue',
     createdAt: '2026-08-08T10:00:00.000Z',

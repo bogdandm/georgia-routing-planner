@@ -240,6 +240,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
         name: name.name,
         normalizedName: name.normalizedName,
         coordinate: [draft.coordinate.longitude, draft.coordinate.latitude],
+        elevationMeters: null,
         iconKey: appearance.iconKey,
         colorKey: appearance.colorKey,
         createdAt: timestamp,

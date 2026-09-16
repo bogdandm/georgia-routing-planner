@@ -50,6 +50,7 @@ function marker(
     name,
     normalizedName: name.toLocaleLowerCase('en'),
     coordinate,
+    elevationMeters: null,
     iconKey: 'place',
     colorKey,
     createdAt,

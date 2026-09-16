@@ -1421,6 +1421,7 @@ describe('WorkspaceShell', () => {
       name: 'Mobile marker',
       normalizedName: 'mobile marker',
       coordinate: [44.9, 41.8],
+      elevationMeters: null,
       iconKey: 'place',
       colorKey: 'blue',
       createdAt: '2026-08-11T00:00:00.000Z',

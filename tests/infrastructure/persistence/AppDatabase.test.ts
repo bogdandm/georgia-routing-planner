@@ -31,6 +31,7 @@ function marker(overrides: Partial<SavedMarker> = {}): SavedMarker {
     name: 'Tbilisi view',
     normalizedName: 'tbilisi view',
     coordinate: [44.8, 41.7],
+    elevationMeters: null,
     iconKey: 'place',
     colorKey: 'blue',
     createdAt: '2026-08-08T10:00:00.000Z',
@@ -141,6 +142,43 @@ describe('AppDatabase', () => {
     });
   });
 
+  it('persists marker weather preferences and repairs invalid custom hours', async () => {
+    await expect(database.loadMarkerWeatherPreferences()).resolves.toEqual({
+      weekdays: [6, 0],
+      period: { kind: 'day' },
+      showOnMap: true,
+    });
+
+    await database.saveMarkerWeatherPreferences({
+      weekdays: [1, 4],
+      period: { kind: 'custom', startHour: 8, endHour: 17 },
+      showOnMap: false,
+    });
+    await expect(database.loadMarkerWeatherPreferences()).resolves.toEqual({
+      weekdays: [1, 4],
+      period: { kind: 'custom', startHour: 8, endHour: 17 },
+      showOnMap: false,
+    });
+
+    await database.settings.put({
+      key: 'markers.weather-preferences',
+      value: {
+        weekdays: [1],
+        period: { kind: 'custom', startHour: 8, endHour: 8 },
+        showOnMap: true,
+      },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadMarkerWeatherPreferences()).resolves.toEqual({
+      weekdays: [6, 0],
+      period: { kind: 'day' },
+      showOnMap: true,
+    });
+    await expect(
+      database.settings.get('markers.weather-preferences'),
+    ).resolves.toBeUndefined();
+  });
+
   it('adds default sorts to persisted earlier UI preferences', async () => {
     await database.settings.put({
       key: 'ui.preferences',
@@ -181,6 +219,9 @@ describe('AppDatabase', () => {
       updatedAt: '2026-08-08T11:00:00.000Z',
     });
     await expect(database.listSavedMarkers()).resolves.toEqual([updated]);
+    const elevated = await database.saveSavedMarkerElevation(original.id, 1_450.5);
+    expect(elevated).toEqual({ ...updated, elevationMeters: 1_450.5 });
+    await expect(database.listSavedMarkers()).resolves.toEqual([elevated]);
 
     await expect(
       database.saveSavedMarker({ ...updated, id: original.id }),
@@ -197,7 +238,7 @@ describe('AppDatabase', () => {
         updatedAt: '2026-08-08T12:00:00.000Z',
       }),
     ).rejects.toMatchObject({ code: 'record-invalid' });
-    await expect(database.listSavedMarkers()).resolves.toEqual([updated]);
+    await expect(database.listSavedMarkers()).resolves.toEqual([elevated]);
 
     await expect(
       database.updateSavedMarker('missing', {
@@ -575,6 +616,55 @@ describe('AppDatabase', () => {
         },
       },
     ]);
+  });
+
+  it('upgrades version 7 marker rows with unresolved elevation without changing sync state', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(7).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+    });
+    const legacyMarker = {
+      id: 'marker:legacy',
+      schemaVersion: 1,
+      name: 'Legacy marker',
+      normalizedName: 'legacy marker',
+      coordinate: [44.8, 41.7],
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-08-08T10:00:00.000Z',
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    };
+    const syncState = {
+      markerId: legacyMarker.id,
+      remoteRevision: 3,
+      pendingKind: null,
+      localVersion: 2,
+    };
+    await legacy.table('savedMarkers').put(legacyMarker);
+    await legacy.table('markerSyncStates').put(syncState);
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    const upgraded = {
+      ...legacyMarker,
+      schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+      elevationMeters: null,
+    };
+    await expect(database.listSavedMarkers()).resolves.toEqual([upgraded]);
+    await expect(database.savedMarkers.get(legacyMarker.id)).resolves.toEqual(upgraded);
+    await expect(database.markerSyncStates.get(legacyMarker.id)).resolves.toEqual(
+      syncState,
+    );
   });
 
   it('tracks marker local versions and retains unacknowledged delete tombstones', async () => {

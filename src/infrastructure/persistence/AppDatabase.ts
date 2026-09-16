@@ -1,6 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { z } from 'zod';
 
+import {
+  defaultMarkerWeatherPreferences,
+  type MarkerWeatherPreferences,
+  type MarkerWeatherWeekday,
+} from '@/application/weather/MarkerWeatherForecast';
 import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
@@ -227,6 +232,46 @@ const defaultUiPreferences: UiPreferences = {
   markerSort: 'created',
   trackSort: 'created',
 };
+const markerWeatherWeekdaySchema: z.ZodType<MarkerWeatherWeekday> = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+]);
+
+const markerWeatherPreferencesSchema: z.ZodType<MarkerWeatherPreferences> = z
+  .object({
+    weekdays: z
+      .array(markerWeatherWeekdaySchema)
+      .max(2)
+      .superRefine((weekdays, context) => {
+        if (new Set(weekdays).size !== weekdays.length) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Marker weather weekdays must be unique.',
+          });
+        }
+      }),
+    period: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('day') }).strict(),
+      z.object({ kind: z.literal('night') }).strict(),
+      z
+        .object({
+          kind: z.literal('custom'),
+          startHour: z.number().int().min(0).max(23),
+          endHour: z.number().int().min(0).max(23),
+        })
+        .strict()
+        .refine((period) => period.startHour !== period.endHour, {
+          message: 'Custom marker weather hours must define a non-empty interval.',
+        }),
+    ]),
+    showOnMap: z.boolean(),
+  })
+  .strict();
 
 const mapCameraKey = 'map.camera';
 
@@ -819,19 +864,34 @@ function parseTrackSyncState(value: unknown): TrackSyncState | null {
   return result.success ? result.data : null;
 }
 
+const savedMarkerBaseSchema = z.object({
+  id: z.string().min(1).max(200),
+  name: markerNameSchema,
+  normalizedName: z.string().min(1),
+  coordinate: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+  iconKey: z.enum(markerIconKeys),
+  colorKey: z.enum(markerColorKeys),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+
 const savedMarkerSchema: z.ZodType<SavedMarker> = z
-  .object({
-    schemaVersion: z.literal(SAVED_MARKER_SCHEMA_VERSION),
-    id: z.string().min(1).max(200),
-    name: markerNameSchema,
-    normalizedName: z.string().min(1),
-    coordinate: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
-    iconKey: z.enum(markerIconKeys),
-    colorKey: z.enum(markerColorKeys),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
-  })
-  .strict()
+  .union([
+    savedMarkerBaseSchema
+      .extend({ schemaVersion: z.literal(1) })
+      .strict()
+      .transform((value): SavedMarker => ({
+        ...value,
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        elevationMeters: null,
+      })),
+    savedMarkerBaseSchema
+      .extend({
+        schemaVersion: z.literal(SAVED_MARKER_SCHEMA_VERSION),
+        elevationMeters: z.number().min(-12_000).max(12_000).nullable(),
+      })
+      .strict(),
+  ])
   .superRefine((value, context) => {
     const normalized = normalizeMarkerName(value.name);
     if (value.normalizedName !== normalized.normalizedName) {
@@ -864,6 +924,7 @@ const savedMarkerUpdateSchema = z
   });
 
 const savedMarkerIdSchema = z.string().min(1).max(200);
+const savedMarkerElevationSchema = z.number().min(-12_000).max(12_000);
 
 function parseSavedMarker(value: unknown): SavedMarker | null {
   const result = savedMarkerSchema.safeParse(value);
@@ -1032,6 +1093,24 @@ export class AppDatabase
             pendingKind: 'upsert',
             localVersion: 1,
           });
+        }
+      });
+    this.version(8)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+        savedMarkers: 'id,normalizedName,colorKey,createdAt',
+        markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      })
+      .upgrade(async (transaction) => {
+        const markerTable = transaction.table('savedMarkers');
+        const markers: unknown[] = await markerTable.toArray();
+        for (const value of markers) {
+          const marker = parseSavedMarker(value);
+          if (marker !== null) await markerTable.put(marker);
         }
       });
   }
@@ -1290,6 +1369,57 @@ export class AppDatabase
           throw new SavedMarkerStorageError(
             'record-invalid',
             'The saved marker update is invalid.',
+          );
+        }
+        const parsedState = markerSyncStateSchema.safeParse(
+          await this.markerSyncStates.get(validMarkerId.data),
+        );
+        const existingState = parsedState.success ? parsedState.data : null;
+        await this.savedMarkers.put(updated);
+        await this.markerSyncStates.put({
+          markerId: updated.id,
+          remoteRevision: existingState?.remoteRevision ?? null,
+          pendingKind: 'upsert',
+          localVersion: nextMarkerLocalVersion(existingState),
+        });
+        return updated;
+      },
+    );
+  }
+  public async saveSavedMarkerElevation(
+    markerId: string,
+    elevationMeters: number,
+  ): Promise<SavedMarker> {
+    const validMarkerId = savedMarkerIdSchema.safeParse(markerId);
+    const validElevation = savedMarkerElevationSchema.safeParse(elevationMeters);
+    if (!validMarkerId.success || !validElevation.success) {
+      throw new SavedMarkerStorageError(
+        'record-invalid',
+        'The saved marker elevation is invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      this.savedMarkers,
+      this.markerSyncStates,
+      async () => {
+        const marker = parseSavedMarker(
+          await this.savedMarkers.get(validMarkerId.data),
+        );
+        if (marker === null) {
+          throw new SavedMarkerStorageError(
+            'not-found',
+            'The saved marker was not found.',
+          );
+        }
+        const updated = parseSavedMarker({
+          ...marker,
+          elevationMeters: validElevation.data,
+        });
+        if (updated === null) {
+          throw new SavedMarkerStorageError(
+            'record-invalid',
+            'The saved marker elevation is invalid.',
           );
         }
         const parsedState = markerSyncStateSchema.safeParse(
@@ -2443,6 +2573,32 @@ export class AppDatabase
     await this.saveUiPreferences({
       ...preferences,
       elevationGradeLegendDismissed,
+    });
+  }
+
+  public async loadMarkerWeatherPreferences(): Promise<MarkerWeatherPreferences> {
+    const record = await this.settings.get('markers.weather-preferences');
+    if (record === undefined) return defaultMarkerWeatherPreferences;
+
+    const parsed = markerWeatherPreferencesSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete('markers.weather-preferences');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.marker-weather-preferences.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultMarkerWeatherPreferences;
+  }
+
+  public async saveMarkerWeatherPreferences(
+    value: MarkerWeatherPreferences,
+  ): Promise<void> {
+    await this.settings.put({
+      key: 'markers.weather-preferences',
+      value: markerWeatherPreferencesSchema.parse(value),
+      updatedAt: new Date().toISOString(),
     });
   }
 

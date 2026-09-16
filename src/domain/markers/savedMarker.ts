@@ -1,4 +1,4 @@
-export const SAVED_MARKER_SCHEMA_VERSION = 1;
+export const SAVED_MARKER_SCHEMA_VERSION = 2;
 
 export const markerIconKeys = [
   'place',
@@ -147,6 +147,7 @@ export interface SavedMarker {
   readonly name: string;
   readonly normalizedName: string;
   readonly coordinate: readonly [longitude: number, latitude: number];
+  readonly elevationMeters: number | null;
   readonly iconKey: MarkerIconKey;
   readonly colorKey: MarkerColorKey;
   readonly createdAt: string;

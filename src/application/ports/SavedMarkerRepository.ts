@@ -12,6 +12,10 @@ export interface SavedMarkerRepository {
       >
     >,
   ): Promise<SavedMarker>;
+  saveSavedMarkerElevation(
+    markerId: string,
+    elevationMeters: number,
+  ): Promise<SavedMarker>;
   deleteSavedMarker(markerId: string): Promise<void>;
 }
 

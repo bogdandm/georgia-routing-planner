@@ -19,13 +19,13 @@ export type MarkerWeatherPeriodSelection =
       readonly endHour: number;
     };
 
-export interface MarkerWeatherPreferences {
+export interface WeatherIntervalPreferences {
   readonly weekdays: readonly MarkerWeatherWeekday[];
   readonly period: MarkerWeatherPeriodSelection;
   readonly showOnMap: boolean;
 }
 
-export const defaultMarkerWeatherPreferences: MarkerWeatherPreferences = {
+export const defaultWeatherIntervalPreferences: WeatherIntervalPreferences = {
   weekdays: [6, 0],
   period: { kind: 'day' },
   showOnMap: true,
@@ -114,7 +114,7 @@ function selectedHours(
 /** Selects and summarizes the next occurrences of configured local weekdays. */
 export function selectMarkerWeatherForecast(
   forecast: PointWeatherForecast,
-  preferences: MarkerWeatherPreferences,
+  preferences: WeatherIntervalPreferences,
 ): MarkerWeatherForecast | null {
   if (preferences.weekdays.length === 0) return null;
   const selectedWeekdays = new Set(preferences.weekdays);

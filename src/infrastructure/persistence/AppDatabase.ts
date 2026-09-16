@@ -2,8 +2,8 @@ import Dexie, { type EntityTable } from 'dexie';
 import { z } from 'zod';
 
 import {
-  defaultMarkerWeatherPreferences,
-  type MarkerWeatherPreferences,
+  defaultWeatherIntervalPreferences,
+  type WeatherIntervalPreferences,
   type MarkerWeatherWeekday,
 } from '@/application/weather/MarkerWeatherForecast';
 import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
@@ -242,7 +242,7 @@ const markerWeatherWeekdaySchema: z.ZodType<MarkerWeatherWeekday> = z.union([
   z.literal(6),
 ]);
 
-const markerWeatherPreferencesSchema: z.ZodType<MarkerWeatherPreferences> = z
+const markerWeatherPreferencesSchema: z.ZodType<WeatherIntervalPreferences> = z
   .object({
     weekdays: z
       .array(markerWeatherWeekdaySchema)
@@ -2576,27 +2576,27 @@ export class AppDatabase
     });
   }
 
-  public async loadMarkerWeatherPreferences(): Promise<MarkerWeatherPreferences> {
-    const record = await this.settings.get('markers.weather-preferences');
-    if (record === undefined) return defaultMarkerWeatherPreferences;
+  public async loadWeatherIntervalPreferences(): Promise<WeatherIntervalPreferences> {
+    const record = await this.settings.get('weather.interval-preferences');
+    if (record === undefined) return defaultWeatherIntervalPreferences;
 
     const parsed = markerWeatherPreferencesSchema.safeParse(record.value);
     if (parsed.success) return parsed.data;
 
-    await this.settings.delete('markers.weather-preferences');
+    await this.settings.delete('weather.interval-preferences');
     this.logger.log({
       level: 'warn',
-      name: 'storage.marker-weather-preferences.repaired',
+      name: 'storage.weather-interval-preferences.repaired',
       data: { reason: 'schema-invalid' },
     });
-    return defaultMarkerWeatherPreferences;
+    return defaultWeatherIntervalPreferences;
   }
 
-  public async saveMarkerWeatherPreferences(
-    value: MarkerWeatherPreferences,
+  public async saveWeatherIntervalPreferences(
+    value: WeatherIntervalPreferences,
   ): Promise<void> {
     await this.settings.put({
-      key: 'markers.weather-preferences',
+      key: 'weather.interval-preferences',
       value: markerWeatherPreferencesSchema.parse(value),
       updatedAt: new Date().toISOString(),
     });

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
-  defaultMarkerWeatherPreferences,
+  defaultWeatherIntervalPreferences,
   selectMarkerWeatherForecast,
-  type MarkerWeatherPreferences,
+  type WeatherIntervalPreferences,
 } from '@/application/weather/MarkerWeatherForecast';
 import type {
   HourlyWeatherForecast,
@@ -75,7 +75,7 @@ describe('selectMarkerWeatherForecast', () => {
   it('combines the configured upcoming weekend daylight periods', async () => {
     const selected = selectMarkerWeatherForecast(
       await pointForecast(),
-      defaultMarkerWeatherPreferences,
+      defaultWeatherIntervalPreferences,
     );
 
     expect(selected).toMatchObject({
@@ -97,7 +97,7 @@ describe('selectMarkerWeatherForecast', () => {
       period: { kind: 'night' },
       showOnMap: true,
     });
-    const customPreferences: MarkerWeatherPreferences = {
+    const customPreferences: WeatherIntervalPreferences = {
       weekdays: [6],
       period: { kind: 'custom', startHour: 20, endHour: 3 },
       showOnMap: false,
@@ -121,7 +121,7 @@ describe('selectMarkerWeatherForecast', () => {
   it('disables marker forecasts when every weekday is cleared', async () => {
     expect(
       selectMarkerWeatherForecast(await pointForecast(), {
-        ...defaultMarkerWeatherPreferences,
+        ...defaultWeatherIntervalPreferences,
         weekdays: [],
       }),
     ).toBeNull();

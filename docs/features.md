@@ -553,9 +553,30 @@ deletion. Markers remain in IndexedDB across browser restarts and render as MapL
 symbols with their selected icon, color, and name. Malformed stored rows are omitted and
 reported through bounded local diagnostics.
 
-Marker search, grouping, filtering, coordinate/elevation/scale editing, remote
-synchronization, Satellite targeting, and copying into Create GPX are not currently
-available.
+The Markers header exposes a weather-settings action. Its label shows the enabled
+weekday abbreviations; no weekday label means forecasts are disabled. One or two local
+weekdays may be selected, with Saturday and Sunday enabled initially. Every selected
+weekday uses the same interval: the Weather tab's daylight period, its continuous
+post-sunset-to-next-sunrise night period, or a custom whole-hour half-open interval.
+Custom intervals whose end hour is earlier than their start continue across local
+midnight. Clearing all weekdays disables marker forecasts. The weekday, interval, and
+**Show forecasts on the map** choices form one browser-local weather preference stored
+in IndexedDB.
+
+While Markers is open, each saved marker receives one forecast at its WGS84 coordinate.
+The point's terrain elevation is resolved for the first request, persisted on that
+marker, and reused by subsequent weather requests. The marker row summarizes all
+selected intervals with one monochrome condition icon, the full temperature range, and
+total precipitation. When map display is enabled, the same clickable summary sits beside
+the marker's existing map symbol and name without replacing either one.
+
+Activating either summary opens an interval preview with one Weather-style period row
+per selected date. **Open in Weather** then selects the Weather workspace and requests
+the normal seven-day forecast at that marker, reusing its persisted elevation and name.
+The interval preview remains local presentation state and is not encoded in the URL.
+
+Marker search, grouping, filtering, coordinate/scale editing, remote synchronization,
+Satellite targeting, and copying into Create GPX are not currently available.
 
 ### Layers
 

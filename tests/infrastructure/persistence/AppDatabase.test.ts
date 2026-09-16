@@ -143,25 +143,25 @@ describe('AppDatabase', () => {
   });
 
   it('persists marker weather preferences and repairs invalid custom hours', async () => {
-    await expect(database.loadMarkerWeatherPreferences()).resolves.toEqual({
+    await expect(database.loadWeatherIntervalPreferences()).resolves.toEqual({
       weekdays: [6, 0],
       period: { kind: 'day' },
       showOnMap: true,
     });
 
-    await database.saveMarkerWeatherPreferences({
+    await database.saveWeatherIntervalPreferences({
       weekdays: [1, 4],
       period: { kind: 'custom', startHour: 8, endHour: 17 },
       showOnMap: false,
     });
-    await expect(database.loadMarkerWeatherPreferences()).resolves.toEqual({
+    await expect(database.loadWeatherIntervalPreferences()).resolves.toEqual({
       weekdays: [1, 4],
       period: { kind: 'custom', startHour: 8, endHour: 17 },
       showOnMap: false,
     });
 
     await database.settings.put({
-      key: 'markers.weather-preferences',
+      key: 'weather.interval-preferences',
       value: {
         weekdays: [1],
         period: { kind: 'custom', startHour: 8, endHour: 8 },
@@ -169,13 +169,13 @@ describe('AppDatabase', () => {
       },
       updatedAt: '2026-08-08T10:00:00.000Z',
     });
-    await expect(database.loadMarkerWeatherPreferences()).resolves.toEqual({
+    await expect(database.loadWeatherIntervalPreferences()).resolves.toEqual({
       weekdays: [6, 0],
       period: { kind: 'day' },
       showOnMap: true,
     });
     await expect(
-      database.settings.get('markers.weather-preferences'),
+      database.settings.get('weather.interval-preferences'),
     ).resolves.toBeUndefined();
   });
 

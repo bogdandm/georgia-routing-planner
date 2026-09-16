@@ -83,15 +83,21 @@ export interface WeatherHeaderPoint {
 
 type WeatherPanelState =
   | { readonly status: 'idle' }
-  | { readonly status: 'loading'; readonly coordinate: MapCoordinate }
+  | {
+      readonly status: 'loading';
+      readonly coordinate: MapCoordinate;
+      readonly elevationMeters: number | undefined;
+    }
   | {
       readonly status: 'ready';
       readonly coordinate: MapCoordinate;
+      readonly elevationMeters: number | undefined;
       readonly forecast: PointWeatherForecast;
     }
   | {
       readonly status: 'error';
       readonly coordinate: MapCoordinate;
+      readonly elevationMeters: number | undefined;
       readonly code: PointWeatherForecastErrorCode;
     };
 
@@ -972,7 +978,7 @@ function SummaryPeriod({
   );
 }
 
-function DailyPeriodRow({
+export function WeatherPeriodSummaryRow({
   dateLabel,
   isDay,
   label,
@@ -982,99 +988,111 @@ function DailyPeriodRow({
   readonly dateLabel: string;
   readonly isDay: boolean;
   readonly label: string;
-  readonly onOpen: (triggerElement: HTMLElement) => void;
+  readonly onOpen?: (triggerElement: HTMLElement) => void;
   readonly period: PointWeatherForecastPeriod;
 }) {
   const values = periodDisplayValues(period);
-  return (
-    <Box component="article" aria-label={`${label} forecast`}>
-      <ButtonBase
-        type="button"
-        aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
-        onClick={(event) => {
-          onOpen(event.currentTarget);
-        }}
+  const content = (
+    <>
+      <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
+        <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
+      </Box>
+      <Typography
+        variant="caption"
+        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
         sx={{
-          width: '100%',
-          minWidth: 0,
-          minHeight: 44,
-          display: 'grid',
-          gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
-          gridTemplateAreas: '"icon temperature condition precipitation metrics"',
-          alignItems: 'center',
-          columnGap: 0.5,
-          px: 1,
-          py: 0.375,
-          color: 'text.primary',
-          textAlign: 'left',
-          '@media (max-width: 479px)': {
-            gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
-            gridTemplateAreas:
-              '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
-            rowGap: 0,
-          },
-          '&:hover': { bgcolor: 'action.hover' },
-          '&.Mui-focusVisible': {
-            boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
-          },
+          gridArea: 'temperature',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+          lineHeight: 1.25,
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
         }}
       >
-        <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
-          <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
-        </Box>
-        <Typography
-          variant="caption"
-          aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+        {values.temperature}
+      </Typography>
+      <Typography
+        variant="caption"
+        sx={{
+          gridArea: 'condition',
+          minWidth: 0,
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+          fontSize: '0.68rem',
+          lineHeight: 1.2,
+        }}
+      >
+        {period.status.primary.label}
+      </Typography>
+      <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
+        <CompactMetricValue
+          kind="precipitation"
+          label={`${label} precipitation`}
+          value={values.precipitation}
+          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          compact
+        />
+      </Box>
+      <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
+        <CompactMetricValue
+          kind="wind"
+          label={`${label} wind`}
+          value={values.wind}
+          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          compact
+        />
+        <CompactMetricValue
+          kind="gusts"
+          label={`${label} gusts`}
+          value={values.gusts}
+          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          compact
+        />
+      </Stack>
+    </>
+  );
+  const rowStyles = {
+    width: '100%',
+    minWidth: 0,
+    minHeight: 44,
+    display: 'grid',
+    gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
+    gridTemplateAreas: '"icon temperature condition precipitation metrics"',
+    alignItems: 'center',
+    columnGap: 0.5,
+    px: 1,
+    py: 0.375,
+    color: 'text.primary',
+    textAlign: 'left',
+    '@media (max-width: 479px)': {
+      gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
+      gridTemplateAreas:
+        '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+      rowGap: 0,
+    },
+  } as const;
+  return (
+    <Box component="article" aria-label={`${label} forecast`}>
+      {onOpen === undefined ? (
+        <Box sx={rowStyles}>{content}</Box>
+      ) : (
+        <ButtonBase
+          type="button"
+          aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
+          onClick={(event) => {
+            onOpen(event.currentTarget);
+          }}
           sx={{
-            gridArea: 'temperature',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            lineHeight: 1.25,
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
+            ...rowStyles,
+            '&:hover': { bgcolor: 'action.hover' },
+            '&.Mui-focusVisible': {
+              boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
+            },
           }}
         >
-          {values.temperature}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            gridArea: 'condition',
-            minWidth: 0,
-            whiteSpace: 'normal',
-            overflowWrap: 'anywhere',
-            fontSize: '0.68rem',
-            lineHeight: 1.2,
-          }}
-        >
-          {period.status.primary.label}
-        </Typography>
-        <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
-          <CompactMetricValue
-            kind="precipitation"
-            label={`${label} precipitation`}
-            value={values.precipitation}
-            ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-            compact
-          />
-        </Box>
-        <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
-          <CompactMetricValue
-            kind="wind"
-            label={`${label} wind`}
-            value={values.wind}
-            ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-            compact
-          />
-          <CompactMetricValue
-            kind="gusts"
-            label={`${label} gusts`}
-            value={values.gusts}
-            ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-            compact
-          />
-        </Stack>
-      </ButtonBase>
+          {content}
+        </ButtonBase>
+      )}
     </Box>
   );
 }
@@ -1167,7 +1185,7 @@ function DayForecastRow({
         </Typography>
       </Box>
       <Stack sx={{ minWidth: 0, py: 0.25 }}>
-        <DailyPeriodRow
+        <WeatherPeriodSummaryRow
           dateLabel={dateLabel}
           label="Day"
           period={day.day}
@@ -1177,7 +1195,7 @@ function DayForecastRow({
           }}
         />
         <Divider sx={{ mx: 0.75 }} />
-        <DailyPeriodRow
+        <WeatherPeriodSummaryRow
           dateLabel={dateLabel}
           label="Night"
           period={day.night}
@@ -1304,16 +1322,21 @@ export function WeatherPanel({
   }, [sidebarCollapsed]);
 
   const loadForecast = useCallback(
-    (coordinate: MapCoordinate, placeLabel?: string) => {
+    (coordinate: MapCoordinate, placeLabel?: string, elevationMeters?: number) => {
       activeController.current?.abort();
       const controller = new AbortController();
       activeController.current = controller;
       setHourlyPanelRequest(null);
       setNearbyPlaceLabel(placeLabel ?? null);
       setWeatherMapForecastMarker(null);
-      setState({ status: 'loading', coordinate: { ...coordinate } });
+      setState({ status: 'loading', coordinate: { ...coordinate }, elevationMeters });
       void pointWeatherForecast
-        .execute({ coordinate, model: DEFAULT_WEATHER_MODEL }, controller.signal)
+        .execute(
+          elevationMeters === undefined
+            ? { coordinate, model: DEFAULT_WEATHER_MODEL }
+            : { coordinate, model: DEFAULT_WEATHER_MODEL, elevationMeters },
+          controller.signal,
+        )
         .then((forecast) => {
           if (controller.signal.aborted || activeController.current !== controller)
             return;
@@ -1322,7 +1345,12 @@ export function WeatherPanel({
             isDay: forecast.current.isDay,
             period: forecast.currentThreeHours,
           });
-          setState({ status: 'ready', coordinate: { ...coordinate }, forecast });
+          setState({
+            status: 'ready',
+            coordinate: { ...coordinate },
+            elevationMeters,
+            forecast,
+          });
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted || activeController.current !== controller)
@@ -1332,7 +1360,12 @@ export function WeatherPanel({
             error instanceof PointWeatherForecastError
               ? error.code
               : 'provider-unavailable';
-          setState({ status: 'error', coordinate: { ...coordinate }, code });
+          setState({
+            status: 'error',
+            coordinate: { ...coordinate },
+            elevationMeters,
+            code,
+          });
         });
     },
     [pointWeatherForecast],
@@ -1344,7 +1377,7 @@ export function WeatherPanel({
     queueMicrotask(() => {
       if (!shouldStart) return;
       consumeWeatherForecastRequest(request.id);
-      loadForecast(request.coordinate, request.placeLabel);
+      loadForecast(request.coordinate, request.placeLabel, request.elevationMeters);
     });
     return () => {
       shouldStart = false;
@@ -1417,7 +1450,11 @@ export function WeatherPanel({
                 <Button
                   variant="outlined"
                   onClick={() => {
-                    loadForecast(state.coordinate, nearbyPlaceLabel ?? undefined);
+                    loadForecast(
+                      state.coordinate,
+                      nearbyPlaceLabel ?? undefined,
+                      state.elevationMeters,
+                    );
                   }}
                 >
                   Retry

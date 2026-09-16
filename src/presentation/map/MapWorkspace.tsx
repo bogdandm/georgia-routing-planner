@@ -78,6 +78,10 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
+import {
+  MarkerWeatherSummaryButton,
+  useOptionalMarkersWorkspace,
+} from '@/presentation/markers/MarkersWorkspace';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
 import {
@@ -329,6 +333,7 @@ export function MapWorkspace({
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const tracksWorkspace = useOptionalTracksWorkspace();
+  const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const routePlanningActive =
@@ -1063,6 +1068,36 @@ export function MapWorkspace({
             {weatherMapForecastMarker === null ? null : (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
             )}
+            {markersWorkspace?.weatherPreferences.showOnMap
+              ? markersWorkspace.markers.map((marker) => {
+                  const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
+                  if (weather?.status !== 'ready') return null;
+                  return (
+                    <Marker
+                      key={`weather:${marker.id}`}
+                      longitude={marker.coordinate[0]}
+                      latitude={marker.coordinate[1]}
+                      anchor="left"
+                      offset={[22, -30]}
+                    >
+                      <Box
+                        onClick={(event) => {
+                          event.stopPropagation();
+                        }}
+                      >
+                        <MarkerWeatherSummaryButton
+                          map
+                          markerName={marker.name}
+                          selection={weather.selection}
+                          onOpen={() => {
+                            markersWorkspace.openWeatherPreview(marker.id);
+                          }}
+                        />
+                      </Box>
+                    </Marker>
+                  );
+                })
+              : null}
           </Map>
         ))
       )}

@@ -10,6 +10,7 @@ import {
   type ElevationProfile,
 } from '@/domain/tracks/elevationProfile';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -1472,6 +1473,46 @@ describe('MapWorkspace', () => {
     expect(within(marker).getByRole('img')).toHaveStyle({
       backgroundColor: 'rgba(255, 255, 255, 0.94)',
     });
+  });
+
+  it('integrates configured interval weather with a saved marker on the map', async () => {
+    const services = createTestServices();
+    await services.database.saveSavedMarker({
+      schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+      id: 'weather-marker',
+      name: 'Weather summit',
+      normalizedName: 'weather summit',
+      coordinate: [44.8271, 41.7151],
+      elevationMeters: 1_750,
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-07-18T00:00:00.000Z',
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+    useUiStore.setState({ activeTab: 'markers' });
+    const user = userEvent.setup();
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MarkersWorkspaceProvider>
+          <MapWorkspace facade={new FakeMapFacade()} />
+        </MarkersWorkspaceProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    const summary = await screen.findByRole('button', {
+      name: 'Open weather for Weather summit: 20 °C, 0 mm precipitation',
+    });
+    const marker = summary.closest('[data-testid="weather-map-marker"]');
+    expect(marker).toHaveAttribute('data-latitude', '41.7151');
+    expect(marker).toHaveAttribute('data-longitude', '44.8271');
+    await user.click(summary);
+    expect(
+      await screen.findByRole('heading', { name: 'Weather summit weather' }),
+    ).toBeVisible();
+
+    services.database.close();
+    await services.database.delete();
   });
 
   it('applies the Sentinel preset when an applied scene is hidden', async () => {

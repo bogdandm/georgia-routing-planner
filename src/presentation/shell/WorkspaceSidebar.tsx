@@ -5,6 +5,7 @@ import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
+import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
   Box,
   Button,
@@ -41,6 +42,7 @@ import {
   MarkerSortControl,
   useMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
+import { markerWeatherWeekdayLabel } from '@/presentation/markers/markerWeatherWeekdayOptions';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
 import { useSatelliteMosaic } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
@@ -200,7 +202,12 @@ export function WorkspaceSidebar({
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
   const onSceneSelected = fullWidth ? onShowMap : undefined;
   const onMarkerSelected = fullWidth ? onShowMap : undefined;
-  const { loadState } = useMarkersWorkspace();
+  const {
+    loadState,
+    openWeatherSettings,
+    weatherPreferences,
+    weatherPreferencesReady,
+  } = useMarkersWorkspace();
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
@@ -326,6 +333,32 @@ export function WorkspaceSidebar({
         ) : null}
         {activeTab === 'markers' ? (
           <>
+            <Tooltip
+              title={
+                weatherPreferences.weekdays.length === 0
+                  ? 'Marker weather is disabled'
+                  : 'Marker weather settings'
+              }
+            >
+              <Button
+                size="small"
+                color={weatherPreferences.weekdays.length === 0 ? 'inherit' : 'primary'}
+                aria-label={`Marker weather settings. ${
+                  weatherPreferences.weekdays.length === 0
+                    ? 'Forecast disabled'
+                    : `Forecast days: ${markerWeatherWeekdayLabel(
+                        weatherPreferences.weekdays,
+                      )}`
+                }`}
+                startIcon={<WbCloudyOutlinedIcon fontSize="small" />}
+                sx={{ minWidth: 0, px: 1, whiteSpace: 'nowrap' }}
+                onClick={openWeatherSettings}
+              >
+                {weatherPreferencesReady
+                  ? markerWeatherWeekdayLabel(weatherPreferences.weekdays)
+                  : ''}
+              </Button>
+            </Tooltip>
             <Tooltip
               title={
                 canCreateMarkers ? 'Place a marker on the map' : markerCreationMessage

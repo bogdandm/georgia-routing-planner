@@ -25,6 +25,7 @@ import {
   MarkersPanel,
   MarkerSortControl,
   MarkersWorkspaceProvider,
+  useMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -58,6 +59,14 @@ function marker(
   };
 }
 
+function WeatherSettingsControl() {
+  const { openWeatherSettings } = useMarkersWorkspace();
+  return (
+    <button type="button" onClick={openWeatherSettings}>
+      Configure marker weather
+    </button>
+  );
+}
 function renderMarkers(onMarkerSortChange?: (sort: MarkerSort) => Promise<boolean>) {
   const saveSort =
     onMarkerSortChange ??
@@ -70,6 +79,7 @@ function renderMarkers(onMarkerSortChange?: (sort: MarkerSort) => Promise<boolea
       <ThemeProvider theme={createAppTheme()}>
         <MarkersWorkspaceProvider>
           <MarkerSortControl onMarkerSortChange={saveSort} />
+          <WeatherSettingsControl />
           <MarkersPanel />
         </MarkersWorkspaceProvider>
       </ThemeProvider>
@@ -316,5 +326,89 @@ describe('MarkersWorkspace', () => {
     });
     fireEvent.click(confirmDelete);
     await screen.findByText(/No saved markers yet/);
+  });
+
+  it('persists weekday and map-display settings and can disable forecasts', async () => {
+    const user = userEvent.setup();
+    renderMarkers();
+    await user.click(
+      await screen.findByRole('button', { name: 'Configure marker weather' }),
+    );
+
+    expect(screen.getByRole('heading', { name: 'Marker weather' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sat' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Sat' }));
+    await user.click(screen.getByRole('button', { name: 'Mon' }));
+    await user.click(screen.getByRole('switch', { name: 'Show forecasts on the map' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await expect(services.database.loadWeatherIntervalPreferences()).resolves.toEqual({
+      weekdays: [0, 1],
+      period: { kind: 'day' },
+      showOnMap: false,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Marker weather' })).toBeNull();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Configure marker weather' }));
+    expect(screen.getByRole('button', { name: 'Mon' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear forecast' }));
+    await expect(services.database.loadWeatherIntervalPreferences()).resolves.toEqual({
+      weekdays: [],
+      period: { kind: 'day' },
+      showOnMap: false,
+    });
+  });
+
+  it('shows marker interval weather, persists elevation, and opens Weather at the marker', async () => {
+    const summit = marker(
+      'summit',
+      'Summit',
+      '2026-07-20T00:00:00.000Z',
+      [44.8271, 41.7151],
+    );
+    await services.database.saveSavedMarker(summit);
+    useUiStore.setState({ activeTab: 'markers' });
+    const user = userEvent.setup();
+    renderMarkers();
+
+    const summary = await screen.findByRole('button', {
+      name: 'Open weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    expect(summary).toBeVisible();
+    await waitFor(async () => {
+      await expect(services.database.listSavedMarkers()).resolves.toEqual([
+        expect.objectContaining({ id: 'summit', elevationMeters: 1_234 }),
+      ]);
+    });
+
+    await user.click(summary);
+    expect(
+      await screen.findByRole('heading', { name: 'Summit weather' }),
+    ).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Open in Weather' }));
+
+    expect(useUiStore.getState().activeTab).toBe('weather');
+    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      placeLabel: 'Summit',
+      elevationMeters: 1_234,
+    });
   });
 });

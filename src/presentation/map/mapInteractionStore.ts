@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { PointWeatherForecastPeriod } from '@/application/weather/GetPointWeatherForecast';
 import type {
   MapCoordinate,
   MapFitPadding,
@@ -34,6 +35,12 @@ interface SatelliteSearchRequest {
 export interface WeatherForecastRequest {
   readonly id: number;
   readonly coordinate: MapCoordinate;
+  readonly placeLabel?: string;
+}
+export interface WeatherMapForecastMarker {
+  readonly coordinate: MapCoordinate;
+  readonly isDay: boolean;
+  readonly period: PointWeatherForecastPeriod;
 }
 export type MarkerPlacementTarget =
   | { readonly kind: 'saved-marker' }
@@ -58,6 +65,8 @@ interface MapInteractionState {
   readonly satelliteSearchAnchor: MapCoordinate | null;
   readonly satelliteSearchRequest: SatelliteSearchRequest | null;
   readonly weatherForecastRequest: WeatherForecastRequest | null;
+  readonly weatherPointSelectionActive: boolean;
+  readonly weatherMapForecastMarker: WeatherMapForecastMarker | null;
   readonly markerPlacement: MarkerPlacement | null;
   readonly markerCreationCommand: MarkerCreationCommand | null;
 }
@@ -69,6 +78,8 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   pointInspectionCommand: null,
   satelliteSearchRequest: null,
   weatherForecastRequest: null,
+  weatherPointSelectionActive: false,
+  weatherMapForecastMarker: null,
   markerPlacement: null,
   markerCreationCommand: null,
 }));
@@ -153,13 +164,23 @@ export function consumeSatelliteSearchRequest(requestId: number): void {
   mapInteractionStore.setState({ satelliteSearchRequest: null });
 }
 
-export function requestWeatherForecast(coordinate: MapCoordinate): void {
+export function requestWeatherForecast(
+  coordinate: MapCoordinate,
+  placeLabel?: string,
+): void {
   nextWeatherForecastRequestId += 1;
+  const request: {
+    id: number;
+    coordinate: MapCoordinate;
+    placeLabel?: string;
+  } = {
+    id: nextWeatherForecastRequestId,
+    coordinate: { ...coordinate },
+  };
+  if (placeLabel !== undefined) request.placeLabel = placeLabel;
   mapInteractionStore.setState({
-    weatherForecastRequest: {
-      id: nextWeatherForecastRequestId,
-      coordinate: { ...coordinate },
-    },
+    weatherPointSelectionActive: false,
+    weatherForecastRequest: request,
   });
 }
 
@@ -167,12 +188,47 @@ export function consumeWeatherForecastRequest(requestId: number): void {
   if (mapInteractionStore.getState().weatherForecastRequest?.id !== requestId) return;
   mapInteractionStore.setState({ weatherForecastRequest: null });
 }
+export function startWeatherPointSelection(): void {
+  mapInteractionStore.setState({
+    markerPlacement: null,
+    weatherPointSelectionActive: true,
+  });
+}
+
+export function cancelWeatherPointSelection(): void {
+  if (!mapInteractionStore.getState().weatherPointSelectionActive) return;
+  mapInteractionStore.setState({ weatherPointSelectionActive: false });
+}
+
+export function completeWeatherPointSelection(
+  coordinate: MapCoordinate,
+  placeLabel?: string,
+): void {
+  if (!mapInteractionStore.getState().weatherPointSelectionActive) return;
+  requestWeatherForecast(coordinate, placeLabel);
+}
+
+export function setWeatherMapForecastMarker(
+  marker: WeatherMapForecastMarker | null,
+): void {
+  mapInteractionStore.setState({
+    weatherMapForecastMarker:
+      marker === null
+        ? null
+        : {
+            coordinate: { ...marker.coordinate },
+            isDay: marker.isDay,
+            period: marker.period,
+          },
+  });
+}
 
 export function requestMarkerPlacement(target: MarkerPlacementTarget): void {
   nextMarkerCommandId += 1;
   mapInteractionStore.setState({
     markerPlacement: { id: nextMarkerCommandId, target },
     markerCreationCommand: null,
+    weatherPointSelectionActive: false,
   });
 }
 
@@ -244,6 +300,8 @@ export function resetMapInteractionStore(): void {
     satelliteSearchAnchor: null,
     satelliteSearchRequest: null,
     weatherForecastRequest: null,
+    weatherPointSelectionActive: false,
+    weatherMapForecastMarker: null,
     markerPlacement: null,
     markerCreationCommand: null,
   });

@@ -742,7 +742,13 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMapClick = (event: MapMouseEvent): void => {
     const map = this.#map;
-    if (map === null || this.#interactionMode === 'marker-placement') return;
+    if (
+      map === null ||
+      this.#interactionMode === 'marker-placement' ||
+      this.#interactionMode === 'weather-point-selection'
+    ) {
+      return;
+    }
     const coordinate = {
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,

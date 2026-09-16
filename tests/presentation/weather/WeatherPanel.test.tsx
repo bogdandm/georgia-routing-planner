@@ -17,6 +17,7 @@ import {
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import {
+  mapInteractionStore,
   requestWeatherForecast,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
@@ -24,7 +25,12 @@ import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 
-function renderPanel(services = createTestServices()) {
+function renderPanel(
+  services = createTestServices(),
+  onSelectedPointChange: Parameters<
+    typeof WeatherPanel
+  >[0]['onSelectedPointChange'] = () => undefined,
+) {
   return {
     services,
     ...render(
@@ -32,7 +38,7 @@ function renderPanel(services = createTestServices()) {
         <ThemeProvider theme={createAppTheme()}>
           <WeatherPanel
             sidebarCollapsed={false}
-            onSelectedPointChange={() => undefined}
+            onSelectedPointChange={onSelectedPointChange}
           />
         </ThemeProvider>
       </RuntimeServicesProvider>,
@@ -80,7 +86,9 @@ describe('WeatherPanel', () => {
 
     expect(screen.getByText('Select a forecast point')).toBeInTheDocument();
     expect(
-      screen.getByText('Click a point on the map to load its ECMWF IFS forecast.'),
+      screen.getByText(
+        'Use the header action, then click the map to load its ECMWF IFS forecast.',
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Weather data by Open-Meteo' }),
@@ -182,6 +190,10 @@ describe('WeatherPanel', () => {
     expect(execute.mock.calls[0]?.[0]).toEqual({
       coordinate: { longitude: 44.8271, latitude: 41.7151 },
       model: 'ecmwf_ifs',
+    });
+    expect(mapInteractionStore.getState().weatherMapForecastMarker).toMatchObject({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      isDay: true,
     });
     expect(screen.queryByText(/All times:/u)).not.toBeInTheDocument();
     expect(screen.queryByText(/Click another map point/u)).not.toBeInTheDocument();
@@ -645,7 +657,7 @@ describe('WeatherPanel', () => {
     first.resolve(baseline);
   });
 
-  it('maps provider failures to safe copy and retries the selected point', async () => {
+  it('preserves a selected POI through provider failure and retry', async () => {
     const user = userEvent.setup();
     const baseline = await testForecast();
     const services = createTestServices();
@@ -658,10 +670,14 @@ describe('WeatherPanel', () => {
         ),
       )
       .mockResolvedValueOnce(baseline);
-    renderPanel(services);
+    const onSelectedPointChange = vi.fn();
+    renderPanel(services, onSelectedPointChange);
 
     act(() => {
-      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+      requestWeatherForecast(
+        { longitude: 44.8271, latitude: 41.7151 },
+        'Narikala Fortress',
+      );
     });
 
     expect(
@@ -673,6 +689,10 @@ describe('WeatherPanel', () => {
     expect(
       screen.getByRole('link', { name: 'Weather data by Open-Meteo' }),
     ).toBeInTheDocument();
+    expect(onSelectedPointChange).toHaveBeenLastCalledWith({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      placeLabel: 'Narikala Fortress',
+    });
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
@@ -685,6 +705,11 @@ describe('WeatherPanel', () => {
     expect(execute.mock.calls[1]?.[0].coordinate).toEqual({
       longitude: 44.8271,
       latitude: 41.7151,
+    });
+    expect(onSelectedPointChange).toHaveBeenLastCalledWith({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      elevationMeters: 1_234,
+      placeLabel: 'Narikala Fortress',
     });
   });
 

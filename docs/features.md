@@ -565,15 +565,22 @@ in IndexedDB.
 
 While Markers is open, each saved marker receives one forecast at its WGS84 coordinate.
 The point's terrain elevation is resolved for the first request, persisted on that
-marker, and reused by subsequent weather requests. The marker row summarizes all
-selected intervals with one monochrome condition icon, the full temperature range, and
-total precipitation. When map display is enabled, the same clickable summary sits beside
-the marker's existing map symbol and name without replacing either one.
+marker, and reused by subsequent weather requests. The marker row shows one separate
+clickable weather cell per selected weekday beside the marker name and distance. Cells
+retain the preference order and each carry that date's monochrome condition icon,
+temperature range, and total precipitation.
 
-Activating either summary opens an interval preview with one Weather-style period row
-per selected date. **Open in Weather** then selects the Weather workspace and requests
-the normal seven-day forecast at that marker, reusing its persisted elevation and name.
-The interval preview remains local presentation state and is not encoded in the URL.
+When map display is enabled, a unified overlay replaces that marker's normal MapLibre
+symbol while Markers is active. Its first cell keeps the configured marker icon and
+name; one weather cell per selected weekday follows in preference order. Leaving Markers
+restores the normal map symbol and removes these interval overlays, including when
+**Open in Weather** selects the marker as the Weather workspace forecast point.
+
+Activating a weather cell expands the same floating 24-hour table used by a Weather
+seven-day forecast period, starting at the selected daylight, night, or custom interval
+boundary. **Open in Weather** in that table selects the Weather workspace and requests
+the normal seven-day forecast at the marker, reusing its persisted elevation and name.
+The floating preview remains local presentation state and is not encoded in the URL.
 
 Marker search, grouping, filtering, coordinate/scale editing, remote synchronization,
 Satellite targeting, and copying into Create GPX are not currently available.

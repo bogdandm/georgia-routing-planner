@@ -72,21 +72,35 @@ async function pointForecast() {
 }
 
 describe('selectMarkerWeatherForecast', () => {
-  it('combines the configured upcoming weekend daylight periods', async () => {
-    const selected = selectMarkerWeatherForecast(
-      await pointForecast(),
-      defaultWeatherIntervalPreferences,
-    );
+  it('returns one daylight summary per weekday in preference order', async () => {
+    const selected = selectMarkerWeatherForecast(await pointForecast(), {
+      ...defaultWeatherIntervalPreferences,
+      weekdays: [0, 6],
+    });
 
     expect(selected).toMatchObject({
-      isDay: true,
-      periods: [{ date: '2026-07-18' }, { date: '2026-07-19' }],
-      period: {
-        temperatureMinCelsius: 6,
-        temperatureMaxCelsius: 19,
-        precipitationMm: 28,
-        status: { debug: { periodHours: 28 } },
-      },
+      periods: [
+        {
+          date: '2026-07-19',
+          isDay: true,
+          period: {
+            temperatureMinCelsius: 6,
+            temperatureMaxCelsius: 19,
+            precipitationMm: 14,
+            status: { debug: { periodHours: 14 } },
+          },
+        },
+        {
+          date: '2026-07-18',
+          isDay: true,
+          period: {
+            temperatureMinCelsius: 6,
+            temperatureMaxCelsius: 19,
+            precipitationMm: 14,
+            status: { debug: { periodHours: 14 } },
+          },
+        },
+      ],
     });
   });
 
@@ -104,13 +118,13 @@ describe('selectMarkerWeatherForecast', () => {
     };
     const custom = selectMarkerWeatherForecast(forecast, customPreferences);
 
-    expect(night?.period).toMatchObject({
+    expect(night?.periods[0]?.period).toMatchObject({
       temperatureMinCelsius: 0,
       temperatureMaxCelsius: 23,
       precipitationMm: 10,
       status: { debug: { periodHours: 10 } },
     });
-    expect(custom?.period).toMatchObject({
+    expect(custom?.periods[0]?.period).toMatchObject({
       temperatureMinCelsius: 0,
       temperatureMaxCelsius: 23,
       precipitationMm: 7,

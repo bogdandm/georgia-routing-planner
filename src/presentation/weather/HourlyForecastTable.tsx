@@ -4,7 +4,8 @@ import AcUnitOutlinedIcon from '@mui/icons-material/AcUnitOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import OpenInFullOutlinedIcon from '@mui/icons-material/OpenInFullOutlined';
-import { Box, IconButton, Paper, Stack, Typography } from '@mui/material';
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
+import { Box, Button, IconButton, Paper, Stack, Typography } from '@mui/material';
 import {
   useCallback,
   useEffect,
@@ -977,6 +978,7 @@ export function HourlyForecastTable({
 export interface FloatingHourlyForecastPanelProps {
   readonly anchorElement: HTMLElement;
   readonly forecast: PointWeatherForecast;
+  readonly onOpenWeather?: () => void;
   readonly onClose: () => void;
   readonly startTime: string;
   readonly title: string;
@@ -990,6 +992,7 @@ export interface FloatingHourlyForecastPanelProps {
 export function FloatingHourlyForecastPanel({
   anchorElement,
   forecast,
+  onOpenWeather,
   onClose,
   startTime,
   title,
@@ -1118,6 +1121,16 @@ export function FloatingHourlyForecastPanel({
         <Typography id={titleId} component="h2" variant="subtitle2" sx={{ flex: 1 }}>
           {title}
         </Typography>
+        {onOpenWeather === undefined ? null : (
+          <Button
+            size="small"
+            endIcon={<OpenInNewOutlinedIcon fontSize="small" />}
+            onClick={onOpenWeather}
+            sx={{ flexShrink: 0 }}
+          >
+            Open in Weather
+          </Button>
+        )}
         <IconButton
           ref={closeButtonRef}
           size="small"

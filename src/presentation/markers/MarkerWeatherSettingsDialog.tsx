@@ -91,15 +91,33 @@ export function MarkerWeatherSettingsDialog({
               Forecast days
             </Typography>
             <ToggleButtonGroup
+              fullWidth
               aria-label="Forecast weekdays"
               value={draft.weekdays}
               onChange={(_, values: MarkerWeatherWeekday[]) => {
-                if (values.length <= 2) {
-                  setDraft((current) => ({ ...current, weekdays: values }));
-                }
+                if (values.length > 2) return;
+                setDraft((current) => {
+                  const retained = current.weekdays.filter((weekday) =>
+                    values.includes(weekday),
+                  );
+                  const added = values.find(
+                    (weekday) => !current.weekdays.includes(weekday),
+                  );
+                  return {
+                    ...current,
+                    weekdays: added === undefined ? retained : [...retained, added],
+                  };
+                });
               }}
               size="small"
-              sx={{ alignSelf: 'flex-start', flexWrap: 'wrap' }}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                '& .MuiToggleButton-root': {
+                  minWidth: 0,
+                  px: 0.5,
+                },
+              }}
             >
               {markerWeatherWeekdayOptions.map((option) => (
                 <ToggleButton
@@ -130,14 +148,14 @@ export function MarkerWeatherSettingsDialog({
                 choosePeriod(kind);
               }}
             >
-              <ToggleButton value="day">
-                <WbSunnyOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} /> Day
+              <ToggleButton value="day" sx={{ gap: 0.75 }}>
+                <WbSunnyOutlinedIcon fontSize="small" /> Day
               </ToggleButton>
-              <ToggleButton value="night">
-                <BedtimeOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} /> Night
+              <ToggleButton value="night" sx={{ gap: 0.75 }}>
+                <BedtimeOutlinedIcon fontSize="small" /> Night
               </ToggleButton>
-              <ToggleButton value="custom">
-                <ScheduleOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} /> Custom
+              <ToggleButton value="custom" sx={{ gap: 0.75 }}>
+                <ScheduleOutlinedIcon fontSize="small" /> Custom
               </ToggleButton>
             </ToggleButtonGroup>
             {draft.period.kind === 'custom' ? (
@@ -199,6 +217,7 @@ export function MarkerWeatherSettingsDialog({
           </Stack>
 
           <FormControlLabel
+            sx={{ m: 0 }}
             control={
               <Switch
                 checked={draft.showOnMap}

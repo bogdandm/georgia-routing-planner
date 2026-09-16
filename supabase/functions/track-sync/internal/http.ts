@@ -205,7 +205,7 @@ const trackMarkersSchema = z
 
 const markerPayloadSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     id: z.string().min(1).max(200),
     name: z.string().min(1).max(200),
     normalizedName: z.string(),
@@ -213,6 +213,7 @@ const markerPayloadSchema = z
       z.number().finite().min(-180).max(180),
       z.number().finite().min(-90).max(90),
     ]),
+    elevationMeters: z.number().finite().min(-12_000).max(12_000).nullable(),
     iconKey: z.enum(markerIconKeys),
     colorKey: z.enum(markerColorKeys),
     createdAt: z.iso.datetime(),

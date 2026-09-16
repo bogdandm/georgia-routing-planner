@@ -1041,11 +1041,12 @@ Deno.test(
             marker_id: 'marker-a',
             revision: 1,
             payload: {
-              schemaVersion: 1,
+              schemaVersion: 2,
               id: 'marker-a',
               name: 'Marker',
               normalizedName: 'marker',
               coordinate: [44.8, 41.7],
+              elevationMeters: null,
               iconKey: 'place',
               colorKey: 'blue',
               createdAt: '2026-08-10T00:00:00.000Z',
@@ -1062,11 +1063,12 @@ Deno.test(
         markerId: 'marker-a',
         baseRevision: 0,
         marker: {
-          schemaVersion: 1,
+          schemaVersion: 2,
           id: 'marker-a',
           name: 'Marker',
           normalizedName: 'marker',
           coordinate: [44.8, 41.7],
+          elevationMeters: null,
           iconKey: 'place',
           colorKey: 'blue',
           createdAt: '2026-08-10T00:00:00.000Z',
@@ -1081,11 +1083,12 @@ Deno.test(
       p_user_id: USER_ID,
       p_marker_id: 'marker-a',
       p_payload: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'marker-a',
         name: 'Marker',
         normalizedName: 'marker',
         coordinate: [44.8, 41.7],
+        elevationMeters: null,
         iconKey: 'place',
         colorKey: 'blue',
         createdAt: '2026-08-10T00:00:00.000Z',
@@ -1105,11 +1108,12 @@ Deno.test('marker limits are bounded conflict responses', async () => {
       markerId: 'marker-a',
       baseRevision: 0,
       marker: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: 'marker-a',
         name: 'Marker',
         normalizedName: 'marker',
         coordinate: [44.8, 41.7],
+        elevationMeters: null,
         iconKey: 'place',
         colorKey: 'blue',
         createdAt: '2026-08-10T00:00:00.000Z',
@@ -1129,11 +1133,12 @@ function markerPayload(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: 'marker-a',
     name: 'Marker',
     normalizedName: 'marker',
     coordinate: [44.8, 41.7],
+    elevationMeters: null,
     iconKey: 'place',
     colorKey: 'blue',
     createdAt: '2026-08-10T00:00:00.000Z',
@@ -1230,6 +1235,8 @@ Deno.test('invalid marker commands never call the RPC boundary', async () => {
   const valid = markerPayload();
   const missingColorKey = { ...valid };
   delete missingColorKey.colorKey;
+  const missingElevation = { ...valid };
+  delete missingElevation.elevationMeters;
   const cases: readonly unknown[] = [
     {
       action: 'marker-upsert',
@@ -1249,6 +1256,18 @@ Deno.test('invalid marker commands never call the RPC boundary', async () => {
       markerId: 'marker-a',
       baseRevision: 0,
       marker: missingColorKey,
+    },
+    {
+      action: 'marker-upsert',
+      markerId: 'marker-a',
+      baseRevision: 0,
+      marker: missingElevation,
+    },
+    {
+      action: 'marker-upsert',
+      markerId: 'marker-a',
+      baseRevision: 0,
+      marker: { ...valid, elevationMeters: 12_001 },
     },
     {
       action: 'marker-upsert',

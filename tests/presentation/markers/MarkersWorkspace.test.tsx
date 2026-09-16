@@ -176,9 +176,9 @@ describe('MarkersWorkspace', () => {
         }),
       ]);
     });
-    expect(
-      screen.queryByRole('heading', { name: 'Create marker' }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Create marker' })).toBeNull();
+    });
   });
 
   it('defers an early creation command until saved markers finish loading', async () => {
@@ -387,22 +387,31 @@ describe('MarkersWorkspace', () => {
     const user = userEvent.setup();
     renderMarkers();
 
-    const summary = await screen.findByRole('button', {
-      name: 'Open weather for Summit: 20 °C, 0 mm precipitation',
+    const saturday = await screen.findByRole('button', {
+      name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
     });
-    expect(summary).toBeVisible();
+    const sunday = screen.getByRole('button', {
+      name: 'Open Sun weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    expect(saturday).toBeVisible();
+    expect(sunday).toBeVisible();
+    expect(saturday.compareDocumentPosition(sunday)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     await waitFor(async () => {
       await expect(services.database.listSavedMarkers()).resolves.toEqual([
         expect.objectContaining({ id: 'summit', elevationMeters: 1_234 }),
       ]);
     });
 
-    await user.click(summary);
+    await user.click(saturday);
+    const preview = await screen.findByRole('dialog', {
+      name: '24-hour forecast · Day · Sat, 18 Jul',
+    });
     expect(
-      await screen.findByRole('heading', { name: 'Summit weather' }),
+      within(preview).getByRole('table', { name: 'Hourly forecast' }),
     ).toBeVisible();
-    expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    await user.click(screen.getByRole('button', { name: 'Open in Weather' }));
+    await user.click(within(preview).getByRole('button', { name: 'Open in Weather' }));
 
     expect(useUiStore.getState().activeTab).toBe('weather');
     expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({

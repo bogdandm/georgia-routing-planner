@@ -39,8 +39,6 @@ export interface MarkerWeatherForecastPeriod {
 
 export interface MarkerWeatherForecast {
   readonly periods: readonly MarkerWeatherForecastPeriod[];
-  readonly isDay: boolean;
-  readonly period: PointWeatherForecastPeriod;
 }
 
 function nextLocalDate(date: string): string {
@@ -118,11 +116,11 @@ export function selectMarkerWeatherForecast(
 ): MarkerWeatherForecast | null {
   if (preferences.weekdays.length === 0) return null;
   const selectedWeekdays = new Set(preferences.weekdays);
-  const periods: MarkerWeatherForecastPeriod[] = [];
-  const allHours: HourlyWeatherForecast[] = [];
+  const periodsByWeekday = new Map<MarkerWeatherWeekday, MarkerWeatherForecastPeriod>();
 
   for (const day of forecast.days) {
-    if (!selectedWeekdays.has(weekdayForLocalDate(day.date))) continue;
+    const weekday = weekdayForLocalDate(day.date);
+    if (!selectedWeekdays.has(weekday) || periodsByWeekday.has(weekday)) continue;
     const hours = selectedHours(forecast, day.date, preferences.period);
     if (hours.length === 0) {
       throw new RangeError(`Forecast period ${day.date} has no hourly samples.`);
@@ -139,32 +137,19 @@ export function selectMarkerWeatherForecast(
           ? 'day'
           : 'night'
         : preferences.period.kind;
-    periods.push({
+    periodsByWeekday.set(weekday, {
       date: day.date,
       isDay,
       period: summarizeWeatherPeriod(hours, kind),
     });
-    allHours.push(...hours);
   }
 
-  if (periods.length !== preferences.weekdays.length || allHours.length === 0) {
-    throw new RangeError('The forecast does not cover every selected weekday.');
-  }
-  const isDay =
-    preferences.period.kind === 'day'
-      ? true
-      : preferences.period.kind === 'night'
-        ? false
-        : allHours.filter((hour) => hour.isDay).length * 2 >= allHours.length;
-  const kind: WeatherPeriodKind =
-    preferences.period.kind === 'custom'
-      ? isDay
-        ? 'day'
-        : 'night'
-      : preferences.period.kind;
-  return {
-    periods,
-    isDay,
-    period: summarizeWeatherPeriod(allHours, kind),
-  };
+  const periods = preferences.weekdays.map((weekday) => {
+    const period = periodsByWeekday.get(weekday);
+    if (period === undefined) {
+      throw new RangeError('The forecast does not cover every selected weekday.');
+    }
+    return period;
+  });
+  return { periods };
 }

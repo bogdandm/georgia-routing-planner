@@ -10,6 +10,7 @@ import {
   ListItemIcon,
   Menu,
   MenuItem,
+  Paper,
   Snackbar,
   Stack,
   Typography,
@@ -78,6 +79,8 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
+import { markerColorFor, markerIconFor } from '@/presentation/markers/markerCatalog';
+import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
 import {
   MarkerWeatherSummaryButton,
   useOptionalMarkersWorkspace,
@@ -1065,35 +1068,80 @@ export function MapWorkspace({
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
             />
-            {weatherMapForecastMarker === null ? null : (
+            {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
-            )}
-            {markersWorkspace?.weatherPreferences.showOnMap
+            ) : null}
+            {activeTab === 'markers' && markersWorkspace?.weatherPreferences.showOnMap
               ? markersWorkspace.markers.map((marker) => {
                   const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
                   if (weather?.status !== 'ready') return null;
+                  const icon = markerIconFor(marker.iconKey);
+                  const color = markerColorFor(marker.colorKey);
                   return (
                     <Marker
                       key={`weather:${marker.id}`}
                       longitude={marker.coordinate[0]}
                       latitude={marker.coordinate[1]}
-                      anchor="left"
-                      offset={[22, -30]}
+                      anchor="bottom"
+                      offset={[0, -6]}
                     >
-                      <Box
+                      <Paper
+                        data-marker-weather-anchor
+                        elevation={3}
                         onClick={(event) => {
                           event.stopPropagation();
                         }}
+                        sx={{
+                          display: 'flex',
+                          overflow: 'hidden',
+                          borderRadius: 1.5,
+                          bgcolor: 'rgba(255, 255, 255, 0.96)',
+                          '& > button:first-of-type': { borderLeft: 0 },
+                        }}
                       >
-                        <MarkerWeatherSummaryButton
-                          map
-                          markerName={marker.name}
-                          selection={weather.selection}
-                          onOpen={() => {
-                            markersWorkspace.openWeatherPreview(marker.id);
+                        <Box
+                          sx={{
+                            minWidth: 96,
+                            maxWidth: 128,
+                            px: 1,
+                            py: 0.75,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
-                        />
-                      </Box>
+                        >
+                          <PinheadIcon svg={icon.svg} color={color.value} size={34} />
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              maxWidth: '100%',
+                              color: 'grey.900',
+                              fontWeight: 700,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {marker.name}
+                          </Typography>
+                        </Box>
+                        {weather.selection.periods.map((selected) => (
+                          <MarkerWeatherSummaryButton
+                            key={selected.date}
+                            map
+                            markerName={marker.name}
+                            selected={selected}
+                            onOpen={(triggerElement) => {
+                              markersWorkspace.openWeatherPreview(
+                                marker.id,
+                                selected.date,
+                                triggerElement,
+                              );
+                            }}
+                          />
+                        ))}
+                      </Paper>
                     </Marker>
                   );
                 })

@@ -42,6 +42,7 @@ import {
   defaultWeatherIntervalPreferences,
   selectMarkerWeatherForecast,
   type MarkerWeatherForecast,
+  type MarkerWeatherForecastPeriod,
   type WeatherIntervalPreferences,
 } from '@/application/weather/MarkerWeatherForecast';
 import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
@@ -67,7 +68,6 @@ import {
   markerIconFor,
 } from '@/presentation/markers/markerCatalog';
 import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
-import { MarkerWeatherPreviewDialog } from '@/presentation/markers/MarkerWeatherPreviewDialog';
 import { MarkerWeatherSettingsDialog } from '@/presentation/markers/MarkerWeatherSettingsDialog';
 import {
   MarkerEditorDialog,
@@ -75,6 +75,7 @@ import {
 } from '@/presentation/markers/MarkerEditorDialog';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
+import { FloatingHourlyForecastPanel } from '@/presentation/weather/HourlyForecastTable';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
 import {
   formatWeatherMillimetres,
@@ -103,6 +104,14 @@ export type MarkerWeatherForecastState =
       readonly code: PointWeatherForecastError['code'];
     };
 
+interface MarkerHourlyForecastRequest {
+  readonly markerId: string;
+  readonly anchorElement: HTMLElement;
+  readonly triggerElement: HTMLElement;
+  readonly startTime: string;
+  readonly title: string;
+}
+
 const markerWeatherRequestConcurrency = 4;
 
 interface MarkersWorkspaceValue {
@@ -120,7 +129,11 @@ interface MarkersWorkspaceValue {
   readonly weatherPreferencesReady: boolean;
   readonly weatherByMarkerId: ReadonlyMap<string, MarkerWeatherForecastState>;
   readonly openWeatherSettings: () => void;
-  readonly openWeatherPreview: (markerId: string) => void;
+  readonly openWeatherPreview: (
+    markerId: string,
+    date: string,
+    triggerElement: HTMLElement,
+  ) => void;
 }
 
 const MarkersWorkspaceContext = createContext<MarkersWorkspaceValue | null>(null);
@@ -172,6 +185,65 @@ function sortMarkers(
     const byName = left.normalizedName.localeCompare(right.normalizedName, 'en');
     return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
   });
+}
+
+const markerWeatherWeekdayLabels = [
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+] as const;
+const markerWeatherMonthLabels = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+function markerWeatherDateParts(date: string): {
+  readonly dateLabel: string;
+  readonly weekday: string;
+} {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  const weekday = markerWeatherWeekdayLabels[value.getUTCDay()] ?? '';
+  const month = markerWeatherMonthLabels[value.getUTCMonth()] ?? '';
+  return { weekday, dateLabel: `${value.getUTCDate().toString()} ${month}` };
+}
+
+function markerWeatherPreviewStartTime(
+  forecast: PointWeatherForecast,
+  selected: MarkerWeatherForecastPeriod,
+  preferences: WeatherIntervalPreferences,
+): string {
+  if (preferences.period.kind === 'day') return `${selected.date}T00:00`;
+  if (preferences.period.kind === 'custom') {
+    return `${selected.date}T${String(preferences.period.startHour).padStart(2, '0')}:00`;
+  }
+  let foundDaylight = false;
+  const nightIndex = forecast.hourly.findIndex((hour) => {
+    if (!hour.time.startsWith(`${selected.date}T`)) return false;
+    if (hour.isDay) {
+      foundDaylight = true;
+      return false;
+    }
+    return foundDaylight;
+  });
+  const startHour = forecast.hourly[Math.max(0, nightIndex - 6)];
+  if (nightIndex < 0 || startHour === undefined) {
+    throw new RangeError(`Forecast period ${selected.date} has no hourly boundary.`);
+  }
+  return startHour.time;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -232,9 +304,8 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     ReadonlyMap<string, MarkerWeatherForecastState>
   >(new Map());
   const [weatherSettingsOpen, setWeatherSettingsOpen] = useState(false);
-  const [weatherPreviewMarkerId, setWeatherPreviewMarkerId] = useState<string | null>(
-    null,
-  );
+  const [weatherPreview, setWeatherPreview] =
+    useState<MarkerHourlyForecastRequest | null>(null);
   const weatherCache = useRef(new Map<string, MarkerWeatherForecastState>());
 
   const loadMarkers = useCallback(async () => {
@@ -279,6 +350,10 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       active = false;
     };
   }, [database, logger]);
+
+  useEffect(() => {
+    if (activeTab !== 'markers') weatherCache.current.clear();
+  }, [activeTab]);
 
   useEffect(() => {
     if (
@@ -437,8 +512,22 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   }, [loadState, markerCreationCommand]);
 
   useEffect(() => {
-    if (loadState === 'ready') mapLayers?.setSavedMarkers(markers);
-  }, [loadState, mapLayers, markers]);
+    if (loadState !== 'ready') return;
+    const layerMarkers =
+      activeTab === 'markers' && weatherPreferences.showOnMap
+        ? markers.filter(
+            (marker) => weatherByMarkerId.get(marker.id)?.status !== 'ready',
+          )
+        : markers;
+    mapLayers?.setSavedMarkers(layerMarkers);
+  }, [
+    activeTab,
+    loadState,
+    mapLayers,
+    markers,
+    weatherByMarkerId,
+    weatherPreferences.showOnMap,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -540,12 +629,33 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   const openWeatherPreview = useCallback(
-    (markerId: string) => {
-      if (weatherByMarkerId.get(markerId)?.status === 'ready') {
-        setWeatherPreviewMarkerId(markerId);
-      }
+    (markerId: string, date: string, triggerElement: HTMLElement) => {
+      const weather = weatherByMarkerId.get(markerId);
+      if (weather?.status !== 'ready') return;
+      const selected = weather.selection.periods.find((period) => period.date === date);
+      if (selected === undefined) return;
+      const { dateLabel, weekday } = markerWeatherDateParts(selected.date);
+      const periodLabel =
+        weatherPreferences.period.kind === 'day'
+          ? 'Day'
+          : weatherPreferences.period.kind === 'night'
+            ? 'Night'
+            : 'Custom';
+      setWeatherPreview({
+        markerId,
+        anchorElement:
+          triggerElement.closest<HTMLElement>('[data-marker-weather-anchor]') ??
+          triggerElement,
+        triggerElement,
+        startTime: markerWeatherPreviewStartTime(
+          weather.forecast,
+          selected,
+          weatherPreferences,
+        ),
+        title: `24-hour forecast · ${periodLabel} · ${weekday}, ${dateLabel}`,
+      });
     },
-    [weatherByMarkerId],
+    [weatherByMarkerId, weatherPreferences],
   );
 
   const openMarkerInWeather = useCallback(
@@ -568,7 +678,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       const nextUrl = new URL(window.location.href);
       nextUrl.hash = workspaceHashForTab('weather');
       window.history.pushState(window.history.state, '', nextUrl);
-      setWeatherPreviewMarkerId(null);
+      setWeatherPreview(null);
     },
     [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed, weatherByMarkerId],
   );
@@ -579,13 +689,13 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     [mapCenter, markerSort, markers],
   );
   const weatherPreviewMarker =
-    weatherPreviewMarkerId === null
+    weatherPreview === null
       ? undefined
-      : markers.find((marker) => marker.id === weatherPreviewMarkerId);
-  const weatherPreview =
-    weatherPreviewMarkerId === null
+      : markers.find((marker) => marker.id === weatherPreview.markerId);
+  const weatherPreviewState =
+    weatherPreview === null
       ? undefined
-      : weatherByMarkerId.get(weatherPreviewMarkerId);
+      : weatherByMarkerId.get(weatherPreview.markerId);
   const value = useMemo<MarkersWorkspaceValue>(
     () => ({
       markers,
@@ -660,15 +770,22 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
           onSave={saveWeatherPreferences}
         />
       ) : null}
-      {weatherPreviewMarker !== undefined && weatherPreview?.status === 'ready' ? (
-        <MarkerWeatherPreviewDialog
-          forecast={weatherPreview.forecast}
-          marker={weatherPreviewMarker}
-          selection={weatherPreview.selection}
+      {weatherPreview !== null &&
+      weatherPreviewMarker !== undefined &&
+      weatherPreviewState?.status === 'ready' ? (
+        <FloatingHourlyForecastPanel
+          key={`${weatherPreview.markerId}:${weatherPreview.startTime}`}
+          anchorElement={weatherPreview.anchorElement}
+          forecast={weatherPreviewState.forecast}
+          startTime={weatherPreview.startTime}
+          title={weatherPreview.title}
+          triggerElement={weatherPreview.triggerElement}
           onClose={() => {
-            setWeatherPreviewMarkerId(null);
+            setWeatherPreview(null);
           }}
-          onOpenWeather={openMarkerInWeather}
+          onOpenWeather={() => {
+            openMarkerInWeather(weatherPreviewMarker);
+          }}
         />
       ) : null}
     </MarkersWorkspaceContext>
@@ -764,92 +881,83 @@ export function MarkerWeatherSummaryButton({
   map = false,
   markerName,
   onOpen,
-  selection,
+  selected,
 }: {
   readonly map?: boolean;
   readonly markerName: string;
-  readonly onOpen: () => void;
-  readonly selection: MarkerWeatherForecast;
+  readonly onOpen: (triggerElement: HTMLElement) => void;
+  readonly selected: MarkerWeatherForecastPeriod;
 }) {
   const temperature = formatWeatherTemperatureRange(
-    selection.period.temperatureMinCelsius,
-    selection.period.temperatureMaxCelsius,
+    selected.period.temperatureMinCelsius,
+    selected.period.temperatureMaxCelsius,
   );
-  const precipitation = formatWeatherMillimetres(selection.period.precipitationMm);
+  const precipitation = formatWeatherMillimetres(selected.period.precipitationMm);
+  const { weekday } = markerWeatherDateParts(selected.date);
   return (
     <ButtonBase
-      aria-label={`Open weather for ${markerName}: ${temperature}, ${precipitation} precipitation`}
-      onClick={onOpen}
-      sx={
-        map
-          ? {
-              minWidth: 64,
-              flexDirection: 'column',
-              alignItems: 'center',
-              px: 0.75,
-              pt: 0.5,
-              pb: 0.75,
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1.5,
-              bgcolor: 'rgba(255, 255, 255, 0.94)',
-              boxShadow: 3,
-              '&:hover': { bgcolor: 'rgba(255, 255, 255, 1)' },
-            }
-          : {
-              width: '100%',
-              minHeight: 36,
-              justifyContent: 'flex-start',
-              gap: 1,
-              px: 1.5,
-              py: 0.5,
-              borderTop: 1,
-              borderColor: 'divider',
-              color: 'text.primary',
-              textAlign: 'left',
-              '&:hover': { bgcolor: 'action.hover' },
-            }
-      }
+      aria-label={`Open ${weekday} weather for ${markerName}: ${temperature}, ${precipitation} precipitation`}
+      onClick={(event) => {
+        onOpen(event.currentTarget);
+      }}
+      sx={{
+        minWidth: map ? 88 : 80,
+        minHeight: map ? 112 : 88,
+        alignSelf: 'stretch',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        px: 0.75,
+        py: 0.5,
+        borderLeft: 1,
+        borderColor: 'divider',
+        color: map ? 'grey.900' : 'text.primary',
+        bgcolor: 'transparent',
+        '&:hover': {
+          bgcolor: map ? 'rgba(0, 0, 0, 0.04)' : 'action.hover',
+        },
+      }}
     >
-      <MonochromeWeatherPeriodIcon
-        icon={selection.period.status.primary.icon}
-        visibility={selection.period.status.visibility}
-        isDay={selection.isDay}
-        size={map ? 56 : 36}
-      />
-      <Stack
-        direction={map ? 'column' : 'row'}
-        spacing={map ? 0.25 : 1}
-        sx={{ alignItems: 'center', whiteSpace: 'nowrap' }}
+      <Typography
+        variant="caption"
+        sx={{ fontWeight: 700, lineHeight: 1.1, color: 'inherit' }}
       >
+        {weekday}
+      </Typography>
+      <MonochromeWeatherPeriodIcon
+        icon={selected.period.status.primary.icon}
+        visibility={selected.period.status.visibility}
+        isDay={selected.isDay}
+        size={map ? 44 : 32}
+      />
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'inherit',
+          fontWeight: 700,
+          lineHeight: 1.2,
+          whiteSpace: 'nowrap',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {temperature}
+      </Typography>
+      <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
+        <WaterDropOutlinedIcon
+          aria-hidden="true"
+          sx={{ fontSize: 13, color: 'info.dark' }}
+        />
         <Typography
-          variant="body2"
+          variant="caption"
           sx={{
-            color: map ? 'grey.900' : 'text.primary',
-            fontWeight: 700,
+            color: map ? 'grey.900' : 'text.secondary',
+            fontWeight: 600,
             lineHeight: 1.2,
+            whiteSpace: 'nowrap',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {temperature}
+          {precipitation}
         </Typography>
-        <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
-          <WaterDropOutlinedIcon
-            aria-hidden="true"
-            sx={{ fontSize: 13, color: 'info.dark' }}
-          />
-          <Typography
-            variant="caption"
-            sx={{
-              color: map ? 'grey.900' : 'text.secondary',
-              fontWeight: 600,
-              lineHeight: 1.2,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {precipitation}
-          </Typography>
-        </Stack>
       </Stack>
     </ButtonBase>
   );
@@ -1033,7 +1141,8 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                   sx={{
                     display: 'grid',
                     gridTemplateColumns: 'minmax(0, 1fr) auto',
-                    alignItems: 'center',
+                    alignItems: 'stretch',
+                    position: 'relative',
                     bgcolor: hovered ? 'action.hover' : 'transparent',
                     '& .MuiListItemButton-root, & .MuiListItemButton-root:hover': {
                       bgcolor: 'transparent',
@@ -1087,16 +1196,95 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         <Typography variant="subtitle2" noWrap>
                           {marker.name}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" noWrap>
                           {markerDistanceLabel(marker, mapCenter)}
                         </Typography>
                       </Box>
                     </Stack>
                   </ListItemButton>
+                  {weather?.status === 'ready' ? (
+                    <Box
+                      data-marker-weather-anchor
+                      sx={{
+                        display: 'flex',
+                        alignSelf: 'stretch',
+                        borderLeft: 1,
+                        borderColor: 'divider',
+                        '& > button:first-of-type': { borderLeft: 0 },
+                      }}
+                    >
+                      {weather.selection.periods.map((selected) => (
+                        <MarkerWeatherSummaryButton
+                          key={selected.date}
+                          markerName={marker.name}
+                          selected={selected}
+                          onOpen={(triggerElement) => {
+                            openWeatherPreview(
+                              marker.id,
+                              selected.date,
+                              triggerElement,
+                            );
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  ) : weather?.status === 'loading' ? (
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      role="status"
+                      sx={{
+                        minWidth: 128,
+                        minHeight: 88,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        px: 1,
+                        borderLeft: 1,
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <CircularProgress size={14} />
+                      <Typography variant="caption" color="text.secondary">
+                        Loading
+                      </Typography>
+                    </Stack>
+                  ) : weather?.status === 'error' ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        minWidth: 128,
+                        minHeight: 88,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        px: 1,
+                        borderLeft: 1,
+                        borderColor: 'divider',
+                      }}
+                    >
+                      Forecast unavailable
+                    </Typography>
+                  ) : null}
                   <Stack
                     direction="row"
                     spacing={0.5}
-                    sx={{ alignItems: 'center', px: 1 }}
+                    sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      right:
+                        weather?.status === 'ready'
+                          ? weather.selection.periods.length * 80 + 4
+                          : weather === undefined
+                            ? 4
+                            : 132,
+                      zIndex: 1,
+                      alignItems: 'center',
+                      px: 0.5,
+                      borderRadius: 1,
+                      bgcolor: hovered ? 'action.hover' : 'transparent',
+                      transform: 'translateY(-50%)',
+                    }}
                   >
                     <Tooltip
                       disableHoverListener={markerHoverSuppressed}
@@ -1167,52 +1355,6 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       </IconButton>
                     </Tooltip>
                   </Stack>
-                  {weather?.status === 'ready' ? (
-                    <Box sx={{ gridColumn: '1 / -1' }}>
-                      <MarkerWeatherSummaryButton
-                        markerName={marker.name}
-                        selection={weather.selection}
-                        onOpen={() => {
-                          openWeatherPreview(marker.id);
-                        }}
-                      />
-                    </Box>
-                  ) : weather?.status === 'loading' ? (
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      role="status"
-                      sx={{
-                        gridColumn: '1 / -1',
-                        minHeight: 36,
-                        alignItems: 'center',
-                        px: 1.5,
-                        borderTop: 1,
-                        borderColor: 'divider',
-                      }}
-                    >
-                      <CircularProgress size={14} />
-                      <Typography variant="caption" color="text.secondary">
-                        Loading forecast
-                      </Typography>
-                    </Stack>
-                  ) : weather?.status === 'error' ? (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        gridColumn: '1 / -1',
-                        minHeight: 36,
-                        display: 'flex',
-                        alignItems: 'center',
-                        px: 1.5,
-                        borderTop: 1,
-                        borderColor: 'divider',
-                      }}
-                    >
-                      Forecast unavailable
-                    </Typography>
-                  ) : null}
                 </Paper>
               </ClickAwayListener>
             );

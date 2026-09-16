@@ -1448,6 +1448,7 @@ describe('MapWorkspace', () => {
         period: forecast.currentThreeHours,
       });
     });
+    useUiStore.setState({ activeTab: 'weather' });
 
     render(
       <RuntimeServicesProvider services={services}>
@@ -1500,16 +1501,29 @@ describe('MapWorkspace', () => {
       </RuntimeServicesProvider>,
     );
 
-    const summary = await screen.findByRole('button', {
-      name: 'Open weather for Weather summit: 20 °C, 0 mm precipitation',
+    const saturday = await screen.findByRole('button', {
+      name: 'Open Sat weather for Weather summit: 20 °C, 0 mm precipitation',
     });
-    const marker = summary.closest('[data-testid="weather-map-marker"]');
+    const sunday = screen.getByRole('button', {
+      name: 'Open Sun weather for Weather summit: 20 °C, 0 mm precipitation',
+    });
+    const marker = saturday.closest('[data-testid="weather-map-marker"]');
     expect(marker).toHaveAttribute('data-latitude', '41.7151');
     expect(marker).toHaveAttribute('data-longitude', '44.8271');
-    await user.click(summary);
+    expect(within(marker as HTMLElement).getByText('Weather summit')).toBeVisible();
+    expect(saturday.compareDocumentPosition(sunday)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    await user.click(saturday);
+    const preview = await screen.findByRole('dialog', {
+      name: '24-hour forecast · Day · Sat, 18 Jul',
+    });
+    await user.click(within(preview).getByRole('button', { name: 'Open in Weather' }));
     expect(
-      await screen.findByRole('heading', { name: 'Weather summit weather' }),
-    ).toBeVisible();
+      screen.queryByRole('button', {
+        name: 'Open Sat weather for Weather summit: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeNull();
 
     services.database.close();
     await services.database.delete();

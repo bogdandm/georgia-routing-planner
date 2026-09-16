@@ -978,7 +978,7 @@ function SummaryPeriod({
   );
 }
 
-export function WeatherPeriodSummaryRow({
+function DailyPeriodRow({
   dateLabel,
   isDay,
   label,
@@ -988,111 +988,99 @@ export function WeatherPeriodSummaryRow({
   readonly dateLabel: string;
   readonly isDay: boolean;
   readonly label: string;
-  readonly onOpen?: (triggerElement: HTMLElement) => void;
+  readonly onOpen: (triggerElement: HTMLElement) => void;
   readonly period: PointWeatherForecastPeriod;
 }) {
   const values = periodDisplayValues(period);
-  const content = (
-    <>
-      <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
-        <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
-      </Box>
-      <Typography
-        variant="caption"
-        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
-        sx={{
-          gridArea: 'temperature',
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          lineHeight: 1.25,
-          fontVariantNumeric: 'tabular-nums',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {values.temperature}
-      </Typography>
-      <Typography
-        variant="caption"
-        sx={{
-          gridArea: 'condition',
-          minWidth: 0,
-          whiteSpace: 'normal',
-          overflowWrap: 'anywhere',
-          fontSize: '0.68rem',
-          lineHeight: 1.2,
-        }}
-      >
-        {period.status.primary.label}
-      </Typography>
-      <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
-        <CompactMetricValue
-          kind="precipitation"
-          label={`${label} precipitation`}
-          value={values.precipitation}
-          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-          compact
-        />
-      </Box>
-      <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
-        <CompactMetricValue
-          kind="wind"
-          label={`${label} wind`}
-          value={values.wind}
-          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-          compact
-        />
-        <CompactMetricValue
-          kind="gusts"
-          label={`${label} gusts`}
-          value={values.gusts}
-          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-          compact
-        />
-      </Stack>
-    </>
-  );
-  const rowStyles = {
-    width: '100%',
-    minWidth: 0,
-    minHeight: 44,
-    display: 'grid',
-    gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
-    gridTemplateAreas: '"icon temperature condition precipitation metrics"',
-    alignItems: 'center',
-    columnGap: 0.5,
-    px: 1,
-    py: 0.375,
-    color: 'text.primary',
-    textAlign: 'left',
-    '@media (max-width: 479px)': {
-      gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
-      gridTemplateAreas:
-        '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
-      rowGap: 0,
-    },
-  } as const;
   return (
     <Box component="article" aria-label={`${label} forecast`}>
-      {onOpen === undefined ? (
-        <Box sx={rowStyles}>{content}</Box>
-      ) : (
-        <ButtonBase
-          type="button"
-          aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
-          onClick={(event) => {
-            onOpen(event.currentTarget);
-          }}
+      <ButtonBase
+        type="button"
+        aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
+        onClick={(event) => {
+          onOpen(event.currentTarget);
+        }}
+        sx={{
+          width: '100%',
+          minWidth: 0,
+          minHeight: 44,
+          display: 'grid',
+          gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
+          gridTemplateAreas: '"icon temperature condition precipitation metrics"',
+          alignItems: 'center',
+          columnGap: 0.5,
+          px: 1,
+          py: 0.375,
+          color: 'text.primary',
+          textAlign: 'left',
+          '@media (max-width: 479px)': {
+            gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
+            gridTemplateAreas:
+              '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+            rowGap: 0,
+          },
+          '&:hover': { bgcolor: 'action.hover' },
+          '&.Mui-focusVisible': {
+            boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
+          },
+        }}
+      >
+        <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
+          <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
+        </Box>
+        <Typography
+          variant="caption"
+          aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
           sx={{
-            ...rowStyles,
-            '&:hover': { bgcolor: 'action.hover' },
-            '&.Mui-focusVisible': {
-              boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
-            },
+            gridArea: 'temperature',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            lineHeight: 1.25,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
           }}
         >
-          {content}
-        </ButtonBase>
-      )}
+          {values.temperature}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{
+            gridArea: 'condition',
+            minWidth: 0,
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
+            fontSize: '0.68rem',
+            lineHeight: 1.2,
+          }}
+        >
+          {period.status.primary.label}
+        </Typography>
+        <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
+          <CompactMetricValue
+            kind="precipitation"
+            label={`${label} precipitation`}
+            value={values.precipitation}
+            ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+            compact
+          />
+        </Box>
+        <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
+          <CompactMetricValue
+            kind="wind"
+            label={`${label} wind`}
+            value={values.wind}
+            ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+            compact
+          />
+          <CompactMetricValue
+            kind="gusts"
+            label={`${label} gusts`}
+            value={values.gusts}
+            ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+            compact
+          />
+        </Stack>
+      </ButtonBase>
     </Box>
   );
 }
@@ -1185,7 +1173,7 @@ function DayForecastRow({
         </Typography>
       </Box>
       <Stack sx={{ minWidth: 0, py: 0.25 }}>
-        <WeatherPeriodSummaryRow
+        <DailyPeriodRow
           dateLabel={dateLabel}
           label="Day"
           period={day.day}
@@ -1195,7 +1183,7 @@ function DayForecastRow({
           }}
         />
         <Divider sx={{ mx: 0.75 }} />
-        <WeatherPeriodSummaryRow
+        <DailyPeriodRow
           dateLabel={dateLabel}
           label="Night"
           period={day.night}

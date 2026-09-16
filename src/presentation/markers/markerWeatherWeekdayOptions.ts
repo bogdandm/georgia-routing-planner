@@ -16,9 +16,6 @@ export const markerWeatherWeekdayOptions = [
 export function markerWeatherWeekdayLabel(
   weekdays: readonly MarkerWeatherWeekday[],
 ): string {
-  const selected = new Set(weekdays);
-  return markerWeatherWeekdayOptions
-    .filter((option) => selected.has(option.value))
-    .map((option) => option.label)
-    .join(', ');
+  const labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+  return weekdays.map((weekday) => labels[weekday]).join(', ');
 }

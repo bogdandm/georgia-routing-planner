@@ -335,21 +335,28 @@ export function WorkspaceSidebar({
           <>
             <Tooltip
               title={
-                weatherPreferences.weekdays.length === 0
-                  ? 'Marker weather is disabled'
-                  : 'Marker weather settings'
+                !weatherPreferencesReady
+                  ? 'Loading marker weather settings'
+                  : weatherPreferences.weekdays.length === 0
+                    ? 'Marker weather is disabled'
+                    : 'Marker weather settings'
               }
             >
               <Button
                 size="small"
                 color={weatherPreferences.weekdays.length === 0 ? 'inherit' : 'primary'}
-                aria-label={`Marker weather settings. ${
-                  weatherPreferences.weekdays.length === 0
-                    ? 'Forecast disabled'
-                    : `Forecast days: ${markerWeatherWeekdayLabel(
-                        weatherPreferences.weekdays,
-                      )}`
-                }`}
+                disabled={!weatherPreferencesReady}
+                aria-label={
+                  weatherPreferencesReady
+                    ? `Marker weather settings. ${
+                        weatherPreferences.weekdays.length === 0
+                          ? 'Forecast disabled'
+                          : `Forecast days: ${markerWeatherWeekdayLabel(
+                              weatherPreferences.weekdays,
+                            )}`
+                      }`
+                    : 'Loading marker weather settings'
+                }
                 startIcon={<WbCloudyOutlinedIcon fontSize="small" />}
                 sx={{ minWidth: 0, px: 1, whiteSpace: 'nowrap' }}
                 onClick={openWeatherSettings}

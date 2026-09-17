@@ -420,4 +420,132 @@ describe('MarkersWorkspace', () => {
       elevationMeters: 1_234,
     });
   });
+
+  it('retains loaded marker forecasts across workspace navigation', async () => {
+    await services.database.saveSavedMarker(
+      marker('summit', 'Summit', '2026-07-20T00:00:00.000Z', [44.8271, 41.7151]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
+    renderMarkers();
+
+    const saturdayForecast = await screen.findByRole('button', {
+      name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    expect(saturdayForecast).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+
+    act(() => {
+      useUiStore.getState().setActiveTab('tracks');
+    });
+    act(() => {
+      useUiStore.getState().setActiveTab('markers');
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+    });
+
+    expect(saturdayForecast).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('continues in-flight marker forecasts across workspace navigation', async () => {
+    await services.database.saveSavedMarker(
+      marker('summit', 'Summit', '2026-07-20T00:00:00.000Z', [44.8271, 41.7151]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let releaseForecast!: () => void;
+    const forecastGate = new Promise<void>((resolve) => {
+      releaseForecast = resolve;
+    });
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        await forecastGate;
+        return realExecute(input, signal);
+      });
+    renderMarkers();
+    await waitFor(() => {
+      expect(execute).toHaveBeenCalledOnce();
+    });
+
+    act(() => {
+      useUiStore.getState().setActiveTab('tracks');
+    });
+    act(() => {
+      useUiStore.getState().setActiveTab('markers');
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+    });
+    expect(execute).toHaveBeenCalledOnce();
+
+    act(() => {
+      releaseForecast();
+    });
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('does not restart sibling forecasts after saving marker elevation', async () => {
+    await services.database.saveSavedMarker(
+      marker('alpha', 'Alpha', '2026-07-20T00:00:00.000Z', [44.8, 41.7]),
+    );
+    await services.database.saveSavedMarker(
+      marker('bravo', 'Bravo', '2026-07-19T00:00:00.000Z', [44.9, 41.8]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let releaseBravo!: () => void;
+    const bravoGate = new Promise<void>((resolve) => {
+      releaseBravo = resolve;
+    });
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        if (input.coordinate.longitude === 44.9) await bravoGate;
+        return realExecute(input, signal);
+      });
+    renderMarkers();
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open Sat weather for Alpha: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
+    await waitFor(async () => {
+      const markers = await services.database.listSavedMarkers();
+      expect(markers.find(({ id }) => id === 'alpha')?.elevationMeters).toBe(1_234);
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+    });
+    expect(
+      execute.mock.calls.filter(([input]) => input.coordinate.longitude === 44.9),
+    ).toHaveLength(1);
+
+    act(() => {
+      releaseBravo();
+    });
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open Sat weather for Bravo: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
+  });
 });

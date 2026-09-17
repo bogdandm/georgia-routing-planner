@@ -300,6 +300,9 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const [weatherPreferences, setWeatherPreferences] =
     useState<WeatherIntervalPreferences>(defaultWeatherIntervalPreferences);
   const [weatherPreferencesReady, setWeatherPreferencesReady] = useState(false);
+  const [weatherLoadingEnabled, setWeatherLoadingEnabled] = useState(
+    activeTab === 'markers',
+  );
   const [weatherByMarkerId, setWeatherByMarkerId] = useState<
     ReadonlyMap<string, MarkerWeatherForecastState>
   >(new Map());
@@ -352,12 +355,18 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   }, [database, logger]);
 
   useEffect(() => {
-    if (activeTab !== 'markers') weatherCache.current.clear();
-  }, [activeTab]);
+    if (activeTab !== 'markers' || weatherLoadingEnabled) return undefined;
+    const timer = window.setTimeout(() => {
+      setWeatherLoadingEnabled(true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [activeTab, weatherLoadingEnabled]);
 
   useEffect(() => {
     if (
-      activeTab !== 'markers' ||
+      !weatherLoadingEnabled ||
       loadState !== 'ready' ||
       !weatherPreferencesReady ||
       weatherPreferences.weekdays.length === 0
@@ -390,6 +399,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     }
 
     let nextIndex = 0;
+    const elevatedMarkers = new Map<string, SavedMarker>();
     const loadNext = async (): Promise<void> => {
       for (;;) {
         const entry = pending[nextIndex];
@@ -435,10 +445,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
                 preferenceKey,
               ].join(':');
               weatherCache.current.set(elevatedCacheKey, readyState);
-              setMarkers((current) =>
-                current.map((marker) => (marker.id === updated.id ? updated : marker)),
-              );
-              void userData.markerChanged(updated.id);
+              elevatedMarkers.set(updated.id, updated);
             } catch {
               logger.log({
                 level: 'warn',
@@ -447,7 +454,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
             }
           }
         } catch (error) {
-          if (error instanceof DOMException && error.name === 'AbortError') return;
+          if (controller.signal.aborted) return;
           const failedState: MarkerWeatherForecastState = {
             status: 'error',
             code:
@@ -466,14 +473,23 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     const startTimer = window.setTimeout(() => {
       setWeatherByMarkerId(initialStates);
       const workerCount = Math.min(markerWeatherRequestConcurrency, pending.length);
-      void Promise.all(Array.from({ length: workerCount }, () => loadNext()));
+      const workers = Array.from({ length: workerCount }, () => loadNext());
+      void Promise.all(workers).then(() => {
+        if (controller.signal.aborted || elevatedMarkers.size === 0) return;
+        setMarkers((current) =>
+          current.map((marker) => elevatedMarkers.get(marker.id) ?? marker),
+        );
+        for (const markerId of elevatedMarkers.keys()) {
+          void userData.markerChanged(markerId);
+        }
+      });
     }, 0);
     return () => {
       window.clearTimeout(startTimer);
       controller.abort();
     };
   }, [
-    activeTab,
+    weatherLoadingEnabled,
     loadState,
     logger,
     markers,

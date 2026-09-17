@@ -79,8 +79,6 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
-import { markerColorFor, markerIconFor } from '@/presentation/markers/markerCatalog';
-import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
 import {
   MarkerWeatherSummaryButton,
   useOptionalMarkersWorkspace,
@@ -1075,15 +1073,13 @@ export function MapWorkspace({
               ? markersWorkspace.markers.map((marker) => {
                   const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
                   if (weather?.status !== 'ready') return null;
-                  const icon = markerIconFor(marker.iconKey);
-                  const color = markerColorFor(marker.colorKey);
                   return (
                     <Marker
                       key={`weather:${marker.id}`}
                       longitude={marker.coordinate[0]}
                       latitude={marker.coordinate[1]}
                       anchor="bottom"
-                      offset={[0, -6]}
+                      offset={[0, -4]}
                     >
                       <Paper
                         data-marker-weather-anchor
@@ -1092,40 +1088,39 @@ export function MapWorkspace({
                           event.stopPropagation();
                         }}
                         sx={{
-                          display: 'flex',
+                          display: 'grid',
+                          gridTemplateColumns:
+                            weather.selection.periods.length === 1
+                              ? '96px'
+                              : 'repeat(2, 52px)',
                           overflow: 'hidden',
-                          borderRadius: 1.5,
+                          borderRadius: 1.25,
                           bgcolor: 'rgba(255, 255, 255, 0.96)',
                           '& > button:first-of-type': { borderLeft: 0 },
                         }}
                       >
-                        <Box
+                        <Typography
+                          variant="caption"
+                          title={marker.name}
                           sx={{
-                            minWidth: 96,
-                            maxWidth: 128,
-                            px: 1,
-                            py: 0.75,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
+                            gridColumn: '1 / -1',
+                            minWidth: 0,
+                            px: 0.75,
+                            py: 0.375,
+                            borderBottom: 1,
+                            borderColor: 'divider',
+                            color: 'grey.900',
+                            fontSize: '0.625rem',
+                            fontWeight: 700,
+                            lineHeight: 1.1,
+                            overflow: 'hidden',
+                            textAlign: 'center',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          <PinheadIcon svg={icon.svg} color={color.value} size={34} />
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              maxWidth: '100%',
-                              color: 'grey.900',
-                              fontWeight: 700,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {marker.name}
-                          </Typography>
-                        </Box>
+                          {marker.name}
+                        </Typography>
                         {weather.selection.periods.map((selected) => (
                           <MarkerWeatherSummaryButton
                             key={selected.date}

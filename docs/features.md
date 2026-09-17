@@ -570,11 +570,12 @@ clickable weather cell per selected weekday beside the marker name and distance.
 retain the preference order and each carry that date's monochrome condition icon,
 temperature range, and total precipitation.
 
-When map display is enabled, a unified overlay replaces that marker's normal MapLibre
-symbol while Markers is active. Its first cell keeps the configured marker icon and
-name; one weather cell per selected weekday follows in preference order. Leaving Markers
-restores the normal map symbol and removes these interval overlays, including when
-**Open in Weather** selects the marker as the Weather workspace forecast point.
+When map display is enabled, a compact unified overlay replaces that marker's normal
+MapLibre symbol while Markers is active. The marker name spans the overlay header; one
+or two weather cells form the grid below it in preference order. The configured marker
+icon is omitted while this weather overlay is visible. Leaving Markers restores the
+normal map symbol and removes these interval overlays, including when **Open in
+Weather** selects the marker as the Weather workspace forecast point.
 
 Activating a weather cell expands the same floating 24-hour table used by a Weather
 seven-day forecast period, starting at the selected daylight, night, or custom interval

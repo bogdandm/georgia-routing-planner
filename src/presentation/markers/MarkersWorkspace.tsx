@@ -901,13 +901,13 @@ export function MarkerWeatherSummaryButton({
         onOpen(event.currentTarget);
       }}
       sx={{
-        minWidth: map ? 88 : 80,
-        minHeight: map ? 112 : 88,
+        minWidth: map ? 52 : 80,
+        minHeight: map ? 60 : 88,
         alignSelf: 'stretch',
         flexDirection: 'column',
         justifyContent: 'center',
-        px: 0.75,
-        py: 0.5,
+        px: map ? 0.5 : 0.75,
+        py: map ? 0.25 : 0.5,
         borderLeft: 1,
         borderColor: 'divider',
         color: map ? 'grey.900' : 'text.primary',
@@ -919,7 +919,12 @@ export function MarkerWeatherSummaryButton({
     >
       <Typography
         variant="caption"
-        sx={{ fontWeight: 700, lineHeight: 1.1, color: 'inherit' }}
+        sx={{
+          fontSize: map ? '0.6rem' : undefined,
+          fontWeight: 700,
+          lineHeight: map ? 1 : 1.1,
+          color: 'inherit',
+        }}
       >
         {weekday}
       </Typography>
@@ -927,14 +932,15 @@ export function MarkerWeatherSummaryButton({
         icon={selected.period.status.primary.icon}
         visibility={selected.period.status.visibility}
         isDay={selected.isDay}
-        size={map ? 44 : 32}
+        size={map ? 28 : 32}
       />
       <Typography
         variant="body2"
         sx={{
           color: 'inherit',
+          fontSize: map ? '0.65rem' : undefined,
           fontWeight: 700,
-          lineHeight: 1.2,
+          lineHeight: map ? 1.1 : 1.2,
           whiteSpace: 'nowrap',
           fontVariantNumeric: 'tabular-nums',
         }}
@@ -944,14 +950,15 @@ export function MarkerWeatherSummaryButton({
       <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
         <WaterDropOutlinedIcon
           aria-hidden="true"
-          sx={{ fontSize: 13, color: 'info.dark' }}
+          sx={{ fontSize: map ? 11 : 13, color: 'info.dark' }}
         />
         <Typography
           variant="caption"
           sx={{
             color: map ? 'grey.900' : 'text.secondary',
+            fontSize: map ? '0.58rem' : undefined,
             fontWeight: 600,
-            lineHeight: 1.2,
+            lineHeight: map ? 1.1 : 1.2,
             whiteSpace: 'nowrap',
             fontVariantNumeric: 'tabular-nums',
           }}

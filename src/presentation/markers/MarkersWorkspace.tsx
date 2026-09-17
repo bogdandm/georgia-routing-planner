@@ -1304,8 +1304,6 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       zIndex: 1,
                       alignItems: 'center',
                       px: 0.5,
-                      borderRadius: 1,
-                      bgcolor: hovered ? 'action.hover' : 'transparent',
                       transform: 'translateY(-50%)',
                     }}
                   >

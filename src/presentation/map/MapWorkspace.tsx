@@ -1,4 +1,4 @@
-import WaterDropIcon from '@mui/icons-material/WaterDrop';
+import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
@@ -178,15 +178,19 @@ function WeatherForecastMapMarker({
           >
             {temperature}
           </Typography>
-          <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
-            <WaterDropIcon
+          <Stack
+            direction="row"
+            spacing={0.25}
+            sx={{ alignItems: 'center', color: 'info.dark' }}
+          >
+            <WaterDropOutlinedIcon
               aria-hidden="true"
-              sx={{ fontSize: 13, color: 'info.dark' }}
+              sx={{ fontSize: 13, color: 'inherit' }}
             />
             <Typography
               variant="caption"
               sx={{
-                color: 'grey.900',
+                color: 'inherit',
                 fontWeight: 600,
                 lineHeight: 1.2,
                 fontVariantNumeric: 'tabular-nums',
@@ -1091,8 +1095,8 @@ export function MapWorkspace({
                           display: 'grid',
                           gridTemplateColumns:
                             weather.selection.periods.length === 1
-                              ? '96px'
-                              : 'repeat(2, 52px)',
+                              ? '98px'
+                              : 'repeat(2, 54px)',
                           overflow: 'hidden',
                           borderRadius: 1.25,
                           bgcolor: 'rgba(255, 255, 255, 0.96)',

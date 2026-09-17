@@ -1511,6 +1511,8 @@ describe('MapWorkspace', () => {
     expect(marker).toHaveAttribute('data-latitude', '41.7151');
     expect(marker).toHaveAttribute('data-longitude', '44.8271');
     expect(within(marker as HTMLElement).getByText('Weather summit')).toBeVisible();
+    expect(within(saturday).queryByText('Sat')).toBeNull();
+    expect(within(sunday).queryByText('Sun')).toBeNull();
     expect(saturday.compareDocumentPosition(sunday)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );

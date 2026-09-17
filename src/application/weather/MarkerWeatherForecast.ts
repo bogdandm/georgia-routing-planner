@@ -144,12 +144,11 @@ export function selectMarkerWeatherForecast(
     });
   }
 
-  const periods = preferences.weekdays.map((weekday) => {
-    const period = periodsByWeekday.get(weekday);
-    if (period === undefined) {
-      throw new RangeError('The forecast does not cover every selected weekday.');
-    }
-    return period;
-  });
+  const periods = [...periodsByWeekday.values()].sort((left, right) =>
+    left.date.localeCompare(right.date),
+  );
+  if (periods.length !== preferences.weekdays.length) {
+    throw new RangeError('The forecast does not cover every selected weekday.');
+  }
   return { periods };
 }

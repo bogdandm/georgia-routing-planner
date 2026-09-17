@@ -555,7 +555,7 @@ function WeatherMetricIcon({
   readonly label: string;
   readonly size?: number;
 }) {
-  const color = kind === 'precipitation' ? 'info.main' : 'text.secondary';
+  const color = kind === 'precipitation' ? 'info.dark' : 'text.secondary';
   const icon =
     kind === 'wind' ? (
       <AirOutlinedIcon aria-hidden="true" sx={{ fontSize: size, color }} />
@@ -589,7 +589,7 @@ function CompactMetricValue({
       <WeatherMetricIcon kind={kind} label={label} size={compact ? 12 : 16} />
       <Typography
         variant="caption"
-        color="text.secondary"
+        color={kind === 'precipitation' ? 'info.dark' : 'text.secondary'}
         aria-label={ariaLabel}
         sx={{
           minWidth: 0,
@@ -623,6 +623,7 @@ function CurrentMetricRow({
         gridTemplateColumns: '16px minmax(0, 1fr) max-content',
         columnGap: 0.5,
         alignItems: 'center',
+        color: kind === 'precipitation' ? 'info.dark' : 'text.primary',
         '@media (max-width: 239px)': {
           gridTemplateColumns: '16px minmax(0, 1fr)',
         },
@@ -631,7 +632,7 @@ function CurrentMetricRow({
       <WeatherMetricIcon kind={kind} label={label} size={16} />
       <Typography
         variant="caption"
-        color="text.secondary"
+        color={kind === 'precipitation' ? 'inherit' : 'text.secondary'}
         sx={{
           lineHeight: 1.25,
           '@media (max-width: 239px)': {
@@ -645,6 +646,7 @@ function CurrentMetricRow({
         variant="caption"
         aria-label={ariaLabel}
         sx={{
+          color: 'inherit',
           justifySelf: 'end',
           fontWeight: 500,
           lineHeight: 1.25,
@@ -726,7 +728,7 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
           isDay={forecast.current.isDay}
           label={label}
           period={period}
-          size={48}
+          size={64}
         />
         <Stack
           spacing={0}
@@ -1134,17 +1136,20 @@ function DayForecastRow({
   readonly day: PointWeatherForecastDay;
   readonly onOpenHourly: OpenDailyHourlyForecast;
 }) {
-  const dateLabel = `${localWeekday(day.date)} ${localDateLabel(day.date)}`;
+  const weekday = localWeekday(day.date);
+  const weekend = weekday === 'Sat' || weekday === 'Sun';
+  const dateLabel = `${weekday} ${localDateLabel(day.date)}`;
   return (
     <Paper
       data-weather-day-card
       role="group"
       variant="outlined"
-      aria-label={`${localWeekday(day.date)} ${localDateLabel(day.date)}`}
+      aria-label={`${weekday} ${localDateLabel(day.date)}`}
       sx={{
         minHeight: 80,
         display: 'grid',
         gridTemplateColumns: '52px minmax(0, 1fr)',
+        borderColor: 'divider',
         borderRadius: 1.25,
         overflow: 'hidden',
       }}
@@ -1152,21 +1157,24 @@ function DayForecastRow({
       <Box
         sx={{
           minWidth: 0,
-          my: 1,
+          my: weekend ? 0 : 1,
           px: 1,
+          py: weekend ? 1 : 0,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          borderRight: 1,
+          bgcolor: weekend ? appColors.tag.orange.background : 'transparent',
+          color: weekend ? appColors.tag.orange.foreground : 'text.primary',
+          borderRight: weekend ? 0 : 1,
           borderColor: 'divider',
         }}
       >
-        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          {localWeekday(day.date)}
+        <Typography variant="body2" sx={{ color: 'inherit', fontWeight: 700 }}>
+          {weekday}
         </Typography>
         <Typography
           variant="caption"
-          color="text.secondary"
+          color={weekend ? 'inherit' : 'text.secondary'}
           sx={{ whiteSpace: 'nowrap' }}
         >
           {localDateLabel(day.date)}

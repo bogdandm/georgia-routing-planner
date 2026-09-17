@@ -72,7 +72,7 @@ async function pointForecast() {
 }
 
 describe('selectMarkerWeatherForecast', () => {
-  it('returns one daylight summary per weekday in preference order', async () => {
+  it('returns one daylight summary per weekday in chronological order', async () => {
     const selected = selectMarkerWeatherForecast(await pointForecast(), {
       ...defaultWeatherIntervalPreferences,
       weekdays: [0, 6],
@@ -81,7 +81,7 @@ describe('selectMarkerWeatherForecast', () => {
     expect(selected).toMatchObject({
       periods: [
         {
-          date: '2026-07-19',
+          date: '2026-07-18',
           isDay: true,
           period: {
             temperatureMinCelsius: 6,
@@ -91,7 +91,7 @@ describe('selectMarkerWeatherForecast', () => {
           },
         },
         {
-          date: '2026-07-18',
+          date: '2026-07-19',
           isDay: true,
           period: {
             temperatureMinCelsius: 6,

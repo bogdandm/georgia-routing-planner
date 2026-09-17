@@ -1157,6 +1157,28 @@ function markerUpsertRequest(overrides: Record<string, unknown> = {}): Request {
   });
 }
 
+Deno.test('legacy marker upserts normalize missing elevation', async () => {
+  const state = makeState();
+  state.rpcResults.set('upsert_marker', [
+    { data: { outcome: 'applied' }, error: null },
+  ]);
+  const legacyMarker = markerPayload({ schemaVersion: 1 });
+  delete legacyMarker.elevationMeters;
+
+  const response = await handleTrackSync(
+    markerUpsertRequest({ marker: legacyMarker }),
+    makeContext(state),
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(state.calls.find((call) => call.name === 'upsert_marker')?.value, {
+    p_user_id: USER_ID,
+    p_marker_id: 'marker-a',
+    p_payload: markerPayload(),
+    p_base_revision: 0,
+  });
+});
+
 Deno.test(
   'marker mutations serialize exact records and omit absent records',
   async () => {

@@ -203,22 +203,42 @@ const trackMarkersSchema = z
     }
   });
 
-const markerPayloadSchema = z
+const markerPayloadFields = {
+  id: z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
+  normalizedName: z.string(),
+  coordinate: z.tuple([
+    z.number().finite().min(-180).max(180),
+    z.number().finite().min(-90).max(90),
+  ]),
+  iconKey: z.enum(markerIconKeys),
+  colorKey: z.enum(markerColorKeys),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+};
+const markerPayloadV1Schema = z
   .object({
     schemaVersion: z.literal(1),
-    id: z.string().min(1).max(200),
-    name: z.string().min(1).max(200),
-    normalizedName: z.string(),
-    coordinate: z.tuple([
-      z.number().finite().min(-180).max(180),
-      z.number().finite().min(-90).max(90),
-    ]),
-    iconKey: z.enum(markerIconKeys),
-    colorKey: z.enum(markerColorKeys),
-    createdAt: z.iso.datetime(),
-    updatedAt: z.iso.datetime(),
+    ...markerPayloadFields,
   })
   .strict();
+const markerPayloadV2Schema = z
+  .object({
+    schemaVersion: z.literal(2),
+    ...markerPayloadFields,
+    elevationMeters: z.number().finite().min(-12_000).max(12_000).nullable(),
+  })
+  .strict();
+const markerPayloadSchema = z
+  .discriminatedUnion('schemaVersion', [markerPayloadV1Schema, markerPayloadV2Schema])
+  .transform((marker): MarkerPayload => {
+    if (marker.schemaVersion === 2) return marker;
+    return {
+      ...marker,
+      schemaVersion: 2,
+      elevationMeters: null,
+    };
+  });
 import { validateGeometryUpload } from './geometry.ts';
 
 export function requireUserId(context: SupabaseContext): string {

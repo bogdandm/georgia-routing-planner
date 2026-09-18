@@ -23,6 +23,7 @@ import {
 } from '@/presentation/map/mapInteractionStore';
 import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { appColors } from '@/presentation/theme/appColors';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 function renderPanel(
@@ -312,6 +313,22 @@ describe('WeatherPanel', () => {
     expect(dailyRows).toHaveLength(7);
     const firstDailyRow = dailyRows[0];
     if (firstDailyRow === undefined) throw new Error('Expected the first daily row.');
+    const secondDailyRow = dailyRows[1];
+    if (secondDailyRow === undefined) throw new Error('Expected the second daily row.');
+    const saturdayDate = within(
+      within(firstDailyRow).getByRole('group', { name: 'Sat 18 Jul' }),
+    ).getByText('Sat').parentElement;
+    const sundayDate = within(
+      within(secondDailyRow).getByRole('group', { name: 'Sun 19 Jul' }),
+    ).getByText('Sun').parentElement;
+    expect(saturdayDate).toHaveStyle({
+      backgroundColor: appColors.tag.orange.background,
+      color: appColors.tag.orange.foreground,
+    });
+    expect(sundayDate).toHaveStyle({
+      backgroundColor: appColors.tag.orange.background,
+      color: appColors.tag.orange.foreground,
+    });
     const dayForecast = within(firstDailyRow).getByRole('article', {
       name: 'Day forecast',
     });

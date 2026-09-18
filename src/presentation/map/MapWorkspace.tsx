@@ -1,4 +1,4 @@
-import WaterDropIcon from '@mui/icons-material/WaterDrop';
+import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
@@ -10,6 +10,7 @@ import {
   ListItemIcon,
   Menu,
   MenuItem,
+  Paper,
   Snackbar,
   Stack,
   Typography,
@@ -78,6 +79,10 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
+import {
+  MarkerWeatherSummaryButton,
+  useOptionalMarkersWorkspace,
+} from '@/presentation/markers/MarkersWorkspace';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
 import {
@@ -173,15 +178,19 @@ function WeatherForecastMapMarker({
           >
             {temperature}
           </Typography>
-          <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
-            <WaterDropIcon
+          <Stack
+            direction="row"
+            spacing={0.25}
+            sx={{ alignItems: 'center', color: 'info.dark' }}
+          >
+            <WaterDropOutlinedIcon
               aria-hidden="true"
-              sx={{ fontSize: 13, color: 'info.dark' }}
+              sx={{ fontSize: 13, color: 'inherit' }}
             />
             <Typography
               variant="caption"
               sx={{
-                color: 'grey.900',
+                color: 'inherit',
                 fontWeight: 600,
                 lineHeight: 1.2,
                 fontVariantNumeric: 'tabular-nums',
@@ -329,6 +338,7 @@ export function MapWorkspace({
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const tracksWorkspace = useOptionalTracksWorkspace();
+  const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const routePlanningActive =
@@ -1060,9 +1070,81 @@ export function MapWorkspace({
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
             />
-            {weatherMapForecastMarker === null ? null : (
+            {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
-            )}
+            ) : null}
+            {activeTab === 'markers' && markersWorkspace?.weatherPreferences.showOnMap
+              ? markersWorkspace.markers.map((marker) => {
+                  const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
+                  if (weather?.status !== 'ready') return null;
+                  return (
+                    <Marker
+                      key={`weather:${marker.id}`}
+                      longitude={marker.coordinate[0]}
+                      latitude={marker.coordinate[1]}
+                      anchor="bottom"
+                      offset={[0, -4]}
+                    >
+                      <Paper
+                        data-marker-weather-anchor
+                        elevation={3}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                        }}
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns:
+                            weather.selection.periods.length === 1
+                              ? '98px'
+                              : 'repeat(2, 54px)',
+                          overflow: 'hidden',
+                          borderRadius: 1.25,
+                          bgcolor: 'rgba(255, 255, 255, 0.96)',
+                          '& > button:first-of-type': { borderLeft: 0 },
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          title={marker.name}
+                          sx={{
+                            gridColumn: '1 / -1',
+                            minWidth: 0,
+                            px: 0.75,
+                            py: 0.375,
+                            borderBottom: 1,
+                            borderColor: 'divider',
+                            color: 'grey.900',
+                            fontSize: '0.625rem',
+                            fontWeight: 700,
+                            lineHeight: 1.1,
+                            overflow: 'hidden',
+                            textAlign: 'center',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {marker.name}
+                        </Typography>
+                        {weather.selection.periods.map((selected) => (
+                          <MarkerWeatherSummaryButton
+                            key={selected.date}
+                            map
+                            markerName={marker.name}
+                            selected={selected}
+                            onOpen={(triggerElement) => {
+                              markersWorkspace.openWeatherPreview(
+                                marker.id,
+                                selected.date,
+                                triggerElement,
+                              );
+                            }}
+                          />
+                        ))}
+                      </Paper>
+                    </Marker>
+                  );
+                })
+              : null}
           </Map>
         ))
       )}

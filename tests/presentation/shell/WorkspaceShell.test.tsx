@@ -816,6 +816,16 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
     ).toBeVisible();
+    const markerWeatherSettings = await screen.findByRole('button', {
+      name: 'Marker weather settings. Forecast days: Sat, Sun',
+    });
+    expect(markerWeatherSettings).toHaveTextContent('Sat, Sun');
+    await user.click(markerWeatherSettings);
+    expect(screen.getByRole('heading', { name: 'Marker weather' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Marker weather' })).toBeNull();
+    });
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     expect(
       screen.queryByRole('heading', { name: 'Map visibility' }),
@@ -1421,6 +1431,7 @@ describe('WorkspaceShell', () => {
       name: 'Mobile marker',
       normalizedName: 'mobile marker',
       coordinate: [44.9, 41.8],
+      elevationMeters: null,
       iconKey: 'place',
       colorKey: 'blue',
       createdAt: '2026-08-11T00:00:00.000Z',

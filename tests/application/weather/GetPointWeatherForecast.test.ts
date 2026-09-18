@@ -141,6 +141,31 @@ describe('GetPointWeatherForecast', () => {
     });
   });
 
+  it('reuses caller-provided elevation without sampling terrain again', async () => {
+    const fetch = vi
+      .fn<WeatherForecastGateway['fetch']>()
+      .mockResolvedValue(forecastData());
+    const sample = vi.fn<ElevationProvider['sample']>();
+
+    const result = await createUseCase(
+      { fetch },
+      { sample, sampleMany: vi.fn() },
+    ).execute(
+      { coordinate: selectedCoordinate, elevationMeters: 1_450 },
+      new AbortController().signal,
+    );
+
+    expect(sample).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.objectContaining({ elevationMeters: 1_450 }),
+      expect.any(AbortSignal),
+    );
+    expect(result).toMatchObject({
+      elevationMeters: 1_450,
+      elevationSource: 'provided',
+    });
+  });
+
   it.each([
     {
       name: 'missing provider',

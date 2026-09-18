@@ -25,6 +25,7 @@ import {
   MarkersPanel,
   MarkerSortControl,
   MarkersWorkspaceProvider,
+  useMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -50,6 +51,7 @@ function marker(
     name,
     normalizedName: name.toLocaleLowerCase('en'),
     coordinate,
+    elevationMeters: null,
     iconKey: 'place',
     colorKey,
     createdAt,
@@ -57,6 +59,14 @@ function marker(
   };
 }
 
+function WeatherSettingsControl() {
+  const { openWeatherSettings } = useMarkersWorkspace();
+  return (
+    <button type="button" onClick={openWeatherSettings}>
+      Configure marker weather
+    </button>
+  );
+}
 function renderMarkers(onMarkerSortChange?: (sort: MarkerSort) => Promise<boolean>) {
   const saveSort =
     onMarkerSortChange ??
@@ -69,6 +79,7 @@ function renderMarkers(onMarkerSortChange?: (sort: MarkerSort) => Promise<boolea
       <ThemeProvider theme={createAppTheme()}>
         <MarkersWorkspaceProvider>
           <MarkerSortControl onMarkerSortChange={saveSort} />
+          <WeatherSettingsControl />
           <MarkersPanel />
         </MarkersWorkspaceProvider>
       </ThemeProvider>
@@ -165,9 +176,9 @@ describe('MarkersWorkspace', () => {
         }),
       ]);
     });
-    expect(
-      screen.queryByRole('heading', { name: 'Create marker' }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Create marker' })).toBeNull();
+    });
   });
 
   it('defers an early creation command until saved markers finish loading', async () => {
@@ -212,7 +223,11 @@ describe('MarkersWorkspace', () => {
     });
 
     const list = await screen.findByRole('list', { name: 'Saved markers' });
-    expect(list).toHaveTextContent(/^Alpha/);
+    const alphaRow = within(list).getByRole('button', { name: /^Alpha/ });
+    const zuluRow = within(list).getByRole('button', { name: /^Zulu/ });
+    expect(alphaRow.compareDocumentPosition(zuluRow)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     await user.click(screen.getByRole('button', { name: /^Zulu/ }));
     expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
       longitude: 44.9,
@@ -223,7 +238,9 @@ describe('MarkersWorkspace', () => {
       screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
     );
     await user.click(screen.getByRole('menuitem', { name: 'Name' }));
-    expect(list).toHaveTextContent(/^Alpha/);
+    expect(alphaRow.compareDocumentPosition(zuluRow)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     await user.click(
       screen.getByRole('button', { name: 'Sort markers. Current: Name' }),
     );
@@ -243,7 +260,11 @@ describe('MarkersWorkspace', () => {
     renderMarkers();
 
     const list = await screen.findByRole('list', { name: 'Saved markers' });
-    expect(list).toHaveTextContent(/^Far/);
+    const farRow = within(list).getByRole('button', { name: /^Far/ });
+    const nearRow = within(list).getByRole('button', { name: /^Near/ });
+    expect(farRow.compareDocumentPosition(nearRow)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     await user.click(
       screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
     );
@@ -251,7 +272,9 @@ describe('MarkersWorkspace', () => {
       screen.getByRole('menuitem', { name: 'Distance from map center' }),
     );
     await waitFor(() => {
-      expect(list).toHaveTextContent(/^Near/);
+      expect(nearRow.compareDocumentPosition(farRow)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
     });
 
     act(() => {
@@ -261,7 +284,9 @@ describe('MarkersWorkspace', () => {
       });
     });
     await waitFor(() => {
-      expect(list).toHaveTextContent(/^Far/);
+      expect(farRow.compareDocumentPosition(nearRow)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
     });
   });
 
@@ -315,5 +340,299 @@ describe('MarkersWorkspace', () => {
     });
     fireEvent.click(confirmDelete);
     await screen.findByText(/No saved markers yet/);
+  });
+
+  it('persists weekday and map-display settings and can disable forecasts', async () => {
+    const user = userEvent.setup();
+    renderMarkers();
+    await user.click(
+      await screen.findByRole('button', { name: 'Configure marker weather' }),
+    );
+
+    expect(screen.getByRole('heading', { name: 'Marker weather' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sat' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Sat' }));
+    await user.click(screen.getByRole('button', { name: 'Mon' }));
+    await user.click(screen.getByRole('switch', { name: 'Show forecasts on the map' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await expect(services.database.loadWeatherIntervalPreferences()).resolves.toEqual({
+      weekdays: [0, 1],
+      period: { kind: 'day' },
+      showOnMap: false,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Marker weather' })).toBeNull();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Configure marker weather' }));
+    expect(screen.getByRole('button', { name: 'Mon' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Sun' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Clear forecast' }));
+    await expect(services.database.loadWeatherIntervalPreferences()).resolves.toEqual({
+      weekdays: [],
+      period: { kind: 'day' },
+      showOnMap: false,
+    });
+  });
+
+  it('updates weekday weather without remounting marker rows or weather slots', async () => {
+    await services.database.saveSavedMarker(
+      marker('summit', 'Summit', '2026-07-20T00:00:00.000Z', [44.8271, 41.7151]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const user = userEvent.setup();
+    const listSavedMarkers = vi.spyOn(services.savedMarkers, 'listSavedMarkers');
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let executionCount = 0;
+    let releaseRefresh!: () => void;
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        executionCount += 1;
+        if (executionCount > 1) await refreshGate;
+        return realExecute(input, signal);
+      });
+    renderMarkers();
+
+    const saturday = await screen.findByRole('button', {
+      name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    const list = screen.getByRole('list', { name: 'Saved markers' });
+    const markerRow = within(list).getByRole('button', { name: /^Summit/ });
+    const weatherSlot = saturday.closest('[data-marker-weather-anchor]');
+    expect(weatherSlot).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Configure marker weather' }));
+    await user.click(screen.getByRole('button', { name: 'Sat' }));
+    await user.click(screen.getByRole('button', { name: 'Mon' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const loading = await screen.findByRole('status', {
+      name: 'Loading weather for Summit',
+    });
+    expect(loading).toBe(weatherSlot);
+    expect(screen.getByRole('list', { name: 'Saved markers' })).toBe(list);
+    expect(within(list).getByRole('button', { name: /^Summit/ })).toBe(markerRow);
+    expect(listSavedMarkers).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+
+    act(() => {
+      releaseRefresh();
+    });
+    const sunday = await screen.findByRole('button', {
+      name: /^Open Sun weather for Summit:/,
+    });
+    expect(sunday).toBeVisible();
+    expect(
+      screen.getByRole('group', { name: 'Marker forecast days' }),
+    ).toHaveTextContent('Sun19 JulMon20 Jul');
+  });
+
+  it('shows marker interval weather, persists elevation, and opens Weather at the marker', async () => {
+    const summit = marker(
+      'summit',
+      'Summit',
+      '2026-07-20T00:00:00.000Z',
+      [44.8271, 41.7151],
+    );
+    await services.database.saveSavedMarker(summit);
+    useUiStore.setState({ activeTab: 'markers' });
+    const user = userEvent.setup();
+    renderMarkers();
+
+    const saturday = await screen.findByRole('button', {
+      name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    const sunday = screen.getByRole('button', {
+      name: 'Open Sun weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    const forecastDays = screen.getByRole('group', {
+      name: 'Marker forecast days',
+    });
+    expect(within(forecastDays).getByText('Sat')).toBeVisible();
+    expect(within(forecastDays).getByText('Sun')).toBeVisible();
+    expect(within(forecastDays).getByText('18 Jul')).toBeVisible();
+    expect(within(forecastDays).getByText('19 Jul')).toBeVisible();
+    expect(within(saturday).queryByText('Sat')).toBeNull();
+    expect(within(sunday).queryByText('Sun')).toBeNull();
+    expect(saturday).toBeVisible();
+    expect(sunday).toBeVisible();
+    expect(saturday.compareDocumentPosition(sunday)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    await waitFor(async () => {
+      await expect(services.database.listSavedMarkers()).resolves.toEqual([
+        expect.objectContaining({ id: 'summit', elevationMeters: 1_234 }),
+      ]);
+    });
+
+    await user.click(saturday);
+    const preview = await screen.findByRole('dialog', {
+      name: '24-hour forecast · Day · Sat, 18 Jul',
+    });
+    expect(
+      within(preview).getByRole('table', { name: 'Hourly forecast' }),
+    ).toBeVisible();
+    await user.click(within(preview).getByRole('button', { name: 'Open in Weather' }));
+
+    expect(useUiStore.getState().activeTab).toBe('weather');
+    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+      coordinate: { longitude: 44.8271, latitude: 41.7151 },
+      placeLabel: 'Summit',
+      elevationMeters: 1_234,
+    });
+  });
+
+  it('retains loaded marker forecasts across workspace navigation', async () => {
+    await services.database.saveSavedMarker(
+      marker('summit', 'Summit', '2026-07-20T00:00:00.000Z', [44.8271, 41.7151]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
+    renderMarkers();
+
+    const saturdayForecast = await screen.findByRole('button', {
+      name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
+    });
+    expect(saturdayForecast).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+
+    act(() => {
+      useUiStore.getState().setActiveTab('tracks');
+    });
+    act(() => {
+      useUiStore.getState().setActiveTab('markers');
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+    });
+
+    expect(saturdayForecast).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('continues in-flight marker forecasts across workspace navigation', async () => {
+    await services.database.saveSavedMarker(
+      marker('summit', 'Summit', '2026-07-20T00:00:00.000Z', [44.8271, 41.7151]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let releaseForecast!: () => void;
+    const forecastGate = new Promise<void>((resolve) => {
+      releaseForecast = resolve;
+    });
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        await forecastGate;
+        return realExecute(input, signal);
+      });
+    renderMarkers();
+    await waitFor(() => {
+      expect(execute).toHaveBeenCalledOnce();
+    });
+    const loadingForecast = screen.getByRole('status', {
+      name: 'Loading weather for Summit',
+    });
+    expect(within(loadingForecast).getAllByText('Loading')).toHaveLength(2);
+
+    act(() => {
+      useUiStore.getState().setActiveTab('tracks');
+    });
+    act(() => {
+      useUiStore.getState().setActiveTab('markers');
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+    });
+    expect(execute).toHaveBeenCalledOnce();
+
+    act(() => {
+      releaseForecast();
+    });
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open Sat weather for Summit: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('does not restart sibling forecasts after saving marker elevation', async () => {
+    await services.database.saveSavedMarker(
+      marker('alpha', 'Alpha', '2026-07-20T00:00:00.000Z', [44.8, 41.7]),
+    );
+    await services.database.saveSavedMarker(
+      marker('bravo', 'Bravo', '2026-07-19T00:00:00.000Z', [44.9, 41.8]),
+    );
+    useUiStore.setState({ activeTab: 'markers' });
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let releaseBravo!: () => void;
+    const bravoGate = new Promise<void>((resolve) => {
+      releaseBravo = resolve;
+    });
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        if (input.coordinate.longitude === 44.9) await bravoGate;
+        return realExecute(input, signal);
+      });
+    renderMarkers();
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open Sat weather for Alpha: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
+    await waitFor(async () => {
+      const markers = await services.database.listSavedMarkers();
+      expect(markers.find(({ id }) => id === 'alpha')?.elevationMeters).toBe(1_234);
+    });
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0);
+      });
+    });
+    expect(
+      execute.mock.calls.filter(([input]) => input.coordinate.longitude === 44.9),
+    ).toHaveLength(1);
+
+    act(() => {
+      releaseBravo();
+    });
+    expect(
+      await screen.findByRole('button', {
+        name: 'Open Sat weather for Bravo: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeVisible();
   });
 });

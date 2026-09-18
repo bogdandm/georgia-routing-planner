@@ -4,10 +4,12 @@ import EditIcon from '@mui/icons-material/Edit';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PaletteIcon from '@mui/icons-material/Palette';
 import SortIcon from '@mui/icons-material/Sort';
+import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import {
   Alert,
   Box,
   Button,
+  ButtonBase,
   CircularProgress,
   ClickAwayListener,
   IconButton,
@@ -28,6 +30,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type PropsWithChildren,
@@ -35,6 +38,15 @@ import {
 import { useStore } from 'zustand';
 
 import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
+import {
+  defaultWeatherIntervalPreferences,
+  selectMarkerWeatherForecast,
+  type MarkerWeatherForecast,
+  type MarkerWeatherForecastPeriod,
+  type WeatherIntervalPreferences,
+} from '@/application/weather/MarkerWeatherForecast';
+import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
+import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
@@ -47,6 +59,7 @@ import {
   consumeMarkerCreationCommand,
   mapInteractionStore,
   requestMapNavigation,
+  requestWeatherForecast,
 } from '@/presentation/map/mapInteractionStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import {
@@ -55,11 +68,19 @@ import {
   markerIconFor,
 } from '@/presentation/markers/markerCatalog';
 import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
+import { MarkerWeatherSettingsDialog } from '@/presentation/markers/MarkerWeatherSettingsDialog';
 import {
   MarkerEditorDialog,
   type MarkerAppearance,
 } from '@/presentation/markers/MarkerEditorDialog';
 import { useUiStore } from '@/presentation/shell/uiStore';
+import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
+import { FloatingHourlyForecastPanel } from '@/presentation/weather/HourlyForecastTable';
+import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
+import {
+  formatWeatherMillimetres,
+  formatWeatherTemperatureRange,
+} from '@/presentation/weather/weatherFormatters';
 
 type MarkerLoadState = 'loading' | 'ready' | 'failed';
 
@@ -70,6 +91,30 @@ type MarkerEditorDraft =
       readonly initialName: string;
     }
   | { readonly mode: 'appearance'; readonly marker: SavedMarker };
+
+export type MarkerWeatherForecastState =
+  | { readonly status: 'loading' }
+  | {
+      readonly status: 'ready';
+      readonly forecast: PointWeatherForecast;
+      readonly selection: MarkerWeatherForecast;
+    }
+  | {
+      readonly status: 'error';
+      readonly code: PointWeatherForecastError['code'];
+    };
+
+interface MarkerHourlyForecastRequest {
+  readonly markerId: string;
+  readonly anchorElement: HTMLElement;
+  readonly triggerElement: HTMLElement;
+  readonly startTime: string;
+  readonly title: string;
+}
+
+const markerWeatherRequestConcurrency = 4;
+const markerWeatherCellWidth = 80;
+const markerWeatherCellHeight = 92;
 
 interface MarkersWorkspaceValue {
   readonly markers: readonly SavedMarker[];
@@ -82,6 +127,15 @@ interface MarkersWorkspaceValue {
   readonly openAppearanceEditor: (marker: SavedMarker) => void;
   readonly renameMarker: (marker: SavedMarker, name: string) => Promise<void>;
   readonly deleteMarker: (marker: SavedMarker) => Promise<void>;
+  readonly weatherPreferences: WeatherIntervalPreferences;
+  readonly weatherPreferencesReady: boolean;
+  readonly weatherByMarkerId: ReadonlyMap<string, MarkerWeatherForecastState>;
+  readonly openWeatherSettings: () => void;
+  readonly openWeatherPreview: (
+    markerId: string,
+    date: string,
+    triggerElement: HTMLElement,
+  ) => void;
 }
 
 const MarkersWorkspaceContext = createContext<MarkersWorkspaceValue | null>(null);
@@ -135,17 +189,94 @@ function sortMarkers(
   });
 }
 
+const markerWeatherWeekdayLabels = [
+  'Sun',
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+] as const;
+const markerWeatherMonthLabels = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+function markerWeatherDateParts(date: string): {
+  readonly dateLabel: string;
+  readonly weekday: string;
+} {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  const weekday = markerWeatherWeekdayLabels[value.getUTCDay()] ?? '';
+  const month = markerWeatherMonthLabels[value.getUTCMonth()] ?? '';
+  return { weekday, dateLabel: `${value.getUTCDate().toString()} ${month}` };
+}
+
+function markerWeatherPreviewStartTime(
+  forecast: PointWeatherForecast,
+  selected: MarkerWeatherForecastPeriod,
+  preferences: WeatherIntervalPreferences,
+): string {
+  if (preferences.period.kind === 'day') return `${selected.date}T00:00`;
+  if (preferences.period.kind === 'custom') {
+    return `${selected.date}T${String(preferences.period.startHour).padStart(2, '0')}:00`;
+  }
+  let foundDaylight = false;
+  const nightIndex = forecast.hourly.findIndex((hour) => {
+    if (!hour.time.startsWith(`${selected.date}T`)) return false;
+    if (hour.isDay) {
+      foundDaylight = true;
+      return false;
+    }
+    return foundDaylight;
+  });
+  const startHour = forecast.hourly[Math.max(0, nightIndex - 6)];
+  if (nightIndex < 0 || startHour === undefined) {
+    throw new RangeError(`Forecast period ${selected.date} has no hourly boundary.`);
+  }
+  return startHour.time;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOptionalMarkersWorkspace(): MarkersWorkspaceValue | null {
+  return use(MarkersWorkspaceContext);
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function useMarkersWorkspace(): MarkersWorkspaceValue {
-  const value = use(MarkersWorkspaceContext);
+  const value = useOptionalMarkersWorkspace();
   if (value === null) throw new Error('Markers workspace is unavailable.');
   return value;
 }
 
 export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
-  const { clock, idGenerator, mapLayers, mapViewport, savedMarkers, userData } =
-    useRuntimeServices();
+  const {
+    clock,
+    database,
+    idGenerator,
+    logger,
+    mapLayers,
+    mapViewport,
+    pointWeatherForecast,
+    savedMarkers,
+    userData,
+  } = useRuntimeServices();
+  const activeTab = useUiStore((state) => state.activeTab);
   const markerSort = useUiStore((state) => state.markerSort);
+  const setActiveTab = useUiStore((state) => state.setActiveTab);
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
+  const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const markerCreationCommand = useStore(
     mapInteractionStore,
     (state) => state.markerCreationCommand,
@@ -168,6 +299,19 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editorDraft, setEditorDraft] = useState<MarkerEditorDraft | null>(null);
+  const [weatherPreferences, setWeatherPreferences] =
+    useState<WeatherIntervalPreferences>(defaultWeatherIntervalPreferences);
+  const [weatherPreferencesReady, setWeatherPreferencesReady] = useState(false);
+  const [weatherLoadingEnabled, setWeatherLoadingEnabled] = useState(
+    activeTab === 'markers',
+  );
+  const [weatherByMarkerId, setWeatherByMarkerId] = useState<
+    ReadonlyMap<string, MarkerWeatherForecastState>
+  >(new Map());
+  const [weatherSettingsOpen, setWeatherSettingsOpen] = useState(false);
+  const [weatherPreview, setWeatherPreview] =
+    useState<MarkerHourlyForecastRequest | null>(null);
+  const weatherCache = useRef(new Map<string, MarkerWeatherForecastState>());
 
   const loadMarkers = useCallback(async () => {
     setLoadState('loading');
@@ -190,6 +334,173 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       window.clearTimeout(timer);
     };
   }, [loadMarkers]);
+
+  useEffect(() => {
+    let active = true;
+    void database
+      .loadWeatherIntervalPreferences()
+      .then((preferences) => {
+        if (active) setWeatherPreferences(preferences);
+      })
+      .catch(() => {
+        logger.log({
+          level: 'warn',
+          name: 'storage.marker-weather-preferences.load-failed',
+        });
+      })
+      .finally(() => {
+        if (active) setWeatherPreferencesReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [database, logger]);
+
+  useEffect(() => {
+    if (activeTab !== 'markers' || weatherLoadingEnabled) return undefined;
+    const timer = window.setTimeout(() => {
+      setWeatherLoadingEnabled(true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [activeTab, weatherLoadingEnabled]);
+
+  useEffect(() => {
+    if (
+      !weatherLoadingEnabled ||
+      loadState !== 'ready' ||
+      !weatherPreferencesReady ||
+      weatherPreferences.weekdays.length === 0
+    ) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const preferenceKey = JSON.stringify(weatherPreferences);
+    const pending: {
+      readonly marker: SavedMarker;
+      readonly cacheKey: string;
+    }[] = [];
+    const initialStates = new Map<string, MarkerWeatherForecastState>();
+    for (const marker of markers) {
+      const cacheKey = [
+        marker.id,
+        marker.coordinate[0],
+        marker.coordinate[1],
+        marker.elevationMeters ?? 'unresolved',
+        preferenceKey,
+      ].join(':');
+      const cached = weatherCache.current.get(cacheKey);
+      if (cached === undefined) {
+        initialStates.set(marker.id, { status: 'loading' });
+        pending.push({ marker, cacheKey });
+      } else {
+        initialStates.set(marker.id, cached);
+      }
+    }
+
+    let nextIndex = 0;
+    const elevatedMarkers = new Map<string, SavedMarker>();
+    const loadNext = async (): Promise<void> => {
+      for (;;) {
+        const entry = pending[nextIndex];
+        nextIndex += 1;
+        if (entry === undefined) return;
+        const coordinate = {
+          longitude: entry.marker.coordinate[0],
+          latitude: entry.marker.coordinate[1],
+        };
+        try {
+          const forecast = await pointWeatherForecast.execute(
+            entry.marker.elevationMeters === null
+              ? { coordinate }
+              : { coordinate, elevationMeters: entry.marker.elevationMeters },
+            controller.signal,
+          );
+          controller.signal.throwIfAborted();
+          const selection = selectMarkerWeatherForecast(forecast, weatherPreferences);
+          if (selection === null) return;
+          const readyState: MarkerWeatherForecastState = {
+            status: 'ready',
+            forecast,
+            selection,
+          };
+          weatherCache.current.set(entry.cacheKey, readyState);
+          setWeatherByMarkerId((current) => {
+            const next = new Map(current);
+            next.set(entry.marker.id, readyState);
+            return next;
+          });
+
+          if (entry.marker.elevationMeters === null) {
+            try {
+              const updated = await savedMarkers.saveSavedMarkerElevation(
+                entry.marker.id,
+                forecast.elevationMeters,
+              );
+              const elevatedCacheKey = [
+                updated.id,
+                updated.coordinate[0],
+                updated.coordinate[1],
+                updated.elevationMeters ?? 'unresolved',
+                preferenceKey,
+              ].join(':');
+              weatherCache.current.set(elevatedCacheKey, readyState);
+              elevatedMarkers.set(updated.id, updated);
+            } catch {
+              logger.log({
+                level: 'warn',
+                name: 'storage.saved-marker-elevation.save-failed',
+              });
+            }
+          }
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          const failedState: MarkerWeatherForecastState = {
+            status: 'error',
+            code:
+              error instanceof PointWeatherForecastError
+                ? error.code
+                : 'provider-unavailable',
+          };
+          setWeatherByMarkerId((current) => {
+            const next = new Map(current);
+            next.set(entry.marker.id, failedState);
+            return next;
+          });
+        }
+      }
+    };
+    const startTimer = window.setTimeout(() => {
+      setWeatherByMarkerId(initialStates);
+      const workerCount = Math.min(markerWeatherRequestConcurrency, pending.length);
+      const workers = Array.from({ length: workerCount }, () => loadNext());
+      void Promise.all(workers).then(() => {
+        if (controller.signal.aborted || elevatedMarkers.size === 0) return;
+        setMarkers((current) =>
+          current.map((marker) => elevatedMarkers.get(marker.id) ?? marker),
+        );
+        for (const markerId of elevatedMarkers.keys()) {
+          void userData.markerChanged(markerId);
+        }
+      });
+    }, 0);
+    return () => {
+      window.clearTimeout(startTimer);
+      controller.abort();
+    };
+  }, [
+    weatherLoadingEnabled,
+    loadState,
+    logger,
+    markers,
+    pointWeatherForecast,
+    savedMarkers,
+    userData,
+    weatherPreferences,
+    weatherPreferencesReady,
+  ]);
 
   useEffect(
     () => userData.subscribeMarkersChanged(() => void loadMarkers()),
@@ -219,8 +530,22 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   }, [loadState, markerCreationCommand]);
 
   useEffect(() => {
-    if (loadState === 'ready') mapLayers?.setSavedMarkers(markers);
-  }, [loadState, mapLayers, markers]);
+    if (loadState !== 'ready') return;
+    const layerMarkers =
+      activeTab === 'markers' && weatherPreferences.showOnMap
+        ? markers.filter(
+            (marker) => weatherByMarkerId.get(marker.id)?.status !== 'ready',
+          )
+        : markers;
+    mapLayers?.setSavedMarkers(layerMarkers);
+  }, [
+    activeTab,
+    loadState,
+    mapLayers,
+    markers,
+    weatherByMarkerId,
+    weatherPreferences.showOnMap,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -240,6 +565,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
         name: name.name,
         normalizedName: name.normalizedName,
         coordinate: [draft.coordinate.longitude, draft.coordinate.latitude],
+        elevationMeters: null,
         iconKey: appearance.iconKey,
         colorKey: appearance.colorKey,
         createdAt: timestamp,
@@ -306,11 +632,94 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     [savedMarkers, userData],
   );
 
+  const saveWeatherPreferences = useCallback(
+    async (preferences: WeatherIntervalPreferences) => {
+      await database.saveWeatherIntervalPreferences(preferences);
+      weatherCache.current.clear();
+      const nextWeather = new Map<string, MarkerWeatherForecastState>();
+      if (preferences.weekdays.length > 0) {
+        for (const marker of markers) {
+          nextWeather.set(marker.id, { status: 'loading' });
+        }
+      }
+      setWeatherByMarkerId(nextWeather);
+      setWeatherPreferences({
+        ...preferences,
+        weekdays: [...preferences.weekdays],
+        period: { ...preferences.period },
+      });
+    },
+    [database, markers],
+  );
+
+  const openWeatherPreview = useCallback(
+    (markerId: string, date: string, triggerElement: HTMLElement) => {
+      const weather = weatherByMarkerId.get(markerId);
+      if (weather?.status !== 'ready') return;
+      const selected = weather.selection.periods.find((period) => period.date === date);
+      if (selected === undefined) return;
+      const { dateLabel, weekday } = markerWeatherDateParts(selected.date);
+      const periodLabel =
+        weatherPreferences.period.kind === 'day'
+          ? 'Day'
+          : weatherPreferences.period.kind === 'night'
+            ? 'Night'
+            : 'Custom';
+      setWeatherPreview({
+        markerId,
+        anchorElement:
+          triggerElement.closest<HTMLElement>('[data-marker-weather-anchor]') ??
+          triggerElement,
+        triggerElement,
+        startTime: markerWeatherPreviewStartTime(
+          weather.forecast,
+          selected,
+          weatherPreferences,
+        ),
+        title: `24-hour forecast · ${periodLabel} · ${weekday}, ${dateLabel}`,
+      });
+    },
+    [weatherByMarkerId, weatherPreferences],
+  );
+
+  const openMarkerInWeather = useCallback(
+    (marker: SavedMarker) => {
+      const weather = weatherByMarkerId.get(marker.id);
+      const elevationMeters =
+        marker.elevationMeters ??
+        (weather?.status === 'ready' ? weather.forecast.elevationMeters : undefined);
+      requestWeatherForecast(
+        {
+          longitude: marker.coordinate[0],
+          latitude: marker.coordinate[1],
+        },
+        marker.name,
+        elevationMeters,
+      );
+      setActiveTab('weather');
+      setMobileWorkspaceOpen(true);
+      setNavigationCollapsed(false);
+      const nextUrl = new URL(window.location.href);
+      nextUrl.hash = workspaceHashForTab('weather');
+      window.history.pushState(window.history.state, '', nextUrl);
+      setWeatherPreview(null);
+    },
+    [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed, weatherByMarkerId],
+  );
+
   const mapCenter = viewport?.center ?? null;
   const sortedMarkers = useMemo(
     () => sortMarkers(markers, markerSort, mapCenter),
     [mapCenter, markerSort, markers],
   );
+  const weatherPreviewMarker =
+    weatherPreview === null
+      ? undefined
+      : markers.find((marker) => marker.id === weatherPreview.markerId);
+  const weatherPreviewState =
+    weatherPreview === null
+      ? undefined
+      : weatherByMarkerId.get(weatherPreview.markerId);
   const value = useMemo<MarkersWorkspaceValue>(
     () => ({
       markers,
@@ -325,6 +734,13 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       },
       renameMarker,
       deleteMarker,
+      weatherPreferences,
+      weatherPreferencesReady,
+      weatherByMarkerId,
+      openWeatherSettings: () => {
+        setWeatherSettingsOpen(true);
+      },
+      openWeatherPreview,
     }),
     [
       deleteMarker,
@@ -333,9 +749,13 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       loadState,
       markers,
       notice,
+      openWeatherPreview,
       renameMarker,
       sortedMarkers,
       mapCenter,
+      weatherByMarkerId,
+      weatherPreferences,
+      weatherPreferencesReady,
     ],
   );
 
@@ -362,6 +782,34 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
             setEditorDraft(null);
           }}
           onSubmit={saveAppearance}
+        />
+      ) : null}
+      {weatherSettingsOpen ? (
+        <MarkerWeatherSettingsDialog
+          open
+          preferences={weatherPreferences}
+          onClose={() => {
+            setWeatherSettingsOpen(false);
+          }}
+          onSave={saveWeatherPreferences}
+        />
+      ) : null}
+      {weatherPreview !== null &&
+      weatherPreviewMarker !== undefined &&
+      weatherPreviewState?.status === 'ready' ? (
+        <FloatingHourlyForecastPanel
+          key={`${weatherPreview.markerId}:${weatherPreview.startTime}`}
+          anchorElement={weatherPreview.anchorElement}
+          forecast={weatherPreviewState.forecast}
+          startTime={weatherPreview.startTime}
+          title={weatherPreview.title}
+          triggerElement={weatherPreview.triggerElement}
+          onClose={() => {
+            setWeatherPreview(null);
+          }}
+          onOpenWeather={() => {
+            openMarkerInWeather(weatherPreviewMarker);
+          }}
         />
       ) : null}
     </MarkersWorkspaceContext>
@@ -453,6 +901,93 @@ function markerDistanceLabel(
   return `${markerDistanceFormatter.format(distanceKm)} km away`;
 }
 
+export function MarkerWeatherSummaryButton({
+  map = false,
+  markerName,
+  onOpen,
+  selected,
+}: {
+  readonly map?: boolean;
+  readonly markerName: string;
+  readonly onOpen: (triggerElement: HTMLElement) => void;
+  readonly selected: MarkerWeatherForecastPeriod;
+}) {
+  const temperature = formatWeatherTemperatureRange(
+    selected.period.temperatureMinCelsius,
+    selected.period.temperatureMaxCelsius,
+  );
+  const precipitation = formatWeatherMillimetres(selected.period.precipitationMm);
+  const { weekday } = markerWeatherDateParts(selected.date);
+  return (
+    <ButtonBase
+      aria-label={`Open ${weekday} weather for ${markerName}: ${temperature}, ${precipitation} precipitation`}
+      onClick={(event) => {
+        onOpen(event.currentTarget);
+      }}
+      sx={{
+        minWidth: map ? 54 : markerWeatherCellWidth,
+        minHeight: map ? 62 : markerWeatherCellHeight,
+        alignSelf: 'stretch',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        px: map ? 0.5 : 0.75,
+        pt: map ? 0 : 0.25,
+        pb: 0.25,
+        borderLeft: 1,
+        borderColor: 'divider',
+        color: map ? 'grey.900' : 'text.primary',
+        bgcolor: 'transparent',
+        '&:hover': {
+          bgcolor: map ? 'rgba(0, 0, 0, 0.04)' : 'action.hover',
+        },
+      }}
+    >
+      <MonochromeWeatherPeriodIcon
+        icon={selected.period.status.primary.icon}
+        visibility={selected.period.status.visibility}
+        isDay={selected.isDay}
+        size={map ? 34 : 48}
+      />
+      <Typography
+        variant="body2"
+        sx={{
+          color: 'inherit',
+          fontSize: map ? '0.65rem' : undefined,
+          fontWeight: 700,
+          lineHeight: map ? 1.1 : 1.2,
+          whiteSpace: 'nowrap',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {temperature}
+      </Typography>
+      <Stack
+        direction="row"
+        spacing={0.25}
+        sx={{ my: 0.5, alignItems: 'center', color: 'info.dark' }}
+      >
+        <WaterDropOutlinedIcon
+          aria-hidden="true"
+          sx={{ fontSize: map ? 11 : 13, color: 'inherit' }}
+        />
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'inherit',
+            fontSize: map ? '0.58rem' : undefined,
+            fontWeight: 600,
+            lineHeight: map ? 1.1 : 1.2,
+            whiteSpace: 'nowrap',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {precipitation}
+        </Typography>
+      </Stack>
+    </ButtonBase>
+  );
+}
+
 interface MarkersPanelProps {
   readonly onMarkerSelected?: () => void;
 }
@@ -465,9 +1000,12 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
     mapCenter,
     notice,
     openAppearanceEditor,
+    openWeatherPreview,
     renameMarker,
     retryLoad,
     sortedMarkers,
+    weatherByMarkerId,
+    weatherPreferences,
   } = useMarkersWorkspace();
   const [actionAnchor, setActionAnchor] = useState<HTMLElement | null>(null);
   const [actionMarker, setActionMarker] = useState<SavedMarker | null>(null);
@@ -479,6 +1017,13 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const [markerHoverSuppressed, setMarkerHoverSuppressed] = useState(false);
+  const weatherColumnPeriods = useMemo(() => {
+    for (const marker of sortedMarkers) {
+      const weather = weatherByMarkerId.get(marker.id);
+      if (weather?.status === 'ready') return weather.selection.periods;
+    }
+    return null;
+  }, [sortedMarkers, weatherByMarkerId]);
 
   const startRename = (marker: SavedMarker) => {
     setActionAnchor(null);
@@ -503,7 +1048,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
   };
 
   return (
-    <Stack spacing={1.5} sx={{ p: 2 }}>
+    <Stack spacing={1.5} sx={{ px: 2, pt: 0.5, pb: 2 }}>
       {loadState === 'loading' ? (
         <Stack direction="row" spacing={1} role="status" sx={{ alignItems: 'center' }}>
           <CircularProgress size={20} />
@@ -537,6 +1082,54 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
           disablePadding
           sx={{ display: 'grid', gap: 1.5 }}
         >
+          {weatherPreferences.weekdays.length === 0 ? null : (
+            <Box
+              component="li"
+              role="group"
+              aria-label="Marker forecast days"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: `minmax(0, 1fr) repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherCellWidth)}px)`,
+                alignItems: 'center',
+                listStyle: 'none',
+                mb: -1.25,
+              }}
+            >
+              <Box aria-hidden />
+              {weatherColumnPeriods === null
+                ? weatherPreferences.weekdays.map((weekday) => (
+                    <Typography
+                      key={weekday}
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ py: 0.5, px: 0, lineHeight: 1.1, textAlign: 'center' }}
+                    >
+                      {markerWeatherWeekdayLabels[weekday]}
+                    </Typography>
+                  ))
+                : weatherColumnPeriods.map((period) => {
+                    const { dateLabel, weekday } = markerWeatherDateParts(period.date);
+                    return (
+                      <Typography
+                        key={period.date}
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ py: 0.5, px: 0, lineHeight: 1.1, textAlign: 'center' }}
+                      >
+                        <Box
+                          component="span"
+                          sx={{ display: 'block', fontWeight: 700 }}
+                        >
+                          {weekday}
+                        </Box>
+                        <Box component="span" sx={{ display: 'block' }}>
+                          {dateLabel}
+                        </Box>
+                      </Typography>
+                    );
+                  })}
+            </Box>
+          )}
           {sortedMarkers.map((marker) => {
             if (renameTarget?.id === marker.id) {
               return (
@@ -590,6 +1183,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
             const pending = pendingDeleteId === marker.id;
             const deleting = deletingId === marker.id;
             const hovered = hoveredMarkerId === marker.id;
+            const weather = weatherByMarkerId.get(marker.id);
             const deleteActionClassName = `marker-row-action${
               pending ? ' marker-row-action--pending' : ''
             }`;
@@ -628,7 +1222,8 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                   sx={{
                     display: 'grid',
                     gridTemplateColumns: 'minmax(0, 1fr) auto',
-                    alignItems: 'center',
+                    alignItems: 'stretch',
+                    position: 'relative',
                     bgcolor: hovered ? 'action.hover' : 'transparent',
                     '& .MuiListItemButton-root, & .MuiListItemButton-root:hover': {
                       bgcolor: 'transparent',
@@ -682,16 +1277,103 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         <Typography variant="subtitle2" noWrap>
                           {marker.name}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="body2" color="text.secondary" noWrap>
                           {markerDistanceLabel(marker, mapCenter)}
                         </Typography>
                       </Box>
                     </Stack>
                   </ListItemButton>
+                  {weatherPreferences.weekdays.length === 0 ? null : (
+                    <Box
+                      data-marker-weather-anchor
+                      role={
+                        weather === undefined || weather.status === 'loading'
+                          ? 'status'
+                          : undefined
+                      }
+                      aria-label={
+                        weather === undefined || weather.status === 'loading'
+                          ? `Loading weather for ${marker.name}`
+                          : undefined
+                      }
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherCellWidth)}px)`,
+                        alignSelf: 'stretch',
+                        borderLeft: 1,
+                        borderColor: 'divider',
+                        '& > button:first-of-type': { borderLeft: 0 },
+                      }}
+                    >
+                      {weather?.status === 'ready' ? (
+                        weather.selection.periods.map((selected) => (
+                          <MarkerWeatherSummaryButton
+                            key={selected.date}
+                            markerName={marker.name}
+                            selected={selected}
+                            onOpen={(triggerElement) => {
+                              openWeatherPreview(
+                                marker.id,
+                                selected.date,
+                                triggerElement,
+                              );
+                            }}
+                          />
+                        ))
+                      ) : weather?.status === 'error' ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            gridColumn: '1 / -1',
+                            minHeight: markerWeatherCellHeight,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            px: 1,
+                          }}
+                        >
+                          Forecast unavailable
+                        </Typography>
+                      ) : (
+                        weatherPreferences.weekdays.map((weekday, index) => (
+                          <Stack
+                            key={weekday}
+                            spacing={0.75}
+                            sx={{
+                              minHeight: markerWeatherCellHeight,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderLeft: index === 0 ? 0 : 1,
+                              borderColor: 'divider',
+                            }}
+                          >
+                            <CircularProgress size={14} />
+                            <Typography variant="caption" color="text.secondary">
+                              Loading
+                            </Typography>
+                          </Stack>
+                        ))
+                      )}
+                    </Box>
+                  )}
                   <Stack
                     direction="row"
                     spacing={0.5}
-                    sx={{ alignItems: 'center', px: 1 }}
+                    sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      right:
+                        weatherPreferences.weekdays.length === 0
+                          ? 4
+                          : weatherPreferences.weekdays.length *
+                              markerWeatherCellWidth +
+                            4,
+                      zIndex: 1,
+                      alignItems: 'center',
+                      px: 0.5,
+                      transform: 'translateY(-50%)',
+                    }}
                   >
                     <Tooltip
                       disableHoverListener={markerHoverSuppressed}

@@ -36,6 +36,7 @@ export interface WeatherForecastRequest {
   readonly id: number;
   readonly coordinate: MapCoordinate;
   readonly placeLabel?: string;
+  readonly elevationMeters?: number;
 }
 export interface WeatherMapForecastMarker {
   readonly coordinate: MapCoordinate;
@@ -167,17 +168,20 @@ export function consumeSatelliteSearchRequest(requestId: number): void {
 export function requestWeatherForecast(
   coordinate: MapCoordinate,
   placeLabel?: string,
+  elevationMeters?: number,
 ): void {
   nextWeatherForecastRequestId += 1;
   const request: {
     id: number;
     coordinate: MapCoordinate;
     placeLabel?: string;
+    elevationMeters?: number;
   } = {
     id: nextWeatherForecastRequestId,
     coordinate: { ...coordinate },
   };
   if (placeLabel !== undefined) request.placeLabel = placeLabel;
+  if (elevationMeters !== undefined) request.elevationMeters = elevationMeters;
   mapInteractionStore.setState({
     weatherPointSelectionActive: false,
     weatherForecastRequest: request,

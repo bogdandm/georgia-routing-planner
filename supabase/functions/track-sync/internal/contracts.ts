@@ -14,11 +14,12 @@ export const UUID_PATTERN =
 export const CONTENT_HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 export interface MarkerPayload {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly id: string;
   readonly name: string;
   readonly normalizedName: string;
   readonly coordinate: readonly [number, number];
+  readonly elevationMeters: number | null;
   readonly iconKey: string;
   readonly colorKey: string;
   readonly createdAt: string;

@@ -10,6 +10,7 @@ import {
   type ElevationProfile,
 } from '@/domain/tracks/elevationProfile';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -1447,6 +1448,7 @@ describe('MapWorkspace', () => {
         period: forecast.currentThreeHours,
       });
     });
+    useUiStore.setState({ activeTab: 'weather' });
 
     render(
       <RuntimeServicesProvider services={services}>
@@ -1472,6 +1474,61 @@ describe('MapWorkspace', () => {
     expect(within(marker).getByRole('img')).toHaveStyle({
       backgroundColor: 'rgba(255, 255, 255, 0.94)',
     });
+  });
+
+  it('integrates configured interval weather with a saved marker on the map', async () => {
+    const services = createTestServices();
+    await services.database.saveSavedMarker({
+      schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+      id: 'weather-marker',
+      name: 'Weather summit',
+      normalizedName: 'weather summit',
+      coordinate: [44.8271, 41.7151],
+      elevationMeters: 1_750,
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-07-18T00:00:00.000Z',
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+    useUiStore.setState({ activeTab: 'markers' });
+    const user = userEvent.setup();
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MarkersWorkspaceProvider>
+          <MapWorkspace facade={new FakeMapFacade()} />
+        </MarkersWorkspaceProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    const saturday = await screen.findByRole('button', {
+      name: 'Open Sat weather for Weather summit: 20 °C, 0 mm precipitation',
+    });
+    const sunday = screen.getByRole('button', {
+      name: 'Open Sun weather for Weather summit: 20 °C, 0 mm precipitation',
+    });
+    const marker = saturday.closest('[data-testid="weather-map-marker"]');
+    expect(marker).toHaveAttribute('data-latitude', '41.7151');
+    expect(marker).toHaveAttribute('data-longitude', '44.8271');
+    expect(within(marker as HTMLElement).getByText('Weather summit')).toBeVisible();
+    expect(within(saturday).queryByText('Sat')).toBeNull();
+    expect(within(sunday).queryByText('Sun')).toBeNull();
+    expect(saturday.compareDocumentPosition(sunday)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    await user.click(saturday);
+    const preview = await screen.findByRole('dialog', {
+      name: '24-hour forecast · Day · Sat, 18 Jul',
+    });
+    await user.click(within(preview).getByRole('button', { name: 'Open in Weather' }));
+    expect(
+      screen.queryByRole('button', {
+        name: 'Open Sat weather for Weather summit: 20 °C, 0 mm precipitation',
+      }),
+    ).toBeNull();
+
+    services.database.close();
+    await services.database.delete();
   });
 
   it('applies the Sentinel preset when an applied scene is hidden', async () => {

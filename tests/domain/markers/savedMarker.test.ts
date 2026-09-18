@@ -10,7 +10,7 @@ import {
 
 describe('saved markers', () => {
   it('exposes the stable schema and broad unique icon catalog', () => {
-    expect(SAVED_MARKER_SCHEMA_VERSION).toBe(1);
+    expect(SAVED_MARKER_SCHEMA_VERSION).toBe(2);
     expect(markerIconKeys.length).toBeGreaterThanOrEqual(100);
     expect(new Set(markerIconKeys).size).toBe(markerIconKeys.length);
     expect(markerIconKeys).toEqual(

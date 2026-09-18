@@ -483,15 +483,16 @@ at the far edge so words do not compress or overflow the card.
 
 Seven rows are derived from location-local hourly forecast data. Each date owns one
 full-width bordered card with a fixed date column and two stacked weather-period rows.
-The rows omit repeated Day and Night text while their article names and icon tooltips
-retain those accessible distinctions. Each row aligns the weather icon, temperature
-range, primary condition, precipitation, and a two-line wind and gust group; its only
-internal divider separates the two periods without crossing the date column. Night `D`
-includes all non-daylight samples after date `D`'s daylight period and all non-daylight
-samples before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore
-belong to night `D-1`; local midnight never splits a physical night. An eighth fetched
-calendar date supplies the pre-sunrise samples needed to complete the seventh displayed
-night.
+Saturday and Sunday date columns use the soft orange tag palette with its paired
+contrast-safe foreground; weekday date columns retain the neutral panel treatment. The
+rows omit repeated Day and Night text while their article names and icon tooltips retain
+those accessible distinctions. Each row aligns the weather icon, temperature range,
+primary condition, precipitation, and a two-line wind and gust group; its only internal
+divider separates the two periods without crossing the date column. Night `D` includes
+all non-daylight samples after date `D`'s daylight period and all non-daylight samples
+before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore belong to
+night `D-1`; local midnight never splits a physical night. An eighth fetched calendar
+date supplies the pre-sunrise samples needed to complete the seventh displayed night.
 
 Each Day or Night row is a keyboard-accessible forecast trigger. Activating it opens a
 non-modal floating 24-hour table using the same hourly visualization as the current
@@ -553,9 +554,41 @@ deletion. Markers remain in IndexedDB across browser restarts and render as MapL
 symbols with their selected icon, color, and name. Malformed stored rows are omitted and
 reported through bounded local diagnostics.
 
-Marker search, grouping, filtering, coordinate/elevation/scale editing, remote
-synchronization, Satellite targeting, and copying into Create GPX are not currently
-available.
+The Markers header exposes a weather-settings action. Its label shows the enabled
+weekday abbreviations; no weekday label means forecasts are disabled. One or two local
+weekdays may be selected, with Saturday and Sunday enabled initially. Every selected
+weekday uses the same interval: the Weather tab's daylight period, its continuous
+post-sunset-to-next-sunrise night period, or a custom whole-hour half-open interval.
+Custom intervals whose end hour is earlier than their start continue across local
+midnight. Clearing all weekdays disables marker forecasts. The weekday, interval, and
+**Show forecasts on the map** choices form one browser-local weather preference stored
+in IndexedDB.
+
+While Markers is open, each saved marker receives one forecast at its WGS84 coordinate.
+The point's terrain elevation is resolved for the first request, persisted on that
+marker, and reused by subsequent weather requests. The marker list labels each selected
+forecast column once above its rows with the weekday, day, and month. Columns use the
+chronological order of their actual forecast dates rather than weekday selection order.
+Each marker row then shows one separate clickable weather cell per selected date beside
+the marker name and distance. Every cell carries that date's monochrome condition icon,
+temperature range, and total precipitation without repeating the date label.
+
+When map display is enabled, a compact unified overlay replaces that marker's normal
+MapLibre symbol while Markers is active. The marker name spans the overlay header; one
+or two weather cells form the grid below it in chronological forecast-date order without
+repeating the date labels. The configured marker icon is omitted while this weather
+overlay is visible. Leaving Markers restores the normal map symbol and removes these
+interval overlays, including when **Open in Weather** selects the marker as the Weather
+forecast point.
+
+Activating a weather cell expands the same floating 24-hour table used by a Weather
+seven-day forecast period, starting at the selected daylight, night, or custom interval
+boundary. **Open in Weather** in that table selects the Weather workspace and requests
+the normal seven-day forecast at the marker, reusing its persisted elevation and name.
+The floating preview remains local presentation state and is not encoded in the URL.
+
+Marker search, grouping, filtering, coordinate/scale editing, remote synchronization,
+Satellite targeting, and copying into Create GPX are not currently available.
 
 ### Layers
 

@@ -421,17 +421,51 @@ availability guarantee. The raster declares the static attribution
 `<a href="https://www.google.com/maps" target="_blank">© Google</a>`.
 
 Google imagery is disabled by default and persists only after an explicit choice in this
-browser. It is mutually exclusive with an applied Sentinel-2 raster: enabling one
-disables the other, and disabling the active raster leaves both off. The vector map
-remains opaque until the first Google source-content event, then shares the existing
-OpenStreetMap-opacity and terrain ordering behavior with the active Sentinel raster. A
-Google failure has no application-level retry or COG fallback; the selected preference
-remains checked while the opaque vector map stays usable.
+browser. It is mutually exclusive with Bing, Esri, NAPR, and applied Sentinel-2 rasters.
+Selecting a different raster does not change the separately persisted OpenStreetMap
+overlay opacity. The vector map remains opaque until the first Google source-content
+event, then shares the existing OpenStreetMap-opacity and terrain ordering behavior with
+the active raster. A Google failure has no application-level retry or COG fallback; the
+selected preference remains checked while the opaque vector map stays usable.
 
 `mt*.google.com/vt` is undocumented. It is not the official Google Map Tiles API and has
 no supported API or SLA guarantee. The application intentionally sends no API key,
 billing credential, session token, or viewport-attribution request, and must not claim
 official Google Maps Platform compliance.
+
+## Bing aerial basemap
+
+The optional Bing source uses MapLibre's `{quadkey}` template support against four
+anonymous `ecn.t*.tiles.virtualearth.net` aerial tile hosts. A bounded probe of
+`https://ecn.t0.tiles.virtualearth.net/tiles/a120310233.jpeg?g=1&mkt=en-US&n=z` on
+**2026-09-21** observed `200`, `content-type: image/jpeg`, and
+`access-control-allow-origin: *`. Runtime attribution links to the Microsoft Maps
+product terms.
+
+This is best-effort endpoint evidence, not a supported Bing Maps integration.
+Microsoft's
+[direct tile guidance](https://learn.microsoft.com/en-us/bingmaps/rest-services/directly-accessing-the-bing-maps-tiles)
+says hard-coded tile URLs are not allowed, requires the current URL and copyright data
+from the keyed Imagery Metadata service, and restricts combining Bing data with
+competing mapping platforms. That metadata API is retired for free accounts and
+available to enterprise accounts only until June 30, 2028. The current static GitHub
+Pages application has no credentialed Bing account or runtime server, so this source
+must be treated as an explicitly selected experimental source and removed or migrated if
+Microsoft enforcement, availability, or project distribution requirements change.
+
+## Esri World Imagery basemap
+
+The optional Esri source uses the anonymous ArcGIS Online tile template
+`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`.
+A bounded z12 probe over Georgia on **2026-09-21** observed `200`,
+`content-type: image/jpeg`, and `access-control-allow-origin: *`. Runtime attribution is
+`Esri, Maxar, Earthstar Geographics, and the GIS User Community`.
+
+Esri's current MapLibre examples use the credentialed `ibasemaps-api.arcgis.com`
+endpoint and require an ArcGIS Location Platform account. The anonymous ArcGIS Online
+endpoint remains point-in-time best-effort evidence rather than an application SLA. A
+future credentialed migration cannot put a durable secret in the static client; it would
+require a separately reviewed public-client credential strategy.
 
 ## NAPR orthophoto mosaic
 
@@ -495,9 +529,10 @@ because it is a Bing mirror, not a NAPR orthophoto.
 
 The runtime attribution is
 `Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>`.
-NAPR is disabled by default, mutually exclusive with Google and Sentinel imagery, and
-uses existing OpenStreetMap-opacity and terrain ordering after any mosaic source reports
-content. Failures remain best-effort and the vector basemap stays usable.
+NAPR is disabled by default, mutually exclusive with Google, Bing, Esri, and Sentinel
+imagery, and uses the existing OpenStreetMap-opacity and terrain ordering after any
+mosaic source reports content. Failures remain best-effort and the vector basemap stays
+usable.
 
 ## Sentinel-2 catalog and raster feasibility
 

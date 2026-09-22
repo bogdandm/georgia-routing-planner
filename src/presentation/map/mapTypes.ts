@@ -6,11 +6,11 @@ export type TerrainMode = MapViewMode;
 
 export type MapLayerPreset =
   | 'vector-osm'
-  | 'google-satellite-hybrid'
   | 'google-satellite'
-  | 'napr-orthophoto-hybrid'
+  | 'bing-satellite'
+  | 'esri-satellite'
   | 'napr-orthophoto'
-  | 'sentinel-2-hybrid';
+  | 'sentinel-2';
 
 export interface MapCoordinate {
   readonly longitude: number;

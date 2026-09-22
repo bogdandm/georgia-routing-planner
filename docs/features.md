@@ -597,28 +597,29 @@ the configured terrain provider, and **OpenStreetMap via OpenFreeMap + OSM Short
 OpenFreeMap supplies hiking-specific map layers and labels. The default-on **OSM
 detail** checkbox controls Shortbread brownfield and building context; Shortbread roads
 and detailed paths remain under the existing Roads and Hiking paths controls. Satellites
-starts with optional **Google satellite imagery** and **NAPR Orthophoto** basemaps,
-followed by **Copernicus Sentinel-2 via Earth Search**, whose **Satellite imagery** and
-**Scene footprint** controls remain disabled until a scene is applied. NAPR is one
-logical multi-year orthophoto mosaic: newest available aerial pixels render from 2025,
-then 2020, then nationwide 2016–2017 coverage. Google, NAPR, and Sentinel imagery are
-mutually exclusive checkboxes: choosing one immediately clears the other two, while
-every imagery source may be off. Google and NAPR are disabled by default, and each
-explicit choice is retained in this browser's IndexedDB preferences. The shared
-OpenStreetMap opacity slider enables whenever any raster is selected and scales every
-OpenStreetMap reference layer and elevation isoline once active raster content has
-switched the map into satellite visual mode; vector paints remain fully opaque while
-static raster tiles first load.
+starts with optional **Google satellite imagery**, **Bing aerial imagery**, **Esri World
+Imagery**, and **NAPR Orthophoto** basemaps, followed by **Copernicus Sentinel-2 via
+Earth Search**, whose **Satellite imagery** and **Scene footprint** controls remain
+disabled until a scene is applied. NAPR is one logical multi-year orthophoto mosaic:
+newest available aerial pixels render from 2025, then 2020, then nationwide 2016–2017
+coverage. Google, Bing, Esri, NAPR, and Sentinel imagery are mutually exclusive
+checkboxes: choosing one immediately clears every other imagery source, while every
+imagery source may be off. Static imagery is disabled by default, and each explicit
+choice is retained in this browser's IndexedDB preferences. The shared OpenStreetMap
+opacity slider enables whenever any raster is selected and scales every OpenStreetMap
+reference layer and elevation isoline once active raster content has switched the map
+into satellite visual mode; vector paints remain fully opaque while static raster tiles
+first load.
 
-The quick chooser presents **Vector OSM** (no raster and opaque vectors), **Google
-Satellite Hybrid** (Google imagery with opaque vectors), **Google Satellite** (Google
-imagery without vectors), **NAPR Orthophoto Hybrid** (NAPR imagery with opaque vectors),
-**NAPR Orthophoto** (NAPR imagery without vectors), and **Sentinel-2 Hybrid** (an
-applied Sentinel scene with opaque vectors). A preset changes only the
-Google/NAPR/Sentinel raster selection and shared OpenStreetMap opacity: all independent
-Layers toggles, imported-track opacity, terrain preferences, and an applied Sentinel
-scene remain intact. Choosing Sentinel-2 Hybrid without an applied scene opens the
-Satellite workspace so the user can select one; NAPR presets do not require a scene.
+The compact map chooser lists **Vector OSM**, **Google Satellite**, **Bing Aerial**,
+**Esri World Imagery**, and **NAPR Orthophoto** without preview thumbnails. Vector OSM
+always renders the vector map at full opacity without changing the saved **OSM overlay**
+setting; choosing a satellite source changes only the active raster and reuses that
+independent toggle. The final two-column action row gives the same hit area to
+**Sentinel-2** and **Layers tab**: Sentinel activates the applied scene or opens
+Satellite when no scene exists, while Layers tab opens the complete Layers workspace.
+Independent Layers toggles, imported-track opacity, terrain preferences, and an applied
+Sentinel scene remain intact.
 
 The remaining checkboxes cover Imported tracks, its default-on **Elevation gradient**,
 Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs, plus

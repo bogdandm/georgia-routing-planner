@@ -41,6 +41,27 @@ describe('createHikingMapStyle', () => {
       tileSize: 256,
       attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
     });
+    expect(style.sources[mapSourceIds.bingSatelliteBasemap]).toEqual({
+      type: 'raster',
+      tiles: [
+        'https://ecn.t0.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+        'https://ecn.t1.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+        'https://ecn.t2.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+        'https://ecn.t3.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+      ],
+      tileSize: 256,
+      attribution:
+        '<a href="https://www.microsoft.com/maps/product/terms.html" target="_blank">© Microsoft Bing</a>',
+    });
+    expect(style.sources[mapSourceIds.esriSatelliteBasemap]).toEqual({
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      attribution:
+        '<a href="https://www.esri.com/" target="_blank">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community',
+    });
     const naprSourceEntries = [
       ['national2016To2017', naprOrthophotoSourceIds.national2016To2017],
       ['westernGeorgia2020', naprOrthophotoSourceIds.westernGeorgia2020],
@@ -69,6 +90,8 @@ describe('createHikingMapStyle', () => {
     expect(layerIds).toEqual([
       mapLayerIds.background,
       satelliteBasemapLayerIds.imagery,
+      satelliteBasemapLayerIds.bing,
+      satelliteBasemapLayerIds.esri,
       naprOrthophotoLayerIds.national2016To2017,
       naprOrthophotoLayerIds.westernGeorgia2020,
       naprOrthophotoLayerIds.kutaisi2020,

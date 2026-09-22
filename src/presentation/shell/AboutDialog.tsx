@@ -203,13 +203,18 @@ export function AboutDialog({
       },
     );
 
-    const satelliteBasemapTileUrl = mapProviders.satelliteBasemap.tileUrls[0];
-    if (satelliteBasemapTileUrl !== undefined) {
+    for (const satelliteBasemap of [
+      mapProviders.satelliteBasemap,
+      mapProviders.bingSatelliteBasemap,
+      mapProviders.esriSatelliteBasemap,
+    ]) {
+      const tileUrl = satelliteBasemap.tileUrls[0];
+      if (tileUrl === undefined) continue;
       dataEntries.push({
         description: 'Satellite basemap',
-        details: mapProviders.satelliteBasemap.attribution.replace(/<[^>]*>/gu, ''),
-        href: originFor(satelliteBasemapTileUrl),
-        title: mapProviders.satelliteBasemap.label,
+        details: satelliteBasemap.attribution.replace(/<[^>]*>/gu, ''),
+        href: originFor(tileUrl),
+        title: satelliteBasemap.label,
       });
     }
 

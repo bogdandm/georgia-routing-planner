@@ -6,6 +6,8 @@ export const mapSourceIds = {
   terrainDem: 'terrain-dem',
   terrainContours: 'terrain-contours',
   satelliteBasemap: 'satellite-basemap',
+  bingSatelliteBasemap: 'bing-satellite-basemap',
+  esriSatelliteBasemap: 'esri-satellite-basemap',
   sentinelRasterA: 'sentinel-raster-a',
   sentinelRasterB: 'sentinel-raster-b',
   sentinelFootprint: 'sentinel-footprint',
@@ -43,6 +45,8 @@ export const sentinelMapLayerIds = {
 
 export const satelliteBasemapLayerIds = {
   imagery: 'satellite-basemap-imagery',
+  bing: 'bing-satellite-basemap-imagery',
+  esri: 'esri-satellite-basemap-imagery',
 } as const;
 
 export const naprOrthophotoLayerIds = {

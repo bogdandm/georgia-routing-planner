@@ -55,6 +55,20 @@ function createBasemapLayers(
       paint: { 'raster-fade-duration': 0 },
     },
     {
+      id: satelliteBasemapLayerIds.bing,
+      type: 'raster',
+      source: mapSourceIds.bingSatelliteBasemap,
+      layout: { visibility: 'none' },
+      paint: { 'raster-fade-duration': 0 },
+    },
+    {
+      id: satelliteBasemapLayerIds.esri,
+      type: 'raster',
+      source: mapSourceIds.esriSatelliteBasemap,
+      layout: { visibility: 'none' },
+      paint: { 'raster-fade-duration': 0 },
+    },
+    {
       id: naprOrthophotoLayerIds.national2016To2017,
       type: 'raster',
       source: naprOrthophotoSourceIds.national2016To2017,
@@ -609,6 +623,18 @@ export function createHikingMapStyle(
         tiles: [...configuration.satelliteBasemap.tileUrls],
         tileSize: configuration.satelliteBasemap.tileSize,
         attribution: configuration.satelliteBasemap.attribution,
+      },
+      [mapSourceIds.bingSatelliteBasemap]: {
+        type: 'raster',
+        tiles: [...configuration.bingSatelliteBasemap.tileUrls],
+        tileSize: configuration.bingSatelliteBasemap.tileSize,
+        attribution: configuration.bingSatelliteBasemap.attribution,
+      },
+      [mapSourceIds.esriSatelliteBasemap]: {
+        type: 'raster',
+        tiles: [...configuration.esriSatelliteBasemap.tileUrls],
+        tileSize: configuration.esriSatelliteBasemap.tileSize,
+        attribution: configuration.esriSatelliteBasemap.attribution,
       },
       [naprOrthophotoSourceIds.national2016To2017]: {
         type: 'raster',

@@ -323,6 +323,14 @@ export function MapWorkspace({
     mapLayerStore,
     (state) => state.visibility['google-satellite'],
   );
+  const bingSatelliteVisible = useStore(
+    mapLayerStore,
+    (state) => state.visibility['bing-satellite'],
+  );
+  const esriSatelliteVisible = useStore(
+    mapLayerStore,
+    (state) => state.visibility['esri-satellite'],
+  );
   const naprOrthophotoVisible = useStore(
     mapLayerStore,
     (state) => state.visibility['napr-orthophoto'],
@@ -481,24 +489,24 @@ export function MapWorkspace({
   const satelliteImageryVisible =
     singleSceneImageryVisible || (satelliteImagerySelected && mosaicImageryAvailable);
   let activeLayerPreset: MapLayerPreset | null = null;
-  if (!googleSatelliteVisible && !naprOrthophotoVisible && !satelliteImageryVisible) {
-    activeLayerPreset = 'vector-osm';
-  } else if (googleSatelliteVisible && openStreetMapOpacity === 1) {
-    activeLayerPreset = 'google-satellite-hybrid';
-  } else if (googleSatelliteVisible && openStreetMapOpacity === 0) {
-    activeLayerPreset = 'google-satellite';
-  } else if (naprOrthophotoVisible && openStreetMapOpacity === 1) {
-    activeLayerPreset = 'napr-orthophoto-hybrid';
-  } else if (naprOrthophotoVisible && openStreetMapOpacity === 0) {
-    activeLayerPreset = 'napr-orthophoto';
-  } else if (
+  if (
     !googleSatelliteVisible &&
+    !bingSatelliteVisible &&
+    !esriSatelliteVisible &&
     !naprOrthophotoVisible &&
-    satelliteImagerySelected &&
-    satelliteImageryVisible &&
-    openStreetMapOpacity === 1
+    !satelliteImageryVisible
   ) {
-    activeLayerPreset = 'sentinel-2-hybrid';
+    activeLayerPreset = 'vector-osm';
+  } else if (googleSatelliteVisible) {
+    activeLayerPreset = 'google-satellite';
+  } else if (bingSatelliteVisible) {
+    activeLayerPreset = 'bing-satellite';
+  } else if (esriSatelliteVisible) {
+    activeLayerPreset = 'esri-satellite';
+  } else if (naprOrthophotoVisible) {
+    activeLayerPreset = 'napr-orthophoto';
+  } else if (satelliteImagerySelected && satelliteImageryVisible) {
+    activeLayerPreset = 'sentinel-2';
   }
   const layerPresetDisabled =
     mapLayers === null ||
@@ -986,7 +994,7 @@ export function MapWorkspace({
     (preset: MapLayerPreset): boolean => {
       if (mapLayers === null) return false;
       if (
-        preset === 'sentinel-2-hybrid' &&
+        preset === 'sentinel-2' &&
         mapLayers.getAppliedScene() === null &&
         !mosaicImageryAvailable
       ) {
@@ -1011,6 +1019,22 @@ export function MapWorkspace({
       setNavigationCollapsed,
     ],
   );
+  const handleHybridOverlayChange = useCallback(
+    (enabled: boolean) => {
+      if (mapLayers === null) return;
+      const result = mapLayers.setOpenStreetMapOpacity(enabled ? 1 : 0);
+      if (result.status === 'failed') setPresetErrorMessage(result.message);
+    },
+    [mapLayers],
+  );
+  const handleOpenLayersTab = useCallback(() => {
+    setActiveTab('layers');
+    setMobileWorkspaceOpen(true);
+    setNavigationCollapsed(false);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.hash = workspaceHashForTab('layers');
+    window.history.pushState(window.history.state, '', nextUrl);
+  }, [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed]);
 
   return (
     <Box
@@ -1064,9 +1088,15 @@ export function MapWorkspace({
             />
             <MapViewControlsControl
               activeLayerPreset={activeLayerPreset}
+              hybridOverlayDisabled={
+                activeLayerPreset === null || activeLayerPreset === 'vector-osm'
+              }
+              hybridOverlayEnabled={openStreetMapOpacity > 0}
               terrainDisabled={mosaicActive}
               layerPresetDisabled={layerPresetDisabled}
               onLayerPresetChange={handleLayerPresetChange}
+              onHybridOverlayChange={handleHybridOverlayChange}
+              onOpenLayersTab={handleOpenLayersTab}
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
             />
@@ -1165,9 +1195,15 @@ export function MapWorkspace({
       resolvedMapCanvas !== undefined ? (
         <MapViewControls
           activeLayerPreset={activeLayerPreset}
+          hybridOverlayDisabled={
+            activeLayerPreset === null || activeLayerPreset === 'vector-osm'
+          }
+          hybridOverlayEnabled={openStreetMapOpacity > 0}
           terrainDisabled={mosaicActive}
           layerPresetDisabled={layerPresetDisabled}
           onLayerPresetChange={handleLayerPresetChange}
+          onHybridOverlayChange={handleHybridOverlayChange}
+          onOpenLayersTab={handleOpenLayersTab}
           onTerrainModeChange={handleTerrainControlChange}
           terrainState={terrainState}
         />

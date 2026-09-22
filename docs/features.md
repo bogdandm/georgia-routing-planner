@@ -151,11 +151,13 @@ field and the adjacent read-only **English place name** field. For a track with 
 dominant interior summit, that candidate uses the nearest named OSM feature across
 supported POI, natural, and place categories rather than a hard-coded feature type.
 Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an `Mt.` prefix
-when the source name does not already include one. Save retains the exact normalized
-source points and a separate browser-calculated Terrarium projection, independent line
-segments, source filename/format metadata, and versioned metrics in this browser; the
-original file bytes are discarded after parsing. Unsaved previews activate the native
-leave-site guard.
+when the source name does not already include one. When source elevation is usable, Save
+retains the exact normalized source points as canonical content and keeps the
+browser-calculated Terrarium projection separately. When an imported track has no usable
+source elevation, Save promotes the complete calculated Terrarium projection to
+canonical points and primary metrics. Source filename/format metadata and versioned
+metrics remain local; the original file bytes are discarded after parsing. Unsaved
+previews activate the native leave-site guard.
 
 **Plan route** opens a new unsaved-track detail pane and gives route planning ownership
 of map clicks. The first click sets the start waypoint; each later click adds an ordered
@@ -191,12 +193,13 @@ existing local-track repository. The result then behaves like any other saved lo
 track. Unsaved plans are transient and activate the same leave-site guard as imported
 previews.
 
-Saved track cards show icon-led recorded duration, distance, and source elevation gain
+Saved track cards show icon-led recorded duration, distance, and primary elevation gain
 when available. The detail pane's primary stats grid presents duration, distance,
-derived average speed, and authoritative source **Elevation gain**/**Elevation loss**
-only. Separate text rows for **Elevation gain (calculated)** and **Elevation loss
-(calculated)** appear below the point/segment count, outside that grid. Missing
-measurements are omitted; source file, point, segment, and save metadata, including a
+derived average speed, and **Elevation gain**/**Elevation loss** from usable source
+elevation or, for an elevation-free import, its promoted Terrarium projection. Tracks
+with usable source elevation retain separate **Elevation gain (calculated)** and
+**Elevation loss (calculated)** rows below the point/segment count. Missing measurements
+are omitted; source file, point, segment, and save metadata, including a
 `DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved tracks are searchable by
 name, reopen after close, and rename only from the detail header's **Rename** action.
 That action replaces the saved title with a bounded name editor; the preview retains its
@@ -221,7 +224,8 @@ The overlay is not narrowed by chart or Climbs & Descents segment hover/selectio
 interactions remain panel-only. Closing the track removes the active geometry without
 deleting a saved record or moving the camera. Every saved track can be downloaded
 locally as GPX or KML. Generated files preserve independent segments, saved name,
-available point elevation, and reliably aligned timestamps without writing GPX or KML
+available canonical point elevation—including promoted Terrarium elevation for an
+elevation-free import—and reliably aligned timestamps without writing GPX or KML
 description elements; conversion never uploads the source.
 
 GPX import also reads bounded root `<wpt>` elements in document order. Valid coordinates

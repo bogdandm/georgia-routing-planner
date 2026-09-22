@@ -433,11 +433,16 @@ finite elevation or explicit missing value. JSON contains the bounded source met
 track-owned marker IDs, names, and coordinates, and distance/elapsed metrics already
 owned by synchronization. Marker-only edits use metadata revisions and therefore do not
 change GRPT bytes, canonical content hashes, lineage, or duplicate grouping.
-Browser-calculated Terrarium points and metrics remain local derived data: only explicit
-recalculation replaces them, and it neither changes the content hash nor creates a cloud
-revision. Another browser therefore displays synchronized source elevation and track
-markers when present and leaves legacy remote-only v1 elevation missing rather than
-inventing terrain values.
+
+Tracks with usable source elevation keep source points and metrics canonical; their
+browser-calculated Terrarium points and metrics remain separate local derived data. An
+elevation-free import promotes a complete Terrarium projection to canonical points and
+metrics on save, so its canonical hash and cloud revision include those elevations.
+Recalculation replaces canonical content, hash, and synchronization revision only for an
+already-promoted track. Recalculation of a source-elevated track replaces only its
+separate local derived projection, leaving canonical source identity unchanged. Another
+browser therefore receives promoted elevation where it was canonicalized while legacy
+remote-only v1 elevation remains missing rather than being invented locally.
 
 JSON requests support metadata update, hard deletion, and quota status. The database RPC
 response has one explicit outcome: `applied | upload | conflict | existing | missing`.

@@ -59,6 +59,7 @@ import { useStore } from 'zustand';
 import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import {
   prepareImportedTrack,
+  TrackElevationPreparationError,
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -243,6 +244,7 @@ type ReadyMultiTrackSelection = Extract<
 interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
   readonly activeProfile: ElevationProfile | null;
+  readonly activeStatsMetrics: TrackStatsMetrics | null;
   readonly elevationProgress: TrackElevationPreparationProgress | null;
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
@@ -345,6 +347,9 @@ type PreparedPreviewTrackBuilder = {
 };
 type LocalTrackSummaryBuilder = {
   -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
+};
+type LocalTrackContentBuilder = {
+  -readonly [Key in keyof LocalTrackContent]: LocalTrackContent[Key];
 };
 
 function useTracksWorkspace(): TracksWorkspaceValue {
@@ -1607,19 +1612,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         : active.id;
       const normalizedName = normalizeLocalTrackName(active.name);
       const savedAt = clock.now().toISOString();
-      const content: LocalTrackContent = {
+      const promoteCalculatedElevation =
+        active.sourceProfile === null &&
+        active.calculatedSegments !== null &&
+        active.calculatedMetrics !== null;
+      const primarySegments = promoteCalculatedElevation
+        ? active.calculatedSegments
+        : active.sourceSegments;
+      const content: LocalTrackContentBuilder = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: savedTrackId,
-        trackPoints: active.sourceSegments.map((segment) => segment.points),
+        trackPoints: primarySegments.map((segment) => segment.points),
         markers: active.markers,
-        ...(active.calculatedSegments === null
-          ? {}
-          : {
-              calculatedTrackPoints: active.calculatedSegments.map(
-                (segment) => segment.points,
-              ),
-            }),
       };
+      if (!promoteCalculatedElevation && active.calculatedSegments !== null) {
+        content.calculatedTrackPoints = active.calculatedSegments.map(
+          (segment) => segment.points,
+        );
+      }
       const summary: LocalTrackSummaryBuilder = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         id: savedTrackId,
@@ -1631,16 +1641,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceFormat: active.sourceFormat,
         favorite: false,
         geometryKind: active.parsed.geometryKind,
-        pointCount: active.sourceSegments.reduce(
+        pointCount: primarySegments.reduce(
           (count, segment) => count + segment.points.length,
           0,
         ),
-        segmentCount: active.sourceSegments.length,
-        metrics: active.sourceMetrics,
+        segmentCount: primarySegments.length,
+        metrics: promoteCalculatedElevation
+          ? active.calculatedMetrics
+          : active.sourceMetrics,
         metadata: active.parsed.metadata,
         warnings: active.parsed.warnings,
       };
-      if (active.calculatedMetrics !== null) {
+      if (!promoteCalculatedElevation && active.calculatedMetrics !== null) {
         summary.calculatedMetrics = active.calculatedMetrics;
       }
       if (active.generatedName !== undefined)
@@ -1769,6 +1781,39 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           }
           return { ...current, preparationStatus: 'ready', ...prepared };
         });
+      } else if (
+        active.summary.metrics.elevationSource === 'dem-assisted' &&
+        active.summary.calculatedMetrics === undefined &&
+        active.content.calculatedTrackPoints === undefined
+      ) {
+        if (
+          prepared.calculatedSegments === null ||
+          prepared.calculatedMetrics === null
+        ) {
+          throw new TrackElevationPreparationError('elevation-unavailable');
+        }
+        const content: LocalTrackContent = {
+          schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+          trackId: activeId,
+          trackPoints: prepared.calculatedSegments.map((segment) => segment.points),
+          markers: active.content.markers,
+        };
+        const summary: LocalTrackSummary = {
+          ...active.summary,
+          updatedAt: clock.now().toISOString(),
+          contentHash: await trackContentHasher.hash(content),
+          metrics: prepared.calculatedMetrics,
+        };
+        await database.saveLocalTrack(summary, content);
+        void userData.trackSaved(activeId);
+        const reloadedContent = await database.loadLocalTrackContent(activeId);
+        controller.signal.throwIfAborted();
+        setActive((current) =>
+          current?.kind === 'saved' && current.summary.id === activeId
+            ? { ...current, summary, content: reloadedContent }
+            : current,
+        );
+        await reloadSummaries();
       } else {
         const summary = await database.replaceCalculatedTrackElevation(
           activeId,
@@ -1799,7 +1844,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setElevationProgress(null);
       }
     }
-  }, [active, database, elevationProvider, recalculationState, reloadSummaries]);
+  }, [
+    active,
+    clock,
+    database,
+    elevationProvider,
+    recalculationState,
+    reloadSummaries,
+    trackContentHasher,
+    userData,
+  ]);
 
   const discardPreview = useCallback(() => {
     initiallyRestoredTrackId.current = null;
@@ -2240,6 +2294,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [mapCenter, query, summaries, trackSort]);
 
   const activeProfile = useMemo(() => elevationProfileForActiveTrack(active), [active]);
+  const activeStatsMetrics = useMemo<TrackStatsMetrics | null>(() => {
+    if (active === null) return null;
+    if (active.kind === 'route-plan') return active.metrics;
+    if (active.kind === 'saved') return active.summary.metrics;
+    if (active.preparationStatus !== 'ready') return null;
+    if (active.sourceProfile === null && active.calculatedMetrics !== null) {
+      return active.calculatedMetrics;
+    }
+    return active.sourceMetrics;
+  }, [active]);
   const multiTrackStatsMetrics = useMemo(
     () =>
       multiTrackMode &&
@@ -2294,6 +2358,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () => ({
       active,
       activeProfile,
+      activeStatsMetrics,
       addRoutePlanPoint,
       clearRoutePlan,
       elevationProgress,
@@ -2334,6 +2399,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       active,
       addRoutePlanPoint,
       activeProfile,
+      activeStatsMetrics,
       applyGeneratedName,
       elevationProgress,
       closeActive,
@@ -3367,6 +3433,7 @@ export function TrackDetailsPane({
 }: TrackDetailsPaneProps) {
   const {
     active,
+    activeStatsMetrics,
     applyGeneratedName,
     closeActive,
     clearRoutePlan,
@@ -3729,20 +3796,13 @@ export function TrackDetailsPane({
     trackShares !== null &&
     userSnapshot.status === 'signed-in' &&
     shareContentHash !== null;
-  const metrics =
-    active.kind === 'route-plan'
-      ? active.metrics
-      : active.kind === 'saved'
-        ? active.summary.metrics
-        : active.preparationStatus === 'ready'
-          ? active.sourceMetrics
-          : null;
+  const metrics = activeStatsMetrics;
   const calculatedMetrics =
     active.kind === 'route-plan'
       ? null
       : active.kind === 'saved'
         ? (active.summary.calculatedMetrics ?? null)
-        : active.preparationStatus === 'ready'
+        : active.preparationStatus === 'ready' && active.sourceProfile !== null
           ? active.calculatedMetrics
           : null;
   const pointCount =

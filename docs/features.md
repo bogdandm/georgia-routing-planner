@@ -505,10 +505,11 @@ animates back to the source card's top-left corner while its width and height re
 zero, then returns focus to the triggering row.
 
 Day and night independently classify every dry sample before choosing the dominant sky
-from duration thresholds; a short cloudy window cannot redefine an otherwise clear
-period. Precipitation is likewise separated into isolated, intermittent, and persistent
-patterns before it is combined with the dominant sky. Significant fog, poor visibility,
-or reduced visibility remains a secondary, time-qualified icon and never replaces the
+from duration thresholds. A brief non-clear variation may remain **Clear**, but a
+sustained three-hour minority window in a 12-hour period is **Mostly clear**.
+Precipitation is likewise separated into isolated, intermittent, and persistent patterns
+before it is combined with the dominant sky. Significant fog, poor visibility, or
+reduced visibility remains a secondary, time-qualified icon and never replaces the
 primary weather icon. Each interval shows temperature, wind-speed, and gust ranges plus
 its complete precipitation total. Wind and gust ranges are displayed in metres per
 second, rounded to the nearest whole number. Date labels and the model-update time use

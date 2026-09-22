@@ -132,6 +132,21 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(aggregateWeatherPeriodStatus(hours).primary.sky).toBe(expected);
   });
 
+  it('reports a sustained mostly-clear window as mostly clear', () => {
+    const status = aggregateWeatherPeriodStatus(
+      [11, 23, 30, 24, 13, 5, 5, 8, 10, 8, 4, 2].map((cloudCoverPercent) =>
+        hour({ cloudCoverPercent }),
+      ),
+    );
+
+    expect(status.primary).toEqual({
+      sky: 'mostly_clear',
+      precipitation: 'none',
+      label: 'Mostly clear',
+      icon: { sky: 'mostly_clear', phenomenon: null },
+    });
+  });
+
   it('excludes meaningful precipitation hours from the background sky distribution', () => {
     const status = aggregateWeatherPeriodStatus([...repeat(11), shower(1)]);
 

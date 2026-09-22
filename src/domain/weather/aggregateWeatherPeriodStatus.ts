@@ -108,7 +108,7 @@ export const WEATHER_PERIOD_STATUS_THRESHOLDS = {
   mostlyClearCloudCoverMaximum: 40,
   partlyCloudyCloudCoverMaximum: 65,
   mostlyCloudyCloudCoverMaximum: 85,
-  clearFractionMinimum: 0.75,
+  clearFractionMinimum: 0.8,
   clearCloudyFractionMaximum: 0.15,
   mostlyClearSunnyFractionMinimum: 0.65,
   overcastFractionMinimum: 0.7,

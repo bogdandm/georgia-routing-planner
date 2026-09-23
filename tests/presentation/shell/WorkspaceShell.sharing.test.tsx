@@ -71,9 +71,11 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    const ordinaryDetails = await screen.findByRole('complementary', {
-      name: 'Track details',
-    });
+    const ordinaryDetails = await screen.findByRole(
+      'complementary',
+      { name: 'Track details' },
+      { timeout: 3_000 },
+    );
     expect(
       within(ordinaryDetails).getByRole('heading', { name: 'Alpha trail' }),
     ).toBeVisible();

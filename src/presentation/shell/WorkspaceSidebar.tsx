@@ -347,7 +347,7 @@ export function WorkspaceSidebar({
         {activeTab === 'markers' ? (
           <Stack
             direction="row"
-            spacing={0.5}
+            spacing={compactMarkersHeader ? 0.5 : 1}
             sx={{
               alignItems: 'center',
               minWidth: 0,

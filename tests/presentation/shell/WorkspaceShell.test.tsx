@@ -2072,14 +2072,24 @@ describe('WorkspaceShell', () => {
     expect(sampleMany).toHaveBeenCalledTimes(2);
   });
 
-  it('places calculated elevation below point and segment metadata', async () => {
+  it('promotes calculated elevation for an elevation-free import', async () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
     if (provider === null) return;
     let demMeters = 400;
+    let elevationFreeDem = false;
+    let elevationDelta = 100;
     vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates) =>
       Promise.resolve(
-        coordinates.map(() => ({ status: 'available' as const, meters: demMeters })),
+        coordinates.map((_, index) => ({
+          status: 'available' as const,
+          meters:
+            elevationFreeDem &&
+            index >= coordinates.length / 3 &&
+            index < (coordinates.length * 2) / 3
+              ? demMeters + elevationDelta
+              : demMeters,
+        })),
       ),
     );
     const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
@@ -2182,25 +2192,114 @@ describe('WorkspaceShell', () => {
     const nextInput = container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(nextInput).not.toBeNull();
     if (nextInput === null) return;
+    saveLocalTrack.mockClear();
+    demMeters = 400;
+    elevationFreeDem = true;
     await user.upload(nextInput, elevationFreeGpxFile());
     details = await screen.findByRole('complementary', { name: 'Track details' });
+    const primaryGain = within(details)
+      .getByLabelText(/^Elevation gain: (?!0 m)/u)
+      .getAttribute('aria-label');
+    const primaryLoss = within(details)
+      .getByLabelText(/^Elevation loss: (?!0 m)/u)
+      .getAttribute('aria-label');
+    if (primaryGain === null || primaryLoss === null) {
+      throw new Error('Calculated elevation totals are missing.');
+    }
     expect(
-      within(details).queryByLabelText(/^Elevation gain: /u),
+      within(details).queryByLabelText(/^Elevation gain \(calculated\):/u),
     ).not.toBeInTheDocument();
     expect(
-      within(details).queryByLabelText(/^Elevation loss: /u),
+      within(details).queryByLabelText(/^Elevation loss \(calculated\):/u),
     ).not.toBeInTheDocument();
     expect(
-      within(details).getByLabelText('Elevation gain (calculated): 0 m'),
+      within(details).getByRole('img', { name: /^Elevation profile from /u }),
     ).toBeVisible();
+
+    let captureDownload = false;
+    let downloadedBlob: Blob | null = null;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((object) => {
+      if (captureDownload && object instanceof Blob) downloadedBlob = object;
+      return 'blob:elevation-free-track';
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      return undefined;
+    });
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    await waitFor(() => {
+      expect(trackSaved).toHaveBeenCalledOnce();
+    });
+    const promotedSummary = saveLocalTrack.mock.calls[0]?.[0];
+    const promotedContent = saveLocalTrack.mock.calls[0]?.[1];
+    expect(promotedSummary?.metrics.elevationSource).toBe('dem-assisted');
+    expect(promotedSummary?.calculatedMetrics).toBeUndefined();
+    expect(promotedContent?.calculatedTrackPoints).toBeUndefined();
     expect(
-      within(details).getByLabelText('Elevation loss (calculated): 0 m'),
-    ).toBeVisible();
-    expect(
-      within(details).getByRole('img', {
-        name: 'Elevation profile from 500 to 500 metres',
+      promotedContent?.trackPoints
+        .flat()
+        .every((point) => point.elevationMeters !== undefined),
+    ).toBe(true);
+    const promotedTrackId = promotedContent?.trackId ?? '';
+    const promotedContentHash = (
+      await services.database.localTracks.get(promotedTrackId)
+    )?.contentHash;
+    expect(promotedContentHash).toMatch(/^[0-9a-f]{64}$/u);
+
+    await user.click(within(details).getByRole('button', { name: 'Close track' }));
+    await user.click(
+      within(screen.getByRole('list', { name: 'Saved tracks' })).getByRole('button', {
+        name: /^Elevation-free trail/u,
       }),
+    );
+    details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(within(details).getByLabelText(primaryGain)).toBeVisible();
+    expect(within(details).getByLabelText(primaryLoss)).toBeVisible();
+    expect(
+      within(details).getByRole('img', { name: /^Elevation profile from /u }),
     ).toBeVisible();
+
+    captureDownload = true;
+    await user.click(within(details).getByRole('button', { name: 'Download GPX' }));
+    captureDownload = false;
+    const downloadedGpx = new TextDecoder().decode(
+      await readBlob(requiredBlob(downloadedBlob)),
+    );
+    const exportedElevations = Array.from(
+      downloadedGpx.matchAll(/<ele>([^<]+)<\/ele>/gu),
+      (match) => Number(match[1]),
+    );
+    expect(exportedElevations).toEqual(
+      promotedContent?.trackPoints.flat().map((point) => point.elevationMeters),
+    );
+
+    trackSaved.mockClear();
+    demMeters = 600;
+    elevationDelta = 200;
+    await user.click(
+      within(details).getByRole('button', { name: 'Recalculate elevation' }),
+    );
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(trackSaved).toHaveBeenCalledOnce();
+    });
+    const promotedRecalculatedContent =
+      await services.database.loadLocalTrackContent(promotedTrackId);
+    const recalculatedSummary =
+      await services.database.localTracks.get(promotedTrackId);
+    expect(promotedRecalculatedContent.trackPoints).not.toEqual(
+      promotedContent?.trackPoints,
+    );
+    expect(promotedRecalculatedContent.calculatedTrackPoints).toBeUndefined();
+    expect(recalculatedSummary?.calculatedMetrics).toBeUndefined();
+    expect(recalculatedSummary?.metrics).not.toEqual(promotedSummary?.metrics);
+    expect(recalculatedSummary?.contentHash).not.toBe(promotedContentHash);
   });
 
   it('keeps the newest import when an older preparation completes late', async () => {

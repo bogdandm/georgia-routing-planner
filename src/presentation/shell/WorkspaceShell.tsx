@@ -159,6 +159,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const previousMultiTrackMode = useRef(false);
   const {
     active: activeTrack,
+    activeStatsMetrics,
     activeProfile,
     elevationProgress,
     importState,
@@ -187,20 +188,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     !multiTrackMode &&
     (activeTrack?.kind === 'preview' || activeTrack?.kind === 'shared') &&
     activeTrack.preparationStatus === 'preparing';
-  const ordinaryActiveTrackMetrics =
-    activeTrack === null
-      ? null
-      : activeTrack.kind === 'preview' || activeTrack.kind === 'shared'
-        ? activeTrack.preparationStatus === 'ready'
-          ? activeTrack.sourceMetrics
-          : null
-        : activeTrack.kind === 'route-plan'
-          ? activeTrack.metrics
-          : activeTrack.summary.metrics;
-  const multiTrackDetailsExist = multiTrackMode && multiTrackSelections.length > 0;
   const activeTrackMetrics = multiTrackMode
     ? multiTrackStatsMetrics
-    : ordinaryActiveTrackMetrics;
+    : activeStatsMetrics;
+  const multiTrackDetailsExist = multiTrackMode && multiTrackSelections.length > 0;
   const summaryProfile = multiTrackMode ? null : activeProfile;
   useEffect(() => {
     const enteredMultiTrackMode = multiTrackMode && !previousMultiTrackMode.current;

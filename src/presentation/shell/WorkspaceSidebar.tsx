@@ -238,6 +238,7 @@ export function WorkspaceSidebar({
     startWeatherPointSelection();
     if (fullWidth) onShowMap();
   };
+  const compactMarkersHeader = fullWidth && activeTab === 'markers';
 
   return (
     <Box
@@ -264,14 +265,26 @@ export function WorkspaceSidebar({
         direction="row"
         spacing={1}
         sx={{
+          display: compactMarkersHeader ? 'grid' : 'flex',
+          gridTemplateColumns: compactMarkersHeader ? 'minmax(0, 1fr) auto' : undefined,
+          gridTemplateRows: compactMarkersHeader ? 'auto auto' : undefined,
+          columnGap: compactMarkersHeader ? 1 : undefined,
+          rowGap: compactMarkersHeader ? 0.5 : undefined,
           alignItems: 'center',
           minHeight: 64,
-          px: 2,
+          px: compactMarkersHeader ? 1 : 2,
+          py: compactMarkersHeader ? 1 : 0,
           bgcolor: appColors.surface.subtle,
           borderBottom: `1px solid ${appColors.brand.sky}`,
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
+        <Box
+          sx={{
+            minWidth: 0,
+            gridColumn: compactMarkersHeader ? 1 : undefined,
+            gridRow: compactMarkersHeader ? 1 : undefined,
+          }}
+        >
           <Typography component="h1" variant="h6" noWrap>
             {definition.title}
           </Typography>
@@ -279,7 +292,7 @@ export function WorkspaceSidebar({
         {activeTab === 'weather' && weatherHeaderPoint !== null ? (
           <WeatherLocationHeader point={weatherHeaderPoint} />
         ) : null}
-        <Box sx={{ flex: 1 }} />
+        <Box sx={{ display: compactMarkersHeader ? 'none' : undefined, flex: 1 }} />
         {activeTab === 'weather' ? (
           <Tooltip
             title={
@@ -332,7 +345,16 @@ export function WorkspaceSidebar({
           </Tooltip>
         ) : null}
         {activeTab === 'markers' ? (
-          <>
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{
+              alignItems: 'center',
+              minWidth: 0,
+              gridColumn: compactMarkersHeader ? '1 / -1' : undefined,
+              gridRow: compactMarkersHeader ? 2 : undefined,
+            }}
+          >
             <Tooltip
               title={
                 !weatherPreferencesReady
@@ -358,7 +380,11 @@ export function WorkspaceSidebar({
                     : 'Loading marker weather settings'
                 }
                 startIcon={<WbCloudyOutlinedIcon fontSize="small" />}
-                sx={{ minWidth: 0, px: 1, whiteSpace: 'nowrap' }}
+                sx={{
+                  minWidth: 0,
+                  px: compactMarkersHeader ? 0.5 : 1,
+                  whiteSpace: 'nowrap',
+                }}
                 onClick={openWeatherSettings}
               >
                 {weatherPreferencesReady
@@ -384,7 +410,7 @@ export function WorkspaceSidebar({
               </span>
             </Tooltip>
             <MarkerSortControl onMarkerSortChange={onMarkerSortChange} />
-          </>
+          </Stack>
         ) : activeTab === 'tracks' ? (
           <>
             <Tooltip
@@ -429,7 +455,14 @@ export function WorkspaceSidebar({
           definition.actions
         )}
         {fullWidth ? (
-          <IconButton aria-label="Show map" onClick={onShowMap}>
+          <IconButton
+            aria-label="Show map"
+            sx={{
+              gridColumn: compactMarkersHeader ? 2 : undefined,
+              gridRow: compactMarkersHeader ? 1 : undefined,
+            }}
+            onClick={onShowMap}
+          >
             <ChevronLeftOutlinedIcon />
           </IconButton>
         ) : null}

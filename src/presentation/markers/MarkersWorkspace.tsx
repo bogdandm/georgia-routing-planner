@@ -925,7 +925,7 @@ export function MarkerWeatherSummaryButton({
         onOpen(event.currentTarget);
       }}
       sx={{
-        minWidth: map ? 54 : markerWeatherCellWidth,
+        minWidth: map ? 56 : markerWeatherCellWidth,
         minHeight: map ? 62 : markerWeatherCellHeight,
         alignSelf: 'stretch',
         flexDirection: 'column',
@@ -1048,7 +1048,15 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
   };
 
   return (
-    <Stack spacing={1.5} sx={{ px: 2, pt: 0.5, pb: 2 }}>
+    <Stack
+      spacing={1.5}
+      sx={{
+        px: 2,
+        pt: 0.5,
+        pb: 2,
+        '@media (width < 900px)': { px: 1, pb: 1 },
+      }}
+    >
       {loadState === 'loading' ? (
         <Stack direction="row" spacing={1} role="status" sx={{ alignItems: 'center' }}>
           <CircularProgress size={20} />
@@ -1080,7 +1088,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
         <List
           aria-label="Saved markers"
           disablePadding
-          sx={{ display: 'grid', gap: 1.5 }}
+          sx={{ display: 'grid', gap: 1.5, '@media (width < 900px)': { gap: 1 } }}
         >
           {weatherPreferences.weekdays.length === 0 ? null : (
             <Box
@@ -1093,9 +1101,12 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                 alignItems: 'center',
                 listStyle: 'none',
                 mb: -1.25,
+                '@media (width < 900px)': {
+                  gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, minmax(0, 1fr))`,
+                },
               }}
             >
-              <Box aria-hidden />
+              <Box aria-hidden sx={{ '@media (width < 900px)': { display: 'none' } }} />
               {weatherColumnPeriods === null
                 ? weatherPreferences.weekdays.map((weekday) => (
                     <Typography
@@ -1239,6 +1250,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         pointerEvents: 'auto',
                       },
                     '@media (width < 900px)': {
+                      gridTemplateRows: 'auto auto',
                       '& .marker-row-action': {
                         opacity: 1,
                         pointerEvents: 'auto',
@@ -1303,6 +1315,16 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         borderLeft: 1,
                         borderColor: 'divider',
                         '& > button:first-of-type': { borderLeft: 0 },
+                        '@media (width < 900px)': {
+                          gridColumn: '1 / -1',
+                          gridRow: 2,
+                          minWidth: 0,
+                          width: '100%',
+                          gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, minmax(0, 1fr))`,
+                          borderTop: 1,
+                          borderLeft: 0,
+                          '& > button': { minWidth: 0, width: '100%' },
+                        },
                       }}
                     >
                       {weather?.status === 'ready' ? (
@@ -1373,6 +1395,14 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       alignItems: 'center',
                       px: 0.5,
                       transform: 'translateY(-50%)',
+                      '@media (width < 900px)': {
+                        position: 'static',
+                        top: 'auto',
+                        right: 'auto',
+                        transform: 'none',
+                        gridColumn: 2,
+                        gridRow: 1,
+                      },
                     }}
                   >
                     <Tooltip

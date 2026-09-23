@@ -155,6 +155,8 @@ function categorizeMapError(
   if (
     (sourceId !== null && isSatelliteSourceId(sourceId)) ||
     sourceId === mapSourceIds.satelliteBasemap ||
+    sourceId === mapSourceIds.bingSatelliteBasemap ||
+    sourceId === mapSourceIds.esriSatelliteBasemap ||
     Object.values(naprOrthophotoSourceIds).includes(
       sourceId as (typeof naprOrthophotoSourceIds)[keyof typeof naprOrthophotoSourceIds],
     )

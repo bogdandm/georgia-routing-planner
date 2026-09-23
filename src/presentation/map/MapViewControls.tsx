@@ -1,10 +1,11 @@
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import {
-  Box,
   CircularProgress,
-  Menu,
   ListItemIcon,
   ListItemText,
+  Menu,
   MenuItem,
   Paper,
   ToggleButton,
@@ -16,13 +17,7 @@ import { useId, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useControl } from 'react-map-gl/maplibre';
 
-import googleSatelliteHybridPreview from '@/presentation/map/layer-previews/google-satellite-hybrid.png';
-import googleSatellitePreview from '@/presentation/map/layer-previews/google-satellite.png';
-import naprOrthophotoHybridPreview from '@/presentation/map/layer-previews/napr-orthophoto-hybrid.png';
-import naprOrthophotoPreview from '@/presentation/map/layer-previews/napr-orthophoto.png';
-import sentinel2HybridPreview from '@/presentation/map/layer-previews/sentinel-2-hybrid.png';
 import type { MapLayerPreset, TerrainMode } from '@/presentation/map/mapTypes';
-import vectorOsmPreview from '@/presentation/map/layer-previews/vector-osm.png';
 
 export type TerrainControlState =
   'flat' | 'enabling' | 'terrain' | 'disabling' | 'failed';
@@ -32,45 +27,23 @@ interface MapViewControlsProps {
   readonly terrainDisabled: boolean;
   readonly activeLayerPreset: MapLayerPreset | null;
   readonly layerPresetDisabled: boolean;
+  readonly hybridOverlayEnabled: boolean;
+  readonly hybridOverlayDisabled: boolean;
   readonly onTerrainModeChange: (mode: TerrainMode) => void;
   readonly onLayerPresetChange: (preset: MapLayerPreset) => boolean;
+  readonly onHybridOverlayChange: (enabled: boolean) => void;
+  readonly onOpenLayersTab: () => void;
 }
 
 const layerPresets: readonly {
   readonly label: string;
-  readonly preview: string;
   readonly value: MapLayerPreset;
 }[] = [
-  {
-    label: 'Vector OSM',
-    preview: vectorOsmPreview,
-    value: 'vector-osm',
-  },
-  {
-    label: 'Google Satellite Hybrid',
-    preview: googleSatelliteHybridPreview,
-    value: 'google-satellite-hybrid',
-  },
-  {
-    label: 'Google Satellite',
-    preview: googleSatellitePreview,
-    value: 'google-satellite',
-  },
-  {
-    label: 'NAPR Orthophoto Hybrid',
-    preview: naprOrthophotoHybridPreview,
-    value: 'napr-orthophoto-hybrid',
-  },
-  {
-    label: 'NAPR Orthophoto',
-    preview: naprOrthophotoPreview,
-    value: 'napr-orthophoto',
-  },
-  {
-    label: 'Sentinel-2 Hybrid',
-    preview: sentinel2HybridPreview,
-    value: 'sentinel-2-hybrid',
-  },
+  { label: 'Vector OSM', value: 'vector-osm' },
+  { label: 'Google Satellite', value: 'google-satellite' },
+  { label: 'Bing Aerial', value: 'bing-satellite' },
+  { label: 'Esri World Imagery', value: 'esri-satellite' },
+  { label: 'NAPR Orthophoto', value: 'napr-orthophoto' },
 ];
 
 class MapViewControlHost implements IControl {
@@ -94,8 +67,12 @@ export function MapViewControls({
   terrainDisabled,
   activeLayerPreset,
   layerPresetDisabled,
+  hybridOverlayEnabled,
+  hybridOverlayDisabled,
   onTerrainModeChange,
   onLayerPresetChange,
+  onHybridOverlayChange,
+  onOpenLayersTab,
 }: MapViewControlsProps) {
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
   const menuId = useId();
@@ -214,7 +191,10 @@ export function MapViewControls({
           setMenuButton(null);
         }}
         open={menuOpen}
-        slotProps={{ paper: { sx: { ml: -1 } } }}
+        slotProps={{
+          list: { sx: { pb: 0 } },
+          paper: { sx: { ml: -1 } },
+        }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         variant="menu"
       >
@@ -227,19 +207,66 @@ export function MapViewControls({
             }}
             role="menuitemradio"
             selected={activeLayerPreset === preset.value}
-            sx={{ minWidth: 300 }}
+            sx={{ minHeight: 44, minWidth: 240, px: 2 }}
           >
-            <ListItemIcon sx={{ minWidth: 96, mr: 2 }}>
-              <Box
-                alt=""
-                component="img"
-                src={preset.preview}
-                sx={{ borderRadius: 1, height: 96, width: 96 }}
-              />
-            </ListItemIcon>
             <ListItemText primary={preset.label} />
           </MenuItem>
         ))}
+        <MenuItem
+          aria-checked={hybridOverlayEnabled}
+          disabled={hybridOverlayDisabled}
+          onClick={() => {
+            onHybridOverlayChange(!hybridOverlayEnabled);
+          }}
+          role="menuitemcheckbox"
+          sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+        >
+          <ListItemIcon sx={{ minWidth: 36 }}>
+            {hybridOverlayEnabled ? (
+              <CheckBoxIcon fontSize="small" />
+            ) : (
+              <CheckBoxOutlineBlankIcon fontSize="small" />
+            )}
+          </ListItemIcon>
+          <ListItemText primary="OSM overlay" />
+        </MenuItem>
+        <MenuItem
+          aria-checked={activeLayerPreset === 'sentinel-2'}
+          onClick={() => {
+            onLayerPresetChange('sentinel-2');
+          }}
+          role="menuitemradio"
+          selected={activeLayerPreset === 'sentinel-2'}
+          sx={{
+            display: 'inline-flex',
+            justifyContent: 'center',
+            minHeight: 40,
+            px: 1,
+            verticalAlign: 'top',
+            width: '50%',
+          }}
+        >
+          Sentinel-2
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setMenuButton(null);
+            onOpenLayersTab();
+          }}
+          role="menuitem"
+          sx={{
+            borderLeft: 1,
+            borderColor: 'divider',
+            display: 'inline-flex',
+            justifyContent: 'center',
+            minHeight: 40,
+            px: 1,
+            verticalAlign: 'top',
+            width: '50%',
+          }}
+        >
+          Layers tab
+        </MenuItem>
       </Menu>
     </>
   );

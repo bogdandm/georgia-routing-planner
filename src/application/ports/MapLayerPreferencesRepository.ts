@@ -1,5 +1,7 @@
 export type LogicalMapLayerId =
   | 'google-satellite'
+  | 'bing-satellite'
+  | 'esri-satellite'
   | 'napr-orthophoto'
   | 'satellite-imagery'
   | 'scene-footprint'

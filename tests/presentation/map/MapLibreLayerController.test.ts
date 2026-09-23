@@ -58,6 +58,8 @@ class FakeLayerMap {
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
     this.sources.set(mapSourceIds.satelliteBasemap, { type: 'raster' });
+    this.sources.set(mapSourceIds.bingSatelliteBasemap, { type: 'raster' });
+    this.sources.set(mapSourceIds.esriSatelliteBasemap, { type: 'raster' });
     for (const sourceId of Object.values(naprOrthophotoSourceIds)) {
       this.sources.set(sourceId, { type: 'raster' });
     }
@@ -66,6 +68,8 @@ class FakeLayerMap {
       1,
       0,
       [satelliteBasemapLayerIds.imagery, { id: satelliteBasemapLayerIds.imagery }],
+      [satelliteBasemapLayerIds.bing, { id: satelliteBasemapLayerIds.bing }],
+      [satelliteBasemapLayerIds.esri, { id: satelliteBasemapLayerIds.esri }],
       ...Object.values(naprOrthophotoLayerIds).map(
         (id): [string, Record<string, unknown>] => [id, { id }],
       ),
@@ -590,7 +594,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('applies each map layer preset atomically without resetting independent layers', async () => {
+  it('switches only the selected imagery source and preserves the OSM overlay', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -600,6 +604,7 @@ describe('MapLibreLayerController', () => {
     expect(controller.setLayerVisibility('roads', false)).toEqual({
       status: 'success',
     });
+    expect(controller.setOpenStreetMapOpacity(0.35)).toEqual({ status: 'success' });
     const savePreferences = vi
       .spyOn(services.database, 'saveMapLayerPreferences')
       .mockResolvedValue(undefined);
@@ -611,91 +616,66 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: {
         'google-satellite': false,
+        'bing-satellite': false,
+        'esri-satellite': false,
+        'napr-orthophoto': false,
         'satellite-imagery': false,
         roads: false,
       },
-      openStreetMapOpacity: 1,
+      openStreetMapOpacity: 0.35,
       appliedImagery: { status: 'hidden', sceneId: 'preset-scene', visible: false },
-    });
-    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
-    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
-
-    expect(controller.setMapLayerPreset('google-satellite-hybrid')).toEqual({
-      status: 'success',
-    });
-    expect(mapLayerStore.getState()).toMatchObject({
-      visibility: {
-        'google-satellite': true,
-        'satellite-imagery': false,
-        roads: false,
-      },
-      openStreetMapOpacity: 1,
-    });
-    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
-    expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('none');
-
-    expect(controller.setMapLayerPreset('napr-orthophoto-hybrid')).toEqual({
-      status: 'success',
-    });
-    expect(mapLayerStore.getState()).toMatchObject({
-      visibility: {
-        'google-satellite': false,
-        'napr-orthophoto': true,
-        'satellite-imagery': false,
-        roads: false,
-      },
-      openStreetMapOpacity: 1,
-    });
-    for (const layerId of Object.values(naprOrthophotoLayerIds)) {
-      expect(map.visibility.get(layerId)).toBe('visible');
-    }
-
-    expect(controller.setMapLayerPreset('napr-orthophoto')).toEqual({
-      status: 'success',
-    });
-    expect(mapLayerStore.getState()).toMatchObject({
-      visibility: {
-        'google-satellite': false,
-        'napr-orthophoto': true,
-        'satellite-imagery': false,
-        roads: false,
-      },
-      openStreetMapOpacity: 0,
     });
 
     expect(controller.setMapLayerPreset('google-satellite')).toEqual({
       status: 'success',
     });
-    expect(mapLayerStore.getState()).toMatchObject({
-      visibility: {
-        'google-satellite': true,
-        'satellite-imagery': false,
-        roads: false,
-      },
-      openStreetMapOpacity: 0,
-    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('visible');
 
-    expect(controller.setMapLayerPreset('sentinel-2-hybrid')).toEqual({
+    expect(controller.setMapLayerPreset('bing-satellite')).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    expect(map.visibility.get(satelliteBasemapLayerIds.bing)).toBe('visible');
+
+    expect(controller.setMapLayerPreset('esri-satellite')).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.bing)).toBe('none');
+    expect(map.visibility.get(satelliteBasemapLayerIds.esri)).toBe('visible');
+
+    expect(controller.setMapLayerPreset('napr-orthophoto')).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(satelliteBasemapLayerIds.esri)).toBe('none');
+    for (const layerId of Object.values(naprOrthophotoLayerIds)) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+
+    expect(controller.setMapLayerPreset('sentinel-2')).toEqual({
       status: 'success',
     });
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: {
         'google-satellite': false,
+        'bing-satellite': false,
+        'esri-satellite': false,
         'napr-orthophoto': false,
         'satellite-imagery': true,
         roads: false,
       },
-      openStreetMapOpacity: 1,
+      openStreetMapOpacity: 0.35,
       appliedImagery: { status: 'ready', sceneId: 'preset-scene', visible: true },
     });
     expect(controller.getAppliedScene()).toMatchObject({ id: 'preset-scene' });
     expect(map.visibility.get(satelliteBasemapLayerIds.imagery)).toBe('none');
+    expect(map.visibility.get(satelliteBasemapLayerIds.bing)).toBe('none');
+    expect(map.visibility.get(satelliteBasemapLayerIds.esri)).toBe('none');
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
     expect(savePreferences).toHaveBeenCalledTimes(6);
     expect(log).toHaveBeenLastCalledWith({
       level: 'info',
       name: 'map.layer-preset.changed',
-      data: { preset: 'sentinel-2-hybrid' },
+      data: { preset: 'sentinel-2' },
     });
   });
 
@@ -711,7 +691,7 @@ describe('MapLibreLayerController', () => {
       .spyOn(services.database, 'saveMapLayerPreferences')
       .mockResolvedValue(undefined);
 
-    expect(controller.setMapLayerPreset('sentinel-2-hybrid')).toEqual({
+    expect(controller.setMapLayerPreset('sentinel-2')).toEqual({
       status: 'failed',
       message: 'Apply a Sentinel scene before choosing this preset.',
     });
@@ -2064,6 +2044,8 @@ describe('MapLibreLayerController', () => {
     await services.database.saveMapLayerPreferences({
       visibility: {
         'google-satellite': false,
+        'bing-satellite': false,
+        'esri-satellite': false,
         'napr-orthophoto': false,
         'satellite-imagery': false,
         'scene-footprint': true,

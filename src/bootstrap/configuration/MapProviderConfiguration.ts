@@ -37,6 +37,31 @@ const defaultSatelliteBasemap = {
   attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
 };
 
+const defaultBingSatelliteBasemap = {
+  id: 'bing-satellite',
+  label: 'Bing aerial imagery',
+  tileUrls: [
+    'https://ecn.t0.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+    'https://ecn.t1.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+    'https://ecn.t2.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+    'https://ecn.t3.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+  ],
+  tileSize: 256 as const,
+  attribution:
+    '<a href="https://www.microsoft.com/maps/product/terms.html" target="_blank">© Microsoft Bing</a>',
+};
+
+const defaultEsriSatelliteBasemap = {
+  id: 'esri-satellite',
+  label: 'Esri World Imagery',
+  tileUrls: [
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  ],
+  tileSize: 256 as const,
+  attribution:
+    '<a href="https://www.esri.com/" target="_blank">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community',
+};
+
 const defaultNaprOrthophoto = {
   id: 'napr-orthophoto',
   label: 'NAPR orthophoto mosaic',
@@ -171,6 +196,26 @@ const naprOrthophotoRasterSourceSchema = z
       });
     }
   });
+
+const satelliteBasemapSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9-]+$/u),
+    label: z.string().min(1).max(80),
+    tileUrls: z
+      .array(
+        endpointSchema.refine(
+          (value) =>
+            value.includes('{quadkey}') ||
+            (value.includes('{z}') && value.includes('{x}') && value.includes('{y}')),
+          'Satellite basemap endpoint must contain {quadkey} or {z}, {x}, and {y}.',
+        ),
+      )
+      .min(1)
+      .max(4),
+    tileSize: z.union([z.literal(256), z.literal(512)]),
+    attribution: safeAttributionSchema,
+  })
+  .strict();
 
 const mapProviderConfigurationInputSchema = z
   .object({
@@ -312,25 +357,9 @@ const mapProviderConfigurationInputSchema = z
           }),
       })
       .strict(),
-    satelliteBasemap: z
-      .object({
-        id: z.string().regex(/^[a-z0-9-]+$/u),
-        label: z.string().min(1).max(80),
-        tileUrls: z
-          .array(
-            endpointSchema.refine(
-              (value) =>
-                value.includes('{z}') && value.includes('{x}') && value.includes('{y}'),
-              'Satellite basemap endpoint must contain {z}, {x}, and {y}.',
-            ),
-          )
-          .min(1)
-          .max(4),
-        tileSize: z.union([z.literal(256), z.literal(512)]),
-        attribution: safeAttributionSchema,
-      })
-      .strict()
-      .default(defaultSatelliteBasemap),
+    satelliteBasemap: satelliteBasemapSchema.default(defaultSatelliteBasemap),
+    bingSatelliteBasemap: satelliteBasemapSchema.default(defaultBingSatelliteBasemap),
+    esriSatelliteBasemap: satelliteBasemapSchema.default(defaultEsriSatelliteBasemap),
     naprOrthophoto: z
       .object({
         id: z.string().regex(/^[a-z0-9-]+$/u),
@@ -362,6 +391,14 @@ interface NaprOrthophotoRasterSource {
   readonly minZoom: number;
   readonly maxZoom: number;
   readonly bounds: readonly [number, number, number, number];
+}
+
+interface StaticSatelliteBasemap {
+  readonly id: string;
+  readonly label: string;
+  readonly tileUrls: readonly string[];
+  readonly tileSize: 256 | 512;
+  readonly attribution: string;
 }
 
 interface DetailVectorConfiguration {
@@ -450,13 +487,9 @@ interface MapProviderConfigurationInput {
       readonly attribution: string;
     };
   };
-  readonly satelliteBasemap: {
-    readonly id: string;
-    readonly label: string;
-    readonly tileUrls: readonly string[];
-    readonly tileSize: 256 | 512;
-    readonly attribution: string;
-  };
+  readonly satelliteBasemap: StaticSatelliteBasemap;
+  readonly bingSatelliteBasemap: StaticSatelliteBasemap;
+  readonly esriSatelliteBasemap: StaticSatelliteBasemap;
   readonly naprOrthophoto: {
     readonly id: string;
     readonly label: string;
@@ -494,6 +527,10 @@ interface MapProviderConfigurationSummary {
   readonly satelliteRendererOrigin: string;
   readonly satelliteBasemapId: string;
   readonly satelliteBasemapOrigins: readonly string[];
+  readonly bingSatelliteBasemapId: string;
+  readonly bingSatelliteBasemapOrigins: readonly string[];
+  readonly esriSatelliteBasemapId: string;
+  readonly esriSatelliteBasemapOrigins: readonly string[];
   readonly naprOrthophotoId: string;
   readonly naprOrthophotoOrigins: readonly string[];
 }
@@ -587,6 +624,8 @@ export const defaultMapProviderConfigurationInput = {
     },
   },
   satelliteBasemap: defaultSatelliteBasemap,
+  bingSatelliteBasemap: defaultBingSatelliteBasemap,
+  esriSatelliteBasemap: defaultEsriSatelliteBasemap,
   naprOrthophoto: defaultNaprOrthophoto,
   policy: {
     requestTimeoutMs: 15_000,
@@ -636,6 +675,18 @@ export function parseMapProviderConfiguration(
     satelliteBasemap: {
       ...parsed.satelliteBasemap,
       tileUrls: parsed.satelliteBasemap.tileUrls.map((tileUrl) =>
+        resolveEndpoint(tileUrl, baseUrl),
+      ),
+    },
+    bingSatelliteBasemap: {
+      ...parsed.bingSatelliteBasemap,
+      tileUrls: parsed.bingSatelliteBasemap.tileUrls.map((tileUrl) =>
+        resolveEndpoint(tileUrl, baseUrl),
+      ),
+    },
+    esriSatelliteBasemap: {
+      ...parsed.esriSatelliteBasemap,
+      tileUrls: parsed.esriSatelliteBasemap.tileUrls.map((tileUrl) =>
         resolveEndpoint(tileUrl, baseUrl),
       ),
     },
@@ -715,6 +766,22 @@ export function summarizeMapProviderConfiguration(
     satelliteBasemapOrigins: [
       ...new Set(
         configuration.satelliteBasemap.tileUrls.map(
+          (tileUrl) => new URL(tileUrl).origin,
+        ),
+      ),
+    ],
+    bingSatelliteBasemapId: configuration.bingSatelliteBasemap.id,
+    bingSatelliteBasemapOrigins: [
+      ...new Set(
+        configuration.bingSatelliteBasemap.tileUrls.map(
+          (tileUrl) => new URL(tileUrl).origin,
+        ),
+      ),
+    ],
+    esriSatelliteBasemapId: configuration.esriSatelliteBasemap.id,
+    esriSatelliteBasemapOrigins: [
+      ...new Set(
+        configuration.esriSatelliteBasemap.tileUrls.map(
           (tileUrl) => new URL(tileUrl).origin,
         ),
       ),

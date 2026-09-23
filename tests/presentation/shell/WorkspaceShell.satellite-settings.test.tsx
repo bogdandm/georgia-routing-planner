@@ -245,6 +245,11 @@ describe('WorkspaceShell', () => {
     const google = screen.getByRole('checkbox', { name: 'Google satellite imagery' });
     await user.click(google);
     expect(setVisibility).toHaveBeenCalledWith('google-satellite', true);
+    await user.click(screen.getByRole('checkbox', { name: 'Bing aerial imagery' }));
+    expect(setVisibility).toHaveBeenCalledWith('bing-satellite', true);
+    await user.click(screen.getByRole('checkbox', { name: 'Esri World Imagery' }));
+    expect(setVisibility).toHaveBeenCalledWith('esri-satellite', true);
+
     act(() => {
       mapLayerStore.setState({
         visibility: {

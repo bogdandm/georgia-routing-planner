@@ -59,6 +59,29 @@ describe('MapProviderConfiguration', () => {
       tileSize: 256,
       attribution: '<a href="https://www.google.com/maps" target="_blank">© Google</a>',
     });
+    expect(configuration.bingSatelliteBasemap).toEqual({
+      id: 'bing-satellite',
+      label: 'Bing aerial imagery',
+      tileUrls: [
+        'https://ecn.t0.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+        'https://ecn.t1.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+        'https://ecn.t2.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+        'https://ecn.t3.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=1&mkt=en-US&n=z',
+      ],
+      tileSize: 256,
+      attribution:
+        '<a href="https://www.microsoft.com/maps/product/terms.html" target="_blank">© Microsoft Bing</a>',
+    });
+    expect(configuration.esriSatelliteBasemap).toEqual({
+      id: 'esri-satellite',
+      label: 'Esri World Imagery',
+      tileUrls: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      attribution:
+        '<a href="https://www.esri.com/" target="_blank">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community',
+    });
     expect(configuration.naprOrthophoto).toEqual({
       id: 'napr-orthophoto',
       label: 'NAPR orthophoto mosaic',
@@ -133,6 +156,15 @@ describe('MapProviderConfiguration', () => {
         'https://mt2.google.com',
         'https://mt3.google.com',
       ],
+      bingSatelliteBasemapId: 'bing-satellite',
+      bingSatelliteBasemapOrigins: [
+        'https://ecn.t0.tiles.virtualearth.net',
+        'https://ecn.t1.tiles.virtualearth.net',
+        'https://ecn.t2.tiles.virtualearth.net',
+        'https://ecn.t3.tiles.virtualearth.net',
+      ],
+      esriSatelliteBasemapId: 'esri-satellite',
+      esriSatelliteBasemapOrigins: ['https://server.arcgisonline.com'],
       naprOrthophotoId: 'napr-orthophoto',
       naprOrthophotoOrigins: ['https://nt0.napr.gov.ge', 'https://mp.napr.gov.ge'],
     });
@@ -151,16 +183,20 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.terrain.filter.negativeSpikeThresholdMeters).toBe(300);
   });
 
-  it('defaults the satellite basemap for existing external configuration', () => {
+  it('defaults all static satellite basemaps for existing external configuration', () => {
     const input = structuredClone(
       defaultMapProviderConfigurationInput,
     ) as unknown as Record<string, unknown>;
     delete input.satelliteBasemap;
+    delete input.bingSatelliteBasemap;
+    delete input.esriSatelliteBasemap;
 
     const configuration = parseMapProviderConfiguration(input, baseUrl);
 
     expect(configuration.satelliteBasemap.tileUrls).toHaveLength(4);
     expect(configuration.satelliteBasemap.id).toBe('google-satellite');
+    expect(configuration.bingSatelliteBasemap.id).toBe('bing-satellite');
+    expect(configuration.esriSatelliteBasemap.id).toBe('esri-satellite');
   });
 
   it('defaults NAPR orthophoto for existing schema-v2 external configuration', () => {
@@ -184,6 +220,8 @@ describe('MapProviderConfiguration', () => {
       terrain: { tileUrl: string };
       satellite: { searchUrl: string };
       satelliteBasemap: { tileUrls: string[] };
+      bingSatelliteBasemap: { tileUrls: string[] };
+      esriSatelliteBasemap: { tileUrls: string[] };
       naprOrthophoto: {
         sources: Record<string, { tileUrls: string[] }>;
       };
@@ -197,6 +235,11 @@ describe('MapProviderConfiguration', () => {
       './fixtures/satellite/{z}/{x}/{y}.jpg',
       './fixtures/satellite/{z}/{x}/{y}.jpg',
     ];
+    input.bingSatelliteBasemap.tileUrls = [
+      './fixtures/bing/{quadkey}.jpg',
+      './fixtures/bing/{quadkey}.jpg',
+    ];
+    input.esriSatelliteBasemap.tileUrls = ['./fixtures/esri/{z}/{y}/{x}.jpg'];
     for (const source of Object.values(input.naprOrthophoto.sources)) {
       source.tileUrls = ['./fixtures/napr/{z}/{x}/{y}.png'];
     }
@@ -218,6 +261,13 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.satelliteBasemap.tileUrls).toEqual([
       'https://example.test/georgia-routing-planner/fixtures/satellite/{z}/{x}/{y}.jpg',
       'https://example.test/georgia-routing-planner/fixtures/satellite/{z}/{x}/{y}.jpg',
+    ]);
+    expect(configuration.bingSatelliteBasemap.tileUrls).toEqual([
+      'https://example.test/georgia-routing-planner/fixtures/bing/{quadkey}.jpg',
+      'https://example.test/georgia-routing-planner/fixtures/bing/{quadkey}.jpg',
+    ]);
+    expect(configuration.esriSatelliteBasemap.tileUrls).toEqual([
+      'https://example.test/georgia-routing-planner/fixtures/esri/{z}/{y}/{x}.jpg',
     ]);
     expect(
       Object.values(configuration.naprOrthophoto.sources).map(

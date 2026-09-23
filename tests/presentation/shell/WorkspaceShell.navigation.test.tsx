@@ -122,6 +122,12 @@ describe('WorkspaceShell', () => {
       within(about).getByRole('link', { name: 'Google satellite imagery' }),
     ).toHaveAttribute('href', 'https://mt0.google.com');
     expect(
+      within(about).getByRole('link', { name: 'Bing aerial imagery' }),
+    ).toHaveAttribute('href', 'https://ecn.t0.tiles.virtualearth.net');
+    expect(
+      within(about).getByRole('link', { name: 'Esri World Imagery' }),
+    ).toHaveAttribute('href', 'https://server.arcgisonline.com');
+    expect(
       within(about).getByRole('link', { name: 'NAPR orthophoto mosaic' }),
     ).toHaveAttribute('href', 'https://nt0.napr.gov.ge');
     expect(within(about).getByText('© Google')).toBeVisible();

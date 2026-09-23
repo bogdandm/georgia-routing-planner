@@ -5,6 +5,25 @@ import react from '@vitejs/plugin-react';
 import { lingui, linguiTransformerBabelPreset } from '@lingui/vite-plugin';
 import { defineConfig } from 'vitest/config';
 
+const isCoverageShard = process.env.VITEST_COVERAGE_SHARD === 'true';
+
+const coverageThresholds = {
+  statements: 80,
+  lines: 80,
+  functions: 80,
+  branches: 75,
+  'src/application/**/*.ts': {
+    statements: 90,
+    lines: 90,
+    branches: 85,
+  },
+  'src/domain/**/*.ts': {
+    statements: 90,
+    lines: 90,
+    branches: 85,
+  },
+};
+
 /** Coverage combines normal and infrastructure tests while their focused commands stay separate. */
 export default defineConfig({
   plugins: [react(), lingui(), babel({ presets: [linguiTransformerBabelPreset()] })],
@@ -43,22 +62,7 @@ export default defineConfig({
         '**/*.test.{ts,tsx}',
         'src/diagnostics/snapshots/HealthCheckService.ts',
       ],
-      thresholds: {
-        statements: 80,
-        lines: 80,
-        functions: 80,
-        branches: 75,
-        'src/application/**/*.ts': {
-          statements: 90,
-          lines: 90,
-          branches: 85,
-        },
-        'src/domain/**/*.ts': {
-          statements: 90,
-          lines: 90,
-          branches: 85,
-        },
-      },
+      ...(isCoverageShard ? {} : { thresholds: coverageThresholds }),
     },
   },
 });

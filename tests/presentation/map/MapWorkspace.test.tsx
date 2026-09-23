@@ -1560,9 +1560,9 @@ describe('MapWorkspace', () => {
 
     await screen.findByText('Hidden Sentinel map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2' }));
 
-    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
+    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2');
   });
 
   it('recognizes a hidden Mosaic and reapplies the Sentinel preset', async () => {
@@ -1605,9 +1605,9 @@ describe('MapWorkspace', () => {
       'aria-checked',
       'true',
     );
-    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2' }));
 
-    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2-hybrid');
+    expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2');
   });
 
   it('applies NAPR quick presets without opening the Satellite workspace', async () => {
@@ -1644,20 +1644,63 @@ describe('MapWorkspace', () => {
     await screen.findByText('NAPR map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
     expect(
-      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
+      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }),
     ).toHaveAttribute('aria-checked', 'true');
-    await user.click(
-      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
-    );
+    await user.click(screen.getByRole('menuitemradio', { name: 'Bing Aerial' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }));
 
-    expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'napr-orthophoto-hybrid');
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'bing-satellite');
     expect(setMapLayerPreset).toHaveBeenNthCalledWith(2, 'napr-orthophoto');
     expect(useUiStore.getState()).toMatchObject({
       activeTab: 'layers',
       mobileWorkspaceOpen: false,
       navigationCollapsed: true,
     });
+  });
+
+  it('toggles the OSM overlay independently and opens the full Layers tab', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setOpenStreetMapOpacity = vi
+      .spyOn(mapLayers, 'setOpenStreetMapOpacity')
+      .mockReturnValue({ status: 'success' });
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({
+      activeTab: 'satellite',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+    act(() => {
+      mapLayerStore.setState({
+        visibility: {
+          ...mapLayerStore.getState().visibility,
+          'google-satellite': true,
+          'satellite-imagery': false,
+        },
+        openStreetMapOpacity: 1,
+      });
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Hybrid map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Hybrid map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'OSM overlay' }));
+    expect(setOpenStreetMapOpacity).toHaveBeenCalledWith(0);
+    await user.click(screen.getByRole('menuitem', { name: 'Layers tab' }));
+
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'layers',
+      mobileWorkspaceOpen: true,
+      navigationCollapsed: false,
+    });
+    expect(window.location.hash).toBe('#layers');
   });
 
   it('opens Satellite instead of applying the Sentinel preset without an applied scene', async () => {
@@ -1682,7 +1725,7 @@ describe('MapWorkspace', () => {
 
     await screen.findByText('Empty Sentinel map');
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2 Hybrid' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2' }));
 
     expect(setMapLayerPreset).not.toHaveBeenCalled();
     expect(useUiStore.getState()).toMatchObject({

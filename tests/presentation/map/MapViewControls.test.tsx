@@ -42,6 +42,10 @@ describe('MapViewControls', () => {
         activeLayerPreset={null}
         terrainDisabled={false}
         layerPresetDisabled={false}
+        hybridOverlayDisabled
+        hybridOverlayEnabled
+        onHybridOverlayChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={onTerrainModeChange}
         terrainState="flat"
@@ -64,6 +68,10 @@ describe('MapViewControls', () => {
         activeLayerPreset={null}
         terrainDisabled={false}
         layerPresetDisabled={false}
+        hybridOverlayDisabled
+        hybridOverlayEnabled
+        onHybridOverlayChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
         terrainState="enabling"
@@ -74,14 +82,20 @@ describe('MapViewControls', () => {
     expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toBeDisabled();
   });
 
-  it('opens the ordered preset menu with decorative previews and its active choice', async () => {
+  it('opens the compact source menu with a separate hybrid toggle and Layers link', async () => {
     const user = userEvent.setup();
+    const onHybridOverlayChange = vi.fn();
+    const onOpenLayersTab = vi.fn();
     render(
       <MapViewControls
-        activeLayerPreset="google-satellite-hybrid"
+        activeLayerPreset="google-satellite"
+        hybridOverlayDisabled={false}
+        hybridOverlayEnabled
         terrainDisabled={false}
         layerPresetDisabled={false}
+        onHybridOverlayChange={onHybridOverlayChange}
         onLayerPresetChange={() => true}
+        onOpenLayersTab={onOpenLayersTab}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
       />,
@@ -94,17 +108,28 @@ describe('MapViewControls', () => {
     const choices = screen.getAllByRole('menuitemradio');
     expect(choices.map((choice) => choice.textContent)).toEqual([
       'Vector OSM',
-      'Google Satellite Hybrid',
       'Google Satellite',
-      'NAPR Orthophoto Hybrid',
+      'Bing Aerial',
+      'Esri World Imagery',
       'NAPR Orthophoto',
-      'Sentinel-2 Hybrid',
+      'Sentinel-2',
     ]);
-    expect(menu.querySelectorAll('img')).toHaveLength(6);
+    expect(menu.querySelectorAll('img')).toHaveLength(0);
     expect(
-      screen.getByRole('menuitemradio', { name: 'Google Satellite Hybrid' }),
+      screen.getByRole('menuitemradio', { name: 'Google Satellite' }),
     ).toHaveAttribute('aria-checked', 'true');
-    expect(button).toHaveAttribute('aria-expanded', 'true');
+    const hybridToggle = screen.getByRole('menuitemcheckbox', { name: 'OSM overlay' });
+    await user.click(hybridToggle);
+    expect(onHybridOverlayChange).toHaveBeenCalledWith(false);
+    hybridToggle.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitemradio', { name: 'Sentinel-2' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    const layersAction = screen.getByRole('menuitem', { name: 'Layers tab' });
+    expect(layersAction).toHaveFocus();
+    await user.click(layersAction);
+    expect(onOpenLayersTab).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   it('keeps the chooser open after applying a preset', async () => {
@@ -115,6 +140,10 @@ describe('MapViewControls', () => {
         activeLayerPreset={null}
         terrainDisabled={false}
         layerPresetDisabled={false}
+        hybridOverlayDisabled={false}
+        hybridOverlayEnabled={false}
+        onHybridOverlayChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
         onLayerPresetChange={onLayerPresetChange}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -122,12 +151,10 @@ describe('MapViewControls', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
-    await user.click(
-      screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto Hybrid' }),
-    );
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }));
 
-    expect(onLayerPresetChange).toHaveBeenNthCalledWith(1, 'napr-orthophoto-hybrid');
+    expect(onLayerPresetChange).toHaveBeenNthCalledWith(1, 'sentinel-2');
     expect(onLayerPresetChange).toHaveBeenNthCalledWith(2, 'napr-orthophoto');
     expect(screen.getByRole('menu')).toBeVisible();
   });
@@ -139,6 +166,10 @@ describe('MapViewControls', () => {
         activeLayerPreset={null}
         terrainDisabled={false}
         layerPresetDisabled={false}
+        hybridOverlayDisabled
+        hybridOverlayEnabled
+        onHybridOverlayChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -160,6 +191,10 @@ describe('MapViewControls', () => {
         activeLayerPreset={null}
         terrainDisabled
         layerPresetDisabled={false}
+        hybridOverlayDisabled
+        hybridOverlayEnabled
+        onHybridOverlayChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -188,6 +223,10 @@ describe('MapViewControls', () => {
         activeLayerPreset={null}
         terrainDisabled={false}
         layerPresetDisabled={false}
+        hybridOverlayDisabled
+        hybridOverlayEnabled
+        onHybridOverlayChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={() => undefined}
         terrainState="flat"

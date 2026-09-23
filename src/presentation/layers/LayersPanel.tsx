@@ -34,6 +34,20 @@ const googleSatelliteControl = {
   requiresScene: false,
 } as const satisfies LayerControl;
 
+const bingSatelliteControl = {
+  id: 'bing-satellite',
+  label: 'Bing aerial imagery',
+  description: 'Bing aerial tiles for the current map view.',
+  requiresScene: false,
+} as const satisfies LayerControl;
+
+const esriSatelliteControl = {
+  id: 'esri-satellite',
+  label: 'Esri World Imagery',
+  description: 'Esri global satellite and aerial imagery.',
+  requiresScene: false,
+} as const satisfies LayerControl;
+
 const naprOrthophotoControl = {
   id: 'napr-orthophoto',
   label: 'NAPR Orthophoto',
@@ -152,7 +166,13 @@ export function LayersPanel() {
       id: 'satellites',
       title: 'Satellites',
       description: 'Satellite basemaps and applied observation scenes.',
-      controls: [googleSatelliteControl, naprOrthophotoControl, ...sentinelControls],
+      controls: [
+        googleSatelliteControl,
+        bingSatelliteControl,
+        esriSatelliteControl,
+        naprOrthophotoControl,
+        ...sentinelControls,
+      ],
     },
     {
       id: 'terrain',
@@ -265,6 +285,8 @@ export function LayersPanel() {
                     disabled={
                       mapLayers === null ||
                       (!state.visibility['google-satellite'] &&
+                        !state.visibility['bing-satellite'] &&
+                        !state.visibility['esri-satellite'] &&
                         !state.visibility['napr-orthophoto'] &&
                         !satelliteImageryVisible)
                     }

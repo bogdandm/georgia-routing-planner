@@ -1,12 +1,14 @@
+/* eslint-disable react-refresh/only-export-components -- Test support deliberately re-exports shared fixture dependencies. */
+
 import { I18nProvider } from '@lingui/react';
 import { ThemeProvider } from '@mui/material';
 import { render, screen, type RenderResult, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 import { type ReactNode } from 'react';
-import {
+import type {
   SatelliteCatalogError,
-  type SatelliteCatalogGateway,
-  type SatelliteCatalogResult,
+  SatelliteCatalogGateway,
+  SatelliteCatalogResult,
 } from '@/application/ports/SatelliteCatalogGateway';
 import {
   type UserDataService,

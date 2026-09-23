@@ -560,9 +560,13 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Mosaic' }));
     await user.click(screen.getByRole('gridcell', { name: selectedDate }));
     await user.click(screen.getByRole('button', { name: 'Show mosaic' }));
-    await waitFor(() => expect(setup.search).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(setup.search).toHaveBeenCalledTimes(1);
+    });
     setup.firstSearch.resolve(setup.result);
-    await waitFor(() => expect(setup.applyMosaic).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(setup.applyMosaic).toHaveBeenCalledTimes(1);
+    });
     return { ...setup, user };
   }
 
@@ -573,7 +577,9 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Mosaic' }));
     await user.click(screen.getByRole('gridcell', { name: '17 Jul 2026' }));
     await user.click(screen.getByRole('button', { name: 'Show mosaic' }));
-    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(search).toHaveBeenCalledTimes(1);
+    });
     const firstSignal = search.mock.calls[0]?.[1];
     expect(screen.getByText('Searching Sentinel archive…')).toBeVisible();
     await user.click(screen.getByRole('gridcell', { name: '18 Jul 2026' }));
@@ -587,13 +593,13 @@ describe('WorkspaceShell', () => {
         expect.any(AbortSignal),
       );
     });
-    await waitFor(() =>
+    await waitFor(() => {
       expect(mapLayerStore.getState().appliedMosaic).toMatchObject({
         status: 'ready',
         selectedDate: '2026-07-18',
         sceneKeys: ['sentinel-2-l2a:' + scene.id],
-      }),
-    );
+      });
+    });
   });
 
   it('refreshes a ready Mosaic after an off-pane viewport change', async () => {
@@ -603,8 +609,12 @@ describe('WorkspaceShell', () => {
       center: { longitude: 44.5, latitude: 42.4 },
     } as const;
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
-    act(() => services.mapViewport.markMoving());
-    act(() => services.mapViewport.settle(refreshedViewport));
+    act(() => {
+      services.mapViewport.markMoving();
+    });
+    act(() => {
+      services.mapViewport.settle(refreshedViewport);
+    });
     await waitFor(() => {
       expect(search).toHaveBeenCalledTimes(2);
       expect(applyMosaic).toHaveBeenLastCalledWith(

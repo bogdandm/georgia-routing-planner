@@ -115,6 +115,7 @@ interface MarkerHourlyForecastRequest {
 const markerWeatherRequestConcurrency = 4;
 const markerWeatherCellWidth = 80;
 const markerWeatherCellHeight = 92;
+const markerWeatherPhoneCellWidth = 78;
 
 interface MarkersWorkspaceValue {
   readonly markers: readonly SavedMarker[];
@@ -1102,11 +1103,11 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                 listStyle: 'none',
                 mb: -1.25,
                 '@media (width < 900px)': {
-                  gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `minmax(0, 1fr) repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherPhoneCellWidth)}px)`,
                 },
               }}
             >
-              <Box aria-hidden sx={{ '@media (width < 900px)': { display: 'none' } }} />
+              <Box aria-hidden />
               {weatherColumnPeriods === null
                 ? weatherPreferences.weekdays.map((weekday) => (
                     <Typography
@@ -1250,7 +1251,6 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         pointerEvents: 'auto',
                       },
                     '@media (width < 900px)': {
-                      gridTemplateRows: 'auto auto',
                       '& .marker-row-action': {
                         opacity: 1,
                         pointerEvents: 'auto',
@@ -1266,12 +1266,21 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       });
                       onMarkerSelected?.();
                     }}
-                    sx={{ minWidth: 0, px: 1.5, py: 1.25 }}
+                    sx={{
+                      minWidth: 0,
+                      px: 1.5,
+                      py: 1.25,
+                      '@media (width < 900px)': { px: 1, py: 0.75 },
+                    }}
                   >
                     <Stack
                       direction="row"
                       spacing={1.25}
-                      sx={{ alignItems: 'center', minWidth: 0 }}
+                      sx={{
+                        alignItems: 'center',
+                        minWidth: 0,
+                        '@media (width < 900px)': { gap: 0.75 },
+                      }}
                     >
                       <Box
                         aria-hidden
@@ -1316,14 +1325,9 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         borderColor: 'divider',
                         '& > button:first-of-type': { borderLeft: 0 },
                         '@media (width < 900px)': {
-                          gridColumn: '1 / -1',
-                          gridRow: 2,
                           minWidth: 0,
-                          width: '100%',
-                          gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, minmax(0, 1fr))`,
-                          borderTop: 1,
-                          borderLeft: 0,
-                          '& > button': { minWidth: 0, width: '100%' },
+                          gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherPhoneCellWidth)}px)`,
+                          '& > button': { minWidth: 0, width: '100%', px: 0.25 },
                         },
                       }}
                     >
@@ -1396,12 +1400,14 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       px: 0.5,
                       transform: 'translateY(-50%)',
                       '@media (width < 900px)': {
-                        position: 'static',
-                        top: 'auto',
-                        right: 'auto',
-                        transform: 'none',
-                        gridColumn: 2,
-                        gridRow: 1,
+                        right:
+                          weatherPreferences.weekdays.length *
+                            markerWeatherPhoneCellWidth +
+                          4,
+                        flexDirection:
+                          weatherPreferences.weekdays.length === 0 ? 'row' : 'column',
+                        gap: weatherPreferences.weekdays.length === 0 ? 0.5 : 0,
+                        px: 0.25,
                       },
                     }}
                   >

@@ -353,6 +353,7 @@ export function WorkspaceSidebar({
               minWidth: 0,
               gridColumn: compactMarkersHeader ? '1 / -1' : undefined,
               gridRow: compactMarkersHeader ? 2 : undefined,
+              ml: compactMarkersHeader ? '0 !important' : undefined,
             }}
           >
             <Tooltip
@@ -382,8 +383,11 @@ export function WorkspaceSidebar({
                 startIcon={<WbCloudyOutlinedIcon fontSize="small" />}
                 sx={{
                   minWidth: 0,
-                  px: compactMarkersHeader ? 0.5 : 1,
+                  px: compactMarkersHeader ? 0 : 1,
                   whiteSpace: 'nowrap',
+                  '& .MuiButton-startIcon': compactMarkersHeader
+                    ? { ml: 0, mr: 0.75 }
+                    : undefined,
                 }}
                 onClick={openWeatherSettings}
               >
@@ -392,6 +396,7 @@ export function WorkspaceSidebar({
                   : ''}
               </Button>
             </Tooltip>
+            {compactMarkersHeader ? <Box aria-hidden sx={{ flex: 1 }} /> : null}
             <Tooltip
               title={
                 canCreateMarkers ? 'Place a marker on the map' : markerCreationMessage

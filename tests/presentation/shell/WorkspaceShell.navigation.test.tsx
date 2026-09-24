@@ -475,6 +475,46 @@ describe('WorkspaceShell', () => {
     expect(within(retainedLocation).getByText('1,234 m')).toBeVisible();
     expect(execute).toHaveBeenCalledOnce();
   });
+  it('links the selected Weather point to Meteoblue and Windy forecasts', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+    const selectPointButton = screen.getByRole('button', {
+      name: 'Select forecast point',
+    });
+    const forecastLinksButton = screen.getByRole('button', {
+      name: 'More forecast links',
+    });
+    expect(forecastLinksButton).toBeDisabled();
+    expect(
+      selectPointButton.compareDocumentPosition(forecastLinksButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    act(() => {
+      requestWeatherForecast({ longitude: 44.8271, latitude: 41.7151 });
+    });
+    await screen.findByRole('button', {
+      name: 'Center map on forecast location',
+    });
+
+    expect(forecastLinksButton).toBeEnabled();
+    await user.click(forecastLinksButton);
+
+    expect(screen.getByRole('menuitem', { name: 'Meteoblue' })).toHaveAttribute(
+      'href',
+      'https://www.meteoblue.com/en/weather/week/41.7151N44.8271E',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Windy' })).toHaveAttribute(
+      'href',
+      'https://www.windy.com/41.7151/44.8271',
+    );
+    for (const link of screen.getAllByRole('menuitem')) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+  });
   it('shows a nearby POI in the Weather header and centers the map from it', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();

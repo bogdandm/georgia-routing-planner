@@ -20,6 +20,20 @@ describe('saved markers', () => {
         'parking',
         'forest',
         'water',
+        'telescope',
+        'moon',
+        'lake',
+        'viewpoint',
+        'waterfall',
+        'cave',
+        'cliff',
+        'valley',
+        'rock',
+        'bear',
+        'deer',
+        'bird',
+        'wildflowers',
+        'wetland',
         'hiking',
         'camping',
         'restaurant',
@@ -41,7 +55,7 @@ describe('saved markers', () => {
       'green',
       'red',
     ]);
-    expect(markerSorts).toEqual(['created', 'name', 'color', 'distance']);
+    expect(markerSorts).toEqual(['created', 'name', 'color', 'icon', 'distance']);
   });
 
   it('trims a name and derives an English-locale comparison key', () => {

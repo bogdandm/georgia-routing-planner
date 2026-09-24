@@ -51,6 +51,7 @@ import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
   normalizeMarkerName,
+  type MarkerIconKey,
   type MarkerSort,
   type NormalizedMarkerName,
   type SavedMarker,
@@ -66,6 +67,7 @@ import {
   markerColorFor,
   markerColorOrder,
   markerIconFor,
+  markerIconOrder,
 } from '@/presentation/markers/markerCatalog';
 import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
 import { MarkerWeatherSettingsDialog } from '@/presentation/markers/MarkerWeatherSettingsDialog';
@@ -141,6 +143,11 @@ interface MarkersWorkspaceValue {
 
 const MarkersWorkspaceContext = createContext<MarkersWorkspaceValue | null>(null);
 
+function compareMarkerNames(left: SavedMarker, right: SavedMarker): number {
+  const byName = left.normalizedName.localeCompare(right.normalizedName, 'en');
+  return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+}
+
 function sortMarkers(
   markers: readonly SavedMarker[],
   sort: MarkerSort,
@@ -164,29 +171,38 @@ function sortMarkers(
     return [...markers].sort((left, right) => {
       const byColor =
         markerColorOrder[left.colorKey] - markerColorOrder[right.colorKey];
-      if (byColor !== 0) return byColor;
-      const byName = left.normalizedName.localeCompare(right.normalizedName, 'en');
-      return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+      return byColor === 0 ? compareMarkerNames(left, right) : byColor;
+    });
+  }
+
+  const distanceByMarker = new Map<SavedMarker, number>();
+  if (mapCenter !== null) {
+    for (const marker of markers) {
+      distanceByMarker.set(
+        marker,
+        geodesicDistanceKm(
+          mapCenter.latitude,
+          mapCenter.longitude,
+          marker.coordinate[1],
+          marker.coordinate[0],
+        ),
+      );
+    }
+  }
+  if (sort === 'icon') {
+    return [...markers].sort((left, right) => {
+      const byIcon = markerIconOrder[left.iconKey] - markerIconOrder[right.iconKey];
+      if (byIcon !== 0) return byIcon;
+      const byDistance =
+        (distanceByMarker.get(left) ?? 0) - (distanceByMarker.get(right) ?? 0);
+      return byDistance === 0 ? compareMarkerNames(left, right) : byDistance;
     });
   }
   if (mapCenter === null) return [...markers];
   return [...markers].sort((left, right) => {
-    const leftDistance = geodesicDistanceKm(
-      mapCenter.latitude,
-      mapCenter.longitude,
-      left.coordinate[1],
-      left.coordinate[0],
-    );
-    const rightDistance = geodesicDistanceKm(
-      mapCenter.latitude,
-      mapCenter.longitude,
-      right.coordinate[1],
-      right.coordinate[0],
-    );
-    const byDistance = leftDistance - rightDistance;
-    if (byDistance !== 0) return byDistance;
-    const byName = left.normalizedName.localeCompare(right.normalizedName, 'en');
-    return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+    const byDistance =
+      (distanceByMarker.get(left) ?? 0) - (distanceByMarker.get(right) ?? 0);
+    return byDistance === 0 ? compareMarkerNames(left, right) : byDistance;
   });
 }
 
@@ -296,6 +312,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     getViewportSnapshot,
   );
   const [markers, setMarkers] = useState<readonly SavedMarker[]>([]);
+  const [recentIconKeys, setRecentIconKeys] = useState<readonly MarkerIconKey[]>([]);
   const [loadState, setLoadState] = useState<MarkerLoadState>('loading');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -318,14 +335,24 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     setLoadState('loading');
     setLoadError(null);
     try {
-      const loaded = await savedMarkers.listSavedMarkers();
+      const [loaded, loadedRecentIconKeys] = await Promise.all([
+        savedMarkers.listSavedMarkers(),
+        database.loadRecentMarkerIconKeys().catch(() => {
+          logger.log({
+            level: 'warn',
+            name: 'storage.marker-recent-icons.load-failed',
+          });
+          return [] as readonly MarkerIconKey[];
+        }),
+      ]);
       setMarkers(loaded);
+      setRecentIconKeys(loadedRecentIconKeys);
       setLoadState('ready');
     } catch {
       setLoadState('failed');
       setLoadError('Saved markers could not be loaded.');
     }
-  }, [savedMarkers]);
+  }, [database, logger, savedMarkers]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -554,6 +581,25 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     };
   }, [mapLayers]);
 
+  const rememberMarkerIcon = useCallback(
+    async (iconKey: MarkerIconKey) => {
+      const nextIconKeys = [
+        iconKey,
+        ...recentIconKeys.filter((candidate) => candidate !== iconKey),
+      ].slice(0, 21);
+      setRecentIconKeys(nextIconKeys);
+      try {
+        await database.saveRecentMarkerIconKeys(nextIconKeys);
+      } catch {
+        logger.log({
+          level: 'warn',
+          name: 'storage.marker-recent-icons.save-failed',
+        });
+      }
+    },
+    [database, logger, recentIconKeys],
+  );
+
   const createMarker = useCallback(
     async (name: NormalizedMarkerName, appearance: MarkerAppearance) => {
       const draft = editorDraft;
@@ -574,10 +620,11 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       };
       await savedMarkers.saveSavedMarker(marker);
       setMarkers((current) => [...current, marker]);
+      await rememberMarkerIcon(marker.iconKey);
       setEditorDraft(null);
       void userData.markerChanged(marker.id);
     },
-    [clock, editorDraft, idGenerator, savedMarkers, userData],
+    [clock, editorDraft, idGenerator, rememberMarkerIcon, savedMarkers, userData],
   );
 
   const saveAppearance = useCallback(
@@ -596,10 +643,11 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       setMarkers((current) =>
         current.map((marker) => (marker.id === updated.id ? updated : marker)),
       );
+      await rememberMarkerIcon(updated.iconKey);
       setEditorDraft(null);
       void userData.markerChanged(updated.id);
     },
-    [clock, editorDraft, savedMarkers, userData],
+    [clock, editorDraft, rememberMarkerIcon, savedMarkers, userData],
   );
 
   const renameMarker = useCallback(
@@ -767,6 +815,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
         <MarkerEditorDialog
           mode="create"
           initialName={editorDraft.initialName}
+          recentIconKeys={recentIconKeys}
           open
           onCancel={() => {
             setEditorDraft(null);
@@ -778,6 +827,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
         <MarkerEditorDialog
           mode="appearance"
           marker={editorDraft.marker}
+          recentIconKeys={recentIconKeys}
           open
           onCancel={() => {
             setEditorDraft(null);
@@ -825,6 +875,7 @@ const markerSortLabels: Readonly<Record<MarkerSort, string>> = {
   created: 'Newest',
   name: 'Name',
   color: 'Icon color',
+  icon: 'Icon and distance',
   distance: 'Distance from map center',
 };
 

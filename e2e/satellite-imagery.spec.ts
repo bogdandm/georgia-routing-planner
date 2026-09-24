@@ -186,7 +186,6 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
     .getByRole('button', { name: 'Close developer diagnostics', exact: true })
     .click();
 
-  await page.getByRole('tab', { name: 'Layers' }).click();
   const imagery = page.getByRole('checkbox', {
     name: 'Satellite imagery',
     exact: true,

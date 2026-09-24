@@ -5,6 +5,9 @@ export const mapSourceIds = {
   basemapDetailVector: 'basemap-detail-vector',
   terrainDem: 'terrain-dem',
   terrainContours: 'terrain-contours',
+  weatherClouds: 'weather-clouds',
+  weatherPrecipitation: 'weather-precipitation',
+  weatherWind: 'weather-wind',
   satelliteBasemap: 'satellite-basemap',
   bingSatelliteBasemap: 'bing-satellite-basemap',
   esriSatelliteBasemap: 'esri-satellite-basemap',
@@ -35,6 +38,11 @@ export const terrainOverlayLayerIds = {
   contourMinor: 'terrain-contour-minor',
   contourIndex: 'terrain-contour-index',
   contourLabels: 'terrain-contour-labels',
+} as const;
+export const weatherMapLayerIds = {
+  clouds: 'weather-clouds',
+  precipitation: 'weather-precipitation',
+  wind: 'weather-wind-arrows',
 } as const;
 
 export const sentinelMapLayerIds = {
@@ -118,6 +126,8 @@ export const mapInsertionPoints = {
   terrainOverlaysBeforeLayerId: mapLayerIds.boundaries,
   // Water polygons mask generated terrain contours while waterways remain visible.
   contoursBeforeLayerId: mapLayerIds.water,
+  // Weather stays below roads, hiking paths, labels, user routes, and markers.
+  weatherBeforeLayerId: mapLayerIds.roadCasings,
   satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
   importedTracksBeforeLayerId: mapLayerIds.hikingPoiLabels,
 } as const;

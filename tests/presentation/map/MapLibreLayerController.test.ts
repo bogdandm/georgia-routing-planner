@@ -22,6 +22,7 @@ import {
   sentinelMapLayerIds,
   sentinelMosaicIdPrefixes,
   terrainOverlayLayerIds,
+  weatherMapLayerIds,
 } from '@/presentation/map/mapIds';
 import * as markerCatalog from '@/presentation/markers/markerCatalog';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
@@ -312,6 +313,115 @@ afterEach(() => {
 });
 
 describe('MapLibreLayerController', () => {
+  it('keeps clouds, precipitation, and wind on one metadata-selected frame', async () => {
+    const metadataUrl =
+      'https://openmeteo.s3.amazonaws.com/data_spatial/ecmwf_ifs025/latest.json';
+    const validTimes = [
+      '2026-09-24T00:00Z',
+      '2026-09-24T06:00Z',
+      '2026-09-24T12:00Z',
+      '2026-09-24T18:00Z',
+      '2026-09-25T00:00Z',
+      '2026-09-25T06:00Z',
+      '2026-09-25T12:00Z',
+    ];
+    const loadMetadata = vi.fn().mockResolvedValue({
+      referenceTime: '2026-09-24T00:00Z',
+      validTimes,
+    });
+    const services = createTestServices({
+      weatherMap: { model: 'ecmwf_ifs025', metadataUrl, loadMetadata },
+    });
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    await expect(
+      controller.setWeatherEnabled(true, new Date('2026-09-24T10:30:00Z')),
+    ).resolves.toEqual({ status: 'success' });
+
+    expect(loadMetadata).toHaveBeenCalledOnce();
+    expect(mapLayerStore.getState().weatherMap).toMatchObject({
+      enabled: true,
+      status: 'ready',
+      selectedTimeIndex: 2,
+      validTimes,
+    });
+    const sourceUrls = [
+      map.sources.get(mapSourceIds.weatherClouds),
+      map.sources.get(mapSourceIds.weatherPrecipitation),
+      map.sources.get(mapSourceIds.weatherWind),
+    ].map((source) =>
+      typeof source === 'object' && source !== null && 'url' in source
+        ? String(source.url)
+        : '',
+    );
+    expect(sourceUrls).toEqual([
+      `om://${metadataUrl}?time_step=valid_times_2&variable=cloud_cover&color_blend=true`,
+      `om://${metadataUrl}?time_step=valid_times_2&variable=precipitation&color_blend=true`,
+      `om://${metadataUrl}?time_step=valid_times_2&variable=wind_u_component_10m&arrows=true`,
+    ]);
+    expect(map.layers.get(weatherMapLayerIds.wind)).toMatchObject({
+      source: mapSourceIds.weatherWind,
+      'source-layer': 'wind-arrows',
+      type: 'line',
+    });
+    const layerOrder = [...map.layers.keys()];
+    expect(layerOrder.indexOf(weatherMapLayerIds.clouds)).toBeLessThan(
+      layerOrder.indexOf(weatherMapLayerIds.precipitation),
+    );
+    expect(layerOrder.indexOf(weatherMapLayerIds.precipitation)).toBeLessThan(
+      layerOrder.indexOf(weatherMapLayerIds.wind),
+    );
+    expect(layerOrder.indexOf(weatherMapLayerIds.wind)).toBeLessThan(
+      layerOrder.indexOf(mapLayerIds.roadCasings),
+    );
+
+    expect(
+      controller.selectWeatherForecastTime(new Date('2026-09-24T18:00:00Z')),
+    ).toEqual({ status: 'success' });
+    for (const sourceId of [
+      mapSourceIds.weatherClouds,
+      mapSourceIds.weatherPrecipitation,
+      mapSourceIds.weatherWind,
+    ]) {
+      const source = map.sources.get(sourceId);
+      expect(
+        typeof source === 'object' && source !== null && 'url' in source
+          ? String(source.url)
+          : '',
+      ).toContain('time_step=valid_times_3');
+    }
+    expect(controller.setWeatherOpacity(0.5)).toEqual({ status: 'success' });
+    expect(map.paintProperties.get(`${weatherMapLayerIds.clouds}.raster-opacity`)).toBe(
+      0.18,
+    );
+    expect(
+      map.paintProperties.get(`${weatherMapLayerIds.precipitation}.raster-opacity`),
+    ).toBe(0.38);
+    expect(map.paintProperties.get(`${weatherMapLayerIds.wind}.line-opacity`)).toBe(
+      0.31,
+    );
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        weatherMapOpacity: 0.5,
+      });
+    });
+    expect(controller.setWeatherOpacity(1.5)).toEqual({
+      status: 'failed',
+      message: 'Choose an opacity between 0 and 100 percent.',
+    });
+    expect(mapLayerStore.getState().weatherMap.enabled).toBe(true);
+    expect(map.sources.has(mapSourceIds.weatherClouds)).toBe(true);
+
+    await controller.setWeatherEnabled(false);
+    expect(map.sources.has(mapSourceIds.weatherClouds)).toBe(false);
+    expect(map.sources.has(mapSourceIds.weatherPrecipitation)).toBe(false);
+    expect(map.sources.has(mapSourceIds.weatherWind)).toBe(false);
+    services.dispose();
+  });
+
   it('retries an active satellite raster with bounded exponential recovery', async () => {
     vi.useFakeTimers();
     const services = createTestServices();
@@ -2062,6 +2172,7 @@ describe('MapLibreLayerController', () => {
       },
       openStreetMapOpacity: 0.55,
       importedTrackOpacity: 0.6,
+      weatherMapOpacity: 0.7,
       satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
@@ -2088,6 +2199,7 @@ describe('MapLibreLayerController', () => {
         'track-elevation-gradient': false,
       },
       importedTrackOpacity: 0.6,
+      weatherMap: { opacity: 0.7 },
       appliedImagery: { status: 'empty' },
     });
     expect(controller.getRenderingTuning()).toEqual({
@@ -2115,6 +2227,7 @@ describe('MapLibreLayerController', () => {
       },
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
+      weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
       satelliteRenderingMode: controller.getRenderingMode(),
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
@@ -2147,6 +2260,7 @@ describe('MapLibreLayerController', () => {
       visibility: mapLayerStore.getState().visibility,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
+      weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
       satelliteRenderingMode: 'auto',
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),

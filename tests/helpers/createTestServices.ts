@@ -30,7 +30,10 @@ import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthS
 import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStorageUsageReader';
 import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
-import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import {
+  MapLibreLayerController,
+  type WeatherMapControllerConfiguration,
+} from '@/presentation/map/MapLibreLayerController';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 
@@ -124,6 +127,7 @@ interface CreateTestServicesOptions {
   readonly userData?: UserDataService;
   readonly trailRouter?: TrailRouter | null;
   readonly pointWeatherForecast?: GetPointWeatherForecast;
+  readonly weatherMap?: WeatherMapControllerConfiguration;
 }
 
 export function createTestServices(
@@ -220,6 +224,7 @@ export function createTestServices(
     idGenerator,
     sentinelQueryDiagnostics,
     database,
+    options.weatherMap,
   );
   const searchSatelliteScenes = new SearchSatelliteScenes(
     satelliteCatalogGateway,

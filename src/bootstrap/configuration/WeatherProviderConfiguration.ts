@@ -6,6 +6,10 @@ export interface WeatherModelConfiguration {
   readonly resolutionLabel: string;
   readonly metadataUrl: string;
 }
+export interface WeatherMapConfiguration {
+  readonly model: 'ecmwf_ifs025';
+  readonly metadataUrl: string;
+}
 
 export interface WeatherProviderConfiguration {
   readonly forecastUrl: string;
@@ -13,6 +17,7 @@ export interface WeatherProviderConfiguration {
   readonly licenseUrl: string;
   readonly requestTimeoutMs: number;
   readonly metadataTtlMs: number;
+  readonly map: WeatherMapConfiguration;
   readonly models: Readonly<Record<WeatherModel, WeatherModelConfiguration>>;
 }
 
@@ -22,6 +27,11 @@ export const weatherProviderConfiguration = {
   licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
   requestTimeoutMs: 15_000,
   metadataTtlMs: 600_000,
+  map: {
+    model: 'ecmwf_ifs025',
+    metadataUrl:
+      'https://openmeteo.s3.amazonaws.com/data_spatial/ecmwf_ifs025/latest.json',
+  },
   models: {
     ecmwf_ifs: {
       requestIdentifier: 'ecmwf_ifs',

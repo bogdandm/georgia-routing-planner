@@ -49,6 +49,7 @@ import { BrowserStorageUsageReader } from '@/infrastructure/runtime/BrowserStora
 import { WebCryptoTrackContentHasher } from '@/infrastructure/runtime/WebCryptoTrackContentHasher';
 import { EarthSearchSatelliteCatalogGateway } from '@/infrastructure/stac/EarthSearchSatelliteCatalogGateway';
 import { OpenMeteoWeatherForecastGateway } from '@/infrastructure/weather/OpenMeteoWeatherForecastGateway';
+import { loadOpenMeteoSpatialMetadata } from '@/infrastructure/weather/loadOpenMeteoSpatialMetadata';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
@@ -172,6 +173,7 @@ export function createRuntimeServices(): RuntimeServices {
   const mapDiagnostics = new MapDiagnosticsSnapshotStore();
   const mapViewport = new MapViewportSnapshotStore();
   const sentinelQueryDiagnostics = new SentinelQueryDiagnosticsStore(clock);
+  const httpClient = createHttpClient(logger, clock, idGenerator);
   const contourTiles =
     mapProviderConfiguration.status === 'valid'
       ? new MapLibreContourTileGenerator(
@@ -197,6 +199,17 @@ export function createRuntimeServices(): RuntimeServices {
           idGenerator,
           sentinelQueryDiagnostics,
           database,
+          {
+            model: weatherProviderConfiguration.map.model,
+            metadataUrl: weatherProviderConfiguration.map.metadataUrl,
+            loadMetadata: (signal) =>
+              loadOpenMeteoSpatialMetadata(
+                httpClient,
+                weatherProviderConfiguration.map.metadataUrl,
+                weatherProviderConfiguration.requestTimeoutMs,
+                signal,
+              ),
+          },
         )
       : null;
   const trailRouter =
@@ -208,7 +221,6 @@ export function createRuntimeServices(): RuntimeServices {
           requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
         })
       : null;
-  const httpClient = createHttpClient(logger, clock, idGenerator);
   const filteredTerrariumTiles =
     mapProviderConfiguration.status === 'valid' &&
     mapProviderConfiguration.value.terrain.encoding === 'terrarium'

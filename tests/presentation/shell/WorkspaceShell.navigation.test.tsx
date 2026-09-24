@@ -20,6 +20,7 @@ import {
   testViewport,
   syntheticSatelliteScene,
   deferred,
+  mockViewportWidth,
   type SatelliteMosaicResult,
 } from '@test/helpers/workspaceShellTestSupport';
 
@@ -50,6 +51,39 @@ describe('WorkspaceShell', () => {
     expect(
       satellite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('switches tabs before collapsing navigation on a repeated active-tab click', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'tracks',
+      navigationCollapsed: false,
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    expect(useUiStore.getState().navigationCollapsed).toBe(true);
+    expect(screen.getByRole('button', { name: 'Show navigation' })).toBeVisible();
+    expect(screen.getByRole('complementary', { hidden: true })).not.toBeVisible();
+  });
+
+  it('returns to the map when its active mobile tab is clicked', async () => {
+    mockViewportWidth(899);
+    useUiStore.setState({ mobileWorkspaceOpen: true });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
+
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
+    expect(screen.getByRole('button', { name: 'Open workspace' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 
   it('creates a share link only after the explicit rail action', async () => {

@@ -731,6 +731,8 @@ describe('WorkspaceShell', () => {
 
     for (const width of [1900, 1920]) {
       mockViewportWidth(width);
+      window.history.replaceState(null, '', '/#satellite');
+      useUiStore.setState({ activeTab: 'satellite' });
       user = userEvent.setup();
       rendered = renderWorkspaceShell();
       await user.click(screen.getByRole('tab', { name: 'Tracks' }));

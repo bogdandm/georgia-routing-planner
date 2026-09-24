@@ -5,6 +5,7 @@ const requiredWeatherMapVariables = [
   'cloud_cover',
   'precipitation',
   'wind_u_component_10m',
+  'wind_v_component_10m',
 ] as const;
 
 const spatialMetadataSchema = z

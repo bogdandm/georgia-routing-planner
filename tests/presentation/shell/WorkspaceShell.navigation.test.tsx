@@ -356,14 +356,16 @@ describe('WorkspaceShell', () => {
       expect(screen.queryByRole('heading', { name: 'Marker weather' })).toBeNull();
     });
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    const layersTools = screen.getByRole('complementary', { name: 'Layers tools' });
+    expect(
+      within(layersTools).getByRole('heading', { name: 'Weather', level: 3 }),
+    ).toBeVisible();
+    expect(
+      within(layersTools).getByRole('checkbox', { name: 'Open Weather tab' }),
+    ).toBeEnabled();
     expect(
       screen.queryByRole('heading', { name: 'Map visibility' }),
     ).not.toBeInTheDocument();
-    expect(
-      within(screen.getByRole('complementary', { name: 'Layers tools' })).getAllByRole(
-        'separator',
-      ),
-    ).toHaveLength(3);
     expect(screen.getByRole('heading', { name: 'Satellites', level: 3 })).toBeVisible();
     expect(
       screen.getByRole('heading', {
@@ -380,8 +382,17 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('checkbox', { name: 'Restricted areas' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'OSM detail' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Hiking paths' })).toBeChecked();
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toHaveValue('100');
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toBeDisabled();
+    const openStreetMapSection = screen
+      .getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread' })
+      .closest('section');
+    expect(openStreetMapSection).not.toBeNull();
+    if (openStreetMapSection === null) return;
+    expect(
+      within(openStreetMapSection).getByRole('slider', { name: 'Opacity' }),
+    ).toHaveValue('100');
+    expect(
+      within(openStreetMapSection).getByRole('slider', { name: 'Opacity' }),
+    ).toBeDisabled();
     expect(
       screen.getByRole('checkbox', { name: 'Google satellite imagery' }),
     ).toBeEnabled();
@@ -399,6 +410,15 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();
     expect(screen.queryByText(/<a href=/u)).not.toBeInTheDocument();
+    await user.click(
+      within(layersTools).getByRole('checkbox', { name: 'Open Weather tab' }),
+    );
+    expect(window.location.hash).toBe('#weather');
+    expect(screen.getByRole('tab', { name: 'Weather' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Show weather map' })).toBeVisible();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(window.location.hash).toBe('#satellite');
     expect(

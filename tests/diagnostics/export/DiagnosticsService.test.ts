@@ -100,6 +100,7 @@ describe('DiagnosticsService', () => {
       .mockImplementation(() => undefined);
     const createObjectUrl = vi
       .spyOn(URL, 'createObjectURL')
+      .mockClear()
       .mockReturnValue('blob:test');
     const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL');
 

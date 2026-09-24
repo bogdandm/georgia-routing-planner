@@ -216,9 +216,17 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
 
-    fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), {
-      target: { value: '60' },
-    });
+    const openStreetMapSection = screen
+      .getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread' })
+      .closest('section');
+    expect(openStreetMapSection).not.toBeNull();
+    if (openStreetMapSection === null) return;
+    fireEvent.change(
+      within(openStreetMapSection).getByRole('slider', { name: 'Opacity' }),
+      {
+        target: { value: '60' },
+      },
+    );
 
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
@@ -267,7 +275,14 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Satellite imagery' }),
     ).not.toBeChecked();
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toBeEnabled();
+    const openStreetMapSection = screen
+      .getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread' })
+      .closest('section');
+    expect(openStreetMapSection).not.toBeNull();
+    if (openStreetMapSection === null) return;
+    expect(
+      within(openStreetMapSection).getByRole('slider', { name: 'Opacity' }),
+    ).toBeEnabled();
 
     await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     expect(setVisibility).toHaveBeenCalledWith('satellite-imagery', true);

@@ -551,8 +551,8 @@ click opens the editor with the nearest inspected POI name when available; the u
 confirms the name, one of 130 Pinhead map icons organized in category tabs, and one of
 ten shared-theme colors before anything is stored. The icon picker exposes the 21 most
 recently used unique icons in a dedicated three-row section. Its expanded Nature catalog
-includes telescope, moon, lake, viewpoint, waterfall, cave, cliff, valley, rock,
-wildlife, wildflowers, and wetland choices for hiking landmarks.
+includes telescope, moon, lake, viewpoint, waterfall, cave, cliff, valley, rock, bear,
+deer, bird, wildflowers, and wetland choices for hiking landmarks.
 
 The contextual sidebar lists saved markers using the same row interaction pattern as
 Tracks. It sorts by newest, name, color, icon, or distance from the current map center;

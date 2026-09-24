@@ -4,6 +4,8 @@ import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
@@ -11,6 +13,8 @@ import {
   Button,
   ButtonBase,
   IconButton,
+  Menu,
+  MenuItem,
   Stack,
   ToggleButton,
   Tooltip,
@@ -102,6 +106,24 @@ const definitions: Record<WorkspaceTab, SidebarDefinition> = {
     actions: null,
   },
 };
+
+function coordinateWithHemisphere(
+  value: number,
+  positiveHemisphere: 'N' | 'E',
+  negativeHemisphere: 'S' | 'W',
+): string {
+  return `${Math.abs(value).toString()}${value >= 0 ? positiveHemisphere : negativeHemisphere}`;
+}
+
+function meteoblueForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string {
+  const latitude = coordinateWithHemisphere(coordinate.latitude, 'N', 'S');
+  const longitude = coordinateWithHemisphere(coordinate.longitude, 'E', 'W');
+  return `https://www.meteoblue.com/en/weather/week/${latitude}${longitude}`;
+}
+
+function windyForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string {
+  return `https://www.windy.com/${coordinate.latitude.toString()}/${coordinate.longitude.toString()}`;
+}
 
 function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }) {
   return (
@@ -212,6 +234,10 @@ export function WorkspaceSidebar({
   const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
     useState<WeatherHeaderPoint | null>(null);
+  const [weatherForecastMenuAnchor, setWeatherForecastMenuAnchor] =
+    useState<HTMLElement | null>(null);
+  const weatherForecastMenuOpen =
+    activeTab === 'weather' && weatherForecastMenuAnchor?.isConnected === true;
   const weatherPointSelectionActive = useStore(
     mapInteractionStore,
     (state) => state.weatherPointSelectionActive,
@@ -294,27 +320,81 @@ export function WorkspaceSidebar({
         ) : null}
         <Box sx={{ display: compactMarkersHeader ? 'none' : undefined, flex: 1 }} />
         {activeTab === 'weather' ? (
-          <Tooltip
-            title={
-              weatherPointSelectionActive
-                ? 'Cancel forecast point selection'
-                : 'Select a forecast point on the map'
-            }
-          >
-            <ToggleButton
-              size="small"
-              value="weather-point"
-              selected={weatherPointSelectionActive}
-              aria-label={
+          <>
+            <Tooltip
+              title={
                 weatherPointSelectionActive
                   ? 'Cancel forecast point selection'
-                  : 'Select forecast point'
+                  : 'Select a forecast point on the map'
               }
-              onClick={toggleWeatherPointSelection}
             >
-              <AddLocationAltIcon fontSize="small" />
-            </ToggleButton>
-          </Tooltip>
+              <ToggleButton
+                size="small"
+                value="weather-point"
+                selected={weatherPointSelectionActive}
+                aria-label={
+                  weatherPointSelectionActive
+                    ? 'Cancel forecast point selection'
+                    : 'Select forecast point'
+                }
+                onClick={toggleWeatherPointSelection}
+              >
+                <AddLocationAltIcon fontSize="small" />
+              </ToggleButton>
+            </Tooltip>
+            <IconButton
+              size="small"
+              aria-controls={
+                weatherForecastMenuOpen ? 'weather-forecast-links-menu' : undefined
+              }
+              aria-expanded={weatherForecastMenuOpen}
+              aria-haspopup="menu"
+              aria-label="More weather actions"
+              disabled={weatherHeaderPoint === null}
+              onClick={(event) => {
+                setWeatherForecastMenuAnchor(event.currentTarget);
+              }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+            <Menu
+              anchorEl={weatherForecastMenuOpen ? weatherForecastMenuAnchor : null}
+              id="weather-forecast-links-menu"
+              open={weatherForecastMenuOpen}
+              onClose={() => {
+                setWeatherForecastMenuAnchor(null);
+              }}
+            >
+              {weatherHeaderPoint === null ? null : (
+                <>
+                  <MenuItem
+                    component="a"
+                    href={meteoblueForecastUrl(weatherHeaderPoint.coordinate)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      setWeatherForecastMenuAnchor(null);
+                    }}
+                  >
+                    Open meteoblue.com
+                    <OpenInNewIcon fontSize="small" sx={{ ml: 1 }} />
+                  </MenuItem>
+                  <MenuItem
+                    component="a"
+                    href={windyForecastUrl(weatherHeaderPoint.coordinate)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      setWeatherForecastMenuAnchor(null);
+                    }}
+                  >
+                    Open windy.com
+                    <OpenInNewIcon fontSize="small" sx={{ ml: 1 }} />
+                  </MenuItem>
+                </>
+              )}
+            </Menu>
+          </>
         ) : null}
         {activeTab === 'satellite' ? (
           <Tooltip

@@ -406,11 +406,13 @@ contract remains unchanged.
 ### Weather
 
 Opening Weather does not change the map cursor or map-click behavior. Its header exposes
-one **Select forecast point** icon action. Activating it changes the cursor to a
+the **Select forecast point** icon action. Activating it changes the cursor to a
 crosshair and gives the next primary map click to Weather instead of the ordinary
-point-inspection workflow; the mode then ends. Marker placement and Weather point
-selection are mutually exclusive, and a route draft hidden behind Weather does not
-capture clicks. On smartphones, activating the action also reveals the map.
+point-inspection workflow; the mode then ends. After a point is selected, the adjacent
+overflow menu links directly to its Meteoblue and Windy forecasts in new browser tabs.
+Marker placement and Weather point selection are mutually exclusive, and a route draft
+hidden behind Weather does not capture clicks. On smartphones, activating the selection
+action also reveals the map.
 
 A completed forecast renders one map marker at the clicked WGS84 coordinate. It uses the
 monochrome Meteocon selected for **Now · next 3 h** at the visual scale of saved map

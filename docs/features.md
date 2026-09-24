@@ -548,16 +548,20 @@ the others behind the map's loading state.
 Markers is a browser-local library of named map points. **New marker** starts placement
 mode, and **Create marker here** is also available from the map context menu. A map
 click opens the editor with the nearest inspected POI name when available; the user
-confirms the name, one of 117 Pinhead map icons organized in category tabs, and one of
-ten shared-theme colors before anything is stored.
+confirms the name, one of 130 Pinhead map icons organized in category tabs, and one of
+ten shared-theme colors before anything is stored. The icon picker exposes the 21 most
+recently used unique icons in a dedicated three-row section. Its expanded Nature catalog
+includes telescope, moon, lake, viewpoint, waterfall, cave, cliff, valley, rock, bear,
+deer, bird, wildflowers, and wetland choices for hiking landmarks.
 
 The contextual sidebar lists saved markers using the same row interaction pattern as
-Tracks. It sorts by newest, name, color, or distance from the current map center; shows
-the current distance; navigates the map from a row and returns smartphone users to the
-map after selecting it; and supports rename, appearance changes, and two-step inline
-deletion. Markers remain in IndexedDB across browser restarts and render as MapLibre
-symbols with their selected icon, color, and name. Malformed stored rows are omitted and
-reported through bounded local diagnostics.
+Tracks. It sorts by newest, name, color, icon, or distance from the current map center;
+icon sorting follows catalog order and sorts markers sharing an icon by distance. The
+list shows the current distance; navigates the map from a row and returns smartphone
+users to the map after selecting it; and supports rename, appearance changes, and
+two-step inline deletion. Markers remain in IndexedDB across browser restarts and render
+as MapLibre symbols with their selected icon, color, and name. Malformed stored rows are
+omitted and reported through bounded local diagnostics.
 
 The Markers header exposes a weather-settings action. Its label shows the enabled
 weekday abbreviations; no weekday label means forecasts are disabled. One or two local

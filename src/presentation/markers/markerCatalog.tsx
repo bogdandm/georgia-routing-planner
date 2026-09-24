@@ -115,6 +115,19 @@ import pinheadSvg113 from '@waysidemapping/pinhead/dist/icons/snowmobile.svg?raw
 import pinheadSvg114 from '@waysidemapping/pinhead/dist/icons/steam_train.svg?raw';
 import pinheadSvg115 from '@waysidemapping/pinhead/dist/icons/tram_on_tram_track.svg?raw';
 import pinheadSvg116 from '@waysidemapping/pinhead/dist/icons/motorcycle.svg?raw';
+import pinheadSvg117 from '@waysidemapping/pinhead/dist/icons/telescope.svg?raw';
+import pinheadSvg118 from '@waysidemapping/pinhead/dist/icons/crescent.svg?raw';
+import pinheadSvg119 from '@waysidemapping/pinhead/dist/icons/tree_on_hill_in_water.svg?raw';
+import pinheadSvg120 from '@waysidemapping/pinhead/dist/icons/waterfall.svg?raw';
+import pinheadSvg121 from '@waysidemapping/pinhead/dist/icons/cave.svg?raw';
+import pinheadSvg122 from '@waysidemapping/pinhead/dist/icons/cliff_with_rocks.svg?raw';
+import pinheadSvg123 from '@waysidemapping/pinhead/dist/icons/snowcapped_mountain_valley.svg?raw';
+import pinheadSvg124 from '@waysidemapping/pinhead/dist/icons/pointy_rock.svg?raw';
+import pinheadSvg125 from '@waysidemapping/pinhead/dist/icons/bear.svg?raw';
+import pinheadSvg126 from '@waysidemapping/pinhead/dist/icons/deer_with_antlers.svg?raw';
+import pinheadSvg127 from '@waysidemapping/pinhead/dist/icons/bird_flying.svg?raw';
+import pinheadSvg128 from '@waysidemapping/pinhead/dist/icons/conifer_tree_and_flower_and_mountain_snowcapped.svg?raw';
+import pinheadSvg129 from '@waysidemapping/pinhead/dist/icons/typha_in_water.svg?raw';
 
 import type { MarkerColorKey, MarkerIconKey } from '@/domain/markers/savedMarker';
 import { appColors } from '@/presentation/theme/appColors';
@@ -171,6 +184,25 @@ export const markerIconCatalog = [
   { key: 'cloud', label: 'Cloud', category: 'Nature', svg: pinheadSvg29 },
   { key: 'storm', label: 'Storm', category: 'Nature', svg: pinheadSvg30 },
   { key: 'tsunami', label: 'Tsunami', category: 'Nature', svg: pinheadSvg31 },
+  { key: 'telescope', label: 'Telescope', category: 'Nature', svg: pinheadSvg117 },
+  { key: 'moon', label: 'Moon', category: 'Nature', svg: pinheadSvg118 },
+  { key: 'lake', label: 'Lake', category: 'Nature', svg: pinheadSvg119 },
+  { key: 'viewpoint', label: 'Viewpoint', category: 'Nature', svg: pinheadSvg103 },
+  { key: 'waterfall', label: 'Waterfall', category: 'Nature', svg: pinheadSvg120 },
+  { key: 'cave', label: 'Cave', category: 'Nature', svg: pinheadSvg121 },
+  { key: 'cliff', label: 'Cliff', category: 'Nature', svg: pinheadSvg122 },
+  { key: 'valley', label: 'Valley', category: 'Nature', svg: pinheadSvg123 },
+  { key: 'rock', label: 'Rock', category: 'Nature', svg: pinheadSvg124 },
+  { key: 'bear', label: 'Bear', category: 'Nature', svg: pinheadSvg125 },
+  { key: 'deer', label: 'Deer', category: 'Nature', svg: pinheadSvg126 },
+  { key: 'bird', label: 'Bird', category: 'Nature', svg: pinheadSvg127 },
+  {
+    key: 'wildflowers',
+    label: 'Wildflowers',
+    category: 'Nature',
+    svg: pinheadSvg128,
+  },
+  { key: 'wetland', label: 'Wetland', category: 'Nature', svg: pinheadSvg129 },
   { key: 'hiking', label: 'Hiking', category: 'Activities', svg: pinheadSvg32 },
   { key: 'cycling', label: 'Cycling', category: 'Activities', svg: pinheadSvg33 },
   { key: 'boating', label: 'Boating', category: 'Activities', svg: pinheadSvg34 },
@@ -292,7 +324,6 @@ export const markerIconCatalog = [
   { key: 'security', label: 'Security', category: 'Safety', svg: pinheadSvg100 },
   { key: 'sos', label: 'SOS', category: 'Safety', svg: pinheadSvg101 },
   { key: 'traffic', label: 'Traffic', category: 'Safety', svg: pinheadSvg102 },
-  { key: 'viewpoint', label: 'Viewpoint', category: 'Safety', svg: pinheadSvg103 },
   { key: 'shuttle', label: 'Shuttle', category: 'Transport', svg: pinheadSvg104 },
   { key: 'commute', label: 'Commute', category: 'Transport', svg: pinheadSvg105 },
   { key: 'bus', label: 'Bus', category: 'Transport', svg: pinheadSvg106 },
@@ -312,6 +343,10 @@ export const markerIconCatalog = [
   { key: 'tram', label: 'Tram', category: 'Transport', svg: pinheadSvg115 },
   { key: 'motorcycle', label: 'Motorcycle', category: 'Transport', svg: pinheadSvg116 },
 ] as const satisfies readonly MarkerIconCatalogEntry[];
+
+export const markerIconOrder = Object.fromEntries(
+  markerIconCatalog.map(({ key }, index) => [key, index]),
+) as Readonly<Record<MarkerIconKey, number>>;
 
 export interface MarkerColorCatalogEntry {
   readonly key: MarkerColorKey;

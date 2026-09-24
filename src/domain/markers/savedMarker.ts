@@ -33,6 +33,20 @@ export const markerIconKeys = [
   'cloud',
   'storm',
   'tsunami',
+  'telescope',
+  'moon',
+  'lake',
+  'viewpoint',
+  'waterfall',
+  'cave',
+  'cliff',
+  'valley',
+  'rock',
+  'bear',
+  'deer',
+  'bird',
+  'wildflowers',
+  'wetland',
   'hiking',
   'cycling',
   'boating',
@@ -104,7 +118,6 @@ export const markerIconKeys = [
   'security',
   'sos',
   'traffic',
-  'viewpoint',
   'shuttle',
   'commute',
   'bus',
@@ -137,7 +150,7 @@ export const markerColorKeys = [
 
 export type MarkerColorKey = (typeof markerColorKeys)[number];
 
-export const markerSorts = ['created', 'name', 'color', 'distance'] as const;
+export const markerSorts = ['created', 'name', 'color', 'icon', 'distance'] as const;
 
 export type MarkerSort = (typeof markerSorts)[number];
 

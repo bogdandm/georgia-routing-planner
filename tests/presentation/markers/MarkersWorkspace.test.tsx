@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
+  type MarkerIconKey,
   type MarkerSort,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
@@ -44,6 +45,7 @@ function marker(
   createdAt: string,
   coordinate: readonly [number, number],
   colorKey: SavedMarker['colorKey'] = 'blue',
+  iconKey: MarkerIconKey = 'place',
 ): SavedMarker {
   return {
     schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
@@ -52,7 +54,7 @@ function marker(
     normalizedName: name.toLocaleLowerCase('en'),
     coordinate,
     elevationMeters: null,
-    iconKey: 'place',
+    iconKey,
     colorKey,
     createdAt,
     updatedAt: createdAt,
@@ -134,9 +136,9 @@ describe('MarkersWorkspace', () => {
       within(
         screen.getByRole('tablist', { name: 'Marker icon categories row 2' }),
       ).getAllByRole('tab'),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     const categoryTabs = screen.getAllByRole('tab');
-    expect(categoryTabs).toHaveLength(7);
+    expect(categoryTabs).toHaveLength(8);
     for (const tab of categoryTabs) expect(tab).toBeVisible();
     const placesStyle = getComputedStyle(screen.getByRole('tab', { name: 'Places' }));
     expect({
@@ -156,6 +158,27 @@ describe('MarkersWorkspace', () => {
       screen.queryByRole('option', { name: 'Choose Hiking icon' }),
     ).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole('tab', { name: 'Nature' }));
+    for (const label of [
+      'Telescope',
+      'Moon',
+      'Lake',
+      'Viewpoint',
+      'Waterfall',
+      'Cave',
+      'Cliff',
+      'Valley',
+      'Rock',
+      'Bear',
+      'Deer',
+      'Bird',
+      'Wildflowers',
+      'Wetland',
+    ]) {
+      expect(
+        screen.getByRole('option', { name: `Choose ${label} icon` }),
+      ).toBeVisible();
+    }
     await user.click(screen.getByRole('tab', { name: 'Activities' }));
     expect(screen.getByRole('option', { name: 'Choose Hiking icon' })).toBeVisible();
     await user.click(screen.getByRole('option', { name: 'Choose Hiking icon' }));
@@ -179,6 +202,61 @@ describe('MarkersWorkspace', () => {
     await waitFor(() => {
       expect(screen.queryByRole('heading', { name: 'Create marker' })).toBeNull();
     });
+    await expect(services.database.loadRecentMarkerIconKeys()).resolves.toEqual([
+      'hiking',
+    ]);
+  });
+
+  it('shows the 21 persisted recently used icons in a three-row section', async () => {
+    const recentIcons = [
+      'flag',
+      'forest',
+      'water',
+      'telescope',
+      'moon',
+      'lake',
+      'viewpoint',
+      'waterfall',
+      'cave',
+      'cliff',
+      'valley',
+      'rock',
+      'bear',
+      'deer',
+      'bird',
+      'wildflowers',
+      'wetland',
+      'hiking',
+      'camping',
+      'camera',
+      'shelter',
+    ] as const satisfies readonly MarkerIconKey[];
+    await services.database.saveRecentMarkerIconKeys(recentIcons);
+    await services.database.saveSavedMarker(
+      marker('new-place', 'New place', '2026-07-20T00:00:00.000Z', [44.8, 41.7]),
+    );
+    const user = userEvent.setup();
+    renderMarkers();
+    await screen.findByRole('list', { name: 'Saved markers' });
+
+    act(() => {
+      requestMarkerCreationAt({ longitude: 44.8, latitude: 41.7 }, 'Recent icon');
+    });
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Choose marker icon. Current: Place',
+      }),
+    );
+
+    expect(screen.getByRole('tab', { name: 'Recently used' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getAllByRole('option')).toHaveLength(21);
+    expect(screen.getByRole('option', { name: 'Choose Shelter icon' })).toBeVisible();
+    expect(
+      screen.queryByRole('option', { name: 'Choose Place icon' }),
+    ).not.toBeInTheDocument();
   });
 
   it('defers an early creation command until saved markers finish loading', async () => {
@@ -249,6 +327,73 @@ describe('MarkersWorkspace', () => {
     expect(list).toHaveTextContent(/km away/);
   });
 
+  it('groups markers by icon and orders each icon group by map distance', async () => {
+    await services.database.saveSavedMarker(
+      marker(
+        'forest-far',
+        'Forest far',
+        '2026-07-20T00:00:00.000Z',
+        [45.8, 41.7],
+        'blue',
+        'forest',
+      ),
+    );
+    await services.database.saveSavedMarker(
+      marker(
+        'forest-near',
+        'Forest near',
+        '2026-07-18T00:00:00.000Z',
+        [44.81, 41.7],
+        'blue',
+        'forest',
+      ),
+    );
+    await services.database.saveSavedMarker(
+      marker(
+        'telescope-far',
+        'Telescope far',
+        '2026-07-19T00:00:00.000Z',
+        [45.8, 41.7],
+        'blue',
+        'telescope',
+      ),
+    );
+    await services.database.saveSavedMarker(
+      marker(
+        'telescope-near',
+        'Telescope near',
+        '2026-07-17T00:00:00.000Z',
+        [44.81, 41.7],
+        'blue',
+        'telescope',
+      ),
+    );
+    const user = userEvent.setup();
+    renderMarkers();
+
+    const list = await screen.findByRole('list', { name: 'Saved markers' });
+    const forestNear = within(list).getByRole('button', { name: /^Forest near/ });
+    const forestFar = within(list).getByRole('button', { name: /^Forest far/ });
+    const telescopeNear = within(list).getByRole('button', { name: /^Telescope near/ });
+    const telescopeFar = within(list).getByRole('button', { name: /^Telescope far/ });
+    await user.click(
+      screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Icon and distance' }));
+
+    await waitFor(() => {
+      expect(forestNear.compareDocumentPosition(forestFar)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(forestFar.compareDocumentPosition(telescopeNear)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(telescopeNear.compareDocumentPosition(telescopeFar)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    });
+  });
+
   it('sorts by the live map center after the viewport moves', async () => {
     await services.database.saveSavedMarker(
       marker('near', 'Near', '2026-07-18T00:00:00.000Z', [44.81, 41.7]),
@@ -309,6 +454,7 @@ describe('MarkersWorkspace', () => {
     await user.type(renameInput, 'Base camp');
     await user.keyboard('{Enter}');
     expect(await screen.findByRole('button', { name: /^Base camp/ })).toBeVisible();
+    await expect(services.database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Marker actions for Base camp' }),
@@ -333,6 +479,9 @@ describe('MarkersWorkspace', () => {
         }),
       ]);
     });
+    await expect(services.database.loadRecentMarkerIconKeys()).resolves.toEqual([
+      'hiking',
+    ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Base camp' }));
     const confirmDelete = screen.getByRole('button', {

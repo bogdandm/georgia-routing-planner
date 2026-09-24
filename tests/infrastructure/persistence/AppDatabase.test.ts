@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   SAVED_MARKER_SCHEMA_VERSION,
+  markerIconKeys,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
 import {
@@ -176,6 +177,30 @@ describe('AppDatabase', () => {
     });
     await expect(
       database.settings.get('weather.interval-preferences'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('persists at most 21 unique recently used marker icons and repairs invalid data', async () => {
+    await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
+
+    await database.saveRecentMarkerIconKeys(['telescope', 'moon', 'lake']);
+    await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([
+      'telescope',
+      'moon',
+      'lake',
+    ]);
+    await expect(
+      database.saveRecentMarkerIconKeys(markerIconKeys.slice(0, 22)),
+    ).rejects.toThrow();
+
+    await database.settings.put({
+      key: 'markers.recent-icons',
+      value: ['moon', 'moon'],
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
+    await expect(
+      database.settings.get('markers.recent-icons'),
     ).resolves.toBeUndefined();
   });
 

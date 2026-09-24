@@ -43,6 +43,7 @@ import {
   markerIconKeys,
   markerSorts,
   normalizeMarkerName,
+  type MarkerIconKey,
   type MarkerSort,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
@@ -214,6 +215,13 @@ const uiPreferencesSchema = z
     trackSort: z.enum(trackSorts).default('created'),
   })
   .strict();
+
+const recentMarkerIconKeysSchema: z.ZodType<readonly MarkerIconKey[]> = z
+  .array(z.enum(markerIconKeys))
+  .max(21)
+  .refine((keys) => new Set(keys).size === keys.length, {
+    message: 'Recently used marker icons must be unique.',
+  });
 
 interface UiPreferences {
   readonly developerMode: boolean;
@@ -2577,6 +2585,32 @@ export class AppDatabase
     await this.saveUiPreferences({
       ...preferences,
       elevationGradeLegendDismissed,
+    });
+  }
+
+  public async loadRecentMarkerIconKeys(): Promise<readonly MarkerIconKey[]> {
+    const record = await this.settings.get('markers.recent-icons');
+    if (record === undefined) return [];
+
+    const parsed = recentMarkerIconKeysSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete('markers.recent-icons');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.marker-recent-icons.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return [];
+  }
+
+  public async saveRecentMarkerIconKeys(
+    iconKeys: readonly MarkerIconKey[],
+  ): Promise<void> {
+    await this.settings.put({
+      key: 'markers.recent-icons',
+      value: recentMarkerIconKeysSchema.parse(iconKeys),
+      updatedAt: new Date().toISOString(),
     });
   }
 

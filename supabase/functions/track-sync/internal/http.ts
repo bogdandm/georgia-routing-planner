@@ -20,7 +20,7 @@ import {
   UUID_PATTERN,
 } from './contracts.ts';
 
-const markerIconKeys = [
+export const markerIconKeys = [
   'place',
   'flag',
   'home',
@@ -53,6 +53,20 @@ const markerIconKeys = [
   'cloud',
   'storm',
   'tsunami',
+  'telescope',
+  'moon',
+  'lake',
+  'viewpoint',
+  'waterfall',
+  'cave',
+  'cliff',
+  'valley',
+  'rock',
+  'bear',
+  'deer',
+  'bird',
+  'wildflowers',
+  'wetland',
   'hiking',
   'cycling',
   'boating',
@@ -124,7 +138,6 @@ const markerIconKeys = [
   'security',
   'sos',
   'traffic',
-  'viewpoint',
   'shuttle',
   'commute',
   'bus',

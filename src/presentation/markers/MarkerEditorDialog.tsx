@@ -51,6 +51,7 @@ interface MarkerEditorDialogBaseProps {
 interface CreateMarkerEditorDialogProps extends MarkerEditorDialogBaseProps {
   readonly mode: 'create';
   readonly initialName: string;
+  readonly recentIconKeys: readonly MarkerIconKey[];
   readonly onSubmit: (
     name: NormalizedMarkerName,
     appearance: MarkerAppearance,
@@ -66,6 +67,7 @@ interface NameOnlyMarkerEditorDialogProps extends MarkerEditorDialogBaseProps {
 interface AppearanceMarkerEditorDialogProps extends MarkerEditorDialogBaseProps {
   readonly mode: 'appearance';
   readonly marker: SavedMarker;
+  readonly recentIconKeys: readonly MarkerIconKey[];
   readonly onSubmit: (appearance: MarkerAppearance) => Promise<void>;
 }
 
@@ -74,9 +76,15 @@ type MarkerEditorDialogProps =
   | NameOnlyMarkerEditorDialogProps
   | AppearanceMarkerEditorDialogProps;
 
-const markerIconCategoryRows = [
-  markerIconCategories.slice(0, 4),
-  markerIconCategories.slice(4),
+type MarkerIconSection = 'Recently used' | MarkerIconCategory;
+
+const markerIconSections: readonly MarkerIconSection[] = [
+  'Recently used',
+  ...markerIconCategories,
+];
+const markerIconSectionRows = [
+  markerIconSections.slice(0, 4),
+  markerIconSections.slice(4),
 ] as const;
 
 export function MarkerEditorDialog(props: MarkerEditorDialogProps) {
@@ -99,26 +107,36 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
   const [colorKey, setColorKey] = useState<MarkerColorKey>(
     () => editorMarker?.colorKey ?? 'blue',
   );
+  const recentIconKeySource = props.mode === 'name-only' ? null : props.recentIconKeys;
   const [iconAnchor, setIconAnchor] = useState<HTMLElement | null>(null);
   const [iconQuery, setIconQuery] = useState('');
-  const [iconCategory, setIconCategory] = useState<MarkerIconCategory>(
-    () => markerIconFor(iconKey).category,
+  const [iconSection, setIconSection] = useState<MarkerIconSection>(() =>
+    recentIconKeySource !== null && recentIconKeySource.length > 0
+      ? 'Recently used'
+      : markerIconFor(iconKey).category,
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const selectedIcon = markerIconFor(iconKey);
+  const recentIcons = useMemo(
+    () => recentIconKeySource?.slice(0, 21).map((key) => markerIconFor(key)) ?? [],
+    [recentIconKeySource],
+  );
   const filteredIcons = useMemo(() => {
     if (props.mode === 'name-only') return [];
     const query = iconQuery.trim().toLocaleLowerCase('en');
+    if (query.length === 0) {
+      return iconSection === 'Recently used'
+        ? recentIcons
+        : markerIconCatalog.filter((entry) => entry.category === iconSection);
+    }
     return markerIconCatalog.filter(
       (entry) =>
-        (query.length > 0 || entry.category === iconCategory) &&
-        (query.length === 0 ||
-          entry.label.toLocaleLowerCase('en').includes(query) ||
-          entry.category.toLocaleLowerCase('en').includes(query)),
+        entry.label.toLocaleLowerCase('en').includes(query) ||
+        entry.category.toLocaleLowerCase('en').includes(query),
     );
-  }, [iconCategory, iconQuery, props.mode]);
+  }, [iconQuery, iconSection, props.mode, recentIcons]);
 
   const openIconPicker = (event: MouseEvent<HTMLElement>) => {
     setIconAnchor(event.currentTarget);
@@ -305,12 +323,12 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
               }}
             />
             <Stack spacing={0} sx={{ mt: 0.5 }}>
-              {markerIconCategoryRows.map((categories, rowIndex) => (
+              {markerIconSectionRows.map((sections, rowIndex) => (
                 <Tabs
                   key={rowIndex}
-                  value={categories.includes(iconCategory) ? iconCategory : false}
-                  onChange={(_event, category: MarkerIconCategory) => {
-                    setIconCategory(category);
+                  value={sections.includes(iconSection) ? iconSection : false}
+                  onChange={(_event, section: MarkerIconSection) => {
+                    setIconSection(section);
                   }}
                   variant="fullWidth"
                   aria-label={`Marker icon categories row ${String(rowIndex + 1)}`}
@@ -337,8 +355,8 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                     },
                   }}
                 >
-                  {categories.map((category) => (
-                    <Tab key={category} value={category} label={category} />
+                  {sections.map((section) => (
+                    <Tab key={section} value={section} label={section} />
                   ))}
                 </Tabs>
               ))}
@@ -366,7 +384,7 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
                       color={selected ? 'primary' : 'default'}
                       onClick={() => {
                         setIconKey(key);
-                        setIconCategory(markerIconFor(key).category);
+                        setIconSection(markerIconFor(key).category);
                         setSubmitError(null);
                         setIconAnchor(null);
                         setIconQuery('');
@@ -385,7 +403,9 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
             </Box>
             {filteredIcons.length === 0 ? (
               <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
-                No matching icons
+                {iconSection === 'Recently used' && iconQuery.length === 0
+                  ? 'No recently used icons yet'
+                  : 'No matching icons'}
               </Typography>
             ) : null}
           </Box>

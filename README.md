@@ -55,18 +55,20 @@ When usable elevation is available, the track view adds:
 ## Markers
 
 Place a marker from the Markers workspace or the map context menu. When a nearby point
-of interest is available, Trail Planner suggests its name before saving. Choose from 117
-Pinhead map icons grouped by category and ten colors; saved markers render on the map
-and remain available after reopening the application.
+of interest is available, Trail Planner suggests its name before saving. Choose from 130
+Pinhead map icons grouped by category and ten colors; the picker keeps the 21 most
+recently used icons in a three-row section. Saved markers render on the map and remain
+available after reopening the application.
 
 Root GPX waypoints are imported as track-owned markers. The active editable track lists
 them below elevation analysis, renders them as compact blue pins, and supports adding,
 renaming, navigating to, and deleting them without adding them to the global marker
 library. They persist and synchronize with the track.
 
-The marker library sorts by creation time, name, color, or distance from the current map
-area. Marker search, grouping, Satellite targeting, and copying global markers into a
-manually created GPX route are not currently available.
+The marker library sorts by creation time, name, color, icon, or distance from the
+current map area. Icon groups follow catalog order and sort internally by distance from
+the map center. Marker search, grouping, Satellite targeting, and copying global markers
+into a manually created GPX route are not currently available.
 
 ## Maps and satellite imagery
 

@@ -1,6 +1,8 @@
 import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
+import { markerIconKeys as browserMarkerIconKeys } from '../../../../src/domain/markers/savedMarker.ts';
+
 import fixtureV1 from '../../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
 import fixtureV2 from '../../../../tests/fixtures/track-sync/geometry-v2.json' with { type: 'json' };
 import {
@@ -11,6 +13,7 @@ import {
   validateCanonicalGeometry,
   validateGeometryUpload,
 } from '../../../functions/track-sync/internal/geometry.ts';
+import { markerIconKeys as edgeMarkerIconKeys } from '../../../functions/track-sync/internal/http.ts';
 import { SupabaseTrackSyncGateway } from '../../../functions/track-sync/internal/supabase-track-sync-gateway.ts';
 import { handleTrackSync } from '../../../functions/track-sync/track-sync.ts';
 
@@ -291,6 +294,10 @@ async function captureConsoleErrors(
     console.error = original;
   }
 }
+
+Deno.test('browser and Edge marker icon contracts stay aligned', () => {
+  assertEquals(edgeMarkerIconKeys, browserMarkerIconKeys);
+});
 
 Deno.test('both shared GRPT fixtures match their envelope and hash', async () => {
   for (const [fixture, version] of [

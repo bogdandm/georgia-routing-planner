@@ -1126,7 +1126,7 @@ export function MapWorkspace({
                           gridTemplateColumns:
                             weather.selection.periods.length === 1
                               ? '98px'
-                              : 'repeat(2, 54px)',
+                              : 'repeat(2, 56px)',
                           overflow: 'hidden',
                           borderRadius: 1.25,
                           bgcolor: 'rgba(255, 255, 255, 0.96)',

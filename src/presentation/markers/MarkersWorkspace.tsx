@@ -115,6 +115,7 @@ interface MarkerHourlyForecastRequest {
 const markerWeatherRequestConcurrency = 4;
 const markerWeatherCellWidth = 80;
 const markerWeatherCellHeight = 92;
+const markerWeatherPhoneCellWidth = 72;
 
 interface MarkersWorkspaceValue {
   readonly markers: readonly SavedMarker[];
@@ -925,7 +926,7 @@ export function MarkerWeatherSummaryButton({
         onOpen(event.currentTarget);
       }}
       sx={{
-        minWidth: map ? 54 : markerWeatherCellWidth,
+        minWidth: map ? 56 : markerWeatherCellWidth,
         minHeight: map ? 62 : markerWeatherCellHeight,
         alignSelf: 'stretch',
         flexDirection: 'column',
@@ -957,6 +958,9 @@ export function MarkerWeatherSummaryButton({
           lineHeight: map ? 1.1 : 1.2,
           whiteSpace: 'nowrap',
           fontVariantNumeric: 'tabular-nums',
+          '@media (width < 900px)': map
+            ? undefined
+            : { fontSize: '0.75rem', lineHeight: 1.1 },
         }}
       >
         {temperature}
@@ -979,6 +983,9 @@ export function MarkerWeatherSummaryButton({
             lineHeight: map ? 1.1 : 1.2,
             whiteSpace: 'nowrap',
             fontVariantNumeric: 'tabular-nums',
+            '@media (width < 900px)': map
+              ? undefined
+              : { fontSize: '0.65rem', lineHeight: 1.1 },
           }}
         >
           {precipitation}
@@ -1047,8 +1054,37 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
     }
   };
 
+  const requestDelete = (marker: SavedMarker) => {
+    if (pendingDeleteId !== marker.id) {
+      setPendingDeleteId(marker.id);
+      return;
+    }
+    setDeletingId(marker.id);
+    setDeleteError(null);
+    setActionAnchor(null);
+    setActionMarker(null);
+    void deleteMarker(marker)
+      .catch((error: unknown) => {
+        setDeleteError(
+          error instanceof Error ? error.message : 'The marker could not be deleted.',
+        );
+      })
+      .finally(() => {
+        setDeletingId(null);
+        setPendingDeleteId(null);
+      });
+  };
+
   return (
-    <Stack spacing={1.5} sx={{ px: 2, pt: 0.5, pb: 2 }}>
+    <Stack
+      spacing={1.5}
+      sx={{
+        px: 2,
+        pt: 0.5,
+        pb: 2,
+        '@media (width < 900px)': { px: 1, pb: 1 },
+      }}
+    >
       {loadState === 'loading' ? (
         <Stack direction="row" spacing={1} role="status" sx={{ alignItems: 'center' }}>
           <CircularProgress size={20} />
@@ -1080,7 +1116,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
         <List
           aria-label="Saved markers"
           disablePadding
-          sx={{ display: 'grid', gap: 1.5 }}
+          sx={{ display: 'grid', gap: 1.5, '@media (width < 900px)': { gap: 1 } }}
         >
           {weatherPreferences.weekdays.length === 0 ? null : (
             <Box
@@ -1093,6 +1129,9 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                 alignItems: 'center',
                 listStyle: 'none',
                 mb: -1.25,
+                '@media (width < 900px)': {
+                  gridTemplateColumns: `minmax(0, 1fr) repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherPhoneCellWidth)}px)`,
+                },
               }}
             >
               <Box aria-hidden />
@@ -1191,7 +1230,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
               <ClickAwayListener
                 key={marker.id}
                 onClickAway={() => {
-                  if (deletingId !== marker.id) {
+                  if (deletingId !== marker.id && actionMarker?.id !== marker.id) {
                     setPendingDeleteId((current) =>
                       current === marker.id ? null : current,
                     );
@@ -1254,12 +1293,20 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       });
                       onMarkerSelected?.();
                     }}
-                    sx={{ minWidth: 0, px: 1.5, py: 1.25 }}
+                    sx={{
+                      minWidth: 0,
+                      px: 1.5,
+                      py: 1.25,
+                      '@media (width < 900px)': { px: 1, py: 0.75 },
+                    }}
                   >
                     <Stack
                       direction="row"
-                      spacing={1.25}
-                      sx={{ alignItems: 'center', minWidth: 0 }}
+                      spacing={{ xs: 0.5, md: 1.25 }}
+                      sx={{
+                        alignItems: 'center',
+                        minWidth: 0,
+                      }}
                     >
                       <Box
                         aria-hidden
@@ -1269,6 +1316,14 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           flex: '0 0 36px',
                           display: 'grid',
                           placeItems: 'center',
+                          '@media (width < 900px)': {
+                            width: 32,
+                            flexBasis: 32,
+                            transform:
+                              weatherPreferences.weekdays.length === 0
+                                ? 'none'
+                                : 'translateY(-4px)',
+                          },
                         }}
                       >
                         <PinheadIcon svg={icon.svg} color={color.value} size={28} />
@@ -1303,6 +1358,11 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         borderLeft: 1,
                         borderColor: 'divider',
                         '& > button:first-of-type': { borderLeft: 0 },
+                        '@media (width < 900px)': {
+                          minWidth: 0,
+                          gridTemplateColumns: `repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherPhoneCellWidth)}px)`,
+                          '& > button': { minWidth: 0, width: '100%', px: 0.25 },
+                        },
                       }}
                     >
                       {weather?.status === 'ready' ? (
@@ -1373,6 +1433,25 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       alignItems: 'center',
                       px: 0.5,
                       transform: 'translateY(-50%)',
+                      '@media (width < 900px)': {
+                        ...(weatherPreferences.weekdays.length === 0
+                          ? {
+                              right: 4,
+                              flexDirection: 'row',
+                              gap: 0.5,
+                              px: 0.25,
+                            }
+                          : {
+                              top: 'auto',
+                              right: 'auto',
+                              bottom: 2,
+                              left: 7,
+                              flexDirection: 'row',
+                              gap: 0,
+                              px: 0,
+                              transform: 'none',
+                            }),
+                      },
                     }}
                   >
                     <Tooltip
@@ -1392,7 +1471,16 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           setActionMarker(marker);
                         }}
                       >
-                        <MoreVertIcon />
+                        <MoreVertIcon
+                          sx={{
+                            '@media (width < 900px)': {
+                              transform:
+                                weatherPreferences.weekdays.length === 0
+                                  ? 'none'
+                                  : 'rotate(90deg)',
+                            },
+                          }}
+                        />
                       </IconButton>
                     </Tooltip>
                     <Tooltip
@@ -1409,6 +1497,14 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         }
                         color={pending ? 'error' : 'default'}
                         disabled={deleting}
+                        sx={{
+                          '@media (width < 900px)': {
+                            display:
+                              weatherPreferences.weekdays.length === 0
+                                ? 'inline-flex'
+                                : 'none',
+                          },
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === 'Escape' && deletingId !== marker.id) {
                             setPendingDeleteId(null);
@@ -1416,24 +1512,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           }
                         }}
                         onClick={() => {
-                          if (!pending) {
-                            setPendingDeleteId(marker.id);
-                            return;
-                          }
-                          setDeletingId(marker.id);
-                          setDeleteError(null);
-                          void deleteMarker(marker)
-                            .catch((error: unknown) => {
-                              setDeleteError(
-                                error instanceof Error
-                                  ? error.message
-                                  : 'The marker could not be deleted.',
-                              );
-                            })
-                            .finally(() => {
-                              setDeletingId(null);
-                              setPendingDeleteId(null);
-                            });
+                          requestDelete(marker);
                         }}
                       >
                         {pending ? (
@@ -1454,6 +1533,11 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
         anchorEl={actionAnchor}
         open={actionMarker !== null}
         onClose={() => {
+          if (actionMarker !== null && deletingId !== actionMarker.id) {
+            setPendingDeleteId((current) =>
+              current === actionMarker.id ? null : current,
+            );
+          }
           setActionAnchor(null);
           setActionMarker(null);
         }}
@@ -1475,6 +1559,31 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
           }}
         >
           <PaletteIcon fontSize="small" sx={{ mr: 1 }} /> Change icon and color
+        </MenuItem>
+        <MenuItem
+          disabled={actionMarker !== null && deletingId === actionMarker.id}
+          sx={{
+            display: 'none',
+            '@media (width < 900px)': {
+              display: weatherPreferences.weekdays.length === 0 ? 'none' : 'flex',
+            },
+            color:
+              actionMarker !== null && pendingDeleteId === actionMarker.id
+                ? 'error.main'
+                : 'inherit',
+          }}
+          onClick={() => {
+            if (actionMarker !== null) requestDelete(actionMarker);
+          }}
+        >
+          {actionMarker !== null && pendingDeleteId === actionMarker.id ? (
+            <DeleteForeverOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+          ) : (
+            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />
+          )}
+          {actionMarker !== null && pendingDeleteId === actionMarker.id
+            ? 'Confirm deletion'
+            : 'Delete marker'}
         </MenuItem>
       </Menu>
     </Stack>

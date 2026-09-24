@@ -320,6 +320,17 @@ describe('WorkspaceShell', () => {
     const { container } = renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    expect(screen.getByRole('heading', { name: 'Markers', level: 1 })).toBeVisible();
+    expect(
+      screen.getByRole('button', {
+        name: 'Marker weather settings. Forecast days: Sat, Sun',
+      }),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'New marker' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Sort markers. Current: Newest' }),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show map' })).toBeVisible();
     await user.click(await screen.findByRole('button', { name: /^Mobile marker/ }));
 
     expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({

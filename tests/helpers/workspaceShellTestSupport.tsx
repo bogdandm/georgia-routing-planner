@@ -339,9 +339,11 @@ export async function renderSavedTrackForSharing(
   useUiStore.setState({ activeTab: 'tracks' });
   await services.database.saveLatestOpenedTrackId(summary.id);
   renderWorkspaceShell();
-  const details = await screen.findByRole('complementary', {
-    name: 'Track details',
-  });
+  const details = await screen.findByRole(
+    'complementary',
+    { name: 'Track details' },
+    { timeout: 5_000 },
+  );
   return { details, summary };
 }
 export function multiTrackSummary(

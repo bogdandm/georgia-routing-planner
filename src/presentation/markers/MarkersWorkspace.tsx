@@ -1319,6 +1319,10 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           '@media (width < 900px)': {
                             width: 32,
                             flexBasis: 32,
+                            transform:
+                              weatherPreferences.weekdays.length === 0
+                                ? 'none'
+                                : 'translateY(-4px)',
                           },
                         }}
                       >
@@ -1467,7 +1471,16 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           setActionMarker(marker);
                         }}
                       >
-                        <MoreVertIcon />
+                        <MoreVertIcon
+                          sx={{
+                            '@media (width < 900px)': {
+                              transform:
+                                weatherPreferences.weekdays.length === 0
+                                  ? 'none'
+                                  : 'rotate(90deg)',
+                            },
+                          }}
+                        />
                       </IconButton>
                     </Tooltip>
                     <Tooltip

@@ -14,7 +14,10 @@ import type {
   MultiLineString,
   Point,
 } from 'geojson';
-import { defaultOmProtocolSettings, omProtocol } from '@openmeteo/weather-map-layer';
+import type {
+  OmProtocolSettings,
+  omProtocol as runOmProtocol,
+} from '@openmeteo/weather-map-layer';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
@@ -210,35 +213,54 @@ const weatherMapProtocolId = 'om';
 const weatherCloudOpacity = 0.36;
 const weatherPrecipitationOpacity = 0.76;
 const weatherWindOpacity = 0.62;
-const weatherMapProtocolSettings = {
-  ...defaultOmProtocolSettings,
-  maxStatesWithData: 6,
-  colorScales: {
-    ...defaultOmProtocolSettings.colorScales,
-    cloud_cover: {
-      type: 'breakpoint',
-      unit: '%',
-      breakpoints: [0, 20, 40, 60, 80, 100],
-      colors: [
-        [235, 238, 240, 0],
-        [226, 230, 233, 0.16],
-        [213, 218, 222, 0.34],
-        [199, 205, 210, 0.56],
-        [240, 242, 244, 0.78],
-        [255, 255, 255, 0.94],
-      ],
-    },
-  },
-} satisfies typeof defaultOmProtocolSettings;
-const weatherMapProtocolHandler = (
-  parameters: Parameters<typeof omProtocol>[0],
-  abortController: AbortController,
-) => omProtocol(parameters, abortController, weatherMapProtocolSettings);
 let weatherMapProtocolConsumers = 0;
+interface WeatherMapProtocolModule {
+  readonly defaultOmProtocolSettings: OmProtocolSettings;
+  readonly omProtocol: typeof runOmProtocol;
+}
 
-function acquireWeatherMapProtocol(): void {
+function loadWeatherMapProtocol(): Promise<WeatherMapProtocolModule> {
+  return import('@openmeteo/weather-map-layer');
+}
+let weatherMapProtocolModulePromise: Promise<WeatherMapProtocolModule> | null = null;
+
+async function acquireWeatherMapProtocol(): Promise<void> {
+  const pendingModule = weatherMapProtocolModulePromise ?? loadWeatherMapProtocol();
+  weatherMapProtocolModulePromise = pendingModule;
+  let protocolModule: WeatherMapProtocolModule;
+  try {
+    protocolModule = await pendingModule;
+  } catch (error: unknown) {
+    if (weatherMapProtocolModulePromise === pendingModule) {
+      weatherMapProtocolModulePromise = null;
+    }
+    throw error;
+  }
+  const { defaultOmProtocolSettings, omProtocol } = protocolModule;
   if (weatherMapProtocolConsumers === 0) {
-    addProtocol(weatherMapProtocolId, weatherMapProtocolHandler);
+    const settings = {
+      ...defaultOmProtocolSettings,
+      maxStatesWithData: 6,
+      colorScales: {
+        ...defaultOmProtocolSettings.colorScales,
+        cloud_cover: {
+          type: 'breakpoint',
+          unit: '%',
+          breakpoints: [0, 20, 40, 60, 80, 100],
+          colors: [
+            [235, 238, 240, 0],
+            [226, 230, 233, 0.16],
+            [213, 218, 222, 0.34],
+            [199, 205, 210, 0.56],
+            [240, 242, 244, 0.78],
+            [255, 255, 255, 0.94],
+          ],
+        },
+      },
+    } satisfies typeof defaultOmProtocolSettings;
+    const handler: Parameters<typeof addProtocol>[1] = (parameters, controller) =>
+      omProtocol(parameters, controller, settings);
+    addProtocol(weatherMapProtocolId, handler);
   }
   weatherMapProtocolConsumers += 1;
 }
@@ -536,6 +558,8 @@ export class MapLibreLayerController {
   readonly #waitingForRasterData = new Set<string>();
   #progressiveRasterSourceId: string | null = null;
   #stagingSourceId: string | null = null;
+  #weatherProtocolRegistration: Promise<void> | null = null;
+  #disposed = false;
   #expectedRasterCancellationUntil = 0;
   #weatherMetadataController: AbortController | null = null;
   #weatherProtocolRegistered = false;
@@ -561,10 +585,6 @@ export class MapLibreLayerController {
     this.#releaseTerrainComputeQueue = contourTiles.subscribeQueueState((state) => {
       mapLayerStore.setState({ terrainComputeQueue: state });
     });
-    if (weatherMap !== undefined) {
-      acquireWeatherMapProtocol();
-      this.#weatherProtocolRegistered = true;
-    }
   }
 
   public attach(map: MapLibreMap): void {
@@ -646,6 +666,9 @@ export class MapLibreLayerController {
 
   /** Releases map listeners, persistence work, protocols, and terrain compute resources. */
   public dispose(): void {
+    this.#disposed = true;
+    this.#weatherMetadataController?.abort();
+    this.#weatherMetadataController = null;
     this.clearMosaic();
     const map = this.#map;
     if (map !== null) this.detach(map);
@@ -709,6 +732,8 @@ export class MapLibreLayerController {
           'Open-Meteo did not provide an available forecast time.',
         );
       }
+      await this.ensureWeatherMapProtocol();
+      controller.signal.throwIfAborted();
       this.replaceWeatherMapFrame(selectedTimeIndex);
       mapLayerStore.setState({
         weatherMap: {
@@ -3825,6 +3850,28 @@ export class MapLibreLayerController {
       if (tracker.timer !== null) clearTimeout(tracker.timer);
     }
     this.#rasterRecoveries.clear();
+  }
+
+  private async ensureWeatherMapProtocol(): Promise<void> {
+    if (this.#weatherProtocolRegistered) return;
+    this.#weatherProtocolRegistration ??= this.registerWeatherMapProtocol();
+    await this.#weatherProtocolRegistration;
+    if (this.#disposed) {
+      throw new Error('The weather map protocol is unavailable.');
+    }
+  }
+
+  private async registerWeatherMapProtocol(): Promise<void> {
+    try {
+      await acquireWeatherMapProtocol();
+      if (this.#disposed) {
+        releaseWeatherMapProtocol();
+        return;
+      }
+      this.#weatherProtocolRegistered = true;
+    } finally {
+      this.#weatherProtocolRegistration = null;
+    }
   }
 
   private weatherMapUrl(

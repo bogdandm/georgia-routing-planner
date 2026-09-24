@@ -300,12 +300,14 @@ perimeter derived from provider-tagged military geometry.
 
 ## Spatial weather map
 
-The weather controller registers the `om://` MapLibre protocol once for the lifetime of
-the runtime service. Enabling weather fetches the public
-`data_spatial/ecmwf_ifs025/latest.json` document through the shared bounded HTTP client,
-validates completion, variables, and `valid_times`, and chooses the available timestamp
-nearest the requested instant. The selected zero-based index becomes one shared
-`time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow sources.
+The weather controller loads the weather-map package and registers its `om://` MapLibre
+protocol on first enable, then releases the protocol when the runtime service is
+disposed. Enabling weather fetches the public `data_spatial/ecmwf_ifs025/latest.json`
+document through the shared bounded HTTP client, validates completion, required cloud,
+precipitation, and both wind-component variables, and `valid_times`, then chooses the
+available timestamp nearest the requested instant. The selected zero-based index becomes
+one shared `time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow
+sources.
 
 MapLibre reads each source directly from Open-Meteo's public OM files. The controller
 adds translucent cloud and precipitation rasters followed by the package's `wind-arrows`

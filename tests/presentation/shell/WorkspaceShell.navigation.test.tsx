@@ -466,7 +466,7 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('button', { name: 'Select forecast point' })).toBeVisible();
     expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
     expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
-  }, 10_000);
+  });
   it('retains the loaded Weather forecast across workspace navigation', async () => {
     const user = userEvent.setup();
     const execute = vi.spyOn(services.pointWeatherForecast, 'execute');

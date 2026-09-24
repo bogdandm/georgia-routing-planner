@@ -29,9 +29,12 @@ interface MapViewControlsProps {
   readonly layerPresetDisabled: boolean;
   readonly hybridOverlayEnabled: boolean;
   readonly hybridOverlayDisabled: boolean;
+  readonly weatherMapEnabled: boolean;
+  readonly weatherMapDisabled: boolean;
   readonly onTerrainModeChange: (mode: TerrainMode) => void;
   readonly onLayerPresetChange: (preset: MapLayerPreset) => boolean;
   readonly onHybridOverlayChange: (enabled: boolean) => void;
+  readonly onWeatherMapChange: (enabled: boolean) => void;
   readonly onOpenLayersTab: () => void;
 }
 
@@ -69,9 +72,12 @@ export function MapViewControls({
   layerPresetDisabled,
   hybridOverlayEnabled,
   hybridOverlayDisabled,
+  weatherMapEnabled,
+  weatherMapDisabled,
   onTerrainModeChange,
   onLayerPresetChange,
   onHybridOverlayChange,
+  onWeatherMapChange,
   onOpenLayersTab,
 }: MapViewControlsProps) {
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
@@ -229,6 +235,24 @@ export function MapViewControls({
             )}
           </ListItemIcon>
           <ListItemText primary="OSM overlay" />
+        </MenuItem>
+        <MenuItem
+          aria-checked={weatherMapEnabled}
+          disabled={weatherMapDisabled}
+          onClick={() => {
+            onWeatherMapChange(!weatherMapEnabled);
+          }}
+          role="menuitemcheckbox"
+          sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+        >
+          <ListItemIcon sx={{ minWidth: 36 }}>
+            {weatherMapEnabled ? (
+              <CheckBoxIcon fontSize="small" />
+            ) : (
+              <CheckBoxOutlineBlankIcon fontSize="small" />
+            )}
+          </ListItemIcon>
+          <ListItemText primary="Weather" secondary="Clouds, precipitation, and wind" />
         </MenuItem>
         <MenuItem
           aria-checked={activeLayerPreset === 'sentinel-2'}

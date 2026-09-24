@@ -19,6 +19,8 @@ import {
   type TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 
 interface LayerControl {
   readonly id: LogicalMapLayerId;
@@ -150,6 +152,7 @@ const importedTrackControls = [
 export function LayersPanel() {
   const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
   const state = useStore(mapLayerStore);
+  const setActiveTab = useUiStore((uiState) => uiState.setActiveTab);
   const [terrainOverlayCommandError, setTerrainOverlayCommandError] = useState<
     string | null
   >(null);
@@ -225,6 +228,16 @@ export function LayersPanel() {
     const result = mapLayers.setTerrainOverlayPreferences(value);
     setTerrainOverlayCommandError(result.status === 'failed' ? result.message : null);
   };
+  const openWeatherTab = () => {
+    setActiveTab('weather');
+    const nextUrl = new URL(window.location.href);
+    nextUrl.hash = workspaceHashForTab('weather');
+    window.history.pushState(window.history.state, '', nextUrl);
+  };
+
+  const changeWeatherOpacity = (_event: Event, value: number | number[]) => {
+    if (typeof value === 'number') mapLayers?.setWeatherOpacity(value / 100);
+  };
 
   return (
     <Stack spacing={1.5} sx={{ p: 2 }}>
@@ -232,6 +245,84 @@ export function LayersPanel() {
         <Alert severity="error">Map layer controls are unavailable.</Alert>
       ) : null}
       <Stack spacing={2} divider={<Divider flexItem />}>
+        <Box component="section" aria-labelledby="weather-layer-source">
+          <Typography id="weather-layer-source" component="h3" variant="subtitle2">
+            Weather
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.5 }}
+          >
+            ECMWF IFS clouds, precipitation, and compact wind arrows from Open-Meteo.
+          </Typography>
+          <Box sx={{ px: 1, mt: 1 }}>
+            <FormControlLabel
+              sx={{ m: 0 }}
+              slotProps={{ typography: { variant: 'body2' } }}
+              disabled={mapLayers === null || state.weatherMap.status === 'loading'}
+              control={
+                <Checkbox
+                  size="small"
+                  sx={{ p: 0, mr: 1 }}
+                  checked={state.weatherMap.enabled}
+                  onChange={(event) => {
+                    if (event.target.checked) {
+                      openWeatherTab();
+                      return;
+                    }
+                    void mapLayers?.setWeatherEnabled(false);
+                  }}
+                />
+              }
+              label={
+                state.weatherMap.enabled ? 'Weather map visible' : 'Open Weather tab'
+              }
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
+            >
+              {state.weatherMap.enabled
+                ? 'All weather fields use the same metadata-selected forecast frame.'
+                : 'Enable the combined weather layer from the Weather tab.'}
+            </Typography>
+            <Stack
+              direction="row"
+              spacing={1.25}
+              sx={{ mt: 1, pl: 3.5, alignItems: 'center' }}
+            >
+              <Typography id="weather-opacity-label" variant="body2">
+                Opacity
+              </Typography>
+              <Slider
+                aria-labelledby="weather-opacity-label"
+                disabled={mapLayers === null || !state.weatherMap.enabled}
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(state.weatherMap.opacity * 100)}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${String(value)}%`}
+                onChange={changeWeatherOpacity}
+                sx={{ flex: 1, mx: 0.5 }}
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ minWidth: 34, textAlign: 'right' }}
+              >
+                {Math.round(state.weatherMap.opacity * 100)}%
+              </Typography>
+            </Stack>
+            {state.weatherMap.message === null ? null : (
+              <Alert severity="warning" role="status" sx={{ mt: 1 }}>
+                {state.weatherMap.message}
+              </Alert>
+            )}
+          </Box>
+        </Box>
         {groups.map((group) => (
           <Box
             component="section"

@@ -85,6 +85,7 @@ import {
 } from '@/presentation/markers/MarkersWorkspace';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
+import { WeatherTimeControl } from '@/presentation/weather/WeatherTimeControl';
 import {
   formatWeatherMillimetres,
   formatWeatherTemperatureRange,
@@ -345,6 +346,7 @@ export function MapWorkspace({
   );
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
+  const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
@@ -1027,6 +1029,12 @@ export function MapWorkspace({
     },
     [mapLayers],
   );
+  const handleWeatherMapChange = useCallback(
+    (enabled: boolean) => {
+      void mapLayers?.setWeatherEnabled(enabled);
+    },
+    [mapLayers],
+  );
   const handleOpenLayersTab = useCallback(() => {
     setActiveTab('layers');
     setMobileWorkspaceOpen(true);
@@ -1097,8 +1105,11 @@ export function MapWorkspace({
               onLayerPresetChange={handleLayerPresetChange}
               onHybridOverlayChange={handleHybridOverlayChange}
               onOpenLayersTab={handleOpenLayersTab}
+              onWeatherMapChange={handleWeatherMapChange}
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
+              weatherMapDisabled={mapLayers === null || weatherMap.status === 'loading'}
+              weatherMapEnabled={weatherMap.enabled}
             />
             {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
@@ -1178,6 +1189,7 @@ export function MapWorkspace({
           </Map>
         ))
       )}
+      {mapProviderConfiguration.status === 'valid' ? <WeatherTimeControl /> : null}
       {cameraMessage !== null && mapProviderConfiguration.status === 'valid' ? (
         <Alert
           severity="warning"
@@ -1204,8 +1216,11 @@ export function MapWorkspace({
           onLayerPresetChange={handleLayerPresetChange}
           onHybridOverlayChange={handleHybridOverlayChange}
           onOpenLayersTab={handleOpenLayersTab}
+          onWeatherMapChange={handleWeatherMapChange}
           onTerrainModeChange={handleTerrainControlChange}
           terrainState={terrainState}
+          weatherMapDisabled={mapLayers === null || weatherMap.status === 'loading'}
+          weatherMapEnabled={weatherMap.enabled}
         />
       ) : null}
       <ElevationGradeLegend

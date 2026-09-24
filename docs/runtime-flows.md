@@ -298,6 +298,25 @@ camera, sources, and user visibility choices are preserved. Surface polygons are
 restyled as decorative line layers; the restricted-area layer is an intentional red
 perimeter derived from provider-tagged military geometry.
 
+## Spatial weather map
+
+The weather controller registers the `om://` MapLibre protocol once for the lifetime of
+the runtime service. Enabling weather fetches the public
+`data_spatial/ecmwf_ifs025/latest.json` document through the shared bounded HTTP client,
+validates completion, variables, and `valid_times`, and chooses the available timestamp
+nearest the requested instant. The selected zero-based index becomes one shared
+`time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow sources.
+
+MapLibre reads each source directly from Open-Meteo's public OM files. The controller
+adds translucent cloud and precipitation rasters followed by the package's `wind-arrows`
+vector source layer, all immediately before road casings. Reconciliation after style
+changes restores the same frame and order before imported tracks, routes, and saved
+markers are reapplied. A time change removes the three old sources and recreates them
+together before publishing the new selected index, so state never claims a mixed
+forecast frame. Disabling weather aborts metadata loading and removes the complete
+source/layer group. Only shared opacity is durable; metadata and forecast-frame state
+remain memory-only.
+
 ## Browser route planning
 
 ```mermaid

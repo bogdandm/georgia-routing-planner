@@ -98,7 +98,13 @@ elevation when necessary, and derives the current three-hour, daylight, and
 midnight-spanning night summaries through the pure `domain/weather` period aggregator.
 `OpenMeteoWeatherForecastGateway` alone owns Open-Meteo query parameters, response
 validation, ECMWF metadata caching, and safe transport failures. Presentation receives
-only normalized forecast values and never imports the HTTP client.
+only normalized forecast values and never imports the HTTP client. The spatial
+weather-map path keeps the same direction without adding another application service.
+`loadOpenMeteoSpatialMetadata` validates the public ECMWF IFS spatial manifest, the
+domain-level nearest-time selector resolves its real `valid_times`, and
+`MapLibreLayerController` owns the external `om://` protocol plus the three synchronized
+native sources. React observes only serializable enablement, opacity, metadata times,
+and the selected frame through `mapLayerStore`.
 
 ## Composition root
 

@@ -5,6 +5,7 @@ import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
@@ -341,25 +342,21 @@ export function WorkspaceSidebar({
                 <AddLocationAltIcon fontSize="small" />
               </ToggleButton>
             </Tooltip>
-            <Tooltip title="Open forecast on another service">
-              <span>
-                <IconButton
-                  size="small"
-                  aria-controls={
-                    weatherForecastMenuOpen ? 'weather-forecast-links-menu' : undefined
-                  }
-                  aria-expanded={weatherForecastMenuOpen}
-                  aria-haspopup="menu"
-                  aria-label="More forecast links"
-                  disabled={weatherHeaderPoint === null}
-                  onClick={(event) => {
-                    setWeatherForecastMenuAnchor(event.currentTarget);
-                  }}
-                >
-                  <MoreVertIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <IconButton
+              size="small"
+              aria-controls={
+                weatherForecastMenuOpen ? 'weather-forecast-links-menu' : undefined
+              }
+              aria-expanded={weatherForecastMenuOpen}
+              aria-haspopup="menu"
+              aria-label="More weather actions"
+              disabled={weatherHeaderPoint === null}
+              onClick={(event) => {
+                setWeatherForecastMenuAnchor(event.currentTarget);
+              }}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
             <Menu
               anchorEl={weatherForecastMenuOpen ? weatherForecastMenuAnchor : null}
               id="weather-forecast-links-menu"
@@ -379,7 +376,8 @@ export function WorkspaceSidebar({
                       setWeatherForecastMenuAnchor(null);
                     }}
                   >
-                    Meteoblue
+                    Open meteoblue.com
+                    <OpenInNewIcon fontSize="small" sx={{ ml: 1 }} />
                   </MenuItem>
                   <MenuItem
                     component="a"
@@ -390,7 +388,8 @@ export function WorkspaceSidebar({
                       setWeatherForecastMenuAnchor(null);
                     }}
                   >
-                    Windy
+                    Open windy.com
+                    <OpenInNewIcon fontSize="small" sx={{ ml: 1 }} />
                   </MenuItem>
                 </>
               )}

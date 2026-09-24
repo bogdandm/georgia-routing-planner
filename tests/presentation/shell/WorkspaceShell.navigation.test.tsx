@@ -484,7 +484,7 @@ describe('WorkspaceShell', () => {
       name: 'Select forecast point',
     });
     const forecastLinksButton = screen.getByRole('button', {
-      name: 'More forecast links',
+      name: 'More weather actions',
     });
     expect(forecastLinksButton).toBeDisabled();
     expect(
@@ -502,14 +502,19 @@ describe('WorkspaceShell', () => {
     expect(forecastLinksButton).toBeEnabled();
     await user.click(forecastLinksButton);
 
-    expect(screen.getByRole('menuitem', { name: 'Meteoblue' })).toHaveAttribute(
+    const meteoblueLink = screen.getByRole('menuitem', {
+      name: 'Open meteoblue.com',
+    });
+    const windyLink = screen.getByRole('menuitem', {
+      name: 'Open windy.com',
+    });
+    expect(meteoblueLink).toHaveAttribute(
       'href',
       'https://www.meteoblue.com/en/weather/week/41.7151N44.8271E',
     );
-    expect(screen.getByRole('menuitem', { name: 'Windy' })).toHaveAttribute(
-      'href',
-      'https://www.windy.com/41.7151/44.8271',
-    );
+    expect(windyLink).toHaveAttribute('href', 'https://www.windy.com/41.7151/44.8271');
+    expect(meteoblueLink.querySelector('svg')).not.toBeNull();
+    expect(windyLink.querySelector('svg')).not.toBeNull();
     for (const link of screen.getAllByRole('menuitem')) {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');

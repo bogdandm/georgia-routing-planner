@@ -415,18 +415,22 @@ hidden behind Weather does not capture clicks. On smartphones, activating the se
 action also reveals the map. The header's **Show weather map** action enables one
 combined ECMWF IFS 0.25° map feature. It fetches Open-Meteo's public spatial metadata
 and OM files directly from the browser without an account, API key, application server,
-or proxy. Neutral translucent cloud cover sits below Open-Meteo-colored precipitation,
-with compact wind arrows above both; the complete weather stack remains below roads,
-hiking paths, labels, routes, and markers.
+or proxy. Cloud cover uses a smooth, dark-neutral transparency ramp below
+Open-Meteo-colored precipitation. Wind arrows sit above both; their stroke stays almost
+invisible at 5 m/s and below, then grows with wind speed. The complete weather stack
+remains below roads, hiking paths, labels, routes, and markers.
 
-While the weather map is enabled, a compact forecast-frame control appears directly
-below map search. Scrollable day and time rails expose the actual `valid_times` returned
-by Open-Meteo, and previous/next actions move by one available frame. Every selection
+While the weather map is enabled, a compact forecast-frame control appears below the map
+readiness and terrain-work indicators. The available metadata days form a two-row
+calendar instead of a scrolling rail; the selected day's actual `valid_times` remain in
+the compact time rail. A small legend identifies clouds, precipitation, and wind.
+Previous and next available times are selected directly from that rail. Every selection
 updates clouds, precipitation, and wind to the same metadata index; the UI never infers
-a fixed forecast interval. The quick map-layer menu can show or hide the feature. Layers
-exposes its shared opacity and, while weather is off, routes its entry to Weather
-instead of starting a hidden network request. Opacity persists locally; enabled state
-and selected forecast frame remain transient.
+a fixed forecast interval. The shared Ready area reports metadata loading and
+determinate progress as the three MapLibre sources settle. The quick map-layer menu can
+show or hide the feature. Layers exposes its shared opacity and, while weather is off,
+routes its entry to Weather instead of starting a hidden network request. Opacity
+persists locally; enabled state and selected forecast frame remain transient.
 
 A completed forecast renders one map marker at the clicked WGS84 coordinate. It uses the
 monochrome Meteocon selected for **Now · next 3 h** at the visual scale of saved map

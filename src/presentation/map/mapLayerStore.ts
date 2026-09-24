@@ -84,6 +84,10 @@ export interface WeatherMapSnapshot {
   readonly referenceTime: string | null;
   readonly validTimes: readonly string[];
   readonly selectedTimeIndex: number | null;
+  readonly renderProgress: {
+    readonly loadedSourceCount: number;
+    readonly totalSourceCount: number;
+  } | null;
   readonly message: string | null;
 }
 
@@ -151,6 +155,7 @@ const initialMapLayerState: MapLayerState = {
     referenceTime: null,
     validTimes: [],
     selectedTimeIndex: null,
+    renderProgress: null,
     message: null,
   },
 };

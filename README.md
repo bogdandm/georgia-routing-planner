@@ -151,8 +151,11 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open the local URL printed by Vite. The default map, terrain, geocoding, and satellite
-providers do not require credentials.
+Open the local URL printed by Vite. The development and preview servers send
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp` so browser workers can use cross-origin
+isolation without command-line flags. The default map, terrain, geocoding, satellite,
+and weather providers do not require credentials.
 
 Account and synchronization features require:
 

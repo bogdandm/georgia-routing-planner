@@ -1451,6 +1451,34 @@ describe('WorkspaceShell', () => {
     ).toHaveAttribute('aria-valuenow', '25');
   });
 
+  it('shows weather source progress in the map Ready area', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    mapLayerStore.setState({
+      weatherMap: {
+        ...mapLayerStore.getState().weatherMap,
+        enabled: true,
+        status: 'ready',
+        renderProgress: { loadedSourceCount: 1, totalSourceCount: 3 },
+      },
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Rendering weather map · 1/3');
+    const progress = screen.getByRole('progressbar', {
+      name: 'Rendering weather map',
+    });
+    expect(Number(progress.getAttribute('aria-valuenow'))).toBeCloseTo(100 / 3);
+  });
+
   it('replaces Ready with a warning after automatic provider fallback', () => {
     services.mapDiagnostics.update({
       ...new FakeMapFacade().snapshot,

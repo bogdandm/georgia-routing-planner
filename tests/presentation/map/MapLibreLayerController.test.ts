@@ -348,6 +348,10 @@ describe('MapLibreLayerController', () => {
       selectedTimeIndex: 2,
       validTimes,
     });
+    expect(mapLayerStore.getState().weatherMap.renderProgress).toEqual({
+      loadedSourceCount: 0,
+      totalSourceCount: 3,
+    });
     const sourceUrls = [
       map.sources.get(mapSourceIds.weatherClouds),
       map.sources.get(mapSourceIds.weatherPrecipitation),
@@ -367,6 +371,23 @@ describe('MapLibreLayerController', () => {
       'source-layer': 'wind-arrows',
       type: 'line',
     });
+    expect(map.layers.get(weatherMapLayerIds.wind)?.paint).toMatchObject({
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['to-number', ['get', 'value']],
+        0,
+        0.08,
+        5,
+        0.12,
+        10,
+        0.55,
+        20,
+        0.9,
+        35,
+        1.15,
+      ],
+    });
     const layerOrder = [...map.layers.keys()];
     expect(layerOrder.indexOf(weatherMapLayerIds.clouds)).toBeLessThan(
       layerOrder.indexOf(weatherMapLayerIds.precipitation),
@@ -377,6 +398,26 @@ describe('MapLibreLayerController', () => {
     expect(layerOrder.indexOf(weatherMapLayerIds.wind)).toBeLessThan(
       layerOrder.indexOf(mapLayerIds.roadCasings),
     );
+    map.fire('sourcedata', {
+      sourceId: mapSourceIds.weatherClouds,
+      sourceDataType: 'content',
+      isSourceLoaded: true,
+    });
+    expect(mapLayerStore.getState().weatherMap.renderProgress).toEqual({
+      loadedSourceCount: 1,
+      totalSourceCount: 3,
+    });
+    for (const sourceId of [
+      mapSourceIds.weatherPrecipitation,
+      mapSourceIds.weatherWind,
+    ]) {
+      map.fire('sourcedata', {
+        sourceId,
+        sourceDataType: 'content',
+        isSourceLoaded: true,
+      });
+    }
+    expect(mapLayerStore.getState().weatherMap.renderProgress).toBeNull();
 
     expect(
       controller.selectWeatherForecastTime(new Date('2026-09-24T18:00:00Z')),
@@ -395,14 +436,24 @@ describe('MapLibreLayerController', () => {
     }
     expect(controller.setWeatherOpacity(0.5)).toEqual({ status: 'success' });
     expect(map.paintProperties.get(`${weatherMapLayerIds.clouds}.raster-opacity`)).toBe(
-      0.18,
+      0.19,
     );
     expect(
       map.paintProperties.get(`${weatherMapLayerIds.precipitation}.raster-opacity`),
     ).toBe(0.38);
-    expect(map.paintProperties.get(`${weatherMapLayerIds.wind}.line-opacity`)).toBe(
-      0.31,
-    );
+    expect(map.paintProperties.get(`${weatherMapLayerIds.wind}.line-opacity`)).toEqual([
+      'interpolate',
+      ['linear'],
+      ['to-number', ['get', 'value']],
+      0,
+      0,
+      5,
+      0.0116,
+      8,
+      0.1595,
+      15,
+      0.29,
+    ]);
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         weatherMapOpacity: 0.5,

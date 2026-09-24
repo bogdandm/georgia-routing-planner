@@ -310,14 +310,19 @@ one shared `time_step=valid_times_N` for cloud cover, precipitation, and wind-ar
 sources.
 
 MapLibre reads each source directly from Open-Meteo's public OM files. The controller
-adds translucent cloud and precipitation rasters followed by the package's `wind-arrows`
-vector source layer, all immediately before road casings. Reconciliation after style
-changes restores the same frame and order before imported tracks, routes, and saved
-markers are reapplied. A time change removes the three old sources and recreates them
-together before publishing the new selected index, so state never claims a mixed
-forecast frame. Disabling weather aborts metadata loading and removes the complete
-source/layer group. Only shared opacity is durable; metadata and forecast-frame state
-remain memory-only.
+adds the dark-neutral cloud-opacity raster and precipitation raster followed by the
+package's `wind-arrows` vector source layer, all immediately before road casings. The
+wind style interpolates both visibility and stroke width from the vector tile's speed
+property, keeping values at or below 5 m/s nearly invisible. Source-data events publish
+zero-to-three render progress into the shared operational-status area and clear it when
+all current-frame sources settle.
+
+Reconciliation after style changes restores the same frame and order before imported
+tracks, routes, and saved markers are reapplied. A time change removes the three old
+sources and recreates them together before publishing the new selected index, so state
+never claims a mixed forecast frame. Disabling weather aborts metadata loading and
+removes the complete source/layer group. Only shared opacity is durable; metadata,
+render progress, and forecast-frame state remain memory-only.
 
 ## Browser route planning
 

@@ -1,14 +1,9 @@
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import {
   Box,
-  CircularProgress,
-  IconButton,
   Paper,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useMemo, type MouseEvent } from 'react';
@@ -20,6 +15,7 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 interface ForecastDay {
   readonly key: string;
   readonly label: string;
+  readonly buttonLabel: string;
   readonly indexes: readonly number[];
 }
 
@@ -28,11 +24,15 @@ const dayFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
   month: 'short',
 });
+const compactDayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  day: 'numeric',
+});
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit',
   minute: '2-digit',
 });
-const zoneFormatter = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' });
+const calendarRowCount = 2;
 
 function localDayKey(date: Date): string {
   return [
@@ -50,13 +50,20 @@ export function WeatherTimeControl() {
   const { mapLayers } = useRuntimeServices();
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const days = useMemo<readonly ForecastDay[]>(() => {
-    const groups = new Map<string, { label: string; indexes: number[] }>();
+    const groups = new Map<
+      string,
+      { label: string; buttonLabel: string; indexes: number[] }
+    >();
     weatherMap.validTimes.forEach((validTime, index) => {
       const date = new Date(validTime);
       const key = localDayKey(date);
       const existing = groups.get(key);
       if (existing === undefined) {
-        groups.set(key, { label: dayFormatter.format(date), indexes: [index] });
+        groups.set(key, {
+          label: dayFormatter.format(date),
+          buttonLabel: compactDayFormatter.format(date),
+          indexes: [index],
+        });
       } else {
         existing.indexes.push(index);
       }
@@ -64,29 +71,12 @@ export function WeatherTimeControl() {
     return [...groups].map(([key, value]) => ({ key, ...value }));
   }, [weatherMap.validTimes]);
 
-  if (!weatherMap.enabled) return null;
-
-  if (weatherMap.status !== 'ready' || weatherMap.selectedTimeIndex === null) {
-    return (
-      <Paper
-        aria-live="polite"
-        elevation={3}
-        sx={{
-          position: 'absolute',
-          top: 62,
-          right: { xs: 12, sm: 54 },
-          zIndex: 3,
-          px: 1.5,
-          py: 1,
-          borderRadius: 2,
-        }}
-      >
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <CircularProgress size={16} />
-          <Typography variant="caption">Loading ECMWF forecast frames…</Typography>
-        </Stack>
-      </Paper>
-    );
+  if (
+    !weatherMap.enabled ||
+    weatherMap.status !== 'ready' ||
+    weatherMap.selectedTimeIndex === null
+  ) {
+    return null;
   }
   const selectedTimeIndex = weatherMap.selectedTimeIndex;
 
@@ -117,6 +107,8 @@ export function WeatherTimeControl() {
     if (nearestIndex !== undefined) selectFrame(nearestIndex);
   };
 
+  const calendarColumnCount = Math.max(1, Math.ceil(days.length / calendarRowCount));
+
   return (
     <Paper
       component="section"
@@ -124,7 +116,7 @@ export function WeatherTimeControl() {
       elevation={4}
       sx={{
         position: 'absolute',
-        top: 62,
+        top: 108,
         right: { xs: 12, sm: 54 },
         left: { xs: 12, sm: 'auto' },
         zIndex: 3,
@@ -137,66 +129,41 @@ export function WeatherTimeControl() {
       }}
     >
       <Stack spacing={0.75}>
-        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>
-              ECMWF IFS 0.25°
-            </Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {dayFormatter.format(selectedTime)} · {timeFormatter.format(selectedTime)}{' '}
-              {zoneFormatter
-                .formatToParts(selectedTime)
-                .find((part) => part.type === 'timeZoneName')?.value ?? ''}
-            </Typography>
-          </Box>
-          <Tooltip title="Previous forecast frame">
-            <span>
-              <IconButton
-                size="small"
-                disabled={selectedTimeIndex === 0}
-                aria-label="Previous forecast frame"
-                onClick={() => {
-                  selectFrame(selectedTimeIndex - 1);
-                }}
-              >
-                <NavigateBeforeIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Next forecast frame">
-            <span>
-              <IconButton
-                size="small"
-                disabled={selectedTimeIndex === weatherMap.validTimes.length - 1}
-                aria-label="Next forecast frame"
-                onClick={() => {
-                  selectFrame(selectedTimeIndex + 1);
-                }}
-              >
-                <NavigateNextIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Stack>
-        <Box sx={{ overflowX: 'auto', pb: 0.25 }}>
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={selectedDayKey}
-            onChange={selectDay}
-            aria-label="Forecast day"
-            sx={{
-              whiteSpace: 'nowrap',
-              '& .MuiToggleButton-root': { px: 1.25, py: 0.5 },
-            }}
-          >
-            {days.map((day) => (
-              <ToggleButton key={day.key} value={day.key} aria-label={day.label}>
-                {day.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={selectedDayKey}
+          onChange={selectDay}
+          aria-label="Forecast day"
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${String(calendarColumnCount)}, minmax(0, 1fr))`,
+            gap: 0.5,
+            '& .MuiToggleButtonGroup-grouped': {
+              minWidth: 0,
+              m: 0,
+              px: 0.75,
+              py: 0.35,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              fontSize: '0.6875rem',
+              '&:not(:first-of-type)': {
+                ml: 0,
+                borderLeft: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+              },
+              '&:first-of-type': { borderRadius: 1 },
+            },
+          }}
+        >
+          {days.map((day) => (
+            <ToggleButton key={day.key} value={day.key} aria-label={day.label}>
+              {day.buttonLabel}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
         <Box sx={{ overflowX: 'auto' }}>
           <ToggleButtonGroup
             exclusive
@@ -225,6 +192,69 @@ export function WeatherTimeControl() {
             })}
           </ToggleButtonGroup>
         </Box>
+        <Stack
+          direction="row"
+          spacing={1.25}
+          aria-label="Weather map legend"
+          sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.25 }}
+        >
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Box
+              aria-hidden
+              sx={{
+                width: 28,
+                height: 6,
+                borderRadius: 3,
+                background:
+                  'linear-gradient(90deg, rgba(66,72,78,0.08), rgba(66,72,78,0.95))',
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              Clouds
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Box
+              aria-hidden
+              sx={{
+                width: 42,
+                height: 6,
+                borderRadius: 3,
+                background:
+                  'linear-gradient(90deg, #85ccfa, #0000ff, #42b608, #ffee00, #ff8800, #ff0000)',
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              Precipitation
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <Box
+              aria-hidden
+              sx={{
+                position: 'relative',
+                width: 24,
+                height: 8,
+                borderTop: '1.5px solid #173941',
+                transform: 'translateY(3px)',
+                '&::after': {
+                  position: 'absolute',
+                  top: -4,
+                  right: 0,
+                  width: 6,
+                  height: 6,
+                  borderTop: '1.5px solid #173941',
+                  borderRight: '1.5px solid #173941',
+                  content: '""',
+                  transform: 'rotate(45deg)',
+                },
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              Wind
+            </Typography>
+          </Stack>
+        </Stack>
       </Stack>
     </Paper>
   );

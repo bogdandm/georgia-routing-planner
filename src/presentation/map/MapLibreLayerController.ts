@@ -210,9 +210,20 @@ export interface WeatherMapControllerConfiguration {
 }
 
 const weatherMapProtocolId = 'om';
-const weatherCloudOpacity = 0.36;
+const weatherCloudOpacity = 0.38;
 const weatherPrecipitationOpacity = 0.76;
-const weatherWindOpacity = 0.62;
+const weatherWindOpacity = 0.58;
+const weatherMapSourceIds = [
+  mapSourceIds.weatherClouds,
+  mapSourceIds.weatherPrecipitation,
+  mapSourceIds.weatherWind,
+] as const;
+type WeatherMapSourceId = (typeof weatherMapSourceIds)[number];
+
+function isWeatherMapSourceId(sourceId: string): sourceId is WeatherMapSourceId {
+  return weatherMapSourceIds.includes(sourceId as WeatherMapSourceId);
+}
+
 let weatherMapProtocolConsumers = 0;
 interface WeatherMapProtocolModule {
   readonly defaultOmProtocolSettings: OmProtocolSettings;
@@ -246,14 +257,19 @@ async function acquireWeatherMapProtocol(): Promise<void> {
         cloud_cover: {
           type: 'breakpoint',
           unit: '%',
-          breakpoints: [0, 20, 40, 60, 80, 100],
+          breakpoints: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
           colors: [
-            [235, 238, 240, 0],
-            [226, 230, 233, 0.16],
-            [213, 218, 222, 0.34],
-            [199, 205, 210, 0.56],
-            [240, 242, 244, 0.78],
-            [255, 255, 255, 0.94],
+            [66, 72, 78, 0],
+            [66, 72, 78, 0.1],
+            [66, 72, 78, 0.2],
+            [66, 72, 78, 0.3],
+            [66, 72, 78, 0.4],
+            [66, 72, 78, 0.5],
+            [66, 72, 78, 0.6],
+            [66, 72, 78, 0.7],
+            [66, 72, 78, 0.8],
+            [66, 72, 78, 0.9],
+            [66, 72, 78, 1],
           ],
         },
       },
@@ -523,6 +539,7 @@ export class MapLibreLayerController {
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
   readonly #readySatelliteBasemapSourceIds = new Set<string>();
+  readonly #readyWeatherMapSourceIds = new Set<string>();
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
@@ -603,11 +620,11 @@ export class MapLibreLayerController {
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
-    this.#map?.off('sourcedata', this.handleSatelliteBasemapSourceData);
+    this.#map?.off('sourcedata', this.handleSourceData);
     this.#map = map;
     map.on('styledata', this.handleStyleData);
     map.on('error', this.handleTerrainOverlayError);
-    map.on('sourcedata', this.handleSatelliteBasemapSourceData);
+    map.on('sourcedata', this.handleSourceData);
     this.reconcileSatelliteBasemapSource();
     this.reconcileMosaicEntries();
     this.reconcileTerrainOverlays();
@@ -634,7 +651,7 @@ export class MapLibreLayerController {
     this.contourTiles.setInteractionActive(false);
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
-    map.off('sourcedata', this.handleSatelliteBasemapSourceData);
+    map.off('sourcedata', this.handleSourceData);
     this.cancelRasterRecovery();
     this.#activeApplyController?.abort();
     this.#mosaicApplyController?.abort();
@@ -660,6 +677,7 @@ export class MapLibreLayerController {
     this.#savedMarkerImageIds.clear();
     this.#satelliteBasemapSources.clear();
     this.#readySatelliteBasemapSourceIds.clear();
+    this.#readyWeatherMapSourceIds.clear();
     this.#applySequence += 1;
     this.#mosaicSequence += 1;
   }
@@ -695,6 +713,7 @@ export class MapLibreLayerController {
           ...current,
           enabled: false,
           status: current.validTimes.length === 0 ? 'idle' : 'ready',
+          renderProgress: null,
           message: null,
         },
       });
@@ -715,6 +734,7 @@ export class MapLibreLayerController {
         ...current,
         enabled: true,
         status: 'loading',
+        renderProgress: null,
         message: null,
       },
     });
@@ -787,7 +807,7 @@ export class MapLibreLayerController {
     }
     mapLayerStore.setState({
       weatherMap: {
-        ...state,
+        ...mapLayerStore.getState().weatherMap,
         selectedTimeIndex,
         message: null,
       },
@@ -2391,26 +2411,37 @@ export class MapLibreLayerController {
     this.reconcileSavedMarkers();
   };
 
-  private readonly handleSatelliteBasemapSourceData = (
-    event: MapSourceDataEvent,
-  ): void => {
+  private readonly handleSourceData = (event: MapSourceDataEvent): void => {
+    if (isSatelliteBasemapSourceId(event.sourceId)) {
+      if (event.sourceDataType !== 'content') return;
+      const map = this.#map;
+      const source = map?.getSource(event.sourceId);
+      if (map === null || source === undefined) return;
+      if (this.#satelliteBasemapSources.get(event.sourceId) !== source) {
+        this.#satelliteBasemapSources.set(event.sourceId, source);
+        this.#readySatelliteBasemapSourceIds.delete(event.sourceId);
+      }
+      if (this.#readySatelliteBasemapSourceIds.has(event.sourceId)) return;
+      this.#readySatelliteBasemapSourceIds.add(event.sourceId);
+      this.applyMapVisualMode();
+      this.reconcileTerrainOverlays();
+      return;
+    }
+    if (!isWeatherMapSourceId(event.sourceId)) return;
+    const map = this.#map;
+    const weatherMap = mapLayerStore.getState().weatherMap;
     if (
-      event.sourceDataType !== 'content' ||
-      !isSatelliteBasemapSourceId(event.sourceId)
+      map === null ||
+      !weatherMap.enabled ||
+      weatherMap.status !== 'ready' ||
+      weatherMap.renderProgress === null ||
+      map.getSource(event.sourceId) === undefined ||
+      !map.isSourceLoaded(event.sourceId)
     ) {
       return;
     }
-    const map = this.#map;
-    const source = map?.getSource(event.sourceId);
-    if (map === null || source === undefined) return;
-    if (this.#satelliteBasemapSources.get(event.sourceId) !== source) {
-      this.#satelliteBasemapSources.set(event.sourceId, source);
-      this.#readySatelliteBasemapSourceIds.delete(event.sourceId);
-    }
-    if (this.#readySatelliteBasemapSourceIds.has(event.sourceId)) return;
-    this.#readySatelliteBasemapSourceIds.add(event.sourceId);
-    this.applyMapVisualMode();
-    this.reconcileTerrainOverlays();
+    this.#readyWeatherMapSourceIds.add(event.sourceId);
+    this.publishWeatherRenderProgress();
   };
 
   private reconcileSatelliteBasemapSource(): void {
@@ -3974,12 +4005,46 @@ export class MapLibreLayerController {
         layout: { 'line-cap': 'round' },
         paint: {
           'line-color': '#173941',
-          'line-opacity': weatherWindOpacity * opacity,
-          'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.7, 10, 1, 14, 1.35],
+          'line-opacity': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', 'value']],
+            0,
+            0,
+            5,
+            weatherWindOpacity * opacity * 0.04,
+            8,
+            weatherWindOpacity * opacity * 0.55,
+            15,
+            weatherWindOpacity * opacity,
+          ],
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', 'value']],
+            0,
+            0.08,
+            5,
+            0.12,
+            10,
+            0.55,
+            20,
+            0.9,
+            35,
+            1.15,
+          ],
         },
       },
       mapInsertionPoints.weatherBeforeLayerId,
     );
+    this.#readyWeatherMapSourceIds.clear();
+    const current = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...current,
+        renderProgress: { loadedSourceCount: 0, totalSourceCount: 3 },
+      },
+    });
   }
 
   private applyWeatherMapOpacity(): void {
@@ -4001,15 +4066,41 @@ export class MapLibreLayerController {
       );
     }
     if (map.getLayer(weatherMapLayerIds.wind) !== undefined) {
-      map.setPaintProperty(
-        weatherMapLayerIds.wind,
-        'line-opacity',
+      map.setPaintProperty(weatherMapLayerIds.wind, 'line-opacity', [
+        'interpolate',
+        ['linear'],
+        ['to-number', ['get', 'value']],
+        0,
+        0,
+        5,
+        weatherWindOpacity * opacity * 0.04,
+        8,
+        weatherWindOpacity * opacity * 0.55,
+        15,
         weatherWindOpacity * opacity,
-      );
+      ]);
     }
+  }
+  private publishWeatherRenderProgress(): void {
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    if (!weatherMap.enabled || weatherMap.renderProgress === null) return;
+    const loadedSourceCount = this.#readyWeatherMapSourceIds.size;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...weatherMap,
+        renderProgress:
+          loadedSourceCount >= weatherMap.renderProgress.totalSourceCount
+            ? null
+            : {
+                loadedSourceCount,
+                totalSourceCount: weatherMap.renderProgress.totalSourceCount,
+              },
+      },
+    });
   }
 
   private removeWeatherMap(): void {
+    this.#readyWeatherMapSourceIds.clear();
     const map = this.#map;
     if (map === null) return;
     for (const layerId of [
@@ -4019,11 +4110,7 @@ export class MapLibreLayerController {
     ]) {
       if (map.getLayer(layerId) !== undefined) map.removeLayer(layerId);
     }
-    for (const sourceId of [
-      mapSourceIds.weatherWind,
-      mapSourceIds.weatherPrecipitation,
-      mapSourceIds.weatherClouds,
-    ]) {
+    for (const sourceId of weatherMapSourceIds) {
       if (map.getSource(sourceId) !== undefined) map.removeSource(sourceId);
     }
   }
@@ -4048,6 +4135,7 @@ export class MapLibreLayerController {
         ...current,
         enabled: false,
         status: 'error',
+        renderProgress: null,
         message,
       },
     });

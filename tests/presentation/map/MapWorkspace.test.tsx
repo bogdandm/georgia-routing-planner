@@ -1356,7 +1356,7 @@ describe('MapWorkspace', () => {
     expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
   });
 
-  it('selects a Weather forecast point only through the one-shot header mode', async () => {
+  it('uses the one-shot Weather point mode while the forecast map is disabled', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });
     tracksWorkspaceMock.active = {
@@ -1430,6 +1430,101 @@ describe('MapWorkspace', () => {
       coordinate: { longitude: 44.8, latitude: 41.7 },
       target: { kind: 'saved-marker' },
     });
+  });
+
+  it('gives enabled weather maps primary clicks instead of route planning or inspection', async () => {
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    tracksWorkspaceMock.active = {
+      kind: 'route-plan',
+      status: 'selecting-start',
+      queuedWaypoints: [],
+      waypoints: [],
+    };
+    useUiStore.setState({ activeTab: 'tracks' });
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...weatherMap,
+        enabled: true,
+        status: 'ready',
+        validTimes: ['2026-09-25T12:00Z'],
+        selectedTimeIndex: 0,
+      },
+    });
+    render(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+
+    const nativeMap = await screen.findByTestId('native-map');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
+
+    fireEvent.click(nativeMap, { button: 0 });
+    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+    });
+    expect(facade.pointInspectionRequests).toEqual([]);
+    await waitFor(() => {
+      expect(useUiStore.getState().activeTab).toBe('weather');
+      expect(window.location.hash).toBe('#weather');
+      expect(window.location.search).toContain('weather=1');
+      expect(window.location.search).toContain('weatherLat=41.70000');
+      expect(window.location.search).toContain('weatherLon=44.80000');
+      expect(window.location.search).toContain('weatherTime=2026-09-25T12%3A00Z');
+    });
+    expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
+  });
+
+  it('restores enabled weather, its forecast point, and selected time from the URL', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?weather=1&weatherLat=41.71234&weatherLon=44.80123&weatherTime=2026-09-25T12%3A00Z#weather',
+    );
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    const setWeatherEnabled = vi
+      .spyOn(mapLayers, 'setWeatherEnabled')
+      .mockImplementation((_enabled, requestedTime) => {
+        const weatherMap = mapLayerStore.getState().weatherMap;
+        mapLayerStore.setState({
+          weatherMap: {
+            ...weatherMap,
+            enabled: true,
+            status: 'ready',
+            validTimes: ['2026-09-25T12:00Z'],
+            selectedTimeIndex: 0,
+          },
+        });
+        expect(requestedTime?.toISOString()).toBe('2026-09-25T12:00:00.000Z');
+        return Promise.resolve({ status: 'success' } as const);
+      });
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+
+    render(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shared weather map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Shared weather map');
+    await waitFor(() => {
+      expect(setWeatherEnabled).toHaveBeenCalledOnce();
+      expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+        coordinate: { longitude: 44.80123, latitude: 41.71234 },
+      });
+    });
+    expect(window.location.search).toContain('weatherTime=2026-09-25T12%3A00Z');
   });
 
   it('shows a monochrome current-weather marker with temperature and precipitation', async () => {

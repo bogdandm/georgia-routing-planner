@@ -86,14 +86,19 @@ is applied to the map. The selected imagery remains aligned with terrain in both
 
 ## Weather
 
-Open Weather and click the map to keep the ordinary point inspection popup while loading
-the same coordinate's next three hours, next 24 hourly forecast slots, and seven local
-calendar-day summaries. Each daily summary keeps daylight and the following physical
-night separate, with temperature, wind, gust, precipitation, and condition values.
+Weather provides a one-shot point-selection action while its map is off. While the
+weather map is enabled, each primary map click replaces the sidebar forecast point
+instead of opening ordinary point inspection or adding a hidden route waypoint. It also
+hides relief shading and elevation isolines until weather is switched off, then restores
+whichever overlays were previously enabled. The sidebar shows that coordinate's next
+three hours, next 24 hourly forecast slots, and seven local calendar-day summaries. Each
+daily summary keeps daylight and the following physical night separate, with
+temperature, wind, gust, precipitation, and condition values.
 
 Weather times follow the selected location's time zone. The values are deterministic
 ECMWF IFS model forecasts delivered by Open-Meteo, not measured weather-station
-observations. Forecast selection and results are session-only and are not persisted.
+observations. Enabled weather-map URLs retain the selected point and forecast frame for
+reload and sharing; forecast responses are not persisted.
 
 ## Local-first data
 

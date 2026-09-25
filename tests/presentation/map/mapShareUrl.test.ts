@@ -4,6 +4,8 @@ import {
   applySharedMapView,
   createMapShareUrl,
   parseSharedMapView,
+  parseWeatherMapUrlState,
+  updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 
@@ -73,5 +75,37 @@ describe('mapShareUrl', () => {
       bearing: 0,
       pitch: 0,
     });
+  });
+
+  it('round-trips enabled weather, its forecast point, and selected valid time', () => {
+    const url = updateWeatherMapUrl('https://example.test/app/?developer=1#weather', {
+      coordinate: { longitude: 44.801234, latitude: 41.712345 },
+      validTime: '2026-09-25T12:00Z',
+    });
+
+    expect(url).toContain('developer=1');
+    expect(url).toContain('weather=1');
+    expect(url).toContain('weatherLat=41.71234');
+    expect(url).toContain('weatherLon=44.80123');
+    expect(url).toContain('weatherTime=2026-09-25T12%3A00Z');
+    expect(parseWeatherMapUrlState(new URL(url).search)).toEqual({
+      coordinate: { longitude: 44.80123, latitude: 41.71234 },
+      validTime: '2026-09-25T12:00Z',
+    });
+  });
+
+  it('keeps weather enabled without optional selection and removes its complete URL state', () => {
+    expect(
+      parseWeatherMapUrlState('?weather=1&weatherLat=91&weatherTime=invalid'),
+    ).toEqual({
+      coordinate: null,
+      validTime: null,
+    });
+    expect(
+      updateWeatherMapUrl(
+        'https://example.test/app/?developer=1&weather=1&weatherLat=41&weatherLon=44&weatherTime=2026-09-25T12%3A00Z#weather',
+        null,
+      ),
+    ).toBe('https://example.test/app/?developer=1#weather');
   });
 });

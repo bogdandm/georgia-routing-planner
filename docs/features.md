@@ -405,32 +405,43 @@ contract remains unchanged.
 
 ### Weather
 
-Opening Weather does not change the map cursor or map-click behavior. Its header exposes
-the **Select forecast point** icon action. Activating it changes the cursor to a
-crosshair and gives the next primary map click to Weather instead of the ordinary
-point-inspection workflow; the mode then ends. After a point is selected, the adjacent
-overflow menu links directly to its Meteoblue and Windy forecasts in new browser tabs.
-Marker placement and Weather point selection are mutually exclusive, and a route draft
-hidden behind Weather does not capture clicks. On smartphones, activating the selection
-action also reveals the map. The header's **Show weather map** action enables one
-combined ECMWF IFS 0.25° map feature. It fetches Open-Meteo's public spatial metadata
-and OM files directly from the browser without an account, API key, application server,
-or proxy. Cloud cover uses a smooth, dark-neutral transparency ramp below
-Open-Meteo-colored precipitation. Wind arrows sit above both; their stroke stays almost
-invisible at 5 m/s and below, then grows with wind speed. The complete weather stack
-remains below roads, hiking paths, labels, routes, and markers.
+Opening Weather does not change the map cursor or map-click behavior while the weather
+map is off. Its header exposes the **Select forecast point** icon action. Activating it
+changes the cursor to a crosshair and gives the next primary map click to Weather
+instead of the ordinary point-inspection workflow; the mode then ends. After a point is
+selected, the adjacent overflow menu links directly to its Meteoblue and Windy forecasts
+in new browser tabs. Marker placement and one-shot Weather point selection are mutually
+exclusive, and a route draft hidden behind Weather does not capture clicks. On
+smartphones, activating the selection action also reveals the map.
+
+The header's **Show weather map** action enables one combined ECMWF IFS 0.25° map
+feature. It temporarily disables relief shading and elevation isolines, restoring each
+overlay that was enabled when weather is later turned off. It then fetches Open-Meteo's
+public spatial metadata and OM files directly from the browser without an account, API
+key, application server, or proxy. While the weather map is enabled, each primary map
+click replaces the Weather sidebar forecast point; ordinary point inspection and hidden
+route-planning clicks stay disabled. Explicit marker placement still takes precedence.
+Cloud cover below 30% is transparent, 31% begins at 30% opacity, and the neutral gray
+ramp darkens smoothly to fully opaque `#808080` at 100%. Precipitation below 0.5 mm is
+transparent, then follows the shared 0.5, 1.5, 2, 3, 7, 10, 20, and 30 mm blue-to-purple
+scale. Wind arrows sit above both; their stroke stays almost invisible at 5 m/s and
+below, then grows with wind speed. The complete weather stack remains below roads,
+hiking paths, labels, routes, and markers.
 
 While the weather map is enabled, a compact forecast-frame control appears below the map
 readiness and terrain-work indicators. The available metadata days form a two-row
 calendar instead of a scrolling rail; the selected day's actual `valid_times` remain in
-the compact time rail. A small legend identifies clouds, precipitation, and wind.
-Previous and next available times are selected directly from that rail. Every selection
-updates clouds, precipitation, and wind to the same metadata index; the UI never infers
-a fixed forecast interval. The shared Ready area reports metadata loading and
-determinate progress as the three MapLibre sources settle. The quick map-layer menu can
-show or hide the feature. Layers exposes its shared opacity and, while weather is off,
-routes its entry to Weather instead of starting a hidden network request. Opacity
-persists locally; enabled state and selected forecast frame remain transient.
+the compact time rail. Its enlarged legend renders cloud and precipitation gradients
+from the same color-scale constants used for map tiles and labels their explicit
+thresholds. Previous and next available times are selected directly from that rail.
+Every selection updates clouds, precipitation, and wind to the same metadata index; the
+UI never infers a fixed forecast interval. The shared Ready area reports metadata
+loading and determinate progress as the three MapLibre sources settle. The quick
+map-layer menu can show or hide the feature. Layers exposes its shared opacity and,
+while weather is off, routes its entry to Weather instead of starting a hidden network
+request. Opacity persists locally. Enabled state, the selected forecast point, and the
+selected metadata time are synchronized into the URL and restored on reload; the
+downloaded forecast response remains session-only.
 
 A completed forecast renders one map marker at the clicked WGS84 coordinate. It uses the
 monochrome Meteocon selected for **Now · next 3 h** at the visual scale of saved map
@@ -542,8 +553,9 @@ the selected location's provider-returned time zone.
 Only the latest point request may update the panel. A new selection or unmount aborts
 the previous request, and Retry repeats the currently selected coordinate. Loading,
 ready, and error content scroll inside the Weather panel while the model metadata and
-`Weather data by Open-Meteo` attribution remain fixed at its bottom. Forecast state is
-ephemeral: navigating away keeps the mounted session, but reload does not persist it.
+`Weather data by Open-Meteo` attribution remain fixed at its bottom. Forecast responses
+are ephemeral: navigation keeps the mounted result, while an enabled weather-map reload
+restores the URL-selected point and frame and requests current provider data again.
 ECMWF IFS values are deterministic model forecasts, not weather-station observations.
 
 Each primary workspace destination has a shareable URL anchor: `#tracks`, `#markers`,

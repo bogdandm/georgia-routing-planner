@@ -68,12 +68,15 @@ import {
   mapInteractionStore,
   requestMarkerCreationAt,
   requestSatelliteSearch,
+  requestWeatherForecast,
   type WeatherMapForecastMarker,
 } from '@/presentation/map/mapInteractionStore';
 import {
   applySharedMapView,
   createMapShareUrl,
   parseSharedMapView,
+  parseWeatherMapUrlState,
+  updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
@@ -266,6 +269,10 @@ export function MapWorkspace({
   const satelliteMode = useSatelliteMode();
   const mosaicActive = satelliteMode === 'mosaic';
   const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
+  const sharedWeatherMap = useMemo(
+    () => parseWeatherMapUrlState(window.location.search),
+    [],
+  );
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
   const [sharedTerrainUrlIntentActive, setSharedTerrainUrlIntentActive] = useState(
     () => sharedMapView?.orientation.mode === '3d',
@@ -276,6 +283,9 @@ export function MapWorkspace({
   const sharedTerrainStartRequested = useRef(false);
   const sharedSceneApplyController = useRef<AbortController | null>(null);
   const sharedSceneRestorationCancelled = useRef(false);
+  const sharedWeatherMapRestoreRequested = useRef(false);
+  const [sharedWeatherMapRestoreComplete, setSharedWeatherMapRestoreComplete] =
+    useState(() => sharedWeatherMap === null);
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
@@ -305,6 +315,10 @@ export function MapWorkspace({
   const weatherPointSelectionActive = useStore(
     mapInteractionStore,
     (state) => state.weatherPointSelectionActive,
+  );
+  const selectedWeatherForecastPoint = useStore(
+    mapInteractionStore,
+    (state) => state.selectedWeatherForecastPoint,
   );
   const weatherMapForecastMarker = useStore(
     mapInteractionStore,
@@ -355,6 +369,7 @@ export function MapWorkspace({
     activeTab === 'tracks' &&
     tracksWorkspace?.active?.kind === 'route-plan' &&
     tracksWorkspace.active.status !== 'saving';
+  const weatherOwnsMapClicks = weatherMap.enabled || weatherPointSelectionActive;
   const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
   const routePlanPreviewAnchor =
     tracksWorkspace?.active?.kind === 'route-plan' && routePlanningActive
@@ -516,6 +531,55 @@ export function MapWorkspace({
     snapshot.lifecycle === 'fatal';
 
   useEffect(() => {
+    if (
+      sharedWeatherMap === null ||
+      sharedWeatherMapRestoreRequested.current ||
+      snapshot.lifecycle !== 'ready' ||
+      mapLayers === null
+    ) {
+      return;
+    }
+    sharedWeatherMapRestoreRequested.current = true;
+    if (sharedWeatherMap.coordinate !== null) {
+      requestWeatherForecast(sharedWeatherMap.coordinate);
+    }
+    const requestedTime =
+      sharedWeatherMap.validTime === null
+        ? new Date()
+        : new Date(sharedWeatherMap.validTime);
+    void mapLayers.setWeatherEnabled(true, requestedTime).finally(() => {
+      setSharedWeatherMapRestoreComplete(true);
+    });
+  }, [mapLayers, sharedWeatherMap, snapshot.lifecycle]);
+
+  useEffect(() => {
+    if (!sharedWeatherMapRestoreComplete) return;
+    const selectedTime =
+      weatherMap.selectedTimeIndex === null
+        ? (sharedWeatherMap?.validTime ?? null)
+        : (weatherMap.validTimes[weatherMap.selectedTimeIndex] ?? null);
+    const nextUrl = updateWeatherMapUrl(
+      window.location.href,
+      weatherMap.enabled
+        ? {
+            coordinate: selectedWeatherForecastPoint?.coordinate ?? null,
+            validTime: selectedTime,
+          }
+        : null,
+    );
+    if (nextUrl !== window.location.href) {
+      window.history.replaceState(window.history.state, '', nextUrl);
+    }
+  }, [
+    selectedWeatherForecastPoint,
+    sharedWeatherMap,
+    sharedWeatherMapRestoreComplete,
+    weatherMap.enabled,
+    weatherMap.selectedTimeIndex,
+    weatherMap.validTimes,
+  ]);
+
+  useEffect(() => {
     const publishViewport = () => {
       mapViewport.update(facade.getViewportSnapshot());
     };
@@ -579,10 +643,10 @@ export function MapWorkspace({
     const mode =
       markerPlacement !== null
         ? 'marker-placement'
-        : routePlanningActive
-          ? 'route-planning'
-          : weatherPointSelectionActive
-            ? 'weather-point-selection'
+        : weatherOwnsMapClicks
+          ? 'weather-point-selection'
+          : routePlanningActive
+            ? 'route-planning'
             : 'default';
     facade.setInteractionMode(mode);
     if (mode === 'route-planning' || mode === 'weather-point-selection') {
@@ -591,14 +655,20 @@ export function MapWorkspace({
     return () => {
       facade.setInteractionMode('default');
     };
-  }, [facade, markerPlacement, routePlanningActive, weatherPointSelectionActive]);
+  }, [facade, markerPlacement, routePlanningActive, weatherOwnsMapClicks]);
 
   useEffect(() => {
-    if (!routePlanningActive || addRoutePlanPoint === undefined) return undefined;
+    if (
+      !routePlanningActive ||
+      weatherOwnsMapClicks ||
+      addRoutePlanPoint === undefined
+    ) {
+      return undefined;
+    }
     return facade.subscribePlanningClicks((coordinate) => {
       addRoutePlanPoint([coordinate.longitude, coordinate.latitude]);
     });
-  }, [addRoutePlanPoint, facade, routePlanningActive]);
+  }, [addRoutePlanPoint, facade, routePlanningActive, weatherOwnsMapClicks]);
 
   useEffect(() => {
     facade.setRoutePlanPreviewAnchor(
@@ -942,17 +1012,28 @@ export function MapWorkspace({
       );
       return;
     }
-    if (event.originalEvent.button !== 0 || !weatherPointSelectionActive) return;
+    if (event.originalEvent.button !== 0 || !weatherOwnsMapClicks) return;
     event.originalEvent.preventDefault();
     const nearestPoi = facade.getNearestPoi(coordinate);
-    completeWeatherPointSelection(
-      coordinate,
+    const placeLabel =
       nearestPoi !== null &&
-        nearestPoi.name !== null &&
-        nearestPoi.distanceMeters <= 500
+      nearestPoi.name !== null &&
+      nearestPoi.distanceMeters <= 500
         ? nearestPoi.name
-        : undefined,
-    );
+        : undefined;
+    if (weatherMap.enabled) {
+      requestWeatherForecast(coordinate, placeLabel);
+      setActiveTab('weather');
+      setMobileWorkspaceOpen(true);
+      setNavigationCollapsed(false);
+      if (window.location.hash !== workspaceHashForTab('weather')) {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.hash = workspaceHashForTab('weather');
+        window.history.pushState(window.history.state, '', nextUrl);
+      }
+      return;
+    }
+    completeWeatherPointSelection(coordinate, placeLabel);
   };
 
   const copyCoordinates = () => {

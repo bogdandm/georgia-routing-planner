@@ -1,6 +1,7 @@
 import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'maplibre-gl';
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { currentBounds } from '@openmeteo/weather-map-layer';
 
 import {
   SAVED_MARKER_SCHEMA_VERSION,
@@ -55,6 +56,7 @@ class FakeLayerMap {
       readonly z: number;
     }[];
   }[] = [];
+  bounds = { west: 44, south: 41, east: 45, north: 42 };
 
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
@@ -230,6 +232,19 @@ class FakeLayerMap {
   public isSourceLoaded(id: string): boolean {
     return this.sourceLoaded && this.sources.has(id);
   }
+  public getBounds(): {
+    readonly getWest: () => number;
+    readonly getSouth: () => number;
+    readonly getEast: () => number;
+    readonly getNorth: () => number;
+  } {
+    return {
+      getWest: () => this.bounds.west,
+      getSouth: () => this.bounds.south,
+      getEast: () => this.bounds.east,
+      getNorth: () => this.bounds.north,
+    };
+  }
 
   public isStyleLoaded(): boolean {
     return this.styleLoaded;
@@ -337,6 +352,9 @@ describe('MapLibreLayerController', () => {
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
 
+    expect(controller.setLayerVisibility('elevation-isolines', false)).toEqual({
+      status: 'success',
+    });
     await expect(
       controller.setWeatherEnabled(true, new Date('2026-09-24T10:30:00Z')),
     ).resolves.toEqual({ status: 'success' });
@@ -362,10 +380,24 @@ describe('MapLibreLayerController', () => {
         : '',
     );
     expect(sourceUrls).toEqual([
-      `om://${metadataUrl}?time_step=valid_times_2&variable=cloud_cover&color_blend=true`,
-      `om://${metadataUrl}?time_step=valid_times_2&variable=precipitation&color_blend=true`,
-      `om://${metadataUrl}?time_step=valid_times_2&variable=wind_u_component_10m&arrows=true`,
+      `om://${metadataUrl}?time_step=valid_times_2&tile_size=256&variable=cloud_cover&color_blend=true`,
+      `om://${metadataUrl}?time_step=valid_times_2&tile_size=256&variable=precipitation&color_blend=true`,
+      `om://${metadataUrl}?time_step=valid_times_2&tile_size=256&variable=wind_u_component_10m&arrows=true`,
     ]);
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'terrain-relief': false,
+      'elevation-isolines': false,
+    });
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
+    const initialWeatherBounds =
+      currentBounds === undefined ? null : [...currentBounds];
+    expect(initialWeatherBounds).not.toBeNull();
+    map.bounds = { west: 10, south: 10, east: 20, north: 20 };
+    map.fire('move', {});
+    expect(currentBounds).toEqual(initialWeatherBounds);
+    map.fire('moveend', {});
+    expect(currentBounds).not.toEqual(initialWeatherBounds);
     expect(map.layers.get(weatherMapLayerIds.wind)).toMatchObject({
       source: mapSourceIds.weatherWind,
       'source-layer': 'wind-arrows',
@@ -398,6 +430,19 @@ describe('MapLibreLayerController', () => {
     expect(layerOrder.indexOf(weatherMapLayerIds.wind)).toBeLessThan(
       layerOrder.indexOf(mapLayerIds.roadCasings),
     );
+    const weatherBeforeIndex = layerOrder.indexOf(mapLayerIds.roadCasings);
+    expect(layerOrder.slice(weatherBeforeIndex - 3, weatherBeforeIndex)).toEqual([
+      weatherMapLayerIds.clouds,
+      weatherMapLayerIds.precipitation,
+      weatherMapLayerIds.wind,
+    ]);
+    map.fire('styledata', {});
+    map.moves.splice(0);
+    const paintUpdateCount = map.paintUpdateCount;
+    map.fire('styledata', {});
+    map.fire('styledata', {});
+    expect(map.moves).toEqual([]);
+    expect(map.paintUpdateCount).toBe(paintUpdateCount);
     map.fire('sourcedata', {
       sourceId: mapSourceIds.weatherClouds,
       sourceDataType: 'content',
@@ -436,7 +481,7 @@ describe('MapLibreLayerController', () => {
     }
     expect(controller.setWeatherOpacity(0.5)).toEqual({ status: 'success' });
     expect(map.paintProperties.get(`${weatherMapLayerIds.clouds}.raster-opacity`)).toBe(
-      0.19,
+      0.5,
     );
     expect(
       map.paintProperties.get(`${weatherMapLayerIds.precipitation}.raster-opacity`),
@@ -456,6 +501,10 @@ describe('MapLibreLayerController', () => {
     ]);
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        visibility: {
+          'terrain-relief': true,
+          'elevation-isolines': false,
+        },
         weatherMapOpacity: 0.5,
       });
     });
@@ -470,6 +519,12 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has(mapSourceIds.weatherClouds)).toBe(false);
     expect(map.sources.has(mapSourceIds.weatherPrecipitation)).toBe(false);
     expect(map.sources.has(mapSourceIds.weatherWind)).toBe(false);
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'terrain-relief': true,
+      'elevation-isolines': false,
+    });
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('visible');
+    expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     services.dispose();
   });
 

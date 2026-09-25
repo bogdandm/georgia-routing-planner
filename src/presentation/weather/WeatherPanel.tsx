@@ -34,6 +34,7 @@ import {
   mapInteractionStore,
   setWeatherMapForecastMarker,
 } from '@/presentation/map/mapInteractionStore';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import {
@@ -1286,6 +1287,10 @@ export function WeatherPanel({
     mapInteractionStore,
     (state) => state.weatherForecastRequest,
   );
+  const weatherMapEnabled = useStore(
+    mapLayerStore,
+    (mapState) => mapState.weatherMap.enabled,
+  );
   const [state, setState] = useState<WeatherPanelState>({ status: 'idle' });
   const [hourlyPanelRequest, setHourlyPanelRequest] =
     useState<FloatingHourlyForecastRequest | null>(null);
@@ -1407,7 +1412,9 @@ export function WeatherPanel({
           </WeatherIconTooltip>
           <Typography variant="subtitle1">Select a forecast point</Typography>
           <Typography variant="body2" color="text.secondary">
-            Use the header action, then click the map to load its ECMWF IFS forecast.
+            {weatherMapEnabled
+              ? 'Click the map to load its ECMWF IFS forecast.'
+              : 'Use the header action, then click the map to load its ECMWF IFS forecast.'}
           </Typography>
         </Stack>
       </Box>

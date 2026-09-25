@@ -437,6 +437,7 @@ export function LayersPanel() {
                       : sceneAvailable;
                   const disabled =
                     mapLayers === null ||
+                    (group.id === 'terrain' && state.weatherMap.enabled) ||
                     (control.requiresScene && !requiredImageryAvailable);
                   return (
                     <Box key={control.id}>
@@ -471,11 +472,13 @@ export function LayersPanel() {
                         color="text.secondary"
                         sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
                       >
-                        {control.requiresScene && !requiredImageryAvailable
-                          ? control.id === 'satellite-imagery'
-                            ? 'Apply Sentinel imagery to enable this layer.'
-                            : 'Apply a Sentinel scene to enable this layer.'
-                          : control.description}
+                        {group.id === 'terrain' && state.weatherMap.enabled
+                          ? 'Weather temporarily hides terrain and restores this setting when disabled.'
+                          : control.requiresScene && !requiredImageryAvailable
+                            ? control.id === 'satellite-imagery'
+                              ? 'Apply Sentinel imagery to enable this layer.'
+                              : 'Apply a Sentinel scene to enable this layer.'
+                            : control.description}
                       </Typography>
                       {control.id === 'elevation-isolines' ? (
                         <Stack
@@ -493,7 +496,7 @@ export function LayersPanel() {
                           <Slider
                             aria-labelledby="contour-distance-label"
                             aria-valuetext={`${String(state.terrainOverlays.preferences.contourIntervalMeters)} metres`}
-                            disabled={mapLayers === null}
+                            disabled={mapLayers === null || state.weatherMap.enabled}
                             min={0}
                             max={supportedContourIntervals.length - 1}
                             step={1}
@@ -544,7 +547,7 @@ export function LayersPanel() {
                         checked={
                           state.terrainOverlays.preferences.filterInvalidDemPixels
                         }
-                        disabled={mapLayers === null}
+                        disabled={mapLayers === null || state.weatherMap.enabled}
                         onChange={(event) => {
                           changeTerrainOverlayPreferences({
                             ...state.terrainOverlays.preferences,

@@ -11,6 +11,13 @@ import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  weatherCloudCoverColorScale,
+  weatherCloudLegendStops,
+  weatherPrecipitationColorScale,
+  weatherPrecipitationLegendStops,
+  weatherScaleGradient,
+} from '@/presentation/weather/weatherMapStyle';
 
 interface ForecastDay {
   readonly key: string;
@@ -33,6 +40,76 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 const calendarRowCount = 2;
+const cloudGradient = weatherScaleGradient(weatherCloudCoverColorScale);
+const precipitationGradient = weatherScaleGradient(weatherPrecipitationColorScale);
+
+function WeatherScaleLegend({
+  gradient,
+  label,
+  stops,
+  unit,
+}: {
+  readonly gradient: string;
+  readonly label: string;
+  readonly stops: readonly { readonly color: string; readonly value: number }[];
+  readonly unit: string;
+}) {
+  return (
+    <Box
+      aria-label={`${label}: ${stops.map(({ value }) => `${value.toString()} ${unit}`).join(', ')}`}
+    >
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}
+      >
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          {label}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {unit}
+        </Typography>
+      </Stack>
+      <Box
+        aria-hidden
+        sx={{
+          height: 16,
+          mt: 0.25,
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1,
+          backgroundColor: '#eef2f5',
+          backgroundImage: gradient,
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${String(stops.length)}, minmax(0, 1fr))`,
+          mt: 0.125,
+        }}
+      >
+        {stops.map((stop) => (
+          <Typography
+            key={stop.value}
+            component="span"
+            variant="caption"
+            sx={{
+              minWidth: 0,
+              color: 'text.secondary',
+              fontSize: '0.625rem',
+              fontVariantNumeric: 'tabular-nums',
+              textAlign: 'center',
+              borderTop: `2px solid ${stop.color}`,
+            }}
+          >
+            {stop.value}
+          </Typography>
+        ))}
+      </Box>
+    </Box>
+  );
+}
 
 function localDayKey(date: Date): string {
   return [
@@ -120,7 +197,7 @@ export function WeatherTimeControl() {
         right: { xs: 12, sm: 54 },
         left: { xs: 12, sm: 'auto' },
         zIndex: 3,
-        width: { sm: 520 },
+        width: { sm: 620 },
         maxWidth: { xs: 'calc(100% - 24px)', sm: 'calc(100% - 70px)' },
         p: 1,
         borderRadius: 2,
@@ -192,48 +269,37 @@ export function WeatherTimeControl() {
             })}
           </ToggleButtonGroup>
         </Box>
-        <Stack
-          direction="row"
-          spacing={1.25}
+        <Box
           aria-label="Weather map legend"
-          sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.25 }}
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1.35fr' },
+            columnGap: 1.5,
+            rowGap: 0.75,
+          }}
         >
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <Box
-              aria-hidden
-              sx={{
-                width: 28,
-                height: 6,
-                borderRadius: 3,
-                background:
-                  'linear-gradient(90deg, rgba(66,72,78,0.08), rgba(66,72,78,0.95))',
-              }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              Clouds
-            </Typography>
-          </Stack>
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <Box
-              aria-hidden
-              sx={{
-                width: 42,
-                height: 6,
-                borderRadius: 3,
-                background:
-                  'linear-gradient(90deg, #85ccfa, #0000ff, #42b608, #ffee00, #ff8800, #ff0000)',
-              }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              Precipitation
-            </Typography>
-          </Stack>
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <WeatherScaleLegend
+            gradient={cloudGradient}
+            label="Cloud cover · <30 transparent"
+            stops={weatherCloudLegendStops}
+            unit="%"
+          />
+          <WeatherScaleLegend
+            gradient={precipitationGradient}
+            label="Precipitation · <0.5 transparent"
+            stops={weatherPrecipitationLegendStops}
+            unit="mm"
+          />
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{ alignItems: 'center', gridColumn: { sm: '1 / -1' } }}
+          >
             <Box
               aria-hidden
               sx={{
                 position: 'relative',
-                width: 24,
+                width: 32,
                 height: 8,
                 borderTop: '1.5px solid #173941',
                 transform: 'translateY(3px)',
@@ -251,10 +317,10 @@ export function WeatherTimeControl() {
               }}
             />
             <Typography variant="caption" color="text.secondary">
-              Wind
+              Wind direction and speed
             </Typography>
           </Stack>
-        </Stack>
+        </Box>
       </Stack>
     </Paper>
   );

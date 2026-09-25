@@ -32,11 +32,13 @@ interface MapPointInspectionCommand {
 interface SatelliteSearchRequest {
   readonly id: number;
 }
-export interface WeatherForecastRequest {
-  readonly id: number;
+export interface SelectedWeatherForecastPoint {
   readonly coordinate: MapCoordinate;
   readonly placeLabel?: string;
   readonly elevationMeters?: number;
+}
+export interface WeatherForecastRequest extends SelectedWeatherForecastPoint {
+  readonly id: number;
 }
 export interface WeatherMapForecastMarker {
   readonly coordinate: MapCoordinate;
@@ -66,6 +68,7 @@ interface MapInteractionState {
   readonly satelliteSearchAnchor: MapCoordinate | null;
   readonly satelliteSearchRequest: SatelliteSearchRequest | null;
   readonly weatherForecastRequest: WeatherForecastRequest | null;
+  readonly selectedWeatherForecastPoint: SelectedWeatherForecastPoint | null;
   readonly weatherPointSelectionActive: boolean;
   readonly weatherMapForecastMarker: WeatherMapForecastMarker | null;
   readonly markerPlacement: MarkerPlacement | null;
@@ -79,6 +82,7 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   pointInspectionCommand: null,
   satelliteSearchRequest: null,
   weatherForecastRequest: null,
+  selectedWeatherForecastPoint: null,
   weatherPointSelectionActive: false,
   weatherMapForecastMarker: null,
   markerPlacement: null,
@@ -171,19 +175,22 @@ export function requestWeatherForecast(
   elevationMeters?: number,
 ): void {
   nextWeatherForecastRequestId += 1;
-  const request: {
-    id: number;
+  const selectedPoint: {
     coordinate: MapCoordinate;
     placeLabel?: string;
     elevationMeters?: number;
   } = {
-    id: nextWeatherForecastRequestId,
     coordinate: { ...coordinate },
   };
-  if (placeLabel !== undefined) request.placeLabel = placeLabel;
-  if (elevationMeters !== undefined) request.elevationMeters = elevationMeters;
+  if (placeLabel !== undefined) selectedPoint.placeLabel = placeLabel;
+  if (elevationMeters !== undefined) selectedPoint.elevationMeters = elevationMeters;
+  const request: WeatherForecastRequest = {
+    id: nextWeatherForecastRequestId,
+    ...selectedPoint,
+  };
   mapInteractionStore.setState({
     weatherPointSelectionActive: false,
+    selectedWeatherForecastPoint: selectedPoint,
     weatherForecastRequest: request,
   });
 }
@@ -304,6 +311,7 @@ export function resetMapInteractionStore(): void {
     satelliteSearchAnchor: null,
     satelliteSearchRequest: null,
     weatherForecastRequest: null,
+    selectedWeatherForecastPoint: null,
     weatherPointSelectionActive: false,
     weatherMapForecastMarker: null,
     markerPlacement: null,

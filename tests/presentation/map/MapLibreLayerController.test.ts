@@ -394,10 +394,12 @@ describe('MapLibreLayerController', () => {
       currentBounds === undefined ? null : [...currentBounds];
     expect(initialWeatherBounds).not.toBeNull();
     map.bounds = { west: 10, south: 10, east: 20, north: 20 };
-    map.fire('move', {});
-    expect(currentBounds).toEqual(initialWeatherBounds);
-    map.fire('moveend', {});
-    expect(currentBounds).not.toEqual(initialWeatherBounds);
+    map.fire('dataloading', {});
+    const zoomedWeatherBounds = currentBounds === undefined ? null : [...currentBounds];
+    expect(zoomedWeatherBounds).not.toEqual(initialWeatherBounds);
+    map.bounds = { west: 20, south: 10, east: 30, north: 20 };
+    map.fire('dataloading', {});
+    expect(currentBounds).not.toEqual(zoomedWeatherBounds);
     expect(map.layers.get(weatherMapLayerIds.wind)).toMatchObject({
       source: mapSourceIds.weatherWind,
       'source-layer': 'wind-arrows',

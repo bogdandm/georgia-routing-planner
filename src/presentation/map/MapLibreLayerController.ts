@@ -633,12 +633,12 @@ export class MapLibreLayerController {
     }
     this.#map?.off('styledata', this.handleStyleData);
     this.#map?.off('sourcedata', this.handleSourceData);
-    this.#map?.off('moveend', this.handleWeatherMapMoveEnd);
+    this.#map?.off('dataloading', this.handleWeatherMapDataLoading);
     this.#map = map;
     map.on('styledata', this.handleStyleData);
     map.on('error', this.handleTerrainOverlayError);
     map.on('sourcedata', this.handleSourceData);
-    map.on('moveend', this.handleWeatherMapMoveEnd);
+    map.on('dataloading', this.handleWeatherMapDataLoading);
     this.reconcileSatelliteBasemapSource();
     this.reconcileMosaicEntries();
     this.reconcileTerrainOverlays();
@@ -666,7 +666,7 @@ export class MapLibreLayerController {
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
-    map.off('moveend', this.handleWeatherMapMoveEnd);
+    map.off('dataloading', this.handleWeatherMapDataLoading);
     this.cancelRasterRecovery();
     this.#activeApplyController?.abort();
     this.#mosaicApplyController?.abort();
@@ -3943,7 +3943,7 @@ export class MapLibreLayerController {
     }
   }
 
-  private readonly handleWeatherMapMoveEnd = (): void => {
+  private readonly handleWeatherMapDataLoading = (): void => {
     if (!mapLayerStore.getState().weatherMap.enabled) return;
     this.updateWeatherMapBounds();
   };

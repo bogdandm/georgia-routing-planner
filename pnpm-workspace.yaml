@@ -9,8 +9,6 @@ verifyDepsBeforeRun: warn
 # The audit plugin's newer utility graph references unpublished parser packages.
 # Version 8.67 provides the same rule API and resolves reproducibly.
 overrides:
-  # 0.1.1 supports MapLibre 5 at runtime; its unpublished ^6.5 declaration prevents install.
-  '@openmeteo/weather-map-layer>maplibre-gl': 5.24.0
   eslint-plugin-lingui>@typescript-eslint/utils: 8.67.0
 minimumReleaseAgeExclude:
   - maplibre-gl@6.11.2

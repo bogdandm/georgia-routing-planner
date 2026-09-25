@@ -431,17 +431,19 @@ hiking paths, labels, routes, and markers.
 While the weather map is enabled, a compact forecast-frame control appears below the map
 readiness and terrain-work indicators. The available metadata days form a two-row
 calendar instead of a scrolling rail; the selected day's actual `valid_times` remain in
-the compact time rail. Its enlarged legend renders cloud and precipitation gradients
-from the same color-scale constants used for map tiles and labels their explicit
-thresholds. Previous and next available times are selected directly from that rail.
-Every selection updates clouds, precipitation, and wind to the same metadata index; the
-UI never infers a fixed forecast interval. The shared Ready area reports metadata
-loading and determinate progress as the three MapLibre sources settle. The quick
-map-layer menu can show or hide the feature. Layers exposes its shared opacity and,
-while weather is off, routes its entry to Weather instead of starting a hidden network
-request. Opacity persists locally. Enabled state, the selected forecast point, and the
-selected metadata time are synchronized into the URL and restored on reload; the
-downloaded forecast response remains session-only.
+the compact time rail. At tablet and desktop widths, its enlarged legend renders cloud
+and precipitation gradients from the same color-scale constants used for map tiles,
+labels their explicit thresholds, and links a low-resolution notice to Windy beside the
+wind legend. The legend and notice are hidden at phone widths to preserve map space.
+Previous and next available times are selected directly from that rail. Every selection
+updates clouds, precipitation, and wind to the same metadata index; the UI never infers
+a fixed forecast interval. The shared Ready area reports metadata loading and
+determinate progress as the three MapLibre sources settle. The quick map-layer menu can
+show or hide the feature. Layers exposes its shared opacity and, while weather is off,
+routes its entry to Weather instead of starting a hidden network request. Opacity
+persists locally. Enabled state, the selected forecast point, and the selected metadata
+time are synchronized into the URL and restored on reload; the downloaded forecast
+response remains session-only.
 
 A completed forecast renders one map marker at the clicked WGS84 coordinate. It uses the
 monochrome Meteocon selected for **Now · next 3 h** at the visual scale of saved map

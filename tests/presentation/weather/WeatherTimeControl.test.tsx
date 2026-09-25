@@ -46,6 +46,11 @@ describe('WeatherTimeControl', () => {
       ),
     ).toBeVisible();
     expect(screen.getByText('Wind direction and speed')).toBeVisible();
+    const windyLink = screen.getByRole('link', { name: 'Windy' });
+    expect(windyLink).toHaveAttribute('href', 'https://www.windy.com/');
+    expect(windyLink.parentElement).toHaveTextContent(
+      'Low-resolution data. Use Windy for a precise forecast.',
+    );
   });
 
   it('groups and labels frames in the selected location time zone', () => {

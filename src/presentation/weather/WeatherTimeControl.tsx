@@ -1,5 +1,6 @@
 import {
   Box,
+  Link,
   Paper,
   Stack,
   ToggleButton,
@@ -344,8 +345,8 @@ export function WeatherTimeControl() {
         <Box
           aria-label="Weather map legend"
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1.35fr' },
+            display: { xs: 'none', sm: 'grid' },
+            gridTemplateColumns: '1fr 1.35fr',
             columnGap: 1.5,
             rowGap: 0.75,
           }}
@@ -362,11 +363,7 @@ export function WeatherTimeControl() {
             stops={weatherPrecipitationLegendStops}
             unit="mm"
           />
-          <Stack
-            direction="row"
-            spacing={0.75}
-            sx={{ alignItems: 'center', gridColumn: { sm: '1 / -1' } }}
-          >
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             <Box
               aria-hidden
               sx={{
@@ -392,6 +389,22 @@ export function WeatherTimeControl() {
               Wind direction and speed
             </Typography>
           </Stack>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ alignSelf: 'center' }}
+          >
+            Low-resolution data. Use{' '}
+            <Link
+              href="https://www.windy.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="hover"
+            >
+              Windy
+            </Link>{' '}
+            for a precise forecast.
+          </Typography>
         </Box>
       </Stack>
     </Paper>

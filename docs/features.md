@@ -421,9 +421,9 @@ public spatial metadata and OM files directly from the browser without an accoun
 key, application server, or proxy. While the weather map is enabled, each primary map
 click replaces the Weather sidebar forecast point; ordinary point inspection and hidden
 route-planning clicks stay disabled. Explicit marker placement still takes precedence.
-Cloud cover below 30% is transparent, 31% begins at 30% opacity, and the neutral gray
-ramp darkens smoothly to fully opaque `#808080` at 100%. Precipitation below 0.5 mm is
-transparent, then follows the shared 0.5, 1.5, 2, 3, 7, 10, 20, and 30 mm blue-to-purple
+Cloud cover at or below 30% is transparent, 31% begins at 30% opacity, and the neutral
+gray ramp darkens smoothly to fully opaque `#808080` at 100%. Precipitation at or below
+0.5 mm is transparent, then follows the shared 0.5, 1.5, 2, 3, 7, 10, 20, and 30 mm
 scale. Wind arrows sit above both; their stroke stays almost invisible at 5 m/s and
 below, then grows with wind speed. The complete weather stack remains below roads,
 hiking paths, labels, routes, and markers.

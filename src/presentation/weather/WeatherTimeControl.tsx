@@ -280,13 +280,13 @@ export function WeatherTimeControl() {
         >
           <WeatherScaleLegend
             gradient={cloudGradient}
-            label="Cloud cover · <30 transparent"
+            label="Cloud cover · ≤30 transparent"
             stops={weatherCloudLegendStops}
             unit="%"
           />
           <WeatherScaleLegend
             gradient={precipitationGradient}
-            label="Precipitation · <0.5 transparent"
+            label="Precipitation · ≤0.5 transparent"
             stops={weatherPrecipitationLegendStops}
             unit="mm"
           />

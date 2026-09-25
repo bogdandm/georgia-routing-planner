@@ -1463,6 +1463,10 @@ describe('MapWorkspace', () => {
       expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
     });
     act(() => {
+      startWeatherPointSelection();
+    });
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(true);
+    act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });
     expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
@@ -1471,6 +1475,7 @@ describe('MapWorkspace', () => {
     expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
       coordinate: { longitude: 44.8, latitude: 41.7 },
     });
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
     expect(facade.pointInspectionRequests).toEqual([]);
     await waitFor(() => {
       expect(useUiStore.getState().activeTab).toBe('weather');

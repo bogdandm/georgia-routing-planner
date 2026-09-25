@@ -32,12 +32,12 @@ describe('WeatherTimeControl', () => {
     expect(screen.getByLabelText('Weather map legend')).toBeVisible();
     expect(
       screen.getByLabelText(
-        'Cloud cover · <30 transparent: 0 %, 30 %, 31 %, 50 %, 70 %, 90 %, 100 %',
+        'Cloud cover · ≤30 transparent: 0 %, 30 %, 31 %, 50 %, 70 %, 90 %, 100 %',
       ),
     ).toBeVisible();
     expect(
       screen.getByLabelText(
-        'Precipitation · <0.5 transparent: 0.5 mm, 1.5 mm, 2 mm, 3 mm, 7 mm, 10 mm, 20 mm, 30 mm',
+        'Precipitation · ≤0.5 transparent: 0.5 mm, 1.5 mm, 2 mm, 3 mm, 7 mm, 10 mm, 20 mm, 30 mm',
       ),
     ).toBeVisible();
     expect(screen.getByText('Wind direction and speed')).toBeVisible();

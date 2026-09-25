@@ -271,8 +271,17 @@ async function acquireWeatherMapProtocol(): Promise<void> {
         precipitation: weatherPrecipitationColorScale,
       },
     } satisfies typeof defaultOmProtocolSettings;
-    const handler: Parameters<typeof addProtocol>[1] = (parameters, controller) =>
-      omProtocol(parameters, controller, settings);
+    const handler: Parameters<typeof addProtocol>[1] = async (
+      parameters,
+      controller,
+    ) => {
+      const response = await omProtocol(parameters, controller, settings);
+      // Open-Meteo reports cancellation as null; MapLibre 6 requires data or rejection.
+      if (response.data === null) {
+        throw new DOMException('Weather map request aborted.', 'AbortError');
+      }
+      return { ...response, data: response.data };
+    };
     addProtocol(weatherMapProtocolId, handler);
   }
   weatherMapProtocolConsumers += 1;

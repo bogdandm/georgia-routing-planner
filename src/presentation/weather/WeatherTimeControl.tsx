@@ -392,7 +392,7 @@ export function WeatherTimeControl() {
           <Typography
             variant="caption"
             color="text.secondary"
-            sx={{ alignSelf: 'center' }}
+            sx={{ alignSelf: 'center', justifySelf: 'end', textAlign: 'right' }}
           >
             Low-resolution data. Use{' '}
             <Link

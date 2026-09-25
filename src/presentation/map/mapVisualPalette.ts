@@ -74,8 +74,20 @@ export const mapVisualPalette = {
   },
 } as const;
 
+const mapVisualModePaintPropertyNames = [
+  'circle-opacity',
+  'circle-stroke-opacity',
+  'fill-opacity',
+  'hillshade-exaggeration',
+  'line-opacity',
+  'text-halo-color',
+  'text-opacity',
+] as const;
+
+type MapVisualModePaintProperty = (typeof mapVisualModePaintPropertyNames)[number];
+
 export type MapVisualModePaint = Readonly<
-  Record<string, Readonly<Record<string, string | number>>>
+  Record<string, Readonly<Partial<Record<MapVisualModePaintProperty, string | number>>>>
 >;
 
 /** Paint changes needed to preserve contrast without changing a feature's meaning. */
@@ -191,3 +203,5 @@ export const mapVisualModePaint = {
     },
   },
 } as const satisfies Readonly<Record<MapVisualMode, MapVisualModePaint>>;
+
+export { mapVisualModePaintPropertyNames };

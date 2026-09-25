@@ -74,6 +74,7 @@ import {
 } from '@/presentation/map/mapLayerStore';
 import {
   mapVisualModePaint,
+  mapVisualModePaintPropertyNames,
   mapVisualPalette,
   type MapVisualMode,
   type MapVisualModePaint,
@@ -2998,7 +2999,7 @@ export class MapLibreLayerController {
     if (source === undefined) {
       map.addSource(mapSourceIds.savedMarkers, { type: 'geojson', data });
     } else {
-      source.setData(data);
+      void source.setData(data);
     }
     if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
       map.addLayer({
@@ -3115,7 +3116,7 @@ export class MapLibreLayerController {
         if (!isGeoJsonSource(routeSource)) {
           throw new Error('The planned route source cannot update its data.');
         }
-        routeSource.setData(routeData);
+        void routeSource.setData(routeData);
       }
       if (map.getLayer(routePlanLayerIds.routed) === undefined) {
         map.addLayer(
@@ -3242,7 +3243,7 @@ export class MapLibreLayerController {
         if (!isGeoJsonSource(source)) {
           throw new Error('The imported track source cannot update its data.');
         }
-        source.setData(feature);
+        void source.setData(feature);
       }
       const { visibility, importedTrackOpacity } = mapLayerStore.getState();
       const layout = {
@@ -3305,7 +3306,7 @@ export class MapLibreLayerController {
     if (source === undefined) {
       map.addSource(mapSourceIds.importedTrackHighlight, { type: 'geojson', data });
     } else if (isGeoJsonSource(source)) {
-      source.setData(data);
+      void source.setData(data);
     }
     if (map.getLayer(importedTrackLayerIds.highlight) === undefined) {
       map.addLayer({
@@ -3356,7 +3357,7 @@ export class MapLibreLayerController {
     if (source === undefined) {
       map.addSource(mapSourceIds.importedTrackTrace, { type: 'geojson', data });
     } else if (isGeoJsonSource(source)) {
-      source.setData(data);
+      void source.setData(data);
     }
     if (map.getLayer(importedTrackLayerIds.trace) === undefined) {
       map.addLayer({
@@ -3477,8 +3478,11 @@ export class MapLibreLayerController {
       const layer = map.getLayer(layerId);
       if (layer === undefined) continue;
       this.#visualModeLayerAnchors.set(layerId, layer);
-      for (const [property, value] of Object.entries(properties)) {
-        map.setPaintProperty(layerId, property, value);
+      for (const property of mapVisualModePaintPropertyNames) {
+        const value = properties[property];
+        if (value !== undefined) {
+          map.setPaintProperty(layerId, property, value);
+        }
       }
     }
     this.applyOpenStreetMapOpacity(true);

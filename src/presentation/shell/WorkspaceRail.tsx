@@ -91,6 +91,7 @@ interface WorkspaceRailProps {
   readonly onOpenSettings: () => void;
   readonly onShare: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
+  readonly onActiveTabClick: () => void;
   readonly onToggleNavigation: () => void;
 }
 
@@ -108,6 +109,7 @@ export function WorkspaceRail({
   onOpenSettings,
   onShare,
   onSectionChange,
+  onActiveTabClick,
   onToggleNavigation,
 }: WorkspaceRailProps) {
   const { userData } = useRuntimeServices();
@@ -393,11 +395,46 @@ export function WorkspaceRail({
           },
         }}
       >
-        <Tab icon={<RouteOutlinedIcon />} label="Tracks" value="tracks" />
-        <Tab icon={<PlaceOutlinedIcon />} label="Markers" value="markers" />
-        <Tab icon={<LayersOutlinedIcon />} label="Layers" value="layers" />
-        <Tab icon={<SatelliteAltOutlinedIcon />} label="Satellite" value="satellite" />
-        <Tab icon={<WbCloudyOutlinedIcon />} label="Weather" value="weather" />
+        <Tab
+          icon={<RouteOutlinedIcon />}
+          label="Tracks"
+          value="tracks"
+          onClickCapture={() => {
+            if (activeTab === 'tracks') onActiveTabClick();
+          }}
+        />
+        <Tab
+          icon={<PlaceOutlinedIcon />}
+          label="Markers"
+          value="markers"
+          onClickCapture={() => {
+            if (activeTab === 'markers') onActiveTabClick();
+          }}
+        />
+        <Tab
+          icon={<LayersOutlinedIcon />}
+          label="Layers"
+          value="layers"
+          onClickCapture={() => {
+            if (activeTab === 'layers') onActiveTabClick();
+          }}
+        />
+        <Tab
+          icon={<SatelliteAltOutlinedIcon />}
+          label="Satellite"
+          value="satellite"
+          onClickCapture={() => {
+            if (activeTab === 'satellite') onActiveTabClick();
+          }}
+        />
+        <Tab
+          icon={<WbCloudyOutlinedIcon />}
+          label="Weather"
+          value="weather"
+          onClickCapture={() => {
+            if (activeTab === 'weather') onActiveTabClick();
+          }}
+        />
       </Tabs>
 
       <ButtonBase

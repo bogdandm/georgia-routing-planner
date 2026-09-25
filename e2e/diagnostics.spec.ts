@@ -37,7 +37,6 @@ test('keeps diagnostics persistent and exposes the Sentinel timeline', async ({
 
   await page.keyboard.press('Escape');
   await expect(drawer).toBeVisible();
-  await page.getByRole('tab', { name: 'Satellite', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Satellite imagery' })).toBeVisible();
   await expect(drawer).toBeVisible();
 

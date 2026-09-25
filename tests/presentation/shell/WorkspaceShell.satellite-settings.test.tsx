@@ -46,7 +46,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     const previousMonth = screen.getByRole('button', {
       name: 'Previous acquisition month',
     });
@@ -165,10 +164,8 @@ describe('WorkspaceShell', () => {
   });
 
   it('restores the persisted maximum cloud cover after remounting', async () => {
-    const user = userEvent.setup();
     const firstRender = renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     const slider = screen.getByRole('slider', { name: 'Maximum cloud' });
     await waitFor(() => {
       expect(slider).toHaveValue('50');
@@ -181,7 +178,6 @@ describe('WorkspaceShell', () => {
 
     firstRender.unmount();
     renderWorkspaceShell();
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await waitFor(() => {
       expect(screen.getByRole('slider', { name: 'Maximum cloud' })).toHaveValue('75');
     });
@@ -373,7 +369,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
@@ -435,7 +430,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(screen.getByRole('button', { name: 'Search images' }));
     expect(await screen.findByText(/12 Jul 2026 · 14:12 GMT\+4/u)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Load more images' }));
@@ -544,7 +538,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
       screen.getByRole('button', { name: 'Previous acquisition month' }),
     );
@@ -608,7 +601,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
       screen.getByRole('button', { name: 'Previous acquisition month' }),
     );
@@ -678,7 +670,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(screen.getByRole('button', { name: 'Search images' }));
     const dateShortcut = await screen.findByRole('gridcell', {
       name: /12 Jul 2026, imagery available/u,
@@ -738,7 +729,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(search).toHaveBeenCalledOnce();
@@ -805,7 +795,6 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
@@ -1284,6 +1273,7 @@ describe('WorkspaceShell', () => {
 
   it('persists the satellite rendering mode only from Satellite', async () => {
     const user = userEvent.setup();
+    useUiStore.setState({ activeTab: 'layers' });
     renderWorkspaceShell();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     const satelliteTools = screen.getByRole('complementary', {
@@ -1330,7 +1320,6 @@ describe('WorkspaceShell', () => {
   it('persists Sentinel stretch controls from Satellite', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
-    await user.click(screen.getByRole('tab', { name: 'Satellite' }));
 
     const stretchDisclosure = screen.getByRole('button', {
       name: 'Sentinel imagery stretch',

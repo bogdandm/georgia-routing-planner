@@ -1,9 +1,10 @@
 import { I18nProvider } from '@lingui/react';
 import { CssBaseline, ThemeProvider } from '@mui/material';
+import { setWorkerUrl } from 'maplibre-gl';
+import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import 'maplibre-gl/dist/maplibre-gl.css';
-
 import { runApplicationBootstrap } from '@/bootstrap/runApplicationBootstrap';
 import { registerPageLifecycleDisposal } from '@/bootstrap/registerPageLifecycleDisposal';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
@@ -16,6 +17,8 @@ import type { TrackSort } from '@/domain/tracks/localTrack';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import '@/presentation/styles/global.css';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+
+setWorkerUrl(mapLibreWorkerUrl);
 
 void runApplicationBootstrap(async (rootElement, services) => {
   const developerModeFromUrl =

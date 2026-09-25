@@ -669,6 +669,13 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               handleNavigationCollapsedChange(false);
             }}
             onSectionChange={handleSectionChange}
+            onActiveTabClick={() => {
+              if (smartphoneViewport) {
+                setMobileWorkspaceOpen(false);
+                return;
+              }
+              handleNavigationCollapsedChange(true);
+            }}
             onToggleDeveloperTools={() => {
               setDeveloperDrawerOpen(!developerDrawerOpen);
             }}

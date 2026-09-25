@@ -6,10 +6,12 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import lookupTimeZone from '@photostructure/tz-lookup';
 import { useMemo, type MouseEvent } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { mapInteractionStore } from '@/presentation/map/mapInteractionStore';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
   weatherCloudCoverColorScale,
@@ -26,19 +28,82 @@ interface ForecastDay {
   readonly indexes: readonly number[];
 }
 
-const dayFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-});
-const compactDayFormatter = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  day: 'numeric',
-});
-const timeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  minute: '2-digit',
-});
+interface ForecastDateParts {
+  readonly dayKey: string;
+  readonly minuteOfDay: number;
+}
+
+interface ForecastTimeFormatters {
+  readonly day: Intl.DateTimeFormat;
+  readonly compactDay: Intl.DateTimeFormat;
+  readonly time: Intl.DateTimeFormat;
+  readonly parts: Intl.DateTimeFormat;
+}
+
+function dateFormatter(
+  options: Intl.DateTimeFormatOptions,
+  timeZone: string | undefined,
+): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(
+    undefined,
+    timeZone === undefined ? options : { ...options, timeZone },
+  );
+}
+
+function createForecastTimeFormatters(
+  timeZone: string | undefined,
+): ForecastTimeFormatters {
+  return {
+    day: dateFormatter({ weekday: 'short', day: 'numeric', month: 'short' }, timeZone),
+    compactDay: dateFormatter({ weekday: 'short', day: 'numeric' }, timeZone),
+    time: dateFormatter({ hour: '2-digit', minute: '2-digit' }, timeZone),
+    parts: dateFormatter(
+      {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      },
+      timeZone,
+    ),
+  };
+}
+
+function forecastDateParts(
+  date: Date,
+  formatter: Intl.DateTimeFormat,
+): ForecastDateParts {
+  let year = '';
+  let month = '';
+  let day = '';
+  let hour = 0;
+  let minute = 0;
+  for (const part of formatter.formatToParts(date)) {
+    switch (part.type) {
+      case 'year':
+        year = part.value;
+        break;
+      case 'month':
+        month = part.value;
+        break;
+      case 'day':
+        day = part.value;
+        break;
+      case 'hour':
+        hour = Number(part.value);
+        break;
+      case 'minute':
+        minute = Number(part.value);
+        break;
+    }
+  }
+  return {
+    dayKey: `${year}-${month}-${day}`,
+    minuteOfDay: hour * 60 + minute,
+  };
+}
 const calendarRowCount = 2;
 const cloudGradient = weatherScaleGradient(weatherCloudCoverColorScale);
 const precipitationGradient = weatherScaleGradient(weatherPrecipitationColorScale);
@@ -111,21 +176,23 @@ function WeatherScaleLegend({
   );
 }
 
-function localDayKey(date: Date): string {
-  return [
-    String(date.getFullYear()),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-function localMinuteOfDay(date: Date): number {
-  return date.getHours() * 60 + date.getMinutes();
-}
-
 export function WeatherTimeControl() {
   const { mapLayers } = useRuntimeServices();
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
+  const selectedPoint = useStore(
+    mapInteractionStore,
+    (state) => state.selectedWeatherForecastPoint,
+  );
+  const latitude = selectedPoint?.coordinate.latitude;
+  const longitude = selectedPoint?.coordinate.longitude;
+  const timeZone = useMemo(
+    () =>
+      latitude === undefined || longitude === undefined
+        ? undefined
+        : lookupTimeZone(latitude, longitude),
+    [latitude, longitude],
+  );
+  const formatters = useMemo(() => createForecastTimeFormatters(timeZone), [timeZone]);
   const days = useMemo<readonly ForecastDay[]>(() => {
     const groups = new Map<
       string,
@@ -133,12 +200,12 @@ export function WeatherTimeControl() {
     >();
     weatherMap.validTimes.forEach((validTime, index) => {
       const date = new Date(validTime);
-      const key = localDayKey(date);
+      const key = forecastDateParts(date, formatters.parts).dayKey;
       const existing = groups.get(key);
       if (existing === undefined) {
         groups.set(key, {
-          label: dayFormatter.format(date),
-          buttonLabel: compactDayFormatter.format(date),
+          label: formatters.day.format(date),
+          buttonLabel: formatters.compactDay.format(date),
           indexes: [index],
         });
       } else {
@@ -146,7 +213,7 @@ export function WeatherTimeControl() {
       }
     });
     return [...groups].map(([key, value]) => ({ key, ...value }));
-  }, [weatherMap.validTimes]);
+  }, [formatters, weatherMap.validTimes]);
 
   if (
     !weatherMap.enabled ||
@@ -158,7 +225,8 @@ export function WeatherTimeControl() {
   const selectedTimeIndex = weatherMap.selectedTimeIndex;
 
   const selectedTime = new Date(weatherMap.validTimes[selectedTimeIndex] ?? '');
-  const selectedDayKey = localDayKey(selectedTime);
+  const selectedDateParts = forecastDateParts(selectedTime, formatters.parts);
+  const selectedDayKey = selectedDateParts.dayKey;
   const selectedDay = days.find((day) => day.key === selectedDayKey);
   const selectFrame = (index: number) => {
     const validTime = weatherMap.validTimes[index];
@@ -169,13 +237,16 @@ export function WeatherTimeControl() {
     if (dayKey === null) return;
     const day = days.find((candidate) => candidate.key === dayKey);
     if (day === undefined) return;
-    const targetMinute = localMinuteOfDay(selectedTime);
+    const targetMinute = selectedDateParts.minuteOfDay;
     let nearestIndex = day.indexes[0];
     let nearestDistance = Number.POSITIVE_INFINITY;
     for (const index of day.indexes) {
       const validTime = weatherMap.validTimes[index];
       if (validTime === undefined) continue;
-      const distance = Math.abs(localMinuteOfDay(new Date(validTime)) - targetMinute);
+      const distance = Math.abs(
+        forecastDateParts(new Date(validTime), formatters.parts).minuteOfDay -
+          targetMinute,
+      );
       if (distance < nearestDistance) {
         nearestIndex = index;
         nearestDistance = distance;
@@ -261,9 +332,9 @@ export function WeatherTimeControl() {
                 <ToggleButton
                   key={validTime}
                   value={index}
-                  aria-label={timeFormatter.format(new Date(validTime))}
+                  aria-label={formatters.time.format(new Date(validTime))}
                 >
-                  {timeFormatter.format(new Date(validTime))}
+                  {formatters.time.format(new Date(validTime))}
                 </ToggleButton>
               );
             })}

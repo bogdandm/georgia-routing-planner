@@ -4215,7 +4215,10 @@ export function TrackDetailsPane({
               />
               {active.preparationStatus === 'preparing' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <CircularProgress size={18} />
+                  <CircularProgress
+                    aria-label="Preparing terrain and elevation"
+                    size={18}
+                  />
                   <Typography variant="body2">
                     Preparing terrain and elevation…
                   </Typography>
@@ -4224,7 +4227,10 @@ export function TrackDetailsPane({
                 <Alert severity="warning">{active.preparationError}</Alert>
               ) : active.namingStatus === 'loading' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <CircularProgress size={18} />
+                  <CircularProgress
+                    aria-label="Looking up representative places"
+                    size={18}
+                  />
                   <Typography variant="body2">
                     Looking up representative places…
                   </Typography>

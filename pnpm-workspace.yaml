@@ -10,3 +10,5 @@ verifyDepsBeforeRun: warn
 # Version 8.67 provides the same rule API and resolves reproducibly.
 overrides:
   eslint-plugin-lingui>@typescript-eslint/utils: 8.67.0
+minimumReleaseAgeExclude:
+  - maplibre-gl@6.11.2

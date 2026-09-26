@@ -4,6 +4,7 @@ import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
+import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
@@ -40,6 +41,7 @@ import {
   requestMarkerPlacement,
   startWeatherPointSelection,
 } from '@/presentation/map/mapInteractionStore';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { defaultGeorgiaCamera } from '@/presentation/map/mapTypes';
 import {
   MarkersPanel,
@@ -192,7 +194,7 @@ export function WorkspaceSidebar({
   onOpenActiveTrackDetails,
   onShowMap,
 }: WorkspaceSidebarProps) {
-  const { mapDiagnostics, mapViewport, trailRouter } = useRuntimeServices();
+  const { mapDiagnostics, mapLayers, mapViewport, trailRouter } = useRuntimeServices();
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
     [mapDiagnostics],
@@ -242,6 +244,7 @@ export function WorkspaceSidebar({
     mapInteractionStore,
     (state) => state.weatherPointSelectionActive,
   );
+  const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   useEffect(() => {
     if (activeTab !== 'weather') cancelWeatherPointSelection();
   }, [activeTab]);
@@ -319,6 +322,34 @@ export function WorkspaceSidebar({
           <WeatherLocationHeader point={weatherHeaderPoint} />
         ) : null}
         <Box sx={{ display: compactMarkersHeader ? 'none' : undefined, flex: 1 }} />
+        {activeTab === 'weather' ? (
+          <Tooltip
+            title={
+              weatherMap.status === 'loading'
+                ? 'Loading weather map'
+                : weatherMap.enabled
+                  ? 'Hide weather map'
+                  : (weatherMap.message ?? 'Show weather map')
+            }
+          >
+            <span>
+              <ToggleButton
+                size="small"
+                value="weather-map"
+                selected={weatherMap.enabled}
+                disabled={mapLayers === null || weatherMap.status === 'loading'}
+                aria-label={
+                  weatherMap.enabled ? 'Hide weather map' : 'Show weather map'
+                }
+                onClick={() => {
+                  void mapLayers?.setWeatherEnabled(!weatherMap.enabled);
+                }}
+              >
+                <MapOutlinedIcon fontSize="small" />
+              </ToggleButton>
+            </span>
+          </Tooltip>
+        ) : null}
         {activeTab === 'weather' ? (
           <>
             <Tooltip

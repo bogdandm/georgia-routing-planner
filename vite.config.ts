@@ -14,6 +14,10 @@ interface PackageMetadata {
 const packageMetadata = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as PackageMetadata;
+const crossOriginIsolationHeaders = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+} as const;
 
 function readCommitHash(): string {
   try {
@@ -41,6 +45,8 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     plugins: [react(), lingui(), babel({ presets: [linguiTransformerBabelPreset()] })],
+    server: { headers: crossOriginIsolationHeaders },
+    preview: { headers: crossOriginIsolationHeaders },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

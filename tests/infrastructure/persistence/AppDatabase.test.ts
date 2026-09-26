@@ -369,6 +369,7 @@ describe('AppDatabase', () => {
       },
       openStreetMapOpacity: 0.65,
       importedTrackOpacity: 0.7,
+      weatherMapOpacity: 0.8,
       satelliteRenderingMode: 'server',
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
@@ -412,6 +413,7 @@ describe('AppDatabase', () => {
         'track-elevation-gradient': true,
       },
       importedTrackOpacity: 1,
+      weatherMapOpacity: 1,
       satelliteRenderingMode: 'auto',
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
       terrainOverlays: {
@@ -422,6 +424,10 @@ describe('AppDatabase', () => {
     });
     await expect(database.settings.get('map.layers')).resolves.not.toHaveProperty(
       'value.appliedScene',
+    );
+    await expect(database.settings.get('map.layers')).resolves.toHaveProperty(
+      'value.weatherMapOpacity',
+      1,
     );
   });
 

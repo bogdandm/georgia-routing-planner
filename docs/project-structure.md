@@ -98,7 +98,15 @@ elevation when necessary, and derives the current three-hour, daylight, and
 midnight-spanning night summaries through the pure `domain/weather` period aggregator.
 `OpenMeteoWeatherForecastGateway` alone owns Open-Meteo query parameters, response
 validation, ECMWF metadata caching, and safe transport failures. Presentation receives
-only normalized forecast values and never imports the HTTP client.
+only normalized forecast values and never imports the HTTP client. The spatial
+weather-map path keeps the same direction without adding another application service.
+`loadOpenMeteoSpatialMetadata` validates the public ECMWF IFS spatial manifest, the
+domain-level nearest-time selector resolves its real `valid_times`, and
+`MapLibreLayerController` owns the external `om://` protocol, snapped viewport bounds,
+and the three synchronized native sources. Shared weather-scale constants drive both
+protocol rendering and the visible legend. React observes serializable enablement,
+opacity, metadata times, and the selected frame through `mapLayerStore`; the map URL
+restores enabled weather, its forecast point, and its selected valid time.
 
 ## Composition root
 
@@ -158,8 +166,8 @@ checks.
 | Saved marker records                                           | `AppDatabase` through `SavedMarkerRepository`         | Validated local-only points with atomic IndexedDB writes |
 | Marker collection, editor draft, and distance anchor           | `MarkersWorkspaceProvider` React state                | One feature owner while map commands stay serializable   |
 | Marker placement and one-shot creation command                 | `mapInteractionStore`                                 | Cross-component map interaction without native objects   |
-| One-shot selected Weather coordinate                           | `mapInteractionStore`                                 | Serializable map-to-panel request without native objects |
-| Selected point and Weather request/result lifecycle            | `WeatherPanel` React state                            | Ephemeral latest-request state retained across rail tabs |
+| Selected Weather point and latest panel request                | `mapInteractionStore`                                 | Serializable map-to-panel and enabled-map URL state      |
+| Weather request/result lifecycle                               | `WeatherPanel` React state                            | Ephemeral latest response retained across rail tabs      |
 | Unsaved import/route plan, active selection, and list query    | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store       |
 | Map diagnostic snapshot                                        | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export       |
 | Current/last Sentinel step status and duration                 | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                      |

@@ -37,6 +37,9 @@ importers:
       '@mui/material':
         specifier: 9.2.0
         version: 9.2.0(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@types/react@19.2.17)(react@19.2.7))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@openmeteo/weather-map-layer':
+        specifier: 0.1.1
+        version: 0.1.1
       '@photostructure/tz-lookup':
         specifier: 11.6.0
         version: 11.6.0
@@ -1189,6 +1192,12 @@ packages:
         integrity: sha512-YGcBz1cg4ATXDCM/71L9xveh4dynfGmcLDqufR+nQQy3fKwsAZsWd/x4621/6uJaeB9mwOHE6hPeDgXz9uViUQ==,
       }
 
+  '@mapbox/tilebelt@2.0.3':
+    resolution:
+      {
+        integrity: sha512-HSscGw2yBlcm0GdLI3S5i8Xw/ffP2fTT2qmRbR1/AkJ02PnNN52yY+zzfw705LKKjesy8jJ/H1dieuioqN0Slw==,
+      }
+
   '@mapbox/tiny-sdf@2.2.0':
     resolution:
       {
@@ -1443,6 +1452,24 @@ packages:
     resolution:
       {
         integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==,
+      }
+
+  '@openmeteo/file-format-wasm@0.0.19':
+    resolution:
+      {
+        integrity: sha512-wHZDULiS7qNyO1e5Bd0GPOO/NfSC58RVkjCXbYO0Dylp4j4+BWm0qxBbF8fibxkOwiXRTZw5KL3YC2UM4//11w==,
+      }
+
+  '@openmeteo/file-reader@0.0.19':
+    resolution:
+      {
+        integrity: sha512-QIggEa1toqh+3us7A2T2M/BoxVu2vz6m49xzJR7zWoh+fHXTaDS9qLo7YGmjc0/a0sYRnkmNvtIoj+JfE758Zw==,
+      }
+
+  '@openmeteo/weather-map-layer@0.1.1':
+    resolution:
+      {
+        integrity: sha512-UMMJJ7ZenNmOxLthOzFUSDyZly0Loss06nvimqb7QjHkJkYNBXlOIKo7mn/6cSNVWK6zl4foWzoAPkB8bK9+pg==,
       }
 
   '@oxc-project/types@0.139.0':
@@ -5725,6 +5752,8 @@ snapshots:
 
   '@mapbox/point-geometry@1.1.0': {}
 
+  '@mapbox/tilebelt@2.0.3': {}
+
   '@mapbox/tiny-sdf@2.2.0': {}
 
   '@mapbox/unitbezier@0.0.1': {}
@@ -5904,6 +5933,21 @@ snapshots:
       outvariant: 1.4.3
 
   '@open-draft/until@2.1.0': {}
+
+  '@openmeteo/file-format-wasm@0.0.19': {}
+
+  '@openmeteo/file-reader@0.0.19':
+    dependencies:
+      '@openmeteo/file-format-wasm': 0.0.19
+
+  '@openmeteo/weather-map-layer@0.1.1':
+    dependencies:
+      '@mapbox/tilebelt': 2.0.3
+      '@mapbox/vector-tile': 3.0.0
+      '@openmeteo/file-reader': 0.0.19
+      maplibre-gl: 6.11.2
+      pbf: 5.1.2
+      point-in-polygon-hao: 1.2.4
 
   '@oxc-project/types@0.139.0': {}
 

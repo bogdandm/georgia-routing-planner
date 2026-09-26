@@ -212,9 +212,17 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
     await userEvent.setup().click(screen.getByRole('tab', { name: 'Layers' }));
 
-    fireEvent.change(screen.getByRole('slider', { name: 'Opacity' }), {
-      target: { value: '60' },
-    });
+    const openStreetMapSection = screen
+      .getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread' })
+      .closest('section');
+    expect(openStreetMapSection).not.toBeNull();
+    if (openStreetMapSection === null) return;
+    fireEvent.change(
+      within(openStreetMapSection).getByRole('slider', { name: 'Opacity' }),
+      {
+        target: { value: '60' },
+      },
+    );
 
     expect(setOpacity).toHaveBeenLastCalledWith(0.6);
   });
@@ -263,7 +271,14 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Satellite imagery' }),
     ).not.toBeChecked();
-    expect(screen.getByRole('slider', { name: 'Opacity' })).toBeEnabled();
+    const openStreetMapSection = screen
+      .getByRole('heading', { name: 'OpenStreetMap via OpenFreeMap + OSM Shortbread' })
+      .closest('section');
+    expect(openStreetMapSection).not.toBeNull();
+    if (openStreetMapSection === null) return;
+    expect(
+      within(openStreetMapSection).getByRole('slider', { name: 'Opacity' }),
+    ).toBeEnabled();
 
     await user.click(screen.getByRole('checkbox', { name: 'Satellite imagery' }));
     expect(setVisibility).toHaveBeenCalledWith('satellite-imagery', true);
@@ -1423,6 +1438,34 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('progressbar', { name: 'Rendering Mosaic images' }),
     ).toHaveAttribute('aria-valuenow', '25');
+  });
+
+  it('shows weather source progress in the map Ready area', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    mapLayerStore.setState({
+      weatherMap: {
+        ...mapLayerStore.getState().weatherMap,
+        enabled: true,
+        status: 'ready',
+        renderProgress: { loadedSourceCount: 1, totalSourceCount: 3 },
+      },
+    });
+    render(
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Rendering weather map · 1/3');
+    const progress = screen.getByRole('progressbar', {
+      name: 'Rendering weather map',
+    });
+    expect(Number(progress.getAttribute('aria-valuenow'))).toBeCloseTo(100 / 3);
   });
 
   it('replaces Ready with a warning after automatic provider fallback', () => {

@@ -29,6 +29,7 @@ import type {
 import {
   defaultSatelliteRenderingMode,
   defaultSatelliteRenderingTuning,
+  defaultWeatherMapOpacity,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 import type {
@@ -331,6 +332,7 @@ const mapLayerPreferencesSchema = z
       .strict(),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     importedTrackOpacity: z.number().min(0).max(1).default(1),
+    weatherMapOpacity: z.number().min(0).max(1).default(defaultWeatherMapOpacity),
     satelliteRenderingMode: z
       .enum(['auto', 'server', 'direct'])
       .default(defaultSatelliteRenderingMode),
@@ -391,6 +393,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   },
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,
+  weatherMapOpacity: defaultWeatherMapOpacity,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
@@ -2683,11 +2686,17 @@ export class AppDatabase
       !Object.hasOwn(storedVisibility, 'bing-satellite') ||
       !Object.hasOwn(storedVisibility, 'esri-satellite') ||
       !Object.hasOwn(storedVisibility, 'napr-orthophoto');
+    const missingWeatherMapOpacity =
+      storedValue === null || !Object.hasOwn(storedValue, 'weatherMapOpacity');
     const parsed = mapLayerPreferencesSchema.safeParse(
       withoutLegacyAppliedScene(record.value),
     );
     if (parsed.success) {
-      if (hadLegacyScene || missingStaticBasemapPreference) {
+      if (
+        hadLegacyScene ||
+        missingStaticBasemapPreference ||
+        missingWeatherMapOpacity
+      ) {
         await this.saveMapLayerPreferences(parsed.data);
       }
       return parsed.data;

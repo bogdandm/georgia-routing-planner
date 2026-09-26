@@ -29,6 +29,7 @@ interface DisplayStatus {
   readonly startedAt: number | null;
   readonly announcement: 'polite' | 'assertive';
   readonly progressPercent?: number;
+  readonly progressLabel?: string;
 }
 
 /** Quiet, always-visible summary of map and imagery work for ordinary users. */
@@ -42,6 +43,7 @@ export function OperationalStatus() {
   );
   const layerError = useStore(mapLayerStore, (state) => state.errorMessage);
   const terrainQueue = useStore(mapLayerStore, (state) => state.terrainComputeQueue);
+  const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const requestStatus = useStore(satelliteRequestStatusStore);
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
@@ -130,7 +132,26 @@ export function OperationalStatus() {
                 ? 0
                 : (renderProgress.renderedSceneCount / renderProgress.totalSceneCount) *
                   100,
+            progressLabel: 'Rendering Mosaic images',
           }),
+    };
+  } else if (weatherMap.status === 'loading') {
+    display = {
+      kind: 'pending',
+      message: 'Loading ECMWF weather map…',
+      startedAt: null,
+      announcement: 'polite',
+    };
+  } else if (weatherMap.enabled && weatherMap.renderProgress !== null) {
+    const { loadedSourceCount, totalSourceCount } = weatherMap.renderProgress;
+    display = {
+      kind: 'pending',
+      message: `Rendering weather map · ${String(loadedSourceCount)}/${String(totalSourceCount)}`,
+      startedAt: null,
+      announcement: 'polite',
+      progressPercent:
+        totalSourceCount === 0 ? 0 : (loadedSourceCount / totalSourceCount) * 100,
+      progressLabel: 'Rendering weather map',
     };
   } else if (requestStatus.status === 'pending') {
     display = {
@@ -279,12 +300,8 @@ export function OperationalStatus() {
       </Box>
       {display.kind === 'pending' ? (
         <LinearProgress
-          aria-hidden={display.progressPercent === undefined ? true : undefined}
-          aria-label={
-            display.progressPercent === undefined
-              ? undefined
-              : 'Rendering Mosaic images'
-          }
+          aria-hidden={display.progressLabel === undefined ? true : undefined}
+          aria-label={display.progressLabel}
           variant={
             display.progressPercent === undefined ? 'indeterminate' : 'determinate'
           }

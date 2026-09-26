@@ -298,6 +298,43 @@ camera, sources, and user visibility choices are preserved. Surface polygons are
 restyled as decorative line layers; the restricted-area layer is an intentional red
 perimeter derived from provider-tagged military geometry.
 
+## Spatial weather map
+
+The weather controller loads the weather-map package and registers its `om://` MapLibre
+protocol on first enable, then releases the protocol when the runtime service is
+disposed. Its protocol cache retains at most three variable states. Enabling weather
+snapshots the current relief-shading and elevation-isoline visibility, suppresses both
+overlays without replacing their durable preferences, then fetches the public
+`data_spatial/ecmwf_ifs025/latest.json` document through the shared bounded HTTP client.
+Disabling weather or failing to enable it restores the snapshot before normal terrain
+controls resume. The controller validates completion, required cloud and precipitation,
+both wind-component variables, and `valid_times`, then chooses the available timestamp
+nearest the requested instant. The selected zero-based index becomes one shared
+`time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow sources.
+
+Before requesting the first weather tile, the controller submits the current MapLibre
+viewport to the package's `updateCurrentBounds()`. It repeats that update only on
+`moveend`; the package owns its built-in tile-boundary snapping. Every source requests
+`tile_size=256`, limiting per-tile raster and vector work without a continuously moving
+bounds stream.
+
+MapLibre reads each source directly from Open-Meteo's public OM files. The controller
+adds the thresholded neutral-gray cloud raster and precipitation raster followed by the
+package's `wind-arrows` vector source layer, all immediately before road casings. The
+wind style interpolates both visibility and stroke width from the vector tile's speed
+property, keeping values at or below 5 m/s nearly invisible. Source-data events publish
+zero-to-three render progress into the shared operational-status area and clear it when
+all current-frame sources settle.
+
+Reconciliation after style changes restores the same frame and order before imported
+tracks, routes, and saved markers are reapplied. A time change removes the three old
+sources and recreates them together before publishing the new selected index, so state
+never claims a mixed forecast frame. Disabling weather aborts metadata loading and
+removes the complete source/layer group. Shared opacity remains durable. While enabled,
+the URL owns the selected point and valid time needed to reload the map and request a
+fresh sidebar forecast; metadata, render progress, and downloaded forecast values remain
+memory-only.
+
 ## Browser route planning
 
 ```mermaid
@@ -723,7 +760,6 @@ sequenceDiagram
   participant Period as Weather period aggregator
 
   Map->>Command: selected WGS84 coordinate
-  Map->>Command: point-inspection command
   Command->>Panel: latest Weather request
   Panel->>UseCase: coordinate + ecmwf_ifs + AbortSignal
   UseCase->>DEM: sample coordinate
@@ -735,12 +771,14 @@ sequenceDiagram
   UseCase-->>Panel: compact summary, 24+ hourly values, and seven date rows
 ```
 
-Weather uses a serializable one-shot command because the persistent map and contextual
-panel have separate owners. The panel consumes each command immediately and retains the
-selected coordinate while loading. A newer point aborts the previous request and owns
-all subsequent rendering; sequence identity prevents a late response from replacing it.
-Leaving Weather keeps the mounted request and result, while unmount aborts active work.
-No forecast state is written to Zustand, IndexedDB, or a share URL.
+Weather keeps the selected point plus a serializable latest-request command in
+`mapInteractionStore` because the persistent map, URL synchronizer, and contextual panel
+have separate owners. The panel consumes each command immediately and retains only its
+request/result lifecycle while loading. A newer point aborts the previous request and
+owns all subsequent rendering; sequence identity prevents a late response from replacing
+it. Leaving Weather keeps the mounted request and result, while unmount aborts active
+work. Forecast values are never written to Zustand or IndexedDB. When the weather map is
+enabled, only its selected coordinate and metadata valid time enter the URL.
 
 `GetPointWeatherForecast` first asks the existing local terrain provider for the clicked
 point. A finite sample is sent as the forecast elevation; otherwise the Open-Meteo
@@ -754,10 +792,10 @@ and status contract. Primary sky and precipitation use per-hour duration and dom
 visibility remains a separate severity and interval-position result. The application
 never requests provider `daily` values or precipitation probability.
 
-The same primary click queues point inspection. Weather explicitly refreshes that popup
-for the selected coordinate instead of using the ordinary second-click close behavior.
-Marker placement remains first in click precedence. A route draft owns clicks only while
-Tracks is active, so it pauses behind Weather and resumes unchanged when Tracks returns.
+One-shot Weather selection and an enabled weather map both suppress ordinary point
+inspection for their primary clicks. Marker placement remains first in click precedence.
+An enabled weather map also pauses route-draft click ownership; disabling it lets the
+unchanged route draft resume when Tracks is active.
 
 ## Point inspection lifecycle
 

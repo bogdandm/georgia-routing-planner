@@ -45,6 +45,9 @@ describe('MapViewControls', () => {
         hybridOverlayDisabled
         hybridOverlayEnabled
         onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={onTerrainModeChange}
@@ -71,6 +74,9 @@ describe('MapViewControls', () => {
         hybridOverlayDisabled
         hybridOverlayEnabled
         onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
@@ -82,10 +88,11 @@ describe('MapViewControls', () => {
     expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toBeDisabled();
   });
 
-  it('opens the compact source menu with a separate hybrid toggle and Layers link', async () => {
+  it('opens compact map controls for overlays, weather, and the Layers tab', async () => {
     const user = userEvent.setup();
     const onHybridOverlayChange = vi.fn();
     const onOpenLayersTab = vi.fn();
+    const onWeatherMapChange = vi.fn();
     render(
       <MapViewControls
         activeLayerPreset="google-satellite"
@@ -94,6 +101,9 @@ describe('MapViewControls', () => {
         terrainDisabled={false}
         layerPresetDisabled={false}
         onHybridOverlayChange={onHybridOverlayChange}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={onWeatherMapChange}
         onLayerPresetChange={() => true}
         onOpenLayersTab={onOpenLayersTab}
         onTerrainModeChange={vi.fn()}
@@ -121,7 +131,10 @@ describe('MapViewControls', () => {
     const hybridToggle = screen.getByRole('menuitemcheckbox', { name: 'OSM overlay' });
     await user.click(hybridToggle);
     expect(onHybridOverlayChange).toHaveBeenCalledWith(false);
-    hybridToggle.focus();
+    const weatherToggle = screen.getByRole('menuitemcheckbox', { name: /Weather/ });
+    await user.click(weatherToggle);
+    expect(onWeatherMapChange).toHaveBeenCalledWith(true);
+    weatherToggle.focus();
     await user.keyboard('{ArrowDown}');
     expect(screen.getByRole('menuitemradio', { name: 'Sentinel-2' })).toHaveFocus();
     await user.keyboard('{ArrowDown}');
@@ -143,6 +156,9 @@ describe('MapViewControls', () => {
         hybridOverlayDisabled={false}
         hybridOverlayEnabled={false}
         onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
         onLayerPresetChange={onLayerPresetChange}
         onTerrainModeChange={vi.fn()}
@@ -169,6 +185,9 @@ describe('MapViewControls', () => {
         hybridOverlayDisabled
         hybridOverlayEnabled
         onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
@@ -194,6 +213,9 @@ describe('MapViewControls', () => {
         hybridOverlayDisabled
         hybridOverlayEnabled
         onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
@@ -226,6 +248,9 @@ describe('MapViewControls', () => {
         hybridOverlayDisabled
         hybridOverlayEnabled
         onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={() => undefined}

@@ -54,6 +54,7 @@
     "@meteocons/svg-static": "0.1.0",
     "@mui/icons-material": "9.2.0",
     "@mui/material": "9.2.0",
+    "@openmeteo/weather-map-layer": "0.1.1",
     "@photostructure/tz-lookup": "11.6.0",
     "@supabase/supabase-js": "2.111.0",
     "@turf/area": "7.3.5",

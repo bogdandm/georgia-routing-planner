@@ -1,9 +1,11 @@
-import type {
-  ErrorEvent as MapLibreErrorEvent,
-  GeoJSONSource,
-  Map as MapLibreMap,
-  MapSourceDataEvent,
-  Source,
+import {
+  addProtocol,
+  removeProtocol,
+  type ErrorEvent as MapLibreErrorEvent,
+  type GeoJSONSource,
+  type Map as MapLibreMap,
+  type MapSourceDataEvent,
+  type Source,
 } from 'maplibre-gl';
 import type {
   Feature,
@@ -12,6 +14,10 @@ import type {
   MultiLineString,
   Point,
 } from 'geojson';
+import type {
+  OmProtocolSettings,
+  omProtocol as runOmProtocol,
+} from '@openmeteo/weather-map-layer';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
@@ -31,6 +37,7 @@ import { supportedContourIntervals } from '@/application/ports/MapLayerPreferenc
 import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQueryDiagnostics';
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
+import type { OpenMeteoSpatialMetadata } from '@/infrastructure/weather/loadOpenMeteoSpatialMetadata';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import {
   calculateSatelliteMosaicCoveragePercent,
@@ -42,6 +49,7 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
+import { selectNearestForecastTimeIndex } from '@/domain/weather/selectNearestForecastTime';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import {
@@ -58,6 +66,7 @@ import {
   sentinelMosaicIdPrefixes,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
+  weatherMapLayerIds,
 } from '@/presentation/map/mapIds';
 import {
   mapLayerStore,
@@ -76,6 +85,10 @@ import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type { MapLayerPreset, MapRecoveryState } from '@/presentation/map/mapTypes';
+import {
+  weatherCloudCoverColorScale,
+  weatherPrecipitationColorScale,
+} from '@/presentation/weather/weatherMapStyle';
 
 interface RoutePlanMapSection {
   readonly kind: 'routed' | 'direct';
@@ -195,6 +208,90 @@ type SatelliteImageryCommandResult =
   | { readonly status: 'failed'; readonly message: string };
 
 type TerrainOverlayCommandResult = MapLayerVisibilityResult;
+export interface WeatherMapControllerConfiguration {
+  readonly model: 'ecmwf_ifs025';
+  readonly metadataUrl: string;
+  readonly loadMetadata: (signal: AbortSignal) => Promise<OpenMeteoSpatialMetadata>;
+}
+
+const weatherMapProtocolId = 'om';
+const weatherCloudOpacity = 1;
+const weatherPrecipitationOpacity = 0.76;
+const weatherWindOpacity = 0.58;
+const weatherMapSourceIds = [
+  mapSourceIds.weatherClouds,
+  mapSourceIds.weatherPrecipitation,
+  mapSourceIds.weatherWind,
+] as const;
+const orderedWeatherMapLayerIds = [
+  weatherMapLayerIds.clouds,
+  weatherMapLayerIds.precipitation,
+  weatherMapLayerIds.wind,
+] as const;
+type WeatherMapSourceId = (typeof weatherMapSourceIds)[number];
+
+function isWeatherMapSourceId(sourceId: string): sourceId is WeatherMapSourceId {
+  return weatherMapSourceIds.includes(sourceId as WeatherMapSourceId);
+}
+
+let weatherMapProtocolConsumers = 0;
+interface WeatherMapProtocolModule {
+  readonly defaultOmProtocolSettings: OmProtocolSettings;
+  readonly omProtocol: typeof runOmProtocol;
+  readonly updateCurrentBounds: (bounds: [number, number, number, number]) => void;
+}
+
+function loadWeatherMapProtocol(): Promise<WeatherMapProtocolModule> {
+  return import('@openmeteo/weather-map-layer');
+}
+let weatherMapProtocolModulePromise: Promise<WeatherMapProtocolModule> | null = null;
+let weatherMapProtocolModule: WeatherMapProtocolModule | null = null;
+
+async function acquireWeatherMapProtocol(): Promise<void> {
+  const pendingModule = weatherMapProtocolModulePromise ?? loadWeatherMapProtocol();
+  weatherMapProtocolModulePromise = pendingModule;
+  let protocolModule: WeatherMapProtocolModule;
+  try {
+    protocolModule = await pendingModule;
+  } catch (error: unknown) {
+    if (weatherMapProtocolModulePromise === pendingModule) {
+      weatherMapProtocolModulePromise = null;
+    }
+    throw error;
+  }
+  weatherMapProtocolModule = protocolModule;
+  const { defaultOmProtocolSettings, omProtocol } = protocolModule;
+  if (weatherMapProtocolConsumers === 0) {
+    const settings = {
+      ...defaultOmProtocolSettings,
+      maxStatesWithData: 3,
+      colorScales: {
+        ...defaultOmProtocolSettings.colorScales,
+        cloud_cover: weatherCloudCoverColorScale,
+        precipitation: weatherPrecipitationColorScale,
+      },
+    } satisfies typeof defaultOmProtocolSettings;
+    const handler: Parameters<typeof addProtocol>[1] = async (
+      parameters,
+      controller,
+    ) => {
+      const response = await omProtocol(parameters, controller, settings);
+      // Open-Meteo reports cancellation as null; MapLibre 6 requires data or rejection.
+      if (response.data === null) {
+        throw new DOMException('Weather map request aborted.', 'AbortError');
+      }
+      return { ...response, data: response.data };
+    };
+    addProtocol(weatherMapProtocolId, handler);
+  }
+  weatherMapProtocolConsumers += 1;
+}
+
+function releaseWeatherMapProtocol(): void {
+  if (weatherMapProtocolConsumers === 0) return;
+  weatherMapProtocolConsumers -= 1;
+  if (weatherMapProtocolConsumers === 0) removeProtocol(weatherMapProtocolId);
+}
 
 export interface ImportedTrackHighlightSegment {
   readonly coordinates: readonly (readonly [number, number])[];
@@ -448,6 +545,13 @@ export class MapLibreLayerController {
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
   readonly #readySatelliteBasemapSourceIds = new Set<string>();
+  readonly #readyWeatherMapSourceIds = new Set<string>();
+  #weatherSuppressedTerrainVisibility: {
+    readonly 'terrain-relief': boolean;
+    readonly 'elevation-isolines': boolean;
+  } | null = null;
+  readonly #weatherMapLayerAnchors = new Map<string, unknown>();
+  #appliedWeatherMapOpacity: number | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
@@ -483,7 +587,11 @@ export class MapLibreLayerController {
   readonly #waitingForRasterData = new Set<string>();
   #progressiveRasterSourceId: string | null = null;
   #stagingSourceId: string | null = null;
+  #weatherProtocolRegistration: Promise<void> | null = null;
+  #disposed = false;
   #expectedRasterCancellationUntil = 0;
+  #weatherMetadataController: AbortController | null = null;
+  #weatherProtocolRegistered = false;
 
   public constructor(
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
@@ -494,6 +602,7 @@ export class MapLibreLayerController {
     private readonly idGenerator: IdGenerator,
     private readonly diagnostics: SentinelQueryDiagnostics,
     private readonly preferences: MapLayerPreferencesRepository,
+    private readonly weatherMap?: WeatherMapControllerConfiguration,
   ) {
     mapLayerStore.setState({
       terrainComputeStatus: contourTiles.getStatus(),
@@ -514,6 +623,7 @@ export class MapLibreLayerController {
       this.reconcileTerrainOverlays();
       this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
+      this.reconcileWeatherMap();
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
@@ -522,16 +632,19 @@ export class MapLibreLayerController {
       return;
     }
     this.#map?.off('styledata', this.handleStyleData);
-    this.#map?.off('sourcedata', this.handleSatelliteBasemapSourceData);
+    this.#map?.off('sourcedata', this.handleSourceData);
+    this.#map?.off('dataloading', this.handleWeatherMapDataLoading);
     this.#map = map;
     map.on('styledata', this.handleStyleData);
     map.on('error', this.handleTerrainOverlayError);
-    map.on('sourcedata', this.handleSatelliteBasemapSourceData);
+    map.on('sourcedata', this.handleSourceData);
+    map.on('dataloading', this.handleWeatherMapDataLoading);
     this.reconcileSatelliteBasemapSource();
     this.reconcileMosaicEntries();
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
+    this.reconcileWeatherMap();
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
@@ -552,10 +665,13 @@ export class MapLibreLayerController {
     this.contourTiles.setInteractionActive(false);
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
-    map.off('sourcedata', this.handleSatelliteBasemapSourceData);
+    map.off('sourcedata', this.handleSourceData);
+    map.off('dataloading', this.handleWeatherMapDataLoading);
     this.cancelRasterRecovery();
     this.#activeApplyController?.abort();
     this.#mosaicApplyController?.abort();
+    this.#weatherMetadataController?.abort();
+    this.#weatherMetadataController = null;
     this.#mosaicApplyController = null;
     this.#activeApplyController = null;
     this.#stagingScene = null;
@@ -576,19 +692,161 @@ export class MapLibreLayerController {
     this.#savedMarkerImageIds.clear();
     this.#satelliteBasemapSources.clear();
     this.#readySatelliteBasemapSourceIds.clear();
+    this.#readyWeatherMapSourceIds.clear();
     this.#applySequence += 1;
     this.#mosaicSequence += 1;
   }
 
   /** Releases map listeners, persistence work, protocols, and terrain compute resources. */
   public dispose(): void {
+    this.#disposed = true;
+    this.#weatherMetadataController?.abort();
+    this.#weatherMetadataController = null;
     this.clearMosaic();
+    this.restoreTerrainAfterWeatherMap();
     const map = this.#map;
     if (map !== null) this.detach(map);
     this.#releaseTerrainComputeStatus();
     this.#releaseTerrainComputeQueue();
     this.contourTiles.dispose();
     this.satelliteCogTiles.dispose();
+    if (this.#weatherProtocolRegistered) {
+      releaseWeatherMapProtocol();
+      this.#weatherProtocolRegistered = false;
+    }
+  }
+  public async setWeatherEnabled(
+    enabled: boolean,
+    requestedTime: Date = new Date(),
+  ): Promise<MapLayerVisibilityResult> {
+    if (!enabled) {
+      this.#weatherMetadataController?.abort();
+      this.#weatherMetadataController = null;
+      const current = mapLayerStore.getState().weatherMap;
+      mapLayerStore.setState({
+        weatherMap: {
+          ...current,
+          enabled: false,
+          status: current.validTimes.length === 0 ? 'idle' : 'ready',
+          renderProgress: null,
+          message: null,
+        },
+      });
+      this.removeWeatherMap();
+      this.restoreTerrainAfterWeatherMap();
+      return { status: 'success' };
+    }
+
+    if (this.#map === null) return this.weatherMapFailure('The map is not ready yet.');
+    if (this.weatherMap === undefined) {
+      return this.weatherMapFailure('The weather map provider is unavailable.');
+    }
+    this.disableTerrainForWeatherMap();
+
+    this.#weatherMetadataController?.abort();
+    const controller = new AbortController();
+    this.#weatherMetadataController = controller;
+    const current = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...current,
+        enabled: true,
+        status: 'loading',
+        renderProgress: null,
+        message: null,
+      },
+    });
+    this.removeWeatherMap();
+
+    try {
+      const metadata = await this.weatherMap.loadMetadata(controller.signal);
+      controller.signal.throwIfAborted();
+      const selectedTimeIndex = selectNearestForecastTimeIndex(
+        metadata.validTimes,
+        requestedTime,
+      );
+      if (selectedTimeIndex < 0) {
+        return this.weatherMapFailure(
+          'Open-Meteo did not provide an available forecast time.',
+        );
+      }
+      await this.ensureWeatherMapProtocol();
+      controller.signal.throwIfAborted();
+      this.updateWeatherMapBounds();
+      this.replaceWeatherMapFrame(selectedTimeIndex);
+      mapLayerStore.setState({
+        weatherMap: {
+          ...mapLayerStore.getState().weatherMap,
+          enabled: true,
+          status: 'ready',
+          referenceTime: metadata.referenceTime,
+          validTimes: [...metadata.validTimes],
+          selectedTimeIndex,
+          message: null,
+        },
+      });
+      this.logger.log({
+        level: 'info',
+        name: 'weather.map.enabled',
+        data: { model: this.weatherMap.model, timeStep: selectedTimeIndex },
+      });
+      return { status: 'success' };
+    } catch {
+      if (controller.signal.aborted) return { status: 'success' };
+      return this.weatherMapFailure('Open-Meteo weather map data is unavailable.');
+    } finally {
+      if (this.#weatherMetadataController === controller) {
+        this.#weatherMetadataController = null;
+      }
+    }
+  }
+
+  public selectWeatherForecastTime(requestedTime: Date): MapLayerVisibilityResult {
+    const state = mapLayerStore.getState().weatherMap;
+    if (!state.enabled || state.status !== 'ready') {
+      return this.weatherMapCommandFailure(
+        'Enable the weather map before choosing its time.',
+      );
+    }
+    const selectedTimeIndex = selectNearestForecastTimeIndex(
+      state.validTimes,
+      requestedTime,
+    );
+    if (selectedTimeIndex < 0) {
+      return this.weatherMapCommandFailure(
+        'Choose an available weather forecast time.',
+      );
+    }
+    if (selectedTimeIndex !== state.selectedTimeIndex) {
+      try {
+        this.replaceWeatherMapFrame(selectedTimeIndex);
+      } catch {
+        return this.weatherMapFailure('The selected weather frame could not be shown.');
+      }
+    }
+    mapLayerStore.setState({
+      weatherMap: {
+        ...mapLayerStore.getState().weatherMap,
+        selectedTimeIndex,
+        message: null,
+      },
+    });
+    return { status: 'success' };
+  }
+
+  public setWeatherOpacity(opacity: number): MapLayerVisibilityResult {
+    if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+      return this.weatherMapCommandFailure(
+        'Choose an opacity between 0 and 100 percent.',
+      );
+    }
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: { ...weatherMap, opacity, message: null },
+    });
+    this.applyWeatherMapOpacity();
+    this.persistStableState();
+    return { status: 'success' };
   }
 
   public setLayerVisibility(
@@ -598,6 +856,15 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null) {
       return this.visibilityFailure('The map is not ready yet.');
+    }
+    if (
+      visible &&
+      mapLayerStore.getState().weatherMap.enabled &&
+      (layerId === 'terrain-relief' || layerId === 'elevation-isolines')
+    ) {
+      return this.visibilityFailure(
+        'Disable the weather map before enabling terrain overlays.',
+      );
     }
 
     const state = mapLayerStore.getState();
@@ -1240,6 +1507,10 @@ export class MapLibreLayerController {
         visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
         importedTrackOpacity: persisted.importedTrackOpacity,
+        weatherMap: {
+          ...mapLayerStore.getState().weatherMap,
+          opacity: persisted.weatherMapOpacity,
+        },
         satelliteRenderingMode: persisted.satelliteRenderingMode,
         satelliteRenderingTuning: { ...persisted.renderingTuning },
         errorMessage: null,
@@ -2134,14 +2405,22 @@ export class MapLibreLayerController {
   }
 
   private persistStableState(): void {
-    const { visibility, openStreetMapOpacity, importedTrackOpacity } =
-      mapLayerStore.getState();
+    const state = mapLayerStore.getState();
+    const visibility =
+      this.#weatherSuppressedTerrainVisibility === null
+        ? state.visibility
+        : {
+            ...state.visibility,
+            ...this.#weatherSuppressedTerrainVisibility,
+          };
+    const { openStreetMapOpacity, importedTrackOpacity, weatherMap } = state;
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
         visibility,
         openStreetMapOpacity,
         importedTrackOpacity,
+        weatherMapOpacity: weatherMap.opacity,
         satelliteRenderingMode: this.#satelliteRenderingMode,
         renderingTuning,
         terrainOverlays: { ...this.#terrainOverlayPreferences },
@@ -2159,6 +2438,7 @@ export class MapLibreLayerController {
     this.reconcileTerrainOverlays();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
+    this.reconcileWeatherMap();
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
@@ -2166,26 +2446,37 @@ export class MapLibreLayerController {
     this.reconcileSavedMarkers();
   };
 
-  private readonly handleSatelliteBasemapSourceData = (
-    event: MapSourceDataEvent,
-  ): void => {
+  private readonly handleSourceData = (event: MapSourceDataEvent): void => {
+    if (isSatelliteBasemapSourceId(event.sourceId)) {
+      if (event.sourceDataType !== 'content') return;
+      const map = this.#map;
+      const source = map?.getSource(event.sourceId);
+      if (map === null || source === undefined) return;
+      if (this.#satelliteBasemapSources.get(event.sourceId) !== source) {
+        this.#satelliteBasemapSources.set(event.sourceId, source);
+        this.#readySatelliteBasemapSourceIds.delete(event.sourceId);
+      }
+      if (this.#readySatelliteBasemapSourceIds.has(event.sourceId)) return;
+      this.#readySatelliteBasemapSourceIds.add(event.sourceId);
+      this.applyMapVisualMode();
+      this.reconcileTerrainOverlays();
+      return;
+    }
+    if (!isWeatherMapSourceId(event.sourceId)) return;
+    const map = this.#map;
+    const weatherMap = mapLayerStore.getState().weatherMap;
     if (
-      event.sourceDataType !== 'content' ||
-      !isSatelliteBasemapSourceId(event.sourceId)
+      map === null ||
+      !weatherMap.enabled ||
+      weatherMap.status !== 'ready' ||
+      weatherMap.renderProgress === null ||
+      map.getSource(event.sourceId) === undefined ||
+      !map.isSourceLoaded(event.sourceId)
     ) {
       return;
     }
-    const map = this.#map;
-    const source = map?.getSource(event.sourceId);
-    if (map === null || source === undefined) return;
-    if (this.#satelliteBasemapSources.get(event.sourceId) !== source) {
-      this.#satelliteBasemapSources.set(event.sourceId, source);
-      this.#readySatelliteBasemapSourceIds.delete(event.sourceId);
-    }
-    if (this.#readySatelliteBasemapSourceIds.has(event.sourceId)) return;
-    this.#readySatelliteBasemapSourceIds.add(event.sourceId);
-    this.applyMapVisualMode();
-    this.reconcileTerrainOverlays();
+    this.#readyWeatherMapSourceIds.add(event.sourceId);
+    this.publishWeatherRenderProgress();
   };
 
   private reconcileSatelliteBasemapSource(): void {
@@ -3628,6 +3919,374 @@ export class MapLibreLayerController {
       if (tracker.timer !== null) clearTimeout(tracker.timer);
     }
     this.#rasterRecoveries.clear();
+  }
+
+  private async ensureWeatherMapProtocol(): Promise<void> {
+    if (this.#weatherProtocolRegistered) return;
+    this.#weatherProtocolRegistration ??= this.registerWeatherMapProtocol();
+    await this.#weatherProtocolRegistration;
+    if (this.#disposed) {
+      throw new Error('The weather map protocol is unavailable.');
+    }
+  }
+
+  private async registerWeatherMapProtocol(): Promise<void> {
+    try {
+      await acquireWeatherMapProtocol();
+      if (this.#disposed) {
+        releaseWeatherMapProtocol();
+        return;
+      }
+      this.#weatherProtocolRegistered = true;
+    } finally {
+      this.#weatherProtocolRegistration = null;
+    }
+  }
+
+  private readonly handleWeatherMapDataLoading = (): void => {
+    if (!mapLayerStore.getState().weatherMap.enabled) return;
+    this.updateWeatherMapBounds();
+  };
+
+  private updateWeatherMapBounds(): void {
+    const map = this.#map;
+    if (map === null || weatherMapProtocolModule === null) return;
+    const bounds = map.getBounds();
+    weatherMapProtocolModule.updateCurrentBounds([
+      bounds.getWest(),
+      bounds.getSouth(),
+      bounds.getEast(),
+      bounds.getNorth(),
+    ]);
+  }
+
+  private disableTerrainForWeatherMap(): void {
+    const map = this.#map;
+    if (map === null) return;
+    const state = mapLayerStore.getState();
+    this.#weatherSuppressedTerrainVisibility ??= {
+      'terrain-relief': state.visibility['terrain-relief'],
+      'elevation-isolines': state.visibility['elevation-isolines'],
+    };
+    if (
+      !state.visibility['terrain-relief'] &&
+      !state.visibility['elevation-isolines']
+    ) {
+      return;
+    }
+    const visibility = {
+      ...state.visibility,
+      'terrain-relief': false,
+      'elevation-isolines': false,
+    };
+    for (const layerId of ['terrain-relief', 'elevation-isolines'] as const) {
+      for (const nativeLayerId of this.nativeLayerIds(layerId)) {
+        if (map.getLayer(nativeLayerId) !== undefined) {
+          map.setLayoutProperty(nativeLayerId, 'visibility', 'none');
+        }
+      }
+    }
+    mapLayerStore.setState({ visibility });
+    this.logger.log({
+      level: 'info',
+      name: 'weather.map.terrain-overlays-hidden',
+    });
+  }
+
+  private restoreTerrainAfterWeatherMap(): void {
+    const previousVisibility = this.#weatherSuppressedTerrainVisibility;
+    if (previousVisibility === null) return;
+    this.#weatherSuppressedTerrainVisibility = null;
+    const map = this.#map;
+    const visibility = {
+      ...mapLayerStore.getState().visibility,
+      ...previousVisibility,
+    };
+    if (map !== null) {
+      for (const layerId of ['terrain-relief', 'elevation-isolines'] as const) {
+        for (const nativeLayerId of this.nativeLayerIds(layerId)) {
+          if (map.getLayer(nativeLayerId) !== undefined) {
+            map.setLayoutProperty(
+              nativeLayerId,
+              'visibility',
+              previousVisibility[layerId] ? 'visible' : 'none',
+            );
+          }
+        }
+      }
+    }
+    mapLayerStore.setState({ visibility });
+    this.persistStableState();
+    this.logger.log({
+      level: 'info',
+      name: 'weather.map.terrain-overlays-restored',
+    });
+  }
+
+  private weatherMapUrl(
+    selectedTimeIndex: number,
+    variable: 'cloud_cover' | 'precipitation' | 'wind_u_component_10m',
+    arrows = false,
+  ): string {
+    if (this.weatherMap === undefined) throw new Error('Weather map is unavailable.');
+    const url = new URL(this.weatherMap.metadataUrl);
+    url.searchParams.set('time_step', `valid_times_${String(selectedTimeIndex)}`);
+    url.searchParams.set('tile_size', '256');
+    url.searchParams.set('variable', variable);
+    if (arrows) url.searchParams.set('arrows', 'true');
+    if (variable !== 'wind_u_component_10m') {
+      url.searchParams.set('color_blend', 'true');
+    }
+    return `${weatherMapProtocolId}://${url.toString()}`;
+  }
+
+  private reconcileWeatherMap(): void {
+    const map = this.#map;
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    if (
+      map === null ||
+      !weatherMap.enabled ||
+      weatherMap.status !== 'ready' ||
+      weatherMap.selectedTimeIndex === null
+    ) {
+      return;
+    }
+    if (map.getLayer(mapInsertionPoints.weatherBeforeLayerId) === undefined) return;
+    const complete = orderedWeatherMapLayerIds.every(
+      (layerId) => map.getLayer(layerId) !== undefined,
+    );
+    if (!complete) {
+      this.replaceWeatherMapFrame(weatherMap.selectedTimeIndex);
+      return;
+    }
+    this.applyWeatherMapOpacity();
+    this.ensureWeatherMapLayerOrder(map);
+  }
+
+  private ensureWeatherMapLayerOrder(map: MapLibreMap): void {
+    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const beforeIndex = layerIds.indexOf(mapInsertionPoints.weatherBeforeLayerId);
+    const orderIsCorrect =
+      beforeIndex >= orderedWeatherMapLayerIds.length &&
+      orderedWeatherMapLayerIds.every(
+        (layerId, index) =>
+          layerIds[beforeIndex - orderedWeatherMapLayerIds.length + index] === layerId,
+      );
+    if (orderIsCorrect) return;
+    for (const layerId of orderedWeatherMapLayerIds) {
+      map.moveLayer(layerId, mapInsertionPoints.weatherBeforeLayerId);
+    }
+  }
+
+  private replaceWeatherMapFrame(selectedTimeIndex: number): void {
+    const map = this.#map;
+    if (map?.getLayer(mapInsertionPoints.weatherBeforeLayerId) === undefined) {
+      throw new Error('The map style is not ready for weather layers.');
+    }
+    this.removeWeatherMap();
+    const opacity = mapLayerStore.getState().weatherMap.opacity;
+    map.addSource(mapSourceIds.weatherClouds, {
+      type: 'raster',
+      url: this.weatherMapUrl(selectedTimeIndex, 'cloud_cover'),
+      maxzoom: 12,
+      attribution: 'Weather data © Open-Meteo · ECMWF',
+    });
+    map.addLayer(
+      {
+        id: weatherMapLayerIds.clouds,
+        type: 'raster',
+        source: mapSourceIds.weatherClouds,
+        paint: {
+          'raster-opacity': weatherCloudOpacity * opacity,
+          'raster-fade-duration': 0,
+        },
+      },
+      mapInsertionPoints.weatherBeforeLayerId,
+    );
+    map.addSource(mapSourceIds.weatherPrecipitation, {
+      type: 'raster',
+      url: this.weatherMapUrl(selectedTimeIndex, 'precipitation'),
+      maxzoom: 12,
+      attribution: 'Weather data © Open-Meteo · ECMWF',
+    });
+    map.addLayer(
+      {
+        id: weatherMapLayerIds.precipitation,
+        type: 'raster',
+        source: mapSourceIds.weatherPrecipitation,
+        paint: {
+          'raster-opacity': weatherPrecipitationOpacity * opacity,
+          'raster-fade-duration': 0,
+        },
+      },
+      mapInsertionPoints.weatherBeforeLayerId,
+    );
+    map.addSource(mapSourceIds.weatherWind, {
+      type: 'vector',
+      url: this.weatherMapUrl(selectedTimeIndex, 'wind_u_component_10m', true),
+      attribution: 'Weather data © Open-Meteo · ECMWF',
+    });
+    map.addLayer(
+      {
+        id: weatherMapLayerIds.wind,
+        type: 'line',
+        source: mapSourceIds.weatherWind,
+        'source-layer': 'wind-arrows',
+        minzoom: 4,
+        layout: { 'line-cap': 'round' },
+        paint: {
+          'line-color': '#173941',
+          'line-opacity': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', 'value']],
+            0,
+            0,
+            5,
+            weatherWindOpacity * opacity * 0.04,
+            8,
+            weatherWindOpacity * opacity * 0.55,
+            15,
+            weatherWindOpacity * opacity,
+          ],
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['to-number', ['get', 'value']],
+            0,
+            0.08,
+            5,
+            0.12,
+            10,
+            0.55,
+            20,
+            0.9,
+            35,
+            1.15,
+          ],
+        },
+      },
+      mapInsertionPoints.weatherBeforeLayerId,
+    );
+    this.#readyWeatherMapSourceIds.clear();
+    const current = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...current,
+        renderProgress: { loadedSourceCount: 0, totalSourceCount: 3 },
+      },
+    });
+    for (const layerId of orderedWeatherMapLayerIds) {
+      this.#weatherMapLayerAnchors.set(layerId, map.getLayer(layerId));
+    }
+    this.#appliedWeatherMapOpacity = opacity;
+  }
+
+  private applyWeatherMapOpacity(): void {
+    const map = this.#map;
+    if (map === null) return;
+    const opacity = mapLayerStore.getState().weatherMap.opacity;
+    const layerChanged = orderedWeatherMapLayerIds.some(
+      (layerId) => map.getLayer(layerId) !== this.#weatherMapLayerAnchors.get(layerId),
+    );
+    if (opacity === this.#appliedWeatherMapOpacity && !layerChanged) return;
+    if (map.getLayer(weatherMapLayerIds.clouds) !== undefined) {
+      map.setPaintProperty(
+        weatherMapLayerIds.clouds,
+        'raster-opacity',
+        weatherCloudOpacity * opacity,
+      );
+    }
+    if (map.getLayer(weatherMapLayerIds.precipitation) !== undefined) {
+      map.setPaintProperty(
+        weatherMapLayerIds.precipitation,
+        'raster-opacity',
+        weatherPrecipitationOpacity * opacity,
+      );
+    }
+    if (map.getLayer(weatherMapLayerIds.wind) !== undefined) {
+      map.setPaintProperty(weatherMapLayerIds.wind, 'line-opacity', [
+        'interpolate',
+        ['linear'],
+        ['to-number', ['get', 'value']],
+        0,
+        0,
+        5,
+        weatherWindOpacity * opacity * 0.04,
+        8,
+        weatherWindOpacity * opacity * 0.55,
+        15,
+        weatherWindOpacity * opacity,
+      ]);
+    }
+    for (const layerId of orderedWeatherMapLayerIds) {
+      this.#weatherMapLayerAnchors.set(layerId, map.getLayer(layerId));
+    }
+    this.#appliedWeatherMapOpacity = opacity;
+  }
+  private publishWeatherRenderProgress(): void {
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    if (!weatherMap.enabled || weatherMap.renderProgress === null) return;
+    const loadedSourceCount = this.#readyWeatherMapSourceIds.size;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...weatherMap,
+        renderProgress:
+          loadedSourceCount >= weatherMap.renderProgress.totalSourceCount
+            ? null
+            : {
+                loadedSourceCount,
+                totalSourceCount: weatherMap.renderProgress.totalSourceCount,
+              },
+      },
+    });
+  }
+
+  private removeWeatherMap(): void {
+    this.#readyWeatherMapSourceIds.clear();
+    this.#weatherMapLayerAnchors.clear();
+    this.#appliedWeatherMapOpacity = null;
+    const map = this.#map;
+    if (map === null) return;
+    for (const layerId of [
+      weatherMapLayerIds.wind,
+      weatherMapLayerIds.precipitation,
+      weatherMapLayerIds.clouds,
+    ]) {
+      if (map.getLayer(layerId) !== undefined) map.removeLayer(layerId);
+    }
+    for (const sourceId of weatherMapSourceIds) {
+      if (map.getSource(sourceId) !== undefined) map.removeSource(sourceId);
+    }
+  }
+
+  private weatherMapCommandFailure(message: string): MapLayerVisibilityResult {
+    const current = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...current,
+        message,
+      },
+    });
+    this.logger.log({ level: 'warn', name: 'weather.map.command-failed' });
+    return { status: 'failed', message };
+  }
+
+  private weatherMapFailure(message: string): MapLayerVisibilityResult {
+    const current = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...current,
+        enabled: false,
+        status: 'error',
+        renderProgress: null,
+        message,
+      },
+    });
+    this.removeWeatherMap();
+    this.restoreTerrainAfterWeatherMap();
+    this.logger.log({ level: 'warn', name: 'weather.map.failed' });
+    return { status: 'failed', message };
   }
 
   private withRasterVisibility(

@@ -11,6 +11,7 @@ import {
   defaultSatelliteRenderingMode,
   defaultSatelliteRenderingTuning,
   defaultTerrainOverlayPreferences,
+  defaultWeatherMapOpacity,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import type {
   TerrainComputeQueueState,
@@ -76,6 +77,19 @@ interface TerrainOverlaySnapshot {
   readonly preferences: TerrainOverlayPreferences;
   readonly message: string | null;
 }
+export interface WeatherMapSnapshot {
+  readonly enabled: boolean;
+  readonly status: 'idle' | 'loading' | 'ready' | 'error';
+  readonly opacity: number;
+  readonly referenceTime: string | null;
+  readonly validTimes: readonly string[];
+  readonly selectedTimeIndex: number | null;
+  readonly renderProgress: {
+    readonly loadedSourceCount: number;
+    readonly totalSourceCount: number;
+  } | null;
+  readonly message: string | null;
+}
 
 interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
@@ -91,6 +105,7 @@ interface MapLayerState {
   readonly satelliteRenderingTuning: SatelliteRenderingTuning;
   readonly selectedScene: SatelliteScene | null;
   readonly terrainOverlays: TerrainOverlaySnapshot;
+  readonly weatherMap: WeatherMapSnapshot;
 }
 
 const initialMapLayerState: MapLayerState = {
@@ -133,9 +148,19 @@ const initialMapLayerState: MapLayerState = {
     preferences: defaultTerrainOverlayPreferences,
     message: null,
   },
+  weatherMap: {
+    enabled: false,
+    status: 'idle',
+    opacity: defaultWeatherMapOpacity,
+    referenceTime: null,
+    validTimes: [],
+    selectedTimeIndex: null,
+    renderProgress: null,
+    message: null,
+  },
 };
 
-/** Serializable state shared by Satellite and Layers; stable choices persist in Dexie. */
+/** Serializable map-layer state shared by map controls and feature panels. */
 export const mapLayerStore = createStore<MapLayerState>()(() => initialMapLayerState);
 
 export function resetMapLayerStore(): void {

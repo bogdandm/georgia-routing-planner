@@ -33,6 +33,7 @@ export const defaultSatelliteRenderingTuning: SatelliteRenderingTuning = {
   gamma: 2.25,
   saturation: 2.5,
 };
+export const defaultWeatherMapOpacity = 1;
 
 export const supportedContourIntervals = [20, 25, 40, 50, 100] as const;
 
@@ -54,6 +55,7 @@ export interface PersistedMapLayerPreferences {
   readonly visibility: MapLayerVisibilityPreferences;
   readonly openStreetMapOpacity: number;
   readonly importedTrackOpacity: number;
+  readonly weatherMapOpacity: number;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;

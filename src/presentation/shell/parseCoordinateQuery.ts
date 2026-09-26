@@ -3,11 +3,14 @@ import type { MapCoordinate } from '@/presentation/map/mapTypes';
 type CoordinateQueryResult =
   | { readonly status: 'not-coordinate' }
   | { readonly status: 'valid'; readonly coordinate: MapCoordinate }
-  | { readonly status: 'invalid'; readonly message: string };
+  | {
+      readonly status: 'invalid';
+      readonly code: 'out-of-bounds' | 'duplicate-axis' | 'non-finite';
+    };
 
 function coordinate(longitude: number, latitude: number): CoordinateQueryResult {
   if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
-    return { status: 'invalid', message: 'Coordinates are outside valid map bounds.' };
+    return { status: 'invalid', code: 'out-of-bounds' };
   }
   return { status: 'valid', coordinate: { longitude, latitude } };
 }
@@ -24,10 +27,7 @@ export function parseCoordinateQuery(raw: string): CoordinateQueryResult {
     const first = Number(labelled[2]);
     const second = Number(labelled[4]);
     if (firstLabel?.startsWith('lat') === secondLabel?.startsWith('lat')) {
-      return {
-        status: 'invalid',
-        message: 'Use one latitude and one longitude label.',
-      };
+      return { status: 'invalid', code: 'duplicate-axis' };
     }
     return firstLabel?.startsWith('lat') === true
       ? coordinate(second, first)
@@ -39,7 +39,7 @@ export function parseCoordinateQuery(raw: string): CoordinateQueryResult {
   const first = Number(pair[1]);
   const second = Number(pair[2]);
   if (!Number.isFinite(first) || !Number.isFinite(second)) {
-    return { status: 'invalid', message: 'Enter two finite coordinate values.' };
+    return { status: 'invalid', code: 'non-finite' };
   }
   return coordinate(second, first);
 }

@@ -2,6 +2,8 @@ import type { GeocodingProviderConfigurationResult } from '@/bootstrap/configura
 import type { MapProviderConfigurationResult } from '@/bootstrap/configuration/MapProviderConfiguration';
 import { weatherProviderConfiguration } from '@/bootstrap/configuration/WeatherProviderConfiguration';
 
+import { Trans, useLingui } from '@lingui/react/macro';
+
 import GitHubIcon from '@mui/icons-material/GitHub';
 import CloseIcon from '@mui/icons-material/Close';
 import {
@@ -15,6 +17,10 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useRef, type RefObject } from 'react';
+
+// Stable DOM identifier used by the dialog accessibility relationship.
+// eslint-disable-next-line -- Stable DOM identifier, not user-visible copy.
+const aboutPanelTitleId = 'about-panel-title';
 
 interface AboutDialogProps {
   readonly onClose: () => void;
@@ -92,6 +98,7 @@ export function AboutDialog({
   triggerRef,
 }: AboutDialogProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const { t } = useLingui();
 
   useEffect(() => {
     if (open) closeButtonRef.current?.focus();
@@ -126,6 +133,8 @@ export function AboutDialog({
     if (attribution === null) continue;
     for (const part of attribution.split('·')) {
       const detail = part.trim();
+      // Attribution normalization is locale-independent provider-data matching.
+      /* eslint-disable -- Attribution normalization is locale-independent provider data. */
       const normalizedCredit = detail
         .toLocaleLowerCase()
         .replace(/^data from\s+/iu, '')
@@ -133,6 +142,7 @@ export function AboutDialog({
       const credit = normalizedCredit.includes('openstreetmap')
         ? 'openstreetmap'
         : normalizedCredit;
+      /* eslint-enable */
       if (credit.length === 0 || displayedAttributionCredits.has(credit)) continue;
       displayedAttributionCredits.add(credit);
       vectorAttributionDetails.push(detail);
@@ -145,32 +155,32 @@ export function AboutDialog({
   const apiEntries: ServiceEntryProps[] = [];
   if (geocoding !== null) {
     apiEntries.push({
-      description: 'Place search',
+      description: t`Place search`,
       href: geocoding.searchUrl,
       title: new URL(geocoding.searchUrl).hostname,
     });
     if (geocoding.nearbyUrl !== undefined) {
       apiEntries.push({
-        description: 'Nearby-feature search',
+        description: t`Nearby-feature search`,
         href: geocoding.nearbyUrl,
         title: new URL(geocoding.nearbyUrl).hostname,
       });
     }
   }
   apiEntries.push({
-    description: 'Point weather forecast.',
+    description: t`Point weather forecast.`,
     href: weatherProviderConfiguration.forecastUrl,
     title: new URL(weatherProviderConfiguration.forecastUrl).hostname,
   });
   if (mapProviders !== null) {
     apiEntries.push(
       {
-        description: 'Satellite scene search',
+        description: t`Satellite scene search`,
         href: mapProviders.satellite.searchUrl,
         title: mapProviders.satellite.label,
       },
       {
-        description: 'Satellite scene rendering',
+        description: t`Satellite scene rendering`,
         href: originFor(mapProviders.satellite.renderer.tileUrlTemplate),
         title: new URL(originFor(mapProviders.satellite.renderer.tileUrlTemplate))
           .hostname,
@@ -178,26 +188,30 @@ export function AboutDialog({
     );
   }
 
+  const l1cCollection = mapProviders?.satellite.collections.L1C;
+  const l2aCollection = mapProviders?.satellite.collections.L2A;
+  const terrainCredits = terrainAttribution ?? '';
+  const weatherModelName = weatherProviderConfiguration.models.ecmwf_ifs.displayName;
   const dataEntries: ServiceEntryProps[] = [];
   if (mapProviders !== null) {
     dataEntries.push(
       {
-        description: 'Vector map',
+        description: t`Vector map`,
         details: vectorAttributionDetails.join(' · '),
         href: originFor(mapProviders.vector.tileJsonUrl),
         title: `${mapProviders.vector.label} + ${mapProviders.detailVector.label}`,
       },
       {
-        description: 'Elevation data',
+        description: t`Elevation data`,
         details:
           mapProviders.terrain.id === 'aws-mapzen-terrarium'
-            ? `${terrainAttribution ?? ''}. Includes Copernicus, USGS, NOAA, and regional elevation data.`
+            ? t`${terrainCredits}. Includes Copernicus, USGS, NOAA, and regional elevation data.`
             : (terrainAttribution ?? undefined),
         href: originFor(mapProviders.terrain.tileUrl),
         title: mapProviders.terrain.label,
       },
       {
-        description: `Satellite imagery from ${mapProviders.satellite.collections.L1C} and ${mapProviders.satellite.collections.L2A}`,
+        description: t`Satellite imagery from ${l1cCollection} and ${l2aCollection}`,
         href: mapProviders.satellite.searchUrl,
         title: mapProviders.satellite.attribution,
       },
@@ -211,7 +225,7 @@ export function AboutDialog({
       const tileUrl = satelliteBasemap.tileUrls[0];
       if (tileUrl === undefined) continue;
       dataEntries.push({
-        description: 'Satellite basemap',
+        description: t`Satellite basemap`,
         details: satelliteBasemap.attribution.replace(/<[^>]*>/gu, ''),
         href: originFor(tileUrl),
         title: satelliteBasemap.label,
@@ -222,7 +236,7 @@ export function AboutDialog({
       mapProviders.naprOrthophoto.sources.national2016To2017.tileUrls[0];
     if (naprOrthophotoTileUrl !== undefined) {
       dataEntries.push({
-        description: 'Georgian orthophoto mosaic',
+        description: t`Georgian orthophoto mosaic`,
         details: mapProviders.naprOrthophoto.attribution.replace(/<[^>]*>/gu, ''),
         href: originFor(naprOrthophotoTileUrl),
         title: mapProviders.naprOrthophoto.label,
@@ -230,24 +244,23 @@ export function AboutDialog({
     }
   }
   dataEntries.push({
-    description: 'Weather forecast data',
-    details:
-      'Deterministic 9 km model forecast; not a measured weather-station observation.',
+    description: t`Weather forecast data`,
+    details: t`Deterministic 9 km model forecast; not a measured weather-station observation.`,
     href: weatherProviderConfiguration.attributionUrl,
     links: [
       {
         href: weatherProviderConfiguration.licenseUrl,
-        label: 'Data licence',
+        label: t`Data licence`,
       },
     ],
-    title: `${weatherProviderConfiguration.models.ecmwf_ifs.displayName} via Open-Meteo`,
+    title: t`${weatherModelName} via Open-Meteo`,
   });
 
   return (
     <Paper
       role="dialog"
-      aria-modal="false"
-      aria-labelledby="about-panel-title"
+      aria-modal={false}
+      aria-labelledby={aboutPanelTitleId}
       elevation={8}
       onKeyDown={(event) => {
         if (event.key === 'Escape') handleClose();
@@ -265,7 +278,7 @@ export function AboutDialog({
       }}
     >
       <DialogTitle
-        id="about-panel-title"
+        id={aboutPanelTitleId}
         sx={(theme) => ({
           px: 2,
           py: 1.5,
@@ -274,9 +287,9 @@ export function AboutDialog({
           [theme.breakpoints.up('sm')]: { px: 6, py: 4, pr: 14 },
         })}
       >
-        About Trail Planner
+        <Trans>About Trail Planner</Trans>
         <IconButton
-          aria-label="Close site information"
+          aria-label={t`Close site information`}
           onClick={handleClose}
           ref={closeButtonRef}
           size="small"
@@ -287,7 +300,7 @@ export function AboutDialog({
             [theme.breakpoints.up('sm')]: { right: 32, top: 32 },
           })}
         >
-          <CloseIcon fontSize="small" />
+          <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </DialogTitle>
       <DialogContent
@@ -301,7 +314,9 @@ export function AboutDialog({
         <Stack spacing={2}>
           <Stack spacing={0.5}>
             <Typography variant="body2">
-              Created by <strong>Bogdan Kalashnikov</strong> (bogdandm).
+              <Trans>
+                Created by <strong>Bogdan Kalashnikov</strong> (bogdandm).
+              </Trans>
             </Typography>
             <Link
               href="https://github.com/bogdandm/georgia-routing-planner"
@@ -314,25 +329,29 @@ export function AboutDialog({
                 width: 'fit-content',
               }}
             >
-              <GitHubIcon fontSize="small" />
-              GitHub repository
+              <GitHubIcon sx={{ fontSize: 20 }} />
+              <Trans>GitHub repository</Trans>
             </Link>
           </Stack>
 
           <Stack spacing={1}>
             <Typography component="h2" variant="subtitle2">
-              APIs
+              <Trans>APIs</Trans>
             </Typography>
             {geocoding === null ? (
               <Typography variant="body2" color="text.secondary">
-                Place search is unavailable because its provider configuration is
-                invalid.
+                <Trans>
+                  Place search is unavailable because its provider configuration is
+                  invalid.
+                </Trans>
               </Typography>
             ) : null}
             {mapProviders === null ? (
               <Typography variant="body2" color="text.secondary">
-                Satellite search is unavailable because its provider configuration is
-                invalid.
+                <Trans>
+                  Satellite search is unavailable because its provider configuration is
+                  invalid.
+                </Trans>
               </Typography>
             ) : null}
             <Stack spacing={1.25}>
@@ -344,12 +363,14 @@ export function AboutDialog({
 
           <Stack spacing={1}>
             <Typography component="h2" variant="subtitle2">
-              Data sources
+              <Trans>Data sources</Trans>
             </Typography>
             {mapProviders === null ? (
               <Typography variant="body2" color="text.secondary">
-                Map, elevation, and imagery sources are unavailable because their
-                provider configuration is invalid.
+                <Trans>
+                  Map, elevation, and imagery sources are unavailable because their
+                  provider configuration is invalid.
+                </Trans>
               </Typography>
             ) : (
               <Stack spacing={1.25}>

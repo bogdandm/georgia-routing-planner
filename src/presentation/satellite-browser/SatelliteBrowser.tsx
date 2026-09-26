@@ -1010,9 +1010,7 @@ export function SatelliteBrowser({
     setLoadingMonth(range.month);
     setLoadingMore(true);
     setLoadMoreError(null);
-    beginSatelliteRequest(
-      `Loading Sentinel imagery for ${monthFormatter.format(new Date(`${range.month}-01T00:00:00.000Z`))}…`,
-    );
+    beginSatelliteRequest({ code: 'loading-month', month: range.month });
     try {
       const monthResult = await searchSatelliteScenes.execute(
         {
@@ -1043,9 +1041,10 @@ export function SatelliteBrowser({
           ? matchingMergedCount
           : Math.min(matchingMergedCount, matchingBaseCount + resultPageSize),
       );
-      completeSatelliteRequest(
-        `${String(mergedResult.sceneCount)} Sentinel image${mergedResult.sceneCount === 1 ? '' : 's'} available`,
-      );
+      completeSatelliteRequest({
+        code: 'images-available',
+        count: mergedResult.sceneCount,
+      });
     } catch (error) {
       if (controller.signal.aborted) return;
       const message =
@@ -1053,7 +1052,7 @@ export function SatelliteBrowser({
           ? error.message
           : `${monthFormatter.format(new Date(`${range.month}-01T00:00:00.000Z`))} imagery could not be loaded. Try again.`;
       setLoadMoreError(message);
-      failSatelliteRequest(message);
+      failSatelliteRequest();
     } finally {
       if (request.current === controller) {
         request.current = null;
@@ -1102,7 +1101,7 @@ export function SatelliteBrowser({
     );
     setResultsOpen(true);
     setSearchState({ status: 'loading' });
-    beginSatelliteRequest('Searching the Earth Search Sentinel catalog…');
+    beginSatelliteRequest({ code: 'searching-catalog' });
     try {
       const result = await searchSatelliteScenes.execute(
         {
@@ -1117,9 +1116,10 @@ export function SatelliteBrowser({
       if (!controller.signal.aborted) {
         markMonthLoaded(range.month);
         setSearchState({ status: 'success', result });
-        completeSatelliteRequest(
-          `${String(result.sceneCount)} Sentinel image${result.sceneCount === 1 ? '' : 's'} available`,
-        );
+        completeSatelliteRequest({
+          code: 'images-available',
+          count: result.sceneCount,
+        });
       }
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -1131,7 +1131,7 @@ export function SatelliteBrowser({
         status: 'error',
         message,
       });
-      failSatelliteRequest(message);
+      failSatelliteRequest();
     } finally {
       if (request.current === controller) {
         request.current = null;
@@ -1190,7 +1190,7 @@ export function SatelliteBrowser({
     setLoadingMore(false);
     setSearchState({ status: 'idle' });
     setResultsOpen(false);
-    completeSatelliteRequest('Sentinel search cancelled');
+    completeSatelliteRequest({ code: 'search-cancelled' });
   };
 
   const changeSearchAreaSource = (event: SelectChangeEvent) => {

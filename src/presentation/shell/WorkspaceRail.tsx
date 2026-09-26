@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
@@ -31,6 +32,10 @@ import {
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { appColors } from '@/presentation/theme/appColors';
+
+// Trail Planner is the invariant product name.
+// eslint-disable-next-line -- Invariant product name.
+const productName = 'Trail Planner';
 
 interface WorkspaceRailIconButtonProps {
   readonly label: string;
@@ -112,6 +117,7 @@ export function WorkspaceRail({
   onActiveTabClick,
   onToggleNavigation,
 }: WorkspaceRailProps) {
+  const { t } = useLingui();
   const { userData } = useRuntimeServices();
   const subscribeUser = useCallback(
     (listener: () => void) => userData.subscribe(listener),
@@ -123,24 +129,24 @@ export function WorkspaceRail({
     getUserSnapshot,
     getUserSnapshot,
   );
-  let userLabel = 'User';
+  let userLabel = t`User`;
   let syncIndicatorColor: string | null = null;
   if (userSnapshot.status === 'signed-in' && userSnapshot.syncEnabled) {
     switch (userSnapshot.syncStatus) {
       case 'syncing':
-        userLabel = 'User synchronization in progress';
+        userLabel = t`User synchronization in progress`;
         syncIndicatorColor = appColors.brand.tigerOrange;
         break;
       case 'error':
-        userLabel = 'User synchronization failed';
+        userLabel = t`User synchronization failed`;
         syncIndicatorColor = appColors.status.error;
         break;
       case 'needs-action':
-        userLabel = 'User synchronization needs a deletion decision';
+        userLabel = t`User synchronization needs a deletion decision`;
         syncIndicatorColor = appColors.brand.tigerOrange;
         break;
       case 'success':
-        userLabel = 'User synchronization successful';
+        userLabel = t`User synchronization successful`;
         syncIndicatorColor = appColors.status.success;
         break;
       case 'idle':
@@ -154,7 +160,7 @@ export function WorkspaceRail({
   return (
     <Box
       component="nav"
-      aria-label="Workspace navigation"
+      aria-label={t`Workspace navigation`}
       sx={{
         position: 'relative',
         zIndex: 4,
@@ -220,7 +226,7 @@ export function WorkspaceRail({
         >
           <Tooltip
             disableInteractive
-            title="Trail Planner"
+            title={productName}
             placement="bottom-start"
             slotProps={{
               popper: {
@@ -229,7 +235,7 @@ export function WorkspaceRail({
             }}
           >
             <ButtonBase
-              aria-label="Show navigation from Trail Planner logo"
+              aria-label={t`Show navigation from Trail Planner logo`}
               className="collapsed-navigation-segment"
               onClick={onToggleNavigation}
               sx={{
@@ -241,6 +247,8 @@ export function WorkspaceRail({
                 bgcolor: appColors.brand.deepSpace,
               }}
             >
+              {/* The empty alt and asset URL are invariant image metadata. */}
+              {/* eslint-disable -- Empty alt and asset URL are invariant image metadata. */}
               <Box
                 alt=""
                 aria-hidden="true"
@@ -250,11 +258,12 @@ export function WorkspaceRail({
                 src={`${import.meta.env.BASE_URL}favicon.png`}
                 sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
               />
+              {/* eslint-enable */}
             </ButtonBase>
           </Tooltip>
           {collapsedSummary === null ? null : (
             <ButtonBase
-              aria-label="Open tracks"
+              aria-label={t`Open tracks`}
               className="collapsed-navigation-segment"
               onClick={onOpenTracks}
               sx={{
@@ -269,9 +278,9 @@ export function WorkspaceRail({
               {collapsedSummary}
             </ButtonBase>
           )}
-          <Tooltip title="Show navigation" placement="right">
+          <Tooltip title={t`Show navigation`} placement="right">
             <ButtonBase
-              aria-label="Show navigation"
+              aria-label={t`Show navigation`}
               className="collapsed-navigation-segment"
               onClick={onToggleNavigation}
               sx={{
@@ -287,8 +296,12 @@ export function WorkspaceRail({
               }}
             >
               <ChevronLeftOutlinedIcon
-                fontSize="small"
-                sx={{ position: 'relative', zIndex: 1, transform: 'rotate(180deg)' }}
+                sx={{
+                  position: 'relative',
+                  zIndex: 1,
+                  transform: 'rotate(180deg)',
+                  fontSize: 20,
+                }}
               />
             </ButtonBase>
           </Tooltip>
@@ -296,7 +309,7 @@ export function WorkspaceRail({
       ) : (
         <Tooltip
           disableInteractive
-          title="Trail Planner"
+          title={productName}
           placement="bottom-start"
           slotProps={{
             popper: {
@@ -305,7 +318,7 @@ export function WorkspaceRail({
           }}
         >
           <ButtonBase
-            aria-label="Hide navigation from Trail Planner logo"
+            aria-label={t`Hide navigation from Trail Planner logo`}
             onClick={onToggleNavigation}
             sx={{
               position: 'relative',
@@ -343,6 +356,8 @@ export function WorkspaceRail({
               },
             }}
           >
+            {/* The empty alt and asset URL are invariant image metadata. */}
+            {/* eslint-disable -- Empty alt and asset URL are invariant image metadata. */}
             <Box
               alt=""
               aria-hidden="true"
@@ -352,12 +367,13 @@ export function WorkspaceRail({
               src={`${import.meta.env.BASE_URL}favicon.png`}
               sx={{ position: 'relative', zIndex: 1, width: 52, height: 52 }}
             />
+            {/* eslint-enable */}
           </ButtonBase>
         </Tooltip>
       )}
 
       <Tabs
-        aria-label="Workspace sections"
+        aria-label={t`Workspace sections`}
         orientation="vertical"
         value={activeTab === 'user' ? false : activeTab}
         onChange={handleSectionChange}
@@ -397,7 +413,7 @@ export function WorkspaceRail({
       >
         <Tab
           icon={<RouteOutlinedIcon />}
-          label="Tracks"
+          label={t`Tracks`}
           value="tracks"
           onClickCapture={() => {
             if (activeTab === 'tracks') onActiveTabClick();
@@ -405,7 +421,7 @@ export function WorkspaceRail({
         />
         <Tab
           icon={<PlaceOutlinedIcon />}
-          label="Markers"
+          label={t`Markers`}
           value="markers"
           onClickCapture={() => {
             if (activeTab === 'markers') onActiveTabClick();
@@ -413,7 +429,7 @@ export function WorkspaceRail({
         />
         <Tab
           icon={<LayersOutlinedIcon />}
-          label="Layers"
+          label={t`Layers`}
           value="layers"
           onClickCapture={() => {
             if (activeTab === 'layers') onActiveTabClick();
@@ -421,7 +437,7 @@ export function WorkspaceRail({
         />
         <Tab
           icon={<SatelliteAltOutlinedIcon />}
-          label="Satellite"
+          label={t`Satellite`}
           value="satellite"
           onClickCapture={() => {
             if (activeTab === 'satellite') onActiveTabClick();
@@ -429,7 +445,7 @@ export function WorkspaceRail({
         />
         <Tab
           icon={<WbCloudyOutlinedIcon />}
-          label="Weather"
+          label={t`Weather`}
           value="weather"
           onClickCapture={() => {
             if (activeTab === 'weather') onActiveTabClick();
@@ -438,7 +454,7 @@ export function WorkspaceRail({
       </Tabs>
 
       <ButtonBase
-        aria-label="Share map view"
+        aria-label={t`Share map view`}
         onClick={onShare}
         sx={{
           minWidth: 52,
@@ -459,7 +475,7 @@ export function WorkspaceRail({
       >
         <ShareOutlinedIcon />
         <Box component="span" sx={{ mt: '2px' }}>
-          Share
+          <Trans>Share</Trans>
         </Box>
       </ButtonBase>
 
@@ -476,8 +492,8 @@ export function WorkspaceRail({
       >
         {developerMode ? (
           <WorkspaceRailIconButton
-            label="Developer diagnostics"
-            tooltip="Developer diagnostics"
+            label={t`Developer diagnostics`}
+            tooltip={t`Developer diagnostics`}
             selected={developerToolsOpen}
             onClick={onToggleDeveloperTools}
           >
@@ -493,6 +509,8 @@ export function WorkspaceRail({
             onSectionChange('user');
           }}
         >
+          {/* MUI badge display tokens are not user-visible copy. */}
+          {/* eslint-disable -- MUI badge display tokens are not user-visible copy. */}
           <Badge
             aria-hidden="true"
             invisible={syncIndicatorColor === null}
@@ -510,18 +528,19 @@ export function WorkspaceRail({
           >
             <AccountCircleOutlinedIcon />
           </Badge>
+          {/* eslint-enable */}
         </WorkspaceRailIconButton>
         <WorkspaceRailIconButton
-          label="Open settings"
-          tooltip="Settings"
+          label={t`Open settings`}
+          tooltip={t`Settings`}
           onClick={onOpenSettings}
         >
           <SettingsOutlinedIcon />
         </WorkspaceRailIconButton>
         <WorkspaceRailIconButton
           buttonRef={aboutButtonRef}
-          label="About this site"
-          tooltip="About this site"
+          label={t`About this site`}
+          tooltip={t`About this site`}
           onClick={onOpenAbout}
         >
           <InfoOutlinedIcon />

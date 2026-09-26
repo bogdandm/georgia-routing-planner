@@ -21,6 +21,7 @@ import {
   syntheticSatelliteScene,
   deferred,
   mockViewportWidth,
+  activateAppLocale,
   type SatelliteMosaicResult,
 } from '@test/helpers/workspaceShellTestSupport';
 
@@ -51,6 +52,26 @@ describe('WorkspaceShell', () => {
     expect(
       satellite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('presents navigation and map sharing in Russian', async () => {
+    activateAppLocale('ru');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const navigation = screen.getByRole('navigation', {
+      name: 'Навигация по рабочим разделам',
+    });
+    expect(within(navigation).getByRole('tab', { name: 'Треки' })).toBeVisible();
+    const share = within(navigation).getByRole('button', {
+      name: 'Поделиться видом карты',
+    });
+    expect(share).toHaveTextContent('Поделиться');
+
+    await user.click(share);
+    expect(
+      screen.getByRole('dialog', { name: 'Поделиться этим видом карты' }),
+    ).toBeVisible();
   });
 
   it('switches tabs before collapsing navigation on a repeated active-tab click', async () => {

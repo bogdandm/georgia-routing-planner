@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import {
   Alert,
@@ -26,11 +27,19 @@ interface ShareMapDialogProps {
   readonly onClose: () => void;
 }
 
+enum CopyState {
+  Idle,
+  Copied2d,
+  Copied3d,
+  Failed,
+}
+
+const shareDialogMaxWidth = 'sm' as const;
+
 export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
+  const { t } = useLingui();
   const { mapDiagnostics, mapLayers } = useRuntimeServices();
-  const [copyState, setCopyState] = useState<
-    'idle' | 'copied-2d' | 'copied-3d' | 'failed'
-  >('idle');
+  const [copyState, setCopyState] = useState(CopyState.Idle);
   const [excludedSceneKey, setExcludedSceneKey] = useState<string | null>(null);
   const subscribe = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
@@ -58,12 +67,15 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
           pitch: camera.pitch,
         });
 
-  const copyLink = async (value: string, copiedState: 'copied-2d' | 'copied-3d') => {
+  const copyLink = async (
+    value: string,
+    copiedState: CopyState.Copied2d | CopyState.Copied3d,
+  ) => {
     try {
       await navigator.clipboard.writeText(value);
       setCopyState(copiedState);
     } catch {
-      setCopyState('failed');
+      setCopyState(CopyState.Failed);
     }
   };
 
@@ -76,13 +88,17 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
           onClose();
         }}
         fullWidth
-        maxWidth="sm"
+        maxWidth={shareDialogMaxWidth}
       >
-        <DialogTitle>Share this map view</DialogTitle>
+        <DialogTitle>
+          <Trans>Share this map view</Trans>
+        </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography variant="body2" color="text.secondary">
-            The 2D link always shares center and zoom. A selected satellite image can be
-            included without storing the scene locally.
+            <Trans>
+              The 2D link always shares center and zoom. A selected satellite image can
+              be included without storing the scene locally.
+            </Trans>
           </Typography>
           <Stack spacing={1.5}>
             <TextField
@@ -90,7 +106,7 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
               multiline
               minRows={2}
               size="small"
-              label="2D share link"
+              label={t`2D share link`}
               value={share2dUrl}
               slotProps={{ htmlInput: { readOnly: true } }}
             />
@@ -100,12 +116,12 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
               minRows={2}
               size="small"
               disabled={share3dUrl === ''}
-              label="3D share link"
+              label={t`3D share link`}
               value={share3dUrl}
               helperText={
                 share3dUrl === ''
-                  ? 'Enable the 3D terrain map to share bearing and pitch.'
-                  : 'This link includes the current bearing and pitch.'
+                  ? t`Enable the 3D terrain map to share bearing and pitch.`
+                  : t`This link includes the current bearing and pitch.`
               }
               slotProps={{ htmlInput: { readOnly: true } }}
             />
@@ -123,12 +139,16 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
                   }}
                 />
               }
-              label="Include selected satellite image"
+              label={t`Include selected satellite image`}
             />
           </Stack>
-          {copyState === 'failed' ? (
+          {copyState === CopyState.Failed ? (
+            // MUI's severity token is not user-visible copy.
+            // eslint-disable-next-line -- MUI severity token, not user-visible copy.
             <Alert severity="error">
-              The link could not be copied. Select it and copy it manually.
+              <Trans>
+                The link could not be copied. Select it and copy it manually.
+              </Trans>
             </Alert>
           ) : null}
         </DialogContent>
@@ -140,35 +160,37 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
               onClose();
             }}
           >
-            Close
+            <Trans>Close</Trans>
           </Button>
           <Button
             size="small"
             startIcon={<ContentCopyOutlinedIcon />}
             disabled={share3dUrl === ''}
-            onClick={() => void copyLink(share3dUrl, 'copied-3d')}
+            onClick={() => void copyLink(share3dUrl, CopyState.Copied3d)}
           >
-            Copy 3D link
+            <Trans>Copy 3D link</Trans>
           </Button>
           <Button
             size="small"
             variant="contained"
             startIcon={<ContentCopyOutlinedIcon />}
             disabled={share2dUrl === ''}
-            onClick={() => void copyLink(share2dUrl, 'copied-2d')}
+            onClick={() => void copyLink(share2dUrl, CopyState.Copied2d)}
           >
-            Copy 2D link
+            <Trans>Copy 2D link</Trans>
           </Button>
         </DialogActions>
       </Dialog>
       <Snackbar
-        open={copyState === 'copied-2d' || copyState === 'copied-3d'}
+        open={copyState === CopyState.Copied2d || copyState === CopyState.Copied3d}
         autoHideDuration={2_500}
         message={
-          copyState === 'copied-3d' ? '3D share link copied' : '2D share link copied'
+          copyState === CopyState.Copied3d
+            ? t`3D share link copied`
+            : t`2D share link copied`
         }
         onClose={() => {
-          setCopyState('idle');
+          setCopyState(CopyState.Idle);
         }}
       />
     </>

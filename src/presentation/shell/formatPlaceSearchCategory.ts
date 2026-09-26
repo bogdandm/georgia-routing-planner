@@ -1,42 +1,48 @@
-const categoryLabels: Readonly<Record<string, string>> = {
-  'boundary:administrative': 'Administrative area',
-  'mountain_pass:yes': 'Mountain pass',
-  'natural:bay': 'Bay',
-  'natural:mountain_range': 'Mountain range',
-  'natural:peak': 'Peak',
-  'natural:ridge': 'Mountain ridge',
-  'natural:saddle': 'Mountain saddle',
-  'natural:spring': 'Spring',
-  'natural:strait': 'Strait',
-  'natural:volcano': 'Volcano',
-  'natural:water': 'Water body',
-  'place:city': 'City',
-  'place:hamlet': 'Hamlet',
-  'place:isolated_dwelling': 'Isolated dwelling',
-  'place:town': 'Town',
-  'place:village': 'Village',
-  'water:lake': 'Lake',
-  'water:lagoon': 'Lagoon',
-  'water:pond': 'Pond',
-  'water:reservoir': 'Reservoir',
-  'water:river': 'River',
-  'waterway:canal': 'Canal',
-  'waterway:river': 'River',
-  'waterway:riverbank': 'River',
-  'waterway:stream': 'Stream',
-  'waterway:waterfall': 'Waterfall',
+import type { I18n, MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+
+const categoryLabels: Readonly<Record<string, MessageDescriptor>> = {
+  'boundary:administrative': msg`Administrative area`,
+  'mountain_pass:yes': msg`Mountain pass`,
+  'natural:bay': msg`Bay`,
+  'natural:mountain_range': msg`Mountain range`,
+  'natural:peak': msg`Peak`,
+  'natural:ridge': msg`Mountain ridge`,
+  'natural:saddle': msg`Mountain saddle`,
+  'natural:spring': msg`Spring`,
+  'natural:strait': msg`Strait`,
+  'natural:volcano': msg`Volcano`,
+  'natural:water': msg`Water body`,
+  'place:city': msg`City`,
+  'place:hamlet': msg`Hamlet`,
+  'place:isolated_dwelling': msg`Isolated dwelling`,
+  'place:town': msg`Town`,
+  'place:village': msg`Village`,
+  'water:lake': msg`Lake`,
+  'water:lagoon': msg`Lagoon`,
+  'water:pond': msg`Pond`,
+  'water:reservoir': msg`Reservoir`,
+  'water:river': msg`River`,
+  'waterway:canal': msg`Canal`,
+  'waterway:river': msg`River`,
+  'waterway:riverbank': msg`River`,
+  'waterway:stream': msg`Stream`,
+  'waterway:waterfall': msg`Waterfall`,
 };
 
-function humanizeTagValue(value: string): string {
+function humanizeTagValue(value: string, i18n: I18n): string {
   const words = value.replaceAll('_', ' ').trim();
-  if (words.length === 0) return 'Other place';
-  return `${words.charAt(0).toLocaleUpperCase('en')}${words.slice(1)}`;
+  if (words.length === 0) return i18n._(msg`Other place`);
+  return `${words.charAt(0).toLocaleUpperCase(i18n.locale)}${words.slice(1)}`;
 }
 
-/** Converts open-ended Nominatim OSM tags into stable, readable UI copy. */
-export function formatPlaceSearchCategory(category: string): string {
+/** Converts open-ended Nominatim OSM tags into locale-aware, readable UI copy. */
+export function formatPlaceSearchCategory(category: string, i18n: I18n): string {
   const reviewedLabel = categoryLabels[category];
-  if (reviewedLabel !== undefined) return reviewedLabel;
+  if (reviewedLabel !== undefined) return i18n._(reviewedLabel);
   const separator = category.indexOf(':');
-  return humanizeTagValue(separator < 0 ? category : category.slice(separator + 1));
+  return humanizeTagValue(
+    separator < 0 ? category : category.slice(separator + 1),
+    i18n,
+  );
 }

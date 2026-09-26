@@ -1,8 +1,50 @@
 import js from '@eslint/js';
+import lingui from 'eslint-plugin-lingui';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
+export const noUnlocalizedStringsRule = [
+  'error',
+  {
+    ignoreNames: [
+      'className',
+      'id',
+      'data-testid',
+      'href',
+      'rel',
+      'target',
+      'type',
+      'value',
+      // Internal state token and ARIA ID reference; neither is user-visible copy.
+      'defaultSettingsTab',
+      'settingsPanelTitleId',
+      'name',
+      'component',
+      'role',
+      'sx',
+      // Non-visible MUI presentation and layout enum values.
+      'align',
+      'alignContent',
+      'alignItems',
+      'color',
+      'direction',
+      'display',
+      'elevation',
+      'flexDirection',
+      'justifyContent',
+      'orientation',
+      'placement',
+      'position',
+      'size',
+      'spacing',
+      'variant',
+    ],
+    // DOM selectors identify existing metadata and are never rendered as copy.
+    ignoreFunctions: ['document.querySelector'],
+    useTsTypes: true,
+  },
+];
 
 export default tseslint.config(
   {
@@ -55,6 +97,26 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
+  },
+  {
+    files: [
+      'src/presentation/shell/WorkspaceRail.tsx',
+      'src/presentation/shell/WorkspaceSidebar.tsx',
+      'src/presentation/shell/WorkspaceShell.tsx',
+      'src/presentation/shell/MapSearchPlaceholder.tsx',
+      'src/presentation/shell/OperationalStatus.tsx',
+      'src/presentation/shell/ShareMapDialog.tsx',
+      'src/presentation/shell/StorageUsagePanel.tsx',
+      'src/presentation/shell/AboutDialog.tsx',
+      'src/presentation/shell/WorkspaceErrorBoundary.tsx',
+      'src/presentation/shell/workspaceTabLocation.ts',
+      'src/presentation/shell/formatPlaceSearchCategory.ts',
+      'src/presentation/shell/SettingsDialog.tsx',
+    ],
+    plugins: { lingui },
+    rules: {
+      'lingui/no-unlocalized-strings': noUnlocalizedStringsRule,
     },
   },
   {

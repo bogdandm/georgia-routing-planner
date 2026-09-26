@@ -13,25 +13,294 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. js-lingui-id: fPa3dU
+#. placeholder {0}: integerFormatter.format(elapsedSeconds)
+#: src/presentation/shell/OperationalStatus.tsx:302
+msgid "{0} s"
+msgstr "{0} с"
+
+#. js-lingui-id: XSrJ15
+#: src/presentation/shell/MapSearchPlaceholder.tsx:480
+msgid "{category} · {distance}"
+msgstr "{distance} · {category}"
+
+#. js-lingui-id: vx3-6w
+#: src/presentation/shell/OperationalStatus.tsx:28
+msgid "{count, plural, one {# Sentinel image is available} other {# Sentinel images are available}}"
+msgstr "{count, plural, one {Доступно # изображение Sentinel} few {Доступно # изображения Sentinel} many {Доступно # изображений Sentinel} other {Доступно # изображения Sentinel}}"
+
+#. js-lingui-id: rPwTt_
+#: src/presentation/shell/MapSearchPlaceholder.tsx:425
+msgid "{expandedRadius} of {maximumRadius} kilometres"
+msgstr "{expandedRadius} из {maximumRadius} километров"
+
+#. js-lingui-id: hB8_P_
+#: src/presentation/shell/OperationalStatus.tsx:36
+msgid "{loadedSourceCount, number} of {totalSourceCount, number} weather map sources rendered"
+msgstr "Отрисовано источников карты погоды: {loadedSourceCount, number} из {totalSourceCount, number}"
+
+#. js-lingui-id: jmJyIX
+#: src/presentation/shell/MapSearchPlaceholder.tsx:52
+msgid "{otherResultCount, plural, one {Show # other result} other {Show # other results}}"
+msgstr "{otherResultCount, plural, one {Показать ещё # результат} few {Показать ещё # результата} many {Показать ещё # результатов} other {Показать ещё # результата}}"
+
+#. js-lingui-id: dwqByo
+#: src/presentation/shell/OperationalStatus.tsx:32
+msgid "{renderedSceneCount, number} of {totalSceneCount, number} Mosaic images rendered"
+msgstr "Отрисовано изображений мозаики: {renderedSceneCount, number} из {totalSceneCount, number}"
+
+#. js-lingui-id: 2nHTqF
+#: src/presentation/shell/WorkspaceSidebar.tsx:305
+msgid "{sidebarTitle} tools"
+msgstr "Инструменты раздела «{sidebarTitle}»"
+
+#. js-lingui-id: sjM4AG
+#: src/presentation/shell/AboutDialog.tsx:208
+msgid "{terrainCredits}. Includes Copernicus, USGS, NOAA, and regional elevation data."
+msgstr "{terrainCredits}. Включает данные Copernicus, USGS, NOAA и региональные данные о рельефе."
+
+#. js-lingui-id: oHZYtP
+#: src/presentation/shell/AboutDialog.tsx:256
+msgid "{weatherModelName} via Open-Meteo"
+msgstr "{weatherModelName} через Open-Meteo"
+
+#. js-lingui-id: Km914x
+#: src/presentation/shell/ShareMapDialog.tsx:109
+msgid "2D share link"
+msgstr "Ссылка на 2D-карту"
+
+#. js-lingui-id: fSe0sp
+#: src/presentation/shell/ShareMapDialog.tsx:190
+msgid "2D share link copied"
+msgstr "Ссылка на 2D-карту скопирована"
+
+#. js-lingui-id: 38b06w
+#: src/presentation/shell/ShareMapDialog.tsx:119
+msgid "3D share link"
+msgstr "Ссылка на 3D-карту"
+
+#. js-lingui-id: La5uO7
+#: src/presentation/shell/ShareMapDialog.tsx:189
+msgid "3D share link copied"
+msgstr "Ссылка на 3D-карту скопирована"
+
+#. js-lingui-id: 2QU_vt
+#: src/presentation/shell/OperationalStatus.tsx:155
+msgid "A map layer update failed. Try again."
+msgstr "Не удалось обновить слой карты. Повторите попытку."
+
+#. js-lingui-id: uqTLqP
+#: src/presentation/shell/WorkspaceRail.tsx:542
+#: src/presentation/shell/WorkspaceRail.tsx:543
+msgid "About this site"
+msgstr "О сайте"
+
+#. js-lingui-id: CF76N8
+#: src/presentation/shell/AboutDialog.tsx:290
+msgid "About Trail Planner"
+msgstr "О Trail Planner"
+
+#. js-lingui-id: XJmAos
+#: src/presentation/shell/formatPlaceSearchCategory.ts:5
+msgid "Administrative area"
+msgstr "Административная территория"
+
+#. js-lingui-id: mJdOG7
+#: src/presentation/shell/StorageUsagePanel.tsx:182
+msgid "Allocated heap"
+msgstr "Выделенная память кучи"
+
+#. js-lingui-id: JR6nY7
+#: src/presentation/shell/AboutDialog.tsx:339
+msgid "APIs"
+msgstr "API"
+
+#. js-lingui-id: YcS65J
+#: src/presentation/shell/StorageUsagePanel.tsx:178
+msgid "Approximate JavaScript memory"
+msgstr "Примерное использование памяти JavaScript"
+
+#. js-lingui-id: ovXmYn
+#: src/presentation/shell/formatPlaceSearchCategory.ts:7
+msgid "Bay"
+msgstr "Залив"
+
+#. js-lingui-id: EzY-ZH
+#: src/presentation/shell/StorageUsagePanel.tsx:132
+msgid "Browser storage usage could not be measured."
+msgstr "Не удалось измерить использование хранилища браузера."
+
+#. js-lingui-id: AprVf0
+#: src/presentation/shell/StorageUsagePanel.tsx:159
+msgid "Cache Storage"
+msgstr "Кеши (Cache Storage)"
+
+#. js-lingui-id: AgeZLF
+#: src/presentation/shell/formatPlaceSearchCategory.ts:26
+msgid "Canal"
+msgstr "Канал"
+
+#. js-lingui-id: i5FD0Y
+#: src/presentation/shell/WorkspaceSidebar.tsx:390
+#: src/presentation/shell/WorkspaceSidebar.tsx:400
+msgid "Cancel forecast point selection"
+msgstr "Отменить выбор точки прогноза"
+
+#. js-lingui-id: oN7Tuf
+#: src/presentation/shell/WorkspaceSidebar.tsx:144
+msgid "Center map on forecast location"
+msgstr "Центрировать карту по месту прогноза"
+
+#. js-lingui-id: 84O1zJ
+#: src/presentation/shell/StorageUsagePanel.tsx:190
+msgid "Chrome manages HTTP and MapLibre tile caches internally. Web apps cannot measure or clear that browser cache. Applied raster sources are removed from MapLibre when they are replaced."
+msgstr "Chrome самостоятельно управляет кешами HTTP и тайлов MapLibre. Веб-приложения не могут измерять или очищать этот кеш браузера. Применённые растровые источники удаляются из MapLibre при замене."
+
+#. js-lingui-id: 3wV73y
+#: src/presentation/shell/formatPlaceSearchCategory.ts:16
+msgid "City"
+msgstr "Город"
+
+#. js-lingui-id: jK_Ldm
+#: src/presentation/shell/MapSearchPlaceholder.tsx:372
+msgid "Clear map search"
+msgstr "Очистить поиск по карте"
+
+#. js-lingui-id: G1X31l
+#: src/presentation/shell/WorkspaceShell.tsx:601
+msgid "Click the map to choose the route start and destination."
+msgstr "Нажмите на карту, чтобы выбрать начало и конец маршрута."
+
+#. js-lingui-id: yz7wBu
+#: src/presentation/shell/ShareMapDialog.tsx:163
+msgid "Close"
+msgstr "Закрыть"
+
+#. js-lingui-id: TjLF4m
+#: src/presentation/shell/AboutDialog.tsx:292
+msgid "Close site information"
+msgstr "Закрыть информацию о сайте"
+
+#. js-lingui-id: wPRVJD
+#: src/presentation/shell/MapSearchPlaceholder.tsx:219
+msgid "Coordinates are outside valid map bounds."
+msgstr "Координаты выходят за допустимые границы карты."
+
+#. js-lingui-id: r8UHl8
+#: src/presentation/shell/ShareMapDialog.tsx:180
+msgid "Copy 2D link"
+msgstr "Копировать ссылку на 2D-карту"
+
+#. js-lingui-id: AKBU-N
+#: src/presentation/shell/ShareMapDialog.tsx:171
+msgid "Copy 3D link"
+msgstr "Копировать ссылку на 3D-карту"
+
+#. js-lingui-id: kaKzkK
+#: src/presentation/shell/AboutDialog.tsx:317
+msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
+msgstr "Создатель — <0>Bogdan Kalashnikov</0> (bogdandm)."
+
+#. js-lingui-id: 2SuOUC
+#: src/presentation/shell/OperationalStatus.tsx:426
+msgid "Current map error"
+msgstr "Текущая ошибка карты"
+
+#. js-lingui-id: jSt3lc
+#: src/presentation/shell/AboutDialog.tsx:253
+msgid "Data licence"
+msgstr "Лицензия на данные"
+
+#. js-lingui-id: rzRLuV
+#: src/presentation/shell/AboutDialog.tsx:366
+msgid "Data sources"
+msgstr "Источники данных"
+
+#. js-lingui-id: 0ezWrD
+#: src/presentation/shell/AboutDialog.tsx:248
+msgid "Deterministic 9 km model forecast; not a measured weather-station observation."
+msgstr "Детерминированный прогноз модели с разрешением 9 км, а не измерение метеостанции."
+
+#. js-lingui-id: HIQP0Z
+#: src/presentation/shell/WorkspaceRail.tsx:495
+#: src/presentation/shell/WorkspaceRail.tsx:496
+msgid "Developer diagnostics"
+msgstr "Диагностика для разработчиков"
+
 #. js-lingui-id: DPfwMq
 #: src/presentation/shell/SettingsDialog.tsx:184
 msgid "Done"
 msgstr "Готово"
+
+#. js-lingui-id: 85Oudu
+#: src/presentation/shell/WorkspaceErrorBoundary.tsx:74
+msgid "Download diagnostics"
+msgstr "Скачать диагностику"
+
+#. js-lingui-id: 2LsxCB
+#: src/presentation/shell/AboutDialog.tsx:205
+msgid "Elevation data"
+msgstr "Данные о рельефе"
 
 #. js-lingui-id: 3tUqN7
 #: src/presentation/shell/SettingsDialog.tsx:140
 msgid "Enable developer diagnostics"
 msgstr "Включить диагностику для разработчиков"
 
+#. js-lingui-id: iJT81d
+#: src/presentation/shell/ShareMapDialog.tsx:123
+msgid "Enable the 3D terrain map to share bearing and pitch."
+msgstr "Включите 3D-карту рельефа, чтобы передать азимут и наклон."
+
 #. js-lingui-id: lYGfRP
 #: src/presentation/shell/SettingsDialog.tsx:165
 msgid "English"
 msgstr "Английский"
 
+#. js-lingui-id: OSJlm5
+#: src/presentation/shell/MapSearchPlaceholder.tsx:225
+msgid "Enter at least two characters or a coordinate pair."
+msgstr "Введите не менее двух символов или пару координат."
+
+#. js-lingui-id: Y-ZU13
+#: src/presentation/shell/MapSearchPlaceholder.tsx:223
+msgid "Enter two finite coordinate values."
+msgstr "Введите два конечных значения координат."
+
+#. js-lingui-id: 2s4gux
+#: src/presentation/shell/WorkspaceSidebar.tsx:554
+msgid "Exit multi-track selection"
+msgstr "Выйти из выбора нескольких треков"
+
+#. js-lingui-id: O6Fpju
+#: src/presentation/shell/WorkspaceShell.tsx:529
+msgid "Expand multiple track details"
+msgstr "Развернуть сведения о нескольких треках"
+
+#. js-lingui-id: NiF6zY
+#: src/presentation/shell/WorkspaceShell.tsx:532
+msgid "Expand track details"
+msgstr "Развернуть сведения о треке"
+
+#. js-lingui-id: SNJ-Dv
+#: src/presentation/shell/WorkspaceShell.tsx:531
+msgid "Expand unsaved track details"
+msgstr "Развернуть сведения о несохранённом треке"
+
+#. js-lingui-id: pkYRAm
+#: src/presentation/shell/MapSearchPlaceholder.tsx:421
+msgid "Expanding place search area"
+msgstr "Расширение области поиска мест"
+
 #. js-lingui-id: BmFfQn
 #: src/presentation/shell/SettingsDialog.tsx:147
 msgid "Exposes local logs, health checks, and diagnostics export. Nothing is uploaded automatically."
 msgstr "Показывает локальные журналы, проверки состояния и экспорт диагностики. Данные не отправляются автоматически."
+
+#. js-lingui-id: WVefXI
+#: src/presentation/shell/OperationalStatus.tsx:181
+msgid "Finalizing the selected Sentinel scene…"
+msgstr "Завершение обработки выбранной сцены Sentinel…"
 
 #. js-lingui-id: Weq9zb
 #: src/presentation/shell/SettingsDialog.tsx:120
@@ -43,14 +312,531 @@ msgstr "Общие"
 msgid "General settings"
 msgstr "Общие настройки"
 
+#. js-lingui-id: NiJby3
+#: src/presentation/shell/AboutDialog.tsx:239
+msgid "Georgian orthophoto mosaic"
+msgstr "Мозаика ортофотопланов Грузии"
+
+#. js-lingui-id: 3qYZr3
+#: src/presentation/shell/AboutDialog.tsx:333
+msgid "GitHub repository"
+msgstr "Репозиторий GitHub"
+
+#. js-lingui-id: KHKW8F
+#: src/presentation/shell/formatPlaceSearchCategory.ts:17
+msgid "Hamlet"
+msgstr "Посёлок"
+
+#. js-lingui-id: W9Eiqx
+#: src/presentation/shell/StorageUsagePanel.tsx:185
+msgid "Heap limit"
+msgstr "Предельный размер кучи"
+
+#. js-lingui-id: T7ZWsE
+#: src/presentation/shell/WorkspaceShell.tsx:833
+#: src/presentation/shell/WorkspaceShell.tsx:835
+msgid "Hide navigation"
+msgstr "Скрыть навигацию"
+
+#. js-lingui-id: 2zEnx6
+#: src/presentation/shell/WorkspaceRail.tsx:321
+msgid "Hide navigation from Trail Planner logo"
+msgstr "Скрыть навигацию через логотип Trail Planner"
+
+#. js-lingui-id: WFECNq
+#: src/presentation/shell/MapSearchPlaceholder.tsx:213
+msgid "Hide other results"
+msgstr "Скрыть остальные результаты"
+
+#. js-lingui-id: JBca1o
+#: src/presentation/shell/WorkspaceSidebar.tsx:361
+#: src/presentation/shell/WorkspaceSidebar.tsx:374
+msgid "Hide weather map"
+msgstr "Скрыть карту погоды"
+
+#. js-lingui-id: B0vUJW
+#: src/presentation/shell/ShareMapDialog.tsx:142
+msgid "Include selected satellite image"
+msgstr "Добавить выбранный спутниковый снимок"
+
+#. js-lingui-id: NH98te
+#: src/presentation/shell/formatPlaceSearchCategory.ts:18
+msgid "Isolated dwelling"
+msgstr "Отдельное жилище"
+
+#. js-lingui-id: g9-BQD
+#: src/presentation/shell/formatPlaceSearchCategory.ts:22
+msgid "Lagoon"
+msgstr "Лагуна"
+
+#. js-lingui-id: a60eo8
+#: src/presentation/shell/formatPlaceSearchCategory.ts:21
+msgid "Lake"
+msgstr "Озеро"
+
 #. js-lingui-id: vXIe7J
 #: src/presentation/shell/SettingsDialog.tsx:154
 #: src/presentation/shell/SettingsDialog.tsx:159
 msgid "Language"
 msgstr "Язык"
 
+#. js-lingui-id: Dq6GG7
+#: src/presentation/shell/WorkspaceRail.tsx:432
+#: src/presentation/shell/WorkspaceSidebar.tsx:81
+msgid "Layers"
+msgstr "Слои"
+
+#. js-lingui-id: fytmSS
+#: src/presentation/shell/OperationalStatus.tsx:218
+msgid "Loading ECMWF weather map…"
+msgstr "Загрузка карты погоды ECMWF…"
+
+#. js-lingui-id: jYxHIA
+#: src/presentation/shell/WorkspaceSidebar.tsx:261
+#: src/presentation/shell/WorkspaceSidebar.tsx:504
+msgid "Loading marker weather settings"
+msgstr "Загрузка настроек погоды для меток"
+
+#. js-lingui-id: kBaj6v
+#: src/presentation/shell/OperationalStatus.tsx:111
+msgid "Loading Sentinel imagery for {loadingMonthLabel}"
+msgstr "Загрузка снимков Sentinel за {loadingMonthLabel}"
+
+#. js-lingui-id: V4WUj8
+#: src/presentation/shell/WorkspaceSidebar.tsx:359
+msgid "Loading weather map"
+msgstr "Загрузка карты погоды"
+
+#. js-lingui-id: 69qJPb
+#: src/presentation/shell/StorageUsagePanel.tsx:155
+msgid "Local database (IndexedDB)"
+msgstr "Локальная база данных (IndexedDB)"
+
+#. js-lingui-id: GJPmhf
+#: src/presentation/shell/MapSearchPlaceholder.tsx:489
+msgid "Local track search results"
+msgstr "Результаты поиска по локальным трекам"
+
+#. js-lingui-id: 1EVe57
+#: src/presentation/shell/StorageUsagePanel.tsx:163
+msgid "localStorage"
+msgstr "Хранилище localStorage"
+
+#. js-lingui-id: NK17ah
+#: src/presentation/shell/WorkspaceSidebar.tsx:284
+msgid "Map is unavailable"
+msgstr "Карта недоступна"
+
+#. js-lingui-id: Eu8uJP
+#: src/presentation/shell/OperationalStatus.tsx:134
+msgid "Map provider configuration is invalid."
+msgstr "Недопустимая конфигурация провайдера карты."
+
+#. js-lingui-id: uIWtLA
+#: src/presentation/shell/MapSearchPlaceholder.tsx:321
+msgid "Map search"
+msgstr "Поиск по карте"
+
+#. js-lingui-id: mEbr3q
+#: src/presentation/shell/AboutDialog.tsx:370
+msgid "Map, elevation, and imagery sources are unavailable because their provider configuration is invalid."
+msgstr "Источники карт, рельефа и снимков недоступны из-за недопустимой конфигурации провайдеров."
+
+#. js-lingui-id: UDMwAB
+#: src/presentation/shell/WorkspaceSidebar.tsx:506
+msgid "Marker weather is disabled"
+msgstr "Погода для меток отключена"
+
+#. js-lingui-id: h-NdYC
+#: src/presentation/shell/WorkspaceSidebar.tsx:507
+msgid "Marker weather settings"
+msgstr "Настройки погоды для меток"
+
+#. js-lingui-id: zv4-g7
+#: src/presentation/shell/WorkspaceSidebar.tsx:264
+msgid "Marker weather settings. Forecast days: {markerWeatherWeekdayLabel}"
+msgstr "Настройки погоды для меток. Дни прогноза: {markerWeatherWeekdayLabel}"
+
+#. js-lingui-id: 6kv0Wh
+#: src/presentation/shell/WorkspaceSidebar.tsx:263
+msgid "Marker weather settings. Forecast disabled"
+msgstr "Настройки погоды для меток. Прогноз отключён"
+
+#. js-lingui-id: Rcw29-
+#: src/presentation/shell/WorkspaceRail.tsx:424
+#: src/presentation/shell/WorkspaceSidebar.tsx:80
+msgid "Markers"
+msgstr "Метки"
+
+#. js-lingui-id: RBg4Cl
+#: src/presentation/shell/StorageUsagePanel.tsx:202
+msgid "Measured {measuredAt}"
+msgstr "Измерено в {measuredAt}"
+
+#. js-lingui-id: Mu-B_W
+#: src/presentation/shell/StorageUsagePanel.tsx:116
+msgid "Measuring browser storage…"
+msgstr "Измерение хранилища браузера…"
+
+#. js-lingui-id: PLOwNq
+#: src/presentation/shell/WorkspaceSidebar.tsx:415
+msgid "More weather actions"
+msgstr "Другие действия с погодой"
+
+#. js-lingui-id: Qd15if
+#: src/presentation/shell/WorkspaceSidebar.tsx:474
+#: src/presentation/shell/WorkspaceSidebar.tsx:485
+msgid "Mosaic"
+msgstr "Мозаика"
+
+#. js-lingui-id: psYNdw
+#: src/presentation/shell/formatPlaceSearchCategory.ts:6
+msgid "Mountain pass"
+msgstr "Горный перевал"
+
+#. js-lingui-id: gZmWwh
+#: src/presentation/shell/formatPlaceSearchCategory.ts:8
+msgid "Mountain range"
+msgstr "Горный хребет"
+
+#. js-lingui-id: PSNw3T
+#: src/presentation/shell/formatPlaceSearchCategory.ts:10
+msgid "Mountain ridge"
+msgstr "Горный гребень"
+
+#. js-lingui-id: Zp5Pn5
+#: src/presentation/shell/formatPlaceSearchCategory.ts:11
+msgid "Mountain saddle"
+msgstr "Горная седловина"
+
+#. js-lingui-id: 19ClrL
+#: src/presentation/shell/AboutDialog.tsx:164
+msgid "Nearby-feature search"
+msgstr "Поиск объектов поблизости"
+
+#. js-lingui-id: 5pep0p
+#: src/presentation/shell/WorkspaceSidebar.tsx:543
+msgid "New marker"
+msgstr "Новая метка"
+
+#. js-lingui-id: 19XTPe
+#: src/presentation/shell/MapSearchPlaceholder.tsx:444
+msgid "No geographic matches found."
+msgstr "Географические совпадения не найдены."
+
+#. js-lingui-id: MyjSw9
+#: src/presentation/shell/MapSearchPlaceholder.tsx:436
+msgid "No matching places were found within approximately {exhaustedDistance}."
+msgstr "В радиусе примерно {exhaustedDistance} подходящие места не найдены."
+
+#. js-lingui-id: -vOJyC
+#: src/presentation/shell/MapSearchPlaceholder.tsx:435
+msgid "No matching places were found."
+msgstr "Подходящие места не найдены."
+
+#. js-lingui-id: 6plAyV
+#: src/presentation/shell/WorkspaceSidebar.tsx:442
+msgid "Open meteoblue.com"
+msgstr "Открыть meteoblue.com"
+
+#. js-lingui-id: Yp-Hi_
+#: src/presentation/shell/WorkspaceRail.tsx:534
+msgid "Open settings"
+msgstr "Открыть настройки"
+
+#. js-lingui-id: BgoQna
+#: src/presentation/shell/WorkspaceRail.tsx:266
+msgid "Open tracks"
+msgstr "Открыть треки"
+
+#. js-lingui-id: PXdouE
+#: src/presentation/shell/WorkspaceSidebar.tsx:454
+msgid "Open windy.com"
+msgstr "Открыть windy.com"
+
+#. js-lingui-id: Gc_l1s
+#: src/presentation/shell/WorkspaceShell.tsx:462
+msgid "Open workspace"
+msgstr "Открыть рабочую область"
+
+#. js-lingui-id: HkGhXz
+#: src/presentation/shell/StorageUsagePanel.tsx:170
+msgid "Origin quota"
+msgstr "Квота хранилища сайта"
+
+#. js-lingui-id: fnY81r
+#: src/presentation/shell/StorageUsagePanel.tsx:167
+msgid "Other origin storage"
+msgstr "Другое хранилище сайта"
+
+#. js-lingui-id: c3qpDj
+#: src/presentation/shell/formatPlaceSearchCategory.ts:35
+msgid "Other place"
+msgstr "Другое место"
+
+#. js-lingui-id: kp_IdV
+#: src/presentation/shell/formatPlaceSearchCategory.ts:9
+msgid "Peak"
+msgstr "Вершина"
+
+#. js-lingui-id: -sDbe3
+#: src/presentation/shell/WorkspaceSidebar.tsx:532
+msgid "Place a marker on the map"
+msgstr "Поставить метку на карте"
+
+#. js-lingui-id: 00DmkM
+#: src/presentation/shell/AboutDialog.tsx:158
+msgid "Place search"
+msgstr "Поиск мест"
+
+#. js-lingui-id: ci-l7K
+#: src/presentation/shell/MapSearchPlaceholder.tsx:238
+msgid "Place search could not contact the provider. Check the connection and try again."
+msgstr "Не удалось связаться с провайдером поиска мест. Проверьте подключение и повторите попытку."
+
+#. js-lingui-id: ji8RBU
+#: src/presentation/shell/MapSearchPlaceholder.tsx:232
+msgid "Place search is temporarily rate-limited. Try again shortly."
+msgstr "Поиск мест временно ограничен по частоте запросов. Повторите попытку чуть позже."
+
+#. js-lingui-id: bdB3Af
+#: src/presentation/shell/AboutDialog.tsx:343
+msgid "Place search is unavailable because its provider configuration is invalid."
+msgstr "Поиск мест недоступен из-за недопустимой конфигурации провайдера."
+
+#. js-lingui-id: UhRZwt
+#: src/presentation/shell/MapSearchPlaceholder.tsx:242
+#: src/presentation/shell/MapSearchPlaceholder.tsx:246
+msgid "Place search is unavailable. Try again."
+msgstr "Поиск мест недоступен. Повторите попытку."
+
+#. js-lingui-id: 7wmsS7
+#: src/presentation/shell/MapSearchPlaceholder.tsx:401
+msgid "Place search provider configuration is unavailable. Coordinate entry still works."
+msgstr "Конфигурация провайдера поиска мест недоступна. Ввод координат по-прежнему работает."
+
+#. js-lingui-id: 1IjCTZ
+#: src/presentation/shell/MapSearchPlaceholder.tsx:450
+msgid "Place search results"
+msgstr "Результаты поиска мест"
+
+#. js-lingui-id: tqAN-8
+#: src/presentation/shell/MapSearchPlaceholder.tsx:235
+msgid "Place search timed out. Try again."
+msgstr "Время ожидания поиска мест истекло. Повторите попытку."
+
+#. js-lingui-id: jiQuHZ
+#: src/presentation/shell/WorkspaceSidebar.tsx:574
+msgid "Plan a route on the map"
+msgstr "Построить маршрут на карте"
+
+#. js-lingui-id: P7wp80
+#: src/presentation/shell/WorkspaceSidebar.tsx:585
+msgid "Plan route"
+msgstr "Построить маршрут"
+
+#. js-lingui-id: vzUDqT
+#: src/presentation/shell/AboutDialog.tsx:171
+msgid "Point weather forecast."
+msgstr "Прогноз погоды для точки."
+
+#. js-lingui-id: n-o-Yq
+#: src/presentation/shell/formatPlaceSearchCategory.ts:23
+msgid "Pond"
+msgstr "Пруд"
+
+#. js-lingui-id: fwASbQ
+#: src/presentation/shell/WorkspaceShell.tsx:559
+msgid "Preparing terrain and elevation…"
+msgstr "Подготовка рельефа и высот…"
+
+#. js-lingui-id: 4OgQ0q
+#: src/presentation/shell/OperationalStatus.tsx:176
+msgid "Preparing the selected Sentinel scene…"
+msgstr "Подготовка выбранной сцены Sentinel…"
+
+#. js-lingui-id: ckH3fT
+#: src/presentation/shell/OperationalStatus.tsx:124
+msgid "Ready"
+msgstr "Готово"
+
+#. js-lingui-id: lCF0wC
+#: src/presentation/shell/StorageUsagePanel.tsx:209
+msgid "Refresh"
+msgstr "Обновить"
+
+#. js-lingui-id: 4CSBKd
+#: src/presentation/shell/OperationalStatus.tsx:212
+msgid "Rendering Mosaic images"
+msgstr "Отрисовка изображений мозаики"
+
+#. js-lingui-id: T2Bz0t
+#: src/presentation/shell/OperationalStatus.tsx:180
+msgid "Rendering the selected Sentinel scene…"
+msgstr "Отрисовка выбранной сцены Sentinel…"
+
+#. js-lingui-id: ZhefBt
+#: src/presentation/shell/OperationalStatus.tsx:234
+msgid "Rendering weather map"
+msgstr "Отрисовка карты погоды"
+
+#. js-lingui-id: J8y4b1
+#: src/presentation/shell/OperationalStatus.tsx:178
+msgid "Requesting Sentinel imagery tiles…"
+msgstr "Запрос тайлов снимка Sentinel…"
+
+#. js-lingui-id: 4__LXr
+#: src/presentation/shell/formatPlaceSearchCategory.ts:24
+msgid "Reservoir"
+msgstr "Водохранилище"
+
+#. js-lingui-id: 6gRgw8
+#: src/presentation/shell/StorageUsagePanel.tsx:128
+msgid "Retry"
+msgstr "Повторить"
+
+#. js-lingui-id: -KkrMV
+#: src/presentation/shell/WorkspaceSidebar.tsx:466
+msgid "Return to individual Sentinel scenes"
+msgstr "Вернуться к отдельным сценам Sentinel"
+
+#. js-lingui-id: jFBwXU
+#: src/presentation/shell/formatPlaceSearchCategory.ts:25
+#: src/presentation/shell/formatPlaceSearchCategory.ts:27
+#: src/presentation/shell/formatPlaceSearchCategory.ts:28
+msgid "River"
+msgstr "Река"
+
+#. js-lingui-id: dN_PDN
+#: src/presentation/shell/WorkspaceSidebar.tsx:573
+msgid "Route planning is unavailable because map routing data is not configured"
+msgstr "Построение маршрута недоступно: данные маршрутизации карты не настроены"
+
+#. js-lingui-id: QENfSy
+#: src/presentation/shell/WorkspaceRail.tsx:440
+msgid "Satellite"
+msgstr "Спутник"
+
+#. js-lingui-id: ELo7ID
+#: src/presentation/shell/AboutDialog.tsx:228
+msgid "Satellite basemap"
+msgstr "Спутниковая базовая карта"
+
+#. js-lingui-id: -dCnti
+#: src/presentation/shell/WorkspaceSidebar.tsx:78
+msgid "Satellite imagery"
+msgstr "Спутниковые снимки"
+
+#. js-lingui-id: ZsN6iq
+#: src/presentation/shell/AboutDialog.tsx:214
+msgid "Satellite imagery from {l1cCollection} and {l2aCollection}"
+msgstr "Спутниковые снимки из коллекций {l1cCollection} и {l2aCollection}"
+
+#. js-lingui-id: MY7gqO
+#: src/presentation/shell/AboutDialog.tsx:183
+msgid "Satellite scene rendering"
+msgstr "Отрисовка спутниковых сцен"
+
+#. js-lingui-id: DH1wOu
+#: src/presentation/shell/AboutDialog.tsx:178
+msgid "Satellite scene search"
+msgstr "Поиск спутниковых сцен"
+
+#. js-lingui-id: rkYl1y
+#: src/presentation/shell/AboutDialog.tsx:351
+msgid "Satellite search is unavailable because its provider configuration is invalid."
+msgstr "Поиск спутниковых сцен недоступен из-за недопустимой конфигурации провайдера."
+
+#. js-lingui-id: tfDRzk
+#: src/presentation/shell/WorkspaceShell.tsx:522
+msgid "Save"
+msgstr "Сохранить"
+
+#. js-lingui-id: Ht8qdB
+#: src/presentation/shell/MapSearchPlaceholder.tsx:499
+msgid "Saved local track"
+msgstr "Сохранённый локальный трек"
+
+#. js-lingui-id: zHhW29
+#: src/presentation/shell/WorkspaceSidebar.tsx:287
+msgid "Saved markers are loading"
+msgstr "Загрузка сохранённых меток"
+
+#. js-lingui-id: AwkEFV
+#: src/presentation/shell/WorkspaceSidebar.tsx:286
+msgid "Saved markers are unavailable"
+msgstr "Сохранённые метки недоступны"
+
+#. js-lingui-id: srhkS0
+#: src/presentation/shell/MapSearchPlaceholder.tsx:511
+msgid "Search all saved tracks"
+msgstr "Искать среди всех сохранённых треков"
+
+#. js-lingui-id: 0rRKr8
+#: src/presentation/shell/MapSearchPlaceholder.tsx:528
+msgid "Search data © <0>OpenStreetMap contributors</0>"
+msgstr "Данные поиска © <0>OpenStreetMap contributors</0>"
+
+#. js-lingui-id: YRxZsk
+#: src/presentation/shell/MapSearchPlaceholder.tsx:356
+msgid "Search map"
+msgstr "Искать на карте"
+
+#. js-lingui-id: xtVjUm
+#: src/presentation/shell/MapSearchPlaceholder.tsx:340
+#: src/presentation/shell/MapSearchPlaceholder.tsx:346
+msgid "Search places or coordinates"
+msgstr "Искать места или координаты"
+
+#. js-lingui-id: kaDhS6
+#: src/presentation/shell/MapSearchPlaceholder.tsx:367
+msgid "Searching places"
+msgstr "Поиск мест"
+
+#. js-lingui-id: llGFzy
+#: src/presentation/shell/OperationalStatus.tsx:194
+msgid "Searching Sentinel archive…"
+msgstr "Поиск в архиве Sentinel…"
+
+#. js-lingui-id: ljDmvk
+#: src/presentation/shell/OperationalStatus.tsx:112
+msgid "Searching the Earth Search Sentinel catalog…"
+msgstr "Поиск в каталоге Sentinel сервиса Earth Search…"
+
+#. js-lingui-id: TdjB1H
+#: src/presentation/shell/WorkspaceSidebar.tsx:391
+msgid "Select a forecast point on the map"
+msgstr "Выбрать точку прогноза на карте"
+
+#. js-lingui-id: gSrjec
+#: src/presentation/shell/WorkspaceSidebar.tsx:401
+msgid "Select forecast point"
+msgstr "Выбрать точку прогноза"
+
+#. js-lingui-id: BQh2wr
+#: src/presentation/shell/WorkspaceSidebar.tsx:555
+#: src/presentation/shell/WorkspaceSidebar.tsx:561
+msgid "Select multiple tracks"
+msgstr "Выбрать несколько треков"
+
+#. js-lingui-id: _XZQbD
+#: src/presentation/shell/OperationalStatus.tsx:115
+msgid "Sentinel catalog ready"
+msgstr "Каталог Sentinel готов"
+
+#. js-lingui-id: bXY4Eu
+#: src/presentation/shell/OperationalStatus.tsx:127
+msgid "Sentinel imagery search failed. Try again."
+msgstr "Не удалось найти снимки Sentinel. Повторите попытку."
+
+#. js-lingui-id: 4gZK_l
+#: src/presentation/shell/OperationalStatus.tsx:117
+msgid "Sentinel search cancelled"
+msgstr "Поиск Sentinel отменён"
+
 #. js-lingui-id: Tz0i8g
 #: src/presentation/shell/SettingsDialog.tsx:75
+#: src/presentation/shell/WorkspaceRail.tsx:535
 msgid "Settings"
 msgstr "Настройки"
 
@@ -58,6 +844,58 @@ msgstr "Настройки"
 #: src/presentation/shell/SettingsDialog.tsx:82
 msgid "Settings tabs"
 msgstr "Вкладки настроек"
+
+#. js-lingui-id: Z8lGw6
+#: src/presentation/shell/WorkspaceRail.tsx:478
+msgid "Share"
+msgstr "Поделиться"
+
+#. js-lingui-id: bdo1_8
+#: src/presentation/shell/WorkspaceRail.tsx:457
+msgid "Share map view"
+msgstr "Поделиться видом карты"
+
+#. js-lingui-id: yNR75y
+#: src/presentation/shell/ShareMapDialog.tsx:94
+msgid "Share this map view"
+msgstr "Поделиться этим видом карты"
+
+#. js-lingui-id: aa47vg
+#: src/presentation/shell/OperationalStatus.tsx:347
+msgid "Show current error details"
+msgstr "Показать сведения о текущей ошибке"
+
+#. js-lingui-id: BE_aZF
+#: src/presentation/shell/WorkspaceSidebar.tsx:594
+msgid "Show map"
+msgstr "Показать карту"
+
+#. js-lingui-id: nPDRCU
+#: src/presentation/shell/WorkspaceRail.tsx:281
+#: src/presentation/shell/WorkspaceRail.tsx:283
+msgid "Show navigation"
+msgstr "Показать навигацию"
+
+#. js-lingui-id: rvH1WP
+#: src/presentation/shell/WorkspaceRail.tsx:238
+msgid "Show navigation from Trail Planner logo"
+msgstr "Показать навигацию через логотип Trail Planner"
+
+#. js-lingui-id: 5HHzPM
+#: src/presentation/shell/WorkspaceSidebar.tsx:364
+#: src/presentation/shell/WorkspaceSidebar.tsx:374
+msgid "Show weather map"
+msgstr "Показать карту погоды"
+
+#. js-lingui-id: og87nv
+#: src/presentation/shell/formatPlaceSearchCategory.ts:12
+msgid "Spring"
+msgstr "Родник"
+
+#. js-lingui-id: V7WtQ5
+#: src/presentation/shell/OperationalStatus.tsx:246
+msgid "Starting the map workspace…"
+msgstr "Запуск рабочей области карты…"
 
 #. js-lingui-id: BrrIs8
 #: src/presentation/shell/SettingsDialog.tsx:121
@@ -68,6 +906,204 @@ msgstr "Хранилище"
 #: src/presentation/shell/SettingsDialog.tsx:176
 msgid "Storage usage settings"
 msgstr "Настройки использования хранилища"
+
+#. js-lingui-id: cB2yrV
+#: src/presentation/shell/formatPlaceSearchCategory.ts:13
+msgid "Strait"
+msgstr "Пролив"
+
+#. js-lingui-id: hou0tP
+#: src/presentation/shell/formatPlaceSearchCategory.ts:29
+msgid "Stream"
+msgstr "Ручей"
+
+#. js-lingui-id: lbWqJN
+#: src/presentation/shell/WorkspaceSidebar.tsx:467
+msgid "Switch to Sentinel Mosaic"
+msgstr "Переключиться на мозаику Sentinel"
+
+#. js-lingui-id: NCW88u
+#: src/presentation/shell/OperationalStatus.tsx:283
+msgid "Terrain compute · compatibility mode"
+msgstr "Расчёт рельефа · режим совместимости"
+
+#. js-lingui-id: lIoxO5
+#: src/presentation/shell/OperationalStatus.tsx:410
+msgid "Terrain compute queue state"
+msgstr "Состояние очереди расчёта рельефа"
+
+#. js-lingui-id: 3yWNOI
+#: src/presentation/shell/OperationalStatus.tsx:44
+msgid "Terrain worker · {activeCount, plural, one {# task active} other {# tasks active}}"
+msgstr "Обработчик рельефа · {activeCount, plural, one {активна # задача} few {активны # задачи} many {активно # задач} other {активно # задачи}}"
+
+#. js-lingui-id: Nb6UdF
+#: src/presentation/shell/OperationalStatus.tsx:40
+msgid "Terrain worker · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} one { · # task active} other { · # tasks active}}"
+msgstr "Обработчик рельефа · в очереди {queuedCount, number}/{capacity, number}{activeCount, plural, =0 {} one { · активна # задача} few { · активны # задачи} many { · активно # задач} other { · активно # задачи}}"
+
+#. js-lingui-id: 9tybQ4
+#: src/presentation/shell/OperationalStatus.tsx:285
+msgid "Terrain worker · restarting"
+msgstr "Обработчик рельефа · перезапуск"
+
+#. js-lingui-id: 6GkJH5
+#: src/presentation/shell/ShareMapDialog.tsx:98
+msgid "The 2D link always shares center and zoom. A selected satellite image can be included without storing the scene locally."
+msgstr "Ссылка на 2D-карту всегда передаёт центр и масштаб. Выбранный спутниковый снимок можно добавить без локального сохранения сцены."
+
+#. js-lingui-id: WMkqRc
+#: src/presentation/shell/WorkspaceErrorBoundary.tsx:59
+msgid "The application encountered an error"
+msgstr "Приложение столкнулось с ошибкой"
+
+#. js-lingui-id: CNWmZe
+#: src/presentation/shell/WorkspaceErrorBoundary.tsx:63
+msgid "The failure was captured locally. Download a privacy-safe bundle to help investigate it."
+msgstr "Сбой зафиксирован локально. Скачайте пакет без конфиденциальных данных, чтобы помочь с расследованием."
+
+#. js-lingui-id: CHpm1i
+#: src/presentation/shell/ShareMapDialog.tsx:149
+msgid "The link could not be copied. Select it and copy it manually."
+msgstr "Не удалось скопировать ссылку. Выделите её и скопируйте вручную."
+
+#. js-lingui-id: UvCiMz
+#: src/presentation/shell/OperationalStatus.tsx:141
+msgid "The map could not be loaded."
+msgstr "Не удалось загрузить карту."
+
+#. js-lingui-id: UlwpUw
+#: src/presentation/shell/OperationalStatus.tsx:169
+msgid "The map is running in a degraded state."
+msgstr "Карта работает с ограниченной функциональностью."
+
+#. js-lingui-id: Pce71j
+#: src/presentation/shell/ShareMapDialog.tsx:124
+msgid "This link includes the current bearing and pitch."
+msgstr "Эта ссылка включает текущие азимут и наклон."
+
+#. js-lingui-id: m4CMLN
+#: src/presentation/shell/OperationalStatus.tsx:253
+msgid "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active."
+msgstr "TiTiler недоступен. Используются готовые снимки Sentinel напрямую."
+
+#. js-lingui-id: QSF6PW
+#: src/presentation/shell/OperationalStatus.tsx:148
+msgid "TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery."
+msgstr "TiTiler недоступен. Переключение на готовые снимки Sentinel напрямую."
+
+#. js-lingui-id: 5M4BZY
+#: src/presentation/shell/StorageUsagePanel.tsx:151
+msgid "Total app storage"
+msgstr "Общее хранилище приложения"
+
+#. js-lingui-id: uCgBlc
+#: src/presentation/shell/formatPlaceSearchCategory.ts:19
+msgid "Town"
+msgstr "Малый город"
+
+#. js-lingui-id: tGFu7D
+#: src/presentation/shell/WorkspaceShell.tsx:504
+msgid "Track name"
+msgstr "Название трека"
+
+#. js-lingui-id: 2eFlmt
+#: src/presentation/shell/WorkspaceRail.tsx:416
+#: src/presentation/shell/WorkspaceSidebar.tsx:77
+msgid "Tracks"
+msgstr "Треки"
+
+#. js-lingui-id: 5f0wUC
+#: src/presentation/shell/MapSearchPlaceholder.tsx:221
+msgid "Use one latitude and one longitude label."
+msgstr "Используйте по одной метке широты и долготы."
+
+#. js-lingui-id: IZKDoG
+#: src/presentation/shell/StorageUsagePanel.tsx:180
+msgid "Used heap"
+msgstr "Используемая память кучи"
+
+#. js-lingui-id: 7PzzBU
+#: src/presentation/shell/WorkspaceRail.tsx:132
+#: src/presentation/shell/WorkspaceSidebar.tsx:82
+msgid "User"
+msgstr "Профиль"
+
+#. js-lingui-id: U-HJ5R
+#: src/presentation/shell/WorkspaceRail.tsx:141
+msgid "User synchronization failed"
+msgstr "Синхронизация профиля не удалась"
+
+#. js-lingui-id: HIxhHX
+#: src/presentation/shell/WorkspaceRail.tsx:137
+msgid "User synchronization in progress"
+msgstr "Синхронизация профиля выполняется"
+
+#. js-lingui-id: HtyM5h
+#: src/presentation/shell/WorkspaceRail.tsx:145
+msgid "User synchronization needs a deletion decision"
+msgstr "Для синхронизации профиля нужно решить, удалять ли данные"
+
+#. js-lingui-id: ie5oY0
+#: src/presentation/shell/WorkspaceRail.tsx:149
+msgid "User synchronization successful"
+msgstr "Профиль успешно синхронизирован"
+
+#. js-lingui-id: 1TQDDF
+#: src/presentation/shell/AboutDialog.tsx:199
+msgid "Vector map"
+msgstr "Векторная карта"
+
+#. js-lingui-id: DDscto
+#: src/presentation/shell/formatPlaceSearchCategory.ts:20
+msgid "Village"
+msgstr "Село"
+
+#. js-lingui-id: N5uU0a
+#: src/presentation/shell/formatPlaceSearchCategory.ts:14
+msgid "Volcano"
+msgstr "Вулкан"
+
+#. js-lingui-id: ILGa7G
+#: src/presentation/shell/MapSearchPlaceholder.tsx:226
+msgid "Wait for the map viewport to become ready, then search again."
+msgstr "Дождитесь готовности области просмотра карты и повторите поиск."
+
+#. js-lingui-id: L6z1-b
+#: src/presentation/shell/formatPlaceSearchCategory.ts:15
+msgid "Water body"
+msgstr "Водоём"
+
+#. js-lingui-id: u-lTLZ
+#: src/presentation/shell/formatPlaceSearchCategory.ts:30
+msgid "Waterfall"
+msgstr "Водопад"
+
+#. js-lingui-id: mJZLtT
+#: src/presentation/shell/WorkspaceRail.tsx:448
+#: src/presentation/shell/WorkspaceSidebar.tsx:79
+msgid "Weather"
+msgstr "Погода"
+
+#. js-lingui-id: 02Er57
+#: src/presentation/shell/AboutDialog.tsx:247
+msgid "Weather forecast data"
+msgstr "Данные прогноза погоды"
+
+#. js-lingui-id: sUKK7e
+#: src/presentation/shell/WorkspaceSidebar.tsx:363
+msgid "Weather map is unavailable"
+msgstr "Карта погоды недоступна"
+
+#. js-lingui-id: V6AIOn
+#: src/presentation/shell/WorkspaceRail.tsx:163
+msgid "Workspace navigation"
+msgstr "Навигация по рабочим разделам"
+
+#. js-lingui-id: gcs5ce
+#: src/presentation/shell/WorkspaceRail.tsx:376
+msgid "Workspace sections"
+msgstr "Разделы рабочей области"
 
 #. js-lingui-id: FX4c9a
 #: src/presentation/shell/SettingsDialog.tsx:168

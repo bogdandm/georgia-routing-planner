@@ -1,3 +1,5 @@
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
@@ -13,6 +15,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
   type MouseEvent,
@@ -22,6 +25,26 @@ import { useStore } from 'zustand';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { satelliteRequestStatusStore } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
+const availableImagesMessage = msg({
+  message:
+    '{count, plural, one {# Sentinel image is available} other {# Sentinel images are available}}',
+});
+const mosaicRenderProgressMessage = msg({
+  message:
+    '{renderedSceneCount, number} of {totalSceneCount, number} Mosaic images rendered',
+});
+const weatherMapRenderProgressMessage = msg({
+  message:
+    '{loadedSourceCount, number} of {totalSourceCount, number} weather map sources rendered',
+});
+const queuedTerrainWorkMessage = msg({
+  message:
+    'Terrain worker · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} one { · # task active} other { · # tasks active}}',
+});
+const activeTerrainWorkMessage = msg({
+  message:
+    'Terrain worker · {activeCount, plural, one {# task active} other {# tasks active}}',
+});
 
 interface DisplayStatus {
   readonly kind: 'ready' | 'pending' | 'warning' | 'error';
@@ -34,6 +57,7 @@ interface DisplayStatus {
 
 /** Quiet, always-visible summary of map and imagery work for ordinary users. */
 export function OperationalStatus() {
+  const { i18n, t } = useLingui();
   const { mapDiagnostics, mapProviderConfiguration } = useRuntimeServices();
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
@@ -60,55 +84,104 @@ export function OperationalStatus() {
   );
   const [now, setNow] = useState(0);
   const [errorAnchor, setErrorAnchor] = useState<HTMLElement | null>(null);
+  /* eslint-disable -- Intl options and ISO date syntax are locale-independent tokens. */
+  const monthFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(i18n.locale, {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }),
+    [i18n.locale],
+  );
+  const integerFormatter = useMemo(
+    () => new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 0 }),
+    [i18n.locale],
+  );
+  const loadingMonthLabel =
+    requestStatus.status === 'pending' && requestStatus.code === 'loading-month'
+      ? monthFormatter.format(new Date(`${requestStatus.month}-01T00:00:00.000Z`))
+      : null;
+  /* eslint-enable */
+
+  let satelliteStatusMessage: string;
+  if (requestStatus.status === 'pending') {
+    satelliteStatusMessage =
+      loadingMonthLabel !== null
+        ? t`Loading Sentinel imagery for ${loadingMonthLabel}`
+        : t`Searching the Earth Search Sentinel catalog…`;
+  } else if (requestStatus.status === 'ready') {
+    if (requestStatus.code === 'catalog-ready') {
+      satelliteStatusMessage = t`Sentinel catalog ready`;
+    } else if (requestStatus.code === 'search-cancelled') {
+      satelliteStatusMessage = t`Sentinel search cancelled`;
+    } else if (requestStatus.code === 'images-available') {
+      satelliteStatusMessage = i18n._({
+        ...availableImagesMessage,
+        values: { count: requestStatus.count },
+      });
+    } else {
+      satelliteStatusMessage = t`Ready`;
+    }
+  } else {
+    satelliteStatusMessage = t`Sentinel imagery search failed. Try again.`;
+  }
 
   let display: DisplayStatus;
   if (mapProviderConfiguration.status === 'invalid') {
     display = {
       kind: 'error',
-      message: mapProviderConfiguration.message,
+      message: t`Map provider configuration is invalid.`,
       startedAt: null,
       announcement: 'assertive',
     };
   } else if (mapSnapshot?.lifecycle === 'fatal') {
     display = {
       kind: 'error',
-      message: mapSnapshot.message ?? 'Map data is unavailable.',
+      message: t`The map could not be loaded.`,
       startedAt: null,
       announcement: 'assertive',
     };
   } else if (automaticAlternativeProviderState === 'switching') {
     display = {
       kind: 'warning',
-      message:
-        'TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery.',
+      message: t`TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery.`,
       startedAt: null,
       announcement: 'polite',
     };
   } else if (layerError !== null) {
     display = {
       kind: 'error',
-      message: layerError,
+      message: t`A map layer update failed. Try again.`,
       startedAt: null,
       announcement: 'polite',
     };
   } else if (requestStatus.status === 'error') {
     display = {
       kind: 'error',
-      message: requestStatus.message,
+      message: satelliteStatusMessage,
       startedAt: null,
       announcement: 'polite',
     };
   } else if (mapSnapshot?.lifecycle === 'degraded' && mapSnapshot.message !== null) {
     display = {
       kind: 'error',
-      message: mapSnapshot.message,
+      message: t`The map is running in a degraded state.`,
       startedAt: null,
       announcement: 'polite',
     };
   } else if (appliedImagery.status === 'loading') {
+    const message =
+      appliedImagery.stage === 'preparing'
+        ? t`Preparing the selected Sentinel scene…`
+        : appliedImagery.stage === 'requesting-tiles'
+          ? t`Requesting Sentinel imagery tiles…`
+          : appliedImagery.stage === 'rendering'
+            ? t`Rendering the selected Sentinel scene…`
+            : t`Finalizing the selected Sentinel scene…`;
     display = {
       kind: 'pending',
-      message: appliedImagery.message,
+      message,
       startedAt: appliedImagery.startedAt,
       announcement: 'polite',
     };
@@ -118,10 +191,14 @@ export function OperationalStatus() {
       kind: 'pending',
       message:
         renderProgress === null
-          ? 'Searching Sentinel archive…'
-          : `Rendering Mosaic images · ${String(
-              renderProgress.renderedSceneCount,
-            )}/${String(renderProgress.totalSceneCount)}`,
+          ? t`Searching Sentinel archive…`
+          : i18n._({
+              ...mosaicRenderProgressMessage,
+              values: {
+                renderedSceneCount: renderProgress.renderedSceneCount,
+                totalSceneCount: renderProgress.totalSceneCount,
+              },
+            }),
       startedAt: null,
       announcement: 'polite',
       ...(renderProgress === null
@@ -132,13 +209,13 @@ export function OperationalStatus() {
                 ? 0
                 : (renderProgress.renderedSceneCount / renderProgress.totalSceneCount) *
                   100,
-            progressLabel: 'Rendering Mosaic images',
+            progressLabel: t`Rendering Mosaic images`,
           }),
     };
   } else if (weatherMap.status === 'loading') {
     display = {
       kind: 'pending',
-      message: 'Loading ECMWF weather map…',
+      message: t`Loading ECMWF weather map…`,
       startedAt: null,
       announcement: 'polite',
     };
@@ -146,39 +223,41 @@ export function OperationalStatus() {
     const { loadedSourceCount, totalSourceCount } = weatherMap.renderProgress;
     display = {
       kind: 'pending',
-      message: `Rendering weather map · ${String(loadedSourceCount)}/${String(totalSourceCount)}`,
+      message: i18n._({
+        ...weatherMapRenderProgressMessage,
+        values: { loadedSourceCount, totalSourceCount },
+      }),
       startedAt: null,
       announcement: 'polite',
       progressPercent:
         totalSourceCount === 0 ? 0 : (loadedSourceCount / totalSourceCount) * 100,
-      progressLabel: 'Rendering weather map',
+      progressLabel: t`Rendering weather map`,
     };
   } else if (requestStatus.status === 'pending') {
     display = {
       kind: 'pending',
-      message: requestStatus.message,
+      message: satelliteStatusMessage,
       startedAt: requestStatus.startedAt,
       announcement: 'polite',
     };
   } else if (mapSnapshot === null || mapSnapshot.lifecycle === 'loading') {
     display = {
       kind: 'pending',
-      message: 'Starting the map workspace…',
+      message: t`Starting the map workspace…`,
       startedAt: null,
       announcement: 'polite',
     };
   } else if (automaticAlternativeProviderState === 'active') {
     display = {
       kind: 'warning',
-      message:
-        'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.',
+      message: t`TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active.`,
       startedAt: null,
       announcement: 'polite',
     };
   } else {
     display = {
       kind: 'ready',
-      message: requestStatus.message,
+      message: satelliteStatusMessage,
       startedAt: null,
       announcement: 'polite',
     };
@@ -201,15 +280,28 @@ export function OperationalStatus() {
 
   const terrainActivityLabel =
     terrainQueue.executionMode === 'inline'
-      ? 'Terrain compute · compatibility mode'
+      ? t`Terrain compute · compatibility mode`
       : terrainQueue.executionMode === 'restarting'
-        ? 'Terrain worker · restarting'
+        ? t`Terrain worker · restarting`
         : terrainQueue.queuedContourCount > 0
-          ? `Terrain worker · queue ${String(terrainQueue.queuedContourCount)}/${String(terrainQueue.queueCapacity)}${terrainQueue.activeCount > 0 ? ` · ${String(terrainQueue.activeCount)} active` : ''}`
+          ? i18n._({
+              ...queuedTerrainWorkMessage,
+              values: {
+                queuedCount: terrainQueue.queuedContourCount,
+                capacity: terrainQueue.queueCapacity,
+                activeCount: terrainQueue.activeCount,
+              },
+            })
           : terrainQueue.activeCount > 0
-            ? `Terrain worker · ${String(terrainQueue.activeCount)} active`
+            ? i18n._({
+                ...activeTerrainWorkMessage,
+                values: { activeCount: terrainQueue.activeCount },
+              })
             : null;
+  const elapsedLabel =
+    elapsedSeconds === null ? null : t`${integerFormatter.format(elapsedSeconds)} s`;
 
+  /* eslint-disable -- MUI, CSS, and ARIA control tokens are not user-visible copy. */
   const handleErrorDetailsOpen = (event: MouseEvent<HTMLElement>) => {
     setErrorAnchor(event.currentTarget);
   };
@@ -251,7 +343,9 @@ export function OperationalStatus() {
     >
       <Box
         component={display.kind === 'error' ? ButtonBase : 'div'}
-        aria-label={display.kind === 'error' ? 'Show current error details' : undefined}
+        aria-label={
+          display.kind === 'error' ? t`Show current error details` : undefined
+        }
         onClick={display.kind === 'error' ? handleErrorDetailsOpen : undefined}
         sx={{
           display: 'flex',
@@ -292,8 +386,8 @@ export function OperationalStatus() {
             }}
           >
             {display.message}
-            {display.kind === 'pending' && elapsedSeconds !== null
-              ? ` · ${String(elapsedSeconds)}s`
+            {display.kind === 'pending' && elapsedLabel !== null
+              ? ` · ${elapsedLabel}`
               : ''}
           </Typography>
         </Tooltip>
@@ -313,7 +407,7 @@ export function OperationalStatus() {
         <Typography
           variant="caption"
           color="text.secondary"
-          aria-label="Terrain compute queue state"
+          aria-label={t`Terrain compute queue state`}
           sx={{ display: 'block', pl: 2.875, lineHeight: 1.25 }}
         >
           {terrainActivityLabel}
@@ -329,11 +423,12 @@ export function OperationalStatus() {
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         slotProps={{ paper: { sx: { mt: 0.5, p: 1.5, maxWidth: 360 } } }}
       >
-        <Typography variant="subtitle2">Current map error</Typography>
+        <Typography variant="subtitle2">{t`Current map error`}</Typography>
         <Typography variant="body2" color="text.secondary">
           {display.message}
         </Typography>
       </Popover>
     </Box>
   );
+  /* eslint-enable */
 }

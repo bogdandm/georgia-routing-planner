@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import {
   Alert,
@@ -24,8 +25,19 @@ type StorageUsageState =
   | { readonly status: 'ready'; readonly snapshot: StorageUsageSnapshot }
   | { readonly status: 'error' };
 
-function formatMegabytes(bytes: number): string {
-  return `${(bytes / 1_048_576).toFixed(2)} MB`;
+const warningSeverity = 'warning' as const;
+const infoSeverity = 'info' as const;
+function formatMegabytes(locale: string, bytes: number): string {
+  /* eslint-disable -- Intl option values are locale-independent formatting tokens. */
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: 'megabyte',
+    unitDisplay: 'short',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return formatter.format(bytes / 1_048_576);
+  /* eslint-enable */
 }
 
 function MetricRow({
@@ -61,13 +73,15 @@ function OptionalMetricRow({
   readonly label: string;
   readonly bytes: number | null;
 }) {
+  const { i18n } = useLingui();
   return bytes === null ? null : (
-    <MetricRow label={label} value={formatMegabytes(bytes)} />
+    <MetricRow label={label} value={formatMegabytes(i18n.locale, bytes)} />
   );
 }
 
 /** Compact read-only origin-storage and JS-heap summary for Settings. */
 export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
+  const { i18n, t } = useLingui();
   const [state, setState] = useState<StorageUsageState>({ status: 'loading' });
 
   const refresh = useCallback(async () => {
@@ -98,7 +112,9 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
     return (
       <Stack direction="row" spacing={1} sx={{ py: 2, alignItems: 'center' }}>
         <CircularProgress size={18} />
-        <Typography variant="body2">Measuring browser storage…</Typography>
+        <Typography variant="body2">
+          <Trans>Measuring browser storage…</Trans>
+        </Typography>
       </Stack>
     );
   }
@@ -106,14 +122,14 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
   if (state.status === 'error') {
     return (
       <Alert
-        severity="warning"
+        severity={warningSeverity}
         action={
           <Button color="inherit" size="small" onClick={() => void refresh()}>
-            Retry
+            <Trans>Retry</Trans>
           </Button>
         }
       >
-        Browser storage usage could not be measured.
+        <Trans>Browser storage usage could not be measured.</Trans>
       </Alert>
     );
   }
@@ -123,27 +139,35 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
     snapshot.heapUsedBytes !== null ||
     snapshot.heapAllocatedBytes !== null ||
     snapshot.heapLimitBytes !== null;
+  /* eslint-disable -- Intl option token, not user-visible copy. */
+  const measuredAt = new Intl.DateTimeFormat(i18n.locale, {
+    timeStyle: 'medium',
+  }).format(new Date(snapshot.measuredAt));
+  /* eslint-enable */
   return (
     <Stack spacing={1.25}>
       <Box>
         <OptionalMetricRow
-          label="Total app storage"
+          label={t`Total app storage`}
           bytes={snapshot.totalStoredBytes}
         />
         <OptionalMetricRow
-          label="Local database (IndexedDB)"
+          label={t`Local database (IndexedDB)`}
           bytes={snapshot.indexedDbBytes}
         />
-        <OptionalMetricRow label="Cache Storage" bytes={snapshot.cacheStorageBytes} />
+        <OptionalMetricRow
+          label={t`Cache Storage`}
+          bytes={snapshot.cacheStorageBytes}
+        />
         <MetricRow
-          label="localStorage"
-          value={formatMegabytes(snapshot.localStorageBytes)}
+          label={t`localStorage`}
+          value={formatMegabytes(i18n.locale, snapshot.localStorageBytes)}
         />
         <OptionalMetricRow
-          label="Other origin storage"
+          label={t`Other origin storage`}
           bytes={snapshot.otherOriginStorageBytes}
         />
-        <OptionalMetricRow label="Origin quota" bytes={snapshot.quotaBytes} />
+        <OptionalMetricRow label={t`Origin quota`} bytes={snapshot.quotaBytes} />
       </Box>
 
       {hasHeapMetrics ? <Divider /> : null}
@@ -151,21 +175,23 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
       {hasHeapMetrics ? (
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
-            Approximate JavaScript memory
+            <Trans>Approximate JavaScript memory</Trans>
           </Typography>
-          <OptionalMetricRow label="Used heap" bytes={snapshot.heapUsedBytes} />
+          <OptionalMetricRow label={t`Used heap`} bytes={snapshot.heapUsedBytes} />
           <OptionalMetricRow
-            label="Allocated heap"
+            label={t`Allocated heap`}
             bytes={snapshot.heapAllocatedBytes}
           />
-          <OptionalMetricRow label="Heap limit" bytes={snapshot.heapLimitBytes} />
+          <OptionalMetricRow label={t`Heap limit`} bytes={snapshot.heapLimitBytes} />
         </Box>
       ) : null}
 
-      <Alert severity="info" icon={false} sx={{ py: 0.25 }}>
-        Chrome manages HTTP and MapLibre tile caches internally. Web apps cannot measure
-        or clear that browser cache. Applied raster sources are removed from MapLibre
-        when they are replaced.
+      <Alert severity={infoSeverity} icon={false} sx={{ py: 0.25 }}>
+        <Trans>
+          Chrome manages HTTP and MapLibre tile caches internally. Web apps cannot
+          measure or clear that browser cache. Applied raster sources are removed from
+          MapLibre when they are replaced.
+        </Trans>
       </Alert>
 
       <Stack
@@ -173,14 +199,14 @@ export function StorageUsagePanel({ reader }: StorageUsagePanelProps) {
         sx={{ alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography variant="caption" color="text.secondary">
-          Measured {new Date(snapshot.measuredAt).toLocaleTimeString()}
+          <Trans>Measured {measuredAt}</Trans>
         </Typography>
         <Button
           size="small"
           startIcon={<RefreshOutlinedIcon />}
           onClick={() => void refresh()}
         >
-          Refresh
+          <Trans>Refresh</Trans>
         </Button>
       </Stack>
     </Stack>

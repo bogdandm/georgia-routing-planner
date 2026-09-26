@@ -1,3 +1,4 @@
+import { I18nProvider } from '@lingui/react';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import {
   mapInteractionStore,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { createTestServices } from '@test/helpers/createTestServices';
 
@@ -19,13 +21,16 @@ const testViewport = {
 describe('MapSearchPlaceholder', () => {
   beforeEach(() => {
     resetMapInteractionStore();
+    activateAppLocale('en');
   });
 
   const renderSearch = (services: RuntimeServices) =>
     render(
-      <RuntimeServicesProvider services={services}>
-        <MapSearchPlaceholder />
-      </RuntimeServicesProvider>,
+      <I18nProvider i18n={appI18n}>
+        <RuntimeServicesProvider services={services}>
+          <MapSearchPlaceholder />
+        </RuntimeServicesProvider>
+      </I18nProvider>,
     );
 
   it('navigates locally for unlabeled latitude/longitude coordinates without contacting a provider', async () => {
@@ -155,7 +160,7 @@ describe('MapSearchPlaceholder', () => {
       return Promise.resolve();
     });
     expect(await screen.findByText('Batumi, Georgia')).toBeVisible();
-    expect(screen.getByText(/km away/u)).toBeVisible();
+    expect(screen.getByText(/City · \d+ km/u)).toBeVisible();
     expect(screen.queryByText('Batumi Street, Gori, Georgia')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Show 1 other result' }));
@@ -175,10 +180,12 @@ describe('MapSearchPlaceholder', () => {
     services.mapViewport.update(testViewport);
     const user = userEvent.setup();
     render(
-      <RuntimeServicesProvider services={services}>
-        <button type="button">Map zoom in</button>
-        <MapSearchPlaceholder />
-      </RuntimeServicesProvider>,
+      <I18nProvider i18n={appI18n}>
+        <RuntimeServicesProvider services={services}>
+          <button type="button">Map zoom in</button>
+          <MapSearchPlaceholder />
+        </RuntimeServicesProvider>
+      </I18nProvider>,
     );
 
     await user.type(
@@ -277,5 +284,36 @@ describe('MapSearchPlaceholder', () => {
       'Enter at least two characters',
     );
     expect(screen.queryByText('Oni, Georgia')).not.toBeInTheDocument();
+  });
+
+  it('presents search and an ICU result count in Russian', async () => {
+    activateAppLocale('ru');
+    const services = createTestServices();
+    if (services.searchPlaces === null) return;
+    vi.spyOn(services.searchPlaces, 'execute').mockResolvedValue([
+      {
+        id: 'batumi-street',
+        label: 'Batumi Street, Gori, Georgia',
+        coordinate: { latitude: 41.98, longitude: 44.11 },
+        category: 'highway:residential',
+        kind: 'other',
+        bounds: null,
+      },
+    ]);
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderSearch(services);
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Искать места или координаты' }),
+      'Batumi{Enter}',
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Показать ещё 1 результат' }),
+    ).toBeVisible();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Географические совпадения не найдены.',
+    );
   });
 });

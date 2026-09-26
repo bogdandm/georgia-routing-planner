@@ -1,5 +1,6 @@
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 
+/* eslint-disable -- URL fragments are locale-independent machine data. */
 const hashByTab: Readonly<Record<WorkspaceTab, string>> = {
   tracks: '#tracks',
   satellite: '#satellite',
@@ -18,6 +19,7 @@ export function workspaceTabFromHash(hash: string): WorkspaceTab | null {
   if (normalized.startsWith('#tracks/share/')) return 'tracks';
   return normalized === '#satelite' ? 'satellite' : null;
 }
+/* eslint-enable */
 
 /** Returns the stable shareable URL hash for a workspace destination. */
 export function workspaceHashForTab(tab: WorkspaceTab): string {

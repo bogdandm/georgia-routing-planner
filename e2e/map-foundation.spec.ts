@@ -600,7 +600,7 @@ test('keeps DEM failure feedback in the shared status without a map banner', asy
   await expect(workspace).toHaveAttribute('data-map-state', 'degraded');
   await expect(
     page.getByRole('button', { name: 'Show current error details' }),
-  ).toContainText('3D terrain is unavailable');
+  ).toContainText('The map is running in a degraded state.');
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry 3D' })).toHaveCount(0);
 });
@@ -626,7 +626,7 @@ test('reports and restores a controlled WebGL context loss', async ({ page }) =>
   test.skip(!supported, 'Chromium did not expose WEBGL_lose_context.');
 
   await expect(workspace).toHaveAttribute('data-map-state', 'fatal');
-  await expect(page.getByRole('alert')).toContainText('lost the WebGL context');
+  await expect(page.getByRole('alert')).toContainText('The map could not be loaded.');
   await page.evaluate(() => {
     const testWindow = window as typeof window & {
       __mapContextExtension?: WEBGL_lose_context;
@@ -656,7 +656,7 @@ test('keeps the map usable and centralizes intercepted vector failures', async (
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Show current error details' }),
-  ).toContainText('Some basemap tiles could not load');
+  ).toContainText('The map is running in a degraded state.');
   await expect(page.getByRole('button', { name: 'Retry map data' })).toHaveCount(0);
 
   const accessibility = await new AxeBuilder({ page })

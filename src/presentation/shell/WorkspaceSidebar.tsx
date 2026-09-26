@@ -1,3 +1,6 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import AddIcon from '@mui/icons-material/Add';
 import AltRouteOutlinedIcon from '@mui/icons-material/AltRouteOutlined';
@@ -21,13 +24,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import {
-  useCallback,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useStore } from 'zustand';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
@@ -48,7 +45,6 @@ import {
   MarkerSortControl,
   useMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
-import { markerWeatherWeekdayLabel } from '@/presentation/markers/markerWeatherWeekdayOptions';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
 import { useSatelliteMosaic } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
@@ -77,37 +73,29 @@ interface WorkspaceSidebarProps {
   readonly onOpenActiveTrackDetails: () => void;
 }
 
-interface SidebarDefinition {
-  readonly actions: ReactNode;
-  readonly title: string;
-}
-
-const definitions: Record<WorkspaceTab, SidebarDefinition> = {
-  tracks: {
-    title: 'Tracks',
-    actions: null,
-  },
-  satellite: {
-    title: 'Satellite imagery',
-    actions: null,
-  },
-  weather: {
-    title: 'Weather',
-    actions: null,
-  },
-  markers: {
-    title: 'Markers',
-    actions: null,
-  },
-  layers: {
-    title: 'Layers',
-    actions: null,
-  },
-  user: {
-    title: 'User',
-    actions: null,
-  },
+const sidebarTitles: Readonly<Record<WorkspaceTab, MessageDescriptor>> = {
+  tracks: msg`Tracks`,
+  satellite: msg`Satellite imagery`,
+  weather: msg`Weather`,
+  markers: msg`Markers`,
+  layers: msg`Layers`,
+  user: msg`User`,
 };
+
+const markerWeatherDates = [
+  new Date(Date.UTC(2024, 0, 7)),
+  new Date(Date.UTC(2024, 0, 8)),
+  new Date(Date.UTC(2024, 0, 9)),
+  new Date(Date.UTC(2024, 0, 10)),
+  new Date(Date.UTC(2024, 0, 11)),
+  new Date(Date.UTC(2024, 0, 12)),
+  new Date(Date.UTC(2024, 0, 13)),
+] as const;
+
+/* eslint-disable -- Stable DOM and ARIA control tokens. */
+const weatherForecastLinksMenuId = 'weather-forecast-links-menu';
+const menuPopupType = 'menu' as const;
+/* eslint-enable */
 
 function coordinateWithHemisphere(
   value: number,
@@ -117,6 +105,7 @@ function coordinateWithHemisphere(
   return `${Math.abs(value).toString()}${value >= 0 ? positiveHemisphere : negativeHemisphere}`;
 }
 
+/* eslint-disable -- Forecast URLs are locale-independent machine data. */
 function meteoblueForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string {
   const latitude = coordinateWithHemisphere(coordinate.latitude, 'N', 'S');
   const longitude = coordinateWithHemisphere(coordinate.longitude, 'E', 'W');
@@ -126,11 +115,33 @@ function meteoblueForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): str
 function windyForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string {
   return `https://www.windy.com/${coordinate.latitude.toString()}/${coordinate.longitude.toString()}`;
 }
+/* eslint-enable */
 
 function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }) {
+  const { i18n, t } = useLingui();
+  /* eslint-disable -- Intl option values are locale-independent formatting tokens. */
+  const coordinateFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(i18n.locale, {
+        minimumFractionDigits: 5,
+        maximumFractionDigits: 5,
+      }),
+    [i18n.locale],
+  );
+  const elevationFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(i18n.locale, {
+        style: 'unit',
+        unit: 'meter',
+        unitDisplay: 'short',
+        maximumFractionDigits: 0,
+      }),
+    [i18n.locale],
+  );
+  /* eslint-enable */
   return (
     <ButtonBase
-      aria-label="Center map on forecast location"
+      aria-label={t`Center map on forecast location`}
       onClick={() => {
         requestMapNavigation(point.coordinate);
       }}
@@ -147,7 +158,7 @@ function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }
     >
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
         <LocationOnOutlinedIcon
-          aria-hidden="true"
+          aria-hidden
           sx={{ flexShrink: 0, fontSize: 18, color: 'text.secondary' }}
         />
         <Stack spacing={0} sx={{ minWidth: 0 }}>
@@ -161,7 +172,7 @@ function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }
             }}
           >
             {point.placeLabel ??
-              `${point.coordinate.latitude.toFixed(5)}, ${point.coordinate.longitude.toFixed(5)}`}
+              `${coordinateFormatter.format(point.coordinate.latitude)}, ${coordinateFormatter.format(point.coordinate.longitude)}`}
           </Typography>
           <Typography
             variant="caption"
@@ -175,7 +186,7 @@ function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }
           >
             {point.elevationMeters === undefined
               ? '\u00a0'
-              : `${Math.round(point.elevationMeters).toLocaleString('en-US')} m`}
+              : elevationFormatter.format(Math.round(point.elevationMeters))}
           </Typography>
         </Stack>
       </Stack>
@@ -194,6 +205,7 @@ export function WorkspaceSidebar({
   onOpenActiveTrackDetails,
   onShowMap,
 }: WorkspaceSidebarProps) {
+  const { i18n, t } = useLingui();
   const { mapDiagnostics, mapLayers, mapViewport, trailRouter } = useRuntimeServices();
   const subscribeToMap = useCallback(
     (listener: () => void) => mapDiagnostics.subscribe(listener),
@@ -221,7 +233,7 @@ export function WorkspaceSidebar({
     getViewportSnapshot,
     getViewportSnapshot,
   );
-  const definition = definitions[activeTab];
+  const sidebarTitle = i18n._(sidebarTitles[activeTab]);
   const camera = mapSnapshot?.camera ?? defaultGeorgiaCamera;
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
   const onSceneSelected = fullWidth ? onShowMap : undefined;
@@ -232,6 +244,24 @@ export function WorkspaceSidebar({
     weatherPreferences,
     weatherPreferencesReady,
   } = useMarkersWorkspace();
+  /* eslint-disable -- Intl options and punctuation are locale-independent tokens. */
+  const markerWeatherWeekdayFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(i18n.locale, {
+        weekday: 'short',
+        timeZone: 'UTC',
+      }),
+    [i18n.locale],
+  );
+  const markerWeatherWeekdayLabel = weatherPreferences.weekdays
+    .map((weekday) => markerWeatherWeekdayFormatter.format(markerWeatherDates[weekday]))
+    .join(', ');
+  /* eslint-enable */
+  const markerWeatherSettingsLabel = !weatherPreferencesReady
+    ? t`Loading marker weather settings`
+    : weatherPreferences.weekdays.length === 0
+      ? t`Marker weather settings. Forecast disabled`
+      : t`Marker weather settings. Forecast days: ${markerWeatherWeekdayLabel}`;
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
@@ -251,10 +281,10 @@ export function WorkspaceSidebar({
   const canCreateMarkers = mapViewportSnapshot !== null && loadState === 'ready';
   const markerCreationMessage =
     mapViewportSnapshot === null
-      ? 'Map is unavailable'
+      ? t`Map is unavailable`
       : loadState === 'failed'
-        ? 'Saved markers are unavailable'
-        : 'Saved markers are loading';
+        ? t`Saved markers are unavailable`
+        : t`Saved markers are loading`;
   const startMarkerPlacement = () => {
     if (fullWidth) onShowMap();
     requestMarkerPlacement({ kind: 'saved-marker' });
@@ -272,7 +302,7 @@ export function WorkspaceSidebar({
   return (
     <Box
       component="aside"
-      aria-label={`${definition.title} tools`}
+      aria-label={t`${sidebarTitle} tools`}
       sx={{
         position: 'relative',
         width: fullWidth ? '100%' : { xs: 420, xl: 464 },
@@ -315,7 +345,7 @@ export function WorkspaceSidebar({
           }}
         >
           <Typography component="h1" variant="h6" noWrap>
-            {definition.title}
+            {sidebarTitle}
           </Typography>
         </Box>
         {activeTab === 'weather' && weatherHeaderPoint !== null ? (
@@ -326,10 +356,12 @@ export function WorkspaceSidebar({
           <Tooltip
             title={
               weatherMap.status === 'loading'
-                ? 'Loading weather map'
+                ? t`Loading weather map`
                 : weatherMap.enabled
-                  ? 'Hide weather map'
-                  : (weatherMap.message ?? 'Show weather map')
+                  ? t`Hide weather map`
+                  : weatherMap.status === 'error'
+                    ? t`Weather map is unavailable`
+                    : t`Show weather map`
             }
           >
             <span>
@@ -339,13 +371,13 @@ export function WorkspaceSidebar({
                 selected={weatherMap.enabled}
                 disabled={mapLayers === null || weatherMap.status === 'loading'}
                 aria-label={
-                  weatherMap.enabled ? 'Hide weather map' : 'Show weather map'
+                  weatherMap.enabled ? t`Hide weather map` : t`Show weather map`
                 }
                 onClick={() => {
                   void mapLayers?.setWeatherEnabled(!weatherMap.enabled);
                 }}
               >
-                <MapOutlinedIcon fontSize="small" />
+                <MapOutlinedIcon sx={{ fontSize: 20 }} />
               </ToggleButton>
             </span>
           </Tooltip>
@@ -355,8 +387,8 @@ export function WorkspaceSidebar({
             <Tooltip
               title={
                 weatherPointSelectionActive
-                  ? 'Cancel forecast point selection'
-                  : 'Select a forecast point on the map'
+                  ? t`Cancel forecast point selection`
+                  : t`Select a forecast point on the map`
               }
             >
               <ToggleButton
@@ -365,32 +397,32 @@ export function WorkspaceSidebar({
                 selected={weatherPointSelectionActive}
                 aria-label={
                   weatherPointSelectionActive
-                    ? 'Cancel forecast point selection'
-                    : 'Select forecast point'
+                    ? t`Cancel forecast point selection`
+                    : t`Select forecast point`
                 }
                 onClick={toggleWeatherPointSelection}
               >
-                <AddLocationAltIcon fontSize="small" />
+                <AddLocationAltIcon sx={{ fontSize: 20 }} />
               </ToggleButton>
             </Tooltip>
             <IconButton
               size="small"
               aria-controls={
-                weatherForecastMenuOpen ? 'weather-forecast-links-menu' : undefined
+                weatherForecastMenuOpen ? weatherForecastLinksMenuId : undefined
               }
               aria-expanded={weatherForecastMenuOpen}
-              aria-haspopup="menu"
-              aria-label="More weather actions"
+              aria-haspopup={menuPopupType}
+              aria-label={t`More weather actions`}
               disabled={weatherHeaderPoint === null}
               onClick={(event) => {
                 setWeatherForecastMenuAnchor(event.currentTarget);
               }}
             >
-              <MoreVertIcon fontSize="small" />
+              <MoreVertIcon sx={{ fontSize: 20 }} />
             </IconButton>
             <Menu
               anchorEl={weatherForecastMenuOpen ? weatherForecastMenuAnchor : null}
-              id="weather-forecast-links-menu"
+              id={weatherForecastLinksMenuId}
               open={weatherForecastMenuOpen}
               onClose={() => {
                 setWeatherForecastMenuAnchor(null);
@@ -407,8 +439,8 @@ export function WorkspaceSidebar({
                       setWeatherForecastMenuAnchor(null);
                     }}
                   >
-                    Open meteoblue.com
-                    <OpenInNewIcon fontSize="small" sx={{ ml: 1 }} />
+                    <Trans>Open meteoblue.com</Trans>
+                    <OpenInNewIcon sx={{ ml: 1, fontSize: 20 }} />
                   </MenuItem>
                   <MenuItem
                     component="a"
@@ -419,8 +451,8 @@ export function WorkspaceSidebar({
                       setWeatherForecastMenuAnchor(null);
                     }}
                   >
-                    Open windy.com
-                    <OpenInNewIcon fontSize="small" sx={{ ml: 1 }} />
+                    <Trans>Open windy.com</Trans>
+                    <OpenInNewIcon sx={{ ml: 1, fontSize: 20 }} />
                   </MenuItem>
                 </>
               )}
@@ -431,15 +463,15 @@ export function WorkspaceSidebar({
           <Tooltip
             title={
               satelliteMode === 'mosaic'
-                ? 'Return to individual Sentinel scenes'
-                : 'Switch to Sentinel Mosaic'
+                ? t`Return to individual Sentinel scenes`
+                : t`Switch to Sentinel Mosaic`
             }
           >
             <ToggleButton
               size="small"
               value="mosaic"
               selected={satelliteMode === 'mosaic'}
-              aria-label="Mosaic"
+              aria-label={t`Mosaic`}
               aria-pressed={satelliteMode === 'mosaic'}
               sx={{ gap: 0.75 }}
               onClick={() => {
@@ -448,10 +480,9 @@ export function WorkspaceSidebar({
               }}
             >
               <GridViewOutlinedIcon
-                fontSize="small"
-                sx={{ transform: 'translateY(-1px)' }}
+                sx={{ fontSize: 20, transform: 'translateY(-1px)' }}
               />
-              Mosaic
+              <Trans>Mosaic</Trans>
             </ToggleButton>
           </Tooltip>
         ) : null}
@@ -470,28 +501,18 @@ export function WorkspaceSidebar({
             <Tooltip
               title={
                 !weatherPreferencesReady
-                  ? 'Loading marker weather settings'
+                  ? t`Loading marker weather settings`
                   : weatherPreferences.weekdays.length === 0
-                    ? 'Marker weather is disabled'
-                    : 'Marker weather settings'
+                    ? t`Marker weather is disabled`
+                    : t`Marker weather settings`
               }
             >
               <Button
                 size="small"
                 color={weatherPreferences.weekdays.length === 0 ? 'inherit' : 'primary'}
                 disabled={!weatherPreferencesReady}
-                aria-label={
-                  weatherPreferencesReady
-                    ? `Marker weather settings. ${
-                        weatherPreferences.weekdays.length === 0
-                          ? 'Forecast disabled'
-                          : `Forecast days: ${markerWeatherWeekdayLabel(
-                              weatherPreferences.weekdays,
-                            )}`
-                      }`
-                    : 'Loading marker weather settings'
-                }
-                startIcon={<WbCloudyOutlinedIcon fontSize="small" />}
+                aria-label={markerWeatherSettingsLabel}
+                startIcon={<WbCloudyOutlinedIcon sx={{ fontSize: 20 }} />}
                 sx={{
                   minWidth: 0,
                   px: compactMarkersHeader ? 0 : 1,
@@ -502,15 +523,13 @@ export function WorkspaceSidebar({
                 }}
                 onClick={openWeatherSettings}
               >
-                {weatherPreferencesReady
-                  ? markerWeatherWeekdayLabel(weatherPreferences.weekdays)
-                  : ''}
+                {weatherPreferencesReady ? markerWeatherWeekdayLabel : ''}
               </Button>
             </Tooltip>
             {compactMarkersHeader ? <Box aria-hidden sx={{ flex: 1 }} /> : null}
             <Tooltip
               title={
-                canCreateMarkers ? 'Place a marker on the map' : markerCreationMessage
+                canCreateMarkers ? t`Place a marker on the map` : markerCreationMessage
               }
             >
               <span>
@@ -521,7 +540,7 @@ export function WorkspaceSidebar({
                   startIcon={<AddIcon />}
                   onClick={startMarkerPlacement}
                 >
-                  New marker
+                  <Trans>New marker</Trans>
                 </Button>
               </span>
             </Tooltip>
@@ -531,26 +550,28 @@ export function WorkspaceSidebar({
           <>
             <Tooltip
               title={
-                multiTrackMode ? 'Exit multi-track selection' : 'Select multiple tracks'
+                multiTrackMode
+                  ? t`Exit multi-track selection`
+                  : t`Select multiple tracks`
               }
             >
               <ToggleButton
                 size="small"
                 value="multi-track"
-                aria-label="Select multiple tracks"
+                aria-label={t`Select multiple tracks`}
                 selected={multiTrackMode}
                 onClick={() => {
                   void toggleMultiTrackMode();
                 }}
               >
-                <PlaylistAddCheckOutlinedIcon fontSize="small" />
+                <PlaylistAddCheckOutlinedIcon sx={{ fontSize: 20 }} />
               </ToggleButton>
             </Tooltip>
             <Tooltip
               title={
                 trailRouter === null
-                  ? 'Route planning is unavailable because map routing data is not configured'
-                  : 'Plan a route on the map'
+                  ? t`Route planning is unavailable because map routing data is not configured`
+                  : t`Plan a route on the map`
               }
             >
               <span>
@@ -561,18 +582,16 @@ export function WorkspaceSidebar({
                   startIcon={<AltRouteOutlinedIcon />}
                   onClick={startRoutePlan}
                 >
-                  Plan route
+                  <Trans>Plan route</Trans>
                 </Button>
               </span>
             </Tooltip>
             <TrackSortControl onTrackSortChange={onTrackSortChange} />
           </>
-        ) : (
-          definition.actions
-        )}
+        ) : null}
         {fullWidth ? (
           <IconButton
-            aria-label="Show map"
+            aria-label={t`Show map`}
             sx={{
               gridColumn: compactMarkersHeader ? 2 : undefined,
               gridRow: compactMarkersHeader ? 1 : undefined,

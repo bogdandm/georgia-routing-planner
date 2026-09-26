@@ -25,7 +25,7 @@ describe('parseCoordinateQuery', () => {
     });
     expect(parseCoordinateQuery('120, 41')).toMatchObject({
       status: 'invalid',
-      message: 'Coordinates are outside valid map bounds.',
+      code: 'out-of-bounds',
     });
     expect(parseCoordinateQuery('lon: 120, lat: 41')).toMatchObject({
       status: 'valid',
@@ -34,8 +34,9 @@ describe('parseCoordinateQuery', () => {
   });
 
   it('rejects out-of-range coordinate-shaped input', () => {
-    expect(parseCoordinateQuery('lat: 91, lon: 44')).toMatchObject({
+    expect(parseCoordinateQuery('lat: 91, lon: 44')).toEqual({
       status: 'invalid',
+      code: 'out-of-bounds',
     });
     expect(parseCoordinateQuery('Tbilisi')).toEqual({ status: 'not-coordinate' });
   });

@@ -1,4 +1,5 @@
 import {
+  I18nProvider,
   ThemeProvider,
   act,
   fireEvent,
@@ -17,6 +18,7 @@ import {
   mapLayerStore,
   setSatelliteSearchAnchor,
   activateAppLocale,
+  appI18n,
   OperationalStatus,
   useUiStore,
   appColors,
@@ -38,6 +40,18 @@ import {
   type UserDataService,
   type UserDataSnapshot,
 } from '@test/helpers/workspaceShellTestSupport';
+
+function renderOperationalStatus() {
+  return render(
+    <I18nProvider i18n={appI18n}>
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <OperationalStatus />
+        </ThemeProvider>
+      </RuntimeServicesProvider>
+    </I18nProvider>,
+  );
+}
 
 describe('WorkspaceShell', () => {
   setupWorkspaceShellTest();
@@ -798,10 +812,13 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Search images' }));
 
     expect(
-      await screen.findAllByText(
+      await screen.findByText(
         'Earth Search is rate limiting requests. Wait and try again.',
       ),
-    ).toHaveLength(2);
+    ).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Sentinel imagery search failed. Try again.',
+    );
     expect(screen.getByRole('button', { name: 'Search images' })).toBeEnabled();
   });
 
@@ -996,7 +1013,7 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Open settings' }));
+    await user.click(screen.getByRole('button', { name: 'Открыть настройки' }));
 
     expect(screen.getByRole('heading', { name: 'Настройки' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Язык' })).toHaveTextContent('Русский');
@@ -1156,31 +1173,24 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
   });
 
-  it('opens the complete current map error from the lightweight status line', async () => {
+  it('opens the localized generic map error from the lightweight status line', async () => {
     const user = userEvent.setup();
     mapLayerStore.setState({
       errorMessage:
         'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
     });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
     const statusButton = await screen.findByRole('button', {
       name: 'Show current error details',
     });
-    await user.hover(
-      screen.getByLabelText(
-        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
-      ),
-    );
+    await user.hover(screen.getByText('A map layer update failed. Try again.'));
     expect(await screen.findByRole('tooltip')).toHaveTextContent(
-      'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+      'A map layer update failed. Try again.',
     );
+    expect(
+      screen.queryByText(/renderer rejected these stretch values/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveStyle({
       backgroundColor: 'rgba(255, 255, 255, 0.42)',
     });
@@ -1188,7 +1198,7 @@ describe('WorkspaceShell', () => {
 
     expect(screen.getByText('Current map error')).toBeVisible();
     expect(
-      screen.getAllByText(/renderer rejected these stretch values/i).at(-1),
+      screen.getAllByText('A map layer update failed. Try again.').at(-1),
     ).toBeVisible();
   });
 
@@ -1381,13 +1391,7 @@ describe('WorkspaceShell', () => {
       ...new FakeMapFacade().snapshot,
       lifecycle: 'ready',
     });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
     expect(screen.getByText('Ready')).toBeVisible();
     expect(
@@ -1405,7 +1409,7 @@ describe('WorkspaceShell', () => {
       });
     });
     expect(screen.getByLabelText('Terrain compute queue state')).toHaveTextContent(
-      'Terrain worker · queue 4/32 · 1 active',
+      'Terrain worker · 4/32 queued · 1 task active',
     );
   });
 
@@ -1424,16 +1428,10 @@ describe('WorkspaceShell', () => {
         renderProgress: { renderedSceneCount: 2, totalSceneCount: 8 },
       },
     });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Rendering Mosaic images · 2/8',
+      '2 of 8 Mosaic images rendered',
     );
     expect(
       screen.getByRole('progressbar', { name: 'Rendering Mosaic images' }),
@@ -1453,15 +1451,11 @@ describe('WorkspaceShell', () => {
         renderProgress: { loadedSourceCount: 1, totalSourceCount: 3 },
       },
     });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
-    expect(screen.getByRole('status')).toHaveTextContent('Rendering weather map · 1/3');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '1 of 3 weather map sources rendered',
+    );
     const progress = screen.getByRole('progressbar', {
       name: 'Rendering weather map',
     });
@@ -1474,13 +1468,7 @@ describe('WorkspaceShell', () => {
       lifecycle: 'ready',
     });
     mapLayerStore.setState({ automaticAlternativeProviderState: 'active' });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
     expect(screen.queryByText('Ready')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -1495,13 +1483,7 @@ describe('WorkspaceShell', () => {
       message: 'The satellite imagery renderer is rate-limiting requests.',
     });
     mapLayerStore.setState({ automaticAlternativeProviderState: 'switching' });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
     expect(screen.getByRole('status')).toHaveTextContent(
       'TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery.',
@@ -1517,17 +1499,12 @@ describe('WorkspaceShell', () => {
       lifecycle: 'fatal',
       message: 'The browser lost the WebGL context.',
     });
-    render(
-      <RuntimeServicesProvider services={services}>
-        <ThemeProvider theme={createAppTheme()}>
-          <OperationalStatus />
-        </ThemeProvider>
-      </RuntimeServicesProvider>,
-    );
+    renderOperationalStatus();
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'The browser lost the WebGL context.',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('The map could not be loaded.');
+    expect(
+      screen.queryByText('The browser lost the WebGL context.'),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

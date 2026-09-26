@@ -1,4 +1,4 @@
-import { useLingui } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import MenuOutlinedIcon from '@mui/icons-material/MenuOutlined';
@@ -51,8 +51,13 @@ import {
 import { RoutePlanStatus } from '@/presentation/tracks/RoutePlanControls';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
+/* eslint-disable -- CSS queries, identifiers, events, and diagnostics are machine data. */
 const smartphoneViewportQuery = '(width < 900px)';
 const auxiliaryOverlayViewportQuery = '(width < 1900px)';
+const desktopBreakpoint = 'xl' as const;
+const hashChangeEvent = 'hashchange';
+const popStateEvent = 'popstate';
+const mobileWorkspaceId = 'mobile-workspace';
 const contextualSidebarWidths = { xs: 420, xl: 464 } as const;
 
 interface WorkspaceShellProps {
@@ -73,9 +78,10 @@ const mapCameraMargin = 56;
 function ControlledFailure(): never {
   throw new Error('Controlled Phase 0 component failure.');
 }
+/* eslint-enable */
 
 function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const locale = resolveAppLocale(null, [i18n.locale]);
   const {
     database,
@@ -116,7 +122,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const contextualSidebarRef = useRef<HTMLDivElement>(null);
   const aboutTriggerRef = useRef<HTMLButtonElement>(null);
   const theme = useTheme();
-  const contextualSidebarWidth = useMediaQuery(theme.breakpoints.up('xl'))
+  const contextualSidebarWidth = useMediaQuery(theme.breakpoints.up(desktopBreakpoint))
     ? contextualSidebarWidths.xl
     : contextualSidebarWidths.xs;
   const getNavigationPadding = useCallback((): MapFitPadding | undefined => {
@@ -173,6 +179,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
+  /* eslint-disable -- Track-detail keys are internal state identity. */
   const activeTrackKey =
     activeTrack === null
       ? null
@@ -182,6 +189,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           ? `route-plan:${activeTrack.id}`
           : `saved:${activeTrack.summary.id}`;
   const trackDetailsKey = multiTrackMode ? 'multi-track' : activeTrackKey;
+  /* eslint-enable */
   const mobileTrackDetailsExpanded =
     trackDetailsKey !== null && mobileTrackDetailsExpandedKey === trackDetailsKey;
   const activeTrackPreparing =
@@ -231,11 +239,11 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       if (tab !== null) setActiveTab(tab);
     };
     restoreTabFromUrl();
-    window.addEventListener('hashchange', restoreTabFromUrl);
-    window.addEventListener('popstate', restoreTabFromUrl);
+    window.addEventListener(hashChangeEvent, restoreTabFromUrl);
+    window.addEventListener(popStateEvent, restoreTabFromUrl);
     return () => {
-      window.removeEventListener('hashchange', restoreTabFromUrl);
-      window.removeEventListener('popstate', restoreTabFromUrl);
+      window.removeEventListener(hashChangeEvent, restoreTabFromUrl);
+      window.removeEventListener(popStateEvent, restoreTabFromUrl);
     };
   }, [setActiveTab]);
 
@@ -449,9 +457,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       </Box>
 
       <IconButton
-        aria-controls="mobile-workspace"
+        aria-controls={mobileWorkspaceId}
         aria-expanded={mobileWorkspaceOpen}
-        aria-label="Open workspace"
+        aria-label={t`Open workspace`}
         onClick={() => {
           setMobileWorkspaceOpen(true);
         }}
@@ -493,7 +501,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             <TextField
               fullWidth
               size="small"
-              label="Track name"
+              label={t`Track name`}
               value={activeTrack.name}
               slotProps={{ htmlInput: { maxLength: 200 } }}
               onChange={(event) => {
@@ -511,17 +519,17 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               onClick={() => void savePreview()}
               sx={{ flexShrink: 0 }}
             >
-              Save
+              <Trans>Save</Trans>
             </Button>
           </Stack>
         ) : null}
         <ButtonBase
           aria-label={
             multiTrackDetailsExist
-              ? 'Expand multiple track details'
+              ? t`Expand multiple track details`
               : activeTrack?.kind === 'preview'
-                ? 'Expand unsaved track details'
-                : 'Expand track details'
+                ? t`Expand unsaved track details`
+                : t`Expand track details`
           }
           onClick={() => {
             if (trackDetailsKey !== null) {
@@ -547,7 +555,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               sx={{ alignItems: 'center' }}
             >
               <CircularProgress size={18} />
-              <Typography variant="body2">Preparing terrain and elevation…</Typography>
+              <Typography variant="body2">
+                <Trans>Preparing terrain and elevation…</Trans>
+              </Typography>
             </Stack>
           ) : smartphoneViewport &&
             activeTrack?.kind === 'route-plan' &&
@@ -585,10 +595,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   color: 'action.active',
                 }}
               >
-                <KeyboardArrowUpIcon fontSize="small" />
+                <KeyboardArrowUpIcon sx={{ fontSize: 20 }} />
               </Box>
               <Typography variant="body2" color="text.secondary">
-                Click the map to choose the route start and destination.
+                <Trans>Click the map to choose the route start and destination.</Trans>
               </Typography>
             </Stack>
           ) : activeTrackMetrics !== null ? (
@@ -603,7 +613,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
 
       <Box
         ref={navigationRef}
-        id={smartphoneViewport ? 'mobile-workspace' : undefined}
+        id={smartphoneViewport ? mobileWorkspaceId : undefined}
         aria-hidden={smartphoneViewport && !mobileWorkspaceOpen}
         sx={{
           position: 'absolute',
@@ -820,9 +830,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           />
         </Box>
         {!smartphoneViewport && !navigationCollapsed ? (
-          <Tooltip title="Hide navigation" placement="right">
+          <Tooltip title={t`Hide navigation`} placement="right">
             <IconButton
-              aria-label="Hide navigation"
+              aria-label={t`Hide navigation`}
               data-testid="navigation-collapse-toggle"
               onClick={() => {
                 handleNavigationCollapsedChange(true);
@@ -880,7 +890,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                 },
               }}
             >
-              <ChevronLeftOutlinedIcon fontSize="small" />
+              <ChevronLeftOutlinedIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
         ) : null}

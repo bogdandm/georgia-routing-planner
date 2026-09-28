@@ -412,18 +412,28 @@ model.
 
 Startup restores the local `sync.enabled` preference and account session independently.
 Exactly one worker run starts after both are resolved when the user is authenticated and
-sync is enabled. Further runs occur only after an explicit local track mutation,
-enabling sync, an explicit sign-in, or **Sync now**; authentication refresh and focus
-notifications update account state without synchronizing. Disabling sync or signing out
-aborts an active run. The main thread passes the authenticated user ID only to namespace
-browser-local preparation; the access token remains the sole remote authorization
-credential.
+sync is enabled. Further runs occur only after an explicit local track, folder, or
+marker mutation, enabling sync, an explicit sign-in, or **Sync now**; authentication
+refresh and focus notifications update account state without synchronizing. Disabling
+sync or signing out aborts an active run. The main thread passes the authenticated user
+ID only to namespace browser-local preparation; the access token remains the sole remote
+authorization credential.
 
 Before any remote status, snapshot, or mutation, the worker records `sync.user-id` in
 the same IndexedDB transaction that prepares local pairs. Each local sync state stores
 the canonical `contentHash`, stable `lineageHash`, and GRPT `geometryVersion`. A new,
 malformed, or different owner resets all remembered remote revisions and tombstones to
 pending upserts while retaining valid browser tracks.
+
+Folder reconciliation runs before track reconciliation so every downloaded track can
+validate its placement against the merged folder set. Pending folder deletes and upserts
+use exact base revisions and bounded conflict retries. A second owner-only snapshot
+becomes canonical; remote folder creation or a higher revision replaces the local
+record, while a known clean folder missing remotely is deleted locally. The merge
+normalizes positions to one contiguous flat order. Folder deletion moves affected tracks
+to **Unfiled** and marks their metadata dirty before the track pass publishes placement.
+Remote track metadata refers only to folder IDs available after this merge; unknown IDs
+become unfiled rather than creating implicit folders.
 
 Each snapshot is grouped by lineage before reconciliation. A ready GRPT v2 member is the
 lineage head even when a v1 predecessor has a higher revision; otherwise the highest
@@ -440,14 +450,14 @@ decision: selected tracks are deleted locally, while unselected tracks become pe
 upserts and upload again. Only explicit local deletes complete silently. Invalid or
 network failures preserve valid local data and pending work.
 
-## Track synchronization trust boundary
+## User-data synchronization trust boundary
 
-The repository defines one authenticated `track-sync` Edge Function. Supabase performs
-its platform JWT check, and `@supabase/server` in `auth: "user"` mode supplies verified
-claims and the platform-provided admin client. The function derives `user_id` only from
-`userClaims.id`. It rejects client-supplied identity, object paths, quota counters,
-unknown fields, oversized bodies, and malformed protocol values. No privileged key is
-stored in the browser or this repository.
+The repository defines one authenticated `track-sync` Edge Function for tracks, folders,
+and saved markers. Supabase performs its platform JWT check, and `@supabase/server` in
+`auth: "user"` mode supplies verified claims and the platform-provided admin client. The
+function derives `user_id` only from `userClaims.id`. It rejects client-supplied
+identity, object paths, quota counters, unknown fields, oversized bodies, and malformed
+protocol values. No privileged key is stored in the browser or this repository.
 
 Uploads use bounded multipart requests containing `action=upload`, `baseRevision`,
 `contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry

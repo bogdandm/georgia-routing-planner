@@ -50,11 +50,7 @@ import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/Satelli
 import { useSatelliteMosaic } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
-import {
-  TracksPanel,
-  TrackSortControl,
-  useTracksWorkspace,
-} from '@/presentation/tracks/TracksWorkspace';
+import { TracksPanel, useTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { UserPanel } from '@/presentation/user/UserPanel';
 import {
   WeatherPanel,
@@ -586,7 +582,6 @@ export function WorkspaceSidebar({
                 </Button>
               </span>
             </Tooltip>
-            <TrackSortControl onTrackSortChange={onTrackSortChange} />
           </>
         ) : null}
         {fullWidth ? (
@@ -617,7 +612,10 @@ export function WorkspaceSidebar({
             height: '100%',
           }}
         >
-          <TracksPanel onOpenActiveDetails={onOpenActiveTrackDetails} />
+          <TracksPanel
+            onOpenActiveDetails={onOpenActiveTrackDetails}
+            onTrackSortChange={onTrackSortChange}
+          />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
           {satelliteMode === 'mosaic' ? (

@@ -47,6 +47,23 @@ import {
   type LocalTrackSummary,
 } from '@test/helpers/workspaceShellTestSupport';
 
+async function createTrackFolder(
+  id: string,
+  name: string,
+  iconKey: 'folder' | 'hiking' = 'folder',
+) {
+  const timestamp = '2026-07-22T10:00:00.000Z';
+  return services.database.createTrackFolder({
+    schemaVersion: 1,
+    id,
+    name,
+    normalizedName: name.toLocaleLowerCase('en'),
+    iconKey,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+}
+
 describe('WorkspaceShell', () => {
   setupWorkspaceShellTest();
 
@@ -159,6 +176,159 @@ describe('WorkspaceShell', () => {
         'Bravo',
       ]);
     });
+  });
+
+  it('renders flat folders including empty folders and keeps Unfiled last', async () => {
+    await createTrackFolder('folder:day-hikes', 'Day hikes', 'hiking');
+    const imported = savedTrackSummary('local:imported', 'Imported trail');
+    const unfiled = {
+      ...savedTrackSummary('local:unfiled', 'Loose trail'),
+      folderId: null,
+    };
+    await services.database.saveLocalTrack(imported, savedTrackContent(imported.id));
+    await services.database.saveLocalTrack(unfiled, savedTrackContent(unfiled.id));
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    const list = await screen.findByRole('list', { name: 'Saved tracks' });
+    const imports = within(list).getByRole('region', { name: 'Imports (1)' });
+    const dayHikes = within(list).getByRole('region', { name: 'Day hikes (0)' });
+    const loose = within(list).getByRole('region', { name: 'Unfiled (1)' });
+    expect(imports.compareDocumentPosition(dayHikes)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(dayHikes.compareDocumentPosition(loose)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(within(dayHikes).getByText('Drop tracks here')).toBeVisible();
+    expect(
+      within(imports).getByRole('button', { name: /^Imported trail/u }),
+    ).toBeVisible();
+    expect(within(loose).getByRole('button', { name: /^Loose trail/u })).toBeVisible();
+  });
+
+  it('creates, edits, and confirms deletion of a track folder', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Create folder' }));
+    const createDialog = screen.getByRole('dialog', { name: 'Create folder' });
+    await user.type(within(createDialog).getByLabelText('Folder name'), 'Weekend');
+    await user.click(within(createDialog).getByRole('button', { name: 'Save' }));
+
+    const list = await screen.findByRole('list', { name: 'Saved tracks' });
+    const created = await within(list).findByRole('region', {
+      name: 'Weekend (0)',
+    });
+    await user.click(within(created).getByRole('button', { name: 'Edit Weekend' }));
+    const editDialog = screen.getByRole('dialog', { name: 'Edit folder' });
+    const nameInput = within(editDialog).getByLabelText('Folder name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Long weekends');
+    await user.click(
+      within(editDialog).getByRole('button', {
+        name: 'Choose folder icon. Current: Folder',
+      }),
+    );
+    await user.click(screen.getByRole('tab', { name: 'Activities' }));
+    await user.click(screen.getByRole('option', { name: 'Choose Hiking icon' }));
+    await user.click(within(editDialog).getByRole('button', { name: 'Save' }));
+
+    const updated = await within(list).findByRole('region', {
+      name: 'Long weekends (0)',
+    });
+    const stored = (await services.database.listTrackFolders()).find(
+      (folder) => folder.name === 'Long weekends',
+    );
+    expect(stored).toMatchObject({ iconKey: 'hiking' });
+    await user.click(
+      within(updated).getByRole('button', { name: 'Edit Long weekends' }),
+    );
+    const deleteDialog = screen.getByRole('dialog', { name: 'Edit folder' });
+    await user.click(
+      within(deleteDialog).getByRole('button', { name: 'Delete folder' }),
+    );
+    await user.click(
+      within(deleteDialog).getByRole('button', { name: 'Confirm delete' }),
+    );
+    await waitFor(() => {
+      expect(
+        within(list).queryByRole('region', { name: 'Long weekends (0)' }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('moves tracks and reorders folders with keyboard drag controls', async () => {
+    const summary = savedTrackSummary('local:keyboard-drag', 'Keyboard trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    const destination = await createTrackFolder('folder:day-hikes', 'Day hikes');
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const folderId = this.dataset.folderDrop ?? this.dataset.folderOrder;
+      const top = folderId === 'imports' ? 0 : folderId === destination.id ? 100 : 200;
+      return new DOMRect(0, top, 320, 64);
+    });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const moveTrack = await screen.findByRole('button', {
+      name: 'Move Keyboard trail',
+    });
+
+    moveTrack.focus();
+    await user.keyboard('[Space]');
+    await user.keyboard('[ArrowDown]');
+    expect(await screen.findByText('Over Day hikes.')).toBeVisible();
+    await user.keyboard('[Space]');
+
+    await waitFor(async () => {
+      const moved = (await services.database.listLocalTracks()).find(
+        (track) => track.id === summary.id,
+      );
+      expect(moved?.folderId).toBe(destination.id);
+    });
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Move Keyboard trail' }),
+    );
+    const list = screen.getByRole('list', { name: 'Saved tracks' });
+    expect(
+      within(within(list).getByRole('region', { name: 'Day hikes (1)' })).getByRole(
+        'button',
+        { name: /^Keyboard trail/u },
+      ),
+    ).toBeVisible();
+
+    const reorderImports = screen.getByRole('button', { name: 'Reorder Imports' });
+    reorderImports.focus();
+    await user.keyboard('[Space]');
+    expect(reorderImports).toHaveAttribute('aria-pressed', 'true');
+    await user.keyboard('[ArrowDown]');
+    expect(await screen.findByText('Over Day hikes.')).toBeVisible();
+    await user.keyboard('[Space]');
+
+    await waitFor(async () => {
+      expect(
+        (await services.database.listTrackFolders()).map((folder) => folder.id),
+      ).toEqual([destination.id, 'imports']);
+    });
+    expect(document.activeElement).toBe(reorderImports);
+  });
+
+  it('opens the folder editor full-screen on a phone viewport', async () => {
+    mockViewportWidth(599);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(await screen.findByRole('button', { name: 'Create folder' }));
+
+    expect(screen.getByRole('dialog', { name: 'Create folder' })).toHaveClass(
+      'MuiDialog-paperFullScreen',
+    );
   });
 
   it('falls back to newest tracks and reacts to live map-center updates', async () => {
@@ -2143,7 +2313,10 @@ describe('WorkspaceShell', () => {
     );
     await waitFor(() => {
       expect(
-        screen.queryByRole('list', { name: 'Saved tracks' }),
+        within(screen.getByRole('list', { name: 'Saved tracks' })).queryByRole(
+          'button',
+          { name: /^Final trail/u },
+        ),
       ).not.toBeInTheDocument();
     });
     await waitFor(() => {

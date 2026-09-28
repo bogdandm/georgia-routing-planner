@@ -12,3 +12,165 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#. js-lingui-id: PUTX8o
+#: src/presentation/tracks/TracksWorkspace.tsx:3420
+msgid "{sectionName} tracks"
+msgstr "{sectionName} tracks"
+
+#. js-lingui-id: dEgA5A
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:156
+msgid "Cancel"
+msgstr "Cancel"
+
+#. js-lingui-id: UsGJLu
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:127
+msgid "Choose folder icon"
+msgstr "Choose folder icon"
+
+#. js-lingui-id: mgJ1oe
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:148
+msgid "Confirm delete"
+msgstr "Confirm delete"
+
+#. js-lingui-id: Oo7YVo
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:102
+#: src/presentation/tracks/TracksWorkspace.tsx:3685
+#: src/presentation/tracks/TracksWorkspace.tsx:3689
+msgid "Create folder"
+msgstr "Create folder"
+
+#. js-lingui-id: NbFtQm
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:150
+msgid "Delete folder"
+msgstr "Delete folder"
+
+#. js-lingui-id: AHjV65
+#: src/presentation/tracks/TracksWorkspace.tsx:3415
+msgid "Drop tracks here"
+msgstr "Drop tracks here"
+
+#. js-lingui-id: N6j2JH
+#. placeholder {0}: folder.name
+#: src/presentation/tracks/TracksWorkspace.tsx:3395
+#: src/presentation/tracks/TracksWorkspace.tsx:3398
+msgid "Edit {0}"
+msgstr "Edit {0}"
+
+#. js-lingui-id: uPHscS
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:102
+msgid "Edit folder"
+msgstr "Edit folder"
+
+#. js-lingui-id: cqQyPB
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:109
+msgid "Folder name"
+msgstr "Folder name"
+
+#. js-lingui-id: tWKSiS
+#: src/presentation/tracks/TracksWorkspace.tsx:3647
+msgid "Item dropped."
+msgstr "Item dropped."
+
+#. js-lingui-id: Z9u6zw
+#. placeholder {0}: summary.name
+#: src/presentation/tracks/TracksWorkspace.tsx:3165
+#: src/presentation/tracks/TracksWorkspace.tsx:3170
+msgid "Move {0}"
+msgstr "Move {0}"
+
+#. js-lingui-id: VZdoAN
+#: src/presentation/tracks/TracksWorkspace.tsx:3650
+msgid "Move cancelled."
+msgstr "Move cancelled."
+
+#. js-lingui-id: 9GH1hZ
+#: src/presentation/tracks/TracksWorkspace.tsx:3642
+msgid "Over {name}."
+msgstr "Over {name}."
+
+#. js-lingui-id: UkNN2P
+#: src/presentation/tracks/TracksWorkspace.tsx:3631
+msgid "Over Unfiled."
+msgstr "Over Unfiled."
+
+#. js-lingui-id: NVQqOC
+#. placeholder {0}: (data.folder as TrackFolder).name
+#: src/presentation/tracks/TracksWorkspace.tsx:3622
+msgid "Picked up folder {0}."
+msgstr "Picked up folder {0}."
+
+#. js-lingui-id: Y0Hloc
+#: src/presentation/tracks/TracksWorkspace.tsx:3627
+msgid "Picked up item."
+msgstr "Picked up item."
+
+#. js-lingui-id: cKK6tl
+#. placeholder {0}: (data.summary as LocalTrackSummary).name
+#: src/presentation/tracks/TracksWorkspace.tsx:3625
+msgid "Picked up track {0}."
+msgstr "Picked up track {0}."
+
+#. js-lingui-id: KQYkQd
+#: src/presentation/tracks/TracksWorkspace.tsx:3616
+msgid "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
+msgstr "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
+
+#. js-lingui-id: 2BPVq8
+#. placeholder {0}: folder.name
+#: src/presentation/tracks/TracksWorkspace.tsx:3369
+#: src/presentation/tracks/TracksWorkspace.tsx:3373
+msgid "Reorder {0}"
+msgstr "Reorder {0}"
+
+#. js-lingui-id: tfDRzk
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:159
+msgid "Save"
+msgstr "Save"
+
+#. js-lingui-id: BBAHO5
+#: src/presentation/tracks/TracksWorkspace.tsx:3717
+msgid "Saved tracks"
+msgstr "Saved tracks"
+
+#. js-lingui-id: xdliLJ
+#: src/presentation/tracks/TracksWorkspace.tsx:655
+msgid "Saved tracks and folders could not be loaded from this browser."
+msgstr "Saved tracks and folders could not be loaded from this browser."
+
+#. js-lingui-id: bePA-q
+#: src/presentation/tracks/TracksWorkspace.tsx:677
+msgid "The folder could not be created."
+msgstr "The folder could not be created."
+
+#. js-lingui-id: vvXfCA
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:85
+#: src/presentation/tracks/TracksWorkspace.tsx:736
+msgid "The folder could not be deleted."
+msgstr "The folder could not be deleted."
+
+#. js-lingui-id: uDPJ21
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:65
+msgid "The folder could not be saved."
+msgstr "The folder could not be saved."
+
+#. js-lingui-id: LxqeOb
+#: src/presentation/tracks/TracksWorkspace.tsx:702
+msgid "The folder could not be updated."
+msgstr "The folder could not be updated."
+
+#. js-lingui-id: 4x2rxR
+#: src/presentation/tracks/TracksWorkspace.tsx:804
+msgid "The folder order could not be saved."
+msgstr "The folder order could not be saved."
+
+#. js-lingui-id: aukFge
+#: src/presentation/tracks/TracksWorkspace.tsx:780
+msgid "The track could not be moved."
+msgstr "The track could not be moved."
+
+#. js-lingui-id: u4NvoA
+#: src/presentation/tracks/TracksWorkspace.tsx:3316
+#: src/presentation/tracks/TracksWorkspace.tsx:3640
+msgid "Unfiled"
+msgstr "Unfiled"

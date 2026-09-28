@@ -12,3 +12,56 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#. js-lingui-id: JsuAUm
+#: src/presentation/markers/MarkerIconPicker.tsx:116
+msgid "{label}. Current: {selectedLabel}"
+msgstr "{label}. Current: {selectedLabel}"
+
+#. js-lingui-id: CbLlnq
+#: src/presentation/markers/MarkerIconPicker.tsx:231
+msgid "Choose {iconLabel} icon"
+msgstr "Choose {iconLabel} icon"
+
+#. js-lingui-id: dWB6jb
+#: src/presentation/markers/MarkerIconPicker.tsx:209
+msgid "Choose Folder icon"
+msgstr "Choose Folder icon"
+
+#. js-lingui-id: kNqMMd
+#: src/presentation/markers/MarkerIconPicker.tsx:98
+#: src/presentation/markers/MarkerIconPicker.tsx:206
+msgid "Folder"
+msgstr "Folder"
+
+#. js-lingui-id: mcmuCe
+#: src/presentation/markers/MarkerIconPicker.tsx:195
+msgid "Icons"
+msgstr "Icons"
+
+#. js-lingui-id: buqOJj
+#. placeholder {0}: rowIndex + 1
+#: src/presentation/markers/MarkerIconPicker.tsx:171
+msgid "Marker icon categories row {0}"
+msgstr "Marker icon categories row {0}"
+
+#. js-lingui-id: IpuMS3
+#: src/presentation/markers/MarkerIconPicker.tsx:253
+msgid "No matching icons"
+msgstr "No matching icons"
+
+#. js-lingui-id: LglrR3
+#: src/presentation/markers/MarkerIconPicker.tsx:252
+msgid "No recently used icons yet"
+msgstr "No recently used icons yet"
+
+#. js-lingui-id: hVMs0B
+#. placeholder {0}: markerIconCatalog.length + Number(allowFolder)
+#: src/presentation/markers/MarkerIconPicker.tsx:147
+msgid "Search {0} icons"
+msgstr "Search {0} icons"
+
+#. js-lingui-id: k8pi2I
+#: src/presentation/markers/MarkerIconPicker.tsx:146
+msgid "Search icons"
+msgstr "Search icons"

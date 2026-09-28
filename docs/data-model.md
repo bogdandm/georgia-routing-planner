@@ -17,12 +17,14 @@ contracts when each feature is implemented.
 
 1. The GitHub repository and its GitHub Pages output are authoritative for the curated
    catalog. The deployed application can read these assets but cannot edit them.
-2. IndexedDB is authoritative for retained local tracks, personal folders, saved
-   markers, and durable preferences. Track sync is optional: local saves never depend on
-   the network, and only the elevation-free canonical track copy and synchronization
-   metadata cross the boundary.
+2. IndexedDB is authoritative for retained local tracks, flat personal folders, saved
+   markers, and durable preferences. Synchronization is optional: local saves never
+   depend on the network. Track geometry and metadata, folder records and placement,
+   marker records, and their synchronization metadata cross the boundary only after the
+   user explicitly enables synchronization.
 3. Supabase Postgres and private Storage are authoritative for a signed-in user's remote
-   track revisions, compressed-byte usage, and immutable synchronized geometry objects.
+   track revisions and geometry, folder records, marker records, and compressed-byte
+   usage.
 4. STAC, imagery, OSM, and DEM providers are authoritative for online source data.
    Browser query/cache state is disposable and never becomes the source of truth.
 5. Zustand and component state hold transient interaction and request state only.
@@ -81,12 +83,12 @@ flowchart LR
 | Curated catalog manifest, track summaries, categories, memberships, previews, and validation report | Generated GitHub Pages assets under `public/catalog/`        | Validated static queries and an in-memory viewport index | Versioned, read-only, fetched from the application origin                        |
 | Curated full GPX                                                                                    | Generated GitHub Pages assets under `public/tracks/`         | Parsed only for an opened/downloaded track               | Loaded on demand; never all fetched at startup                                   |
 | Local GPX before retention                                                                          | Browser memory from a file picker or drop                    | Validated import preview                                 | Discarded unless the user explicitly retains it                                  |
-| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; private to this browser                            |
+| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; summary owns nullable folder placement             |
 | Synchronized track metadata and revision                                                            | Supabase Postgres `track_records`                            | User-owned remote track record                           | Readable only by its owner; writes pass through the authenticated Edge Function  |
 | Synchronized compressed geometry                                                                    | Private Supabase Storage `track-geometries`                  | GZIP-compressed canonical GRPT bytes                     | Owner-readable; server writes and hard-deletes immutable per-upload objects      |
 | Synchronized geometry quota                                                                         | Supabase Postgres `user_track_usage`                         | Used, reserved, and next-revision counters               | 8 MiB compressed bytes per user; mutations serialize on this row                 |
-| Personal folders and track placement                                                                | Browser IndexedDB                                            | Folder tree and one personal placement per track         | May reference curated or local track IDs; cannot modify static catalog files     |
-| Unsaved route plans                                                                                 | Browser memory                                               | Ordered waypoints, accepted leg geometry, and metrics    | Discarded on close or reload; Save converts the plan into a retained local track |
+| Flat personal folders                                                                               | IndexedDB `trackFolders`; Supabase `track_folder_records`    | `TrackFolder` plus browser-local `FolderSyncState`       | Owner-only; ordered, revisioned, and limited to 1,000 remote records             |
+| Unsaved route plans                                                                                 | Browser memory                                               | Ordered waypoints, accepted leg geometry, and metrics    | Discarded on close or reload; Save converts the plan into an unfiled local track |
 | Saved markers                                                                                       | Browser IndexedDB                                            | Versioned marker records mapped to domain objects        | Private until explicit file export                                               |
 | Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                                  |
 | Active selection, edit state, filters, sorting, layer instances                                     | Browser memory/Zustand/components                            | Serializable transient state plus map facade state       | Lost on reload unless a specific preference is deliberately persisted            |
@@ -106,6 +108,13 @@ metadata, a server revision, `reserved | ready` state, one unique object path,
 compressed byte count, timestamps, and a temporary reservation expiry.
 `user_track_usage` stores non-negative used and reserved byte counters plus the next
 per-user revision. Neither table has a `deleted_at` column or another tombstone state.
+
+`track_folder_records` uses `(user_id, folder_id)` as its primary key. Its validated
+payload contains the stable folder ID, normalized name, one folder-or-marker icon key,
+zero-based position, and creation/update timestamps. A positive per-user revision
+serializes optimistic mutations. Browser roles receive owner-only `SELECT`; folder
+upsert and hard-delete operations run only through security-definer RPCs invoked by the
+authenticated Edge Function. The server caps each owner at 1,000 folders.
 
 Only `authenticated` `SELECT` is granted on these tables, with RLS constrained by
 `auth.uid() = user_id`. Browser roles cannot write either table or Storage. The private
@@ -296,18 +305,26 @@ geometry; migrated rows may temporarily lack that hash. The content row owns exa
 normalized source-point projection and may retain local derived elevation, which is not
 part of the canonical identity. Original file bytes are discarded after parsing.
 
+`trackFolders` stores a flat ordered list. Folder placement remains in
+`LocalTrackSummary.folderId`; it is nullable rather than a separate join record. The
+stable `folder:imports` record is provisioned when an import is saved. Saving a route or
+upgrading a pre-folder database leaves the summary unfiled. Folder deletion and order
+compaction update every affected summary and folder in one IndexedDB transaction.
+
 `trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
 stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,
-or `delete` intent. A save, metadata change, or deletion updates the affected track rows
-and queue state in one IndexedDB transaction. `sync.enabled` is a validated setting with
-default `false`; it alone permits startup or lifecycle synchronization.
+or `delete` intent. `folderSyncStates` is keyed by folder ID and stores its remote
+revision, pending `upsert | delete` intent, and monotonic local version. A track save,
+placement change, folder mutation, or deletion updates the affected domain rows and sync
+state in one IndexedDB transaction. `sync.enabled` is a validated setting with default
+`false`; it alone permits startup or lifecycle synchronization.
 
-`sync.user-id` stores the bounded opaque account identifier that owns the local
-preparation state; it is coordination metadata, never an authorization credential. On a
-missing, malformed, or changed owner, preparation retains every valid local
-summary/content pair, collapses duplicate content through the normal canonical rule,
-removes stale sync states and delete tombstones, and writes pending upserts with null
-revisions. That transaction also stores the new owner and resets `sync.usage`.
+`sync.user-id` stores the bounded opaque account identifier that owns local preparation
+state; it is coordination metadata, never an authorization credential. On a missing,
+malformed, or changed owner, preparation retains every valid local summary/content pair
+and folder, collapses duplicate track content through the normal canonical rule, removes
+stale sync states and tombstones, and writes pending upserts with null revisions. That
+transaction also stores the new owner and resets `sync.usage`.
 
 When a same-account remote deletion needs a decision, one IndexedDB transaction removes
 the selected summary/content/state rows and clears `local-tracks.latest-opened` only
@@ -542,10 +559,11 @@ are excluded from default export. Geometry requires a separate explicit opt-in.
 
 ## Deletion and consistency rules
 
-- Deleting a local track removes its content and personal placement atomically. It does
-  not affect curated assets, folders, or saved markers.
-- Removing a personal folder moves its placements to `Unfiled` unless the user chooses
-  another explicit destination. Child-folder handling requires confirmation.
+- Deleting a local track removes its content and synchronization state atomically. It
+  does not affect folders or saved markers.
+- Removing a personal folder moves every placed track to **Unfiled**, compacts the
+  remaining folder order, and records the folder deletion and track metadata changes in
+  the same transaction. Folders never have children.
 - Catalog-version replacement invalidates only derived/cache records, never user
   folders, placements, markers, or local tracks.
 - If a curated track disappears in a catalog update, its personal placement becomes an

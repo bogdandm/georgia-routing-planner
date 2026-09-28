@@ -1,3 +1,4 @@
+import { I18nProvider } from '@lingui/react';
 import { ThemeProvider } from '@mui/material';
 import {
   act,
@@ -22,6 +23,7 @@ import {
   requestMarkerCreationAt,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import {
   MarkersPanel,
   MarkerSortControl,
@@ -77,19 +79,22 @@ function renderMarkers(onMarkerSortChange?: (sort: MarkerSort) => Promise<boolea
       return Promise.resolve(true);
     });
   return render(
-    <RuntimeServicesProvider services={services}>
-      <ThemeProvider theme={createAppTheme()}>
-        <MarkersWorkspaceProvider>
-          <MarkerSortControl onMarkerSortChange={saveSort} />
-          <WeatherSettingsControl />
-          <MarkersPanel />
-        </MarkersWorkspaceProvider>
-      </ThemeProvider>
-    </RuntimeServicesProvider>,
+    <I18nProvider i18n={appI18n}>
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <MarkersWorkspaceProvider>
+            <MarkerSortControl onMarkerSortChange={saveSort} />
+            <WeatherSettingsControl />
+            <MarkersPanel />
+          </MarkersWorkspaceProvider>
+        </ThemeProvider>
+      </RuntimeServicesProvider>
+    </I18nProvider>,
   );
 }
 
 beforeEach(async () => {
+  activateAppLocale('en');
   resetMapInteractionStore();
   services = createTestServices();
   await services.database.delete();

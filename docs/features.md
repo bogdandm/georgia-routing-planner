@@ -214,15 +214,16 @@ mutation. Users can favorite a track from its list row or detail header. Saved-t
 downloads use the one-click **Download GPX** detail-header action; KML remains in the
 detail header's compact action menu. Favorites sort before other tracks, with the
 selected track sort applied independently inside every folder. Users create, rename,
-re-icon, delete, and explicitly reorder flat folders from compact controls above and
-within the track list. The icon picker offers the folder glyph plus the complete marker
-catalog. Empty folders remain visible as drop targets; **Unfiled** is always rendered
-last. Deleting a folder moves its tracks to **Unfiled**. Tracks and folders move with
-pointer, delayed touch, or keyboard drag controls; keyboard drops restore focus to the
-moved control. Nesting is unavailable. New file imports enter the single provisioned
-**Imports** folder, saved route plans remain unfiled, and records migrated from older
-browser schemas remain unfiled. Folder identity, ordering, icon, and track placement
-synchronize with the existing opt-in account data flow.
+re-icon, delete, collapse, expand, and explicitly reorder flat folders from compact
+controls above and within the track list. The icon picker offers the folder glyph plus
+the complete marker catalog. Empty folders remain visible as drop targets. Tracks
+without a folder render directly below the folder rows without another framed section.
+Deleting a folder moves its tracks there. Tracks and folders move with pointer, delayed
+touch, or keyboard drag controls; keyboard drops restore focus to the moved control.
+Nesting is unavailable. New file imports enter the single provisioned **Imports**
+folder, saved route plans remain unfiled, and migration assigns older imported tracks to
+**Imports** while leaving older saved routes unfiled. Folder identity, ordering, icon,
+and track placement synchronize with the existing opt-in account data flow.
 
 The latest opened saved track reopens after restart when its content is still valid. A
 compact local-retention notice stays pinned to the Tracks panel bottom. Catalog, tags,

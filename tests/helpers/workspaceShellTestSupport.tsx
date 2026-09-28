@@ -448,20 +448,11 @@ export const trackSortTestNames = [
 
 export function savedTrackNames(): readonly string[] {
   return within(screen.getByRole('list', { name: 'Saved tracks' }))
-    .getAllByRole('listitem')
-    .map((row) => {
-      const trackButton = within(row)
-        .getAllByRole('button')
-        .find((button) =>
-          trackSortTestNames.some((candidate) =>
-            button.textContent.startsWith(candidate),
-          ),
-        );
-      if (trackButton === undefined) throw new Error('Expected a track row button.');
-      const label = trackButton.textContent;
+    .getAllByRole('button')
+    .flatMap((button) => {
+      const label = button.textContent;
       const name = trackSortTestNames.find((candidate) => label.startsWith(candidate));
-      if (name === undefined) throw new Error(`Unknown track row label: ${label}`);
-      return name;
+      return name === undefined ? [] : [name];
     });
 }
 

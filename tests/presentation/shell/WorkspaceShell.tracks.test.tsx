@@ -178,7 +178,7 @@ describe('WorkspaceShell', () => {
     });
   });
 
-  it('renders flat folders including empty folders and keeps Unfiled last', async () => {
+  it('renders collapsible flat folders and leaves unfiled tracks below them', async () => {
     await createTrackFolder('folder:day-hikes', 'Day hikes', 'hiking');
     const imported = savedTrackSummary('local:imported', 'Imported trail');
     const unfiled = {
@@ -195,18 +195,32 @@ describe('WorkspaceShell', () => {
     const list = await screen.findByRole('list', { name: 'Saved tracks' });
     const imports = within(list).getByRole('region', { name: 'Imports (1)' });
     const dayHikes = within(list).getByRole('region', { name: 'Day hikes (0)' });
-    const loose = within(list).getByRole('region', { name: 'Unfiled (1)' });
+    const loose = within(list).getByRole('button', { name: /^Loose trail/u });
     expect(imports.compareDocumentPosition(dayHikes)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(dayHikes.compareDocumentPosition(loose)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    expect(within(list).queryByRole('region', { name: /Unfiled/u })).toBeNull();
     expect(within(dayHikes).getByText('Drop tracks here')).toBeVisible();
     expect(
       within(imports).getByRole('button', { name: /^Imported trail/u }),
     ).toBeVisible();
-    expect(within(loose).getByRole('button', { name: /^Loose trail/u })).toBeVisible();
+    expect(loose).toBeVisible();
+
+    await user.click(within(imports).getByRole('button', { name: 'Collapse Imports' }));
+    expect(
+      within(imports).queryByRole('button', { name: /^Imported trail/u }),
+    ).toBeNull();
+    const expandImports = within(imports).getByRole('button', {
+      name: 'Expand Imports',
+    });
+    expect(expandImports).toHaveAttribute('aria-expanded', 'false');
+    await user.click(expandImports);
+    expect(
+      within(imports).getByRole('button', { name: /^Imported trail/u }),
+    ).toBeVisible();
   });
 
   it('creates, edits, and confirms deletion of a track folder', async () => {

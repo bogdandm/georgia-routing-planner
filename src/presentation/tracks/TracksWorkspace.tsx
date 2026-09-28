@@ -31,7 +31,6 @@ import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -2981,8 +2980,18 @@ interface TracksPanelProps {
 }
 
 type ActiveDrag =
-  | { readonly type: 'folder'; readonly id: string; readonly name: string }
-  | { readonly type: 'track'; readonly id: string; readonly name: string };
+  | {
+      readonly type: 'folder';
+      readonly id: string;
+      readonly name: string;
+      readonly width: number;
+    }
+  | {
+      readonly type: 'track';
+      readonly id: string;
+      readonly name: string;
+      readonly width: number;
+    };
 const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
   const activeData = args.context.active?.data.current;
   if (
@@ -3119,17 +3128,17 @@ function SavedTrackRow({
         if (!deleting) setPendingDelete(false);
       }}
     >
-      <Paper
+      <Box
         ref={setNodeRef}
         component="li"
-        variant="outlined"
         className={hovered ? 'saved-track-row--hovered' : undefined}
         sx={{
           display: 'grid',
           gridTemplateColumns: 'auto minmax(0, 1fr) auto',
           alignItems: 'center',
-          opacity: draggable.isDragging ? 0.35 : 1,
-          transform: CSS.Translate.toString(draggable.transform),
+          borderBottom: 1,
+          borderColor: 'divider',
+          opacity: draggable.isDragging ? 0 : 1,
           bgcolor: selected
             ? hovered
               ? `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`
@@ -3162,20 +3171,18 @@ function SavedTrackRow({
           if (!deleting) setPendingDelete(false);
         }}
       >
-        <Tooltip title={t`Move ${summary.name}`}>
-          <IconButton
-            ref={draggable.setActivatorNodeRef}
-            className="saved-track-row-action saved-track-row-drag"
-            size="small"
-            aria-label={t`Move ${summary.name}`}
-            data-drag-focus={`track:${summary.id}`}
-            sx={{ ml: 0.5, touchAction: 'none', cursor: 'grab' }}
-            {...draggable.attributes}
-            {...draggable.listeners}
-          >
-            <DragIndicatorIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        <IconButton
+          ref={draggable.setActivatorNodeRef}
+          className="saved-track-row-action saved-track-row-drag"
+          size="small"
+          aria-label={t`Move ${summary.name}`}
+          data-drag-focus={`track:${summary.id}`}
+          sx={{ ml: 0.5, touchAction: 'none', cursor: 'grab' }}
+          {...draggable.attributes}
+          {...draggable.listeners}
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </IconButton>
         <ListItemButton
           selected={selected}
           aria-pressed={multiTrackMode ? selected : undefined}
@@ -3282,18 +3289,75 @@ function SavedTrackRow({
             </IconButton>
           </Tooltip>
         </Stack>
-      </Paper>
+      </Box>
     </ClickAwayListener>
   );
 }
 
-interface TrackFolderSectionProps {
-  readonly folder: TrackFolder | null;
+interface SavedTrackListProps {
+  readonly ariaLabel: string;
   readonly summaries: readonly LocalTrackSummary[];
+  readonly folderId: string | null;
   readonly deletingId: string | null;
   readonly active: ActiveTrack | null;
   readonly multiTrackMode: boolean;
   readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary) => void;
+  readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
+}
+
+function SavedTrackList({
+  ariaLabel,
+  summaries,
+  folderId,
+  deletingId,
+  active,
+  multiTrackMode,
+  multiTrackSelections,
+  onSelect,
+  onToggleFavorite,
+  onDelete,
+}: SavedTrackListProps) {
+  return (
+    <List disablePadding aria-label={ariaLabel}>
+      {summaries.map((summary) => {
+        const selected = multiTrackMode
+          ? multiTrackSelections.some(
+              (selection) => selection.summary.id === summary.id,
+            )
+          : active?.kind === 'saved' && active.summary.id === summary.id;
+        return (
+          <SavedTrackRow
+            key={summary.id}
+            summary={summary}
+            folderId={folderId}
+            selected={selected}
+            multiTrackMode={multiTrackMode}
+            deleting={deletingId === summary.id}
+            onSelect={() => {
+              onSelect(summary, selected);
+            }}
+            onToggleFavorite={() => {
+              onToggleFavorite(summary);
+            }}
+            onDelete={() => onDelete(summary)}
+          />
+        );
+      })}
+    </List>
+  );
+}
+
+interface TrackFolderSectionProps {
+  readonly folder: TrackFolder;
+  readonly summaries: readonly LocalTrackSummary[];
+  readonly collapsed: boolean;
+  readonly deletingId: string | null;
+  readonly active: ActiveTrack | null;
+  readonly multiTrackMode: boolean;
+  readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly onToggleCollapsed: (folderId: string) => void;
   readonly onEditFolder: (folder: TrackFolder) => void;
   readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
   readonly onToggleFavorite: (summary: LocalTrackSummary) => void;
@@ -3303,99 +3367,121 @@ interface TrackFolderSectionProps {
 function TrackFolderSection({
   folder,
   summaries,
+  collapsed,
   deletingId,
   active,
   multiTrackMode,
   multiTrackSelections,
+  onToggleCollapsed,
   onEditFolder,
   onSelect,
   onToggleFavorite,
   onDelete,
 }: TrackFolderSectionProps) {
   const { t } = useLingui();
-  const sectionName = folder?.name ?? t`Unfiled`;
   const sortable = useSortable({
-    id: folder === null ? 'unfiled' : `folder-order:${folder.id}`,
-    data:
-      folder === null
-        ? { type: 'unfiled', folderId: null }
-        : { type: 'folder', folderId: folder.id, folder },
-    disabled: folder === null,
+    id: `folder-order:${folder.id}`,
+    data: { type: 'folder', folderId: folder.id, folder },
   });
   const drop = useDroppable({
-    id: folder === null ? 'folder-drop:unfiled' : `folder-drop:${folder.id}`,
+    id: `folder-drop:${folder.id}`,
     data: {
       type: 'folder-target',
-      folderId: folder?.id ?? null,
+      folderId: folder.id,
       folder,
     },
   });
-  const style = {
-    transform: CSS.Transform.toString(sortable.transform),
-    transition: sortable.transition,
-  };
+  const setNodeRef = useCallback(
+    (node: HTMLElement | null) => {
+      sortable.setNodeRef(node);
+      drop.setNodeRef(node);
+    },
+    [drop.setNodeRef, sortable.setNodeRef],
+  );
 
   return (
-    <Paper
-      ref={folder === null ? undefined : sortable.setNodeRef}
-      component="section"
-      variant="outlined"
-      aria-labelledby={`track-folder-${folder?.id ?? 'unfiled'}`}
-      data-folder-order={folder?.id}
+    <Box
+      ref={setNodeRef}
+      role="listitem"
+      data-folder-order={folder.id}
+      data-folder-drop={folder.id}
       sx={{
-        ...style,
-        opacity: sortable.isDragging ? 0.35 : 1,
-        overflow: 'hidden',
-        borderColor: drop.isOver ? 'primary.main' : 'divider',
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+        opacity: sortable.isDragging ? 0 : 1,
+        bgcolor: drop.isOver ? 'action.hover' : 'transparent',
       }}
     >
-      <Stack
-        direction="row"
-        spacing={0.75}
-        sx={{
-          minHeight: 40,
-          alignItems: 'center',
-          px: 0.75,
-          bgcolor: appColors.surface.subtle,
-          borderBottom: summaries.length === 0 ? 0 : 1,
-          borderColor: 'divider',
-        }}
+      <Box
+        component="section"
+        aria-labelledby={`track-folder-${folder.id}`}
+        sx={{ overflow: 'hidden' }}
       >
-        {folder === null ? (
-          <Box sx={{ display: 'grid', placeItems: 'center', width: 32 }}>
-            <FolderOpenOutlinedIcon color="action" fontSize="small" />
-          </Box>
-        ) : (
-          <Tooltip title={t`Reorder ${folder.name}`}>
-            <IconButton
-              ref={sortable.setActivatorNodeRef}
-              size="small"
-              aria-label={t`Reorder ${folder.name}`}
-              data-drag-focus={`folder:${folder.id}`}
-              sx={{ touchAction: 'none', cursor: 'grab' }}
-              {...sortable.attributes}
-              {...sortable.listeners}
-            >
-              <DragIndicatorIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-        <Box sx={{ display: 'grid', placeItems: 'center', width: 24, flexShrink: 0 }}>
-          {folder === null ? null : <TrackFolderGlyph iconKey={folder.iconKey} />}
-        </Box>
-        <Typography
-          id={`track-folder-${folder?.id ?? 'unfiled'}`}
-          variant="subtitle2"
-          sx={{ minWidth: 0, flex: 1 }}
-          noWrap
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+            minHeight: 44,
+            alignItems: 'stretch',
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: appColors.surface.subtle,
+          }}
         >
-          {sectionName} ({String(summaries.length)})
-        </Typography>
-        {folder === null ? null : (
+          <IconButton
+            ref={sortable.setActivatorNodeRef}
+            size="small"
+            aria-label={t`Reorder ${folder.name}`}
+            data-drag-focus={`folder:${folder.id}`}
+            sx={{ alignSelf: 'center', ml: 0.5, touchAction: 'none', cursor: 'grab' }}
+            {...sortable.attributes}
+            {...sortable.listeners}
+          >
+            <DragIndicatorIcon fontSize="small" />
+          </IconButton>
+          <ListItemButton
+            aria-expanded={!collapsed}
+            aria-label={
+              collapsed ? t`Expand ${folder.name}` : t`Collapse ${folder.name}`
+            }
+            onClick={() => {
+              onToggleCollapsed(folder.id);
+            }}
+            sx={{
+              minWidth: 0,
+              px: 0.75,
+              py: 0.5,
+              gap: 1,
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            <Box
+              sx={{ display: 'grid', placeItems: 'center', width: 24, flexShrink: 0 }}
+            >
+              <TrackFolderGlyph iconKey={folder.iconKey} />
+            </Box>
+            <Typography
+              id={`track-folder-${folder.id}`}
+              variant="subtitle2"
+              sx={{ minWidth: 0, flex: 1 }}
+              noWrap
+            >
+              {folder.name} ({String(summaries.length)})
+            </Typography>
+            <KeyboardArrowDownIcon
+              color="action"
+              fontSize="small"
+              sx={{
+                transform: collapsed ? 'none' : 'rotate(180deg)',
+                transition: 'transform 150ms ease-out',
+              }}
+            />
+          </ListItemButton>
           <Tooltip title={t`Edit ${folder.name}`}>
             <IconButton
               size="small"
               aria-label={t`Edit ${folder.name}`}
+              sx={{ alignSelf: 'center', mr: 0.5 }}
               onClick={() => {
                 onEditFolder(folder);
               }}
@@ -3403,51 +3489,38 @@ function TrackFolderSection({
               <EditOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-        )}
-      </Stack>
-      <Box
-        ref={drop.setNodeRef}
-        data-folder-drop={folder?.id ?? 'unfiled'}
-        sx={{ minHeight: 34, p: summaries.length === 0 ? 1 : 0 }}
-      >
-        {summaries.length === 0 ? (
-          <Typography variant="caption" color="text.secondary">
-            <Trans>Drop tracks here</Trans>
-          </Typography>
-        ) : (
-          <List
-            disablePadding
-            aria-label={t`${sectionName} tracks`}
-            sx={{ display: 'grid', gap: 1, p: 1 }}
+        </Box>
+        {collapsed ? null : summaries.length === 0 ? (
+          <Box
+            sx={{
+              minHeight: 34,
+              display: 'flex',
+              alignItems: 'center',
+              px: 1.5,
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
           >
-            {summaries.map((summary) => {
-              const selected = multiTrackMode
-                ? multiTrackSelections.some(
-                    (selection) => selection.summary.id === summary.id,
-                  )
-                : active?.kind === 'saved' && active.summary.id === summary.id;
-              return (
-                <SavedTrackRow
-                  key={summary.id}
-                  summary={summary}
-                  folderId={folder?.id ?? null}
-                  selected={selected}
-                  multiTrackMode={multiTrackMode}
-                  deleting={deletingId === summary.id}
-                  onSelect={() => {
-                    onSelect(summary, selected);
-                  }}
-                  onToggleFavorite={() => {
-                    onToggleFavorite(summary);
-                  }}
-                  onDelete={() => onDelete(summary)}
-                />
-              );
-            })}
-          </List>
+            <Typography variant="caption" color="text.secondary">
+              <Trans>Drop tracks here</Trans>
+            </Typography>
+          </Box>
+        ) : (
+          <SavedTrackList
+            ariaLabel={t`${folder.name} tracks`}
+            summaries={summaries}
+            folderId={folder.id}
+            deletingId={deletingId}
+            active={active}
+            multiTrackMode={multiTrackMode}
+            multiTrackSelections={multiTrackSelections}
+            onSelect={onSelect}
+            onToggleFavorite={onToggleFavorite}
+            onDelete={onDelete}
+          />
         )}
       </Box>
-    </Paper>
+    </Box>
   );
 }
 
@@ -3481,6 +3554,13 @@ export function TracksPanel({
     null,
   );
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const unfiledDrop = useDroppable({
+    id: 'folder-drop:unfiled',
+    data: { type: 'folder-target', folderId: null },
+  });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
@@ -3509,6 +3589,17 @@ export function TracksPanel({
       ),
     [filteredSummaries, knownFolderIds],
   );
+  const toggleFolderCollapsed = (folderId: string) => {
+    setCollapsedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
 
   const restoreFocus = (focusKey: string) => {
     window.setTimeout(() => {
@@ -3520,12 +3611,13 @@ export function TracksPanel({
   };
   const dragStart = ({ active: dragged }: DragStartEvent) => {
     const data = dragged.data.current;
+    const width = dragged.rect.current.initial?.width ?? 280;
     if (data?.type === 'folder') {
       const folder = data.folder as TrackFolder;
-      setActiveDrag({ type: 'folder', id: folder.id, name: folder.name });
+      setActiveDrag({ type: 'folder', id: folder.id, name: folder.name, width });
     } else if (data?.type === 'track') {
       const summary = data.summary as LocalTrackSummary;
-      setActiveDrag({ type: 'track', id: summary.id, name: summary.name });
+      setActiveDrag({ type: 'track', id: summary.id, name: summary.name, width });
     }
   };
   const dragEnd = ({ active: dragged, over }: DragEndEvent) => {
@@ -3539,9 +3631,7 @@ export function TracksPanel({
         target?.type === 'folder-target' ||
         target?.type === 'track-target'
           ? (target.folderId as string | null)
-          : target?.type === 'unfiled'
-            ? null
-            : undefined;
+          : undefined;
       if (folderId === undefined || folderId === summary.folderId) {
         restoreFocus(`track:${summary.id}`);
         return;
@@ -3628,7 +3718,6 @@ export function TracksPanel({
             },
             onDragOver({ over }) {
               const data = over?.data.current;
-              if (data?.type === 'unfiled') return t`Over Unfiled.`;
               if (
                 data?.type === 'folder' ||
                 data?.type === 'folder-target' ||
@@ -3710,20 +3799,26 @@ export function TracksPanel({
             </Typography>
           ) : null}
           {folders.length > 0 || summaries.length > 0 ? (
-            <SortableContext
-              items={folders.map((folder) => `folder-order:${folder.id}`)}
-              strategy={verticalListSortingStrategy}
+            <Box
+              role="list"
+              aria-label={t`Saved tracks`}
+              sx={{ mx: -2, borderTop: 1, borderColor: 'divider' }}
             >
-              <Stack spacing={1.5} role="list" aria-label={t`Saved tracks`}>
+              <SortableContext
+                items={folders.map((folder) => `folder-order:${folder.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
                 {grouped.map(({ folder, summaries: folderSummaries }) => (
                   <TrackFolderSection
                     key={folder.id}
                     folder={folder}
                     summaries={folderSummaries}
+                    collapsed={collapsedFolderIds.has(folder.id)}
                     deletingId={deletingId}
                     active={active}
                     multiTrackMode={multiTrackMode}
                     multiTrackSelections={multiTrackSelections}
+                    onToggleCollapsed={toggleFolderCollapsed}
                     onEditFolder={setEditingFolder}
                     onSelect={select}
                     onToggleFavorite={(summary) => {
@@ -3732,36 +3827,61 @@ export function TracksPanel({
                     onDelete={remove}
                   />
                 ))}
-                <TrackFolderSection
-                  folder={null}
-                  summaries={unfiled}
-                  deletingId={deletingId}
-                  active={active}
-                  multiTrackMode={multiTrackMode}
-                  multiTrackSelections={multiTrackSelections}
-                  onEditFolder={setEditingFolder}
-                  onSelect={select}
-                  onToggleFavorite={(summary) => {
-                    void toggleFavorite(summary);
-                  }}
-                  onDelete={remove}
-                />
-              </Stack>
-            </SortableContext>
+              </SortableContext>
+              <Box
+                ref={unfiledDrop.setNodeRef}
+                role="listitem"
+                data-folder-drop="unfiled"
+                sx={{
+                  minHeight:
+                    unfiled.length === 0 && activeDrag?.type === 'track' ? 34 : 0,
+                  bgcolor: unfiledDrop.isOver ? 'action.hover' : 'transparent',
+                }}
+              >
+                {unfiled.length > 0 ? (
+                  <SavedTrackList
+                    ariaLabel={t`Unfiled tracks`}
+                    summaries={unfiled}
+                    folderId={null}
+                    deletingId={deletingId}
+                    active={active}
+                    multiTrackMode={multiTrackMode}
+                    multiTrackSelections={multiTrackSelections}
+                    onSelect={select}
+                    onToggleFavorite={(summary) => {
+                      void toggleFavorite(summary);
+                    }}
+                    onDelete={remove}
+                  />
+                ) : activeDrag?.type === 'track' ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', px: 1.5, py: 1 }}
+                  >
+                    <Trans>Drop tracks here</Trans>
+                  </Typography>
+                ) : null}
+              </Box>
+            </Box>
           ) : null}
         </Stack>
         <DragOverlay>
           {activeDrag === null ? null : (
             <Paper
-              variant="outlined"
-              elevation={6}
+              elevation={4}
+              square
               sx={{
+                width: activeDrag.width,
+                maxWidth: 'calc(100vw - 32px)',
+                minHeight: 44,
+                boxSizing: 'border-box',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1,
-                maxWidth: 280,
                 px: 1.5,
-                py: 1,
+                py: 0.75,
+                pointerEvents: 'none',
               }}
             >
               {activeDrag.type === 'folder' ? (

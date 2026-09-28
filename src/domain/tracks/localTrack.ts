@@ -6,7 +6,7 @@ import type {
 } from '@/domain/tracks/gpx';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
-export const LOCAL_TRACK_SCHEMA_VERSION = 5;
+export const LOCAL_TRACK_SCHEMA_VERSION = 6;
 export const MAXIMUM_TRACK_MARKERS = 32;
 
 export const trackSorts = ['created', 'name', 'oldest', 'distance'] as const;
@@ -26,6 +26,7 @@ export interface LocalTrackSummary {
   readonly sourceFormat: 'gpx' | 'fit' | 'kml';
   readonly favorite: boolean;
   readonly geometryKind: 'track' | 'route';
+  readonly folderId: string | null;
   readonly pointCount: number;
   readonly segmentCount: number;
   readonly metrics: TrackMetrics;

@@ -250,6 +250,7 @@ export function savedTrackSummary(
     sourceFormat: 'gpx',
     favorite,
     geometryKind: 'track',
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {

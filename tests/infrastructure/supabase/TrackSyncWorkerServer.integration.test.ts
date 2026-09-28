@@ -71,6 +71,7 @@ function summary(id: string): LocalTrackSummary {
     sourceFormat: 'gpx',
     favorite: false,
     geometryKind: 'track',
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {

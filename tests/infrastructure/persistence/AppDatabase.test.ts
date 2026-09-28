@@ -11,6 +11,12 @@ import {
   type LocalTrackContent,
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
+import {
+  IMPORTS_FOLDER_ID,
+  TRACK_FOLDER_SCHEMA_VERSION,
+  normalizeTrackFolderName,
+  type TrackFolder,
+} from '@/domain/tracks/trackFolder';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { createTestServices } from '@test/helpers/createTestServices';
 
@@ -54,6 +60,7 @@ function localTrackSummary(): LocalTrackSummary {
     sourceFormat: 'gpx',
     favorite: false,
     geometryKind: 'track',
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {
@@ -74,6 +81,23 @@ function localTrackSummary(): LocalTrackSummary {
     },
     metadata: { version: '1.1', links: [] },
     warnings: [],
+  };
+}
+
+function trackFolder(
+  id: string,
+  name: string,
+  overrides: Partial<TrackFolder> = {},
+): TrackFolder {
+  return {
+    schemaVersion: TRACK_FOLDER_SCHEMA_VERSION,
+    id,
+    ...normalizeTrackFolderName(name),
+    iconKey: 'folder',
+    position: 0,
+    createdAt: '2026-08-08T10:00:00.000Z',
+    updatedAt: '2026-08-08T10:00:00.000Z',
+    ...overrides,
   };
 }
 
@@ -789,5 +813,240 @@ describe('AppDatabase', () => {
         markers: { deleteIds: ['marker:1', 'marker:outside'], restoreIds: [] },
       }),
     ).rejects.toMatchObject({ code: 'record-invalid' });
+  });
+
+  it('upgrades version 8 tracks into exactly one Imports folder', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(8).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+    });
+    const imported = localTrackSummary();
+    const importedLegacy = {
+      ...imported,
+      schemaVersion: 5,
+    } as Record<string, unknown>;
+    delete importedLegacy.folderId;
+    const routeLegacy = {
+      ...importedLegacy,
+      id: 'local:route',
+      geometryKind: 'route',
+      name: 'Route',
+      normalizedName: 'route',
+    };
+    await legacy.table('localTracks').bulkPut([importedLegacy, routeLegacy]);
+    await legacy.table('trackSyncStates').bulkPut([
+      {
+        trackId: imported.id,
+        contentHash: imported.contentHash,
+        lineageHash: imported.contentHash,
+        geometryVersion: 2,
+        remoteRevision: 4,
+        pendingKind: null,
+      },
+      {
+        trackId: 'local:route',
+        contentHash: imported.contentHash,
+        lineageHash: imported.contentHash,
+        geometryVersion: 2,
+        remoteRevision: 5,
+        pendingKind: null,
+      },
+    ]);
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({
+        id: IMPORTS_FOLDER_ID,
+        name: 'Imports',
+        iconKey: 'folder',
+        position: 0,
+      }),
+    ]);
+    await expect(database.listLocalTracks()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: imported.id, folderId: IMPORTS_FOLDER_ID }),
+        expect.objectContaining({ id: 'local:route', folderId: null }),
+      ]),
+    );
+    await expect(database.trackSyncStates.get(imported.id)).resolves.toEqual(
+      expect.objectContaining({ pendingKind: 'metadata' }),
+    );
+    await expect(database.trackSyncStates.get('local:route')).resolves.toEqual(
+      expect.objectContaining({ pendingKind: null }),
+    );
+  });
+
+  it('creates empty folders at the end of the persisted order', async () => {
+    const folder = trackFolder('folder:one', 'Weekend');
+    const created = await database.createTrackFolder({
+      schemaVersion: folder.schemaVersion,
+      id: folder.id,
+      name: folder.name,
+      normalizedName: folder.normalizedName,
+      iconKey: folder.iconKey,
+      createdAt: folder.createdAt,
+      updatedAt: folder.updatedAt,
+    });
+
+    expect(created.position).toBe(1);
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 0 }),
+      expect.objectContaining({ id: folder.id, position: 1 }),
+    ]);
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
+  });
+
+  it('rejects incomplete and duplicate folder orders and persists dense positions', async () => {
+    const first = trackFolder('folder:first', 'First');
+    const second = trackFolder('folder:second', 'Second');
+    await database.createTrackFolder({
+      schemaVersion: first.schemaVersion,
+      id: first.id,
+      name: first.name,
+      normalizedName: first.normalizedName,
+      iconKey: first.iconKey,
+      createdAt: first.createdAt,
+      updatedAt: first.updatedAt,
+    });
+    await database.createTrackFolder({
+      schemaVersion: second.schemaVersion,
+      id: second.id,
+      name: second.name,
+      normalizedName: second.normalizedName,
+      iconKey: second.iconKey,
+      createdAt: second.createdAt,
+      updatedAt: second.updatedAt,
+    });
+
+    await expect(
+      database.reorderTrackFolders([IMPORTS_FOLDER_ID, first.id]),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+    await expect(
+      database.reorderTrackFolders([first.id, first.id, IMPORTS_FOLDER_ID]),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+
+    await database.reorderTrackFolders([second.id, IMPORTS_FOLDER_ID, first.id]);
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: second.id, position: 0 }),
+      expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 1 }),
+      expect.objectContaining({ id: first.id, position: 2 }),
+    ]);
+  });
+
+  it('moves only track placement metadata and marks cloud metadata dirty', async () => {
+    const summary = localTrackSummary();
+    const content = localTrackContent();
+    const destination = trackFolder('folder:destination', 'Destination');
+    await database.saveLocalTrack(summary, content);
+    await database.trackSyncStates.put({
+      trackId: summary.id,
+      contentHash: summary.contentHash ?? '',
+      lineageHash: summary.contentHash ?? '',
+      geometryVersion: 2,
+      remoteRevision: 7,
+      pendingKind: null,
+    });
+    await database.createTrackFolder({
+      schemaVersion: destination.schemaVersion,
+      id: destination.id,
+      name: destination.name,
+      normalizedName: destination.normalizedName,
+      iconKey: destination.iconKey,
+      createdAt: destination.createdAt,
+      updatedAt: destination.updatedAt,
+    });
+
+    const moved = await database.moveLocalTrackToFolder(summary.id, destination.id);
+
+    expect(moved).toMatchObject({
+      id: summary.id,
+      folderId: destination.id,
+      contentHash: summary.contentHash,
+    });
+    await expect(database.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
+    await expect(database.trackSyncStates.get(summary.id)).resolves.toEqual(
+      expect.objectContaining({
+        contentHash: summary.contentHash,
+        remoteRevision: 7,
+        pendingKind: 'metadata',
+      }),
+    );
+  });
+
+  it('deletes populated folders without deleting tracks and compacts folder order', async () => {
+    const summary = localTrackSummary();
+    const content = localTrackContent();
+    const removed = trackFolder('folder:removed', 'Removed');
+    const retained = trackFolder('folder:retained', 'Retained');
+    await database.saveLocalTrack(summary, content);
+    for (const folder of [removed, retained]) {
+      await database.createTrackFolder({
+        schemaVersion: folder.schemaVersion,
+        id: folder.id,
+        name: folder.name,
+        normalizedName: folder.normalizedName,
+        iconKey: folder.iconKey,
+        createdAt: folder.createdAt,
+        updatedAt: folder.updatedAt,
+      });
+    }
+    await database.moveLocalTrackToFolder(summary.id, removed.id);
+
+    const affected = await database.deleteTrackFolder(removed.id);
+
+    expect(affected).toEqual([
+      expect.objectContaining({ id: summary.id, folderId: null }),
+    ]);
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: summary.id, folderId: null }),
+    ]);
+    await expect(database.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 0 }),
+      expect.objectContaining({ id: retained.id, position: 1 }),
+    ]);
+  });
+
+  it('recreates Imports at the end before saving a later file import', async () => {
+    const additional = trackFolder('folder:kept', 'Kept');
+    await database.createTrackFolder({
+      schemaVersion: additional.schemaVersion,
+      id: additional.id,
+      name: additional.name,
+      normalizedName: additional.normalizedName,
+      iconKey: additional.iconKey,
+      createdAt: additional.createdAt,
+      updatedAt: additional.updatedAt,
+    });
+    await database.deleteTrackFolder(IMPORTS_FOLDER_ID);
+
+    const recreated = await database.ensureImportsFolder();
+    const summary = localTrackSummary();
+    await database.saveLocalTrack(summary, localTrackContent());
+
+    expect(recreated).toMatchObject({
+      id: IMPORTS_FOLDER_ID,
+      name: 'Imports',
+      iconKey: 'folder',
+      position: 1,
+    });
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: additional.id, position: 0 }),
+      expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 1 }),
+    ]);
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: summary.id, folderId: IMPORTS_FOLDER_ID }),
+    ]);
   });
 });

@@ -27,6 +27,7 @@ function summary(id: string, name: string): LocalTrackSummary {
     sourceFormat: 'gpx',
     favorite: false,
     geometryKind: 'track',
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {
@@ -82,6 +83,7 @@ describe('local track persistence', () => {
       ...summary('local:route', 'Planned route'),
       sourceFilename: 'Planned route.gpx',
       geometryKind: 'route',
+      folderId: null,
       pointCount: 3,
       metadata: {
         version: '1.1',

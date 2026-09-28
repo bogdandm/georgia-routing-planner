@@ -85,6 +85,7 @@ import {
   type TrackMarker,
   type TrackSort,
 } from '@/domain/tracks/localTrack';
+import { IMPORTS_FOLDER_ID } from '@/domain/tracks/trackFolder';
 import {
   calculateTrackMetrics,
   findDominantSummit,
@@ -1539,6 +1540,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceFormat: 'gpx',
         favorite: false,
         geometryKind: 'route',
+        folderId: null,
         pointCount: active.segment.points.length,
         segmentCount: 1,
         metrics: active.metrics,
@@ -1641,6 +1643,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceFormat: active.sourceFormat,
         favorite: false,
         geometryKind: active.parsed.geometryKind,
+        folderId: IMPORTS_FOLDER_ID,
         pointCount: primarySegments.reduce(
           (count, segment) => count + segment.points.length,
           0,
@@ -1664,6 +1667,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
       if (active.fallbackPoi !== undefined) summary.fallbackPoi = active.fallbackPoi;
+      await database.ensureImportsFolder();
       await database.saveLocalTrack(summary, content);
       void userData.trackSaved(summary.id);
       if (generation !== importGeneration.current) return;

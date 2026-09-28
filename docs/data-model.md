@@ -307,9 +307,10 @@ part of the canonical identity. Original file bytes are discarded after parsing.
 
 `trackFolders` stores a flat ordered list. Folder placement remains in
 `LocalTrackSummary.folderId`; it is nullable rather than a separate join record. The
-stable `folder:imports` record is provisioned when an import is saved. Saving a route or
-upgrading a pre-folder database leaves the summary unfiled. Folder deletion and order
-compaction update every affected summary and folder in one IndexedDB transaction.
+stable `folder:imports` record is provisioned when an import is saved. Saving a route
+leaves it unfiled; upgrading a pre-folder database assigns imported tracks to
+`folder:imports` and leaves saved routes unfiled. Folder deletion and order compaction
+update every affected summary and folder in one IndexedDB transaction.
 
 `trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
 stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,

@@ -771,7 +771,31 @@ function isLegacyLocalTrackRecord(value: unknown): value is Record<string, unkno
   );
 }
 
+function isPreFolderLocalTrackSummaryRecord(value: unknown): value is Record<
+  string,
+  unknown
+> & {
+  readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
+  readonly geometryKind: 'track' | 'route';
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'schemaVersion' in value &&
+    value.schemaVersion === LOCAL_TRACK_SCHEMA_VERSION &&
+    'geometryKind' in value &&
+    (value.geometryKind === 'track' || value.geometryKind === 'route') &&
+    !('folderId' in value)
+  );
+}
+
 function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
+  if (isPreFolderLocalTrackSummaryRecord(value)) {
+    return {
+      ...value,
+      folderId: value.geometryKind === 'track' ? IMPORTS_FOLDER_ID : null,
+    };
+  }
   if (!isLegacyLocalTrackRecord(value)) return value;
   const migrated = {
     ...value,

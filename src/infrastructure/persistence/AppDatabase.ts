@@ -274,6 +274,21 @@ function parseFolderSyncState(value: unknown): FolderSyncState | null {
   return parsed.success ? parsed.data : null;
 }
 
+function equalFolderSyncStates(
+  left: FolderSyncState | null,
+  right: FolderSyncState | null,
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.folderId === right.folderId &&
+      left.remoteRevision === right.remoteRevision &&
+      left.pendingKind === right.pendingKind &&
+      left.localVersion === right.localVersion)
+  );
+}
+
 function nextFolderLocalVersion(state: FolderSyncState | null): number {
   if (state === null) return 1;
   if (
@@ -2927,6 +2942,157 @@ export class AppDatabase
     );
   }
 
+  /** Atomically applies a validated folder merge unless local intent changed. */
+  public async applyRemoteFolderMergeBatch(
+    batch: RemoteFolderMergeBatch,
+  ): Promise<RemoteFolderMergeResult> {
+    if (batch.expectedUserId.length === 0 || batch.expectedUserId.length > 200) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The synchronization account identifier is invalid.',
+      );
+    }
+    const folders = batch.put.map(validateTrackFolderRecord);
+    const states = batch.states.map((state) => {
+      const parsed = folderSyncStateSchema.safeParse(state);
+      if (!parsed.success) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The folder synchronization state is invalid.',
+        );
+      }
+      return parsed.data;
+    });
+    const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+    const stateById = new Map(states.map((state) => [state.folderId, state]));
+    const folderDeleteIds = new Set(batch.deleteFolderIds);
+    const stateDeleteIds = new Set(batch.deleteStateIds);
+    const expectedById = new Map(
+      batch.expected.map((expectation) => [expectation.folderId, expectation]),
+    );
+    const lists = [
+      [folderById, folders.length],
+      [folderDeleteIds, batch.deleteFolderIds.length],
+      [stateById, states.length],
+      [stateDeleteIds, batch.deleteStateIds.length],
+      [expectedById, batch.expected.length],
+    ] as const;
+    if (
+      lists.some(([ids, length]) => ids.size !== length) ||
+      ![...folderDeleteIds, ...stateDeleteIds].every(
+        (id) => trackFolderIdSchema.safeParse(id).success,
+      ) ||
+      [...folderById].some(([id]) => folderDeleteIds.has(id)) ||
+      [...stateById].some(([id]) => stateDeleteIds.has(id))
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The folder merge contains duplicate or conflicting identifiers.',
+      );
+    }
+    const operationIds = new Set([
+      ...folderById.keys(),
+      ...folderDeleteIds,
+      ...stateById.keys(),
+      ...stateDeleteIds,
+    ]);
+    if (
+      operationIds.size !== expectedById.size ||
+      [...operationIds].some((id) => !expectedById.has(id))
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The folder merge expectations do not match its operations.',
+      );
+    }
+    for (const expectation of expectedById.values()) {
+      const state =
+        expectation.state === null
+          ? null
+          : folderSyncStateSchema.safeParse(expectation.state);
+      if (
+        !trackFolderIdSchema.safeParse(expectation.folderId).success ||
+        (state !== null &&
+          (!state.success || state.data.folderId !== expectation.folderId))
+      ) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The folder merge expectation is invalid.',
+        );
+      }
+    }
+    batch.signal?.throwIfAborted();
+    return this.transaction(
+      'rw',
+      [
+        this.settings,
+        this.trackFolders,
+        this.folderSyncStates,
+        this.localTracks,
+        this.trackSyncStates,
+      ],
+      async () => {
+        const owner = await this.settings.get('sync.user-id');
+        if (owner?.value !== batch.expectedUserId) {
+          return { changed: false, tracksChanged: false };
+        }
+        let changed = false;
+        let tracksChanged = false;
+        for (const folderId of operationIds) {
+          const expectation = expectedById.get(folderId);
+          if (expectation === undefined) continue;
+          const current = parseFolderSyncState(
+            await this.folderSyncStates.get(folderId),
+          );
+          if (!equalFolderSyncStates(current, expectation.state)) continue;
+          batch.signal?.throwIfAborted();
+          const folder = folderById.get(folderId);
+          if (folder !== undefined) {
+            const existing = parseTrackFolder(await this.trackFolders.get(folderId));
+            if (
+              existing === null ||
+              JSON.stringify(existing) !== JSON.stringify(folder)
+            ) {
+              await this.trackFolders.put(folder);
+              changed = true;
+            }
+          } else if (folderDeleteIds.has(folderId)) {
+            if ((await this.trackFolders.get(folderId)) !== undefined) {
+              await this.trackFolders.delete(folderId);
+              changed = true;
+            }
+            const timestamp = new Date().toISOString();
+            for (const candidate of await this.localTracks.toArray()) {
+              const summary = parseLocalTrackSummary(candidate);
+              if (summary?.folderId !== folderId) continue;
+              await this.localTracks.put({
+                ...summary,
+                folderId: null,
+                updatedAt: timestamp,
+              });
+              const trackState = parseTrackSyncState(
+                await this.trackSyncStates.get(summary.id),
+              );
+              if (trackState !== null) {
+                await this.trackSyncStates.put({
+                  ...trackState,
+                  pendingKind:
+                    trackState.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+                });
+              }
+              tracksChanged = true;
+            }
+          }
+          const state = stateById.get(folderId);
+          if (state !== undefined) await this.folderSyncStates.put(state);
+          else if (stateDeleteIds.has(folderId)) {
+            await this.folderSyncStates.delete(folderId);
+          }
+        }
+        return { changed, tracksChanged };
+      },
+    );
+  }
   public async resolveRemoteDeletions(decision: {
     readonly expectedUserId: string;
     readonly trackCandidateIds: readonly string[];

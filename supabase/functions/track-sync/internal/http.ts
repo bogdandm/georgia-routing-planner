@@ -3,6 +3,8 @@ import { z } from 'npm:zod@4.4.3';
 
 import {
   CONTENT_HASH_PATTERN,
+  type FolderPayload,
+  MAX_FOLDER_BYTES,
   MAX_JSON_BYTES,
   MAX_MARKER_BYTES,
   MAX_METADATA_BYTES,
@@ -252,6 +254,53 @@ const markerPayloadSchema = z
       elevationMeters: null,
     };
   });
+
+const folderPayloadSchema: z.ZodType<FolderPayload> = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: z.string().min(1).max(200),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .refine((name) =>
+        [...name].every((character) => {
+          const codePoint = character.codePointAt(0);
+          return (
+            codePoint === 0x09 ||
+            codePoint === 0x0a ||
+            codePoint === 0x0d ||
+            (codePoint !== undefined &&
+              ((codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+                (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+                (codePoint >= 0x10000 && codePoint <= 0x10ffff)))
+          );
+        }),
+      ),
+    normalizedName: z.string().min(1).max(200),
+    iconKey: z.union([z.literal('folder'), z.enum(markerIconKeys)]),
+    position: z.number().int().nonnegative().refine(Number.isSafeInteger),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .superRefine((folder, context) => {
+    if (folder.normalizedName !== folder.name.toLocaleLowerCase('en')) {
+      context.addIssue({
+        code: 'custom',
+        path: ['normalizedName'],
+        message: 'normalizedName must match name.',
+      });
+    }
+    if (Date.parse(folder.updatedAt) < Date.parse(folder.createdAt)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['updatedAt'],
+        message: 'updatedAt must not predate createdAt.',
+      });
+    }
+  });
 import { validateGeometryUpload } from './geometry.ts';
 
 export function requireUserId(context: SupabaseContext): string {
@@ -382,6 +431,19 @@ function requireMetadata(value: unknown): Record<string, unknown> {
       'metadata markers are invalid.',
     );
   }
+  if (
+    Object.hasOwn(value, 'folderId') &&
+    value.folderId !== null &&
+    (typeof value.folderId !== 'string' ||
+      value.folderId.length === 0 ||
+      value.folderId.length > 200)
+  ) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_metadata',
+      'metadata folderId must be null or a bounded folder identifier.',
+    );
+  }
   const encoded = new TextEncoder().encode(JSON.stringify(value));
   if (encoded.byteLength > MAX_METADATA_BYTES) {
     throw new TrackSyncFailure(413, 'metadata_too_large', 'metadata exceeds 64 KiB.');
@@ -414,6 +476,35 @@ function requireMarkerPayload(value: unknown, markerId: string): MarkerPayload {
     new TextEncoder().encode(JSON.stringify(parsed.data)).byteLength > MAX_MARKER_BYTES
   ) {
     throw new TrackSyncFailure(413, 'marker_too_large', 'marker exceeds 4 KiB.');
+  }
+  return parsed.data;
+}
+
+function requireFolderId(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 200) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_folder',
+      'folderId must be 1 to 200 characters.',
+    );
+  }
+  return value;
+}
+
+function requireFolderPayload(value: unknown, folderId: string): FolderPayload {
+  const parsed = folderPayloadSchema.safeParse(value);
+  if (
+    !parsed.success ||
+    parsed.data.id !== folderId ||
+    parsed.data.name !== parsed.data.name.trim() ||
+    parsed.data.normalizedName !== parsed.data.name.toLocaleLowerCase('en')
+  ) {
+    throw new TrackSyncFailure(400, 'invalid_folder', 'folder is invalid.');
+  }
+  if (
+    new TextEncoder().encode(JSON.stringify(parsed.data)).byteLength > MAX_FOLDER_BYTES
+  ) {
+    throw new TrackSyncFailure(413, 'folder_too_large', 'folder exceeds 4 KiB.');
   }
   return parsed.data;
 }
@@ -545,6 +636,24 @@ async function parseJsonRequest(request: Request): Promise<TrackSyncCommand> {
       baseRevision: requireBaseRevision(value.baseRevision),
     };
   }
+  if (value.action === 'folder-upsert') {
+    requireExactFields(value, ['action', 'folderId', 'baseRevision', 'folder']);
+    const folderId = requireFolderId(value.folderId);
+    return {
+      action: 'folder-upsert',
+      folderId,
+      baseRevision: requireBaseRevision(value.baseRevision),
+      folder: requireFolderPayload(value.folder, folderId),
+    };
+  }
+  if (value.action === 'folder-delete') {
+    requireExactFields(value, ['action', 'folderId', 'baseRevision']);
+    return {
+      action: 'folder-delete',
+      folderId: requireFolderId(value.folderId),
+      baseRevision: requireBaseRevision(value.baseRevision),
+    };
+  }
   throw new TrackSyncFailure(
     400,
     'invalid_action',
@@ -660,6 +769,17 @@ async function parseUploadRequest(request: Request): Promise<TrackSyncCommand> {
 
 function serializeRecord(value: unknown): unknown {
   if (!isObject(value)) return undefined;
+  if (
+    typeof value.folder_id === 'string' &&
+    Number.isSafeInteger(value.revision) &&
+    isObject(value.payload)
+  ) {
+    return {
+      folder_id: value.folder_id,
+      revision: value.revision,
+      payload: value.payload,
+    };
+  }
   if (
     typeof value.marker_id === 'string' &&
     Number.isSafeInteger(value.revision) &&

@@ -17,6 +17,7 @@ export const trackSyncWorkerEventNames = {
   progress: 'track-sync.progress',
   tracksChanged: 'track-sync.tracks-changed',
   markersChanged: 'track-sync.markers-changed',
+  foldersChanged: 'track-sync.folders-changed',
 } as const;
 
 export interface UserDataSyncChangedEvent {
@@ -36,7 +37,11 @@ export interface TrackSyncWorkerResult {
     readonly reservedBytes: number;
     readonly limitBytes: number;
   };
-  readonly changed: { readonly tracks: boolean; readonly markers: boolean };
+  readonly changed: {
+    readonly tracks: boolean;
+    readonly markers: boolean;
+    readonly folders: boolean;
+  };
   readonly remoteTrackDeletions: readonly RemoteTrackDeletionCandidate[];
   readonly remoteMarkerDeletions: readonly RemoteMarkerDeletionCandidate[];
 }
@@ -123,6 +128,17 @@ export class TrackSyncWorkerClient {
     );
   }
 
+  public subscribeFoldersChanged(
+    listener: (event: UserDataSyncChangedEvent) => void,
+  ): () => void {
+    return this.#rpc.subscribeEvent(
+      trackSyncWorkerEventNames.foldersChanged,
+      (payload) => {
+        if (isSyncChangedEvent(payload)) listener(payload);
+      },
+    );
+  }
+
   public subscribeProgress(
     listener: (progress: UserDataSyncProgress) => void,
   ): () => void {
@@ -163,7 +179,7 @@ export function syncWorkerErrorMessage(error: unknown): string | null {
   if (!(error instanceof Error)) return null;
   const code = (error as WorkerRpcRemoteError).code;
   if (code === 'limit') {
-    return 'Cloud marker limit reached. Delete a synchronized marker and try again.';
+    return error.message.length <= 200 ? error.message : null;
   }
   if (
     code !== 'auth-expired' &&

@@ -1018,6 +1018,51 @@ describe('AppDatabase', () => {
     ]);
   });
 
+  it('applies remote folder deletion without deleting placed tracks', async () => {
+    const summary = localTrackSummary();
+    const content = localTrackContent();
+    await database.saveLocalTrack(summary, content);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-a',
+      updatedAt: '2026-09-28T00:00:00.000Z',
+    });
+    const folderState = {
+      folderId: IMPORTS_FOLDER_ID,
+      remoteRevision: 4,
+      pendingKind: null,
+      localVersion: 2,
+    } as const;
+    await database.folderSyncStates.put(folderState);
+    await database.trackSyncStates.put({
+      trackId: summary.id,
+      contentHash: summary.contentHash ?? '',
+      lineageHash: summary.contentHash ?? '',
+      geometryVersion: 2,
+      remoteRevision: 5,
+      pendingKind: null,
+    });
+
+    await expect(
+      database.applyRemoteFolderMergeBatch({
+        put: [],
+        deleteFolderIds: [IMPORTS_FOLDER_ID],
+        states: [],
+        deleteStateIds: [IMPORTS_FOLDER_ID],
+        expected: [{ folderId: IMPORTS_FOLDER_ID, state: folderState }],
+        expectedUserId: 'user-a',
+      }),
+    ).resolves.toEqual({ changed: true, tracksChanged: true });
+
+    await expect(database.listTrackFolders()).resolves.toEqual([]);
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: summary.id, folderId: null }),
+    ]);
+    await expect(database.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
+    await expect(database.trackSyncStates.get(summary.id)).resolves.toMatchObject({
+      pendingKind: 'metadata',
+    });
+  });
   it('recreates Imports at the end before saving a later file import', async () => {
     const additional = trackFolder('folder:kept', 'Kept');
     await database.createTrackFolder({

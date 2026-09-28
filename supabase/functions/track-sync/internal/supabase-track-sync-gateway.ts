@@ -2,6 +2,7 @@ import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
 import {
   DATABASE_PAGE_SIZE,
+  type DeleteFolderCommand,
   type DeleteMarkerCommand,
   type DeleteTrackCommand,
   MAX_STORAGE_OBJECTS,
@@ -13,6 +14,7 @@ import {
   TRACK_QUOTA_BYTES,
   TrackSyncFailure,
   type TrackUsage,
+  type UpsertFolderCommand,
   type UpsertMarkerCommand,
   type UploadTrackCommand,
   UUID_PATTERN,
@@ -153,6 +155,23 @@ export class SupabaseTrackSyncGateway {
     return await this.callRpc('delete_marker', {
       p_user_id: this.userId,
       p_marker_id: command.markerId,
+      p_base_revision: command.baseRevision,
+    });
+  }
+
+  async upsertFolder(command: UpsertFolderCommand): Promise<RpcResponse> {
+    return await this.callRpc('upsert_track_folder', {
+      p_user_id: this.userId,
+      p_folder_id: command.folderId,
+      p_payload: command.folder,
+      p_base_revision: command.baseRevision,
+    });
+  }
+
+  async deleteFolder(command: DeleteFolderCommand): Promise<RpcResponse> {
+    return await this.callRpc('delete_track_folder', {
+      p_user_id: this.userId,
+      p_folder_id: command.folderId,
       p_base_revision: command.baseRevision,
     });
   }

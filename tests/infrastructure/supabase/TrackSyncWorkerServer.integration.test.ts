@@ -19,6 +19,10 @@ import {
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
 import {
+  TRACK_FOLDER_SCHEMA_VERSION,
+  type TrackFolder,
+} from '@/domain/tracks/trackFolder';
+import {
   AppDatabase,
   type LocalTrackSyncPair,
   type TrackSyncState,
@@ -118,6 +122,19 @@ function marker(overrides: Partial<SavedMarker> = {}): SavedMarker {
   };
 }
 
+function folder(id: string, name: string, position: number): TrackFolder {
+  return {
+    schemaVersion: TRACK_FOLDER_SCHEMA_VERSION,
+    id,
+    name,
+    normalizedName: name.toLocaleLowerCase('en'),
+    iconKey: 'folder',
+    position,
+    createdAt: '2026-09-28T00:00:00.000Z',
+    updatedAt: '2026-09-28T00:00:00.000Z',
+  };
+}
+
 beforeEach(async () => {
   services = createTestServices();
   database = services.database;
@@ -132,6 +149,142 @@ afterEach(async () => {
 });
 
 describe('TrackSyncWorkerServer', () => {
+  it('reconciles folders before tracks and publishes remote folder changes', async () => {
+    const imports = folder('imports', 'Imports', 0);
+    const trips = folder('folder:trips', 'Trips', 1);
+    let uploadedImports = imports;
+    let folderSnapshotCount = 0;
+    const calls: string[] = [];
+    const gateway = {
+      folderSnapshot: vi.fn(() => {
+        calls.push('folder-snapshot');
+        folderSnapshotCount += 1;
+        return Promise.resolve(
+          folderSnapshotCount === 1
+            ? [
+                { folder_id: imports.id, revision: 1, payload: imports },
+                { folder_id: trips.id, revision: 1, payload: trips },
+              ]
+            : [
+                { folder_id: imports.id, revision: 2, payload: uploadedImports },
+                { folder_id: trips.id, revision: 1, payload: trips },
+              ],
+        );
+      }),
+      mutateFolder: vi.fn(
+        (folderId: string, _baseRevision: number, payload: TrackFolder | null) => {
+          calls.push(`folder-mutate:${folderId}`);
+          if (folderId === imports.id && payload !== null) uploadedImports = payload;
+          return Promise.resolve({ outcome: 'applied' as const, revision: 2 });
+        },
+      ),
+      status: vi.fn(() => {
+        calls.push('status');
+        return Promise.resolve({
+          usedBytes: 0,
+          reservedBytes: 0,
+          limitBytes: 8_388_608,
+        });
+      }),
+      snapshot: vi.fn(() => {
+        calls.push('track-snapshot');
+        return Promise.resolve([]);
+      }),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+    const foldersChanged = vi.fn();
+    client.subscribeEvent(trackSyncWorkerEventNames.foldersChanged, foldersChanged);
+
+    await expect(
+      client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+        sessionRevision: 3,
+      }),
+    ).resolves.toMatchObject({
+      changed: { tracks: false, markers: false, folders: true },
+    });
+
+    expect(calls.indexOf('folder-snapshot')).toBeLessThan(
+      calls.indexOf('track-snapshot'),
+    );
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: imports.id, position: 0 }),
+      trips,
+    ]);
+    await vi.waitFor(() => {
+      expect(foldersChanged).toHaveBeenCalledWith({
+        userId: 'user-id',
+        sessionRevision: 3,
+      });
+    });
+    client.dispose();
+  });
+
+  it('recreates a pending local folder removed remotely', async () => {
+    await database.ensureImportsFolder();
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-09-28T00:00:00.000Z',
+    });
+    await database.folderSyncStates.put({
+      folderId: 'imports',
+      remoteRevision: 1,
+      pendingKind: 'upsert',
+      localVersion: 2,
+    });
+    const imports = (await database.listTrackFolders())[0]!;
+    const mutationBases: number[] = [];
+    let recreated = false;
+    const gateway = {
+      folderSnapshot: vi.fn(() =>
+        Promise.resolve(
+          recreated ? [{ folder_id: 'imports', revision: 2, payload: imports }] : [],
+        ),
+      ),
+      mutateFolder: vi.fn(
+        (_folderId: string, baseRevision: number, _payload: TrackFolder | null) => {
+          mutationBases.push(baseRevision);
+          if (baseRevision === 1) {
+            return Promise.resolve({ outcome: 'missing' as const });
+          }
+          recreated = true;
+          return Promise.resolve({ outcome: 'applied' as const, revision: 2 });
+        },
+      ),
+      status: vi.fn().mockResolvedValue({
+        usedBytes: 0,
+        reservedBytes: 0,
+        limitBytes: 8_388_608,
+      }),
+      snapshot: vi.fn().mockResolvedValue([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    expect(mutationBases).toEqual([1, 0]);
+    await expect(database.folderSyncStates.get('imports')).resolves.toMatchObject({
+      remoteRevision: 2,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
   it('applies an uploaded revision through one batch and publishes one event', async () => {
     const track = summary('local:track');
     await database.saveLocalTrack(track, content(track.id));
@@ -185,7 +338,7 @@ describe('TrackSyncWorkerServer', () => {
       }),
     ).resolves.toEqual({
       usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
-      changed: { tracks: true, markers: false },
+      changed: { tracks: true, markers: false, folders: false },
       remoteTrackDeletions: [],
       remoteMarkerDeletions: [],
     });
@@ -333,7 +486,7 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false },
+      changed: { tracks: false, markers: false, folders: false },
       remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -548,7 +701,7 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false },
+      changed: { tracks: false, markers: false, folders: false },
       remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -1423,7 +1576,7 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false },
+      changed: { tracks: false, markers: false, folders: false },
       remoteTrackDeletions: [],
     });
 
@@ -1479,7 +1632,7 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 7,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false },
+      changed: { tracks: false, markers: false, folders: false },
       remoteMarkerDeletions: [],
     });
     expect(mutateMarker).toHaveBeenCalledWith(

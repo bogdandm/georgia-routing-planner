@@ -480,7 +480,7 @@ export class FetchRemoteGateway implements RemoteGateway {
       '/rest/v1/track_folder_records?select=folder_id,revision,payload&order=folder_id.asc',
       {
         headers: {
-          Range: `0-${maximumFolderSnapshotRecords - 1}`,
+          Range: ['0', String(maximumFolderSnapshotRecords - 1)].join('-'),
           'Range-Unit': 'items',
         },
         signal,
@@ -500,7 +500,10 @@ export class FetchRemoteGateway implements RemoteGateway {
       '/rest/v1/track_folder_records?select=folder_id,revision,payload&order=folder_id.asc',
       {
         headers: {
-          Range: `${maximumFolderSnapshotRecords}-${maximumFolderSnapshotRecords}`,
+          Range: [
+            String(maximumFolderSnapshotRecords),
+            String(maximumFolderSnapshotRecords),
+          ].join('-'),
           'Range-Unit': 'items',
         },
         signal,

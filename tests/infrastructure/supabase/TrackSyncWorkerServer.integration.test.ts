@@ -239,7 +239,8 @@ describe('TrackSyncWorkerServer', () => {
       pendingKind: 'upsert',
       localVersion: 2,
     });
-    const imports = (await database.listTrackFolders())[0]!;
+    const [imports] = await database.listTrackFolders();
+    if (imports === undefined) throw new Error('Expected the Imports folder.');
     const mutationBases: number[] = [];
     let recreated = false;
     const gateway = {

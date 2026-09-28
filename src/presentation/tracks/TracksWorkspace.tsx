@@ -3101,20 +3101,26 @@ function SavedTrackRow({
   const [hovered, setHovered] = useState(false);
   const [hoverEpoch, setHoverEpoch] = useState(0);
   const [hoverSuppressed, setHoverSuppressed] = useState(false);
-  const draggable = useDraggable({
+  const {
+    attributes: dragAttributes,
+    isDragging,
+    listeners: dragListeners,
+    setActivatorNodeRef,
+    setNodeRef: setDraggableNodeRef,
+  } = useDraggable({
     id: `track:${summary.id}`,
     data: { type: 'track', summary },
   });
-  const droppable = useDroppable({
+  const { setNodeRef: setDroppableNodeRef } = useDroppable({
     id: `track-target:${summary.id}`,
     data: { type: 'track-target', folderId },
   });
   const setNodeRef = useCallback(
     (node: HTMLElement | null) => {
-      draggable.setNodeRef(node);
-      droppable.setNodeRef(node);
+      setDraggableNodeRef(node);
+      setDroppableNodeRef(node);
     },
-    [draggable.setNodeRef, droppable.setNodeRef],
+    [setDraggableNodeRef, setDroppableNodeRef],
   );
   const actionClassName = `saved-track-row-action${
     pendingDelete ? ' saved-track-row-action--pending' : ''
@@ -3138,7 +3144,7 @@ function SavedTrackRow({
           alignItems: 'center',
           borderBottom: 1,
           borderColor: 'divider',
-          opacity: draggable.isDragging ? 0 : 1,
+          opacity: isDragging ? 0 : 1,
           bgcolor: selected
             ? hovered
               ? `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`
@@ -3172,14 +3178,14 @@ function SavedTrackRow({
         }}
       >
         <IconButton
-          ref={draggable.setActivatorNodeRef}
+          ref={setActivatorNodeRef}
           className="saved-track-row-action saved-track-row-drag"
           size="small"
           aria-label={t`Move ${summary.name}`}
           data-drag-focus={`track:${summary.id}`}
           sx={{ ml: 0.5, touchAction: 'none', cursor: 'grab' }}
-          {...draggable.attributes}
-          {...draggable.listeners}
+          {...dragAttributes}
+          {...dragListeners}
         >
           <DragIndicatorIcon fontSize="small" />
         </IconButton>
@@ -3379,11 +3385,19 @@ function TrackFolderSection({
   onDelete,
 }: TrackFolderSectionProps) {
   const { t } = useLingui();
-  const sortable = useSortable({
+  const {
+    attributes: sortableAttributes,
+    isDragging,
+    listeners: sortableListeners,
+    setActivatorNodeRef,
+    setNodeRef: setSortableNodeRef,
+    transform,
+    transition,
+  } = useSortable({
     id: `folder-order:${folder.id}`,
     data: { type: 'folder', folderId: folder.id, folder },
   });
-  const drop = useDroppable({
+  const { isOver, setNodeRef: setDropNodeRef } = useDroppable({
     id: `folder-drop:${folder.id}`,
     data: {
       type: 'folder-target',
@@ -3393,10 +3407,10 @@ function TrackFolderSection({
   });
   const setNodeRef = useCallback(
     (node: HTMLElement | null) => {
-      sortable.setNodeRef(node);
-      drop.setNodeRef(node);
+      setSortableNodeRef(node);
+      setDropNodeRef(node);
     },
-    [drop.setNodeRef, sortable.setNodeRef],
+    [setDropNodeRef, setSortableNodeRef],
   );
 
   return (
@@ -3406,10 +3420,10 @@ function TrackFolderSection({
       data-folder-order={folder.id}
       data-folder-drop={folder.id}
       sx={{
-        transform: CSS.Transform.toString(sortable.transform),
-        transition: sortable.transition,
-        opacity: sortable.isDragging ? 0 : 1,
-        bgcolor: drop.isOver ? 'action.hover' : 'transparent',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0 : 1,
+        bgcolor: isOver ? 'action.hover' : 'transparent',
       }}
     >
       <Box
@@ -3429,13 +3443,13 @@ function TrackFolderSection({
           }}
         >
           <IconButton
-            ref={sortable.setActivatorNodeRef}
+            ref={setActivatorNodeRef}
             size="small"
             aria-label={t`Reorder ${folder.name}`}
             data-drag-focus={`folder:${folder.id}`}
             sx={{ alignSelf: 'center', ml: 0.5, touchAction: 'none', cursor: 'grab' }}
-            {...sortable.attributes}
-            {...sortable.listeners}
+            {...sortableAttributes}
+            {...sortableListeners}
           >
             <DragIndicatorIcon fontSize="small" />
           </IconButton>
@@ -3557,7 +3571,7 @@ export function TracksPanel({
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const unfiledDrop = useDroppable({
+  const { isOver: isOverUnfiled, setNodeRef: setUnfiledNodeRef } = useDroppable({
     id: 'folder-drop:unfiled',
     data: { type: 'folder-target', folderId: null },
   });
@@ -3829,13 +3843,13 @@ export function TracksPanel({
                 ))}
               </SortableContext>
               <Box
-                ref={unfiledDrop.setNodeRef}
+                ref={setUnfiledNodeRef}
                 role="listitem"
                 data-folder-drop="unfiled"
                 sx={{
                   minHeight:
                     unfiled.length === 0 && activeDrag?.type === 'track' ? 34 : 0,
-                  bgcolor: unfiledDrop.isOver ? 'action.hover' : 'transparent',
+                  bgcolor: isOverUnfiled ? 'action.hover' : 'transparent',
                 }}
               >
                 {unfiled.length > 0 ? (

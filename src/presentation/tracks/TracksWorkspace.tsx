@@ -3021,10 +3021,15 @@ const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) =
   const overData = args.context.over?.data.current;
   let target: (typeof targets)[number] | undefined;
   if (activeData.type === 'track') {
+    const currentTarget = targets.find(
+      (candidate, index) =>
+        args.currentCoordinates.y >= candidate.rect.top &&
+        (args.currentCoordinates.y < candidate.rect.bottom ||
+          (index === targets.length - 1 &&
+            args.currentCoordinates.y <= candidate.rect.bottom)),
+    );
     const currentFolderId =
-      overData?.type === 'folder-target'
-        ? (overData.folderId as string | null)
-        : (activeData.summary as LocalTrackSummary).folderId;
+      currentTarget?.folderId ?? (activeData.summary as LocalTrackSummary).folderId;
     const currentIndex = targets.findIndex(
       (candidate) => candidate.folderId === currentFolderId,
     );
@@ -3137,10 +3142,15 @@ function SavedTrackRow({
       <Box
         ref={setNodeRef}
         component="li"
-        className={hovered ? 'saved-track-row--hovered' : undefined}
+        className={`saved-track-row${
+          folderId === null ? ' saved-track-row--unfiled' : ''
+        }${hovered ? ' saved-track-row--hovered' : ''}`}
         sx={{
+          position: 'relative',
           display: 'grid',
-          gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+          gridTemplateColumns:
+            folderId === null ? '4px minmax(0, 1fr) auto' : '48px minmax(0, 1fr) auto',
+          width: '100%',
           alignItems: 'center',
           borderBottom: 1,
           borderColor: 'divider',
@@ -3155,14 +3165,33 @@ function SavedTrackRow({
           '& .MuiListItemButton-root, & .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-selected, & .MuiListItemButton-root.Mui-selected:hover':
             { bgcolor: 'transparent' },
           '& .saved-track-row-action': {
+            width: 0,
+            height: 32,
+            minWidth: 0,
+            p: 0,
+            overflow: 'hidden',
             opacity: 0,
             pointerEvents: 'none',
-            transition: 'opacity 150ms ease-out',
+            transition:
+              'width 150ms ease-out, padding 150ms ease-out, opacity 150ms ease-out',
           },
-          '& .saved-track-row-drag, & .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:focus-within .saved-track-row-action, &.saved-track-row--hovered .saved-track-row-action':
-            { opacity: 1, pointerEvents: 'auto' },
-          '@media (width < 900px)': {
-            '& .saved-track-row-action': { opacity: 1, pointerEvents: 'auto' },
+          '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:focus-within .saved-track-row-action, &.saved-track-row--hovered .saved-track-row-action':
+            { width: 32, p: 0.5, opacity: 1, pointerEvents: 'auto' },
+          '& .saved-track-row-content': {
+            transition: 'padding 150ms ease-out',
+          },
+          '@media (hover: hover) and (pointer: fine)': {
+            '&.saved-track-row--unfiled:hover .saved-track-row-content, &.saved-track-row--unfiled:focus-within .saved-track-row-content':
+              { pl: 4 },
+          },
+          '@media (hover: none), (pointer: coarse)': {
+            '& .saved-track-row-action': {
+              width: 32,
+              p: 0.5,
+              opacity: 1,
+              pointerEvents: 'auto',
+            },
+            '&.saved-track-row--unfiled .saved-track-row-content': { pl: 4 },
           },
         }}
         onMouseEnter={() => {
@@ -3183,17 +3212,32 @@ function SavedTrackRow({
           size="small"
           aria-label={t`Move ${summary.name}`}
           data-drag-focus={`track:${summary.id}`}
-          sx={{ ml: 0.5, touchAction: 'none', cursor: 'grab' }}
+          sx={{
+            alignSelf: 'stretch',
+            justifySelf: 'start',
+            height: '100%',
+            borderRadius: 0,
+            zIndex: 1,
+            touchAction: 'none',
+            cursor: 'grab',
+            '&:hover': { bgcolor: 'transparent' },
+            '&.Mui-focusVisible': {
+              bgcolor: 'transparent',
+              outline: '2px solid currentColor',
+              outlineOffset: -2,
+            },
+          }}
           {...dragAttributes}
           {...dragListeners}
         >
           <DragIndicatorIcon fontSize="small" />
         </IconButton>
         <ListItemButton
+          className="saved-track-row-content"
           selected={selected}
           aria-pressed={multiTrackMode ? selected : undefined}
           onClick={onSelect}
-          sx={{ display: 'block', minWidth: 0, px: 1, py: 1.25 }}
+          sx={{ display: 'block', minWidth: 0, px: 0.5, py: 1.25 }}
         >
           <Typography variant="subtitle2">{summary.name}</Typography>
           <Stack
@@ -3226,7 +3270,7 @@ function SavedTrackRow({
           key={`saved-track-actions:${summary.id}:${String(hoverEpoch)}`}
           direction="row"
           spacing={0}
-          sx={{ alignItems: 'center', pr: 0.5 }}
+          sx={{ alignItems: 'center' }}
         >
           <Tooltip
             disableHoverListener={hoverSuppressed}
@@ -3326,7 +3370,7 @@ function SavedTrackList({
   onDelete,
 }: SavedTrackListProps) {
   return (
-    <List disablePadding aria-label={ariaLabel}>
+    <List disablePadding aria-label={ariaLabel} sx={{ m: 0, width: '100%' }}>
       {summaries.map((summary) => {
         const selected = multiTrackMode
           ? multiTrackSelections.some(
@@ -3433,27 +3477,39 @@ function TrackFolderSection({
       >
         <Box
           sx={{
+            position: 'relative',
             display: 'grid',
-            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+            gridTemplateColumns: 'minmax(0, 1fr) 36px',
             minHeight: 44,
             alignItems: 'stretch',
             borderBottom: 1,
             borderColor: 'divider',
             bgcolor: appColors.surface.subtle,
+            '& .track-folder-drag-handle, & .track-folder-glyph': {
+              transition: 'opacity 150ms ease-out',
+            },
+            '@media (hover: hover) and (pointer: fine)': {
+              '& .track-folder-content': { pl: 0.5 },
+              '& .track-folder-drag-handle': {
+                opacity: 0,
+                pointerEvents: 'none',
+              },
+              '&:hover .track-folder-drag-handle, &:focus-within .track-folder-drag-handle':
+                {
+                  opacity: 1,
+                  pointerEvents: 'auto',
+                },
+              '&:hover .track-folder-glyph, &:focus-within .track-folder-glyph': {
+                opacity: 0,
+              },
+            },
+            '@media (hover: none), (pointer: coarse)': {
+              '& .track-folder-content': { pl: 5 },
+            },
           }}
         >
-          <IconButton
-            ref={setActivatorNodeRef}
-            size="small"
-            aria-label={t`Reorder ${folder.name}`}
-            data-drag-focus={`folder:${folder.id}`}
-            sx={{ alignSelf: 'center', ml: 0.5, touchAction: 'none', cursor: 'grab' }}
-            {...sortableAttributes}
-            {...sortableListeners}
-          >
-            <DragIndicatorIcon fontSize="small" />
-          </IconButton>
           <ListItemButton
+            className="track-folder-content"
             aria-expanded={!collapsed}
             aria-label={
               collapsed ? t`Expand ${folder.name}` : t`Collapse ${folder.name}`
@@ -3463,16 +3519,17 @@ function TrackFolderSection({
             }}
             sx={{
               minWidth: 0,
-              px: 0.75,
+              pr: 0.5,
               py: 0.5,
-              gap: 1,
+              gap: 0.5,
               '&:hover': { bgcolor: 'action.hover' },
             }}
           >
             <Box
+              className="track-folder-glyph"
               sx={{ display: 'grid', placeItems: 'center', width: 24, flexShrink: 0 }}
             >
-              <TrackFolderGlyph iconKey={folder.iconKey} />
+              <TrackFolderGlyph iconKey={folder.iconKey} size={22} />
             </Box>
             <Typography
               id={`track-folder-${folder.id}`}
@@ -3482,25 +3539,46 @@ function TrackFolderSection({
             >
               {folder.name} ({String(summaries.length)})
             </Typography>
-            <KeyboardArrowDownIcon
-              color="action"
-              fontSize="small"
-              sx={{
-                transform: collapsed ? 'none' : 'rotate(180deg)',
-                transition: 'transform 150ms ease-out',
-              }}
-            />
           </ListItemButton>
+          <IconButton
+            className="track-folder-drag-handle"
+            ref={setActivatorNodeRef}
+            size="small"
+            aria-label={t`Reorder ${folder.name}`}
+            data-drag-focus={`folder:${folder.id}`}
+            sx={{
+              position: 'absolute',
+              insetBlock: 0,
+              insetInlineStart: 0,
+              width: 32,
+              minWidth: 0,
+              p: 0,
+              borderRadius: 0,
+              zIndex: 1,
+              touchAction: 'none',
+              cursor: 'grab',
+              '&:hover': { bgcolor: 'transparent' },
+              '&.Mui-focusVisible': {
+                bgcolor: 'transparent',
+                outline: '2px solid currentColor',
+                outlineOffset: -2,
+              },
+            }}
+            {...sortableAttributes}
+            {...sortableListeners}
+          >
+            <DragIndicatorIcon fontSize="small" />
+          </IconButton>
           <Tooltip title={t`Edit ${folder.name}`}>
             <IconButton
               size="small"
               aria-label={t`Edit ${folder.name}`}
-              sx={{ alignSelf: 'center', mr: 0.5 }}
+              sx={{ alignSelf: 'center', justifySelf: 'center' }}
               onClick={() => {
                 onEditFolder(folder);
               }}
             >
-              <EditOutlinedIcon fontSize="small" />
+              <MoreVertIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -3510,7 +3588,8 @@ function TrackFolderSection({
               minHeight: 34,
               display: 'flex',
               alignItems: 'center',
-              px: 1.5,
+              pl: 6.5,
+              pr: 1.5,
               borderBottom: 1,
               borderColor: 'divider',
             }}
@@ -3534,6 +3613,74 @@ function TrackFolderSection({
           />
         )}
       </Box>
+    </Box>
+  );
+}
+
+interface UnfiledTrackDropZoneProps {
+  readonly summaries: readonly LocalTrackSummary[];
+  readonly trackDragActive: boolean;
+  readonly deletingId: string | null;
+  readonly active: ActiveTrack | null;
+  readonly multiTrackMode: boolean;
+  readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary) => void;
+  readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
+}
+
+function UnfiledTrackDropZone({
+  summaries,
+  trackDragActive,
+  deletingId,
+  active,
+  multiTrackMode,
+  multiTrackSelections,
+  onSelect,
+  onToggleFavorite,
+  onDelete,
+}: UnfiledTrackDropZoneProps) {
+  const { t } = useLingui();
+  const { isOver, setNodeRef } = useDroppable({
+    id: 'folder-drop:unfiled',
+    data: { type: 'folder-target', folderId: null },
+  });
+
+  return (
+    <Box
+      ref={setNodeRef}
+      role="listitem"
+      aria-label={t`Unfiled tracks`}
+      data-folder-drop="unfiled"
+      sx={{
+        minHeight: summaries.length === 0 && trackDragActive ? 44 : undefined,
+        mt: 0,
+        bgcolor: isOver ? 'action.hover' : 'transparent',
+        transition: 'background-color 150ms ease-out',
+      }}
+    >
+      {summaries.length > 0 ? (
+        <SavedTrackList
+          ariaLabel={t`Unfiled tracks`}
+          summaries={summaries}
+          folderId={null}
+          deletingId={deletingId}
+          active={active}
+          multiTrackMode={multiTrackMode}
+          multiTrackSelections={multiTrackSelections}
+          onSelect={onSelect}
+          onToggleFavorite={onToggleFavorite}
+          onDelete={onDelete}
+        />
+      ) : trackDragActive ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'flex', minHeight: 44, alignItems: 'center', px: 1.5 }}
+        >
+          <Trans>Drop tracks here</Trans>
+        </Typography>
+      ) : null}
     </Box>
   );
 }
@@ -3571,10 +3718,6 @@ export function TracksPanel({
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const { isOver: isOverUnfiled, setNodeRef: setUnfiledNodeRef } = useDroppable({
-    id: 'folder-drop:unfiled',
-    data: { type: 'folder-target', folderId: null },
-  });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
@@ -3816,7 +3959,12 @@ export function TracksPanel({
             <Box
               role="list"
               aria-label={t`Saved tracks`}
-              sx={{ mx: -2, borderTop: 1, borderColor: 'divider' }}
+              sx={{
+                width: 'calc(100% + 32px)',
+                mx: -2,
+                borderTop: 1,
+                borderColor: 'divider',
+              }}
             >
               <SortableContext
                 items={folders.map((folder) => `folder-order:${folder.id}`)}
@@ -3842,41 +3990,19 @@ export function TracksPanel({
                   />
                 ))}
               </SortableContext>
-              <Box
-                ref={setUnfiledNodeRef}
-                role="listitem"
-                data-folder-drop="unfiled"
-                sx={{
-                  minHeight:
-                    unfiled.length === 0 && activeDrag?.type === 'track' ? 34 : 0,
-                  bgcolor: isOverUnfiled ? 'action.hover' : 'transparent',
+              <UnfiledTrackDropZone
+                summaries={unfiled}
+                trackDragActive={activeDrag?.type === 'track'}
+                deletingId={deletingId}
+                active={active}
+                multiTrackMode={multiTrackMode}
+                multiTrackSelections={multiTrackSelections}
+                onSelect={select}
+                onToggleFavorite={(summary) => {
+                  void toggleFavorite(summary);
                 }}
-              >
-                {unfiled.length > 0 ? (
-                  <SavedTrackList
-                    ariaLabel={t`Unfiled tracks`}
-                    summaries={unfiled}
-                    folderId={null}
-                    deletingId={deletingId}
-                    active={active}
-                    multiTrackMode={multiTrackMode}
-                    multiTrackSelections={multiTrackSelections}
-                    onSelect={select}
-                    onToggleFavorite={(summary) => {
-                      void toggleFavorite(summary);
-                    }}
-                    onDelete={remove}
-                  />
-                ) : activeDrag?.type === 'track' ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', px: 1.5, py: 1 }}
-                  >
-                    <Trans>Drop tracks here</Trans>
-                  </Typography>
-                ) : null}
-              </Box>
+                onDelete={remove}
+              />
             </Box>
           ) : null}
         </Stack>

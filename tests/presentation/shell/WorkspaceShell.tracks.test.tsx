@@ -195,11 +195,16 @@ describe('WorkspaceShell', () => {
     const list = await screen.findByRole('list', { name: 'Saved tracks' });
     const imports = within(list).getByRole('region', { name: 'Imports (1)' });
     const dayHikes = within(list).getByRole('region', { name: 'Day hikes (0)' });
-    const loose = within(list).getByRole('button', { name: /^Loose trail/u });
+    const unfiledZone = within(list).getByRole('listitem', {
+      name: 'Unfiled tracks',
+    });
+    const loose = within(
+      within(unfiledZone).getByRole('list', { name: 'Unfiled tracks' }),
+    ).getByRole('button', { name: /^Loose trail/u });
     expect(imports.compareDocumentPosition(dayHikes)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(dayHikes.compareDocumentPosition(loose)).toBe(
+    expect(dayHikes.compareDocumentPosition(unfiledZone)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(within(list).queryByRole('region', { name: /Unfiled/u })).toBeNull();
@@ -282,7 +287,10 @@ describe('WorkspaceShell', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
     ) {
-      const folderId = this.dataset.folderDrop ?? this.dataset.folderOrder;
+      const folderId =
+        this.dataset.folderDrop ??
+        this.dataset.folderOrder ??
+        this.closest<HTMLElement>('[data-folder-drop]')?.dataset.folderDrop;
       const top = folderId === 'imports' ? 0 : folderId === destination.id ? 100 : 200;
       return new DOMRect(0, top, 320, 64);
     });
@@ -315,6 +323,41 @@ describe('WorkspaceShell', () => {
         { name: /^Keyboard trail/u },
       ),
     ).toBeVisible();
+
+    const unfiledZone = within(list).getByRole('listitem', {
+      name: 'Unfiled tracks',
+    });
+    expect(within(unfiledZone).queryByText('Drop tracks here')).not.toBeInTheDocument();
+    const moveTrackBack = screen.getByRole('button', {
+      name: 'Move Keyboard trail',
+    });
+    moveTrackBack.focus();
+    await user.keyboard('[Space]');
+    expect(await within(unfiledZone).findByText('Drop tracks here')).toBeVisible();
+    await user.keyboard('[ArrowDown]');
+    expect(await screen.findByText('Over Unfiled.')).toBeVisible();
+    await user.keyboard('[Space]');
+
+    await waitFor(async () => {
+      const moved = (await services.database.listLocalTracks()).find(
+        (track) => track.id === summary.id,
+      );
+      expect(moved?.folderId).toBeNull();
+    });
+    expect(
+      within(
+        within(unfiledZone).getByRole('list', { name: 'Unfiled tracks' }),
+      ).getByRole('button', { name: /^Keyboard trail/u }),
+    ).toBeVisible();
+    expect(
+      within(within(list).getByRole('region', { name: 'Day hikes (0)' })).queryByRole(
+        'button',
+        { name: /^Keyboard trail/u },
+      ),
+    ).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Move Keyboard trail' }),
+    );
 
     const reorderImports = screen.getByRole('button', { name: 'Reorder Imports' });
     reorderImports.focus();

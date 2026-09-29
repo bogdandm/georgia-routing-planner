@@ -587,6 +587,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const shareResolutionAbort = useRef<AbortController | null>(null);
   const sharedIntent = useRef(parseTrackShareLocation(window.location.hash));
   const restorationAttempted = useRef(false);
+  // One shared read of the remembered collapsed folders. Every reload waits for it
+  // so folders never render expanded first; it applies once, and never after the
+  // user has already toggled a folder.
+  const collapsedFolderLoad = useRef<Promise<readonly string[]> | null>(null);
+  const collapsedFoldersSettled = useRef(false);
   const readyMultiTrackSelections = useMemo(
     () =>
       multiTrackSelections.filter(
@@ -628,23 +633,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const reloadSummaries = useCallback(async () => {
     try {
-      // Collapse state loads with the first folder list so folders never render
-      // expanded before their remembered state applies. It is view state, so a
-      // read failure falls back to expanded folders instead of hiding the list.
-      const firstLoad = !restorationAttempted.current;
+      collapsedFolderLoad.current ??= database
+        .loadCollapsedTrackFolderIds()
+        .catch((): readonly string[] => {
+          // View state only: an unreadable record falls back to expanded folders.
+          logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+          return [];
+        });
       const [loaded, loadedFolders, collapsed] = await Promise.all([
         database.listLocalTracks(),
         database.listTrackFolders(),
-        firstLoad
-          ? database.loadCollapsedTrackFolderIds().catch(() => {
-              logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
-              return [];
-            })
-          : null,
+        collapsedFolderLoad.current,
       ]);
       setSummaries(loaded);
       setFolders(loadedFolders);
-      if (collapsed !== null) setCollapsedFolderIds(new Set(collapsed));
+      if (!collapsedFoldersSettled.current) {
+        collapsedFoldersSettled.current = true;
+        setCollapsedFolderIds(new Set(collapsed));
+      }
       if (!restorationAttempted.current) {
         restorationAttempted.current = true;
         if (sharedIntent.current.kind !== 'none') return;
@@ -676,6 +682,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     (folderId: string) => {
       const next = new Set(collapsedFolderIds);
       if (!next.delete(folderId)) next.add(folderId);
+      collapsedFoldersSettled.current = true;
       setCollapsedFolderIds(next);
       // Saving only current folders also forgets folders deleted since.
       const known = new Set(folders.map((folder) => folder.id));

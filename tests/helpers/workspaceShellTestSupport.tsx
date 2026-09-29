@@ -209,6 +209,7 @@ export function setupWorkspaceShellTest(): void {
   });
 
   afterEach(async () => {
+    await services.database.open();
     services.database.close();
     await services.database.delete();
     vi.restoreAllMocks();

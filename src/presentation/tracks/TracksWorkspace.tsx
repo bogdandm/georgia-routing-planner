@@ -3929,7 +3929,6 @@ export function TracksPanel({
             <Tooltip title={t`Create folder`}>
               <IconButton
                 size="small"
-                color="primary"
                 aria-label={t`Create folder`}
                 onClick={() => {
                   setEditingFolder('create');

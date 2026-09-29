@@ -394,6 +394,86 @@ describe('TrackSyncWorkerServer', () => {
     });
     client.dispose();
   });
+
+  it('completes a sync when the user reorders during a folder upload', async () => {
+    const trips = folder('folder:trips', 'Trips', 1);
+    const imports = folder('imports', 'Imports', 0);
+    await database.trackFolders.bulkPut([imports, trips]);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-09-28T00:00:00.000Z',
+    });
+    await database.folderSyncStates.bulkPut([
+      { folderId: 'imports', remoteRevision: 1, pendingKind: null, localVersion: 1 },
+      { folderId: trips.id, remoteRevision: 2, pendingKind: null, localVersion: 1 },
+    ]);
+    const renamed = await database.updateTrackFolder(trips.id, {
+      name: 'Road trips',
+      normalizedName: 'road trips',
+      iconKey: 'folder',
+      updatedAt: '2026-09-29T00:00:00.000Z',
+    });
+    let remote = [
+      { folder_id: 'imports', revision: 1, payload: imports },
+      { folder_id: trips.id, revision: 2, payload: trips },
+    ];
+    const gateway = {
+      folderSnapshot: vi.fn(() => Promise.resolve(remote)),
+      mutateFolder: vi.fn(
+        async (folderId: string, _base: number, payload: TrackFolder | null) => {
+          // The user drags Trips to the top while its rename is on the wire.
+          await database.reorderTrackFolders([trips.id, 'imports']);
+          remote = remote.map((record) =>
+            record.folder_id === folderId && payload !== null
+              ? { folder_id: folderId, revision: 3, payload }
+              : record,
+          );
+          return { outcome: 'applied' as const, revision: 3 };
+        },
+      ),
+      reorderFolders: vi.fn((folderIds: readonly string[]) => {
+        remote = remote.map((record) => ({
+          ...record,
+          revision: record.revision + 10,
+          payload: { ...record.payload, position: folderIds.indexOf(record.folder_id) },
+        }));
+        return Promise.resolve();
+      }),
+      status: vi.fn().mockResolvedValue({
+        usedBytes: 0,
+        reservedBytes: 0,
+        limitBytes: 8_388_608,
+      }),
+      snapshot: vi.fn().mockResolvedValue([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: trips.id, name: renamed.name, position: 0 }),
+      expect.objectContaining({ id: 'imports', position: 1 }),
+    ]);
+    await expect(database.folderSyncStates.get(trips.id)).resolves.toMatchObject({
+      pendingKind: null,
+    });
+    expect(gateway.reorderFolders).toHaveBeenCalledWith(
+      [trips.id, 'imports'],
+      expect.anything(),
+    );
+    await expect(database.readPendingFolderOrder()).resolves.toBeNull();
+    client.dispose();
+  });
   it('applies an uploaded revision through one batch and publishes one event', async () => {
     const track = summary('local:track');
     await database.saveLocalTrack(track, content(track.id));

@@ -2987,14 +2987,7 @@ const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) =
       const data = container.data.current;
       const rect = container.rect.current;
       return data?.type === targetType && rect !== null
-        ? [
-            {
-              folderId: data.folderId as string | null,
-              position:
-                data.type === 'folder' ? (data.folder as TrackFolder).position : null,
-              rect,
-            },
-          ]
+        ? [{ folderId: data.folderId as string | null, rect }]
         : [];
     })
     .sort((left, right) => left.rect.top - right.rect.top);
@@ -3018,26 +3011,19 @@ const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) =
         ? undefined
         : targets[currentIndex + (event.code === 'ArrowDown' ? 1 : -1)];
   } else {
-    const currentFolder =
+    // Folder positions may tie after synchronization, so keyboard moves step
+    // through the rendered order rather than comparing stored positions.
+    const currentFolderId =
       overData?.type === 'folder'
-        ? (overData.folder as TrackFolder)
-        : (activeData.folder as TrackFolder);
-    const candidates = targets
-      .filter(
-        (candidate) =>
-          candidate.position !== null &&
-          (event.code === 'ArrowDown'
-            ? candidate.position > currentFolder.position
-            : candidate.position < currentFolder.position),
-      )
-      .sort((left, right) => {
-        if (left.position === null || right.position === null) return 0;
-        return (
-          Math.abs(left.position - currentFolder.position) -
-          Math.abs(right.position - currentFolder.position)
-        );
-      });
-    [target] = candidates;
+        ? (overData.folderId as string)
+        : (activeData.folder as TrackFolder).id;
+    const currentIndex = targets.findIndex(
+      (candidate) => candidate.folderId === currentFolderId,
+    );
+    target =
+      currentIndex < 0
+        ? undefined
+        : targets[currentIndex + (event.code === 'ArrowDown' ? 1 : -1)];
   }
   if (target === undefined) return args.currentCoordinates;
   return {
@@ -3091,14 +3077,27 @@ function revealOnRowHover(selector: string, hoverSelector: string) {
   } as const;
 }
 
+/**
+ * Hover state shared by every saved-track row. A pointer favorite click re-sorts
+ * rows under a stationary pointer, which fires enter events on whichever row slides
+ * underneath; hover stays suppressed across all rows until the pointer really moves.
+ */
+interface SavedTrackHover {
+  readonly suppressed: boolean;
+  /** Remounts row tooltips so one opened before the re-sort closes. */
+  readonly epoch: number;
+  readonly resume: () => void;
+}
+
 interface SavedTrackRowProps {
   readonly summary: LocalTrackSummary;
   readonly folderId: string | null;
   readonly selected: boolean;
   readonly multiTrackMode: boolean;
   readonly deleting: boolean;
+  readonly hover: SavedTrackHover;
   readonly onSelect: () => void;
-  readonly onToggleFavorite: () => void;
+  readonly onToggleFavorite: (fromPointer: boolean) => void;
   readonly onDelete: () => Promise<void>;
 }
 
@@ -3108,6 +3107,7 @@ function SavedTrackRow({
   selected,
   multiTrackMode,
   deleting,
+  hover,
   onSelect,
   onToggleFavorite,
   onDelete,
@@ -3115,8 +3115,6 @@ function SavedTrackRow({
   const { t } = useLingui();
   const [pendingDelete, setPendingDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [hoverEpoch, setHoverEpoch] = useState(0);
-  const [hoverSuppressed, setHoverSuppressed] = useState(false);
   const {
     attributes: dragAttributes,
     isDragging,
@@ -3177,10 +3175,10 @@ function SavedTrackRow({
           },
         }}
         onMouseEnter={() => {
-          if (!hoverSuppressed) setHovered(true);
+          if (!hover.suppressed) setHovered(true);
         }}
         onMouseMove={() => {
-          setHoverSuppressed(false);
+          if (hover.suppressed) hover.resume();
           setHovered(true);
         }}
         onMouseLeave={() => {
@@ -3240,13 +3238,13 @@ function SavedTrackRow({
           </Stack>
         </ListItemButton>
         <Stack
-          key={`saved-track-actions:${summary.id}:${String(hoverEpoch)}`}
+          key={`saved-track-actions:${summary.id}:${String(hover.epoch)}`}
           direction="row"
           spacing={0}
           sx={{ alignItems: 'center', pr: 1 }}
         >
           <Tooltip
-            disableHoverListener={hoverSuppressed}
+            disableHoverListener={hover.suppressed}
             title={summary.favorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             <IconButton
@@ -3259,12 +3257,9 @@ function SavedTrackRow({
               }
               color={summary.favorite ? 'warning' : 'default'}
               onClick={(event) => {
-                if (event.detail > 0) {
-                  setHoverSuppressed(true);
-                  setHovered(false);
-                  setHoverEpoch((current) => current + 1);
-                }
-                onToggleFavorite();
+                const fromPointer = event.detail > 0;
+                if (fromPointer) setHovered(false);
+                onToggleFavorite(fromPointer);
               }}
             >
               {summary.favorite ? (
@@ -3275,7 +3270,7 @@ function SavedTrackRow({
             </IconButton>
           </Tooltip>
           <Tooltip
-            disableHoverListener={hoverSuppressed}
+            disableHoverListener={hover.suppressed}
             title={pendingDelete ? 'Confirm deletion' : 'Delete track'}
           >
             <IconButton
@@ -3325,8 +3320,9 @@ interface SavedTrackListProps {
   readonly active: ActiveTrack | null;
   readonly multiTrackMode: boolean;
   readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly hover: SavedTrackHover;
   readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
-  readonly onToggleFavorite: (summary: LocalTrackSummary) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary, fromPointer: boolean) => void;
   readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
 }
 
@@ -3338,6 +3334,7 @@ function SavedTrackList({
   active,
   multiTrackMode,
   multiTrackSelections,
+  hover,
   onSelect,
   onToggleFavorite,
   onDelete,
@@ -3358,11 +3355,12 @@ function SavedTrackList({
             selected={selected}
             multiTrackMode={multiTrackMode}
             deleting={deletingId === summary.id}
+            hover={hover}
             onSelect={() => {
               onSelect(summary, selected);
             }}
-            onToggleFavorite={() => {
-              onToggleFavorite(summary);
+            onToggleFavorite={(fromPointer) => {
+              onToggleFavorite(summary, fromPointer);
             }}
             onDelete={() => onDelete(summary)}
           />
@@ -3380,10 +3378,11 @@ interface TrackFolderSectionProps {
   readonly active: ActiveTrack | null;
   readonly multiTrackMode: boolean;
   readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly hover: SavedTrackHover;
   readonly onToggleCollapsed: (folderId: string) => void;
   readonly onEditFolder: (folder: TrackFolder) => void;
   readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
-  readonly onToggleFavorite: (summary: LocalTrackSummary) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary, fromPointer: boolean) => void;
   readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
 }
 
@@ -3395,6 +3394,7 @@ function TrackFolderSection({
   active,
   multiTrackMode,
   multiTrackSelections,
+  hover,
   onToggleCollapsed,
   onEditFolder,
   onSelect,
@@ -3567,6 +3567,7 @@ function TrackFolderSection({
             active={active}
             multiTrackMode={multiTrackMode}
             multiTrackSelections={multiTrackSelections}
+            hover={hover}
             onSelect={onSelect}
             onToggleFavorite={onToggleFavorite}
             onDelete={onDelete}
@@ -3584,8 +3585,9 @@ interface UnfiledTrackDropZoneProps {
   readonly active: ActiveTrack | null;
   readonly multiTrackMode: boolean;
   readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly hover: SavedTrackHover;
   readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
-  readonly onToggleFavorite: (summary: LocalTrackSummary) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary, fromPointer: boolean) => void;
   readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
 }
 
@@ -3596,6 +3598,7 @@ function UnfiledTrackDropZone({
   active,
   multiTrackMode,
   multiTrackSelections,
+  hover,
   onSelect,
   onToggleFavorite,
   onDelete,
@@ -3627,6 +3630,7 @@ function UnfiledTrackDropZone({
           active={active}
           multiTrackMode={multiTrackMode}
           multiTrackSelections={multiTrackSelections}
+          hover={hover}
           onSelect={onSelect}
           onToggleFavorite={onToggleFavorite}
           onDelete={onDelete}
@@ -3670,6 +3674,25 @@ export function TracksPanel({
   } = useTracksWorkspace();
   const { t } = useLingui();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hoverSuppressed, setHoverSuppressed] = useState(false);
+  const [hoverEpoch, setHoverEpoch] = useState(0);
+  const hover = useMemo<SavedTrackHover>(
+    () => ({
+      suppressed: hoverSuppressed,
+      epoch: hoverEpoch,
+      resume: () => {
+        setHoverSuppressed(false);
+      },
+    }),
+    [hoverEpoch, hoverSuppressed],
+  );
+  const toggleRowFavorite = (summary: LocalTrackSummary, fromPointer: boolean) => {
+    if (fromPointer) {
+      setHoverSuppressed(true);
+      setHoverEpoch((current) => current + 1);
+    }
+    void toggleFavorite(summary);
+  };
   const [editingFolder, setEditingFolder] = useState<TrackFolder | 'create' | null>(
     null,
   );
@@ -3944,12 +3967,11 @@ export function TracksPanel({
                     active={active}
                     multiTrackMode={multiTrackMode}
                     multiTrackSelections={multiTrackSelections}
+                    hover={hover}
                     onToggleCollapsed={toggleFolderCollapsed}
                     onEditFolder={setEditingFolder}
                     onSelect={select}
-                    onToggleFavorite={(summary) => {
-                      void toggleFavorite(summary);
-                    }}
+                    onToggleFavorite={toggleRowFavorite}
                     onDelete={remove}
                   />
                 ))}
@@ -3961,10 +3983,9 @@ export function TracksPanel({
                 active={active}
                 multiTrackMode={multiTrackMode}
                 multiTrackSelections={multiTrackSelections}
+                hover={hover}
                 onSelect={select}
-                onToggleFavorite={(summary) => {
-                  void toggleFavorite(summary);
-                }}
+                onToggleFavorite={toggleRowFavorite}
                 onDelete={remove}
               />
             </Box>

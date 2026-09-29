@@ -1430,10 +1430,9 @@ export class TrackSyncWorkerServer {
       const before = initialById.get(folderId);
       const now = current.get(folderId);
       if (before === undefined || now === undefined) continue;
-      if (
-        JSON.stringify(before.folder) !== JSON.stringify(now.folder) ||
-        !folderStatesEqual(before.state, now.state)
-      ) {
+      // Every local content edit or deletion advances the folder's sync state; a
+      // local reorder does not, and the merge keeps its newer positions.
+      if (!folderStatesEqual(before.state, now.state)) {
         throw new TrackSyncWorkerError(
           'Synchronization could not finish. Your local tracks and folders remain available.',
           'concurrent-change',

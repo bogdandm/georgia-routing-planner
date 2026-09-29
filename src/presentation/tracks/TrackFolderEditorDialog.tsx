@@ -50,18 +50,27 @@ function OpenTrackFolderEditorDialog({
   const [iconKey, setIconKey] = useState<TrackFolderIconKey>(
     folder?.iconKey ?? 'folder',
   );
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const save = async () => {
+    let normalizedName: string;
     try {
-      const normalized = normalizeTrackFolderName(name);
-      setSaving(true);
-      setError(null);
-      await onSave(normalized.name, iconKey);
+      normalizedName = normalizeTrackFolderName(name).name;
     } catch (failure) {
-      setError(
+      setValidationError(
+        failure instanceof Error ? failure.message : t`The folder could not be saved.`,
+      );
+      return;
+    }
+    setSaving(true);
+    setSubmitError(null);
+    try {
+      await onSave(normalizedName, iconKey);
+    } catch (failure) {
+      setSubmitError(
         failure instanceof Error ? failure.message : t`The folder could not be saved.`,
       );
       setSaving(false);
@@ -75,11 +84,11 @@ function OpenTrackFolderEditorDialog({
     }
     if (onDelete === undefined) return;
     setSaving(true);
-    setError(null);
+    setSubmitError(null);
     try {
       await onDelete();
     } catch (failure) {
-      setError(
+      setSubmitError(
         failure instanceof Error
           ? failure.message
           : t`The folder could not be deleted.`,
@@ -109,12 +118,12 @@ function OpenTrackFolderEditorDialog({
             label={t`Folder name`}
             value={name}
             disabled={saving}
-            error={error !== null}
-            helperText={error}
+            error={validationError !== null}
+            helperText={validationError}
             slotProps={{ htmlInput: { maxLength: 200 } }}
             onChange={(event) => {
               setName(event.target.value);
-              setError(null);
+              setValidationError(null);
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void save();
@@ -128,10 +137,10 @@ function OpenTrackFolderEditorDialog({
             disabled={saving}
             onChange={(selected: SelectableIconKey) => {
               setIconKey(selected);
-              setError(null);
+              setSubmitError(null);
             }}
           />
-          {error === null ? null : <Alert severity="error">{error}</Alert>}
+          {submitError === null ? null : <Alert severity="error">{submitError}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions

@@ -242,7 +242,8 @@ describe('WorkspaceShell', () => {
     const created = await within(list).findByRole('region', {
       name: 'Weekend (0)',
     });
-    await user.click(within(created).getByRole('button', { name: 'Edit Weekend' }));
+    // Folder actions are revealed by CSS :hover, which jsdom does not apply.
+    fireEvent.click(within(created).getByRole('button', { name: 'Edit Weekend' }));
     const editDialog = screen.getByRole('dialog', { name: 'Edit folder' });
     const nameInput = within(editDialog).getByLabelText('Folder name');
     await user.clear(nameInput);
@@ -263,7 +264,7 @@ describe('WorkspaceShell', () => {
       (folder) => folder.name === 'Long weekends',
     );
     expect(stored).toMatchObject({ iconKey: 'hiking' });
-    await user.click(
+    fireEvent.click(
       within(updated).getByRole('button', { name: 'Edit Long weekends' }),
     );
     const deleteDialog = screen.getByRole('dialog', { name: 'Edit folder' });

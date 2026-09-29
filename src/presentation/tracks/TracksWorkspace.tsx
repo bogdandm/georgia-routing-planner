@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import AddIcon from '@mui/icons-material/Add';
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
@@ -65,6 +65,8 @@ import {
   TextField,
   Tooltip,
   Typography,
+  type SxProps,
+  type Theme,
 } from '@mui/material';
 import {
   createContext,
@@ -3066,6 +3068,51 @@ const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) =
   };
 };
 
+// The saved-track list bleeds to the panel edges. Drag handles live in the
+// panel's 16 px side padding, so hover never shifts row content, and folder
+// contents align with the folder name to show hierarchy.
+const TRACK_LIST_GUTTER_PX = 16;
+const TRACK_FOLDER_GLYPH_PX = 20;
+const TRACK_FOLDER_INDENT_PX = TRACK_FOLDER_GLYPH_PX + 8;
+
+const dragHandleSx: SxProps<Theme> = {
+  alignSelf: 'stretch',
+  width: TRACK_LIST_GUTTER_PX,
+  minWidth: 0,
+  p: 0,
+  borderRadius: 0,
+  color: 'text.secondary',
+  touchAction: 'none',
+  cursor: 'grab',
+  '& .MuiSvgIcon-root': { fontSize: 16 },
+  '&:hover': { bgcolor: 'transparent', color: 'text.primary' },
+  '&.Mui-focusVisible': {
+    bgcolor: 'transparent',
+    outline: '2px solid currentColor',
+    outlineOffset: -2,
+  },
+};
+
+// Secondary row controls stay in the layout and only fade in, so revealing
+// them never reflows the row. Keyboard focus reveals them too; focus restored
+// after a pointer drag does not. Touch devices have no hover and always show them.
+function revealOnRowHover(selector: string, hoverSelector: string) {
+  return {
+    [`& ${selector}`]: {
+      opacity: 0,
+      pointerEvents: 'none',
+      transition: 'opacity 150ms ease-out',
+    },
+    [`&${hoverSelector} ${selector}, &:has(:focus-visible) ${selector}`]: {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    '@media (hover: none), (pointer: coarse)': {
+      [`& ${selector}`]: { opacity: 1, pointerEvents: 'auto' },
+    },
+  } as const;
+}
+
 function TrackFolderGlyph({
   iconKey,
   size = 20,
@@ -3142,15 +3189,10 @@ function SavedTrackRow({
       <Box
         ref={setNodeRef}
         component="li"
-        className={`saved-track-row${
-          folderId === null ? ' saved-track-row--unfiled' : ''
-        }${hovered ? ' saved-track-row--hovered' : ''}`}
+        className={hovered ? 'saved-track-row--hovered' : undefined}
         sx={{
-          position: 'relative',
           display: 'grid',
-          gridTemplateColumns:
-            folderId === null ? '4px minmax(0, 1fr) auto' : '32px minmax(0, 1fr) auto',
-          width: '100%',
+          gridTemplateColumns: `${String(TRACK_LIST_GUTTER_PX)}px minmax(0, 1fr) auto`,
           alignItems: 'center',
           borderBottom: 1,
           borderColor: 'divider',
@@ -3164,34 +3206,10 @@ function SavedTrackRow({
               : 'transparent',
           '& .MuiListItemButton-root, & .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-selected, & .MuiListItemButton-root.Mui-selected:hover':
             { bgcolor: 'transparent' },
-          '& .saved-track-row-action': {
-            width: 0,
-            height: 32,
-            minWidth: 0,
-            p: 0,
-            overflow: 'hidden',
-            opacity: 0,
-            pointerEvents: 'none',
-            transition:
-              'width 150ms ease-out, padding 150ms ease-out, opacity 150ms ease-out',
-          },
-          '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:focus-within .saved-track-row-action, &.saved-track-row--hovered .saved-track-row-action':
-            { width: 32, p: 0.5, opacity: 1, pointerEvents: 'auto' },
-          '& .saved-track-row-content': {
-            transition: 'padding 150ms ease-out',
-          },
-          '@media (hover: hover) and (pointer: fine)': {
-            '&.saved-track-row--unfiled:hover .saved-track-row-content, &.saved-track-row--unfiled:focus-within .saved-track-row-content':
-              { pl: 4 },
-          },
-          '@media (hover: none), (pointer: coarse)': {
-            '& .saved-track-row-action': {
-              width: 32,
-              p: 0.5,
-              opacity: 1,
-              pointerEvents: 'auto',
-            },
-            '&.saved-track-row--unfiled .saved-track-row-content': { pl: 4 },
+          ...revealOnRowHover('.saved-track-row-action', '.saved-track-row--hovered'),
+          '& .saved-track-row-favorite--active, & .saved-track-row-action--pending': {
+            opacity: 1,
+            pointerEvents: 'auto',
           },
         }}
         onMouseEnter={() => {
@@ -3208,36 +3226,27 @@ function SavedTrackRow({
       >
         <IconButton
           ref={setActivatorNodeRef}
-          className="saved-track-row-action saved-track-row-drag"
+          className="saved-track-row-action"
           size="small"
           aria-label={t`Move ${summary.name}`}
           data-drag-focus={`track:${summary.id}`}
-          sx={{
-            alignSelf: 'stretch',
-            justifySelf: 'start',
-            height: '100%',
-            borderRadius: 0,
-            zIndex: 1,
-            touchAction: 'none',
-            cursor: 'grab',
-            '&:hover': { bgcolor: 'transparent' },
-            '&.Mui-focusVisible': {
-              bgcolor: 'transparent',
-              outline: '2px solid currentColor',
-              outlineOffset: -2,
-            },
-          }}
+          sx={dragHandleSx}
           {...dragAttributes}
           {...dragListeners}
         >
           <DragIndicatorIcon fontSize="small" />
         </IconButton>
         <ListItemButton
-          className="saved-track-row-content"
           selected={selected}
           aria-pressed={multiTrackMode ? selected : undefined}
           onClick={onSelect}
-          sx={{ display: 'block', minWidth: 0, px: 0.5, py: 1.25 }}
+          sx={{
+            display: 'block',
+            minWidth: 0,
+            py: 1.25,
+            pl: folderId === null ? 0 : `${String(TRACK_FOLDER_INDENT_PX)}px`,
+            pr: 0.5,
+          }}
         >
           <Typography variant="subtitle2">{summary.name}</Typography>
           <Stack
@@ -3270,7 +3279,7 @@ function SavedTrackRow({
           key={`saved-track-actions:${summary.id}:${String(hoverEpoch)}`}
           direction="row"
           spacing={0}
-          sx={{ alignItems: 'center' }}
+          sx={{ alignItems: 'center', pr: 1 }}
         >
           <Tooltip
             disableHoverListener={hoverSuppressed}
@@ -3465,51 +3474,47 @@ function TrackFolderSection({
       data-folder-drop={folder.id}
       sx={{
         transform: CSS.Transform.toString(transform),
-        transition,
         opacity: isDragging ? 0 : 1,
-        bgcolor: isOver ? 'action.hover' : 'transparent',
+        bgcolor: isOver ? 'action.selected' : 'transparent',
+        transition: [transition, 'background-color 150ms ease-out']
+          .filter(Boolean)
+          .join(', '),
       }}
     >
       <Box
         component="section"
-        aria-labelledby={`track-folder-${folder.id}`}
-        sx={{ overflow: 'hidden' }}
+        aria-label={`${folder.name} (${String(summaries.length)})`}
       >
         <Box
           sx={{
-            position: 'relative',
             display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) 36px',
+            // Columns match the track rows: gutter, content, favorite-sized
+            // edit action, delete-sized chevron. The toggle spans the last
+            // three columns so the whole header, chevron included, expands.
+            gridTemplateColumns: `${String(TRACK_LIST_GUTTER_PX)}px minmax(0, 1fr) 30px 38px`,
             minHeight: 44,
-            alignItems: 'stretch',
+            alignItems: 'center',
             borderBottom: 1,
             borderColor: 'divider',
             bgcolor: appColors.surface.subtle,
-            '& .track-folder-drag-handle, & .track-folder-glyph': {
-              transition: 'opacity 150ms ease-out',
-            },
-            '@media (hover: hover) and (pointer: fine)': {
-              '& .track-folder-content': { pl: 0.5 },
-              '& .track-folder-drag-handle': {
-                opacity: 0,
-                pointerEvents: 'none',
-              },
-              '&:hover .track-folder-drag-handle, &:focus-within .track-folder-drag-handle':
-                {
-                  opacity: 1,
-                  pointerEvents: 'auto',
-                },
-              '&:hover .track-folder-glyph, &:focus-within .track-folder-glyph': {
-                opacity: 0,
-              },
-            },
-            '@media (hover: none), (pointer: coarse)': {
-              '& .track-folder-content': { pl: 5 },
-            },
+            '&:hover': { bgcolor: 'action.hover' },
+            '& .MuiListItemButton-root:hover': { bgcolor: 'transparent' },
+            ...revealOnRowHover('.track-folder-action', ':hover'),
           }}
         >
+          <IconButton
+            className="track-folder-action"
+            ref={setActivatorNodeRef}
+            size="small"
+            aria-label={t`Reorder ${folder.name}`}
+            data-drag-focus={`folder:${folder.id}`}
+            sx={dragHandleSx}
+            {...sortableAttributes}
+            {...sortableListeners}
+          >
+            <DragIndicatorIcon />
+          </IconButton>
           <ListItemButton
-            className="track-folder-content"
             aria-expanded={!collapsed}
             aria-label={
               collapsed ? t`Expand ${folder.name}` : t`Collapse ${folder.name}`
@@ -3518,67 +3523,55 @@ function TrackFolderSection({
               onToggleCollapsed(folder.id);
             }}
             sx={{
+              gridColumn: '2 / -1',
+              gridRow: 1,
+              alignSelf: 'stretch',
               minWidth: 0,
-              pr: 0.5,
+              gap: 1,
+              px: 0,
               py: 0.5,
-              gap: 0.5,
-              '&:hover': { bgcolor: 'action.hover' },
             }}
           >
             <Box
-              className="track-folder-glyph"
-              sx={{ display: 'grid', placeItems: 'center', width: 24, flexShrink: 0 }}
+              sx={{
+                display: 'grid',
+                placeItems: 'center',
+                width: TRACK_FOLDER_GLYPH_PX,
+                flexShrink: 0,
+                color: 'text.secondary',
+              }}
             >
-              <TrackFolderGlyph iconKey={folder.iconKey} size={22} />
+              <TrackFolderGlyph iconKey={folder.iconKey} size={TRACK_FOLDER_GLYPH_PX} />
             </Box>
-            <Typography
-              id={`track-folder-${folder.id}`}
-              variant="subtitle2"
-              sx={{ minWidth: 0, flex: 1 }}
-              noWrap
-            >
-              {folder.name} ({String(summaries.length)})
+            <Typography variant="subtitle2" noWrap sx={{ minWidth: 0 }}>
+              {folder.name}
             </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+              {summaries.length}
+            </Typography>
+            <Box aria-hidden sx={{ flex: 1, minWidth: 32 }} />
+            <KeyboardArrowDownIcon
+              fontSize="small"
+              sx={{
+                mr: '13px',
+                flexShrink: 0,
+                color: 'text.secondary',
+                transform: collapsed ? 'rotate(-90deg)' : 'none',
+                transition: 'transform 150ms ease-out',
+              }}
+            />
           </ListItemButton>
-          <IconButton
-            className="track-folder-drag-handle"
-            ref={setActivatorNodeRef}
-            size="small"
-            aria-label={t`Reorder ${folder.name}`}
-            data-drag-focus={`folder:${folder.id}`}
-            sx={{
-              position: 'absolute',
-              insetBlock: 0,
-              insetInlineStart: 0,
-              width: 32,
-              minWidth: 0,
-              p: 0,
-              borderRadius: 0,
-              zIndex: 1,
-              touchAction: 'none',
-              cursor: 'grab',
-              '&:hover': { bgcolor: 'transparent' },
-              '&.Mui-focusVisible': {
-                bgcolor: 'transparent',
-                outline: '2px solid currentColor',
-                outlineOffset: -2,
-              },
-            }}
-            {...sortableAttributes}
-            {...sortableListeners}
-          >
-            <DragIndicatorIcon fontSize="small" />
-          </IconButton>
           <Tooltip title={t`Edit ${folder.name}`}>
             <IconButton
+              className="track-folder-action"
               size="small"
               aria-label={t`Edit ${folder.name}`}
-              sx={{ alignSelf: 'center', justifySelf: 'center' }}
+              sx={{ gridColumn: 3, gridRow: 1, zIndex: 1 }}
               onClick={() => {
                 onEditFolder(folder);
               }}
             >
-              <MoreVertIcon fontSize="small" />
+              <EditOutlinedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -3588,8 +3581,8 @@ function TrackFolderSection({
               minHeight: 34,
               display: 'flex',
               alignItems: 'center',
-              pl: 4.5,
-              pr: 1.5,
+              pl: `${String(TRACK_LIST_GUTTER_PX + TRACK_FOLDER_INDENT_PX)}px`,
+              pr: 2,
               borderBottom: 1,
               borderColor: 'divider',
             }}
@@ -3654,8 +3647,7 @@ function UnfiledTrackDropZone({
       data-folder-drop="unfiled"
       sx={{
         minHeight: summaries.length === 0 && trackDragActive ? 44 : undefined,
-        mt: 0,
-        bgcolor: isOver ? 'action.hover' : 'transparent',
+        bgcolor: isOver ? 'action.selected' : 'transparent',
         transition: 'background-color 150ms ease-out',
       }}
     >
@@ -3676,7 +3668,7 @@ function UnfiledTrackDropZone({
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ display: 'flex', minHeight: 44, alignItems: 'center', px: 1.5 }}
+          sx={{ display: 'flex', minHeight: 44, alignItems: 'center', px: 2 }}
         >
           <Trans>Drop tracks here</Trans>
         </Typography>
@@ -3898,7 +3890,13 @@ export function TracksPanel({
           },
         }}
       >
-        <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
+        {/* useFlexGap keeps Stack from resetting the saved-track list's
+            negative margins, which let it bleed to the panel edges. */}
+        <Stack
+          spacing={2}
+          useFlexGap
+          sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}
+        >
           <TrackImportZone />
           <Box
             sx={{
@@ -3937,7 +3935,7 @@ export function TracksPanel({
                   setEditingFolder('create');
                 }}
               >
-                <AddIcon />
+                <CreateNewFolderOutlinedIcon />
               </IconButton>
             </Tooltip>
           </Box>

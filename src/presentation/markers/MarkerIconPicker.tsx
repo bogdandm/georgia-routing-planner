@@ -144,6 +144,7 @@ export function MarkerIconPicker({
         startIcon={<IconGlyph iconKey={value} size={18} />}
         endIcon={<ExpandMoreIcon />}
         sx={{
+          alignSelf: 'flex-start',
           minWidth: 0,
           maxWidth: '100%',
           px: 1.25,

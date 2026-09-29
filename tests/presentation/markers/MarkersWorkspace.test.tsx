@@ -1,3 +1,4 @@
+import { I18nProvider } from '@lingui/react';
 import { ThemeProvider } from '@mui/material';
 import {
   act,
@@ -22,6 +23,8 @@ import {
   requestMarkerCreationAt,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
+import { MarkerIconPicker } from '@/presentation/markers/MarkerIconPicker';
 import {
   MarkersPanel,
   MarkerSortControl,
@@ -77,19 +80,22 @@ function renderMarkers(onMarkerSortChange?: (sort: MarkerSort) => Promise<boolea
       return Promise.resolve(true);
     });
   return render(
-    <RuntimeServicesProvider services={services}>
-      <ThemeProvider theme={createAppTheme()}>
-        <MarkersWorkspaceProvider>
-          <MarkerSortControl onMarkerSortChange={saveSort} />
-          <WeatherSettingsControl />
-          <MarkersPanel />
-        </MarkersWorkspaceProvider>
-      </ThemeProvider>
-    </RuntimeServicesProvider>,
+    <I18nProvider i18n={appI18n}>
+      <RuntimeServicesProvider services={services}>
+        <ThemeProvider theme={createAppTheme()}>
+          <MarkersWorkspaceProvider>
+            <MarkerSortControl onMarkerSortChange={saveSort} />
+            <WeatherSettingsControl />
+            <MarkersPanel />
+          </MarkersWorkspaceProvider>
+        </ThemeProvider>
+      </RuntimeServicesProvider>
+    </I18nProvider>,
   );
 }
 
 beforeEach(async () => {
+  activateAppLocale('en');
   resetMapInteractionStore();
   services = createTestServices();
   await services.database.delete();
@@ -205,6 +211,41 @@ describe('MarkersWorkspace', () => {
     await expect(services.database.loadRecentMarkerIconKeys()).resolves.toEqual([
       'hiking',
     ]);
+  });
+
+  it('localizes icon categories, options, and search matching', async () => {
+    activateAppLocale('ru');
+    const user = userEvent.setup();
+    render(
+      <I18nProvider i18n={appI18n}>
+        <ThemeProvider theme={createAppTheme()}>
+          <MarkerIconPicker
+            value="place"
+            recentIconKeys={[]}
+            label="Значок маркера"
+            onChange={vi.fn()}
+          />
+        </ThemeProvider>
+      </I18nProvider>,
+    );
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Значок маркера. Текущий значок: Место',
+      }),
+    );
+    expect(screen.getByRole('tab', { name: 'Места' })).toBeVisible();
+    expect(
+      screen.getByRole('option', { name: 'Выбрать значок «Место»' }),
+    ).toBeVisible();
+
+    await user.type(screen.getByRole('searchbox', { name: 'Поиск значков' }), 'пещера');
+    expect(
+      screen.getByRole('option', { name: 'Выбрать значок «Пещера»' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('option', { name: 'Выбрать значок «Место»' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows the 21 persisted recently used icons in a three-row section', async () => {

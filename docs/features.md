@@ -104,11 +104,11 @@ synchronization requests until the page reloads.
 
 ### Tracks
 
-Tracks combines the implemented browser-local track library with reviewed global catalog
-and folder behavior. The contextual sidebar header places the pressed multi-track
-selection control immediately before `Plan route`; its scrollable content owns file
-import, search, sort, and local track results. Catalog, personal folders, tags, filters,
-and batch import remain reviewed but unavailable.
+Tracks combines the browser-local track library with flat personal folders. The
+contextual sidebar header places the pressed multi-track selection control immediately
+before `Plan route`; its scrollable content owns file import, search, sorting, folder
+management, and local track results. Catalog, tags, filters, and batch import remain
+reviewed but unavailable.
 
 Selecting a track draws its geometry on the map and opens an adjacent detail pane with
 source, tags, metrics, folder/download actions, calculation provenance, and a contextual
@@ -212,21 +212,33 @@ inline confirmation: the row delete icon becomes a destructive confirmation icon
 delete**. Pointer exit, Escape, and click-away cancel either confirmation without
 mutation. Users can favorite a track from its list row or detail header. Saved-track GPX
 downloads use the one-click **Download GPX** detail-header action; KML remains in the
-detail header's compact action menu. Favorites sort before other tracks, with newest
-imports first inside each group. The latest opened saved track reopens after restart
-when its content is still valid. A compact local-retention notice stays pinned to the
-Tracks panel bottom. Catalog, folders, tags, filters, batch import, whole-workspace
-dropping, and manual GPX authoring remain unavailable. A newly imported or reopened
-track renders as bright-blue independent lines and fits its complete bounds with padding
-for the master/detail surfaces. With usable elevation, the map overlays every non-flat
-climb/descent grade subsegment across the active track, leaving flat spans bright blue.
-The overlay is not narrowed by chart or Climbs & Descents segment hover/selection; those
-interactions remain panel-only. Closing the track removes the active geometry without
-deleting a saved record or moving the camera. Every saved track can be downloaded
-locally as GPX or KML. Generated files preserve independent segments, saved name,
-available canonical point elevation—including promoted Terrarium elevation for an
-elevation-free import—and reliably aligned timestamps without writing GPX or KML
-description elements; conversion never uploads the source.
+detail header's compact action menu. Favorites sort before other tracks, with the
+selected track sort applied independently inside every folder. Users create, rename,
+re-icon, delete, collapse, expand, and explicitly reorder flat folders from compact
+controls above and within the track list. The icon picker offers the folder glyph plus
+the complete marker catalog. Empty folders remain visible as drop targets. Tracks
+without a folder render directly below the folder rows without another framed section.
+Deleting a folder moves its tracks there. Tracks and folders move with pointer, delayed
+touch, or keyboard drag controls; keyboard drops restore focus to the moved control.
+Nesting is unavailable. New file imports enter the single provisioned **Imports**
+folder, saved route plans remain unfiled, and migration assigns older imported tracks to
+**Imports** while leaving older saved routes unfiled. **Imports** can be renamed,
+re-iconed, and reordered but not deleted, because it is the destination for every new
+import. Folder identity, ordering, icon, and track placement synchronize with the
+existing opt-in account data flow; the last synchronized folder reorder wins as a whole.
+
+The latest opened saved track reopens after restart when its content is still valid.
+Catalog, tags, filters, batch import, and manual GPX authoring remain unavailable. A
+newly imported or reopened track renders as bright-blue independent lines and fits its
+complete bounds with padding for the master/detail surfaces. With usable elevation, the
+map overlays every non-flat climb/descent grade subsegment across the active track,
+leaving flat spans bright blue. The overlay is not narrowed by chart or Climbs &
+Descents segment hover/selection; those interactions remain panel-only. Closing the
+track removes the active geometry without deleting a saved record or moving the camera.
+Every saved track can be downloaded locally as GPX or KML. Generated files preserve
+independent segments, saved name, available canonical point elevation—including promoted
+Terrarium elevation for an elevation-free import—and reliably aligned timestamps without
+writing GPX or KML description elements; conversion never uploads the source.
 
 GPX import also reads bounded root `<wpt>` elements in document order. Valid coordinates
 are retained, names use the same whitespace and length normalization as saved markers,

@@ -34,7 +34,7 @@ const signUpErrorMessage = 'Unable to create an account. Try again.';
 const sessionErrorMessage = 'Unable to restore your account session.';
 const signOutErrorMessage = 'Unable to sign out. Try again.';
 const syncErrorMessage =
-  'Synchronization could not finish. Your local tracks and markers remain available.';
+  'Synchronization could not finish. Your local tracks, folders, and markers remain available.';
 const syncQuotaErrorMessage =
   'Cloud track storage is full. Delete a synchronized track and try again.';
 const syncPreferenceErrorMessage =
@@ -47,6 +47,7 @@ export class SupabaseUserDataService implements UserDataService {
   readonly #listeners = new Set<() => void>();
   readonly #trackListeners = new Set<() => void>();
   readonly #markerListeners = new Set<() => void>();
+  readonly #folderListeners = new Set<() => void>();
   #worker: TrackSyncWorkerClient | null;
   #snapshot = initialSnapshot;
   #unsubscribe: (() => void) | null = null;
@@ -96,6 +97,11 @@ export class SupabaseUserDataService implements UserDataService {
   public subscribeMarkersChanged(listener: () => void): () => void {
     this.#markerListeners.add(listener);
     return () => this.#markerListeners.delete(listener);
+  }
+
+  public subscribeFoldersChanged(listener: () => void): () => void {
+    this.#folderListeners.add(listener);
+    return () => this.#folderListeners.delete(listener);
   }
 
   public async setSyncEnabled(enabled: boolean): Promise<void> {
@@ -250,6 +256,10 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   public async markerDeleted(_markerId: string): Promise<void> {
+    await this.synchronizeNow();
+  }
+
+  public async foldersChanged(): Promise<void> {
     await this.synchronizeNow();
   }
 
@@ -593,6 +603,10 @@ export class SupabaseUserDataService implements UserDataService {
     worker.subscribeMarkersChanged(({ userId, sessionRevision }) => {
       if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
       for (const listener of this.#markerListeners) listener();
+    });
+    worker.subscribeFoldersChanged(({ userId, sessionRevision }) => {
+      if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
+      for (const listener of this.#folderListeners) listener();
     });
     worker.subscribeProgress((progress: UserDataSyncProgress) => {
       if (this.#snapshot.syncStatus !== 'syncing') return;

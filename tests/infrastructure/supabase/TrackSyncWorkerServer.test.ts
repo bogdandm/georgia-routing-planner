@@ -24,6 +24,7 @@ const pair = {
     sourceFormat: 'gpx' as const,
     favorite: false,
     geometryKind: 'track' as const,
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {

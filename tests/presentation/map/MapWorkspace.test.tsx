@@ -1,3 +1,4 @@
+import { I18nProvider } from '@lingui/react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Children, act, isValidElement, type ReactNode } from 'react';
@@ -24,6 +25,7 @@ import {
   setWeatherMapForecastMarker,
   startWeatherPointSelection,
 } from '@/presentation/map/mapInteractionStore';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
 import {
   SatelliteMosaicProvider,
@@ -233,6 +235,7 @@ function mockViewportWidth(width: number): void {
 
 describe('MapWorkspace', () => {
   beforeEach(() => {
+    activateAppLocale('en');
     resetMapInteractionStore();
     resetMapLayerStore();
     mapClickCoordinate.longitude = 44.8;
@@ -1255,11 +1258,13 @@ describe('MapWorkspace', () => {
     };
     const user = userEvent.setup();
     render(
-      <RuntimeServicesProvider services={services}>
-        <MarkersWorkspaceProvider>
-          <MapWorkspace facade={facade} />
-        </MarkersWorkspaceProvider>
-      </RuntimeServicesProvider>,
+      <I18nProvider i18n={appI18n}>
+        <RuntimeServicesProvider services={services}>
+          <MarkersWorkspaceProvider>
+            <MapWorkspace facade={facade} />
+          </MarkersWorkspaceProvider>
+        </RuntimeServicesProvider>
+      </I18nProvider>,
     );
 
     const nativeMap = await screen.findByTestId('native-map');
@@ -1594,11 +1599,13 @@ describe('MapWorkspace', () => {
     const user = userEvent.setup();
 
     render(
-      <RuntimeServicesProvider services={services}>
-        <MarkersWorkspaceProvider>
-          <MapWorkspace facade={new FakeMapFacade()} />
-        </MarkersWorkspaceProvider>
-      </RuntimeServicesProvider>,
+      <I18nProvider i18n={appI18n}>
+        <RuntimeServicesProvider services={services}>
+          <MarkersWorkspaceProvider>
+            <MapWorkspace facade={new FakeMapFacade()} />
+          </MarkersWorkspaceProvider>
+        </RuntimeServicesProvider>
+      </I18nProvider>,
     );
 
     const saturday = await screen.findByRole('button', {

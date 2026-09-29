@@ -1,3 +1,27 @@
+import { Trans, useLingui } from '@lingui/react/macro';
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type KeyboardCoordinateGetter,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
@@ -6,6 +30,8 @@ import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
@@ -13,7 +39,6 @@ import NorthEastIcon from '@mui/icons-material/NorthEast';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
-import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
@@ -39,6 +64,8 @@ import {
   TextField,
   Tooltip,
   Typography,
+  type SxProps,
+  type Theme,
 } from '@mui/material';
 import {
   createContext,
@@ -86,6 +113,12 @@ import {
   type TrackSort,
 } from '@/domain/tracks/localTrack';
 import {
+  IMPORTS_FOLDER_ID,
+  normalizeTrackFolderName,
+  type TrackFolder,
+  type TrackFolderIconKey,
+} from '@/domain/tracks/trackFolder';
+import {
   calculateTrackMetrics,
   findDominantSummit,
   formatGeneratedPoiLabel,
@@ -112,6 +145,8 @@ import {
   type ElevationProfile,
   type ElevationProfileInputPoint,
 } from '@/domain/tracks/elevationProfile';
+import { SelectableIconGlyph } from '@/presentation/markers/MarkerIconPicker';
+import { TrackFolderEditorDialog } from '@/presentation/tracks/TrackFolderEditorDialog';
 import { formatDateTime } from '@/presentation/formatDateTime';
 import {
   ElevationPreparationChart,
@@ -248,6 +283,19 @@ interface TracksWorkspaceValue {
   readonly elevationProgress: TrackElevationPreparationProgress | null;
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
+  readonly folders: readonly TrackFolder[];
+  readonly createFolder: (name: string, iconKey: TrackFolderIconKey) => Promise<void>;
+  readonly updateFolder: (
+    folder: TrackFolder,
+    name: string,
+    iconKey: TrackFolderIconKey,
+  ) => Promise<void>;
+  readonly deleteFolder: (folder: TrackFolder) => Promise<void>;
+  readonly moveTrackToFolder: (
+    trackId: string,
+    folderId: string | null,
+  ) => Promise<boolean>;
+  readonly reorderFolders: (folderIds: readonly string[]) => Promise<boolean>;
   readonly importError: string | null;
   readonly importFiles: (files: FileList | readonly File[]) => Promise<void>;
   readonly multiTrackMode: boolean;
@@ -406,6 +454,7 @@ function bestCandidate(
     })[0];
 }
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
+  const { t } = useLingui();
   const {
     clock,
     database,
@@ -444,6 +493,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const mapCenter = viewport?.center ?? null;
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
+  const [folders, setFolders] = useState<readonly TrackFolder[]>([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
@@ -572,8 +622,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const reloadSummaries = useCallback(async () => {
     try {
-      const loaded = await database.listLocalTracks();
+      const [loaded, loadedFolders] = await Promise.all([
+        database.listLocalTracks(),
+        database.listTrackFolders(),
+      ]);
       setSummaries(loaded);
+      setFolders(loadedFolders);
       if (!restorationAttempted.current) {
         restorationAttempted.current = true;
         if (sharedIntent.current.kind !== 'none') return;
@@ -597,10 +651,141 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         }
       }
     } catch {
-      setError('Saved tracks could not be loaded from this browser.');
+      setError(t`Saved tracks and folders could not be loaded from this browser.`);
     }
-  }, [database]);
+  }, [database, t]);
 
+  // The folder editor dialog reports these failures, so they are rethrown
+  // without also setting the panel-level error.
+  const createFolder = useCallback(
+    async (name: string, iconKey: TrackFolderIconKey) => {
+      const normalized = normalizeTrackFolderName(name);
+      const timestamp = clock.now().toISOString();
+      const created = await database.createTrackFolder({
+        schemaVersion: 1,
+        id: `folder:${idGenerator.generate()}`,
+        name: normalized.name,
+        normalizedName: normalized.normalizedName,
+        iconKey,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      setFolders((current) => [...current, created]);
+      void userData.foldersChanged();
+    },
+    [clock, database, idGenerator, userData],
+  );
+
+  const updateFolder = useCallback(
+    async (folder: TrackFolder, name: string, iconKey: TrackFolderIconKey) => {
+      const normalized = normalizeTrackFolderName(name);
+      const updated = await database.updateTrackFolder(folder.id, {
+        name: normalized.name,
+        normalizedName: normalized.normalizedName,
+        iconKey,
+        updatedAt: clock.now().toISOString(),
+      });
+      setFolders((current) =>
+        current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
+      );
+      void userData.foldersChanged();
+    },
+    [clock, database, userData],
+  );
+
+  const deleteFolder = useCallback(
+    async (folder: TrackFolder) => {
+      const moved = await database.deleteTrackFolder(folder.id);
+      setFolders((current) =>
+        current.filter((candidate) => candidate.id !== folder.id),
+      );
+      const movedById = new Map(moved.map((summary) => [summary.id, summary]));
+      const applyMoved = (summary: LocalTrackSummary): LocalTrackSummary =>
+        movedById.get(summary.id) ?? summary;
+      setSummaries((current) => current.map(applyMoved));
+      setActive((current) =>
+        current?.kind === 'saved'
+          ? { ...current, summary: applyMoved(current.summary) }
+          : current,
+      );
+      setMultiTrackSelections((current) =>
+        current.map((selection) => ({
+          ...selection,
+          summary: applyMoved(selection.summary),
+        })),
+      );
+      void userData.foldersChanged();
+    },
+    [database, userData],
+  );
+
+  const moveTrackToFolder = useCallback(
+    async (trackId: string, folderId: string | null): Promise<boolean> => {
+      const applyFolder = (summary: LocalTrackSummary): LocalTrackSummary =>
+        summary.id === trackId ? { ...summary, folderId } : summary;
+      setSummaries((current) => current.map(applyFolder));
+      setActive((current) =>
+        current?.kind === 'saved' && current.summary.id === trackId
+          ? { ...current, summary: applyFolder(current.summary) }
+          : current,
+      );
+      setMultiTrackSelections((current) =>
+        current.map((selection) => ({
+          ...selection,
+          summary: applyFolder(selection.summary),
+        })),
+      );
+      try {
+        const updated = await database.moveLocalTrackToFolder(trackId, folderId);
+        setSummaries((current) =>
+          current.map((summary) => (summary.id === trackId ? updated : summary)),
+        );
+        setActive((current) =>
+          current?.kind === 'saved' && current.summary.id === trackId
+            ? { ...current, summary: updated }
+            : current,
+        );
+        setMultiTrackSelections((current) =>
+          current.map((selection) => ({
+            ...selection,
+            summary: selection.summary.id === trackId ? updated : selection.summary,
+          })),
+        );
+        void userData.trackMetadataChanged(trackId);
+        setError(null);
+        return true;
+      } catch {
+        await reloadSummaries();
+        setError(t`The track could not be moved.`);
+        return false;
+      }
+    },
+    [database, reloadSummaries, t, userData],
+  );
+
+  const reorderFolders = useCallback(
+    async (folderIds: readonly string[]): Promise<boolean> => {
+      const byId = new Map(folders.map((folder) => [folder.id, folder]));
+      setFolders(
+        folderIds.flatMap((id, position) => {
+          const folder = byId.get(id);
+          return folder === undefined ? [] : [{ ...folder, position }];
+        }),
+      );
+      try {
+        const reordered = await database.reorderTrackFolders(folderIds);
+        setFolders(reordered);
+        void userData.foldersChanged();
+        setError(null);
+        return true;
+      } catch {
+        await reloadSummaries();
+        setError(t`The folder order could not be saved.`);
+        return false;
+      }
+    },
+    [database, folders, reloadSummaries, t, userData],
+  );
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       void reloadSummaries();
@@ -826,6 +1011,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         }
       }),
     [active, database, multiTrackSelections, reloadSummaries, userData],
+  );
+  useEffect(
+    () =>
+      userData.subscribeFoldersChanged(() => {
+        void reloadSummaries();
+      }),
+    [reloadSummaries, userData],
   );
 
   useEffect(() => {
@@ -1539,6 +1731,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceFormat: 'gpx',
         favorite: false,
         geometryKind: 'route',
+        folderId: null,
         pointCount: active.segment.points.length,
         segmentCount: 1,
         metrics: active.metrics,
@@ -1641,6 +1834,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         sourceFormat: active.sourceFormat,
         favorite: false,
         geometryKind: active.parsed.geometryKind,
+        folderId: IMPORTS_FOLDER_ID,
         pointCount: primarySegments.reduce(
           (count, segment) => count + segment.points.length,
           0,
@@ -1664,6 +1858,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
       if (active.fallbackPoi !== undefined) summary.fallbackPoi = active.fallbackPoi;
+      await database.ensureImportsFolder();
       await database.saveLocalTrack(summary, content);
       void userData.trackSaved(summary.id);
       if (generation !== importGeneration.current) return;
@@ -2364,6 +2559,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       elevationProgress,
       error,
       filteredSummaries,
+      folders,
+      createFolder,
+      updateFolder,
+      deleteFolder,
+      moveTrackToFolder,
+      reorderFolders,
       importError: importError?.message ?? null,
       importState,
       importFiles,
@@ -2404,7 +2605,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       elevationProgress,
       closeActive,
       clearRoutePlan,
+      createFolder,
       deleteSaved,
+      deleteFolder,
       discardPreview,
       discardRoutePlan,
       startTrackMarkerPlacement,
@@ -2412,16 +2615,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       deleteTrackMarker,
       error,
       filteredSummaries,
+      folders,
       importError,
       importFiles,
       importState,
       multiTrackMode,
       multiTrackSelections,
       multiTrackStatsMetrics,
+      moveTrackToFolder,
       query,
       renameActive,
       recalculateElevation,
       recalculationState,
+      reorderFolders,
       savePreview,
       saveRoutePlan,
       selectSaved,
@@ -2431,6 +2637,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setQuery,
       undoLastRoutePlanPoint,
       summaries,
+      updateFolder,
       toggleFavorite,
       toggleMultiTrackMode,
       toggleMultiTrackSelection,
@@ -2724,6 +2931,7 @@ function TrackImportZone() {
                 spacing={0.75}
                 sx={{
                   minHeight: 48,
+
                   width: '100%',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -2748,299 +2956,1097 @@ function TrackImportZone() {
 
 interface TracksPanelProps {
   readonly onOpenActiveDetails: () => void;
+  readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
 }
 
-export function TracksPanel({ onOpenActiveDetails }: TracksPanelProps) {
+type ActiveDrag =
+  | {
+      readonly type: 'folder';
+      readonly id: string;
+      readonly name: string;
+      readonly width: number;
+    }
+  | {
+      readonly type: 'track';
+      readonly id: string;
+      readonly name: string;
+      readonly width: number;
+    };
+const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
+  const activeData = args.context.active?.data.current;
+  if (
+    (activeData?.type !== 'track' && activeData?.type !== 'folder') ||
+    (event.code !== 'ArrowUp' && event.code !== 'ArrowDown')
+  ) {
+    return args.currentCoordinates;
+  }
+  const targetType = activeData.type === 'track' ? 'folder-target' : 'folder';
+  const targets = args.context.droppableContainers
+    .getEnabled()
+    .flatMap((container) => {
+      const data = container.data.current;
+      const rect = container.rect.current;
+      return data?.type === targetType && rect !== null
+        ? [{ folderId: data.folderId as string | null, rect }]
+        : [];
+    })
+    .sort((left, right) => left.rect.top - right.rect.top);
+  const overData = args.context.over?.data.current;
+  let target: (typeof targets)[number] | undefined;
+  if (activeData.type === 'track') {
+    const currentTarget = targets.find(
+      (candidate, index) =>
+        args.currentCoordinates.y >= candidate.rect.top &&
+        (args.currentCoordinates.y < candidate.rect.bottom ||
+          (index === targets.length - 1 &&
+            args.currentCoordinates.y <= candidate.rect.bottom)),
+    );
+    const currentFolderId =
+      currentTarget?.folderId ?? (activeData.summary as LocalTrackSummary).folderId;
+    const currentIndex = targets.findIndex(
+      (candidate) => candidate.folderId === currentFolderId,
+    );
+    target =
+      currentIndex < 0
+        ? undefined
+        : targets[currentIndex + (event.code === 'ArrowDown' ? 1 : -1)];
+  } else {
+    // Folder positions may tie after synchronization, so keyboard moves step
+    // through the rendered order rather than comparing stored positions.
+    const currentFolderId =
+      overData?.type === 'folder'
+        ? (overData.folderId as string)
+        : (activeData.folder as TrackFolder).id;
+    const currentIndex = targets.findIndex(
+      (candidate) => candidate.folderId === currentFolderId,
+    );
+    target =
+      currentIndex < 0
+        ? undefined
+        : targets[currentIndex + (event.code === 'ArrowDown' ? 1 : -1)];
+  }
+  if (target === undefined) return args.currentCoordinates;
+  return {
+    x: target.rect.left + target.rect.width / 2,
+    y: target.rect.top + target.rect.height / 2,
+  };
+};
+
+// The saved-track list bleeds to the panel edges. Drag handles live in the
+// panel's 16 px side padding, so hover never shifts row content, and folder
+// contents align with the folder name to show hierarchy.
+const TRACK_LIST_GUTTER_PX = 16;
+const TRACK_FOLDER_GLYPH_PX = 20;
+const TRACK_FOLDER_INDENT_PX = TRACK_FOLDER_GLYPH_PX + 8;
+
+const dragHandleSx: SxProps<Theme> = {
+  alignSelf: 'stretch',
+  width: TRACK_LIST_GUTTER_PX,
+  minWidth: 0,
+  p: 0,
+  borderRadius: 0,
+  color: 'text.secondary',
+  touchAction: 'none',
+  cursor: 'grab',
+  '& .MuiSvgIcon-root': { fontSize: 16 },
+  '&:hover': { bgcolor: 'transparent', color: 'text.primary' },
+  '&.Mui-focusVisible': {
+    bgcolor: 'transparent',
+    outline: '2px solid currentColor',
+    outlineOffset: -2,
+  },
+};
+
+// Secondary row controls stay in the layout and only fade in, so revealing
+// them never reflows the row. Keyboard focus reveals them too; focus restored
+// after a pointer drag does not. Touch devices have no hover and always show them.
+function revealOnRowHover(selector: string, hoverSelector: string) {
+  return {
+    [`& ${selector}`]: {
+      opacity: 0,
+      pointerEvents: 'none',
+      transition: 'opacity 150ms ease-out',
+    },
+    [`&${hoverSelector} ${selector}, &:has(:focus-visible) ${selector}`]: {
+      opacity: 1,
+      pointerEvents: 'auto',
+    },
+    '@media (hover: none), (pointer: coarse)': {
+      [`& ${selector}`]: { opacity: 1, pointerEvents: 'auto' },
+    },
+  } as const;
+}
+
+/**
+ * Hover state shared by every saved-track row. A pointer favorite click re-sorts
+ * rows under a stationary pointer, which fires enter events on whichever row slides
+ * underneath; hover stays suppressed across all rows until the pointer really moves.
+ */
+interface SavedTrackHover {
+  readonly suppressed: boolean;
+  /** Remounts row tooltips so one opened before the re-sort closes. */
+  readonly epoch: number;
+  readonly resume: () => void;
+}
+
+interface SavedTrackRowProps {
+  readonly summary: LocalTrackSummary;
+  readonly folderId: string | null;
+  readonly selected: boolean;
+  readonly multiTrackMode: boolean;
+  readonly deleting: boolean;
+  readonly hover: SavedTrackHover;
+  readonly onSelect: () => void;
+  readonly onToggleFavorite: (fromPointer: boolean) => void;
+  readonly onDelete: () => Promise<void>;
+}
+
+function SavedTrackRow({
+  summary,
+  folderId,
+  selected,
+  multiTrackMode,
+  deleting,
+  hover,
+  onSelect,
+  onToggleFavorite,
+  onDelete,
+}: SavedTrackRowProps) {
+  const { t } = useLingui();
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const {
+    attributes: dragAttributes,
+    isDragging,
+    listeners: dragListeners,
+    setActivatorNodeRef,
+    setNodeRef: setDraggableNodeRef,
+  } = useDraggable({
+    id: `track:${summary.id}`,
+    data: { type: 'track', summary },
+  });
+  const { setNodeRef: setDroppableNodeRef } = useDroppable({
+    id: `track-target:${summary.id}`,
+    data: { type: 'track-target', folderId },
+  });
+  const setNodeRef = useCallback(
+    (node: HTMLElement | null) => {
+      setDraggableNodeRef(node);
+      setDroppableNodeRef(node);
+    },
+    [setDraggableNodeRef, setDroppableNodeRef],
+  );
+  const actionClassName = `saved-track-row-action${
+    pendingDelete ? ' saved-track-row-action--pending' : ''
+  }`;
+  const elapsedSeconds = summary.metrics.elapsedSeconds;
+  const ascentMeters = summary.metrics.ascentMeters;
+
+  return (
+    <ClickAwayListener
+      onClickAway={() => {
+        if (!deleting) setPendingDelete(false);
+      }}
+    >
+      <Box
+        ref={setNodeRef}
+        component="li"
+        className={hovered ? 'saved-track-row--hovered' : undefined}
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: `${String(TRACK_LIST_GUTTER_PX)}px minmax(0, 1fr) auto`,
+          alignItems: 'center',
+          borderBottom: 1,
+          borderColor: 'divider',
+          opacity: isDragging ? 0 : 1,
+          bgcolor: selected
+            ? hovered
+              ? `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`
+              : appColors.surface.selected
+            : hovered
+              ? 'action.hover'
+              : 'transparent',
+          '& .MuiListItemButton-root, & .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-selected, & .MuiListItemButton-root.Mui-selected:hover':
+            { bgcolor: 'transparent' },
+          ...revealOnRowHover('.saved-track-row-action', '.saved-track-row--hovered'),
+          '& .saved-track-row-favorite--active, & .saved-track-row-action--pending': {
+            opacity: 1,
+            pointerEvents: 'auto',
+          },
+        }}
+        onMouseEnter={() => {
+          if (!hover.suppressed) setHovered(true);
+        }}
+        onMouseMove={() => {
+          if (hover.suppressed) hover.resume();
+          setHovered(true);
+        }}
+        onMouseLeave={() => {
+          setHovered(false);
+          if (!deleting) setPendingDelete(false);
+        }}
+      >
+        <IconButton
+          ref={setActivatorNodeRef}
+          className="saved-track-row-action"
+          size="small"
+          aria-label={t`Move ${summary.name}`}
+          data-drag-focus={`track:${summary.id}`}
+          sx={dragHandleSx}
+          {...dragAttributes}
+          {...dragListeners}
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </IconButton>
+        <ListItemButton
+          selected={selected}
+          aria-pressed={multiTrackMode ? selected : undefined}
+          onClick={onSelect}
+          sx={{
+            display: 'block',
+            minWidth: 0,
+            py: 1.25,
+            pl: folderId === null ? 0 : `${String(TRACK_FOLDER_INDENT_PX)}px`,
+            pr: 0.5,
+          }}
+        >
+          <Typography variant="subtitle2">{summary.name}</Typography>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
+          >
+            {elapsedSeconds === undefined ? null : (
+              <TrackStat
+                icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
+                label="Recorded time"
+                value={formatTrackDuration(elapsedSeconds)}
+              />
+            )}
+            <TrackStat
+              icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
+              label="Distance"
+              value={formatTrackDistance(summary.metrics.distanceMeters)}
+            />
+            {ascentMeters === undefined ? null : (
+              <TrackStat
+                icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
+                label="Elevation gain"
+                value={formatTrackElevation(ascentMeters)}
+              />
+            )}
+          </Stack>
+        </ListItemButton>
+        <Stack
+          key={`saved-track-actions:${summary.id}:${String(hover.epoch)}`}
+          direction="row"
+          spacing={0}
+          sx={{ alignItems: 'center', pr: 1 }}
+        >
+          <Tooltip
+            disableHoverListener={hover.suppressed}
+            title={summary.favorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <IconButton
+              className={`saved-track-row-action${
+                summary.favorite ? ' saved-track-row-favorite--active' : ''
+              }`}
+              size="small"
+              aria-label={
+                summary.favorite ? 'Remove from favorites' : 'Add to favorites'
+              }
+              color={summary.favorite ? 'warning' : 'default'}
+              onClick={(event) => {
+                const fromPointer = event.detail > 0;
+                if (fromPointer) setHovered(false);
+                onToggleFavorite(fromPointer);
+              }}
+            >
+              {summary.favorite ? (
+                <StarIcon fontSize="small" />
+              ) : (
+                <StarBorderIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+          <Tooltip
+            disableHoverListener={hover.suppressed}
+            title={pendingDelete ? 'Confirm deletion' : 'Delete track'}
+          >
+            <IconButton
+              className={actionClassName}
+              size="small"
+              aria-label={
+                pendingDelete
+                  ? `Confirm deletion of ${summary.name}`
+                  : `Delete ${summary.name}`
+              }
+              color={pendingDelete ? 'error' : 'default'}
+              disabled={deleting}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !deleting) {
+                  setPendingDelete(false);
+                  event.currentTarget.blur();
+                }
+              }}
+              onClick={() => {
+                if (!pendingDelete) {
+                  setPendingDelete(true);
+                  return;
+                }
+                void onDelete().finally(() => {
+                  setPendingDelete(false);
+                });
+              }}
+            >
+              {pendingDelete ? (
+                <DeleteForeverOutlinedIcon fontSize="small" />
+              ) : (
+                <DeleteOutlineOutlinedIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </Box>
+    </ClickAwayListener>
+  );
+}
+
+interface SavedTrackListProps {
+  readonly ariaLabel: string;
+  readonly summaries: readonly LocalTrackSummary[];
+  readonly folderId: string | null;
+  readonly deletingId: string | null;
+  readonly active: ActiveTrack | null;
+  readonly multiTrackMode: boolean;
+  readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly hover: SavedTrackHover;
+  readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary, fromPointer: boolean) => void;
+  readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
+}
+
+function SavedTrackList({
+  ariaLabel,
+  summaries,
+  folderId,
+  deletingId,
+  active,
+  multiTrackMode,
+  multiTrackSelections,
+  hover,
+  onSelect,
+  onToggleFavorite,
+  onDelete,
+}: SavedTrackListProps) {
+  return (
+    <List disablePadding aria-label={ariaLabel} sx={{ m: 0, width: '100%' }}>
+      {summaries.map((summary) => {
+        const selected = multiTrackMode
+          ? multiTrackSelections.some(
+              (selection) => selection.summary.id === summary.id,
+            )
+          : active?.kind === 'saved' && active.summary.id === summary.id;
+        return (
+          <SavedTrackRow
+            key={summary.id}
+            summary={summary}
+            folderId={folderId}
+            selected={selected}
+            multiTrackMode={multiTrackMode}
+            deleting={deletingId === summary.id}
+            hover={hover}
+            onSelect={() => {
+              onSelect(summary, selected);
+            }}
+            onToggleFavorite={(fromPointer) => {
+              onToggleFavorite(summary, fromPointer);
+            }}
+            onDelete={() => onDelete(summary)}
+          />
+        );
+      })}
+    </List>
+  );
+}
+
+interface TrackFolderSectionProps {
+  readonly folder: TrackFolder;
+  readonly summaries: readonly LocalTrackSummary[];
+  readonly collapsed: boolean;
+  readonly deletingId: string | null;
+  readonly active: ActiveTrack | null;
+  readonly multiTrackMode: boolean;
+  readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly hover: SavedTrackHover;
+  readonly onToggleCollapsed: (folderId: string) => void;
+  readonly onEditFolder: (folder: TrackFolder) => void;
+  readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary, fromPointer: boolean) => void;
+  readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
+}
+
+function TrackFolderSection({
+  folder,
+  summaries,
+  collapsed,
+  deletingId,
+  active,
+  multiTrackMode,
+  multiTrackSelections,
+  hover,
+  onToggleCollapsed,
+  onEditFolder,
+  onSelect,
+  onToggleFavorite,
+  onDelete,
+}: TrackFolderSectionProps) {
+  const { t } = useLingui();
+  const {
+    attributes: sortableAttributes,
+    isDragging,
+    listeners: sortableListeners,
+    setActivatorNodeRef,
+    setNodeRef: setSortableNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: `folder-order:${folder.id}`,
+    data: { type: 'folder', folderId: folder.id, folder },
+  });
+  const { isOver, setNodeRef: setDropNodeRef } = useDroppable({
+    id: `folder-drop:${folder.id}`,
+    data: {
+      type: 'folder-target',
+      folderId: folder.id,
+      folder,
+    },
+  });
+  const setNodeRef = useCallback(
+    (node: HTMLElement | null) => {
+      setSortableNodeRef(node);
+      setDropNodeRef(node);
+    },
+    [setDropNodeRef, setSortableNodeRef],
+  );
+
+  return (
+    <Box
+      ref={setNodeRef}
+      role="listitem"
+      data-folder-order={folder.id}
+      data-folder-drop={folder.id}
+      sx={{
+        transform: CSS.Transform.toString(transform),
+        opacity: isDragging ? 0 : 1,
+        bgcolor: isOver ? 'action.selected' : 'transparent',
+        transition: [transition, 'background-color 150ms ease-out']
+          .filter(Boolean)
+          .join(', '),
+      }}
+    >
+      <Box
+        component="section"
+        aria-label={`${folder.name} (${String(summaries.length)})`}
+      >
+        <Box
+          sx={{
+            display: 'grid',
+            // Columns match the track rows: gutter, content, favorite-sized
+            // edit action, delete-sized chevron. The toggle spans the last
+            // three columns so the whole header, chevron included, expands.
+            gridTemplateColumns: `${String(TRACK_LIST_GUTTER_PX)}px minmax(0, 1fr) 30px 38px`,
+            minHeight: 44,
+            alignItems: 'center',
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: appColors.surface.subtle,
+            '&:hover': { bgcolor: 'action.hover' },
+            '& .MuiListItemButton-root:hover': { bgcolor: 'transparent' },
+            ...revealOnRowHover('.track-folder-action', ':hover'),
+          }}
+        >
+          <IconButton
+            className="track-folder-action"
+            ref={setActivatorNodeRef}
+            size="small"
+            aria-label={t`Reorder ${folder.name}`}
+            data-drag-focus={`folder:${folder.id}`}
+            sx={dragHandleSx}
+            {...sortableAttributes}
+            {...sortableListeners}
+          >
+            <DragIndicatorIcon />
+          </IconButton>
+          <ListItemButton
+            aria-expanded={!collapsed}
+            aria-label={
+              collapsed ? t`Expand ${folder.name}` : t`Collapse ${folder.name}`
+            }
+            onClick={() => {
+              onToggleCollapsed(folder.id);
+            }}
+            sx={{
+              gridColumn: '2 / -1',
+              gridRow: 1,
+              alignSelf: 'stretch',
+              minWidth: 0,
+              gap: 1,
+              px: 0,
+              py: 0.5,
+            }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                placeItems: 'center',
+                width: TRACK_FOLDER_GLYPH_PX,
+                flexShrink: 0,
+                color: 'text.secondary',
+              }}
+            >
+              <SelectableIconGlyph
+                iconKey={folder.iconKey}
+                size={TRACK_FOLDER_GLYPH_PX}
+              />
+            </Box>
+            <Typography variant="subtitle2" noWrap sx={{ minWidth: 0 }}>
+              {folder.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+              {summaries.length}
+            </Typography>
+            <Box aria-hidden sx={{ flex: 1, minWidth: 32 }} />
+            <KeyboardArrowDownIcon
+              fontSize="small"
+              sx={{
+                mr: '13px',
+                flexShrink: 0,
+                color: 'text.secondary',
+                transform: collapsed ? 'rotate(-90deg)' : 'none',
+                transition: 'transform 150ms ease-out',
+              }}
+            />
+          </ListItemButton>
+          <Tooltip title={t`Edit ${folder.name}`}>
+            <IconButton
+              className="track-folder-action"
+              size="small"
+              aria-label={t`Edit ${folder.name}`}
+              sx={{ gridColumn: 3, gridRow: 1, zIndex: 1 }}
+              onClick={() => {
+                onEditFolder(folder);
+              }}
+            >
+              <EditOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        {collapsed ? null : summaries.length === 0 ? (
+          <Box
+            sx={{
+              minHeight: 34,
+              display: 'flex',
+              alignItems: 'center',
+              pl: `${String(TRACK_LIST_GUTTER_PX + TRACK_FOLDER_INDENT_PX)}px`,
+              pr: 2,
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              <Trans>Drop tracks here</Trans>
+            </Typography>
+          </Box>
+        ) : (
+          <SavedTrackList
+            ariaLabel={t`${folder.name} tracks`}
+            summaries={summaries}
+            folderId={folder.id}
+            deletingId={deletingId}
+            active={active}
+            multiTrackMode={multiTrackMode}
+            multiTrackSelections={multiTrackSelections}
+            hover={hover}
+            onSelect={onSelect}
+            onToggleFavorite={onToggleFavorite}
+            onDelete={onDelete}
+          />
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+interface UnfiledTrackDropZoneProps {
+  readonly summaries: readonly LocalTrackSummary[];
+  readonly trackDragActive: boolean;
+  readonly deletingId: string | null;
+  readonly active: ActiveTrack | null;
+  readonly multiTrackMode: boolean;
+  readonly multiTrackSelections: readonly MultiTrackSelection[];
+  readonly hover: SavedTrackHover;
+  readonly onSelect: (summary: LocalTrackSummary, selected: boolean) => void;
+  readonly onToggleFavorite: (summary: LocalTrackSummary, fromPointer: boolean) => void;
+  readonly onDelete: (summary: LocalTrackSummary) => Promise<void>;
+}
+
+function UnfiledTrackDropZone({
+  summaries,
+  trackDragActive,
+  deletingId,
+  active,
+  multiTrackMode,
+  multiTrackSelections,
+  hover,
+  onSelect,
+  onToggleFavorite,
+  onDelete,
+}: UnfiledTrackDropZoneProps) {
+  const { t } = useLingui();
+  const { isOver, setNodeRef } = useDroppable({
+    id: 'folder-drop:unfiled',
+    data: { type: 'folder-target', folderId: null },
+  });
+
+  return (
+    <Box
+      ref={setNodeRef}
+      role="listitem"
+      aria-label={t`Unfiled tracks`}
+      data-folder-drop="unfiled"
+      sx={{
+        minHeight: summaries.length === 0 && trackDragActive ? 44 : undefined,
+        bgcolor: isOver ? 'action.selected' : 'transparent',
+        transition: 'background-color 150ms ease-out',
+      }}
+    >
+      {summaries.length > 0 ? (
+        <SavedTrackList
+          ariaLabel={t`Unfiled tracks`}
+          summaries={summaries}
+          folderId={null}
+          deletingId={deletingId}
+          active={active}
+          multiTrackMode={multiTrackMode}
+          multiTrackSelections={multiTrackSelections}
+          hover={hover}
+          onSelect={onSelect}
+          onToggleFavorite={onToggleFavorite}
+          onDelete={onDelete}
+        />
+      ) : trackDragActive ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'flex', minHeight: 44, alignItems: 'center', px: 2 }}
+        >
+          <Trans>Drop tracks here</Trans>
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
+export function TracksPanel({
+  onOpenActiveDetails,
+  onTrackSortChange,
+}: TracksPanelProps) {
   const {
     active,
+    createFolder,
+    deleteFolder,
+    deleteSaved,
     error,
     filteredSummaries,
+    folders,
+    moveTrackToFolder,
     multiTrackMode,
     multiTrackSelections,
     query,
-    setQuery,
+    reorderFolders,
     selectSaved,
+    setQuery,
     summaries,
     toggleFavorite,
     toggleMultiTrackSelection,
-    deleteSaved,
+    updateFolder,
   } = useTracksWorkspace();
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const { t } = useLingui();
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // A sorted row can move under a stationary pointer without a leave event.
-  const [hoveredSavedTrackId, setHoveredSavedTrackId] = useState<string | null>(null);
-  const [savedTrackHoverEpoch, setSavedTrackHoverEpoch] = useState(0);
-  const [savedTrackHoverSuppressed, setSavedTrackHoverSuppressed] = useState(false);
+  const [hoverSuppressed, setHoverSuppressed] = useState(false);
+  const [hoverEpoch, setHoverEpoch] = useState(0);
+  const hover = useMemo<SavedTrackHover>(
+    () => ({
+      suppressed: hoverSuppressed,
+      epoch: hoverEpoch,
+      resume: () => {
+        setHoverSuppressed(false);
+      },
+    }),
+    [hoverEpoch, hoverSuppressed],
+  );
+  const toggleRowFavorite = (summary: LocalTrackSummary, fromPointer: boolean) => {
+    if (fromPointer) {
+      setHoverSuppressed(true);
+      setHoverEpoch((current) => current + 1);
+    }
+    void toggleFavorite(summary);
+  };
+  const [editingFolder, setEditingFolder] = useState<TrackFolder | 'create' | null>(
+    null,
+  );
+  const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 180, tolerance: 6 },
+    }),
+    useSensor(KeyboardSensor, { coordinateGetter: trackFolderKeyboardCoordinates }),
+  );
+  const knownFolderIds = useMemo(
+    () => new Set(folders.map((folder) => folder.id)),
+    [folders],
+  );
+  const grouped = useMemo(
+    () =>
+      folders.map((folder) => ({
+        folder,
+        summaries: filteredSummaries.filter(
+          (summary) => summary.folderId === folder.id,
+        ),
+      })),
+    [filteredSummaries, folders],
+  );
+  const unfiled = useMemo(
+    () =>
+      filteredSummaries.filter(
+        (summary) => summary.folderId === null || !knownFolderIds.has(summary.folderId),
+      ),
+    [filteredSummaries, knownFolderIds],
+  );
+  const toggleFolderCollapsed = (folderId: string) => {
+    setCollapsedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const restoreFocus = (focusKey: string) => {
+    window.setTimeout(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-drag-focus="${focusKey}"]`,
+      );
+      element?.focus();
+    }, 0);
+  };
+  const dragStart = ({ active: dragged }: DragStartEvent) => {
+    const data = dragged.data.current;
+    const width = dragged.rect.current.initial?.width ?? 280;
+    if (data?.type === 'folder') {
+      const folder = data.folder as TrackFolder;
+      setActiveDrag({ type: 'folder', id: folder.id, name: folder.name, width });
+    } else if (data?.type === 'track') {
+      const summary = data.summary as LocalTrackSummary;
+      setActiveDrag({ type: 'track', id: summary.id, name: summary.name, width });
+    }
+  };
+  const dragEnd = ({ active: dragged, over }: DragEndEvent) => {
+    const drag = dragged.data.current;
+    const target = over?.data.current;
+    setActiveDrag(null);
+    if (drag?.type === 'track') {
+      const summary = drag.summary as LocalTrackSummary;
+      const folderId =
+        target?.type === 'folder' ||
+        target?.type === 'folder-target' ||
+        target?.type === 'track-target'
+          ? (target.folderId as string | null)
+          : undefined;
+      if (folderId === undefined || folderId === summary.folderId) {
+        restoreFocus(`track:${summary.id}`);
+        return;
+      }
+      void moveTrackToFolder(summary.id, folderId).finally(() => {
+        restoreFocus(`track:${summary.id}`);
+      });
+      return;
+    }
+    if (drag?.type !== 'folder') return;
+    const folder = drag.folder as TrackFolder;
+    const targetFolderId =
+      target?.type === 'folder'
+        ? (target.folderId as string)
+        : target?.type === 'folder-target' || target?.type === 'track-target'
+          ? (target.folderId as string | null)
+          : null;
+    if (targetFolderId === null || targetFolderId === folder.id) {
+      restoreFocus(`folder:${folder.id}`);
+      return;
+    }
+    const oldIndex = folders.findIndex((candidate) => candidate.id === folder.id);
+    const newIndex = folders.findIndex((candidate) => candidate.id === targetFolderId);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove([...folders], oldIndex, newIndex).map(
+      (candidate) => candidate.id,
+    );
+    void reorderFolders(next).finally(() => {
+      restoreFocus(`folder:${folder.id}`);
+    });
+  };
+  const select = (summary: LocalTrackSummary, selected: boolean) => {
+    if (multiTrackMode) {
+      const adding = !selected;
+      void toggleMultiTrackSelection(summary)
+        .then(() => {
+          if (adding) onOpenActiveDetails();
+        })
+        .catch(() => undefined);
+      return;
+    }
+    if (selected) {
+      onOpenActiveDetails();
+      return;
+    }
+    void selectSaved(summary);
+  };
+  const remove = async (summary: LocalTrackSummary) => {
+    setDeletingId(summary.id);
+    try {
+      await deleteSaved(summary);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Stack spacing={2} sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
-        <TrackImportZone />
-        <TextField
-          fullWidth
-          size="small"
-          aria-label="Search saved tracks"
-          placeholder={`Search ${String(summaries.length)} saved tracks`}
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={dragStart}
+        onDragCancel={() => {
+          if (activeDrag !== null) {
+            restoreFocus(`${activeDrag.type}:${activeDrag.id}`);
+          }
+          setActiveDrag(null);
+        }}
+        onDragEnd={dragEnd}
+        accessibility={{
+          screenReaderInstructions: {
+            draggable: t`Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel.`,
+          },
+          announcements: {
+            onDragStart({ active: dragged }) {
+              const data = dragged.data.current;
+              if (data?.type === 'folder') {
+                return t`Picked up folder ${(data.folder as TrackFolder).name}.`;
+              }
+              if (data?.type === 'track') {
+                return t`Picked up track ${(data.summary as LocalTrackSummary).name}.`;
+              }
+              return t`Picked up item.`;
             },
-          }}
-        />
-        {error === null ? null : <Alert severity="warning">{error}</Alert>}
-        {filteredSummaries.length === 0 ? (
-          <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
-            <Typography variant="body2" color="text.secondary">
-              {summaries.length === 0
-                ? 'Import a GPX, FIT, or KML file to preview it, then save it in this browser.'
-                : 'No saved track matches this name.'}
-            </Typography>
-          </Paper>
-        ) : (
-          <List
-            disablePadding
-            aria-label="Saved tracks"
-            sx={{ display: 'grid', gap: 1.5 }}
-          >
-            {filteredSummaries.map((summary) => {
-              const elapsedSeconds = summary.metrics.elapsedSeconds;
-              const ascentMeters = summary.metrics.ascentMeters;
-              const selected = multiTrackMode
-                ? multiTrackSelections.some(
-                    (selection) => selection.summary.id === summary.id,
-                  )
-                : active?.kind === 'saved' && active.summary.id === summary.id;
-              const pending = pendingDeleteId === summary.id;
-              const deleting = deletingId === summary.id;
-              const actionClassName = `saved-track-row-action${pending ? ' saved-track-row-action--pending' : ''}`;
-              const hovered = hoveredSavedTrackId === summary.id;
-              return (
-                <ClickAwayListener
-                  key={summary.id}
-                  onClickAway={() => {
-                    if (deletingId !== summary.id) {
-                      setPendingDeleteId((current) =>
-                        current === summary.id ? null : current,
-                      );
-                    }
-                  }}
-                >
-                  <Paper
-                    component="li"
-                    variant="outlined"
-                    className={hovered ? 'saved-track-row--hovered' : undefined}
-                    onMouseEnter={() => {
-                      if (!savedTrackHoverSuppressed) {
-                        setHoveredSavedTrackId(summary.id);
-                      }
-                    }}
-                    onMouseMove={() => {
-                      setSavedTrackHoverSuppressed(false);
-                      setHoveredSavedTrackId(summary.id);
-                    }}
-                    onMouseLeave={() => {
-                      setHoveredSavedTrackId((current) =>
-                        current === summary.id ? null : current,
-                      );
-                      if (deletingId !== summary.id) {
-                        setPendingDeleteId((current) =>
-                          current === summary.id ? null : current,
-                        );
-                      }
-                    }}
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(0, 1fr) auto',
-                      alignItems: 'center',
-                      bgcolor: selected
-                        ? hovered
-                          ? `color-mix(in srgb, ${appColors.surface.selected}, ${appColors.text.primary} 8%)`
-                          : appColors.surface.selected
-                        : hovered
-                          ? 'action.hover'
-                          : 'transparent',
-                      '& .MuiListItemButton-root, & .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-selected, & .MuiListItemButton-root.Mui-selected:hover':
-                        { bgcolor: 'transparent' },
-                      '& .saved-track-row-action': {
-                        opacity: 0,
-                        pointerEvents: 'none',
-                        transition: 'opacity 150ms ease-out',
-                      },
-                      '& .saved-track-row-favorite--active, & .saved-track-row-action--pending, &:focus-within .saved-track-row-action, &.saved-track-row--hovered .saved-track-row-action':
-                        { opacity: 1, pointerEvents: 'auto' },
-                      '@media (width < 900px)': {
-                        '& .saved-track-row-action': {
-                          opacity: 1,
-                          pointerEvents: 'auto',
-                        },
-                      },
-                    }}
-                  >
-                    <ListItemButton
-                      selected={selected}
-                      aria-pressed={multiTrackMode ? selected : undefined}
-                      onClick={() => {
-                        if (multiTrackMode) {
-                          const adding = !selected;
-                          void toggleMultiTrackSelection(summary)
-                            .then(() => {
-                              if (adding) onOpenActiveDetails();
-                            })
-                            .catch(() => undefined);
-                          return;
-                        }
-                        if (selected) {
-                          onOpenActiveDetails();
-                          return;
-                        }
-                        void selectSaved(summary);
-                      }}
-                      sx={{
-                        display: 'block',
-                        minWidth: 0,
-                        px: 1.5,
-                        py: 1.25,
-                      }}
-                    >
-                      <Typography variant="subtitle2">{summary.name}</Typography>
-                      <Stack
-                        direction="row"
-                        spacing={1.5}
-                        sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
-                      >
-                        {elapsedSeconds === undefined ? null : (
-                          <TrackStat
-                            icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
-                            label="Recorded time"
-                            value={formatTrackDuration(elapsedSeconds)}
-                          />
-                        )}
-                        <TrackStat
-                          icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
-                          label="Distance"
-                          value={formatTrackDistance(summary.metrics.distanceMeters)}
-                        />
-                        {ascentMeters === undefined ? null : (
-                          <TrackStat
-                            icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
-                            label="Elevation gain"
-                            value={formatTrackElevation(ascentMeters)}
-                          />
-                        )}
-                      </Stack>
-                    </ListItemButton>
-                    <Stack
-                      key={`saved-track-actions:${summary.id}:${String(savedTrackHoverEpoch)}`}
-                      direction="row"
-                      spacing={0.5}
-                      sx={{ alignItems: 'center', px: 1 }}
-                    >
-                      <Tooltip
-                        disableHoverListener={savedTrackHoverSuppressed}
-                        title={
-                          summary.favorite
-                            ? 'Remove from favorites'
-                            : 'Add to favorites'
-                        }
-                      >
-                        <IconButton
-                          className={`saved-track-row-action${summary.favorite ? ' saved-track-row-favorite--active' : ''}`}
-                          size="small"
-                          aria-label={
-                            summary.favorite
-                              ? 'Remove from favorites'
-                              : 'Add to favorites'
-                          }
-                          color={summary.favorite ? 'warning' : 'default'}
-                          onClick={(event) => {
-                            if (event.detail > 0) {
-                              setSavedTrackHoverSuppressed(true);
-                              setHoveredSavedTrackId(null);
-                              setSavedTrackHoverEpoch((current) => current + 1);
-                            }
-                            void toggleFavorite(summary);
-                          }}
-                        >
-                          {summary.favorite ? (
-                            <StarIcon fontSize="small" />
-                          ) : (
-                            <StarBorderIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip
-                        disableHoverListener={savedTrackHoverSuppressed}
-                        title={pending ? 'Confirm deletion' : 'Delete track'}
-                      >
-                        <IconButton
-                          className={actionClassName}
-                          size="small"
-                          aria-label={
-                            pending
-                              ? `Confirm deletion of ${summary.name}`
-                              : `Delete ${summary.name}`
-                          }
-                          color={pending ? 'error' : 'default'}
-                          disabled={deleting}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Escape' && deletingId !== summary.id) {
-                              setPendingDeleteId(null);
-                              event.currentTarget.blur();
-                            }
-                          }}
-                          onClick={() => {
-                            if (!pending) {
-                              setPendingDeleteId(summary.id);
-                              return;
-                            }
-                            setDeletingId(summary.id);
-                            void deleteSaved(summary).finally(() => {
-                              setDeletingId(null);
-                              setPendingDeleteId(null);
-                            });
-                          }}
-                        >
-                          {pending ? (
-                            <DeleteForeverOutlinedIcon fontSize="small" />
-                          ) : (
-                            <DeleteOutlineOutlinedIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-                  </Paper>
-                </ClickAwayListener>
-              );
-            })}
-          </List>
-        )}
-      </Stack>
-      <Alert
-        severity="info"
-        icon={<SaveOutlinedIcon fontSize="small" />}
-        sx={{
-          flexShrink: 0,
-          m: 0,
-          px: 1,
-          py: 0,
-          minHeight: 32,
-          alignItems: 'center',
-          borderRadius: 0,
-          borderTop: 1,
-          borderColor: 'divider',
-          '& .MuiAlert-icon': { mr: 0.75, py: 0.25 },
-          '& .MuiAlert-message': { py: 0.25 },
+            onDragOver({ over }) {
+              const data = over?.data.current;
+              if (
+                data?.type === 'folder' ||
+                data?.type === 'folder-target' ||
+                data?.type === 'track-target'
+              ) {
+                const folderId = data.folderId as string | null;
+                const name =
+                  folderId === null
+                    ? t`Unfiled`
+                    : folders.find((folder) => folder.id === folderId)?.name;
+                return name === undefined ? undefined : t`Over ${name}.`;
+              }
+              return undefined;
+            },
+            onDragEnd() {
+              return t`Item dropped.`;
+            },
+            onDragCancel() {
+              return t`Move cancelled.`;
+            },
+          },
         }}
       >
-        <Typography variant="caption">Saved tracks stay in this browser.</Typography>
-      </Alert>
+        {/* useFlexGap keeps Stack from resetting the saved-track list's
+            negative margins, which let it bleed to the panel edges. */}
+        <Stack
+          spacing={2}
+          useFlexGap
+          sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}
+        >
+          <TrackImportZone />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+              gap: 0.75,
+              alignItems: 'center',
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              aria-label="Search saved tracks"
+              placeholder={`Search ${String(summaries.length)} saved tracks`}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            <TrackSortControl onTrackSortChange={onTrackSortChange} />
+            <Tooltip title={t`Create folder`}>
+              <IconButton
+                size="small"
+                aria-label={t`Create folder`}
+                onClick={() => {
+                  setEditingFolder('create');
+                }}
+              >
+                <CreateNewFolderOutlinedIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          {error === null ? null : <Alert severity="warning">{error}</Alert>}
+          {summaries.length === 0 && folders.length === 0 ? (
+            <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
+              <Typography variant="body2" color="text.secondary">
+                Import a GPX, FIT, or KML file to preview it, then save it in this
+                browser.
+              </Typography>
+            </Paper>
+          ) : null}
+          {query.length > 0 && filteredSummaries.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No saved track matches this name.
+            </Typography>
+          ) : null}
+          {folders.length > 0 || summaries.length > 0 ? (
+            <Box
+              role="list"
+              aria-label={t`Saved tracks`}
+              sx={{
+                width: 'calc(100% + 32px)',
+                mx: -2,
+                borderTop: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <SortableContext
+                items={folders.map((folder) => `folder-order:${folder.id}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                {grouped.map(({ folder, summaries: folderSummaries }) => (
+                  <TrackFolderSection
+                    key={folder.id}
+                    folder={folder}
+                    summaries={folderSummaries}
+                    collapsed={collapsedFolderIds.has(folder.id)}
+                    deletingId={deletingId}
+                    active={active}
+                    multiTrackMode={multiTrackMode}
+                    multiTrackSelections={multiTrackSelections}
+                    hover={hover}
+                    onToggleCollapsed={toggleFolderCollapsed}
+                    onEditFolder={setEditingFolder}
+                    onSelect={select}
+                    onToggleFavorite={toggleRowFavorite}
+                    onDelete={remove}
+                  />
+                ))}
+              </SortableContext>
+              <UnfiledTrackDropZone
+                summaries={unfiled}
+                trackDragActive={activeDrag?.type === 'track'}
+                deletingId={deletingId}
+                active={active}
+                multiTrackMode={multiTrackMode}
+                multiTrackSelections={multiTrackSelections}
+                hover={hover}
+                onSelect={select}
+                onToggleFavorite={toggleRowFavorite}
+                onDelete={remove}
+              />
+            </Box>
+          ) : null}
+        </Stack>
+        <DragOverlay>
+          {activeDrag === null ? null : (
+            <Paper
+              elevation={4}
+              square
+              sx={{
+                width: activeDrag.width,
+                maxWidth: 'calc(100vw - 32px)',
+                minHeight: 44,
+                boxSizing: 'border-box',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1.5,
+                py: 0.75,
+                pointerEvents: 'none',
+              }}
+            >
+              {activeDrag.type === 'folder' ? (
+                <FolderOutlinedIcon fontSize="small" />
+              ) : (
+                <DragIndicatorIcon fontSize="small" />
+              )}
+              <Typography variant="subtitle2" noWrap>
+                {activeDrag.name}
+              </Typography>
+            </Paper>
+          )}
+        </DragOverlay>
+      </DndContext>
+      <TrackFolderEditorDialog
+        open={editingFolder !== null}
+        folder={editingFolder === 'create' ? null : editingFolder}
+        onCancel={() => {
+          setEditingFolder(null);
+        }}
+        onSave={async (name, iconKey) => {
+          if (editingFolder === null) return;
+          if (editingFolder === 'create') {
+            await createFolder(name, iconKey);
+          } else {
+            await updateFolder(editingFolder, name, iconKey);
+          }
+          setEditingFolder(null);
+        }}
+        {...(editingFolder === null ||
+        editingFolder === 'create' ||
+        editingFolder.id === IMPORTS_FOLDER_ID
+          ? {}
+          : {
+              onDelete: async () => {
+                await deleteFolder(editingFolder);
+                setEditingFolder(null);
+              },
+            })}
+      />
     </Box>
   );
 }

@@ -1,6 +1,4 @@
 import CheckIcon from '@mui/icons-material/Check';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import SearchIcon from '@mui/icons-material/Search';
 import {
   Alert,
   Box,
@@ -10,16 +8,11 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  InputAdornment,
-  Popover,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   Tooltip,
-  Typography,
 } from '@mui/material';
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useState } from 'react';
 
 import {
   normalizeMarkerName,
@@ -28,14 +21,8 @@ import {
   type NormalizedMarkerName,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
-import {
-  markerColorCatalog,
-  markerIconCatalog,
-  markerIconCategories,
-  markerIconFor,
-  type MarkerIconCategory,
-} from '@/presentation/markers/markerCatalog';
-import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
+import { markerColorCatalog } from '@/presentation/markers/markerCatalog';
+import { MarkerIconPicker } from '@/presentation/markers/MarkerIconPicker';
 import { appColors } from '@/presentation/theme/appColors';
 
 export interface MarkerAppearance {
@@ -76,17 +63,6 @@ type MarkerEditorDialogProps =
   | NameOnlyMarkerEditorDialogProps
   | AppearanceMarkerEditorDialogProps;
 
-type MarkerIconSection = 'Recently used' | MarkerIconCategory;
-
-const markerIconSections: readonly MarkerIconSection[] = [
-  'Recently used',
-  ...markerIconCategories,
-];
-const markerIconSectionRows = [
-  markerIconSections.slice(0, 4),
-  markerIconSections.slice(4),
-] as const;
-
 export function MarkerEditorDialog(props: MarkerEditorDialogProps) {
   if (!props.open) return null;
   const key =
@@ -108,39 +84,9 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
     () => editorMarker?.colorKey ?? 'blue',
   );
   const recentIconKeySource = props.mode === 'name-only' ? null : props.recentIconKeys;
-  const [iconAnchor, setIconAnchor] = useState<HTMLElement | null>(null);
-  const [iconQuery, setIconQuery] = useState('');
-  const [iconSection, setIconSection] = useState<MarkerIconSection>(() =>
-    recentIconKeySource !== null && recentIconKeySource.length > 0
-      ? 'Recently used'
-      : markerIconFor(iconKey).category,
-  );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const selectedIcon = markerIconFor(iconKey);
-  const recentIcons = useMemo(
-    () => recentIconKeySource?.slice(0, 21).map((key) => markerIconFor(key)) ?? [],
-    [recentIconKeySource],
-  );
-  const filteredIcons = useMemo(() => {
-    if (props.mode === 'name-only') return [];
-    const query = iconQuery.trim().toLocaleLowerCase('en');
-    if (query.length === 0) {
-      return iconSection === 'Recently used'
-        ? recentIcons
-        : markerIconCatalog.filter((entry) => entry.category === iconSection);
-    }
-    return markerIconCatalog.filter(
-      (entry) =>
-        entry.label.toLocaleLowerCase('en').includes(query) ||
-        entry.category.toLocaleLowerCase('en').includes(query),
-    );
-  }, [iconQuery, iconSection, props.mode, recentIcons]);
-
-  const openIconPicker = (event: MouseEvent<HTMLElement>) => {
-    setIconAnchor(event.currentTarget);
-  };
 
   const submit = async () => {
     let normalized: NormalizedMarkerName | undefined;
@@ -211,25 +157,16 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
           {submitError !== null ? <Alert severity="error">{submitError}</Alert> : null}
           {props.mode === 'name-only' ? null : (
             <Stack spacing={1}>
-              <Button
-                aria-label={`Choose marker icon. Current: ${selectedIcon.label}`}
-                onClick={openIconPicker}
-                variant="outlined"
-                size="small"
-                startIcon={<PinheadIcon svg={selectedIcon.svg} size={18} />}
-                endIcon={<ExpandMoreIcon />}
-                sx={{
-                  minWidth: 0,
-                  maxWidth: '100%',
-                  px: 1.25,
-                  justifyContent: 'start',
-                  '& .MuiButton-startIcon, & .MuiButton-endIcon': { flexShrink: 0 },
+              <MarkerIconPicker
+                value={iconKey}
+                recentIconKeys={recentIconKeySource ?? []}
+                label="Choose marker icon"
+                onChange={(selected) => {
+                  if (selected === 'folder') return;
+                  setIconKey(selected);
+                  setSubmitError(null);
                 }}
-              >
-                <Typography component="span" variant="inherit" noWrap>
-                  {selectedIcon.label}
-                </Typography>
-              </Button>
+              />
               <Box
                 role="group"
                 aria-label="Marker color"
@@ -291,126 +228,6 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
           {props.mode === 'appearance' ? 'Save' : 'Create'}
         </Button>
       </DialogActions>
-      {props.mode === 'name-only' ? null : (
-        <Popover
-          open={iconAnchor !== null}
-          anchorEl={iconAnchor}
-          onClose={() => {
-            setIconAnchor(null);
-            setIconQuery('');
-          }}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        >
-          <Box sx={{ width: 420, maxWidth: 'calc(100vw - 32px)', p: 1 }}>
-            <TextField
-              autoFocus
-              fullWidth
-              size="small"
-              aria-label="Search marker icons"
-              placeholder={`Search ${String(markerIconCatalog.length)} icons`}
-              value={iconQuery}
-              onChange={(event) => {
-                setIconQuery(event.target.value);
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <Stack spacing={0} sx={{ mt: 0.5 }}>
-              {markerIconSectionRows.map((sections, rowIndex) => (
-                <Tabs
-                  key={rowIndex}
-                  value={sections.includes(iconSection) ? iconSection : false}
-                  onChange={(_event, section: MarkerIconSection) => {
-                    setIconSection(section);
-                  }}
-                  variant="fullWidth"
-                  aria-label={`Marker icon categories row ${String(rowIndex + 1)}`}
-                  sx={{
-                    minHeight: 36,
-                    '& .MuiTab-root': {
-                      minHeight: 36,
-                      minWidth: 0,
-                      m: 0,
-                      px: 0.75,
-                      borderRadius: 0,
-                      bgcolor: 'transparent',
-                      color: 'text.secondary',
-                      fontSize: '0.75rem',
-                      whiteSpace: 'nowrap',
-                    },
-                    '& .MuiTab-root.Mui-selected': {
-                      bgcolor: 'transparent',
-                      color: 'primary.main',
-                    },
-                    '& .MuiTabs-indicator': {
-                      height: 2,
-                      borderRadius: 0,
-                    },
-                  }}
-                >
-                  {sections.map((section) => (
-                    <Tab key={section} value={section} label={section} />
-                  ))}
-                </Tabs>
-              ))}
-            </Stack>
-            <Box
-              role="listbox"
-              aria-label="Marker icons"
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                gap: 0.5,
-                maxHeight: 280,
-                overflowY: 'auto',
-                mt: 1,
-              }}
-            >
-              {filteredIcons.map(({ key, label, svg }) => {
-                const selected = key === iconKey;
-                return (
-                  <Tooltip key={key} title={label}>
-                    <IconButton
-                      role="option"
-                      aria-label={`Choose ${label} icon`}
-                      aria-selected={selected}
-                      color={selected ? 'primary' : 'default'}
-                      onClick={() => {
-                        setIconKey(key);
-                        setIconSection(markerIconFor(key).category);
-                        setSubmitError(null);
-                        setIconAnchor(null);
-                        setIconQuery('');
-                      }}
-                      sx={{
-                        border: '1px solid',
-                        borderColor: selected ? 'primary.main' : 'transparent',
-                        borderRadius: 1,
-                      }}
-                    >
-                      <PinheadIcon svg={svg} size={24} />
-                    </IconButton>
-                  </Tooltip>
-                );
-              })}
-            </Box>
-            {filteredIcons.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
-                {iconSection === 'Recently used' && iconQuery.length === 0
-                  ? 'No recently used icons yet'
-                  : 'No matching icons'}
-              </Typography>
-            ) : null}
-          </Box>
-        </Popover>
-      )}
     </Dialog>
   );
 }

@@ -9,6 +9,11 @@ import {
 } from '@/domain/tracks/trackSyncGeometry';
 import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
+import {
+  IMPORTS_FOLDER_ID,
+  isImportsPlaceholder,
+  type TrackFolder,
+} from '@/domain/tracks/trackFolder';
 import type {
   RemoteMarkerDeletionCandidate,
   RemoteTrackDeletionCandidate,
@@ -16,7 +21,9 @@ import type {
 import {
   validateLocalTrackSyncPair,
   validateSavedMarkerRecord,
+  validateTrackFolderRecord,
   type AppDatabase,
+  type FolderSyncState,
   type LocalTrackSyncPair,
   type MarkerSyncState,
   type TrackSyncState,
@@ -38,6 +45,7 @@ import {
 const hashPattern = /^[0-9a-f]{64}$/;
 const snapshotPageSize = 1_000;
 const maximumSnapshotRecords = 10_000;
+const maximumFolderSnapshotRecords = 1_000;
 const maximumServerErrorAttempts = 3;
 const exhaustedServerErrorMessage =
   'Cloud synchronization stopped after 3 server failures. Reload the page to try again.';
@@ -132,6 +140,46 @@ function parseRemoteMarkerRecord(value: unknown): RemoteMarkerRecord {
   return { ...parsed.data, payload };
 }
 
+interface RemoteFolderRecord {
+  readonly folder_id: string;
+  readonly revision: number;
+  readonly payload: TrackFolder;
+}
+
+const remoteFolderRecordSchema = z
+  .object({
+    folder_id: z.string().min(1).max(200),
+    revision: z.number().int().positive(),
+    payload: z.unknown(),
+  })
+  .strict();
+
+function parseRemoteFolderRecord(value: unknown): RemoteFolderRecord {
+  const parsed = remoteFolderRecordSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid track folder records.',
+      'invalid-remote',
+    );
+  }
+  let payload: TrackFolder;
+  try {
+    payload = validateTrackFolderRecord(parsed.data.payload);
+  } catch {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid track folder records.',
+      'invalid-remote',
+    );
+  }
+  if (payload.id !== parsed.data.folder_id) {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid track folder records.',
+      'invalid-remote',
+    );
+  }
+  return { ...parsed.data, payload };
+}
+
 interface RemoteIdentity {
   readonly lineageHash: string;
   readonly geometryVersion: 1 | 2;
@@ -200,6 +248,14 @@ interface RemoteGateway {
     payload: SavedMarker | null,
     signal: AbortSignal,
   ): Promise<RemoteMutation>;
+  folderSnapshot?(signal: AbortSignal): Promise<readonly RemoteFolderRecord[]>;
+  mutateFolder?(
+    folderId: string,
+    baseRevision: number,
+    payload: TrackFolder | null,
+    signal: AbortSignal,
+  ): Promise<RemoteMutation>;
+  reorderFolders?(folderIds: readonly string[], signal: AbortSignal): Promise<void>;
   download(path: string, signal: AbortSignal): Promise<Uint8Array>;
   deleteRemoteRecord(
     contentHash: string,
@@ -234,6 +290,15 @@ function syncStatesEqual(left: TrackSyncState, right: TrackSyncState): boolean {
 function markerStatesEqual(left: MarkerSyncState, right: MarkerSyncState): boolean {
   return (
     left.markerId === right.markerId &&
+    left.remoteRevision === right.remoteRevision &&
+    left.pendingKind === right.pendingKind &&
+    left.localVersion === right.localVersion
+  );
+}
+
+function folderStatesEqual(left: FolderSyncState, right: FolderSyncState): boolean {
+  return (
+    left.folderId === right.folderId &&
     left.remoteRevision === right.remoteRevision &&
     left.pendingKind === right.pendingKind &&
     left.localVersion === right.localVersion
@@ -282,9 +347,21 @@ async function errorForResponse(response: Response): Promise<TrackSyncWorkerErro
           'limit',
         );
       }
+      if (code === 'folder_limit') {
+        return new TrackSyncWorkerError(
+          'Cloud track folder limit reached. Delete a synchronized folder and try again.',
+          'limit',
+        );
+      }
       if (code === 'marker_revision_exhausted') {
         return new TrackSyncWorkerError(
-          'Synchronization could not finish. Your local tracks and markers remain available.',
+          'Synchronization could not finish. Your local tracks, folders, and markers remain available.',
+          'revision-exhausted',
+        );
+      }
+      if (code === 'folder_revision_exhausted') {
+        return new TrackSyncWorkerError(
+          'Synchronization could not finish. Your local tracks and folders remain available.',
           'revision-exhausted',
         );
       }
@@ -395,6 +472,59 @@ export class FetchRemoteGateway implements RemoteGateway {
     if (value.length > 0) {
       throw new TrackSyncWorkerError(
         'Cloud marker limit reached. Delete a synchronized marker and try again.',
+        'limit',
+      );
+    }
+    return records;
+  }
+
+  public async folderSnapshot(
+    signal: AbortSignal,
+  ): Promise<readonly RemoteFolderRecord[]> {
+    const response = await this.request(
+      '/rest/v1/track_folder_records?select=folder_id,revision,payload&order=folder_id.asc',
+      {
+        headers: {
+          Range: ['0', String(maximumFolderSnapshotRecords - 1)].join('-'),
+          'Range-Unit': 'items',
+        },
+        signal,
+      },
+    );
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (!Array.isArray(value)) {
+      throw new TrackSyncWorkerError(
+        'The server returned invalid track folder records.',
+        'invalid-remote',
+      );
+    }
+    const records = value.map(parseRemoteFolderRecord);
+    if (records.length < maximumFolderSnapshotRecords) return records;
+    const probe = await this.request(
+      '/rest/v1/track_folder_records?select=folder_id,revision,payload&order=folder_id.asc',
+      {
+        headers: {
+          Range: [
+            String(maximumFolderSnapshotRecords),
+            String(maximumFolderSnapshotRecords),
+          ].join('-'),
+          'Range-Unit': 'items',
+        },
+        signal,
+      },
+    );
+    if (!probe.ok) throw await errorForResponse(probe);
+    const probeValue: unknown = await probe.json();
+    if (!Array.isArray(probeValue)) {
+      throw new TrackSyncWorkerError(
+        'The server returned invalid track folder records.',
+        'invalid-remote',
+      );
+    }
+    if (probeValue.length > 0) {
+      throw new TrackSyncWorkerError(
+        'Cloud track folder limit reached. Delete a synchronized folder and try again.',
         'limit',
       );
     }
@@ -593,6 +723,85 @@ export class FetchRemoteGateway implements RemoteGateway {
     );
   }
 
+  public async mutateFolder(
+    folderId: string,
+    baseRevision: number,
+    payload: TrackFolder | null,
+    signal: AbortSignal,
+  ): Promise<RemoteMutation> {
+    const response = await this.request('/functions/v1/track-sync', {
+      method: 'POST',
+      body: JSON.stringify(
+        payload === null
+          ? { action: 'folder-delete', folderId, baseRevision }
+          : { action: 'folder-upsert', folderId, baseRevision, folder: payload },
+      ),
+      signal,
+    });
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (typeof value !== 'object' || value === null || !('outcome' in value)) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid track folder mutation.',
+        'invalid-remote',
+      );
+    }
+    const responseValue = value as Record<string, unknown>;
+    if (responseValue.outcome === 'missing') return { outcome: 'missing' };
+    if (responseValue.outcome === 'applied' && payload === null) {
+      return { outcome: 'applied', revision: 0 };
+    }
+    let record: RemoteFolderRecord;
+    try {
+      record = parseRemoteFolderRecord(responseValue.record);
+    } catch {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid track folder mutation.',
+        'invalid-remote',
+      );
+    }
+    if (record.folder_id !== folderId) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid track folder mutation.',
+        'invalid-remote',
+      );
+    }
+    if (responseValue.outcome === 'conflict') {
+      return { outcome: 'conflict', revision: record.revision };
+    }
+    if (responseValue.outcome === 'applied' || responseValue.outcome === 'existing') {
+      return { outcome: responseValue.outcome, revision: record.revision };
+    }
+    throw new TrackSyncWorkerError(
+      'The server returned an invalid track folder mutation outcome.',
+      'invalid-remote',
+    );
+  }
+
+  public async reorderFolders(
+    folderIds: readonly string[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    const response = await this.request('/functions/v1/track-sync', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'folder-reorder', folderIds }),
+      signal,
+    });
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      !('outcome' in value) ||
+      value.outcome !== 'applied'
+    ) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid track folder order.',
+        'invalid-remote',
+      );
+    }
+  }
+
   public async download(path: string, signal: AbortSignal): Promise<Uint8Array> {
     const response = await this.request(
       `/storage/v1/object/track-geometries/${encodeURIComponent(path).replaceAll('%2F', '/')}`,
@@ -659,6 +868,7 @@ function remoteMetadata(
 function localFromRemote(
   record: RemoteRecord,
   geometry: Uint8Array,
+  availableFolderIds: ReadonlySet<string>,
   localId?: string,
 ): LocalTrackSyncPair {
   try {
@@ -678,6 +888,13 @@ function localFromRemote(
     ) {
       throw new Error('Required track metadata is missing.');
     }
+    const folderId = Object.hasOwn(base, 'folderId')
+      ? typeof base.folderId === 'string' && availableFolderIds.has(base.folderId)
+        ? base.folderId
+        : null
+      : geometryKind === 'track' && availableFolderIds.has(IMPORTS_FOLDER_ID)
+        ? IMPORTS_FOLDER_ID
+        : null;
     const decoded = decodeTrackSyncGeometry(geometry);
     const id = localId ?? `local:sync:${record.content_hash}`;
     const summary: Record<string, unknown> = {
@@ -692,6 +909,7 @@ function localFromRemote(
       sourceFormat,
       favorite: base.favorite,
       geometryKind,
+      folderId,
       pointCount: decoded.reduce((count, segment) => count + segment.length, 0),
       segmentCount: decoded.length,
       metrics: calculateTrackMetrics(decoded.map((points) => ({ points }))),
@@ -774,6 +992,12 @@ export class TrackSyncWorkerServer {
             sessionRevision: request.sessionRevision,
           });
         }
+        if (result.changed.folders) {
+          this.#rpc.publishEvent(trackSyncWorkerEventNames.foldersChanged, {
+            userId: request.userId,
+            sessionRevision: request.sessionRevision,
+          });
+        }
         return result;
       },
     });
@@ -786,16 +1010,40 @@ export class TrackSyncWorkerServer {
     signal: AbortSignal,
   ): Promise<TrackSyncWorkerResult> {
     const gateway = this.#gatewayFactory(accessToken);
-    const local = await this.prepareUserDataSync(userId, signal);
+    await this.prepareUserDataSync(userId, signal);
     signal.throwIfAborted();
+    let completedItems = 0;
+    let totalItems = 0;
+    const publishProgress = () => {
+      this.#rpc.publishEvent(trackSyncWorkerEventNames.progress, {
+        completedItems,
+        totalItems,
+      });
+    };
+    const folderOutcome = await this.synchronizeFolders(
+      userId,
+      gateway,
+      signal,
+      (items) => {
+        totalItems += items;
+        publishProgress();
+      },
+      () => {
+        completedItems += 1;
+        publishProgress();
+      },
+    );
+    const availableFolderIds = new Set(
+      (await this.database.listTrackFolders()).map((folder) => folder.id),
+    );
+    const local = await this.readLocal();
     let usage = await gateway.status(signal);
     const firstSnapshot = await gateway.snapshot(signal);
     const firstLineages = readyLineages(firstSnapshot);
     const localByLineage = new Map(
       local.map((entry) => [entry.state.lineageHash, entry]),
     );
-    let completedTracks = 0;
-    let totalTracks =
+    totalItems +=
       local.filter((entry) => entry.state.pendingKind !== null).length +
       firstLineages.filter((lineage) => {
         const localEntry = localByLineage.get(lineage.identity.lineageHash);
@@ -806,14 +1054,8 @@ export class TrackSyncWorkerServer {
               localEntry.state.remoteRevision !== lineage.head.revision))
         );
       }).length;
+    if (totalItems > completedItems) publishProgress();
     const remoteDeletionCandidates = new Map<string, RemoteTrackDeletionCandidate>();
-    const publishProgress = () => {
-      this.#rpc.publishEvent(trackSyncWorkerEventNames.progress, {
-        completedItems: completedTracks,
-        totalItems: totalTracks,
-      });
-    };
-    if (totalTracks > 0) publishProgress();
     const mutationStates = new Map<string, TrackSyncState | null>();
     for (const entry of [...local].sort(
       (left, right) =>
@@ -829,7 +1071,7 @@ export class TrackSyncWorkerServer {
           outcome.remoteTrackDeletion,
         );
       }
-      completedTracks += 1;
+      completedItems += 1;
       publishProgress();
     }
     if (mutationStates.size > 0) usage = await gateway.status(signal);
@@ -866,7 +1108,8 @@ export class TrackSyncWorkerServer {
       const pairUnchangedSinceScan =
         initial?.pair?.summary.updatedAt === entry.pair?.summary.updatedAt &&
         initial?.pair?.summary.name === entry.pair?.summary.name &&
-        initial?.pair?.summary.favorite === entry.pair?.summary.favorite;
+        initial?.pair?.summary.favorite === entry.pair?.summary.favorite &&
+        initial?.pair?.summary.folderId === entry.pair?.summary.folderId;
       let effective: TrackSyncState | null = entry.state;
       if (
         entry.pair === null &&
@@ -950,15 +1193,16 @@ export class TrackSyncWorkerServer {
       if (handledLineages.has(lineage.identity.lineageHash)) continue;
       downloads.push({ kind: 'new', remote: lineage.head });
     }
-    const reconciledTotalTracks = completedTracks + downloads.length;
-    if (reconciledTotalTracks !== totalTracks) {
-      totalTracks = reconciledTotalTracks;
+    const reconciledTotalTracks = completedItems + downloads.length;
+    if (reconciledTotalTracks !== totalItems) {
+      totalItems = reconciledTotalTracks;
       publishProgress();
     }
     for (const download of downloads) {
       const pair = await this.downloadPair(
         download.remote,
         download.kind === 'existing' ? download.localId : undefined,
+        availableFolderIds,
         gateway,
         signal,
       );
@@ -975,7 +1219,7 @@ export class TrackSyncWorkerServer {
       if (download.kind === 'existing' && pair.summary.id !== download.localId) {
         deleted.add(download.localId);
       }
-      completedTracks += 1;
+      completedItems += 1;
       publishProgress();
     }
     signal.throwIfAborted();
@@ -988,7 +1232,11 @@ export class TrackSyncWorkerServer {
       signal,
       usage,
     });
-    const tracksChanged = put.length > 0 || deleted.size > 0 || states.length > 0;
+    const tracksChanged =
+      folderOutcome.tracksChanged ||
+      put.length > 0 ||
+      deleted.size > 0 ||
+      states.length > 0;
     if (tracksChanged) {
       this.#rpc.publishEvent(trackSyncWorkerEventNames.tracksChanged, {
         userId,
@@ -1016,20 +1264,271 @@ export class TrackSyncWorkerServer {
       gateway,
       signal,
       (items) => {
-        totalTracks += items;
+        totalItems += items;
         publishProgress();
       },
       () => {
-        completedTracks += 1;
+        completedItems += 1;
         publishProgress();
       },
     );
     return {
       usage,
-      changed: { tracks: tracksChanged, markers: markerOutcome.changed },
+      changed: {
+        tracks: tracksChanged,
+        markers: markerOutcome.changed,
+        folders: folderOutcome.changed,
+      },
       remoteTrackDeletions: [...remoteDeletionCandidates.values()],
       remoteMarkerDeletions: markerOutcome.remoteDeletions,
     };
+  }
+
+  private async synchronizeFolders(
+    userId: string,
+    gateway: RemoteGateway,
+    signal: AbortSignal,
+    addItems: (items: number) => void,
+    completeItem: () => void,
+  ): Promise<{ readonly changed: boolean; readonly tracksChanged: boolean }> {
+    if (gateway.folderSnapshot === undefined || gateway.mutateFolder === undefined) {
+      return { changed: false, tracksChanged: false };
+    }
+    const initial = await this.database.readFolderSyncSnapshot();
+    const firstRemote = new Map(
+      (await gateway.folderSnapshot(signal)).map((record) => [
+        record.folder_id,
+        record,
+      ]),
+    );
+    const initialById = new Map(initial.map((entry) => [entry.state.folderId, entry]));
+    const pending = initial.filter(
+      (entry) =>
+        entry.state.pendingKind !== null &&
+        (entry.state.pendingKind === 'delete' || entry.folder !== null),
+    );
+    const anticipatedRemoteChanges = initial.reduce((count, entry) => {
+      const remote = firstRemote.get(entry.state.folderId);
+      if (
+        entry.state.pendingKind === null &&
+        entry.state.remoteRevision !== null &&
+        (remote === undefined ||
+          remote.revision > entry.state.remoteRevision ||
+          (remote.revision === entry.state.remoteRevision &&
+            JSON.stringify(remote.payload) !== JSON.stringify(entry.folder)))
+      ) {
+        return count + 1;
+      }
+      return count;
+    }, 0);
+    const anticipatedRemoteCreates = [...firstRemote.values()].filter(
+      (remote) => !initialById.has(remote.folder_id),
+    ).length;
+    const anticipated =
+      pending.length + anticipatedRemoteChanges + anticipatedRemoteCreates;
+    if (anticipated > 0) addItems(anticipated);
+
+    // Folder content conflicts resolve as last writer wins: a conflict retries the
+    // local edit on the newer revision. Order is not part of these writes; the
+    // server keeps an existing folder's position and reorders arrive as one list.
+    const acknowledgements = new Map<string, FolderSyncState | null>();
+    for (const entry of pending) {
+      const remote = firstRemote.get(entry.state.folderId);
+      if (
+        entry.state.pendingKind === 'upsert' &&
+        entry.state.remoteRevision === null &&
+        remote !== undefined &&
+        entry.folder !== null &&
+        isImportsPlaceholder(entry.folder)
+      ) {
+        acknowledgements.set(entry.state.folderId, {
+          ...entry.state,
+          remoteRevision: remote.revision,
+          pendingKind: null,
+        });
+        completeItem();
+        continue;
+      }
+      let baseRevision = entry.state.remoteRevision ?? remote?.revision ?? 0;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const mutation = await gateway.mutateFolder(
+          entry.state.folderId,
+          baseRevision,
+          entry.state.pendingKind === 'delete' ? null : entry.folder,
+          signal,
+        );
+        if (mutation.outcome === 'conflict') {
+          baseRevision = mutation.revision;
+          continue;
+        }
+        if (mutation.outcome === 'missing') {
+          if (entry.state.pendingKind === 'upsert' && baseRevision !== 0) {
+            baseRevision = 0;
+            continue;
+          }
+          if (entry.state.pendingKind === 'delete') {
+            acknowledgements.set(entry.state.folderId, null);
+            break;
+          }
+          throw new TrackSyncWorkerError(
+            'Synchronization could not recreate a missing track folder.',
+            'concurrent-change',
+          );
+        }
+        if (mutation.outcome === 'reserved') {
+          throw new TrackSyncWorkerError(
+            'The server returned an invalid track folder mutation.',
+            'invalid-remote',
+          );
+        }
+        if (entry.state.pendingKind === 'delete') {
+          acknowledgements.set(entry.state.folderId, null);
+        } else {
+          acknowledgements.set(entry.state.folderId, {
+            ...entry.state,
+            remoteRevision: mutation.revision,
+            pendingKind: null,
+          });
+        }
+        break;
+      }
+      if (!acknowledgements.has(entry.state.folderId)) {
+        throw new TrackSyncWorkerError(
+          'Synchronization could not finish. Your local tracks and folders remain available.',
+          'concurrent-change',
+        );
+      }
+      completeItem();
+    }
+
+    const pendingOrder =
+      gateway.reorderFolders === undefined
+        ? null
+        : await this.database.readPendingFolderOrder();
+    if (pendingOrder !== null) {
+      await gateway.reorderFolders?.(pendingOrder.folderIds, signal);
+    }
+
+    const secondRemote = new Map(
+      (await gateway.folderSnapshot(signal)).map((record) => [
+        record.folder_id,
+        record,
+      ]),
+    );
+    const current = new Map(
+      (await this.database.readFolderSyncSnapshot()).map((entry) => [
+        entry.state.folderId,
+        entry,
+      ]),
+    );
+    const putById = new Map<string, TrackFolder>();
+    const stateById = new Map<string, FolderSyncState>();
+    const deleteFolderIds = new Set<string>();
+    const deleteStateIds = new Set<string>();
+    const expectedById = new Map<string, FolderSyncState | null>();
+    for (const [folderId, acknowledged] of acknowledgements) {
+      const before = initialById.get(folderId);
+      const now = current.get(folderId);
+      if (before === undefined || now === undefined) continue;
+      // Every local content edit or deletion advances the folder's sync state; a
+      // local reorder does not, and the merge keeps its newer positions.
+      if (!folderStatesEqual(before.state, now.state)) {
+        throw new TrackSyncWorkerError(
+          'Synchronization could not finish. Your local tracks and folders remain available.',
+          'concurrent-change',
+        );
+      }
+      expectedById.set(folderId, now.state);
+      if (acknowledged === null) {
+        deleteStateIds.add(folderId);
+      } else {
+        const remote = secondRemote.get(folderId);
+        if (
+          now.folder !== null &&
+          remote !== undefined &&
+          JSON.stringify(remote.payload) !== JSON.stringify(now.folder)
+        ) {
+          putById.set(folderId, remote.payload);
+          stateById.set(folderId, {
+            ...acknowledged,
+            remoteRevision: remote.revision,
+            localVersion: acknowledged.localVersion + 1,
+          });
+        } else {
+          stateById.set(folderId, acknowledged);
+        }
+      }
+    }
+    for (const [folderId, remote] of secondRemote) {
+      const entry = current.get(folderId);
+      if (entry === undefined) {
+        if (!firstRemote.has(folderId)) addItems(1);
+        putById.set(folderId, remote.payload);
+        stateById.set(folderId, {
+          folderId,
+          remoteRevision: remote.revision,
+          pendingKind: null,
+          localVersion: 1,
+        });
+        expectedById.set(folderId, null);
+        completeItem();
+        continue;
+      }
+      if (entry.state.pendingKind !== null || entry.state.remoteRevision === null) {
+        continue;
+      }
+      if (remote.revision < entry.state.remoteRevision) {
+        throw new TrackSyncWorkerError(
+          'The server returned an invalid track folder revision.',
+          'invalid-remote',
+        );
+      }
+      const changedPayload =
+        JSON.stringify(remote.payload) !== JSON.stringify(entry.folder);
+      if (
+        remote.revision > entry.state.remoteRevision ||
+        (remote.revision === entry.state.remoteRevision && changedPayload)
+      ) {
+        if (entry.state.localVersion >= Number.MAX_SAFE_INTEGER) {
+          throw new TrackSyncWorkerError(
+            'Synchronization could not finish. Your local tracks and folders remain available.',
+            'revision-exhausted',
+          );
+        }
+        putById.set(folderId, remote.payload);
+        stateById.set(folderId, {
+          folderId,
+          remoteRevision: remote.revision,
+          pendingKind: null,
+          localVersion: entry.state.localVersion + 1,
+        });
+        expectedById.set(folderId, entry.state);
+        completeItem();
+      }
+    }
+    for (const entry of current.values()) {
+      if (
+        entry.folder !== null &&
+        entry.state.pendingKind === null &&
+        entry.state.remoteRevision !== null &&
+        !secondRemote.has(entry.state.folderId)
+      ) {
+        deleteFolderIds.add(entry.state.folderId);
+        deleteStateIds.add(entry.state.folderId);
+        expectedById.set(entry.state.folderId, entry.state);
+        completeItem();
+      }
+    }
+    return await this.database.applyRemoteFolderMergeBatch({
+      put: [...putById.values()],
+      deleteFolderIds: [...deleteFolderIds],
+      states: [...stateById.values()],
+      deleteStateIds: [...deleteStateIds],
+      expected: [...expectedById].map(([folderId, state]) => ({ folderId, state })),
+      expectedUserId: userId,
+      acknowledgedOrderVersion: pendingOrder?.version ?? null,
+      signal,
+    });
   }
 
   private async synchronizeMarkers(
@@ -1091,7 +1590,7 @@ export class TrackSyncWorkerServer {
         if (mutation.outcome === 'conflict') {
           if (attempt === 1) {
             throw new TrackSyncWorkerError(
-              'Synchronization could not finish. Your local tracks and markers remain available.',
+              'Synchronization could not finish. Your local tracks, folders, and markers remain available.',
               'concurrent-change',
             );
           }
@@ -1147,7 +1646,7 @@ export class TrackSyncWorkerServer {
         JSON.stringify(before.marker) === JSON.stringify(now.marker);
       if (!markerUnchanged || !markerStatesEqual(before.state, now.state)) {
         throw new TrackSyncWorkerError(
-          'Synchronization could not finish. Your local tracks and markers remain available.',
+          'Synchronization could not finish. Your local tracks, folders, and markers remain available.',
           'concurrent-change',
         );
       }
@@ -1186,7 +1685,7 @@ export class TrackSyncWorkerServer {
       ) {
         if (entry.state.localVersion >= Number.MAX_SAFE_INTEGER) {
           throw new TrackSyncWorkerError(
-            'Synchronization could not finish. Your local tracks and markers remain available.',
+            'Synchronization could not finish. Your local tracks, folders, and markers remain available.',
             'revision-exhausted',
           );
         }
@@ -1264,6 +1763,7 @@ export class TrackSyncWorkerServer {
   private async downloadPair(
     remote: RemoteRecord,
     localId: string | undefined,
+    availableFolderIds: ReadonlySet<string>,
     gateway: RemoteGateway,
     signal: AbortSignal,
   ): Promise<LocalTrackSyncPair> {
@@ -1282,7 +1782,7 @@ export class TrackSyncWorkerServer {
       if (canonical[4] !== remoteIdentity(remote).geometryVersion) {
         throw new Error('The downloaded codec version does not match the record.');
       }
-      return localFromRemote(remote, canonical, localId);
+      return localFromRemote(remote, canonical, availableFolderIds, localId);
     } catch (error) {
       if (error instanceof TrackSyncWorkerError) throw error;
       throw new TrackSyncWorkerError(

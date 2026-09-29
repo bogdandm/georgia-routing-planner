@@ -587,6 +587,112 @@ Deno.test(
   },
 );
 
+Deno.test(
+  'folder mutations are validated and forwarded to the folder RPCs',
+  async () => {
+    const folder = {
+      schemaVersion: 1,
+      id: 'imports',
+      name: 'Imports',
+      normalizedName: 'imports',
+      iconKey: 'folder',
+      position: 0,
+      createdAt: '2026-09-28T00:00:00.000Z',
+      updatedAt: '2026-09-28T00:00:00.000Z',
+    };
+    const state = makeState();
+    state.rpcResults.set('upsert_track_folder', [
+      {
+        data: {
+          outcome: 'applied',
+          record: { folder_id: 'imports', revision: 1, payload: folder },
+        },
+        error: null,
+      },
+    ]);
+    const upsert = await handleTrackSync(
+      jsonRequest({
+        action: 'folder-upsert',
+        folderId: 'imports',
+        baseRevision: 0,
+        folder,
+      }),
+      makeContext(state),
+    );
+    assertEquals(upsert.status, 200);
+    assertEquals(await responseJson(upsert), {
+      outcome: 'applied',
+      record: { folder_id: 'imports', revision: 1, payload: folder },
+    });
+    assertEquals(
+      state.calls.find((call) => call.name === 'upsert_track_folder')?.value,
+      {
+        p_user_id: USER_ID,
+        p_folder_id: 'imports',
+        p_payload: folder,
+        p_base_revision: 0,
+      },
+    );
+
+    const deletion = await handleTrackSync(
+      jsonRequest({ action: 'folder-delete', folderId: 'imports', baseRevision: 1 }),
+      makeContext(state),
+    );
+    assertEquals(deletion.status, 200);
+    assertEquals(
+      state.calls.find((call) => call.name === 'delete_track_folder')?.value,
+      {
+        p_user_id: USER_ID,
+        p_folder_id: 'imports',
+        p_base_revision: 1,
+      },
+    );
+
+    state.rpcResults.set('reorder_track_folders', [
+      { data: { outcome: 'applied' }, error: null },
+    ]);
+    const reorder = await handleTrackSync(
+      jsonRequest({ action: 'folder-reorder', folderIds: ['folder:trips', 'imports'] }),
+      makeContext(state),
+    );
+    assertEquals(reorder.status, 200);
+    assertEquals(
+      state.calls.find((call) => call.name === 'reorder_track_folders')?.value,
+      { p_user_id: USER_ID, p_folder_ids: ['folder:trips', 'imports'] },
+    );
+  },
+);
+
+Deno.test('invalid folder payloads are rejected before backend access', async () => {
+  const state = makeState();
+  const response = await handleTrackSync(
+    jsonRequest({
+      action: 'folder-upsert',
+      folderId: 'imports',
+      baseRevision: 0,
+      folder: {
+        schemaVersion: 1,
+        id: 'imports',
+        name: 'Imports',
+        normalizedName: 'wrong',
+        iconKey: 'folder',
+        position: 0,
+        createdAt: '2026-09-28T00:00:00.000Z',
+        updatedAt: '2026-09-28T00:00:00.000Z',
+      },
+    }),
+    makeContext(state),
+  );
+  assertEquals(response.status, 400);
+  assertEquals(state.calls.length, 0);
+
+  const repeated = await handleTrackSync(
+    jsonRequest({ action: 'folder-reorder', folderIds: ['imports', 'imports'] }),
+    makeContext(state),
+  );
+  assertEquals(repeated.status, 400);
+  assertEquals(state.calls.length, 0);
+});
 Deno.test('a geometry hash mismatch is rejected before reservation', async () => {
   const state = makeState();
   const response = await handleTrackSync(

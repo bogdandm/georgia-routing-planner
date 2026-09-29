@@ -42,8 +42,11 @@ road and trail topology or remains a direct line. Routing and elevation calculat
 in the browser; saving stores the result as an existing local track.
 
 Saved tracks remain available after reopening the application. They can be searched,
-favorited, renamed, deleted, or downloaded as GPX or KML. GPX waypoints stay attached to
-their track as name-only markers and are included in GPX downloads.
+favorited, renamed, deleted, or downloaded as GPX or KML. Flat collapsible folders keep
+saved tracks organized, including empty folders; tracks without a folder stay directly
+below the folder rows. Folders and tracks move with pointer, touch, or keyboard
+controls. GPX waypoints stay attached to their track as name-only markers and are
+included in GPX downloads.
 
 When usable elevation is available, the track view adds:
 

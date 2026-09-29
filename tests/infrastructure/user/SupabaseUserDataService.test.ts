@@ -239,6 +239,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -269,6 +270,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -310,7 +312,7 @@ describe('SupabaseUserDataService', () => {
             () => {
               resolve({
                 usage: emptyUsage,
-                changed: { tracks: false, markers: false },
+                changed: { tracks: false, markers: false, folders: false },
                 remoteTrackDeletions: [],
                 remoteMarkerDeletions: [],
               });
@@ -323,6 +325,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -359,7 +362,7 @@ describe('SupabaseUserDataService', () => {
             () => {
               resolve({
                 usage: emptyUsage,
-                changed: { tracks: false, markers: false },
+                changed: { tracks: false, markers: false, folders: false },
                 remoteTrackDeletions: [],
                 remoteMarkerDeletions: [],
               });
@@ -372,6 +375,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -406,6 +410,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -438,6 +443,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -471,7 +477,7 @@ describe('SupabaseUserDataService', () => {
       .mockRejectedValueOnce(new TrackSyncWorkerError('Expired.', 'auth-expired'))
       .mockResolvedValue({
         usage: emptyUsage,
-        changed: { tracks: false, markers: false },
+        changed: { tracks: false, markers: false, folders: false },
         remoteTrackDeletions: [],
         remoteMarkerDeletions: [],
       });
@@ -479,6 +485,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -523,6 +530,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -538,7 +546,7 @@ describe('SupabaseUserDataService', () => {
       busy: false,
       syncStatus: 'error',
       errorMessage:
-        'Synchronization could not finish. Your local tracks and markers remain available.',
+        'Synchronization could not finish. Your local tracks, folders, and markers remain available.',
     });
     service.dispose();
   });
@@ -552,7 +560,7 @@ describe('SupabaseUserDataService', () => {
       .fn()
       .mockResolvedValueOnce({
         usage: emptyUsage,
-        changed: { tracks: false, markers: false },
+        changed: { tracks: false, markers: false, folders: false },
         remoteTrackDeletions: [
           { trackId: 'local:delete', name: 'Delete' },
           { trackId: 'local:restore', name: 'Restore' },
@@ -561,7 +569,7 @@ describe('SupabaseUserDataService', () => {
       })
       .mockResolvedValue({
         usage: emptyUsage,
-        changed: { tracks: true, markers: false },
+        changed: { tracks: true, markers: false, folders: false },
         remoteTrackDeletions: [],
         remoteMarkerDeletions: [],
       });
@@ -569,6 +577,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -619,12 +628,13 @@ describe('SupabaseUserDataService', () => {
     const worker = {
       synchronize: vi.fn().mockResolvedValue({
         usage: emptyUsage,
-        changed: { tracks: false, markers: false },
+        changed: { tracks: false, markers: false, folders: false },
         remoteTrackDeletions: [{ trackId: 'local:keep', name: 'Keep' }],
         remoteMarkerDeletions: [],
       }),
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -655,7 +665,7 @@ describe('SupabaseUserDataService', () => {
       resolveFirst = () => {
         resolve({
           usage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
-          changed: { tracks: false, markers: false },
+          changed: { tracks: false, markers: false, folders: false },
           remoteTrackDeletions: [],
           remoteMarkerDeletions: [],
         });
@@ -666,7 +676,7 @@ describe('SupabaseUserDataService', () => {
       .mockReturnValueOnce(firstRun)
       .mockResolvedValue({
         usage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
-        changed: { tracks: false, markers: false },
+        changed: { tracks: false, markers: false, folders: false },
         remoteTrackDeletions: [],
         remoteMarkerDeletions: [],
       });
@@ -674,6 +684,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -723,7 +734,7 @@ describe('SupabaseUserDataService', () => {
         .mockResolvedValue({ data: { session: activeSession }, error: null });
       const synchronize = vi.fn().mockResolvedValue({
         usage: emptyUsage,
-        changed: { tracks: false, markers: false },
+        changed: { tracks: false, markers: false, folders: false },
         remoteTrackDeletions: [],
         remoteMarkerDeletions: [],
       });
@@ -731,6 +742,7 @@ describe('SupabaseUserDataService', () => {
         synchronize,
         subscribeTracksChanged: vi.fn(),
         subscribeMarkersChanged: vi.fn(),
+        subscribeFoldersChanged: vi.fn(),
         subscribeProgress: vi.fn(),
         dispose: vi.fn(),
       } as unknown as TrackSyncWorkerClient;
@@ -775,7 +787,7 @@ describe('SupabaseUserDataService', () => {
       resolveFirst = () => {
         resolve({
           usage: emptyUsage,
-          changed: { tracks: false, markers: false },
+          changed: { tracks: false, markers: false, folders: false },
           remoteTrackDeletions: [],
           remoteMarkerDeletions: [],
         });
@@ -786,7 +798,7 @@ describe('SupabaseUserDataService', () => {
       .mockReturnValueOnce(firstRun)
       .mockResolvedValue({
         usage: emptyUsage,
-        changed: { tracks: false, markers: false },
+        changed: { tracks: false, markers: false, folders: false },
         remoteTrackDeletions: [],
         remoteMarkerDeletions: [],
       });
@@ -794,6 +806,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn(),
       dispose: vi.fn(),
     } as unknown as TrackSyncWorkerClient;
@@ -831,7 +844,7 @@ describe('SupabaseUserDataService', () => {
       resolveFirst = () => {
         resolve({
           usage: emptyUsage,
-          changed: { tracks: false, markers: false },
+          changed: { tracks: false, markers: false, folders: false },
           remoteTrackDeletions: [],
           remoteMarkerDeletions: [],
         });
@@ -853,7 +866,7 @@ describe('SupabaseUserDataService', () => {
               () => {
                 resolve({
                   usage: emptyUsage,
-                  changed: { tracks: false, markers: false },
+                  changed: { tracks: false, markers: false, folders: false },
                   remoteTrackDeletions: [],
                   remoteMarkerDeletions: [],
                 });
@@ -867,6 +880,7 @@ describe('SupabaseUserDataService', () => {
       synchronize,
       subscribeTracksChanged: vi.fn(),
       subscribeMarkersChanged: vi.fn(),
+      subscribeFoldersChanged: vi.fn(),
       subscribeProgress: vi.fn((listener) => {
         emitProgress = listener as (progress: UserDataSyncProgress) => void;
         return () => undefined;

@@ -313,7 +313,10 @@ assigns imported tracks to `imports` and leaves saved routes unfiled without que
 synchronized tracks for upload. Folder deletion updates every affected summary and
 folder in one IndexedDB transaction and leaves remaining positions unchanged. A local
 reorder rewrites positions and records a pending order version in settings instead of
-per-folder synchronization state.
+per-folder synchronization state. The `track-folders.collapsed` settings record holds
+the IDs of folders shown collapsed in this browser; it is outside the `sync.*` keys, is
+never uploaded, drops deleted folders on the next save, and resets to expanded when
+unreadable.
 
 `trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
 stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,

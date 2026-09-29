@@ -284,6 +284,9 @@ interface TracksWorkspaceValue {
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
   readonly folders: readonly TrackFolder[];
+  /** Folders shown collapsed; remembered in this browser only. */
+  readonly collapsedFolderIds: ReadonlySet<string>;
+  readonly toggleFolderCollapsed: (folderId: string) => void;
   readonly createFolder: (name: string, iconKey: TrackFolderIconKey) => Promise<void>;
   readonly updateFolder: (
     folder: TrackFolder,
@@ -494,6 +497,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const mapCenter = viewport?.center ?? null;
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [folders, setFolders] = useState<readonly TrackFolder[]>([]);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
@@ -581,6 +587,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const shareResolutionAbort = useRef<AbortController | null>(null);
   const sharedIntent = useRef(parseTrackShareLocation(window.location.hash));
   const restorationAttempted = useRef(false);
+  // One shared read of the remembered collapsed folders. Every reload waits for it
+  // so folders never render expanded first; it applies once, and never after the
+  // user has already toggled a folder.
+  const collapsedFolderLoad = useRef<Promise<readonly string[]> | null>(null);
+  const collapsedFoldersSettled = useRef(false);
   const readyMultiTrackSelections = useMemo(
     () =>
       multiTrackSelections.filter(
@@ -622,12 +633,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const reloadSummaries = useCallback(async () => {
     try {
-      const [loaded, loadedFolders] = await Promise.all([
+      collapsedFolderLoad.current ??= database
+        .loadCollapsedTrackFolderIds()
+        .catch((): readonly string[] => {
+          // View state only: an unreadable record falls back to expanded folders.
+          logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+          return [];
+        });
+      const [loaded, loadedFolders, collapsed] = await Promise.all([
         database.listLocalTracks(),
         database.listTrackFolders(),
+        collapsedFolderLoad.current,
       ]);
       setSummaries(loaded);
       setFolders(loadedFolders);
+      if (!collapsedFoldersSettled.current) {
+        collapsedFoldersSettled.current = true;
+        setCollapsedFolderIds(new Set(collapsed));
+      }
       if (!restorationAttempted.current) {
         restorationAttempted.current = true;
         if (sharedIntent.current.kind !== 'none') return;
@@ -653,7 +676,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     } catch {
       setError(t`Saved tracks and folders could not be loaded from this browser.`);
     }
-  }, [database, t]);
+  }, [database, logger, t]);
+
+  const toggleFolderCollapsed = useCallback(
+    (folderId: string) => {
+      const next = new Set(collapsedFolderIds);
+      if (!next.delete(folderId)) next.add(folderId);
+      collapsedFoldersSettled.current = true;
+      setCollapsedFolderIds(next);
+      // Saving only current folders also forgets folders deleted since.
+      const known = new Set(folders.map((folder) => folder.id));
+      void database
+        .saveCollapsedTrackFolderIds([...next].filter((id) => known.has(id)))
+        .catch(() => {
+          logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+        });
+    },
+    [collapsedFolderIds, database, folders, logger],
+  );
 
   // The folder editor dialog reports these failures, so they are rethrown
   // without also setting the panel-level error.
@@ -2560,6 +2600,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       error,
       filteredSummaries,
       folders,
+      collapsedFolderIds,
+      toggleFolderCollapsed,
       createFolder,
       updateFolder,
       deleteFolder,
@@ -2616,6 +2658,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       error,
       filteredSummaries,
       folders,
+      collapsedFolderIds,
+      toggleFolderCollapsed,
       importError,
       importFiles,
       importState,
@@ -3654,6 +3698,7 @@ export function TracksPanel({
 }: TracksPanelProps) {
   const {
     active,
+    collapsedFolderIds,
     createFolder,
     deleteFolder,
     deleteSaved,
@@ -3669,6 +3714,7 @@ export function TracksPanel({
     setQuery,
     summaries,
     toggleFavorite,
+    toggleFolderCollapsed,
     toggleMultiTrackSelection,
     updateFolder,
   } = useTracksWorkspace();
@@ -3697,9 +3743,6 @@ export function TracksPanel({
     null,
   );
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
-  const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
@@ -3728,17 +3771,6 @@ export function TracksPanel({
       ),
     [filteredSummaries, knownFolderIds],
   );
-  const toggleFolderCollapsed = (folderId: string) => {
-    setCollapsedFolderIds((current) => {
-      const next = new Set(current);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
-  };
 
   const restoreFocus = (focusKey: string) => {
     window.setTimeout(() => {

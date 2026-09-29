@@ -226,6 +226,8 @@ folder, saved route plans remain unfiled, and migration assigns older imported t
 re-iconed, and reordered but not deleted, because it is the destination for every new
 import. Folder identity, ordering, icon, and track placement synchronize with the
 existing opt-in account data flow; the last synchronized folder reorder wins as a whole.
+Which folders are collapsed is remembered in the current browser and restored after a
+reload, but it is view state and never synchronizes to other devices.
 
 The latest opened saved track reopens after restart when its content is still valid.
 Catalog, tags, filters, batch import, and manual GPX authoring remain unavailable. A

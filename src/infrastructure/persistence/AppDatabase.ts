@@ -223,6 +223,14 @@ export interface PendingFolderOrder {
 const folderOrderVersionKey = 'sync.folder-order-version';
 
 const trackFolderIdSchema = z.string().min(1).max(200);
+
+// Browser-local view state: which folders the Tracks list shows collapsed. It lives
+// outside the `sync.*` keys and is never uploaded.
+const collapsedTrackFoldersKey = 'track-folders.collapsed';
+const collapsedTrackFolderIdsSchema = z
+  .array(trackFolderIdSchema)
+  .max(1_000)
+  .refine((ids) => new Set(ids).size === ids.length, 'Folder IDs must be unique.');
 const trackFolderIconKeys = ['folder', ...markerIconKeys] as const;
 const trackFolderSchema: z.ZodType<TrackFolder> = z
   .object({
@@ -1542,6 +1550,32 @@ export class AppDatabase
         return folder;
       },
     );
+  }
+
+  public async loadCollapsedTrackFolderIds(): Promise<readonly string[]> {
+    const record = await this.settings.get(collapsedTrackFoldersKey);
+    if (record === undefined) return [];
+    const parsed = collapsedTrackFolderIdsSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+    await this.settings.delete(collapsedTrackFoldersKey);
+    return [];
+  }
+
+  public async saveCollapsedTrackFolderIds(
+    folderIds: readonly string[],
+  ): Promise<void> {
+    const parsed = collapsedTrackFolderIdsSchema.safeParse(folderIds);
+    if (!parsed.success) {
+      throw new TrackFolderStorageError(
+        'record-invalid',
+        'The collapsed track folder list is invalid.',
+      );
+    }
+    await this.settings.put({
+      key: collapsedTrackFoldersKey,
+      value: parsed.data,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   public async createTrackFolder(folder: NewTrackFolder): Promise<TrackFolder> {

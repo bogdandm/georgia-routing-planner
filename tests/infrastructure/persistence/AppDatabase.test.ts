@@ -889,6 +889,28 @@ describe('AppDatabase', () => {
     );
   });
 
+  it('keeps collapsed folders locally and discards an unreadable list', async () => {
+    await database.saveCollapsedTrackFolderIds([IMPORTS_FOLDER_ID, 'folder:trips']);
+    await expect(database.loadCollapsedTrackFolderIds()).resolves.toEqual([
+      IMPORTS_FOLDER_ID,
+      'folder:trips',
+    ]);
+    await expect(
+      database.saveCollapsedTrackFolderIds([IMPORTS_FOLDER_ID, IMPORTS_FOLDER_ID]),
+    ).rejects.toMatchObject({ code: 'record-invalid' });
+
+    await database.settings.put({
+      key: 'track-folders.collapsed',
+      value: 'imports',
+      updatedAt: '2026-09-29T00:00:00.000Z',
+    });
+
+    await expect(database.loadCollapsedTrackFolderIds()).resolves.toEqual([]);
+    await expect(
+      database.settings.get('track-folders.collapsed'),
+    ).resolves.toBeUndefined();
+  });
+
   it('creates empty folders at the end of the persisted order', async () => {
     const folder = trackFolder('folder:one', 'Weekend');
     const created = await database.createTrackFolder({

@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
@@ -38,6 +39,7 @@ interface MapViewControlsProps {
   readonly onOpenLayersTab: () => void;
 }
 
+/* eslint-disable lingui/no-unlocalized-strings -- Configured provider product names stay invariant. */
 const layerPresets: readonly {
   readonly label: string;
   readonly value: MapLayerPreset;
@@ -48,6 +50,8 @@ const layerPresets: readonly {
   { label: 'Esri World Imagery', value: 'esri-satellite' },
   { label: 'NAPR Orthophoto', value: 'napr-orthophoto' },
 ];
+const sentinelPresetLabel = 'Sentinel-2';
+/* eslint-enable lingui/no-unlocalized-strings */
 
 class MapViewControlHost implements IControl {
   readonly element: HTMLDivElement = document.createElement('div');
@@ -80,10 +84,11 @@ export function MapViewControls({
   onWeatherMapChange,
   onOpenLayersTab,
 }: MapViewControlsProps) {
+  const { t } = useLingui();
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
   const menuId = useId();
   const pending = terrainState === 'enabling' || terrainState === 'disabling';
-  const selectedMode =
+  const selectedMode: TerrainMode =
     terrainState === 'terrain' || terrainState === 'enabling' ? 'terrain' : 'flat';
   const menuOpen = menuButton !== null;
 
@@ -115,7 +120,7 @@ export function MapViewControls({
           exclusive
           orientation="vertical"
           size="small"
-          aria-label="Map dimension"
+          aria-label={t`Map dimension`}
           value={selectedMode}
           onChange={handleTerrainModeChange}
           sx={{
@@ -131,15 +136,16 @@ export function MapViewControls({
         >
           <ToggleButton
             value="flat"
-            aria-label="Show flat 2D map"
+            aria-label={t`Show flat 2D map`}
             disabled={pending}
             sx={{ width: 40, height: 36, p: 0 }}
           >
-            <Tooltip title="Flat map">
+            <Tooltip title={t`Flat map`}>
               <span>
                 {terrainState === 'disabling' ? (
                   <CircularProgress size={18} aria-hidden />
                 ) : (
+                  // eslint-disable-next-line lingui/no-unlocalized-strings -- Technical dimension token.
                   '2D'
                 )}
               </span>
@@ -148,14 +154,14 @@ export function MapViewControls({
           <Tooltip
             title={
               terrainDisabled
-                ? '3D terrain is unavailable while Sentinel Mosaic is active.'
-                : '3D terrain'
+                ? t`3D terrain is unavailable while Sentinel Mosaic is active.`
+                : t`3D terrain`
             }
           >
             <span>
               <ToggleButton
                 value="terrain"
-                aria-label="Show 3D terrain map"
+                aria-label={t`Show 3D terrain map`}
                 disabled={pending || terrainDisabled}
                 sx={{ width: 40, height: 36, p: 0 }}
               >
@@ -163,6 +169,7 @@ export function MapViewControls({
                   {terrainState === 'enabling' ? (
                     <CircularProgress size={18} aria-hidden />
                   ) : (
+                    // eslint-disable-next-line lingui/no-unlocalized-strings -- Technical dimension token.
                     '3D'
                   )}
                 </span>
@@ -170,13 +177,13 @@ export function MapViewControls({
             </span>
           </Tooltip>
         </ToggleButtonGroup>
-        <Tooltip title="Choose map layer preset">
+        <Tooltip title={t`Choose map layer preset`}>
           <span>
             <ToggleButton
               aria-controls={menuOpen ? menuId : undefined}
               aria-expanded={menuOpen}
               aria-haspopup="menu"
-              aria-label="Choose map layer preset"
+              aria-label={t`Choose map layer preset`}
               disabled={layerPresetDisabled}
               onClick={(event) => {
                 setMenuButton(event.currentTarget);
@@ -234,7 +241,7 @@ export function MapViewControls({
               <CheckBoxOutlineBlankIcon fontSize="small" />
             )}
           </ListItemIcon>
-          <ListItemText primary="OSM overlay" />
+          <ListItemText primary={t`OSM overlay`} />
         </MenuItem>
         <MenuItem
           aria-checked={weatherMapEnabled}
@@ -252,7 +259,10 @@ export function MapViewControls({
               <CheckBoxOutlineBlankIcon fontSize="small" />
             )}
           </ListItemIcon>
-          <ListItemText primary="Weather" secondary="Clouds, precipitation, and wind" />
+          <ListItemText
+            primary={t`Weather`}
+            secondary={t`Clouds, precipitation, and wind`}
+          />
         </MenuItem>
         <MenuItem
           aria-checked={activeLayerPreset === 'sentinel-2'}
@@ -270,7 +280,7 @@ export function MapViewControls({
             width: '50%',
           }}
         >
-          Sentinel-2
+          {sentinelPresetLabel}
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -289,7 +299,7 @@ export function MapViewControls({
             width: '50%',
           }}
         >
-          Layers tab
+          {t`Layers tab`}
         </MenuItem>
       </Menu>
     </>

@@ -1,6 +1,7 @@
+import { useLingui } from '@lingui/react/macro';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import { Box, IconButton, Paper, Tooltip, Typography } from '@mui/material';
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 
 import {
   GRADE_BANDS_ASCENDING,
@@ -31,8 +32,10 @@ const legendCurveControlY =
 const legendCurveEndY =
   LEGEND_CURVE_START_Y -
   ((LEGEND_GRADE_MINIMUM_PCT + LEGEND_GRADE_MAXIMUM_PCT) / 2 / 100) * legendPlotWidth;
+/* eslint-disable lingui/no-unlocalized-strings -- SVG path commands are not copy. */
 const legendCurvePath = `M ${String(LEGEND_PLOT_LEFT)} ${String(LEGEND_CURVE_START_Y)} Q ${String(legendCurveControlX)} ${String(legendCurveControlY)} ${String(LEGEND_PLOT_RIGHT)} ${String(legendCurveEndY)}`;
 const legendAreaPath = `${legendCurvePath} L ${String(LEGEND_PLOT_RIGHT)} 40 L ${String(LEGEND_PLOT_LEFT)} 40 Z`;
+/* eslint-enable lingui/no-unlocalized-strings */
 const legendBandBoundariesPct = [
   LEGEND_GRADE_MINIMUM_PCT,
   ...GRADE_BAND_THRESHOLDS_PCT,
@@ -70,8 +73,11 @@ function legendPlotX(gradePct: number): number {
   );
 }
 
-function formatGradeThreshold(threshold: number): string {
-  return `${threshold < 0 ? '−' : ''}${String(Math.abs(threshold))}%`;
+function formatGradeThreshold(
+  threshold: number,
+  percentFormatter: Intl.NumberFormat,
+): string {
+  return `${threshold < 0 ? '−' : ''}${percentFormatter.format(Math.abs(threshold) / 100)}`;
 }
 
 /** Explains the colors of the active track's grade overlay without duplicating its state. */
@@ -81,7 +87,14 @@ export function ElevationGradeLegend({
   profile,
   visible,
 }: ElevationGradeLegendProps) {
+  const { i18n, t } = useLingui();
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `elevation-grade-legend-${useId().replaceAll(':', '')}`;
+  const percentFormatter = useMemo(
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
+    () => new Intl.NumberFormat(i18n.locale, { style: 'percent' }),
+    [i18n.locale],
+  );
 
   if (!visible || profile === null || profile.gradeSubsegments.length === 0)
     return null;
@@ -90,7 +103,7 @@ export function ElevationGradeLegend({
 
   return (
     <Paper
-      aria-label="Elevation grade legend"
+      aria-label={t`Elevation grade legend`}
       component="section"
       elevation={2}
       sx={{
@@ -107,11 +120,11 @@ export function ElevationGradeLegend({
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography component="h2" variant="caption" sx={{ fontWeight: 700 }}>
-          Track grade
+          {t`Track grade`}
         </Typography>
-        <Tooltip title="Hide track grade legend">
+        <Tooltip title={t`Hide track grade legend`}>
           <IconButton
-            aria-label="Hide track grade legend"
+            aria-label={t`Hide track grade legend`}
             onClick={() => {
               onDismissedChange(true);
             }}
@@ -123,7 +136,7 @@ export function ElevationGradeLegend({
         </Tooltip>
       </Box>
       <svg
-        aria-label="Track grade color thresholds"
+        aria-label={t`Track grade color thresholds`}
         height={62}
         role="img"
         viewBox="0 0 252 62"
@@ -171,7 +184,7 @@ export function ElevationGradeLegend({
                 y2={44}
               />
               <text fontSize={10} textAnchor="middle" x={x} y={57}>
-                {formatGradeThreshold(threshold)}
+                {formatGradeThreshold(threshold, percentFormatter)}
               </text>
             </g>
           );

@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import type {
   ErrorEvent as MapLibreErrorEvent,
   Map as MapLibreMap,
@@ -10,6 +11,7 @@ import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
+import { appI18n } from '@/presentation/localization/appI18n';
 import type {
   MapFacade,
   MapInteractionMode,
@@ -110,9 +112,18 @@ type MapLayerControllerLifecycle = Pick<
 const sourceRecoveryStabilityMs = 2_000;
 
 function formatRoutePlanPreviewDistance(distanceMeters: number): string {
-  if (distanceMeters < 1_000) return `${String(Math.round(distanceMeters))} m`;
-  if (distanceMeters < 10_000) return `${(distanceMeters / 1_000).toFixed(1)} km`;
-  return `${String(Math.round(distanceMeters / 1_000))} km`;
+  if (distanceMeters < 1_000) {
+    const distance = new Intl.NumberFormat(appI18n.locale, {
+      maximumFractionDigits: 0,
+    }).format(distanceMeters);
+    return appI18n._(msg`${distance} m`);
+  }
+  const fractionDigits = distanceMeters < 10_000 ? 1 : 0;
+  const distance = new Intl.NumberFormat(appI18n.locale, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(distanceMeters / 1_000);
+  return appI18n._(msg`${distance} km`);
 }
 
 function getErrorSourceId(event: MapLibreErrorEvent): string | null {

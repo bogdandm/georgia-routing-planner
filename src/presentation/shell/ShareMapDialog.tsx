@@ -143,8 +143,6 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
             />
           </Stack>
           {copyState === CopyState.Failed ? (
-            // MUI's severity token is not user-visible copy.
-            // eslint-disable-next-line -- MUI severity token, not user-visible copy.
             <Alert severity="error">
               <Trans>
                 The link could not be copied. Select it and copy it manually.

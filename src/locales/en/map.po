@@ -12,3 +12,265 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#. js-lingui-id: 3Mpfhk
+#: src/presentation/map/MapLibreFacade.ts:126
+msgid "{distance} km"
+msgstr "{distance} km"
+
+#. js-lingui-id: 9sSCIt
+#: src/presentation/map/MapLibreFacade.ts:119
+msgid "{distance} m"
+msgstr "{distance} m"
+
+#. js-lingui-id: KPwAwW
+#: src/presentation/map/MapLibrePointInspector.ts:79
+msgid "{elevation} m"
+msgstr "{elevation} m"
+
+#. js-lingui-id: rC5zgZ
+#: src/presentation/map/MapLibrePointInspector.ts:105
+msgid "{name} ({category}), {distance} m away"
+msgstr "{name} ({category}), {distance} m away"
+
+#. js-lingui-id: tzyloL
+#: src/presentation/map/MapLibrePointInspector.ts:103
+msgid "{name}, {distance} m away"
+msgstr "{name}, {distance} m away"
+
+#. js-lingui-id: 2h8w7c
+#: src/presentation/map/MapViewControls.tsx:158
+msgid "3D terrain"
+msgstr "3D terrain"
+
+#. js-lingui-id: eWVlWI
+#: src/presentation/map/MapViewControls.tsx:157
+msgid "3D terrain is unavailable while Sentinel Mosaic is active."
+msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
+
+#. js-lingui-id: dEgA5A
+#: src/presentation/map/MapWorkspace.tsx:1412
+msgid "Cancel"
+msgstr "Cancel"
+
+#. js-lingui-id: WdJ-u8
+#: src/presentation/map/MapLibrePointInspector.ts:94
+msgid "Checking nearby map data…"
+msgstr "Checking nearby map data…"
+
+#. js-lingui-id: 2uEfCs
+#: src/presentation/map/MapViewControls.tsx:180
+#: src/presentation/map/MapViewControls.tsx:186
+msgid "Choose map layer preset"
+msgstr "Choose map layer preset"
+
+#. js-lingui-id: dLNd3k
+#: src/presentation/map/MapWorkspace.tsx:1409
+msgid "Click the map to place the marker"
+msgstr "Click the map to place the marker"
+
+#. js-lingui-id: jysdB3
+#: src/presentation/map/MapWorkspace.tsx:1422
+msgid "Clipboard access failed. Try again or use the Share dialog."
+msgstr "Clipboard access failed. Try again or use the Share dialog."
+
+#. js-lingui-id: ucYcTY
+#: src/presentation/map/MapLibrePointInspector.ts:129
+msgid "Close map point details"
+msgstr "Close map point details"
+
+#. js-lingui-id: zN8IXs
+#: src/presentation/map/MapViewControls.tsx:264
+msgid "Clouds, precipitation, and wind"
+msgstr "Clouds, precipitation, and wind"
+
+#. js-lingui-id: EOv8gS
+#: src/presentation/map/MapLibrePointInspector.ts:136
+msgid "Coordinates"
+msgstr "Coordinates"
+
+#. js-lingui-id: 1-81oq
+#: src/presentation/map/MapWorkspace.tsx:1153
+msgid "Coordinates copied"
+msgstr "Coordinates copied"
+
+#. js-lingui-id: hAvoLY
+#: src/presentation/map/MapWorkspace.tsx:1378
+msgid "Copy coordinates"
+msgstr "Copy coordinates"
+
+#. js-lingui-id: y1eoq1
+#: src/presentation/map/MapLibrePointInspector.ts:162
+msgid "Copy link"
+msgstr "Copy link"
+
+#. js-lingui-id: 9qqDhd
+#: src/presentation/map/MapWorkspace.tsx:1390
+msgid "Copy link to this point"
+msgstr "Copy link to this point"
+
+#. js-lingui-id: xCBfsE
+#: src/presentation/map/MapLibrePointInspector.ts:170
+msgid "Create marker"
+msgstr "Create marker"
+
+#. js-lingui-id: Shcont
+#: src/presentation/map/MapWorkspace.tsx:1384
+msgid "Create marker here"
+msgstr "Create marker here"
+
+#. js-lingui-id: _j3RtS
+#: src/presentation/map/MapWorkspace.tsx:135
+msgid "Current weather: {temperature}, {precipitation} precipitation"
+msgstr "Current weather: {temperature}, {precipitation} precipitation"
+
+#. js-lingui-id: XqgXQv
+#: src/presentation/map/MapLibrePointInspector.ts:84
+msgid "Elevation could not be loaded."
+msgstr "Elevation could not be loaded."
+
+#. js-lingui-id: iyHgF_
+#: src/presentation/map/ElevationGradeLegend.tsx:106
+msgid "Elevation grade legend"
+msgstr "Elevation grade legend"
+
+#. js-lingui-id: IjJgG5
+#: src/presentation/map/MapLibrePointInspector.ts:82
+msgid "Elevation is unavailable here."
+msgstr "Elevation is unavailable here."
+
+#. js-lingui-id: D_aoaV
+#: src/presentation/map/MapViewControls.tsx:143
+msgid "Flat map"
+msgstr "Flat map"
+
+#. js-lingui-id: ddStAP
+#: src/presentation/map/ElevationGradeLegend.tsx:125
+#: src/presentation/map/ElevationGradeLegend.tsx:127
+msgid "Hide track grade legend"
+msgstr "Hide track grade legend"
+
+#. js-lingui-id: VBKJhe
+#: src/presentation/map/MapViewControls.tsx:302
+msgid "Layers tab"
+msgstr "Layers tab"
+
+#. js-lingui-id: o4EgvC
+#: src/presentation/map/MapLibrePointInspector.ts:76
+msgid "Loading elevation…"
+msgstr "Loading elevation…"
+
+#. js-lingui-id: 0bNvaO
+#: src/presentation/map/MapViewControls.tsx:123
+msgid "Map dimension"
+msgstr "Map dimension"
+
+#. js-lingui-id: 2TeMfD
+#: src/presentation/map/MapLibrePointInspector.ts:124
+msgid "Map point"
+msgstr "Map point"
+
+#. js-lingui-id: 6IvbmD
+#: src/presentation/map/MapWorkspace.tsx:1371
+msgid "Map point actions"
+msgstr "Map point actions"
+
+#. js-lingui-id: iDuQuY
+#: src/presentation/map/MapWorkspace.tsx:1160
+msgid "Map workspace"
+msgstr "Map workspace"
+
+#. js-lingui-id: N-L5qF
+#: src/presentation/map/MapLibrePointInspector.ts:98
+msgid "Nearby map data could not be inspected."
+msgstr "Nearby map data could not be inspected."
+
+#. js-lingui-id: uEebYd
+#: src/presentation/map/MapLibrePointInspector.ts:146
+msgid "Nearby map feature"
+msgstr "Nearby map feature"
+
+#. js-lingui-id: T-1HHj
+#: src/presentation/map/MapLibrePointInspector.ts:96
+msgid "No named map feature found."
+msgstr "No named map feature found."
+
+#. js-lingui-id: pOgx3m
+#: src/presentation/map/MapViewControls.tsx:244
+msgid "OSM overlay"
+msgstr "OSM overlay"
+
+#. js-lingui-id: _HLYHh
+#: src/presentation/map/MapWorkspace.tsx:1155
+msgid "Point link copied"
+msgstr "Point link copied"
+
+#. js-lingui-id: -dYCED
+#: src/presentation/map/MapWorkspace.tsx:1396
+msgid "Search satellite scenes here"
+msgstr "Search satellite scenes here"
+
+#. js-lingui-id: 0OYApz
+#: src/presentation/map/MapViewControls.tsx:164
+msgid "Show 3D terrain map"
+msgstr "Show 3D terrain map"
+
+#. js-lingui-id: 0EcC35
+#: src/presentation/map/MapViewControls.tsx:139
+msgid "Show flat 2D map"
+msgstr "Show flat 2D map"
+
+#. js-lingui-id: M4RWWV
+#: src/presentation/map/MapLibrePointInspector.ts:141
+msgid "Terrain elevation"
+msgstr "Terrain elevation"
+
+#. js-lingui-id: 9xVYMD
+#: src/presentation/map/MapWorkspace.tsx:1145
+msgid "The current camera could not be saved. Map interaction is still available."
+msgstr "The current camera could not be saved. Map interaction is still available."
+
+#. js-lingui-id: IxTd0L
+#: src/presentation/map/MapWorkspace.tsx:1429
+msgid "The map layer could not be changed. Try again."
+msgstr "The map layer could not be changed. Try again."
+
+#. js-lingui-id: U5Trc5
+#: src/presentation/map/MapWorkspace.tsx:1171
+msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
+msgstr "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
+
+#. js-lingui-id: FlHLo_
+#: src/presentation/map/MapWorkspace.tsx:1147
+msgid "The saved camera could not be restored. The Georgia overview is shown instead."
+msgstr "The saved camera could not be restored. The Georgia overview is shown instead."
+
+#. js-lingui-id: IDB1Ps
+#: src/presentation/map/MapWorkspace.tsx:1149
+msgid "The shared satellite image could not be restored. The shared map location is still available."
+msgstr "The shared satellite image could not be restored. The shared map location is still available."
+
+#. js-lingui-id: B8wKQB
+#: src/presentation/map/ElevationGradeLegend.tsx:123
+msgid "Track grade"
+msgstr "Track grade"
+
+#. js-lingui-id: QJAf8t
+#: src/presentation/map/ElevationGradeLegend.tsx:139
+msgid "Track grade color thresholds"
+msgstr "Track grade color thresholds"
+
+#. js-lingui-id: aBvon1
+#: src/presentation/map/MapLibrePointInspector.ts:101
+msgid "Unnamed map feature"
+msgstr "Unnamed map feature"
+
+#. js-lingui-id: mJZLtT
+#: src/presentation/map/MapViewControls.tsx:263
+msgid "Weather"
+msgstr "Weather"
+
+#. js-lingui-id: ElM6On
+#: src/presentation/map/MapWorkspace.tsx:1358
+msgid "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."
+msgstr "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."

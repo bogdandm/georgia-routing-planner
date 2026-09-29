@@ -118,14 +118,12 @@ function toCandidate(
     safeProperty(properties, 'name');
   if (name === null) return null;
   const category =
-    safeProperty(properties, 'subclass') ??
-    safeProperty(properties, 'class') ??
-    'point of interest';
+    safeProperty(properties, 'subclass') ?? safeProperty(properties, 'class');
   return {
     name,
     category,
     distanceMeters,
-    stableKey: `${String(feature.id ?? '')}\u0000${name}\u0000${category}`,
+    stableKey: `${String(feature.id ?? '')}\u0000${name}\u0000${category ?? ''}`,
   };
 }
 

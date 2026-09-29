@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
 import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
 import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
@@ -39,7 +40,11 @@ import type {
   MapCamera as PersistedMapCamera,
   MapViewState,
 } from '@/application/ports/MapCameraRepository';
-import type { MapFacade, MapViewportMovement } from '@/presentation/map/MapFacade';
+import type {
+  MapFacade,
+  MapInteractionMode,
+  MapViewportMovement,
+} from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
@@ -112,17 +117,22 @@ const unavailableMapStyle: StyleSpecification = {
 const cameraRestoreTimeoutMs = 2_000;
 const terrainRetryDelaysMs = [1_000, 3_000] as const;
 
+type MapWorkspaceNotice =
+  'camera-save-failed' | 'camera-restore-failed' | 'shared-scene-restore-failed';
+type CopyConfirmation = 'coordinates' | 'point-link';
+
 function WeatherForecastMapMarker({
   marker,
 }: {
   readonly marker: WeatherMapForecastMarker;
 }) {
+  const { t } = useLingui();
   const temperature = formatWeatherTemperatureRange(
     marker.period.temperatureMinCelsius,
     marker.period.temperatureMaxCelsius,
   );
   const precipitation = formatWeatherMillimetres(marker.period.precipitationMm);
-  const label = `Current weather: ${temperature}, ${precipitation} precipitation`;
+  const label = t`Current weather: ${temperature}, ${precipitation} precipitation`;
   return (
     <Marker
       longitude={marker.coordinate.longitude}
@@ -255,6 +265,7 @@ export function MapWorkspace({
   getNavigationPadding,
   onElevationGradeLegendDismissedChange,
 }: MapWorkspaceProps) {
+  const { t } = useLingui();
   const {
     logger,
     elevationProvider,
@@ -286,7 +297,7 @@ export function MapWorkspace({
   const sharedWeatherMapRestoreRequested = useRef(false);
   const [sharedWeatherMapRestoreComplete, setSharedWeatherMapRestoreComplete] =
     useState(() => sharedWeatherMap === null);
-  const [cameraMessage, setCameraMessage] = useState<string | null>(null);
+  const [cameraNotice, setCameraNotice] = useState<MapWorkspaceNotice | null>(null);
   const [terrainCommandState, setTerrainCommandState] = useState<Exclude<
     TerrainControlState,
     'flat' | 'terrain'
@@ -300,9 +311,11 @@ export function MapWorkspace({
     readonly longitude: number;
     readonly latitude: number;
   } | null>(null);
-  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [copyConfirmation, setCopyConfirmation] = useState<CopyConfirmation | null>(
+    null,
+  );
   const [copyError, setCopyError] = useState(false);
-  const [presetErrorMessage, setPresetErrorMessage] = useState<string | null>(null);
+  const [layerChangeFailed, setLayerChangeFailed] = useState(false);
   const smartphoneViewport = useMediaQuery('(width < 900px)');
   const navigationCommand = useStore(
     mapInteractionStore,
@@ -396,15 +409,18 @@ export function MapWorkspace({
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
-  const copyText = useCallback(async (value: string, message: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyMessage(message);
-      setCopyError(false);
-    } catch {
-      setCopyError(true);
-    }
-  }, []);
+  const copyText = useCallback(
+    async (value: string, confirmation: CopyConfirmation) => {
+      try {
+        await navigator.clipboard.writeText(value);
+        setCopyConfirmation(confirmation);
+        setCopyError(false);
+      } catch {
+        setCopyError(true);
+      }
+    },
+    [],
+  );
   const copyPointLinkAtCoordinate = useCallback(
     (coordinate: MapCoordinate, camera: MapCamera) => {
       const url = createMapShareUrl(
@@ -416,7 +432,7 @@ export function MapWorkspace({
         },
         null,
       );
-      void copyText(url, 'Point link copied');
+      void copyText(url, 'point-link');
     },
     [copyText],
   );
@@ -429,9 +445,8 @@ export function MapWorkspace({
   const cameraPersistence = useMemo(
     () =>
       new SettledCameraPersistence(mapCameraRepository, logger, () => {
-        setCameraMessage(
-          'The current camera could not be saved. Map interaction is still available.',
-        );
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+        setCameraNotice('camera-save-failed');
       }),
     [logger, mapCameraRepository],
   );
@@ -513,6 +528,7 @@ export function MapWorkspace({
     !naprOrthophotoVisible &&
     !satelliteImageryVisible
   ) {
+    /* eslint-disable lingui/no-unlocalized-strings -- Layer preset IDs. */
     activeLayerPreset = 'vector-osm';
   } else if (googleSatelliteVisible) {
     activeLayerPreset = 'google-satellite';
@@ -524,6 +540,7 @@ export function MapWorkspace({
     activeLayerPreset = 'napr-orthophoto';
   } else if (satelliteImagerySelected && satelliteImageryVisible) {
     activeLayerPreset = 'sentinel-2';
+    /* eslint-enable lingui/no-unlocalized-strings */
   }
   const layerPresetDisabled =
     mapLayers === null ||
@@ -640,7 +657,7 @@ export function MapWorkspace({
   }, [facade, pointInspectionCommand, snapshot.lifecycle]);
 
   useEffect(() => {
-    const mode =
+    const mode: MapInteractionMode =
       markerPlacement !== null
         ? 'marker-placement'
         : weatherOwnsMapClicks
@@ -726,6 +743,7 @@ export function MapWorkspace({
       terrainCommandAbort.current?.abort();
       const commandAbort = new AbortController();
       terrainCommandAbort.current = commandAbort;
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Terrain command state.
       setTerrainCommandState(mode === 'terrain' ? 'enabling' : 'disabling');
       const attemptDelays = mode === 'terrain' ? [0, ...retryDelaysMs] : [0];
 
@@ -747,6 +765,7 @@ export function MapWorkspace({
         }
 
         terrainCommandAbort.current = null;
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Terrain command state.
         setTerrainCommandState('failed');
       };
       const command = terrainCommandTail.current.then(run, run);
@@ -862,9 +881,8 @@ export function MapWorkspace({
       .catch(() => {
         if (active) {
           logger.log({ level: 'warn', name: 'storage.map-camera.load-failed' });
-          setCameraMessage(
-            'The saved camera could not be restored. The Georgia overview is shown instead.',
-          );
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+          setCameraNotice('camera-restore-failed');
           setRestoredView({ camera: defaultGeorgiaCamera, terrainMode: 'flat' });
         }
       });
@@ -909,9 +927,8 @@ export function MapWorkspace({
       .then((scene) => {
         if (controller.signal.aborted) return;
         if (scene === null) {
-          setCameraMessage(
-            'The shared satellite image could not be restored. The shared map location is still available.',
-          );
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+          setCameraNotice('shared-scene-restore-failed');
           return;
         }
         mapLayers.selectScene(scene);
@@ -924,9 +941,8 @@ export function MapWorkspace({
         ) {
           return;
         }
-        setCameraMessage(
-          'The shared satellite image could not be restored. The shared map location is still available.',
-        );
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+        setCameraNotice('shared-scene-restore-failed');
       });
     return () => {
       controller.abort();
@@ -949,9 +965,8 @@ export function MapWorkspace({
       sharedSceneApplyController.current = null;
       setSharedSceneToApply(null);
       if (result.status === 'failed') {
-        setCameraMessage(
-          'The shared satellite image could not be restored. The shared map location is still available.',
-        );
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+        setCameraNotice('shared-scene-restore-failed');
       }
     });
     return () => {
@@ -1040,7 +1055,7 @@ export function MapWorkspace({
     if (contextMenu === null) return;
     const value = `${contextMenu.latitude.toFixed(5)}, ${contextMenu.longitude.toFixed(5)}`;
     closeContextMenu();
-    void copyText(value, 'Coordinates copied');
+    void copyText(value, 'coordinates');
   };
 
   const copyPointLink = () => {
@@ -1091,7 +1106,7 @@ export function MapWorkspace({
       }
       const result = mapLayers.setMapLayerPreset(preset);
       if (result.status === 'success') return true;
-      setPresetErrorMessage(result.message);
+      setLayerChangeFailed(true);
       return false;
     },
     [
@@ -1106,7 +1121,7 @@ export function MapWorkspace({
     (enabled: boolean) => {
       if (mapLayers === null) return;
       const result = mapLayers.setOpenStreetMapOpacity(enabled ? 1 : 0);
-      if (result.status === 'failed') setPresetErrorMessage(result.message);
+      if (result.status === 'failed') setLayerChangeFailed(true);
     },
     [mapLayers],
   );
@@ -1125,11 +1140,27 @@ export function MapWorkspace({
     window.history.pushState(window.history.state, '', nextUrl);
   }, [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed]);
 
+  let cameraNoticeText: string | null = null;
+  if (cameraNotice === 'camera-save-failed') {
+    cameraNoticeText = t`The current camera could not be saved. Map interaction is still available.`;
+  } else if (cameraNotice === 'camera-restore-failed') {
+    cameraNoticeText = t`The saved camera could not be restored. The Georgia overview is shown instead.`;
+  } else if (cameraNotice === 'shared-scene-restore-failed') {
+    cameraNoticeText = t`The shared satellite image could not be restored. The shared map location is still available.`;
+  }
+  let copyConfirmationText: string | null = null;
+  if (copyConfirmation === 'coordinates') {
+    copyConfirmationText = t`Coordinates copied`;
+  } else if (copyConfirmation === 'point-link') {
+    copyConfirmationText = t`Point link copied`;
+  }
+
   return (
     <Box
-      aria-label="Map workspace"
+      aria-label={t`Map workspace`}
       data-testid="map-workspace"
       data-map-state={
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Test-facing lifecycle token.
         mapProviderConfiguration.status === 'invalid' ? 'fatal' : snapshot.lifecycle
       }
       data-terrain-compute-status={terrainComputeStatus}
@@ -1137,8 +1168,7 @@ export function MapWorkspace({
     >
       {mapProviderConfiguration.status === 'invalid' ? (
         <Alert severity="error" sx={{ m: 2 }}>
-          {mapProviderConfiguration.message} The basemap was not started. Check the
-          deployment configuration or open developer diagnostics.
+          {t`The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics.`}
         </Alert>
       ) : restoredView === null ? null : (
         (resolvedMapCanvas ?? (
@@ -1271,15 +1301,15 @@ export function MapWorkspace({
         ))
       )}
       {mapProviderConfiguration.status === 'valid' ? <WeatherTimeControl /> : null}
-      {cameraMessage !== null && mapProviderConfiguration.status === 'valid' ? (
+      {cameraNoticeText !== null && mapProviderConfiguration.status === 'valid' ? (
         <Alert
           severity="warning"
           onClose={() => {
-            setCameraMessage(null);
+            setCameraNotice(null);
           }}
           sx={{ position: 'absolute', left: 16, right: 16, bottom: 16 }}
         >
-          {cameraMessage}
+          {cameraNoticeText}
         </Alert>
       ) : null}
       {restoredView !== null &&
@@ -1325,8 +1355,7 @@ export function MapWorkspace({
           severity="info"
           sx={{ position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 1 }}
         >
-          You are offline. Areas already rendered may remain visible, but new map data
-          is unavailable until the connection returns.
+          {t`You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns.`}
         </Alert>
       ) : null}
       <Menu
@@ -1339,48 +1368,48 @@ export function MapWorkspace({
             : { top: contextMenu.mouseY, left: contextMenu.mouseX }
         }
         slotProps={{
-          list: { 'aria-label': 'Map point actions', autoFocusItem: false },
+          list: { 'aria-label': t`Map point actions`, autoFocusItem: false },
         }}
       >
         <MenuItem onClick={copyCoordinates}>
           <ListItemIcon>
             <ContentCopyOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          Copy coordinates
+          {t`Copy coordinates`}
         </MenuItem>
         <MenuItem onClick={createMarkerAtPoint}>
           <ListItemIcon>
             <AddLocationAltOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          Create marker here
+          {t`Create marker here`}
         </MenuItem>
         <MenuItem onClick={copyPointLink}>
           <ListItemIcon>
             <ShareOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          Copy link to this point
+          {t`Copy link to this point`}
         </MenuItem>
         <MenuItem onClick={searchSatelliteAtPoint}>
           <ListItemIcon>
             <SatelliteAltOutlinedIcon fontSize="small" />
           </ListItemIcon>
-          Search satellite scenes here
+          {t`Search satellite scenes here`}
         </MenuItem>
       </Menu>
       <Snackbar
-        open={copyMessage !== null}
+        open={copyConfirmationText !== null}
         autoHideDuration={2_500}
-        message={copyMessage}
+        message={copyConfirmationText}
         onClose={() => {
-          setCopyMessage(null);
+          setCopyConfirmation(null);
         }}
       />
       <Snackbar
         open={markerPlacement !== null}
-        message="Click the map to place the marker"
+        message={t`Click the map to place the marker`}
         action={
           <Button color="inherit" size="small" onClick={cancelMarkerPlacement}>
-            Cancel
+            {t`Cancel`}
           </Button>
         }
         onClose={(_event, reason) => {
@@ -1390,18 +1419,18 @@ export function MapWorkspace({
       <Snackbar
         open={copyError}
         autoHideDuration={4_000}
-        message="Clipboard access failed. Try again or use the Share dialog."
+        message={t`Clipboard access failed. Try again or use the Share dialog.`}
         onClose={() => {
           setCopyError(false);
         }}
       />
       <Snackbar
         autoHideDuration={4_000}
-        message={presetErrorMessage}
+        message={t`The map layer could not be changed. Try again.`}
         onClose={() => {
-          setPresetErrorMessage(null);
+          setLayerChangeFailed(false);
         }}
-        open={presetErrorMessage !== null}
+        open={layerChangeFailed}
       />
     </Box>
   );

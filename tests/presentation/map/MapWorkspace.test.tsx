@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Children, act, isValidElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ import {
 } from '@/domain/tracks/elevationProfile';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -33,6 +34,7 @@ import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const mapClickCoordinate = vi.hoisted(() => ({
   longitude: 44.8,
@@ -233,6 +235,7 @@ function mockViewportWidth(width: number): void {
 
 describe('MapWorkspace', () => {
   beforeEach(() => {
+    activateAppLocale('en');
     resetMapInteractionStore();
     resetMapLayerStore();
     mapClickCoordinate.longitude = 44.8;
@@ -252,7 +255,7 @@ describe('MapWorkspace', () => {
   it('uses a valid explicit share view over local camera persistence', async () => {
     window.history.replaceState(null, '', '/?map=1&lat=41.7&lon=44.8&z=13.25');
     const services = createTestServices();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace
           facade={new FakeMapFacade()}
@@ -283,7 +286,7 @@ describe('MapWorkspace', () => {
       '/?map=2&lat=41.7&lon=44.8&z=13.25&view=3d&bearing=18.5&pitch=35.5',
     );
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
@@ -332,7 +335,7 @@ describe('MapWorkspace', () => {
     );
     const user = userEvent.setup();
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Shared 3D map</div>} />
       </RuntimeServicesProvider>,
@@ -363,7 +366,7 @@ describe('MapWorkspace', () => {
     );
     const user = userEvent.setup();
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <SatelliteMosaicProvider>
           <MosaicModeButton />
@@ -422,7 +425,7 @@ describe('MapWorkspace', () => {
       return { status: 'success', mode };
     };
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <SatelliteMosaicProvider>
           <MosaicModeButton />
@@ -473,7 +476,7 @@ describe('MapWorkspace', () => {
       .mockResolvedValue({ status: 'success' });
     const facade = new FakeMapFacade();
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Shared scene map</div>} />
       </RuntimeServicesProvider>,
@@ -521,7 +524,7 @@ describe('MapWorkspace', () => {
     const selectScene = vi.spyOn(mapLayers, 'selectScene');
     const applyScene = vi.spyOn(mapLayers, 'applyScene');
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <SatelliteMosaicProvider>
           <MosaicModeButton />
@@ -565,7 +568,7 @@ describe('MapWorkspace', () => {
     const applyScene = vi.spyOn(mapLayers, 'applyScene');
     const facade = new FakeMapFacade();
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <SatelliteMosaicProvider>
           <MosaicModeButton />
@@ -595,7 +598,7 @@ describe('MapWorkspace', () => {
 
   it('delivers serializable search navigation commands through the facade', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Map command canvas</div>} />
       </RuntimeServicesProvider>,
@@ -611,7 +614,7 @@ describe('MapWorkspace', () => {
 
   it('delivers ready point-inspection commands through the facade', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
@@ -635,7 +638,7 @@ describe('MapWorkspace', () => {
 
   it('opens a selected result immediately while navigating to it', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
@@ -667,7 +670,7 @@ describe('MapWorkspace', () => {
 
   it('holds point-inspection commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
@@ -701,7 +704,7 @@ describe('MapWorkspace', () => {
       bottom: 56,
       left: 536,
     }));
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
@@ -736,7 +739,7 @@ describe('MapWorkspace', () => {
   });
   it('holds fit-to-track commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Fit command canvas</div>} />
       </RuntimeServicesProvider>,
@@ -771,7 +774,7 @@ describe('MapWorkspace', () => {
   it('publishes lifecycle state without mounting a duplicate local banner', () => {
     const facade = new FakeMapFacade();
     const services = createTestServices();
-    const { unmount } = render(
+    const { unmount } = renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Controlled map canvas</div>} />
       </RuntimeServicesProvider>,
@@ -820,7 +823,7 @@ describe('MapWorkspace', () => {
       },
     };
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Must not mount</div>} />
       </RuntimeServicesProvider>,
@@ -850,7 +853,7 @@ describe('MapWorkspace', () => {
       },
     };
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace
           facade={new FakeMapFacade()}
@@ -882,7 +885,7 @@ describe('MapWorkspace', () => {
       },
     };
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace
           facade={facade}
@@ -910,7 +913,7 @@ describe('MapWorkspace', () => {
 
   it('disables native box zoom and right-button camera drag in both map modes', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} />
       </RuntimeServicesProvider>,
@@ -928,7 +931,7 @@ describe('MapWorkspace', () => {
   });
 
   it('uses a bounded linear transition for My location', async () => {
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={new FakeMapFacade()} />
       </RuntimeServicesProvider>,
@@ -949,7 +952,7 @@ describe('MapWorkspace', () => {
       },
     };
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace
           facade={new FakeMapFacade()}
@@ -982,7 +985,7 @@ describe('MapWorkspace', () => {
       );
     };
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={facade}
@@ -1010,7 +1013,7 @@ describe('MapWorkspace', () => {
 
   it('returns the control to 2D after a late terrain source failure', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Terrain map</div>} />
       </RuntimeServicesProvider>,
@@ -1045,7 +1048,7 @@ describe('MapWorkspace', () => {
 
   it('leaves recoverable map feedback to the shared status and describes offline limits', async () => {
     const facade = new FakeMapFacade();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Available map</div>} />
       </RuntimeServicesProvider>,
@@ -1098,7 +1101,7 @@ describe('MapWorkspace', () => {
         showTileBoundaries: true,
       },
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Debug map</div>} />
       </RuntimeServicesProvider>,
@@ -1120,7 +1123,7 @@ describe('MapWorkspace', () => {
 
   it('shows the legend only while the desktop grade overlay is visible', async () => {
     tracksWorkspaceMock.activeProfile = gradeProfile;
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
           facade={new FakeMapFacade()}
@@ -1233,7 +1236,7 @@ describe('MapWorkspace', () => {
   it('hides the legend on smartphone viewports', async () => {
     tracksWorkspaceMock.activeProfile = gradeProfile;
     mockViewportWidth(899);
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Mobile map</div>} />
       </RuntimeServicesProvider>,
@@ -1254,7 +1257,7 @@ describe('MapWorkspace', () => {
       distanceMeters: 24,
     };
     const user = userEvent.setup();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MarkersWorkspaceProvider>
           <MapWorkspace facade={facade} />
@@ -1295,7 +1298,7 @@ describe('MapWorkspace', () => {
       .spyOn(navigator.clipboard, 'writeText')
       .mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} />
       </RuntimeServicesProvider>,
@@ -1340,7 +1343,7 @@ describe('MapWorkspace', () => {
       waypoints: [],
     };
     useUiStore.setState({ activeTab: 'tracks' });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} mapCanvas={<div>Planning map</div>} />
       </RuntimeServicesProvider>,
@@ -1366,7 +1369,7 @@ describe('MapWorkspace', () => {
       waypoints: [],
     };
     useUiStore.setState({ activeTab: 'weather' });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} />
       </RuntimeServicesProvider>,
@@ -1452,7 +1455,7 @@ describe('MapWorkspace', () => {
         selectedTimeIndex: 0,
       },
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} />
       </RuntimeServicesProvider>,
@@ -1516,7 +1519,7 @@ describe('MapWorkspace', () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Shared weather map</div>} />
       </RuntimeServicesProvider>,
@@ -1550,7 +1553,7 @@ describe('MapWorkspace', () => {
     });
     useUiStore.setState({ activeTab: 'weather' });
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={new FakeMapFacade()} />
       </RuntimeServicesProvider>,
@@ -1593,7 +1596,7 @@ describe('MapWorkspace', () => {
     useUiStore.setState({ activeTab: 'markers' });
     const user = userEvent.setup();
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MarkersWorkspaceProvider>
           <MapWorkspace facade={new FakeMapFacade()} />
@@ -1652,7 +1655,7 @@ describe('MapWorkspace', () => {
         },
       });
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Hidden Sentinel map</div>} />
       </RuntimeServicesProvider>,
@@ -1693,7 +1696,7 @@ describe('MapWorkspace', () => {
         },
       });
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Hidden Mosaic map</div>} />
       </RuntimeServicesProvider>,
@@ -1735,7 +1738,7 @@ describe('MapWorkspace', () => {
         openStreetMapOpacity: 1,
       });
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>NAPR map</div>} />
       </RuntimeServicesProvider>,
@@ -1783,7 +1786,7 @@ describe('MapWorkspace', () => {
         openStreetMapOpacity: 1,
       });
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Hybrid map</div>} />
       </RuntimeServicesProvider>,
@@ -1817,7 +1820,7 @@ describe('MapWorkspace', () => {
       mobileWorkspaceOpen: false,
       navigationCollapsed: true,
     });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Empty Sentinel map</div>} />
       </RuntimeServicesProvider>,
@@ -1847,7 +1850,7 @@ describe('MapWorkspace', () => {
     });
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} mapCanvas={<div>Preset failure map</div>} />
       </RuntimeServicesProvider>,
@@ -1857,7 +1860,9 @@ describe('MapWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Google Satellite' }));
 
-    expect(screen.getByText('The map is not ready yet.')).toBeVisible();
+    expect(
+      screen.getByText('The map layer could not be changed. Try again.'),
+    ).toBeVisible();
     expect(screen.getByRole('menu')).toBeVisible();
   });
 });

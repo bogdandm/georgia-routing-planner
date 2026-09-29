@@ -1,13 +1,15 @@
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useState } from 'react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import {
   MapViewControls,
   MapViewControlsControl,
 } from '@/presentation/map/MapViewControls';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const mapControlHost = document.createElement('div');
 mapControlHost.className = 'maplibregl-ctrl-top-right';
@@ -34,10 +36,14 @@ vi.mock('react-map-gl/maplibre', () => ({
 }));
 
 describe('MapViewControls', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
   it('exposes an exclusive, accessible 2D/3D choice', async () => {
     const user = userEvent.setup();
     const onTerrainModeChange = vi.fn();
-    render(
+    renderWithI18n(
       <MapViewControls
         activeLayerPreset={null}
         terrainDisabled={false}
@@ -66,7 +72,7 @@ describe('MapViewControls', () => {
   });
 
   it('disables repeated mode changes while a transition is pending', () => {
-    render(
+    renderWithI18n(
       <MapViewControls
         activeLayerPreset={null}
         terrainDisabled={false}
@@ -93,7 +99,7 @@ describe('MapViewControls', () => {
     const onHybridOverlayChange = vi.fn();
     const onOpenLayersTab = vi.fn();
     const onWeatherMapChange = vi.fn();
-    render(
+    renderWithI18n(
       <MapViewControls
         activeLayerPreset="google-satellite"
         hybridOverlayDisabled={false}
@@ -148,7 +154,7 @@ describe('MapViewControls', () => {
   it('keeps the chooser open after applying a preset', async () => {
     const user = userEvent.setup();
     const onLayerPresetChange = vi.fn().mockReturnValue(true);
-    render(
+    renderWithI18n(
       <MapViewControls
         activeLayerPreset={null}
         terrainDisabled={false}
@@ -177,7 +183,7 @@ describe('MapViewControls', () => {
 
   it('closes the chooser and restores button focus on Escape', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithI18n(
       <MapViewControls
         activeLayerPreset={null}
         terrainDisabled={false}
@@ -205,7 +211,7 @@ describe('MapViewControls', () => {
   });
   it('disables 3D terrain while Sentinel Mosaic is active', async () => {
     const user = userEvent.setup();
-    render(
+    renderWithI18n(
       <MapViewControls
         activeLayerPreset={null}
         terrainDisabled
@@ -240,7 +246,7 @@ describe('MapViewControls', () => {
 
   it('mounts the dimension and layer controls in the MapLibre rail', () => {
     document.body.append(mapControlHost);
-    const { unmount } = render(
+    const { unmount } = renderWithI18n(
       <MapViewControlsControl
         activeLayerPreset={null}
         terrainDisabled={false}

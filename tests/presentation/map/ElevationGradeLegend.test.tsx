@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const profile: ElevationProfile = {
   algorithmVersion: 3,
@@ -25,10 +27,14 @@ const profile: ElevationProfile = {
 };
 
 describe('ElevationGradeLegend', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
   it('hides the legend after it is dismissed', async () => {
     const user = userEvent.setup();
     const onDismissedChange = vi.fn();
-    const { rerender } = render(
+    const { rerender } = renderWithI18n(
       <ElevationGradeLegend
         dismissed={false}
         onDismissedChange={onDismissedChange}

@@ -209,6 +209,7 @@ export function setupWorkspaceShellTest(): void {
   });
 
   afterEach(async () => {
+    await services.database.open();
     services.database.close();
     await services.database.delete();
     vi.restoreAllMocks();
@@ -250,6 +251,7 @@ export function savedTrackSummary(
     sourceFormat: 'gpx',
     favorite,
     geometryKind: 'track',
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {
@@ -447,14 +449,11 @@ export const trackSortTestNames = [
 
 export function savedTrackNames(): readonly string[] {
   return within(screen.getByRole('list', { name: 'Saved tracks' }))
-    .getAllByRole('listitem')
-    .map((row) => {
-      const [trackButton] = within(row).getAllByRole('button');
-      if (trackButton === undefined) throw new Error('Expected a track row button.');
-      const label = trackButton.textContent;
+    .getAllByRole('button')
+    .flatMap((button) => {
+      const label = button.textContent;
       const name = trackSortTestNames.find((candidate) => label.startsWith(candidate));
-      if (name === undefined) throw new Error(`Unknown track row label: ${label}`);
-      return name;
+      return name === undefined ? [] : [name];
     });
 }
 

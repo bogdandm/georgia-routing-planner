@@ -1,12 +1,15 @@
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
 import type {
+  DeleteFolderCommand,
   DeleteMarkerCommand,
   DeleteTrackCommand,
   MetadataTrackCommand,
   RpcResponse,
+  ReorderFoldersCommand,
   TrackSyncCommand,
   TrackSyncResult,
+  UpsertFolderCommand,
   UpsertMarkerCommand,
   UploadTrackCommand,
 } from './contracts.ts';
@@ -30,6 +33,12 @@ export class TrackSyncService {
         return await this.upsertMarker(command);
       case 'marker-delete':
         return await this.deleteMarker(command);
+      case 'folder-upsert':
+        return await this.upsertFolder(command);
+      case 'folder-delete':
+        return await this.deleteFolder(command);
+      case 'folder-reorder':
+        return await this.reorderFolders(command);
       case 'status':
         return await this.status();
     }
@@ -41,6 +50,36 @@ export class TrackSyncService {
 
   private async deleteMarker(command: DeleteMarkerCommand): Promise<RpcResponse> {
     return this.markerMutation(await this.gateway.deleteMarker(command));
+  }
+
+  private async upsertFolder(command: UpsertFolderCommand): Promise<RpcResponse> {
+    return this.folderMutation(await this.gateway.upsertFolder(command));
+  }
+
+  private async deleteFolder(command: DeleteFolderCommand): Promise<RpcResponse> {
+    return this.folderMutation(await this.gateway.deleteFolder(command));
+  }
+
+  private async reorderFolders(command: ReorderFoldersCommand): Promise<RpcResponse> {
+    return this.folderMutation(await this.gateway.reorderFolders(command));
+  }
+
+  private folderMutation(result: RpcResponse): RpcResponse {
+    if (result.outcome === 'limit') {
+      throw new TrackSyncFailure(
+        409,
+        'folder_limit',
+        'Cloud track folder limit reached.',
+      );
+    }
+    if (result.outcome === 'revision-exhausted') {
+      throw new TrackSyncFailure(
+        409,
+        'folder_revision_exhausted',
+        'Track folder revisions are exhausted.',
+      );
+    }
+    return result;
   }
 
   private markerMutation(result: RpcResponse): RpcResponse {

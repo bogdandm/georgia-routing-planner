@@ -22,6 +22,11 @@ import {
   type MapCamera,
   type MapCameraRepository,
 } from '@/application/ports/MapCameraRepository';
+import {
+  TrackFolderStorageError,
+  type NewTrackFolder,
+  type TrackFolderRepository,
+} from '@/application/ports/TrackFolderRepository';
 import type {
   MapLayerPreferencesRepository,
   PersistedMapLayerPreferences,
@@ -58,6 +63,14 @@ import {
   type TrackMarker,
   type TrackSort,
 } from '@/domain/tracks/localTrack';
+import {
+  IMPORTS_FOLDER_ID,
+  TRACK_FOLDER_SCHEMA_VERSION,
+  createDefaultImportsFolder,
+  normalizeTrackFolderName,
+  trackFolderUpdatedAt,
+  type TrackFolder,
+} from '@/domain/tracks/trackFolder';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
 
 interface SettingRecord {
@@ -163,6 +176,144 @@ export interface RemoteMarkerMergeBatch {
 
 export interface RemoteMarkerMergeResult {
   readonly changed: boolean;
+}
+
+export interface FolderSyncState {
+  readonly folderId: string;
+  readonly remoteRevision: number | null;
+  readonly pendingKind: 'upsert' | 'delete' | null;
+  readonly localVersion: number;
+}
+
+export interface FolderSyncEntry {
+  readonly folder: TrackFolder | null;
+  readonly state: FolderSyncState;
+}
+
+export interface FolderMergeExpectation {
+  readonly folderId: string;
+  readonly state: FolderSyncState | null;
+}
+
+export interface RemoteFolderMergeBatch {
+  readonly put: readonly TrackFolder[];
+  readonly deleteFolderIds: readonly string[];
+  readonly states: readonly FolderSyncState[];
+  readonly deleteStateIds: readonly string[];
+  readonly expected: readonly FolderMergeExpectation[];
+  readonly expectedUserId: string;
+  /** Local order version this run uploaded, or null when it uploaded no order. */
+  readonly acknowledgedOrderVersion: number | null;
+  readonly signal?: AbortSignal;
+}
+
+export interface RemoteFolderMergeResult {
+  readonly changed: boolean;
+  readonly tracksChanged: boolean;
+}
+
+/** A local folder order waiting for synchronization. */
+export interface PendingFolderOrder {
+  readonly version: number;
+  readonly folderIds: readonly string[];
+}
+
+// Settings key holding the version of the latest local folder reorder that has
+// not been synchronized yet; absent when the local order is clean.
+const folderOrderVersionKey = 'sync.folder-order-version';
+
+const trackFolderIdSchema = z.string().min(1).max(200);
+const trackFolderIconKeys = ['folder', ...markerIconKeys] as const;
+const trackFolderSchema: z.ZodType<TrackFolder> = z
+  .object({
+    schemaVersion: z.literal(TRACK_FOLDER_SCHEMA_VERSION),
+    id: trackFolderIdSchema,
+    name: z.string().trim().min(1).max(200),
+    normalizedName: z.string().min(1).max(200),
+    iconKey: z.enum(trackFolderIconKeys),
+    position: z.number().int().nonnegative().refine(Number.isSafeInteger),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+  })
+  .strict()
+  .superRefine((folder, context) => {
+    try {
+      const normalized = normalizeTrackFolderName(folder.name);
+      if (
+        folder.name !== normalized.name ||
+        folder.normalizedName !== normalized.normalizedName
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Folder names must be normalized.',
+        });
+      }
+    } catch {
+      context.addIssue({ code: 'custom', message: 'Folder name is invalid.' });
+    }
+  });
+
+const folderSyncStateSchema: z.ZodType<FolderSyncState> = z
+  .object({
+    folderId: trackFolderIdSchema,
+    remoteRevision: z.number().int().positive().refine(Number.isSafeInteger).nullable(),
+    pendingKind: z.enum(['upsert', 'delete']).nullable(),
+    localVersion: z.number().int().positive().refine(Number.isSafeInteger),
+  })
+  .strict()
+  .refine(
+    (state) => state.pendingKind !== null || state.remoteRevision !== null,
+    'Clean folder state requires a remote revision.',
+  );
+
+function parseTrackFolder(value: unknown): TrackFolder | null {
+  const parsed = trackFolderSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+export function validateTrackFolderRecord(value: unknown): TrackFolder {
+  const folder = parseTrackFolder(value);
+  if (folder === null) {
+    throw new TrackFolderStorageError(
+      'record-invalid',
+      'The track folder record is invalid.',
+    );
+  }
+  return folder;
+}
+
+function parseFolderSyncState(value: unknown): FolderSyncState | null {
+  const parsed = folderSyncStateSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function equalFolderSyncStates(
+  left: FolderSyncState | null,
+  right: FolderSyncState | null,
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.folderId === right.folderId &&
+      left.remoteRevision === right.remoteRevision &&
+      left.pendingKind === right.pendingKind &&
+      left.localVersion === right.localVersion)
+  );
+}
+
+function nextFolderLocalVersion(state: FolderSyncState | null): number {
+  if (state === null) return 1;
+  if (
+    !Number.isSafeInteger(state.localVersion) ||
+    state.localVersion >= Number.MAX_SAFE_INTEGER
+  ) {
+    throw new TrackFolderStorageError(
+      'record-invalid',
+      'The track folder version is invalid.',
+    );
+  }
+  return state.localVersion + 1;
 }
 export interface LocalTrackSyncPair {
   readonly summary: LocalTrackSummary;
@@ -619,9 +770,9 @@ type LocalTrackContentBuilder = {
   -readonly [Key in keyof LocalTrackContent]: LocalTrackContent[Key];
 };
 
-function isLegacyLocalTrackRecord(
-  value: unknown,
-): value is Record<string, unknown> & { readonly schemaVersion: 1 | 2 | 3 | 4 } {
+function isLegacyLocalTrackRecord(value: unknown): value is Record<string, unknown> & {
+  readonly schemaVersion: 1 | 2 | 3 | 4 | 5;
+} {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -629,15 +780,40 @@ function isLegacyLocalTrackRecord(
     typeof value.schemaVersion === 'number' &&
     Number.isInteger(value.schemaVersion) &&
     value.schemaVersion >= 1 &&
-    value.schemaVersion <= 4
+    value.schemaVersion <= 5
+  );
+}
+
+function isPreFolderLocalTrackSummaryRecord(value: unknown): value is Record<
+  string,
+  unknown
+> & {
+  readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
+  readonly geometryKind: 'track' | 'route';
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'schemaVersion' in value &&
+    value.schemaVersion === LOCAL_TRACK_SCHEMA_VERSION &&
+    'geometryKind' in value &&
+    (value.geometryKind === 'track' || value.geometryKind === 'route') &&
+    !('folderId' in value)
   );
 }
 
 function withCurrentLocalTrackSchemaVersion(value: unknown): unknown {
+  if (isPreFolderLocalTrackSummaryRecord(value)) {
+    return {
+      ...value,
+      folderId: value.geometryKind === 'track' ? IMPORTS_FOLDER_ID : null,
+    };
+  }
   if (!isLegacyLocalTrackRecord(value)) return value;
   const migrated = {
     ...value,
     schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+    folderId: value.geometryKind === 'track' ? IMPORTS_FOLDER_ID : null,
   };
   if ('savedAt' in migrated && !('updatedAt' in migrated)) {
     return { ...migrated, updatedAt: migrated.savedAt };
@@ -677,6 +853,7 @@ const currentLocalTrackSummarySchema = z
     sourceFormat: z.enum(['gpx', 'fit', 'kml']).default('gpx'),
     favorite: z.boolean().default(false),
     geometryKind: z.enum(['track', 'route']),
+    folderId: trackFolderIdSchema.nullable(),
     pointCount: z.number().int().min(2).max(100_000),
     segmentCount: z.number().int().min(1).max(512),
     metrics: trackMetricsSchema,
@@ -703,6 +880,7 @@ const currentLocalTrackSummarySchema = z
       sourceFormat: value.sourceFormat,
       favorite: value.favorite,
       geometryKind: value.geometryKind,
+      folderId: value.folderId,
       pointCount: value.pointCount,
       segmentCount: value.segmentCount,
       metrics: value.metrics,
@@ -992,7 +1170,8 @@ export class AppDatabase
     MapLayerPreferencesRepository,
     MapCameraRepository,
     LocalTrackRepository,
-    SavedMarkerRepository
+    SavedMarkerRepository,
+    TrackFolderRepository
 {
   public readonly settings!: EntityTable<SettingRecord, 'key'>;
   public readonly diagnostics!: EntityTable<PersistedDiagnosticRecord, 'id'>;
@@ -1001,6 +1180,8 @@ export class AppDatabase
   public readonly trackSyncStates!: EntityTable<TrackSyncState, 'trackId'>;
   public readonly savedMarkers!: EntityTable<SavedMarker, 'id'>;
   public readonly markerSyncStates!: EntityTable<MarkerSyncState, 'markerId'>;
+  public readonly trackFolders!: EntityTable<TrackFolder, 'id'>;
+  public readonly folderSyncStates!: EntityTable<FolderSyncState, 'folderId'>;
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
     this.version(1).stores({
@@ -1128,6 +1309,48 @@ export class AppDatabase
           if (marker !== null) await markerTable.put(marker);
         }
       });
+    this.version(9)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+        savedMarkers: 'id,normalizedName,colorKey,createdAt',
+        markerSyncStates: 'markerId,remoteRevision,pendingKind',
+        trackFolders: 'id,normalizedName,position',
+        folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      })
+      // Placement is derived from geometry kind. Synchronized tracks stay clean:
+      // remote metadata without `folderId` resolves to the same placement on
+      // download, so re-uploading every track would only risk stale overwrites.
+      .upgrade(async (transaction) => {
+        const timestamp = new Date().toISOString();
+        const summaryTable = transaction.table('localTracks');
+        const summaries: unknown[] = await summaryTable.toArray();
+        for (const value of summaries) {
+          const summary = parseLocalTrackSummary(value);
+          if (summary !== null) await summaryTable.put(summary);
+        }
+        const folder = createDefaultImportsFolder(timestamp);
+        await transaction.table('trackFolders').put(folder);
+        await transaction.table('folderSyncStates').put({
+          folderId: folder.id,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+          localVersion: 1,
+        } satisfies FolderSyncState);
+      });
+    this.on('populate', async (transaction) => {
+      const folder = createDefaultImportsFolder(new Date().toISOString());
+      await transaction.table('trackFolders').put(folder);
+      await transaction.table('folderSyncStates').put({
+        folderId: folder.id,
+        remoteRevision: null,
+        pendingKind: 'upsert',
+        localVersion: 1,
+      } satisfies FolderSyncState);
+    });
   }
 
   public async saveLocalTrack(
@@ -1263,6 +1486,344 @@ export class AppDatabase
       if (left.favorite !== right.favorite) return left.favorite ? -1 : 1;
       const bySavedAt = right.savedAt.localeCompare(left.savedAt, 'en');
       return bySavedAt === 0 ? left.id.localeCompare(right.id, 'en') : bySavedAt;
+    });
+  }
+
+  public async listTrackFolders(): Promise<readonly TrackFolder[]> {
+    const records = await this.trackFolders.toArray();
+    const valid: TrackFolder[] = [];
+    let invalidCount = 0;
+    for (const record of records) {
+      const folder = parseTrackFolder(record);
+      if (folder === null) invalidCount += 1;
+      else valid.push(folder);
+    }
+    if (invalidCount > 0) {
+      this.logger.log({
+        level: 'warn',
+        name: 'storage.track-folders.invalid-record',
+        data: { invalidCount },
+      });
+    }
+    return valid.sort(
+      (left, right) =>
+        left.position - right.position || left.id.localeCompare(right.id, 'en'),
+    );
+  }
+
+  public async ensureImportsFolder(): Promise<TrackFolder> {
+    return this.transaction(
+      'rw',
+      this.trackFolders,
+      this.folderSyncStates,
+      async () => {
+        const existing = parseTrackFolder(
+          await this.trackFolders.get(IMPORTS_FOLDER_ID),
+        );
+        if (existing !== null) return existing;
+        const folders = (await this.trackFolders.toArray())
+          .map(parseTrackFolder)
+          .filter((folder): folder is TrackFolder => folder !== null);
+        const position =
+          folders.length === 0
+            ? 0
+            : Math.max(...folders.map((folder) => folder.position)) + 1;
+        const folder = createDefaultImportsFolder(new Date().toISOString(), position);
+        await this.trackFolders.put(folder);
+        const existingState = parseFolderSyncState(
+          await this.folderSyncStates.get(folder.id),
+        );
+        await this.folderSyncStates.put({
+          folderId: folder.id,
+          remoteRevision: existingState?.remoteRevision ?? null,
+          pendingKind: 'upsert',
+          localVersion: nextFolderLocalVersion(existingState),
+        });
+        return folder;
+      },
+    );
+  }
+
+  public async createTrackFolder(folder: NewTrackFolder): Promise<TrackFolder> {
+    return this.transaction(
+      'rw',
+      this.trackFolders,
+      this.folderSyncStates,
+      async () => {
+        if ((await this.trackFolders.get(folder.id)) !== undefined) {
+          throw new TrackFolderStorageError(
+            'record-invalid',
+            'A track folder with this identifier already exists.',
+          );
+        }
+        const folders = (await this.trackFolders.toArray())
+          .map(parseTrackFolder)
+          .filter((value): value is TrackFolder => value !== null);
+        const position =
+          folders.length === 0
+            ? 0
+            : Math.max(...folders.map((value) => value.position)) + 1;
+        const created = parseTrackFolder({ ...folder, position });
+        if (created === null) {
+          throw new TrackFolderStorageError(
+            'record-invalid',
+            'The track folder record is invalid.',
+          );
+        }
+        await this.trackFolders.add(created);
+        await this.folderSyncStates.put({
+          folderId: created.id,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+          localVersion: 1,
+        });
+        return created;
+      },
+    );
+  }
+
+  public async updateTrackFolder(
+    folderId: string,
+    changes: Readonly<
+      Pick<TrackFolder, 'name' | 'normalizedName' | 'iconKey' | 'updatedAt'>
+    >,
+  ): Promise<TrackFolder> {
+    if (!trackFolderIdSchema.safeParse(folderId).success) {
+      throw new TrackFolderStorageError(
+        'record-invalid',
+        'The track folder identifier is invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      this.trackFolders,
+      this.folderSyncStates,
+      async () => {
+        const existing = parseTrackFolder(await this.trackFolders.get(folderId));
+        if (existing === null) {
+          throw new TrackFolderStorageError(
+            'not-found',
+            'The track folder was not found.',
+          );
+        }
+        const updated = parseTrackFolder({
+          ...existing,
+          ...changes,
+          updatedAt: trackFolderUpdatedAt(existing, changes.updatedAt),
+        });
+        if (updated === null) {
+          throw new TrackFolderStorageError(
+            'record-invalid',
+            'The track folder update is invalid.',
+          );
+        }
+        const state = parseFolderSyncState(await this.folderSyncStates.get(folderId));
+        await this.trackFolders.put(updated);
+        await this.folderSyncStates.put({
+          folderId,
+          remoteRevision: state?.remoteRevision ?? null,
+          pendingKind: 'upsert',
+          localVersion: nextFolderLocalVersion(state),
+        });
+        return updated;
+      },
+    );
+  }
+
+  public async reorderTrackFolders(
+    folderIds: readonly string[],
+  ): Promise<readonly TrackFolder[]> {
+    if (
+      folderIds.some((id) => !trackFolderIdSchema.safeParse(id).success) ||
+      new Set(folderIds).size !== folderIds.length
+    ) {
+      throw new TrackFolderStorageError(
+        'record-invalid',
+        'The track folder order is invalid.',
+      );
+    }
+    return this.transaction('rw', this.trackFolders, this.settings, async () => {
+      const folders = (await this.trackFolders.toArray())
+        .map(parseTrackFolder)
+        .filter((folder): folder is TrackFolder => folder !== null);
+      if (
+        folders.length !== folderIds.length ||
+        folders.some((folder) => !folderIds.includes(folder.id))
+      ) {
+        throw new TrackFolderStorageError(
+          'record-invalid',
+          'The track folder order must contain every folder exactly once.',
+        );
+      }
+      const byId = new Map(folders.map((folder) => [folder.id, folder]));
+      const ordered: TrackFolder[] = [];
+      for (const [position, folderId] of folderIds.entries()) {
+        const folder = byId.get(folderId);
+        if (folder === undefined) continue;
+        const updated = folder.position === position ? folder : { ...folder, position };
+        if (updated !== folder) await this.trackFolders.put(updated);
+        ordered.push(updated);
+      }
+      // Order is synchronized as one list rather than per-folder edits, so the
+      // last device to synchronize a reorder wins as a whole.
+      const pending = await this.settings.get(folderOrderVersionKey);
+      await this.settings.put({
+        key: folderOrderVersionKey,
+        value: typeof pending?.value === 'number' ? pending.value + 1 : 1,
+        updatedAt: new Date().toISOString(),
+      });
+      return ordered;
+    });
+  }
+
+  public async moveLocalTrackToFolder(
+    trackId: string,
+    folderId: string | null,
+  ): Promise<LocalTrackSummary> {
+    if (
+      !trackFolderIdSchema.safeParse(trackId).success ||
+      (folderId !== null && !trackFolderIdSchema.safeParse(folderId).success)
+    ) {
+      throw new TrackFolderStorageError(
+        'record-invalid',
+        'The track folder placement is invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      this.localTracks,
+      this.trackSyncStates,
+      this.trackFolders,
+      async () => {
+        if (
+          folderId !== null &&
+          parseTrackFolder(await this.trackFolders.get(folderId)) === null
+        ) {
+          throw new TrackFolderStorageError(
+            'not-found',
+            'The destination track folder was not found.',
+          );
+        }
+        const summary = parseLocalTrackSummary(await this.localTracks.get(trackId));
+        if (summary === null) {
+          throw new LocalTrackStorageError(
+            'not-found',
+            'The saved track was not found.',
+          );
+        }
+        if (summary.folderId === folderId) return summary;
+        const updated: LocalTrackSummary = {
+          ...summary,
+          folderId,
+          updatedAt: new Date().toISOString(),
+        };
+        await this.localTracks.put(updated);
+        const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
+        if (state !== null) {
+          await this.trackSyncStates.put({
+            ...state,
+            pendingKind: state.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+          });
+        }
+        return updated;
+      },
+    );
+  }
+
+  public async deleteTrackFolder(
+    folderId: string,
+  ): Promise<readonly LocalTrackSummary[]> {
+    if (!trackFolderIdSchema.safeParse(folderId).success) {
+      throw new TrackFolderStorageError(
+        'record-invalid',
+        'The track folder identifier is invalid.',
+      );
+    }
+    return this.transaction(
+      'rw',
+      [
+        this.trackFolders,
+        this.folderSyncStates,
+        this.localTracks,
+        this.trackSyncStates,
+      ],
+      async () => {
+        if (folderId === IMPORTS_FOLDER_ID) {
+          throw new TrackFolderStorageError(
+            'record-invalid',
+            'The Imports folder cannot be deleted.',
+          );
+        }
+        const folder = parseTrackFolder(await this.trackFolders.get(folderId));
+        if (folder === null) {
+          throw new TrackFolderStorageError(
+            'not-found',
+            'The track folder was not found.',
+          );
+        }
+        const timestamp = new Date().toISOString();
+        const affected: LocalTrackSummary[] = [];
+        for (const candidate of await this.localTracks.toArray()) {
+          const summary = parseLocalTrackSummary(candidate);
+          if (summary?.folderId !== folderId) continue;
+          const updated = { ...summary, folderId: null, updatedAt: timestamp };
+          affected.push(updated);
+          await this.localTracks.put(updated);
+          const trackState = parseTrackSyncState(
+            await this.trackSyncStates.get(summary.id),
+          );
+          if (trackState !== null) {
+            await this.trackSyncStates.put({
+              ...trackState,
+              pendingKind: trackState.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+            });
+          }
+        }
+        await this.trackFolders.delete(folderId);
+        const deletedStateRecord = await this.folderSyncStates.get(folderId);
+        const deletedState = parseFolderSyncState(deletedStateRecord);
+        if (deletedStateRecord === undefined) {
+          await this.folderSyncStates.delete(folderId);
+        } else {
+          await this.folderSyncStates.put({
+            folderId,
+            remoteRevision: deletedState?.remoteRevision ?? null,
+            pendingKind: 'delete',
+            localVersion: nextFolderLocalVersion(deletedState),
+          });
+        }
+        return affected;
+      },
+    );
+  }
+
+  public async readPendingFolderOrder(): Promise<PendingFolderOrder | null> {
+    return this.transaction('r', this.settings, this.trackFolders, async () => {
+      const pending = await this.settings.get(folderOrderVersionKey);
+      if (typeof pending?.value !== 'number') return null;
+      const folders = (await this.trackFolders.toArray())
+        .map(parseTrackFolder)
+        .filter((folder): folder is TrackFolder => folder !== null)
+        .sort(
+          (left, right) =>
+            left.position - right.position || left.id.localeCompare(right.id, 'en'),
+        );
+      return { version: pending.value, folderIds: folders.map((folder) => folder.id) };
+    });
+  }
+
+  public async readFolderSyncSnapshot(): Promise<readonly FolderSyncEntry[]> {
+    return this.transaction('r', this.trackFolders, this.folderSyncStates, async () => {
+      const snapshot: FolderSyncEntry[] = [];
+      for (const candidate of await this.folderSyncStates
+        .orderBy('folderId')
+        .toArray()) {
+        const state = parseFolderSyncState(candidate);
+        if (state === null) continue;
+        const folder = parseTrackFolder(await this.trackFolders.get(state.folderId));
+        snapshot.push({ folder, state });
+      }
+      return snapshot;
     });
   }
 
@@ -1757,6 +2318,8 @@ export class AppDatabase
         this.trackSyncStates,
         this.savedMarkers,
         this.markerSyncStates,
+        this.trackFolders,
+        this.folderSyncStates,
       ],
       async () => {
         const owner = await this.settings.get('sync.user-id');
@@ -2041,6 +2604,72 @@ export class AppDatabase
                 ...state,
                 pendingKind: 'delete',
                 localVersion: nextMarkerLocalVersion(state),
+              });
+            }
+          }
+        }
+        const folders = (await this.trackFolders.toArray())
+          .map(parseTrackFolder)
+          .filter((folder): folder is TrackFolder => folder !== null);
+        const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+        // An unreadable local record is not a deletion intent; its state is kept
+        // as-is instead of being turned into a remote delete.
+        const storedFolderIds = new Set(
+          await this.trackFolders.toCollection().primaryKeys(),
+        );
+        const statesByFolderId = new Map<string, FolderSyncState>();
+        if (sameAccount) {
+          for (const candidate of await this.folderSyncStates.toArray()) {
+            const state = parseFolderSyncState(candidate);
+            if (state !== null) statesByFolderId.set(state.folderId, state);
+          }
+        }
+        await this.folderSyncStates.clear();
+        if (!sameAccount) {
+          for (const folder of folders) {
+            await this.folderSyncStates.put({
+              folderId: folder.id,
+              remoteRevision: null,
+              pendingKind: 'upsert',
+              localVersion: 1,
+            });
+          }
+        } else {
+          for (const folder of folders) {
+            const state = statesByFolderId.get(folder.id);
+            if (state === undefined) {
+              await this.folderSyncStates.put({
+                folderId: folder.id,
+                remoteRevision: null,
+                pendingKind: 'upsert',
+                localVersion: 1,
+              });
+            } else if (state.pendingKind === 'delete') {
+              await this.folderSyncStates.put({
+                ...state,
+                pendingKind: 'upsert',
+                localVersion: nextFolderLocalVersion(state),
+              });
+            } else {
+              await this.folderSyncStates.put(state);
+            }
+          }
+          for (const state of statesByFolderId.values()) {
+            if (folderById.has(state.folderId)) continue;
+            if (storedFolderIds.has(state.folderId)) {
+              await this.folderSyncStates.put(state);
+              continue;
+            }
+            if (state.pendingKind === 'delete') {
+              await this.folderSyncStates.put(state);
+            } else if (
+              state.pendingKind === 'upsert' &&
+              state.remoteRevision !== null
+            ) {
+              await this.folderSyncStates.put({
+                ...state,
+                pendingKind: 'delete',
+                localVersion: nextFolderLocalVersion(state),
               });
             }
           }
@@ -2350,6 +2979,150 @@ export class AppDatabase
     );
   }
 
+  /** Atomically applies a validated folder merge unless local intent changed. */
+  public async applyRemoteFolderMergeBatch(
+    batch: RemoteFolderMergeBatch,
+  ): Promise<RemoteFolderMergeResult> {
+    if (batch.expectedUserId.length === 0 || batch.expectedUserId.length > 200) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The synchronization account identifier is invalid.',
+      );
+    }
+    const folders = batch.put.map(validateTrackFolderRecord);
+    const states = batch.states.map((state) => {
+      const parsed = folderSyncStateSchema.safeParse(state);
+      if (!parsed.success) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The folder synchronization state is invalid.',
+        );
+      }
+      return parsed.data;
+    });
+    const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+    const stateById = new Map(states.map((state) => [state.folderId, state]));
+    const folderDeleteIds = new Set(batch.deleteFolderIds);
+    const stateDeleteIds = new Set(batch.deleteStateIds);
+    const expectedById = new Map(
+      batch.expected.map((expectation) => [expectation.folderId, expectation]),
+    );
+    const lists = [
+      [folderById, folders.length],
+      [folderDeleteIds, batch.deleteFolderIds.length],
+      [stateById, states.length],
+      [stateDeleteIds, batch.deleteStateIds.length],
+      [expectedById, batch.expected.length],
+    ] as const;
+    if (
+      lists.some(([ids, length]) => ids.size !== length) ||
+      ![...folderDeleteIds, ...stateDeleteIds].every(
+        (id) => trackFolderIdSchema.safeParse(id).success,
+      ) ||
+      [...folderById].some(([id]) => folderDeleteIds.has(id)) ||
+      [...stateById].some(([id]) => stateDeleteIds.has(id))
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The folder merge contains duplicate or conflicting identifiers.',
+      );
+    }
+    const operationIds = new Set([
+      ...folderById.keys(),
+      ...folderDeleteIds,
+      ...stateById.keys(),
+      ...stateDeleteIds,
+    ]);
+    if (
+      operationIds.size !== expectedById.size ||
+      [...operationIds].some((id) => !expectedById.has(id))
+    ) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The folder merge expectations do not match its operations.',
+      );
+    }
+    for (const expectation of expectedById.values()) {
+      const state =
+        expectation.state === null
+          ? null
+          : folderSyncStateSchema.safeParse(expectation.state);
+      if (
+        !trackFolderIdSchema.safeParse(expectation.folderId).success ||
+        (state !== null &&
+          (!state.success || state.data.folderId !== expectation.folderId))
+      ) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The folder merge expectation is invalid.',
+        );
+      }
+    }
+    batch.signal?.throwIfAborted();
+    return this.transaction(
+      'rw',
+      [this.settings, this.trackFolders, this.folderSyncStates, this.localTracks],
+      async () => {
+        const owner = await this.settings.get('sync.user-id');
+        if (owner?.value !== batch.expectedUserId) {
+          return { changed: false, tracksChanged: false };
+        }
+        // A reorder uploaded by this run is acknowledged; a newer local reorder
+        // keeps local positions until its own synchronization.
+        const pendingOrder = await this.settings.get(folderOrderVersionKey);
+        let keepLocalOrder = typeof pendingOrder?.value === 'number';
+        if (keepLocalOrder && pendingOrder?.value === batch.acknowledgedOrderVersion) {
+          await this.settings.delete(folderOrderVersionKey);
+          keepLocalOrder = false;
+        }
+        let changed = false;
+        let tracksChanged = false;
+        for (const folderId of operationIds) {
+          const expectation = expectedById.get(folderId);
+          if (expectation === undefined) continue;
+          const current = parseFolderSyncState(
+            await this.folderSyncStates.get(folderId),
+          );
+          if (!equalFolderSyncStates(current, expectation.state)) continue;
+          batch.signal?.throwIfAborted();
+          const remote = folderById.get(folderId);
+          if (remote !== undefined) {
+            const existing = parseTrackFolder(await this.trackFolders.get(folderId));
+            const folder =
+              keepLocalOrder && existing !== null
+                ? { ...remote, position: existing.position }
+                : remote;
+            if (
+              existing === null ||
+              JSON.stringify(existing) !== JSON.stringify(folder)
+            ) {
+              await this.trackFolders.put(folder);
+              changed = true;
+            }
+          } else if (folderDeleteIds.has(folderId)) {
+            if ((await this.trackFolders.get(folderId)) !== undefined) {
+              await this.trackFolders.delete(folderId);
+              changed = true;
+            }
+            // Remote metadata still names the deleted folder; every device reads
+            // an unknown folder as unfiled, so placement changes stay local.
+            for (const candidate of await this.localTracks.toArray()) {
+              const summary = parseLocalTrackSummary(candidate);
+              if (summary?.folderId !== folderId) continue;
+              await this.localTracks.put({ ...summary, folderId: null });
+              tracksChanged = true;
+            }
+          }
+          const state = stateById.get(folderId);
+          if (state !== undefined) await this.folderSyncStates.put(state);
+          else if (stateDeleteIds.has(folderId)) {
+            await this.folderSyncStates.delete(folderId);
+          }
+        }
+        return { changed, tracksChanged };
+      },
+    );
+  }
   public async resolveRemoteDeletions(decision: {
     readonly expectedUserId: string;
     readonly trackCandidateIds: readonly string[];

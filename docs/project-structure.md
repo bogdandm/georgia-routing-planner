@@ -149,32 +149,33 @@ checks.
 
 ## State ownership
 
-| State                                                          | Owner                                                 | Reason                                                   |
-| -------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
-| Dialogs, active rail section, developer flags                  | Zustand `uiStore`                                     | Cross-component, transient, serializable UI state        |
-| Component transitions and messages                             | React component state                                 | Local rendering concern                                  |
-| Native map, listeners, camera snapshot, terrain operation      | `MapLibreFacade`                                      | Imperative MapLibre lifecycle stays isolated             |
-| Middle-drag pan and Shift+left terrain orbit with pivot marker | `MapPointerGestureControl`                            | Camera input and native marker placement stay isolated   |
-| Sentinel, terrain, active-track, and route-plan map commands   | `MapLibreLayerController`                             | Native resources and ordering stay imperative            |
-| Direct visual-COG scene registry and raster worker             | `SatelliteCogTileProvider` / `SatelliteCogRasterizer` | Bounded fallback state and COG URLs stay outside React   |
-| DEM fetch, repair, parse, contour caches, worker fallback      | `TerrainComputeEngine` / `TerrainComputeBackend`      | One algorithm runs in worker or inline compatibility     |
-| Terrain worker execution status                                | `mapLayerStore`                                       | Transient serializable UI warning state                  |
-| Visibility, stretch, rendering, and overlay preferences        | Dexie plus map layer controller                       | Durable non-scene choices with a serializable live view  |
-| Browser storage and optional heap measurements                 | `BrowserStorageUsageReader`                           | Read-only platform metrics behind an app port            |
-| Settled 2D center and zoom                                     | `AppDatabase` through `MapCameraRepository`           | Durable camera restarts without 3D orientation           |
-| Saved local track summaries and content                        | `AppDatabase` through `LocalTrackRepository`          | Atomic IndexedDB ownership with validated reads          |
-| Saved marker records                                           | `AppDatabase` through `SavedMarkerRepository`         | Validated local-only points with atomic IndexedDB writes |
-| Marker collection, editor draft, and distance anchor           | `MarkersWorkspaceProvider` React state                | One feature owner while map commands stay serializable   |
-| Marker placement and one-shot creation command                 | `mapInteractionStore`                                 | Cross-component map interaction without native objects   |
-| Selected Weather point and latest panel request                | `mapInteractionStore`                                 | Serializable map-to-panel and enabled-map URL state      |
-| Weather request/result lifecycle                               | `WeatherPanel` React state                            | Ephemeral latest response retained across rail tabs      |
-| Unsaved import/route plan, active selection, and list query    | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store       |
-| Map diagnostic snapshot                                        | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export       |
-| Current/last Sentinel step status and duration                 | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                      |
-| Submitted scene criteria and derived grouped results           | `SatelliteBrowser` React state                        | Disposable, not persisted                                |
-| Mosaic mode, draft/active dates, and request identity          | `SatelliteMosaicProvider` React state                 | Cross-surface transient workflow, not URL or preference  |
-| Selected/applied scene or applied Mosaic snapshot              | `MapLibreLayerController` plus `mapLayerStore`        | Mutually exclusive transient rendering state             |
-| Persistent account session and registration                    | Official Supabase client via `UserDataService`        | Optional email/password auth outside Zustand/Dexie       |
+| State                                                          | Owner                                                 | Reason                                                  |
+| -------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| Dialogs, active rail section, developer flags                  | Zustand `uiStore`                                     | Cross-component, transient, serializable UI state       |
+| Component transitions and messages                             | React component state                                 | Local rendering concern                                 |
+| Native map, listeners, camera snapshot, terrain operation      | `MapLibreFacade`                                      | Imperative MapLibre lifecycle stays isolated            |
+| Middle-drag pan and Shift+left terrain orbit with pivot marker | `MapPointerGestureControl`                            | Camera input and native marker placement stay isolated  |
+| Sentinel, terrain, active-track, and route-plan map commands   | `MapLibreLayerController`                             | Native resources and ordering stay imperative           |
+| Direct visual-COG scene registry and raster worker             | `SatelliteCogTileProvider` / `SatelliteCogRasterizer` | Bounded fallback state and COG URLs stay outside React  |
+| DEM fetch, repair, parse, contour caches, worker fallback      | `TerrainComputeEngine` / `TerrainComputeBackend`      | One algorithm runs in worker or inline compatibility    |
+| Terrain worker execution status                                | `mapLayerStore`                                       | Transient serializable UI warning state                 |
+| Visibility, stretch, rendering, and overlay preferences        | Dexie plus map layer controller                       | Durable non-scene choices with a serializable live view |
+| Browser storage and optional heap measurements                 | `BrowserStorageUsageReader`                           | Read-only platform metrics behind an app port           |
+| Settled 2D center and zoom                                     | `AppDatabase` through `MapCameraRepository`           | Durable camera restarts without 3D orientation          |
+| Saved local track summaries and content                        | `AppDatabase` through `LocalTrackRepository`          | Atomic IndexedDB ownership with validated reads         |
+| Flat track folders, order, and placement                       | `AppDatabase` through `TrackFolderRepository`         | One transaction owner for folders and track summaries   |
+| Saved marker records                                           | `AppDatabase` through `SavedMarkerRepository`         | Validated local points with atomic IndexedDB writes     |
+| Marker collection, editor draft, and distance anchor           | `MarkersWorkspaceProvider` React state                | One feature owner while map commands stay serializable  |
+| Marker placement and one-shot creation command                 | `mapInteractionStore`                                 | Cross-component map interaction without native objects  |
+| Selected Weather point and latest panel request                | `mapInteractionStore`                                 | Serializable map-to-panel and enabled-map URL state     |
+| Weather request/result lifecycle                               | `WeatherPanel` React state                            | Ephemeral latest response retained across rail tabs     |
+| Unsaved import/route plan, active selection, and list query    | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store      |
+| Map diagnostic snapshot                                        | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export      |
+| Current/last Sentinel step status and duration                 | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                     |
+| Submitted scene criteria and derived grouped results           | `SatelliteBrowser` React state                        | Disposable, not persisted                               |
+| Mosaic mode, draft/active dates, and request identity          | `SatelliteMosaicProvider` React state                 | Cross-surface transient workflow, not URL or preference |
+| Selected/applied scene or applied Mosaic snapshot              | `MapLibreLayerController` plus `mapLayerStore`        | Mutually exclusive transient rendering state            |
+| Persistent account session and registration                    | Official Supabase client via `UserDataService`        | Optional email/password auth outside Zustand/Dexie      |
 
 Do not mirror authoritative map or durable data into Zustand. React consumes the map's
 serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
@@ -182,14 +183,15 @@ the native map instance to be recreated. The facade creates a new readonly seria
 snapshot for each update, so snapshot stores retain that value directly and consumers
 must not mutate it.
 
-The track parsers and calculation policies stay under `domain/tracks`; they have no
-React, Dexie, MapLibre, or provider dependency. `AppDatabase` implements the narrow
-local-track repository contract because it already owns schema migration and transaction
-lifetime. `TracksWorkspaceProvider` owns imported previews and transient route plans;
-accepted route geometry uses the same calculation and save path instead of adding draft
-persistence. `MapLibreLayerController` owns the active track line, planned route and
-waypoint overlay, and transient chart-hover marker so React never owns native map
-objects.
+The track parsers, calculation policies, and flat folder model stay under
+`domain/tracks`; they have no React, Dexie, MapLibre, or provider dependency.
+`AppDatabase` implements both `LocalTrackRepository` and `TrackFolderRepository` because
+track placement, folder ordering, and their synchronization states require one
+transaction owner. `TracksWorkspaceProvider` owns the loaded folder projection, imported
+previews, and transient route plans; accepted route geometry uses the same calculation
+and save path instead of adding draft persistence. `MapLibreLayerController` owns the
+active track line, planned route and waypoint overlay, and transient chart-hover marker
+so React never owns native map objects.
 
 `BrowserTrailRouter` implements the narrow `TrailRouter` application capability with one
 Vite module worker and the reusable request-correlated `WorkerRpc` transport. The worker

@@ -8,6 +8,7 @@ import {
   type LocalTrackContent,
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
+import { IMPORTS_FOLDER_ID } from '@/domain/tracks/trackFolder';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 import { createTestServices } from '@test/helpers/createTestServices';
 
@@ -27,6 +28,7 @@ function summary(id: string, name: string): LocalTrackSummary {
     sourceFormat: 'gpx',
     favorite: false,
     geometryKind: 'track',
+    folderId: 'imports',
     pointCount: 2,
     segmentCount: 1,
     metrics: {
@@ -82,6 +84,7 @@ describe('local track persistence', () => {
       ...summary('local:route', 'Planned route'),
       sourceFilename: 'Planned route.gpx',
       geometryKind: 'route',
+      folderId: null,
       pointCount: 3,
       metadata: {
         version: '1.1',
@@ -273,7 +276,56 @@ describe('local track persistence', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('migrates legacy records to local schema v5 without fabricating content hashes', async () => {
+  it('migrates schema v6 records from database v8 into folder placement', async () => {
+    database.close();
+    await database.delete();
+    const preFolderDatabase = new Dexie('GeorgiaRoutingPlanner');
+    preFolderDatabase.version(8).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+    });
+    const importedRecord: Record<string, unknown> = {
+      ...summary('local:v8-import', 'Imported before folders'),
+    };
+    delete importedRecord.folderId;
+    const routeRecord: Record<string, unknown> = {
+      ...summary('local:v8-route', 'Saved route before folders'),
+      geometryKind: 'route',
+      sourceFilename: 'Saved route before folders.gpx',
+    };
+    delete routeRecord.folderId;
+    await preFolderDatabase.table('localTracks').bulkPut([importedRecord, routeRecord]);
+    preFolderDatabase.close();
+
+    database = new AppDatabase(services.logger);
+
+    await expect(database.listLocalTracks()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'local:v8-import',
+          folderId: IMPORTS_FOLDER_ID,
+        }),
+        expect.objectContaining({
+          id: 'local:v8-route',
+          folderId: null,
+        }),
+      ]),
+    );
+    await expect(database.listTrackFolders()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: IMPORTS_FOLDER_ID })]),
+    );
+    await expect(database.localTracks.get('local:v8-import')).resolves.toHaveProperty(
+      'folderId',
+      IMPORTS_FOLDER_ID,
+    );
+  });
+
+  it('migrates legacy records to the current local schema without fabricating content hashes', async () => {
     database.close();
     await database.delete();
     const legacy = new Dexie('GeorgiaRoutingPlanner');
@@ -335,11 +387,11 @@ describe('local track persistence', () => {
 
     const migratedTracks = await database.listLocalTracks();
     const migrated = migratedTracks.find((track) => track.id === 'local:legacy');
-    expect(migrated?.schemaVersion).toBe(5);
+    expect(migrated?.schemaVersion).toBe(LOCAL_TRACK_SCHEMA_VERSION);
     expect(migrated?.metrics.elevationSource).toBe('gpx');
     expect(migrated?.metrics.elevationAlgorithmVersion).toBe(1);
     await expect(database.loadLocalTrackContent('local:legacy')).resolves.toEqual({
-      schemaVersion: 5,
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:legacy',
       trackPoints: [
         [{ coordinate: [44, 42] }, { coordinate: [44.01, 42.01] }],
@@ -348,7 +400,7 @@ describe('local track persistence', () => {
       markers: [],
     });
     const storedSummary = await database.localTracks.get('local:legacy');
-    expect(storedSummary).toHaveProperty('schemaVersion', 5);
+    expect(storedSummary).toHaveProperty('schemaVersion', LOCAL_TRACK_SCHEMA_VERSION);
     expect(storedSummary).toHaveProperty('updatedAt', storedSummary?.savedAt);
     expect(storedSummary).not.toHaveProperty('contentHash');
     await expect(database.loadTrackSyncState('local:legacy')).resolves.toBeNull();

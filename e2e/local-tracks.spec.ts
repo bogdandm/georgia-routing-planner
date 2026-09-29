@@ -929,6 +929,10 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
       name: 'Confirm deletion of Kazbegi ridge walk',
     })
     .click();
-  await expect(page.getByRole('list', { name: 'Saved tracks' })).toHaveCount(0);
+  // Imports is permanent, so the list stays; only the deleted track row disappears.
+  await expect(savedTracks.getByRole('region', { name: 'Imports (0)' })).toBeVisible();
+  await expect(
+    savedTracks.getByRole('button', { name: /^Kazbegi ridge walk/u }),
+  ).toHaveCount(0);
   expect(dialogs).toEqual([]);
 });

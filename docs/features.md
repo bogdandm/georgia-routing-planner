@@ -222,22 +222,23 @@ Deleting a folder moves its tracks there. Tracks and folders move with pointer, 
 touch, or keyboard drag controls; keyboard drops restore focus to the moved control.
 Nesting is unavailable. New file imports enter the single provisioned **Imports**
 folder, saved route plans remain unfiled, and migration assigns older imported tracks to
-**Imports** while leaving older saved routes unfiled. Folder identity, ordering, icon,
-and track placement synchronize with the existing opt-in account data flow.
+**Imports** while leaving older saved routes unfiled. **Imports** can be renamed,
+re-iconed, and reordered but not deleted, because it is the destination for every new
+import. Folder identity, ordering, icon, and track placement synchronize with the
+existing opt-in account data flow; the last synchronized folder reorder wins as a whole.
 
-The latest opened saved track reopens after restart when its content is still valid. A
-compact local-retention notice stays pinned to the Tracks panel bottom. Catalog, tags,
-filters, batch import, and manual GPX authoring remain unavailable. A newly imported or
-reopened track renders as bright-blue independent lines and fits its complete bounds
-with padding for the master/detail surfaces. With usable elevation, the map overlays
-every non-flat climb/descent grade subsegment across the active track, leaving flat
-spans bright blue. The overlay is not narrowed by chart or Climbs & Descents segment
-hover/selection; those interactions remain panel-only. Closing the track removes the
-active geometry without deleting a saved record or moving the camera. Every saved track
-can be downloaded locally as GPX or KML. Generated files preserve independent segments,
-saved name, available canonical point elevation—including promoted Terrarium elevation
-for an elevation-free import—and reliably aligned timestamps without writing GPX or KML
-description elements; conversion never uploads the source.
+The latest opened saved track reopens after restart when its content is still valid.
+Catalog, tags, filters, batch import, and manual GPX authoring remain unavailable. A
+newly imported or reopened track renders as bright-blue independent lines and fits its
+complete bounds with padding for the master/detail surfaces. With usable elevation, the
+map overlays every non-flat climb/descent grade subsegment across the active track,
+leaving flat spans bright blue. The overlay is not narrowed by chart or Climbs &
+Descents segment hover/selection; those interactions remain panel-only. Closing the
+track removes the active geometry without deleting a saved record or moving the camera.
+Every saved track can be downloaded locally as GPX or KML. Generated files preserve
+independent segments, saved name, available canonical point elevation—including promoted
+Terrarium elevation for an elevation-free import—and reliably aligned timestamps without
+writing GPX or KML description elements; conversion never uploads the source.
 
 GPX import also reads bounded root `<wpt>` elements in document order. Valid coordinates
 are retained, names use the same whitespace and length normalization as saved markers,

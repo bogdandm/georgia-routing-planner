@@ -111,10 +111,12 @@ per-user revision. Neither table has a `deleted_at` column or another tombstone 
 
 `track_folder_records` uses `(user_id, folder_id)` as its primary key. Its validated
 payload contains the stable folder ID, normalized name, one folder-or-marker icon key,
-zero-based position, and creation/update timestamps. A positive per-user revision
-serializes optimistic mutations. Browser roles receive owner-only `SELECT`; folder
-upsert and hard-delete operations run only through security-definer RPCs invoked by the
-authenticated Edge Function. The server caps each owner at 1,000 folders.
+non-negative position, and creation/update timestamps. A positive per-user revision
+serializes optimistic mutations. Content upserts keep an existing record's position;
+only the atomic reorder RPC changes it. Browser roles receive owner-only `SELECT`;
+folder upsert, reorder, and hard-delete operations run only through security-definer
+RPCs invoked by the authenticated Edge Function. The server provisions **Imports** for
+every account and caps each owner at 1,000 folders.
 
 Only `authenticated` `SELECT` is granted on these tables, with RLS constrained by
 `auth.uid() = user_id`. Browser roles cannot write either table or Storage. The private
@@ -251,19 +253,17 @@ classDiagram
     +TrackId trackId
     +string sortRank
   }
-  class UserFolder {
+  class TrackFolder {
     +string id
-    +string parentId optional
     +string name
-    +string sortRank
+    +string iconKey
+    +int position
     +Instant createdAt
     +Instant updatedAt
   }
-  class UserTrackPlacement {
+  class TrackPlacement {
     +TrackId trackId
     +string folderId optional
-    +string sortRank
-    +Instant updatedAt
   }
 
   CuratedCatalogManifest "1" o-- "many" CuratedTrackRecord
@@ -273,8 +273,8 @@ classDiagram
   LocalTrackRecord "1" --> "1" LocalTrackContentRecord
   CuratedCategory "1" --> "many" CuratedCategoryMembership
   CuratedTrackRecord "1" --> "many" CuratedCategoryMembership
-  UserFolder "1" --> "many" UserTrackPlacement
-  TrackSummary "1" --> "zero or one" UserTrackPlacement
+  TrackFolder "1" --> "many" TrackPlacement
+  TrackSummary "1" --> "1" TrackPlacement
 ```
 
 ### Track attributes and invariants
@@ -288,8 +288,8 @@ classDiagram
 | `LocalTrackRecord`        | Name, source identity/format, favorite state, import time, content reference, and bounded validation warnings; `addedAt` equals the completed retention/import time      |
 | `LocalTrackContentRecord` | One validated normalized source-point projection keyed by its track ID; original file bytes are not retained; fetched separately from summaries                          |
 | `CuratedCategory`         | Read-only hierarchical category from GitHub. A track may appear in multiple curated categories through memberships                                                       |
-| `UserFolder`              | Browser-local hierarchical folder. Cycles are forbidden; sibling names need not be globally unique                                                                       |
-| `UserTrackPlacement`      | Exactly one personal placement per track, with optional folder ID for `Unfiled` and a stable fractional/manual sort rank                                                 |
+| `TrackFolder`             | Flat personal folder with no children. Names need not be unique; order is by position, then ID. **Imports** is provisioned and cannot be deleted                         |
+| `TrackPlacement`          | The nullable `folderId` on each saved track summary; `null` or an unknown folder ID means **Unfiled**. Tracks inside a folder follow the selected track sort             |
 
 `recordedStartAt` and `recordedEndAt` come from valid GPX point timestamps.
 `elapsedDuration` is their difference when the ordering is valid. Moving time is not an
@@ -307,10 +307,13 @@ part of the canonical identity. Original file bytes are discarded after parsing.
 
 `trackFolders` stores a flat ordered list. Folder placement remains in
 `LocalTrackSummary.folderId`; it is nullable rather than a separate join record. The
-stable `folder:imports` record is provisioned when an import is saved. Saving a route
-leaves it unfiled; upgrading a pre-folder database assigns imported tracks to
-`folder:imports` and leaves saved routes unfiled. Folder deletion and order compaction
-update every affected summary and folder in one IndexedDB transaction.
+stable `imports` record is provisioned with the database and recreated when an import is
+saved without it. Saving a route leaves it unfiled; upgrading a pre-folder database
+assigns imported tracks to `imports` and leaves saved routes unfiled without queuing
+synchronized tracks for upload. Folder deletion updates every affected summary and
+folder in one IndexedDB transaction and leaves remaining positions unchanged. A local
+reorder rewrites positions and records a pending order version in settings instead of
+per-folder synchronization state.
 
 `trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
 stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,
@@ -562,9 +565,9 @@ are excluded from default export. Geometry requires a separate explicit opt-in.
 
 - Deleting a local track removes its content and synchronization state atomically. It
   does not affect folders or saved markers.
-- Removing a personal folder moves every placed track to **Unfiled**, compacts the
-  remaining folder order, and records the folder deletion and track metadata changes in
-  the same transaction. Folders never have children.
+- Removing a personal folder moves every placed track to **Unfiled** and records the
+  folder deletion and track metadata changes in the same transaction. Folders never have
+  children, and **Imports** cannot be removed.
 - Catalog-version replacement invalidates only derived/cache records, never user
   folders, placements, markers, or local tracks.
 - If a curated track disappears in a catalog update, its personal placement becomes an

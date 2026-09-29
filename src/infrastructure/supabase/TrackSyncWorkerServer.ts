@@ -9,7 +9,11 @@ import {
 } from '@/domain/tracks/trackSyncGeometry';
 import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
-import { IMPORTS_FOLDER_ID, type TrackFolder } from '@/domain/tracks/trackFolder';
+import {
+  IMPORTS_FOLDER_ID,
+  isImportsPlaceholder,
+  type TrackFolder,
+} from '@/domain/tracks/trackFolder';
 import type {
   RemoteMarkerDeletionCandidate,
   RemoteTrackDeletionCandidate,
@@ -251,6 +255,7 @@ interface RemoteGateway {
     payload: TrackFolder | null,
     signal: AbortSignal,
   ): Promise<RemoteMutation>;
+  reorderFolders?(folderIds: readonly string[], signal: AbortSignal): Promise<void>;
   download(path: string, signal: AbortSignal): Promise<Uint8Array>;
   deleteRemoteRecord(
     contentHash: string,
@@ -772,6 +777,31 @@ export class FetchRemoteGateway implements RemoteGateway {
       'invalid-remote',
     );
   }
+
+  public async reorderFolders(
+    folderIds: readonly string[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    const response = await this.request('/functions/v1/track-sync', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'folder-reorder', folderIds }),
+      signal,
+    });
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      !('outcome' in value) ||
+      value.outcome !== 'applied'
+    ) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid track folder order.',
+        'invalid-remote',
+      );
+    }
+  }
+
   public async download(path: string, signal: AbortSignal): Promise<Uint8Array> {
     const response = await this.request(
       `/storage/v1/object/track-geometries/${encodeURIComponent(path).replaceAll('%2F', '/')}`,
@@ -829,8 +859,8 @@ function remoteMetadata(
     ['endPoi', summary.endPoi],
     ['fallbackPoi', summary.fallbackPoi],
   ] as const;
-  for (const [key, value] of poiFields) {
-    if (value !== undefined) result[key] = value;
+  for (const [key, poi] of poiFields) {
+    if (poi !== undefined) result[key] = { label: poi.label, kind: poi.kind };
   }
   return result;
 }
@@ -1298,12 +1328,28 @@ export class TrackSyncWorkerServer {
       pending.length + anticipatedRemoteChanges + anticipatedRemoteCreates;
     if (anticipated > 0) addItems(anticipated);
 
+    // Folder content conflicts resolve as last writer wins: a conflict retries the
+    // local edit on the newer revision. Order is not part of these writes; the
+    // server keeps an existing folder's position and reorders arrive as one list.
     const acknowledgements = new Map<string, FolderSyncState | null>();
     for (const entry of pending) {
-      let baseRevision =
-        entry.state.remoteRevision ??
-        firstRemote.get(entry.state.folderId)?.revision ??
-        0;
+      const remote = firstRemote.get(entry.state.folderId);
+      if (
+        entry.state.pendingKind === 'upsert' &&
+        entry.state.remoteRevision === null &&
+        remote !== undefined &&
+        entry.folder !== null &&
+        isImportsPlaceholder(entry.folder)
+      ) {
+        acknowledgements.set(entry.state.folderId, {
+          ...entry.state,
+          remoteRevision: remote.revision,
+          pendingKind: null,
+        });
+        completeItem();
+        continue;
+      }
+      let baseRevision = entry.state.remoteRevision ?? remote?.revision ?? 0;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const mutation = await gateway.mutateFolder(
           entry.state.folderId,
@@ -1355,41 +1401,20 @@ export class TrackSyncWorkerServer {
       completeItem();
     }
 
-    const secondRecords = [...(await gateway.folderSnapshot(signal))];
-    const canonical = [...secondRecords].sort(
-      (left, right) =>
-        left.payload.position - right.payload.position ||
-        left.folder_id.localeCompare(right.folder_id, 'en'),
-    );
-    const normalized = new Map<string, RemoteFolderRecord>();
-    for (const [position, remote] of canonical.entries()) {
-      if (remote.payload.position === position) {
-        normalized.set(remote.folder_id, remote);
-        continue;
-      }
-      const payload = validateTrackFolderRecord({
-        ...remote.payload,
-        position,
-      });
-      const mutation = await gateway.mutateFolder(
-        remote.folder_id,
-        remote.revision,
-        payload,
-        signal,
-      );
-      if (mutation.outcome !== 'applied' && mutation.outcome !== 'existing') {
-        throw new TrackSyncWorkerError(
-          'Synchronization could not normalize track folder order.',
-          'concurrent-change',
-        );
-      }
-      normalized.set(remote.folder_id, {
-        folder_id: remote.folder_id,
-        revision: mutation.revision,
-        payload,
-      });
+    const pendingOrder =
+      gateway.reorderFolders === undefined
+        ? null
+        : await this.database.readPendingFolderOrder();
+    if (pendingOrder !== null) {
+      await gateway.reorderFolders?.(pendingOrder.folderIds, signal);
     }
-    const secondRemote = new Map(normalized);
+
+    const secondRemote = new Map(
+      (await gateway.folderSnapshot(signal)).map((record) => [
+        record.folder_id,
+        record,
+      ]),
+    );
     const current = new Map(
       (await this.database.readFolderSyncSnapshot()).map((entry) => [
         entry.state.folderId,
@@ -1495,16 +1520,16 @@ export class TrackSyncWorkerServer {
         completeItem();
       }
     }
-    const result = await this.database.applyRemoteFolderMergeBatch({
+    return await this.database.applyRemoteFolderMergeBatch({
       put: [...putById.values()],
       deleteFolderIds: [...deleteFolderIds],
       states: [...stateById.values()],
       deleteStateIds: [...deleteStateIds],
       expected: [...expectedById].map(([folderId, state]) => ({ folderId, state })),
       expectedUserId: userId,
+      acknowledgedOrderVersion: pendingOrder?.version ?? null,
       signal,
     });
-    return result;
   }
 
   private async synchronizeMarkers(

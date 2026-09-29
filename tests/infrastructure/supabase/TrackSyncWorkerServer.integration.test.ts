@@ -286,6 +286,114 @@ describe('TrackSyncWorkerServer', () => {
     });
     client.dispose();
   });
+
+  it("adopts the account's Imports folder instead of uploading a new placeholder", async () => {
+    const accountImports = {
+      ...folder('imports', 'Inbox', 2),
+      iconKey: 'hiking' as const,
+      updatedAt: '2026-09-29T00:00:00.000Z',
+    };
+    const mutateFolder = vi.fn();
+    const gateway = {
+      folderSnapshot: vi.fn(() =>
+        Promise.resolve([
+          { folder_id: 'imports', revision: 5, payload: accountImports },
+        ]),
+      ),
+      mutateFolder,
+      status: vi.fn().mockResolvedValue({
+        usedBytes: 0,
+        reservedBytes: 0,
+        limitBytes: 8_388_608,
+      }),
+      snapshot: vi.fn().mockResolvedValue([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    expect(mutateFolder).not.toHaveBeenCalled();
+    await expect(database.listTrackFolders()).resolves.toEqual([accountImports]);
+    await expect(database.folderSyncStates.get('imports')).resolves.toMatchObject({
+      remoteRevision: 5,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
+
+  it('uploads a local reorder as one complete order and then adopts it', async () => {
+    const trips = folder('folder:trips', 'Trips', 1);
+    const imports = folder('imports', 'Imports', 0);
+    await database.trackFolders.bulkPut([imports, trips]);
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-09-28T00:00:00.000Z',
+    });
+    await database.folderSyncStates.bulkPut([
+      { folderId: 'imports', remoteRevision: 1, pendingKind: null, localVersion: 1 },
+      { folderId: trips.id, remoteRevision: 2, pendingKind: null, localVersion: 1 },
+    ]);
+    await database.reorderTrackFolders([trips.id, 'imports']);
+    let remote = [
+      { folder_id: 'imports', revision: 1, payload: imports },
+      { folder_id: trips.id, revision: 2, payload: trips },
+    ];
+    const reorderFolders = vi.fn((folderIds: readonly string[]) => {
+      remote = remote.map((record) => ({
+        ...record,
+        revision: record.revision + 10,
+        payload: { ...record.payload, position: folderIds.indexOf(record.folder_id) },
+      }));
+      return Promise.resolve();
+    });
+    const gateway = {
+      folderSnapshot: vi.fn(() => Promise.resolve(remote)),
+      mutateFolder: vi.fn(),
+      reorderFolders,
+      status: vi.fn().mockResolvedValue({
+        usedBytes: 0,
+        reservedBytes: 0,
+        limitBytes: 8_388_608,
+      }),
+      snapshot: vi.fn().mockResolvedValue([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    expect(reorderFolders).toHaveBeenCalledOnce();
+    expect(reorderFolders.mock.calls[0]?.[0]).toEqual([trips.id, 'imports']);
+    expect(gateway.mutateFolder).not.toHaveBeenCalled();
+    await expect(database.readPendingFolderOrder()).resolves.toBeNull();
+    await expect(database.listTrackFolders()).resolves.toEqual([
+      expect.objectContaining({ id: trips.id, position: 0 }),
+      expect.objectContaining({ id: 'imports', position: 1 }),
+    ]);
+    await expect(database.folderSyncStates.get(trips.id)).resolves.toMatchObject({
+      remoteRevision: 12,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
   it('applies an uploaded revision through one batch and publishes one event', async () => {
     const track = summary('local:track');
     await database.saveLocalTrack(track, content(track.id));

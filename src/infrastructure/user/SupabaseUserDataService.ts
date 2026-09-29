@@ -259,7 +259,7 @@ export class SupabaseUserDataService implements UserDataService {
     await this.synchronizeNow();
   }
 
-  public async folderChanged(_folderId: string): Promise<void> {
+  public async foldersChanged(): Promise<void> {
     await this.synchronizeNow();
   }
 

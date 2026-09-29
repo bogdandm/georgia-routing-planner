@@ -235,6 +235,9 @@ describe('WorkspaceShell', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Create folder' }));
     const createDialog = screen.getByRole('dialog', { name: 'Create folder' });
+    await user.type(within(createDialog).getByLabelText('Folder name'), '   ');
+    await user.click(within(createDialog).getByRole('button', { name: 'Save' }));
+    expect(await within(createDialog).findByText('Enter a folder name.')).toBeVisible();
     await user.type(within(createDialog).getByLabelText('Folder name'), 'Weekend');
     await user.click(within(createDialog).getByRole('button', { name: 'Save' }));
 
@@ -279,6 +282,22 @@ describe('WorkspaceShell', () => {
         within(list).queryByRole('region', { name: 'Long weekends (0)' }),
       ).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps the Imports folder editable but not deletable', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const list = await screen.findByRole('list', { name: 'Saved tracks' });
+    const imports = await within(list).findByRole('region', { name: 'Imports (0)' });
+
+    fireEvent.click(within(imports).getByRole('button', { name: 'Edit Imports' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit folder' });
+
+    expect(within(dialog).getByLabelText('Folder name')).toHaveValue('Imports');
+    expect(
+      within(dialog).queryByRole('button', { name: 'Delete folder' }),
+    ).not.toBeInTheDocument();
   });
 
   it('moves tracks and reorders folders with keyboard drag controls', async () => {

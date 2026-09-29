@@ -53,7 +53,7 @@ function createService(initial: UserDataSnapshot) {
     trackSaved: vi.fn().mockResolvedValue(undefined),
     markerChanged: vi.fn().mockResolvedValue(undefined),
     markerDeleted: vi.fn().mockResolvedValue(undefined),
-    folderChanged: vi.fn().mockResolvedValue(undefined),
+    foldersChanged: vi.fn().mockResolvedValue(undefined),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

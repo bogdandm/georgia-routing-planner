@@ -879,8 +879,10 @@ describe('AppDatabase', () => {
         expect.objectContaining({ id: 'local:route', folderId: null }),
       ]),
     );
+    // Remote records without folderId resolve to the same placement, so the
+    // upgrade must not queue stale metadata uploads for synchronized tracks.
     await expect(database.trackSyncStates.get(imported.id)).resolves.toEqual(
-      expect.objectContaining({ pendingKind: 'metadata' }),
+      expect.objectContaining({ pendingKind: null }),
     );
     await expect(database.trackSyncStates.get('local:route')).resolves.toEqual(
       expect.objectContaining({ pendingKind: null }),
@@ -907,7 +909,7 @@ describe('AppDatabase', () => {
     await expect(database.listLocalTracks()).resolves.toEqual([]);
   });
 
-  it('rejects incomplete and duplicate folder orders and persists dense positions', async () => {
+  it('rejects incomplete and duplicate folder orders and queues one complete order', async () => {
     const first = trackFolder('folder:first', 'First');
     const second = trackFolder('folder:second', 'Second');
     await database.createTrackFolder({
@@ -936,12 +938,97 @@ describe('AppDatabase', () => {
       database.reorderTrackFolders([first.id, first.id, IMPORTS_FOLDER_ID]),
     ).rejects.toMatchObject({ code: 'record-invalid' });
 
+    await expect(database.readPendingFolderOrder()).resolves.toBeNull();
     await database.reorderTrackFolders([second.id, IMPORTS_FOLDER_ID, first.id]);
     await expect(database.listTrackFolders()).resolves.toEqual([
       expect.objectContaining({ id: second.id, position: 0 }),
       expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 1 }),
       expect.objectContaining({ id: first.id, position: 2 }),
     ]);
+    await database.reorderTrackFolders([first.id, second.id, IMPORTS_FOLDER_ID]);
+    await expect(database.readPendingFolderOrder()).resolves.toEqual({
+      version: 2,
+      folderIds: [first.id, second.id, IMPORTS_FOLDER_ID],
+    });
+    await expect(database.folderSyncStates.get(first.id)).resolves.toMatchObject({
+      localVersion: 1,
+    });
+  });
+
+  it('keeps a newer local order until its own synchronization', async () => {
+    const other = trackFolder('folder:other', 'Other');
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-a',
+      updatedAt: '2026-09-28T00:00:00.000Z',
+    });
+    await database.createTrackFolder({
+      schemaVersion: other.schemaVersion,
+      id: other.id,
+      name: other.name,
+      normalizedName: other.normalizedName,
+      iconKey: other.iconKey,
+      createdAt: other.createdAt,
+      updatedAt: other.updatedAt,
+    });
+    const state = {
+      folderId: other.id,
+      remoteRevision: 3,
+      pendingKind: null,
+      localVersion: 2,
+    } as const;
+    await database.folderSyncStates.put(state);
+    await database.reorderTrackFolders([other.id, IMPORTS_FOLDER_ID]);
+    const remote = {
+      ...other,
+      name: 'Renamed',
+      normalizedName: 'renamed',
+      position: 1,
+    };
+    const merge = (acknowledgedOrderVersion: number | null) =>
+      database.applyRemoteFolderMergeBatch({
+        put: [remote],
+        deleteFolderIds: [],
+        states: [{ ...state, remoteRevision: 4 }],
+        deleteStateIds: [],
+        expected: [{ folderId: other.id, state }],
+        expectedUserId: 'user-a',
+        acknowledgedOrderVersion,
+      });
+
+    await merge(null);
+
+    await expect(database.trackFolders.get(other.id)).resolves.toMatchObject({
+      name: 'Renamed',
+      position: 0,
+    });
+    await expect(database.readPendingFolderOrder()).resolves.toMatchObject({
+      version: 1,
+    });
+
+    await database.folderSyncStates.put(state);
+    await merge(1);
+
+    await expect(database.trackFolders.get(other.id)).resolves.toMatchObject({
+      position: 1,
+    });
+    await expect(database.readPendingFolderOrder()).resolves.toBeNull();
+  });
+
+  it('never stores a folder change dated before the folder was created', async () => {
+    await database.trackFolders.update(IMPORTS_FOLDER_ID, {
+      createdAt: '2026-09-28T12:00:00.000Z',
+      updatedAt: '2026-09-28T12:00:00.000Z',
+    });
+
+    const updated = await database.updateTrackFolder(IMPORTS_FOLDER_ID, {
+      name: 'Inbox',
+      normalizedName: 'inbox',
+      iconKey: 'folder',
+      updatedAt: '2026-09-28T11:59:00.000Z',
+    });
+
+    expect(updated.updatedAt).toBe('2026-09-28T12:00:00.000Z');
   });
 
   it('moves only track placement metadata and marks cloud metadata dirty', async () => {
@@ -984,7 +1071,7 @@ describe('AppDatabase', () => {
     );
   });
 
-  it('deletes populated folders without deleting tracks and compacts folder order', async () => {
+  it('deletes populated folders without deleting tracks and keeps Imports', async () => {
     const summary = localTrackSummary();
     const content = localTrackContent();
     const removed = trackFolder('folder:removed', 'Removed');
@@ -1014,8 +1101,11 @@ describe('AppDatabase', () => {
     await expect(database.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
     await expect(database.listTrackFolders()).resolves.toEqual([
       expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 0 }),
-      expect.objectContaining({ id: retained.id, position: 1 }),
+      expect.objectContaining({ id: retained.id, position: 2 }),
     ]);
+    await expect(database.deleteTrackFolder(IMPORTS_FOLDER_ID)).rejects.toMatchObject({
+      code: 'record-invalid',
+    });
   });
 
   it('applies remote folder deletion without deleting placed tracks', async () => {
@@ -1051,6 +1141,7 @@ describe('AppDatabase', () => {
         deleteStateIds: [IMPORTS_FOLDER_ID],
         expected: [{ folderId: IMPORTS_FOLDER_ID, state: folderState }],
         expectedUserId: 'user-a',
+        acknowledgedOrderVersion: null,
       }),
     ).resolves.toEqual({ changed: true, tracksChanged: true });
 
@@ -1060,10 +1151,11 @@ describe('AppDatabase', () => {
     ]);
     await expect(database.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
     await expect(database.trackSyncStates.get(summary.id)).resolves.toMatchObject({
-      pendingKind: 'metadata',
+      pendingKind: null,
     });
   });
-  it('recreates Imports at the end before saving a later file import', async () => {
+
+  it('recreates a removed Imports folder at the end before a later file import', async () => {
     const additional = trackFolder('folder:kept', 'Kept');
     await database.createTrackFolder({
       schemaVersion: additional.schemaVersion,
@@ -1074,7 +1166,7 @@ describe('AppDatabase', () => {
       createdAt: additional.createdAt,
       updatedAt: additional.updatedAt,
     });
-    await database.deleteTrackFolder(IMPORTS_FOLDER_ID);
+    await database.trackFolders.delete(IMPORTS_FOLDER_ID);
 
     const recreated = await database.ensureImportsFolder();
     const summary = localTrackSummary();
@@ -1084,11 +1176,11 @@ describe('AppDatabase', () => {
       id: IMPORTS_FOLDER_ID,
       name: 'Imports',
       iconKey: 'folder',
-      position: 1,
+      position: 2,
     });
     await expect(database.listTrackFolders()).resolves.toEqual([
-      expect.objectContaining({ id: additional.id, position: 0 }),
-      expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 1 }),
+      expect.objectContaining({ id: additional.id, position: 1 }),
+      expect.objectContaining({ id: IMPORTS_FOLDER_ID, position: 2 }),
     ]);
     await expect(database.listLocalTracks()).resolves.toEqual([
       expect.objectContaining({ id: summary.id, folderId: IMPORTS_FOLDER_ID }),

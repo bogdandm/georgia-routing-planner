@@ -86,6 +86,36 @@ select is(
   public.upsert_track_folder('22222222-2222-2222-2222-222222222222', 'private', '{"id":"private"}'::jsonb, 0) ->> 'outcome',
   'applied', 'second owner folder upsert applies'
 );
+select is(
+  public.upsert_track_folder('22222222-2222-2222-2222-222222222222', 'trips', '{"id":"trips","position":1}'::jsonb, 0) ->> 'outcome',
+  'applied', 'second owner creates another folder'
+);
+select is(
+  public.reorder_track_folders('22222222-2222-2222-2222-222222222222', array['trips', 'unknown', 'imports']) ->> 'outcome',
+  'applied', 'a complete folder order applies'
+);
+select results_eq(
+  $$ select folder_id, (payload ->> 'position')::integer
+     from public.track_folder_records
+     where user_id = '22222222-2222-2222-2222-222222222222'
+     order by (payload ->> 'position')::integer $$,
+  $$ values ('trips'::text, 0), ('imports'::text, 1), ('private'::text, 2) $$,
+  'requested folders lead in order and unlisted folders follow'
+);
+select is(
+  public.upsert_track_folder(
+    '22222222-2222-2222-2222-222222222222',
+    'trips',
+    '{"id":"trips","position":7}'::jsonb,
+    (select revision from public.track_folder_records where user_id = '22222222-2222-2222-2222-222222222222' and folder_id = 'trips')
+  ) -> 'record' -> 'payload' ->> 'position',
+  '0', 'content upserts keep the server-owned folder position'
+);
+select throws_ok(
+  $$ select public.reorder_track_folders('22222222-2222-2222-2222-222222222222', array['trips', 'trips']) $$,
+  'P0001', 'invalid track folder order', 'duplicate folder order entries are rejected'
+);
+select function_privs_are('public', 'reorder_track_folders', array['uuid', 'text[]'], 'authenticated', array[]::text[], 'authenticated users cannot reorder folders directly');
 set local role authenticated;
 set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 select is((select count(*) from public.track_folder_records), 1::bigint, 'RLS exposes only the authenticated owner folders');
@@ -96,8 +126,7 @@ select throws_ok(
 reset role;
 set local role authenticated;
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
-select is((select count(*) from public.track_folder_records), 2::bigint, 'RLS hides the first owner folders from the second owner');
-reset role;
+select is((select count(*) from public.track_folder_records), 3::bigint, 'RLS hides the first owner folders from the second owner');
 
 select * from finish();
 rollback;

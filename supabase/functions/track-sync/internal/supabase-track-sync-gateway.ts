@@ -12,6 +12,7 @@ import {
   type StorageEntry,
   TRACK_GEOMETRY_BUCKET,
   TRACK_QUOTA_BYTES,
+  type ReorderFoldersCommand,
   TrackSyncFailure,
   type TrackUsage,
   type UpsertFolderCommand,
@@ -173,6 +174,13 @@ export class SupabaseTrackSyncGateway {
       p_user_id: this.userId,
       p_folder_id: command.folderId,
       p_base_revision: command.baseRevision,
+    });
+  }
+
+  async reorderFolders(command: ReorderFoldersCommand): Promise<RpcResponse> {
+    return await this.callRpc('reorder_track_folders', {
+      p_user_id: this.userId,
+      p_folder_ids: command.folderIds,
     });
   }
 

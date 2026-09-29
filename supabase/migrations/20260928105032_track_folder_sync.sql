@@ -139,8 +139,17 @@ begin
   where user_folder_sync_state.user_id = p_user_id
   returning next_revision - 1 into v_revision;
 
+  -- Folder order is owned by reorder_track_folders, so a stale content edit from
+  -- another device cannot move an existing folder.
   update public.track_folder_records
-  set payload = p_payload, revision = v_revision, updated_at = now()
+  set
+    payload = jsonb_set(
+      p_payload,
+      '{position}',
+      coalesce(v_record.payload -> 'position', p_payload -> 'position', '0'::jsonb)
+    ),
+    revision = v_revision,
+    updated_at = now()
   where track_folder_records.user_id = p_user_id
     and track_folder_records.folder_id = p_folder_id
   returning * into v_record;
@@ -286,61 +295,92 @@ select
   )
 from auth.users as users;
 
-do $$
+-- Applies one complete folder order atomically under the per-user lock, so the
+-- last device to synchronize a reorder wins as a whole. Requested folders come
+-- first in the given order; folders the caller did not know keep their relative
+-- order after them. Unknown requested IDs are ignored.
+create function public.reorder_track_folders(
+  p_user_id uuid,
+  p_folder_ids text[]
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
-  v_user record;
-  v_track public.track_records%rowtype;
+  v_state private.user_folder_sync_state%rowtype;
+  v_record record;
+  v_position bigint := 0;
   v_revision bigint;
 begin
-  for v_user in
-    select distinct track_records.user_id
-    from public.track_records
-    where track_records.state = 'ready'
-      and not (track_records.metadata ? 'folderId')
-      and track_records.metadata ->> 'geometryKind' in ('track', 'route')
-    order by track_records.user_id
+  if p_user_id is null
+    or p_folder_ids is null
+    or cardinality(p_folder_ids) > 1000
+    or array_position(p_folder_ids, null) is not null
+    or exists (
+      select 1
+      from unnest(p_folder_ids) as requested(folder_id)
+      where char_length(requested.folder_id) not between 1 and 200
+        or octet_length(requested.folder_id) > 800
+    )
+    or (
+      select count(distinct requested.folder_id)
+      from unnest(p_folder_ids) as requested(folder_id)
+    ) <> cardinality(p_folder_ids)
+  then
+    raise exception 'invalid track folder order';
+  end if;
+
+  insert into private.user_folder_sync_state (user_id)
+  values (p_user_id)
+  on conflict (user_id) do nothing;
+
+  select user_folder_sync_state.* into strict v_state
+  from private.user_folder_sync_state
+  where user_folder_sync_state.user_id = p_user_id
+  for update;
+
+  if v_state.next_revision not between 1 and 9007199254740992
+    or v_state.record_count not between 0 and 1000
+  then
+    raise exception 'invalid track folder synchronization state';
+  end if;
+
+  if v_state.next_revision + v_state.record_count > 9007199254740992 then
+    return jsonb_build_object('outcome', 'revision-exhausted');
+  end if;
+
+  for v_record in
+    select track_folder_records.folder_id, track_folder_records.payload
+    from public.track_folder_records
+    left join unnest(p_folder_ids) with ordinality as requested(folder_id, ordinal)
+      on requested.folder_id = track_folder_records.folder_id
+    where track_folder_records.user_id = p_user_id
+    order by
+      requested.ordinal nulls last,
+      (track_folder_records.payload ->> 'position')::bigint,
+      track_folder_records.folder_id
+    for update of track_folder_records
   loop
-    insert into public.user_track_usage (user_id)
-    values (v_user.user_id)
-    on conflict (user_id) do nothing;
-
-    perform 1
-    from public.user_track_usage
-    where user_track_usage.user_id = v_user.user_id
-    for update;
-
-    for v_track in
-      select track_records.*
-      from public.track_records
-      where track_records.user_id = v_user.user_id
-        and track_records.state = 'ready'
-        and not (track_records.metadata ? 'folderId')
-        and track_records.metadata ->> 'geometryKind' in ('track', 'route')
-      order by track_records.content_hash
-      for update
-    loop
-      update public.user_track_usage
+    if (v_record.payload ->> 'position')::bigint is distinct from v_position then
+      update private.user_folder_sync_state
       set next_revision = next_revision + 1
-      where user_track_usage.user_id = v_user.user_id
+      where user_folder_sync_state.user_id = p_user_id
       returning next_revision - 1 into v_revision;
 
-      update public.track_records
+      update public.track_folder_records
       set
-        metadata = jsonb_set(
-          metadata,
-          '{folderId}',
-          case
-            when metadata ->> 'geometryKind' = 'track' then to_jsonb('imports'::text)
-            else 'null'::jsonb
-          end,
-          true
-        ),
+        payload = jsonb_set(payload, '{position}', to_jsonb(v_position)),
         revision = v_revision,
         updated_at = now()
-      where track_records.user_id = v_user.user_id
-        and track_records.content_hash = v_track.content_hash;
-    end loop;
+      where track_folder_records.user_id = p_user_id
+        and track_folder_records.folder_id = v_record.folder_id;
+    end if;
+    v_position := v_position + 1;
   end loop;
+
+  return jsonb_build_object('outcome', 'applied');
 end;
 $$;
 
@@ -350,7 +390,11 @@ revoke execute on function public.upsert_track_folder(uuid, text, jsonb, bigint)
 from public, anon, authenticated;
 revoke execute on function public.delete_track_folder(uuid, text, bigint)
 from public, anon, authenticated;
+revoke execute on function public.reorder_track_folders(uuid, text[])
+from public, anon, authenticated;
 grant execute on function public.upsert_track_folder(uuid, text, jsonb, bigint)
 to service_role;
 grant execute on function public.delete_track_folder(uuid, text, bigint)
+to service_role;
+grant execute on function public.reorder_track_folders(uuid, text[])
 to service_role;

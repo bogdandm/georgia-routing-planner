@@ -62,7 +62,13 @@ interface MarkerIconPickerProps {
   readonly onChange: (iconKey: SelectableIconKey) => void;
 }
 
-function IconGlyph({ iconKey, size }: { iconKey: SelectableIconKey; size: number }) {
+export function SelectableIconGlyph({
+  iconKey,
+  size,
+}: {
+  readonly iconKey: SelectableIconKey;
+  readonly size: number;
+}) {
   return iconKey === 'folder' ? (
     <FolderOutlinedIcon sx={{ fontSize: size }} />
   ) : (
@@ -141,7 +147,7 @@ export function MarkerIconPicker({
         onClick={open}
         variant="outlined"
         size="small"
-        startIcon={<IconGlyph iconKey={value} size={18} />}
+        startIcon={<SelectableIconGlyph iconKey={value} size={18} />}
         endIcon={<ExpandMoreIcon />}
         sx={{
           alignSelf: 'flex-start',
@@ -247,7 +253,7 @@ export function MarkerIconPicker({
                     borderRadius: 1,
                   }}
                 >
-                  <IconGlyph iconKey="folder" size={24} />
+                  <SelectableIconGlyph iconKey="folder" size={24} />
                 </IconButton>
               </Tooltip>
             ) : null}

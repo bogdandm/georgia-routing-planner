@@ -39,7 +39,6 @@ import NorthEastIcon from '@mui/icons-material/NorthEast';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
-import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
@@ -146,8 +145,7 @@ import {
   type ElevationProfile,
   type ElevationProfileInputPoint,
 } from '@/domain/tracks/elevationProfile';
-import { markerIconFor } from '@/presentation/markers/markerCatalog';
-import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
+import { SelectableIconGlyph } from '@/presentation/markers/MarkerIconPicker';
 import { TrackFolderEditorDialog } from '@/presentation/tracks/TrackFolderEditorDialog';
 import { formatDateTime } from '@/presentation/formatDateTime';
 import {
@@ -657,88 +655,68 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [database, t]);
 
+  // The folder editor dialog reports these failures, so they are rethrown
+  // without also setting the panel-level error.
   const createFolder = useCallback(
     async (name: string, iconKey: TrackFolderIconKey) => {
-      try {
-        const normalized = normalizeTrackFolderName(name);
-        const timestamp = clock.now().toISOString();
-        const created = await database.createTrackFolder({
-          schemaVersion: 1,
-          id: `folder:${idGenerator.generate()}`,
-          name: normalized.name,
-          normalizedName: normalized.normalizedName,
-          iconKey,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        });
-        setFolders((current) => [...current, created]);
-        void userData.folderChanged(created.id);
-        setError(null);
-      } catch (failure) {
-        setError(t`The folder could not be created.`);
-        throw failure;
-      }
+      const normalized = normalizeTrackFolderName(name);
+      const timestamp = clock.now().toISOString();
+      const created = await database.createTrackFolder({
+        schemaVersion: 1,
+        id: `folder:${idGenerator.generate()}`,
+        name: normalized.name,
+        normalizedName: normalized.normalizedName,
+        iconKey,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      setFolders((current) => [...current, created]);
+      void userData.foldersChanged();
     },
-    [clock, database, idGenerator, t, userData],
+    [clock, database, idGenerator, userData],
   );
 
   const updateFolder = useCallback(
     async (folder: TrackFolder, name: string, iconKey: TrackFolderIconKey) => {
-      try {
-        const normalized = normalizeTrackFolderName(name);
-        const updated = await database.updateTrackFolder(folder.id, {
-          name: normalized.name,
-          normalizedName: normalized.normalizedName,
-          iconKey,
-          updatedAt: clock.now().toISOString(),
-        });
-        setFolders((current) =>
-          current.map((candidate) =>
-            candidate.id === updated.id ? updated : candidate,
-          ),
-        );
-        void userData.folderChanged(updated.id);
-        setError(null);
-      } catch (failure) {
-        setError(t`The folder could not be updated.`);
-        throw failure;
-      }
+      const normalized = normalizeTrackFolderName(name);
+      const updated = await database.updateTrackFolder(folder.id, {
+        name: normalized.name,
+        normalizedName: normalized.normalizedName,
+        iconKey,
+        updatedAt: clock.now().toISOString(),
+      });
+      setFolders((current) =>
+        current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
+      );
+      void userData.foldersChanged();
     },
-    [clock, database, t, userData],
+    [clock, database, userData],
   );
 
   const deleteFolder = useCallback(
     async (folder: TrackFolder) => {
-      try {
-        const moved = await database.deleteTrackFolder(folder.id);
-        setFolders((current) =>
-          current
-            .filter((candidate) => candidate.id !== folder.id)
-            .map((candidate, position) => ({ ...candidate, position })),
-        );
-        const movedById = new Map(moved.map((summary) => [summary.id, summary]));
-        const applyMoved = (summary: LocalTrackSummary): LocalTrackSummary =>
-          movedById.get(summary.id) ?? summary;
-        setSummaries((current) => current.map(applyMoved));
-        setActive((current) =>
-          current?.kind === 'saved'
-            ? { ...current, summary: applyMoved(current.summary) }
-            : current,
-        );
-        setMultiTrackSelections((current) =>
-          current.map((selection) => ({
-            ...selection,
-            summary: applyMoved(selection.summary),
-          })),
-        );
-        void userData.folderChanged(folder.id);
-        setError(null);
-      } catch (failure) {
-        setError(t`The folder could not be deleted.`);
-        throw failure;
-      }
+      const moved = await database.deleteTrackFolder(folder.id);
+      setFolders((current) =>
+        current.filter((candidate) => candidate.id !== folder.id),
+      );
+      const movedById = new Map(moved.map((summary) => [summary.id, summary]));
+      const applyMoved = (summary: LocalTrackSummary): LocalTrackSummary =>
+        movedById.get(summary.id) ?? summary;
+      setSummaries((current) => current.map(applyMoved));
+      setActive((current) =>
+        current?.kind === 'saved'
+          ? { ...current, summary: applyMoved(current.summary) }
+          : current,
+      );
+      setMultiTrackSelections((current) =>
+        current.map((selection) => ({
+          ...selection,
+          summary: applyMoved(selection.summary),
+        })),
+      );
+      void userData.foldersChanged();
     },
-    [database, t, userData],
+    [database, userData],
   );
 
   const moveTrackToFolder = useCallback(
@@ -797,7 +775,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       try {
         const reordered = await database.reorderTrackFolders(folderIds);
         setFolders(reordered);
-        for (const folder of reordered) void userData.folderChanged(folder.id);
+        void userData.foldersChanged();
         setError(null);
         return true;
       } catch {
@@ -3113,20 +3091,6 @@ function revealOnRowHover(selector: string, hoverSelector: string) {
   } as const;
 }
 
-function TrackFolderGlyph({
-  iconKey,
-  size = 20,
-}: {
-  readonly iconKey: TrackFolderIconKey;
-  readonly size?: number;
-}) {
-  return iconKey === 'folder' ? (
-    <FolderOutlinedIcon sx={{ fontSize: size }} />
-  ) : (
-    <PinheadIcon svg={markerIconFor(iconKey).svg} size={size} />
-  );
-}
-
 interface SavedTrackRowProps {
   readonly summary: LocalTrackSummary;
   readonly folderId: string | null;
@@ -3541,7 +3505,10 @@ function TrackFolderSection({
                 color: 'text.secondary',
               }}
             >
-              <TrackFolderGlyph iconKey={folder.iconKey} size={TRACK_FOLDER_GLYPH_PX} />
+              <SelectableIconGlyph
+                iconKey={folder.iconKey}
+                size={TRACK_FOLDER_GLYPH_PX}
+              />
             </Box>
             <Typography variant="subtitle2" noWrap sx={{ minWidth: 0 }}>
               {folder.name}
@@ -4033,27 +4000,6 @@ export function TracksPanel({
           )}
         </DragOverlay>
       </DndContext>
-      <Alert
-        severity="info"
-        icon={<SaveOutlinedIcon fontSize="small" />}
-        sx={{
-          flexShrink: 0,
-          m: 0,
-          px: 1,
-          py: 0,
-          minHeight: 32,
-          alignItems: 'center',
-          borderRadius: 0,
-          borderTop: 1,
-          borderColor: 'divider',
-          '& .MuiAlert-icon': { mr: 0.75, py: 0.25 },
-          '& .MuiAlert-message': { py: 0.25 },
-        }}
-      >
-        <Typography variant="caption">
-          Saved tracks and folders stay in this browser.
-        </Typography>
-      </Alert>
       <TrackFolderEditorDialog
         open={editingFolder !== null}
         folder={editingFolder === 'create' ? null : editingFolder}
@@ -4069,7 +4015,9 @@ export function TracksPanel({
           }
           setEditingFolder(null);
         }}
-        {...(editingFolder === null || editingFolder === 'create'
+        {...(editingFolder === null ||
+        editingFolder === 'create' ||
+        editingFolder.id === IMPORTS_FOLDER_ID
           ? {}
           : {
               onDelete: async () => {

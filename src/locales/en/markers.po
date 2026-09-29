@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: JsuAUm
-#: src/presentation/markers/MarkerIconPicker.tsx:139
+#: src/presentation/markers/MarkerIconPicker.tsx:145
 msgid "{label}. Current: {selectedLabel}"
 msgstr "{label}. Current: {selectedLabel}"
 
@@ -144,12 +144,12 @@ msgid "Celebration"
 msgstr "Celebration"
 
 #. js-lingui-id: CbLlnq
-#: src/presentation/markers/MarkerIconPicker.tsx:260
+#: src/presentation/markers/MarkerIconPicker.tsx:267
 msgid "Choose {iconLabel} icon"
 msgstr "Choose {iconLabel} icon"
 
 #. js-lingui-id: dWB6jb
-#: src/presentation/markers/MarkerIconPicker.tsx:237
+#: src/presentation/markers/MarkerIconPicker.tsx:244
 msgid "Choose Folder icon"
 msgstr "Choose Folder icon"
 
@@ -274,8 +274,8 @@ msgid "Flight"
 msgstr "Flight"
 
 #. js-lingui-id: kNqMMd
-#: src/presentation/markers/MarkerIconPicker.tsx:114
-#: src/presentation/markers/MarkerIconPicker.tsx:234
+#: src/presentation/markers/MarkerIconPicker.tsx:120
+#: src/presentation/markers/MarkerIconPicker.tsx:241
 msgid "Folder"
 msgstr "Folder"
 
@@ -345,7 +345,7 @@ msgid "Ice cream"
 msgstr "Ice cream"
 
 #. js-lingui-id: mcmuCe
-#: src/presentation/markers/MarkerIconPicker.tsx:223
+#: src/presentation/markers/MarkerIconPicker.tsx:230
 msgid "Icons"
 msgstr "Icons"
 
@@ -391,7 +391,7 @@ msgstr "Map"
 
 #. js-lingui-id: buqOJj
 #. placeholder {0}: rowIndex + 1
-#: src/presentation/markers/MarkerIconPicker.tsx:195
+#: src/presentation/markers/MarkerIconPicker.tsx:202
 msgid "Marker icon categories row {0}"
 msgstr "Marker icon categories row {0}"
 
@@ -441,12 +441,12 @@ msgid "Navigation"
 msgstr "Navigation"
 
 #. js-lingui-id: IpuMS3
-#: src/presentation/markers/MarkerIconPicker.tsx:282
+#: src/presentation/markers/MarkerIconPicker.tsx:289
 msgid "No matching icons"
 msgstr "No matching icons"
 
 #. js-lingui-id: LglrR3
-#: src/presentation/markers/MarkerIconPicker.tsx:281
+#: src/presentation/markers/MarkerIconPicker.tsx:288
 msgid "No recently used icons yet"
 msgstr "No recently used icons yet"
 
@@ -558,12 +558,12 @@ msgstr "Seafood"
 
 #. js-lingui-id: hVMs0B
 #. placeholder {0}: markerIconCatalog.length + Number(allowFolder)
-#: src/presentation/markers/MarkerIconPicker.tsx:170
+#: src/presentation/markers/MarkerIconPicker.tsx:177
 msgid "Search {0} icons"
 msgstr "Search {0} icons"
 
 #. js-lingui-id: k8pi2I
-#: src/presentation/markers/MarkerIconPicker.tsx:176
+#: src/presentation/markers/MarkerIconPicker.tsx:183
 msgid "Search icons"
 msgstr "Search icons"
 

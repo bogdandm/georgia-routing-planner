@@ -464,7 +464,7 @@ describe('local track persistence', () => {
       lineageHash: sourceSummary.contentHash,
       geometryVersion: 1,
       remoteRevision: 7,
-      pendingKind: 'metadata',
+      pendingKind: null,
     });
   });
 

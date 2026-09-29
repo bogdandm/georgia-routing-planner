@@ -14,7 +14,7 @@ import {
 import { useState } from 'react';
 
 import {
-  normalizeTrackFolderName,
+  TrackFolderNameError,
   type TrackFolder,
   type TrackFolderIconKey,
 } from '@/domain/tracks/trackFolder';
@@ -28,6 +28,7 @@ interface TrackFolderEditorDialogProps {
   readonly folder: TrackFolder | null;
   readonly onCancel: () => void;
   readonly onSave: (name: string, iconKey: TrackFolderIconKey) => Promise<void>;
+  /** Omitted for folders that cannot be deleted, such as Imports. */
   readonly onDelete?: () => Promise<void>;
 }
 
@@ -55,44 +56,39 @@ function OpenTrackFolderEditorDialog({
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  const nameProblemMessages = {
+    required: t`Enter a folder name.`,
+    'too-long': t`Folder names must be 200 characters or fewer.`,
+    'invalid-character': t`The folder name contains unsupported characters.`,
+  } as const;
+
   const save = async () => {
-    let normalizedName: string;
-    try {
-      normalizedName = normalizeTrackFolderName(name).name;
-    } catch (failure) {
-      setValidationError(
-        failure instanceof Error ? failure.message : t`The folder could not be saved.`,
-      );
-      return;
-    }
     setSaving(true);
     setSubmitError(null);
     try {
-      await onSave(normalizedName, iconKey);
+      await onSave(name, iconKey);
     } catch (failure) {
-      setSubmitError(
-        failure instanceof Error ? failure.message : t`The folder could not be saved.`,
-      );
+      if (failure instanceof TrackFolderNameError) {
+        setValidationError(nameProblemMessages[failure.problem]);
+      } else {
+        setSubmitError(t`The folder could not be saved.`);
+      }
       setSaving(false);
     }
   };
 
   const remove = async () => {
+    if (onDelete === undefined) return;
     if (!confirmingDelete) {
       setConfirmingDelete(true);
       return;
     }
-    if (onDelete === undefined) return;
     setSaving(true);
     setSubmitError(null);
     try {
       await onDelete();
-    } catch (failure) {
-      setSubmitError(
-        failure instanceof Error
-          ? failure.message
-          : t`The folder could not be deleted.`,
-      );
+    } catch {
+      setSubmitError(t`The folder could not be deleted.`);
       setSaving(false);
       setConfirmingDelete(false);
     }
@@ -144,9 +140,9 @@ function OpenTrackFolderEditorDialog({
         </Stack>
       </DialogContent>
       <DialogActions
-        sx={{ justifyContent: folder === null ? 'flex-end' : 'space-between' }}
+        sx={{ justifyContent: onDelete === undefined ? 'flex-end' : 'space-between' }}
       >
-        {folder === null ? null : (
+        {onDelete === undefined ? null : (
           <Button
             color="error"
             disabled={saving}

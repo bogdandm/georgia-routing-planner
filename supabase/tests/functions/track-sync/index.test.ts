@@ -647,6 +647,19 @@ Deno.test(
         p_base_revision: 1,
       },
     );
+
+    state.rpcResults.set('reorder_track_folders', [
+      { data: { outcome: 'applied' }, error: null },
+    ]);
+    const reorder = await handleTrackSync(
+      jsonRequest({ action: 'folder-reorder', folderIds: ['folder:trips', 'imports'] }),
+      makeContext(state),
+    );
+    assertEquals(reorder.status, 200);
+    assertEquals(
+      state.calls.find((call) => call.name === 'reorder_track_folders')?.value,
+      { p_user_id: USER_ID, p_folder_ids: ['folder:trips', 'imports'] },
+    );
   },
 );
 
@@ -671,6 +684,13 @@ Deno.test('invalid folder payloads are rejected before backend access', async ()
     makeContext(state),
   );
   assertEquals(response.status, 400);
+  assertEquals(state.calls.length, 0);
+
+  const repeated = await handleTrackSync(
+    jsonRequest({ action: 'folder-reorder', folderIds: ['imports', 'imports'] }),
+    makeContext(state),
+  );
+  assertEquals(repeated.status, 400);
   assertEquals(state.calls.length, 0);
 });
 Deno.test('a geometry hash mismatch is rejected before reservation', async () => {

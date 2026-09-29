@@ -115,6 +115,11 @@ export interface DeleteFolderCommand {
   readonly baseRevision: number;
 }
 
+export interface ReorderFoldersCommand {
+  readonly action: 'folder-reorder';
+  readonly folderIds: readonly string[];
+}
+
 export type TrackSyncCommand =
   | UploadTrackCommand
   | MetadataTrackCommand
@@ -123,7 +128,8 @@ export type TrackSyncCommand =
   | UpsertMarkerCommand
   | DeleteMarkerCommand
   | UpsertFolderCommand
-  | DeleteFolderCommand;
+  | DeleteFolderCommand
+  | ReorderFoldersCommand;
 
 export interface StorageEntry {
   readonly id: string | null;

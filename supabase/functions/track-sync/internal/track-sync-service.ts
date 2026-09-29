@@ -6,6 +6,7 @@ import type {
   DeleteTrackCommand,
   MetadataTrackCommand,
   RpcResponse,
+  ReorderFoldersCommand,
   TrackSyncCommand,
   TrackSyncResult,
   UpsertFolderCommand,
@@ -36,6 +37,8 @@ export class TrackSyncService {
         return await this.upsertFolder(command);
       case 'folder-delete':
         return await this.deleteFolder(command);
+      case 'folder-reorder':
+        return await this.reorderFolders(command);
       case 'status':
         return await this.status();
     }
@@ -55,6 +58,10 @@ export class TrackSyncService {
 
   private async deleteFolder(command: DeleteFolderCommand): Promise<RpcResponse> {
     return this.folderMutation(await this.gateway.deleteFolder(command));
+  }
+
+  private async reorderFolders(command: ReorderFoldersCommand): Promise<RpcResponse> {
+    return this.folderMutation(await this.gateway.reorderFolders(command));
   }
 
   private folderMutation(result: RpcResponse): RpcResponse {

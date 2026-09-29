@@ -5,6 +5,7 @@ import {
   CONTENT_HASH_PATTERN,
   type FolderPayload,
   MAX_FOLDER_BYTES,
+  MAX_FOLDER_RECORDS,
   MAX_JSON_BYTES,
   MAX_MARKER_BYTES,
   MAX_METADATA_BYTES,
@@ -653,6 +654,26 @@ async function parseJsonRequest(request: Request): Promise<TrackSyncCommand> {
       folderId: requireFolderId(value.folderId),
       baseRevision: requireBaseRevision(value.baseRevision),
     };
+  }
+  if (value.action === 'folder-reorder') {
+    requireExactFields(value, ['action', 'folderIds']);
+    const folderIds = value.folderIds;
+    if (!Array.isArray(folderIds) || folderIds.length > MAX_FOLDER_RECORDS) {
+      throw new TrackSyncFailure(
+        400,
+        'invalid_folder_order',
+        'folderIds must be an array of at most 1000 folder identifiers.',
+      );
+    }
+    const ids = folderIds.map(requireFolderId);
+    if (new Set(ids).size !== ids.length) {
+      throw new TrackSyncFailure(
+        400,
+        'invalid_folder_order',
+        'folderIds must not repeat a folder.',
+      );
+    }
+    return { action: 'folder-reorder', folderIds: ids };
   }
   throw new TrackSyncFailure(
     400,

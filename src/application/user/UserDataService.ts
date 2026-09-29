@@ -52,7 +52,7 @@ export interface UserDataService {
   trackDeleted(trackId: string): Promise<void>;
   markerChanged(markerId: string): Promise<void>;
   markerDeleted(markerId: string): Promise<void>;
-  folderChanged(folderId: string): Promise<void>;
+  foldersChanged(): Promise<void>;
   subscribeTracksChanged(listener: () => void): () => void;
   subscribeMarkersChanged(listener: () => void): () => void;
   subscribeFoldersChanged(listener: () => void): () => void;
@@ -97,6 +97,6 @@ export function createUnconfiguredUserDataService(): UserDataService {
     trackSaved: () => Promise.resolve(),
     markerChanged: () => Promise.resolve(),
     markerDeleted: () => Promise.resolve(),
-    folderChanged: () => Promise.resolve(),
+    foldersChanged: () => Promise.resolve(),
   };
 }

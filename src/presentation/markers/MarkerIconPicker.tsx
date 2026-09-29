@@ -1,3 +1,5 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
@@ -39,6 +41,18 @@ const markerIconSectionRows = [
   markerIconSections.slice(4),
 ] as const;
 
+const markerIconSectionLabels: Readonly<Record<MarkerIconSection, MessageDescriptor>> =
+  {
+    'Recently used': msg`Recently used`,
+    Places: msg`Places`,
+    Nature: msg`Nature`,
+    Activities: msg`Activities`,
+    'Food & stay': msg`Food & stay`,
+    Landmarks: msg`Landmarks`,
+    Safety: msg`Safety`,
+    Transport: msg`Transport`,
+  };
+
 interface MarkerIconPickerProps {
   readonly value: SelectableIconKey;
   readonly recentIconKeys: readonly MarkerIconKey[];
@@ -64,7 +78,8 @@ export function MarkerIconPicker({
   disabled = false,
   onChange,
 }: MarkerIconPickerProps) {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
+  const locale = i18n.locale;
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   const [section, setSection] = useState<MarkerIconSection>(() =>
@@ -79,24 +94,32 @@ export function MarkerIconPicker({
     [recentIconKeys],
   );
   const filteredIcons = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('en');
+    const normalizedQuery = query.trim().toLocaleLowerCase(locale);
     if (normalizedQuery.length === 0) {
       return section === 'Recently used'
         ? recentIcons
         : markerIconCatalog.filter((entry) => entry.category === section);
     }
-    return markerIconCatalog.filter(
-      (entry) =>
+    return markerIconCatalog.filter((entry) => {
+      const localizedLabel = i18n._(entry.labelMessage);
+      const localizedCategory = i18n._(markerIconSectionLabels[entry.category]);
+      return (
         entry.label.toLocaleLowerCase('en').includes(normalizedQuery) ||
-        entry.category.toLocaleLowerCase('en').includes(normalizedQuery),
-    );
-  }, [query, recentIcons, section]);
+        entry.category.toLocaleLowerCase('en').includes(normalizedQuery) ||
+        localizedLabel.toLocaleLowerCase(locale).includes(normalizedQuery) ||
+        localizedCategory.toLocaleLowerCase(locale).includes(normalizedQuery)
+      );
+    });
+  }, [i18n, locale, query, recentIcons, section]);
+  const folderLabel = t`Folder`;
+  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
   const showFolder =
     allowFolder &&
-    (query.trim().length === 0 ||
-      'folder'.includes(query.trim().toLocaleLowerCase('en')));
-  const selectedLabel = value === 'folder' ? t`Folder` : markerIconFor(value).label;
-
+    (normalizedQuery.length === 0 ||
+      'folder'.includes(normalizedQuery) ||
+      folderLabel.toLocaleLowerCase(locale).includes(normalizedQuery));
+  const selectedLabel =
+    value === 'folder' ? folderLabel : i18n._(markerIconFor(value).labelMessage);
   const close = () => {
     setAnchor(null);
     setQuery('');
@@ -143,13 +166,14 @@ export function MarkerIconPicker({
             autoFocus
             fullWidth
             size="small"
-            aria-label={t`Search icons`}
+            type="search"
             placeholder={t`Search ${markerIconCatalog.length + Number(allowFolder)} icons`}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
             }}
             slotProps={{
+              htmlInput: { 'aria-label': t`Search icons` },
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
@@ -185,7 +209,11 @@ export function MarkerIconPicker({
                 }}
               >
                 {sections.map((candidate) => (
-                  <Tab key={candidate} value={candidate} label={candidate} />
+                  <Tab
+                    key={candidate}
+                    value={candidate}
+                    label={i18n._(markerIconSectionLabels[candidate])}
+                  />
                 ))}
               </Tabs>
             ))}
@@ -222,8 +250,9 @@ export function MarkerIconPicker({
                 </IconButton>
               </Tooltip>
             ) : null}
-            {filteredIcons.map(({ key, label: iconLabel, svg }) => {
+            {filteredIcons.map(({ key, labelMessage, svg }) => {
               const selected = key === value;
+              const iconLabel = i18n._(labelMessage);
               return (
                 <Tooltip key={key} title={iconLabel}>
                   <IconButton

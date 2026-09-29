@@ -15,7 +15,7 @@ msgstr ""
 
 #. js-lingui-id: QUiwqi
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3510
+#: src/presentation/tracks/TracksWorkspace.tsx:3524
 msgid "{0} tracks"
 msgstr "{0} tracks"
 
@@ -31,7 +31,7 @@ msgstr "Choose folder icon"
 
 #. js-lingui-id: tTipyO
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3445
+#: src/presentation/tracks/TracksWorkspace.tsx:3459
 msgid "Collapse {0}"
 msgstr "Collapse {0}"
 
@@ -42,8 +42,8 @@ msgstr "Confirm delete"
 
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:102
-#: src/presentation/tracks/TracksWorkspace.tsx:3774
-#: src/presentation/tracks/TracksWorkspace.tsx:3778
+#: src/presentation/tracks/TracksWorkspace.tsx:3788
+#: src/presentation/tracks/TracksWorkspace.tsx:3792
 msgid "Create folder"
 msgstr "Create folder"
 
@@ -53,15 +53,15 @@ msgid "Delete folder"
 msgstr "Delete folder"
 
 #. js-lingui-id: AHjV65
-#: src/presentation/tracks/TracksWorkspace.tsx:3505
-#: src/presentation/tracks/TracksWorkspace.tsx:3862
+#: src/presentation/tracks/TracksWorkspace.tsx:3519
+#: src/presentation/tracks/TracksWorkspace.tsx:3876
 msgid "Drop tracks here"
 msgstr "Drop tracks here"
 
 #. js-lingui-id: N6j2JH
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3480
-#: src/presentation/tracks/TracksWorkspace.tsx:3483
+#: src/presentation/tracks/TracksWorkspace.tsx:3494
+#: src/presentation/tracks/TracksWorkspace.tsx:3497
 msgid "Edit {0}"
 msgstr "Edit {0}"
 
@@ -72,7 +72,7 @@ msgstr "Edit folder"
 
 #. js-lingui-id: WXp971
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3445
+#: src/presentation/tracks/TracksWorkspace.tsx:3459
 msgid "Expand {0}"
 msgstr "Expand {0}"
 
@@ -82,51 +82,51 @@ msgid "Folder name"
 msgstr "Folder name"
 
 #. js-lingui-id: tWKSiS
-#: src/presentation/tracks/TracksWorkspace.tsx:3736
+#: src/presentation/tracks/TracksWorkspace.tsx:3750
 msgid "Item dropped."
 msgstr "Item dropped."
 
 #. js-lingui-id: Z9u6zw
 #. placeholder {0}: summary.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3178
+#: src/presentation/tracks/TracksWorkspace.tsx:3184
 msgid "Move {0}"
 msgstr "Move {0}"
 
 #. js-lingui-id: VZdoAN
-#: src/presentation/tracks/TracksWorkspace.tsx:3739
+#: src/presentation/tracks/TracksWorkspace.tsx:3753
 msgid "Move cancelled."
 msgstr "Move cancelled."
 
 #. js-lingui-id: 9GH1hZ
-#: src/presentation/tracks/TracksWorkspace.tsx:3731
+#: src/presentation/tracks/TracksWorkspace.tsx:3745
 msgid "Over {name}."
 msgstr "Over {name}."
 
 #. js-lingui-id: NVQqOC
 #. placeholder {0}: (data.folder as TrackFolder).name
-#: src/presentation/tracks/TracksWorkspace.tsx:3712
+#: src/presentation/tracks/TracksWorkspace.tsx:3726
 msgid "Picked up folder {0}."
 msgstr "Picked up folder {0}."
 
 #. js-lingui-id: Y0Hloc
-#: src/presentation/tracks/TracksWorkspace.tsx:3717
+#: src/presentation/tracks/TracksWorkspace.tsx:3731
 msgid "Picked up item."
 msgstr "Picked up item."
 
 #. js-lingui-id: cKK6tl
 #. placeholder {0}: (data.summary as LocalTrackSummary).name
-#: src/presentation/tracks/TracksWorkspace.tsx:3715
+#: src/presentation/tracks/TracksWorkspace.tsx:3729
 msgid "Picked up track {0}."
 msgstr "Picked up track {0}."
 
 #. js-lingui-id: KQYkQd
-#: src/presentation/tracks/TracksWorkspace.tsx:3706
+#: src/presentation/tracks/TracksWorkspace.tsx:3720
 msgid "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 msgstr "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 
 #. js-lingui-id: 2BPVq8
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3434
+#: src/presentation/tracks/TracksWorkspace.tsx:3448
 msgid "Reorder {0}"
 msgstr "Reorder {0}"
 
@@ -136,7 +136,7 @@ msgid "Save"
 msgstr "Save"
 
 #. js-lingui-id: BBAHO5
-#: src/presentation/tracks/TracksWorkspace.tsx:3804
+#: src/presentation/tracks/TracksWorkspace.tsx:3818
 msgid "Saved tracks"
 msgstr "Saved tracks"
 
@@ -177,11 +177,11 @@ msgid "The track could not be moved."
 msgstr "The track could not be moved."
 
 #. js-lingui-id: u4NvoA
-#: src/presentation/tracks/TracksWorkspace.tsx:3729
+#: src/presentation/tracks/TracksWorkspace.tsx:3743
 msgid "Unfiled"
 msgstr "Unfiled"
 
 #. js-lingui-id: bLnJmO
-#: src/presentation/tracks/TracksWorkspace.tsx:3843
+#: src/presentation/tracks/TracksWorkspace.tsx:3857
 msgid "Unfiled tracks"
 msgstr "Unfiled tracks"

@@ -14,54 +14,740 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: JsuAUm
-#: src/presentation/markers/MarkerIconPicker.tsx:116
+#: src/presentation/markers/MarkerIconPicker.tsx:139
 msgid "{label}. Current: {selectedLabel}"
 msgstr "{label}. Текущий значок: {selectedLabel}"
 
+#. js-lingui-id: 39ohdf
+#: src/presentation/markers/MarkerIconPicker.tsx:49
+msgid "Activities"
+msgstr "Активности"
+
+#. js-lingui-id: Zdun41
+#: src/presentation/markers/markerCatalog.tsx:413
+msgid "Alert"
+msgstr "Тревога"
+
+#. js-lingui-id: hwpQaF
+#: src/presentation/markers/markerCatalog.tsx:173
+msgid "Apartment"
+msgstr "Апартаменты"
+
+#. js-lingui-id: 6cU-Bw
+#: src/presentation/markers/markerCatalog.tsx:367
+msgid "Attraction"
+msgstr "Достопримечательность"
+
+#. js-lingui-id: tA1nmf
+#: src/presentation/markers/markerCatalog.tsx:327
+msgid "Bakery"
+msgstr "Пекарня"
+
+#. js-lingui-id: GoBp8L
+#: src/presentation/markers/markerCatalog.tsx:345
+msgid "Bar"
+msgstr "Бар"
+
+#. js-lingui-id: lTY3xZ
+#: src/presentation/markers/markerCatalog.tsx:208
+msgid "Beach"
+msgstr "Пляж"
+
+#. js-lingui-id: nxZBQI
+#: src/presentation/markers/markerCatalog.tsx:246
+msgid "Bear"
+msgstr "Медведь"
+
+#. js-lingui-id: 05AfaT
+#: src/presentation/markers/markerCatalog.tsx:456
+msgid "Bike"
+msgstr "Велосипед"
+
+#. js-lingui-id: ILUH3x
+#: src/presentation/markers/markerCatalog.tsx:248
+msgid "Bird"
+msgstr "Птица"
+
+#. js-lingui-id: 32TndD
+#: src/presentation/markers/markerCatalog.tsx:411
+msgid "Blocked"
+msgstr "Проход закрыт"
+
+#. js-lingui-id: FEmb-0
+#: src/presentation/markers/markerCatalog.tsx:259
+msgid "Boating"
+msgstr "Катание на лодке"
+
+#. js-lingui-id: DUvGjB
+#: src/presentation/markers/markerCatalog.tsx:328
+msgid "Brunch"
+msgstr "Бранч"
+
+#. js-lingui-id: jemsB5
+#: src/presentation/markers/markerCatalog.tsx:392
+msgid "Buddhist temple"
+msgstr "Буддийский храм"
+
+#. js-lingui-id: UEOZgY
+#: src/presentation/markers/markerCatalog.tsx:444
+msgid "Bus"
+msgstr "Автобус"
+
+#. js-lingui-id: 9N-p-g
+#: src/presentation/markers/markerCatalog.tsx:174
+msgid "Business"
+msgstr "Организация"
+
+#. js-lingui-id: cTAcnC
+#: src/presentation/markers/markerCatalog.tsx:175
+msgid "Cabin"
+msgstr "Домик"
+
+#. js-lingui-id: vPKmgm
+#: src/presentation/markers/markerCatalog.tsx:324
+msgid "Cafe"
+msgstr "Кафе"
+
+#. js-lingui-id: rT2cV-
+#: src/presentation/markers/markerCatalog.tsx:359
+msgid "Camera"
+msgstr "Камера"
+
+#. js-lingui-id: Ev3HEi
+#: src/presentation/markers/markerCatalog.tsx:329
+msgid "Camping"
+msgstr "Кемпинг"
+
+#. js-lingui-id: ehaZ-s
+#: src/presentation/markers/markerCatalog.tsx:445
+msgid "Car"
+msgstr "Автомобиль"
+
+#. js-lingui-id: INcnHP
+#: src/presentation/markers/markerCatalog.tsx:412
+msgid "Car crash"
+msgstr "ДТП"
+
+#. js-lingui-id: HNAJHQ
+#: src/presentation/markers/markerCatalog.tsx:360
+msgid "Castle"
+msgstr "Замок"
+
+#. js-lingui-id: -dKWeV
+#: src/presentation/markers/markerCatalog.tsx:242
+msgid "Cave"
+msgstr "Пещера"
+
+#. js-lingui-id: grlA0m
+#: src/presentation/markers/markerCatalog.tsx:374
+msgid "Celebration"
+msgstr "Праздник"
+
 #. js-lingui-id: CbLlnq
-#: src/presentation/markers/MarkerIconPicker.tsx:231
+#: src/presentation/markers/MarkerIconPicker.tsx:260
 msgid "Choose {iconLabel} icon"
 msgstr "Выбрать значок «{iconLabel}»"
 
 #. js-lingui-id: dWB6jb
-#: src/presentation/markers/MarkerIconPicker.tsx:209
+#: src/presentation/markers/MarkerIconPicker.tsx:237
 msgid "Choose Folder icon"
 msgstr "Выбрать значок папки"
 
+#. js-lingui-id: 1CfVUC
+#: src/presentation/markers/markerCatalog.tsx:361
+msgid "Church"
+msgstr "Церковь"
+
+#. js-lingui-id: 3wV73y
+#: src/presentation/markers/markerCatalog.tsx:177
+msgid "City"
+msgstr "Город"
+
+#. js-lingui-id: 60FykE
+#: src/presentation/markers/markerCatalog.tsx:243
+msgid "Cliff"
+msgstr "Обрыв"
+
+#. js-lingui-id: XLMJ7O
+#: src/presentation/markers/markerCatalog.tsx:216
+msgid "Cloud"
+msgstr "Облачно"
+
+#. js-lingui-id: FFdvhW
+#: src/presentation/markers/markerCatalog.tsx:443
+msgid "Commute"
+msgstr "Поездки"
+
+#. js-lingui-id: 2HTqAZ
+#: src/presentation/markers/markerCatalog.tsx:176
+msgid "Cottage"
+msgstr "Коттедж"
+
+#. js-lingui-id: jV9IBb
+#: src/presentation/markers/markerCatalog.tsx:258
+msgid "Cycling"
+msgstr "Велоспорт"
+
+#. js-lingui-id: TNZKpI
+#: src/presentation/markers/markerCatalog.tsx:414
+msgid "Danger"
+msgstr "Опасность"
+
+#. js-lingui-id: 3AAg85
+#: src/presentation/markers/markerCatalog.tsx:378
+msgid "Deck"
+msgstr "Терраса"
+
+#. js-lingui-id: PjayOd
+#: src/presentation/markers/markerCatalog.tsx:247
+msgid "Deer"
+msgstr "Олень"
+
+#. js-lingui-id: LiVofz
+#: src/presentation/markers/markerCatalog.tsx:346
+msgid "Dining"
+msgstr "Еда"
+
+#. js-lingui-id: wi6pR1
+#: src/presentation/markers/markerCatalog.tsx:285
+msgid "Diving"
+msgstr "Дайвинг"
+
+#. js-lingui-id: XzAuUz
+#: src/presentation/markers/markerCatalog.tsx:350
+msgid "Drinking water"
+msgstr "Питьевая вода"
+
+#. js-lingui-id: X56ScM
+#: src/presentation/markers/markerCatalog.tsx:209
+msgid "Eco"
+msgstr "Эко"
+
+#. js-lingui-id: e_nl8W
+#: src/presentation/markers/markerCatalog.tsx:450
+msgid "Electric bike"
+msgstr "Электровелосипед"
+
+#. js-lingui-id: mjWorc
+#: src/presentation/markers/markerCatalog.tsx:415
+msgid "Emergency"
+msgstr "Экстренная помощь"
+
+#. js-lingui-id: SUXBxp
+#: src/presentation/markers/markerCatalog.tsx:419
+msgid "Engineering"
+msgstr "Инженерные объекты"
+
+#. js-lingui-id: 8tjQCz
+#: src/presentation/markers/markerCatalog.tsx:202
+msgid "Explore"
+msgstr "Исследовать"
+
+#. js-lingui-id: _tlnwv
+#: src/presentation/markers/markerCatalog.tsx:333
+msgid "Fast food"
+msgstr "Фастфуд"
+
+#. js-lingui-id: cf35MA
+#: src/presentation/markers/markerCatalog.tsx:379
+msgid "Festival"
+msgstr "Фестиваль"
+
+#. js-lingui-id: cADkbl
+#: src/presentation/markers/markerCatalog.tsx:426
+msgid "Fire extinguisher"
+msgstr "Огнетушитель"
+
+#. js-lingui-id: DC4-ua
+#: src/presentation/markers/markerCatalog.tsx:434
+msgid "Fire station"
+msgstr "Пожарная часть"
+
+#. js-lingui-id: baOCbm
+#: src/presentation/markers/markerCatalog.tsx:170
+msgid "Flag"
+msgstr "Флаг"
+
+#. js-lingui-id: OdM_lr
+#: src/presentation/markers/markerCatalog.tsx:454
+msgid "Flight"
+msgstr "Авиаперелёт"
+
 #. js-lingui-id: kNqMMd
-#: src/presentation/markers/MarkerIconPicker.tsx:98
-#: src/presentation/markers/MarkerIconPicker.tsx:206
+#: src/presentation/markers/MarkerIconPicker.tsx:114
+#: src/presentation/markers/MarkerIconPicker.tsx:234
 msgid "Folder"
 msgstr "Папка"
 
+#. js-lingui-id: a9lMYF
+#: src/presentation/markers/MarkerIconPicker.tsx:50
+msgid "Food & stay"
+msgstr "Еда и ночлег"
+
+#. js-lingui-id: DDWQmc
+#: src/presentation/markers/markerCatalog.tsx:304
+msgid "Football"
+msgstr "Футбол"
+
+#. js-lingui-id: kFLJqR
+#: src/presentation/markers/markerCatalog.tsx:204
+msgid "Forest"
+msgstr "Лес"
+
+#. js-lingui-id: F0gbO2
+#: src/presentation/markers/markerCatalog.tsx:380
+msgid "Fort"
+msgstr "Форт"
+
+#. js-lingui-id: PDAs5V
+#: src/presentation/markers/markerCatalog.tsx:455
+msgid "Fuel"
+msgstr "Заправка"
+
+#. js-lingui-id: hT_xCE
+#: src/presentation/markers/markerCatalog.tsx:210
+msgid "Grass"
+msgstr "Трава"
+
+#. js-lingui-id: qonUHH
+#: src/presentation/markers/markerCatalog.tsx:354
+msgid "Grocery"
+msgstr "Продукты"
+
+#. js-lingui-id: TbFGoa
+#: src/presentation/markers/markerCatalog.tsx:257
+msgid "Hiking"
+msgstr "Пеший туризм"
+
+#. js-lingui-id: XoEM1-
+#: src/presentation/markers/markerCatalog.tsx:399
+msgid "Hindu temple"
+msgstr "Индуистский храм"
+
+#. js-lingui-id: i0qMbr
+#: src/presentation/markers/markerCatalog.tsx:171
+msgid "Home"
+msgstr "Дом"
+
+#. js-lingui-id: lnjmoG
+#: src/presentation/markers/markerCatalog.tsx:406
+msgid "Hospital"
+msgstr "Больница"
+
+#. js-lingui-id: vOZkAU
+#: src/presentation/markers/markerCatalog.tsx:325
+msgid "Hotel"
+msgstr "Отель"
+
+#. js-lingui-id: kCjjZw
+#: src/presentation/markers/markerCatalog.tsx:340
+msgid "Ice cream"
+msgstr "Мороженое"
+
 #. js-lingui-id: mcmuCe
-#: src/presentation/markers/MarkerIconPicker.tsx:195
+#: src/presentation/markers/MarkerIconPicker.tsx:223
 msgid "Icons"
 msgstr "Значки"
 
+#. js-lingui-id: CE-M2e
+#: src/presentation/markers/markerCatalog.tsx:408
+msgid "Info"
+msgstr "Информация"
+
+#. js-lingui-id: wefuvA
+#: src/presentation/markers/markerCatalog.tsx:265
+msgid "Kayaking"
+msgstr "Каякинг"
+
+#. js-lingui-id: lpNA1F
+#: src/presentation/markers/markerCatalog.tsx:272
+msgid "Kitesurfing"
+msgstr "Кайтсёрфинг"
+
+#. js-lingui-id: a60eo8
+#: src/presentation/markers/markerCatalog.tsx:227
+msgid "Lake"
+msgstr "Озеро"
+
+#. js-lingui-id: -MCRYR
+#: src/presentation/markers/MarkerIconPicker.tsx:51
+msgid "Landmarks"
+msgstr "Ориентиры"
+
+#. js-lingui-id: XxIeKn
+#: src/presentation/markers/markerCatalog.tsx:203
+msgid "Landscape"
+msgstr "Пейзаж"
+
+#. js-lingui-id: svex5a
+#: src/presentation/markers/markerCatalog.tsx:344
+msgid "Liquor"
+msgstr "Алкоголь"
+
+#. js-lingui-id: 4HBFYh
+#: src/presentation/markers/markerCatalog.tsx:178
+msgid "Map"
+msgstr "Карта"
+
 #. js-lingui-id: buqOJj
 #. placeholder {0}: rowIndex + 1
-#: src/presentation/markers/MarkerIconPicker.tsx:171
+#: src/presentation/markers/MarkerIconPicker.tsx:195
 msgid "Marker icon categories row {0}"
 msgstr "Строка {0} категорий значков маркеров"
 
+#. js-lingui-id: Rk-ZP6
+#: src/presentation/markers/markerCatalog.tsx:407
+msgid "Medical"
+msgstr "Медпомощь"
+
+#. js-lingui-id: MFN0FN
+#: src/presentation/markers/markerCatalog.tsx:363
+msgid "Monument"
+msgstr "Памятник"
+
+#. js-lingui-id: iQ2nLC
+#: src/presentation/markers/markerCatalog.tsx:226
+msgid "Moon"
+msgstr "Луна"
+
+#. js-lingui-id: yA6ZLP
+#: src/presentation/markers/markerCatalog.tsx:381
+msgid "Mosque"
+msgstr "Мечеть"
+
+#. js-lingui-id: DjTtBe
+#: src/presentation/markers/markerCatalog.tsx:469
+msgid "Motorcycle"
+msgstr "Мотоцикл"
+
+#. js-lingui-id: nGd86f
+#: src/presentation/markers/markerCatalog.tsx:362
+msgid "Museum"
+msgstr "Музей"
+
+#. js-lingui-id: v5eALp
+#: src/presentation/markers/markerCatalog.tsx:182
+msgid "My location"
+msgstr "Моё местоположение"
+
+#. js-lingui-id: PGt_mb
+#: src/presentation/markers/MarkerIconPicker.tsx:48
+msgid "Nature"
+msgstr "Природа"
+
+#. js-lingui-id: UxKoFf
+#: src/presentation/markers/markerCatalog.tsx:189
+msgid "Navigation"
+msgstr "Навигация"
+
 #. js-lingui-id: IpuMS3
-#: src/presentation/markers/MarkerIconPicker.tsx:253
+#: src/presentation/markers/MarkerIconPicker.tsx:282
 msgid "No matching icons"
 msgstr "Подходящие значки не найдены"
 
 #. js-lingui-id: LglrR3
-#: src/presentation/markers/MarkerIconPicker.tsx:252
+#: src/presentation/markers/MarkerIconPicker.tsx:281
 msgid "No recently used icons yet"
 msgstr "Недавно использованных значков пока нет"
 
+#. js-lingui-id: 63G2X_
+#: src/presentation/markers/markerCatalog.tsx:279
+msgid "Paragliding"
+msgstr "Парапланеризм"
+
+#. js-lingui-id: zKXtCb
+#: src/presentation/markers/markerCatalog.tsx:211
+msgid "Park"
+msgstr "Парк"
+
+#. js-lingui-id: yacEUu
+#: src/presentation/markers/markerCatalog.tsx:172
+msgid "Parking"
+msgstr "Парковка"
+
+#. js-lingui-id: nkqs9W
+#: src/presentation/markers/markerCatalog.tsx:260
+msgid "Pets"
+msgstr "Питомцы"
+
+#. js-lingui-id: qVkGWK
+#: src/presentation/markers/markerCatalog.tsx:193
+msgid "Pin"
+msgstr "Метка"
+
+#. js-lingui-id: VOMRpC
+#: src/presentation/markers/markerCatalog.tsx:169
+msgid "Place"
+msgstr "Место"
+
+#. js-lingui-id: xVhL_N
+#: src/presentation/markers/MarkerIconPicker.tsx:47
+msgid "Places"
+msgstr "Места"
+
+#. js-lingui-id: Ed-ntB
+#: src/presentation/markers/markerCatalog.tsx:197
+msgid "Public place"
+msgstr "Общественное место"
+
+#. js-lingui-id: 0-G1UH
+#: src/presentation/markers/markerCatalog.tsx:446
+msgid "Railway"
+msgstr "Железная дорога"
+
+#. js-lingui-id: 1K3mjX
+#: src/presentation/markers/markerCatalog.tsx:356
+msgid "Ramen"
+msgstr "Рамен"
+
+#. js-lingui-id: uabU9X
+#: src/presentation/markers/MarkerIconPicker.tsx:46
+msgid "Recently used"
+msgstr "Недавно использованные"
+
+#. js-lingui-id: gjpdaf
+#: src/presentation/markers/markerCatalog.tsx:438
+msgid "Report"
+msgstr "Сообщить"
+
+#. js-lingui-id: P2sn7C
+#: src/presentation/markers/markerCatalog.tsx:320
+msgid "Restaurant"
+msgstr "Ресторан"
+
+#. js-lingui-id: nKyPBN
+#: src/presentation/markers/markerCatalog.tsx:410
+msgid "Roadwork"
+msgstr "Дорожные работы"
+
+#. js-lingui-id: g2eGl5
+#: src/presentation/markers/markerCatalog.tsx:245
+msgid "Rock"
+msgstr "Скала"
+
+#. js-lingui-id: EVfVou
+#: src/presentation/markers/markerCatalog.tsx:283
+msgid "Rowing"
+msgstr "Гребля"
+
+#. js-lingui-id: RiQMUh
+#: src/presentation/markers/markerCatalog.tsx:316
+msgid "Running"
+msgstr "Бег"
+
+#. js-lingui-id: I_43p6
+#: src/presentation/markers/markerCatalog.tsx:430
+#: src/presentation/markers/MarkerIconPicker.tsx:52
+msgid "Safety"
+msgstr "Безопасность"
+
+#. js-lingui-id: Z9WBnC
+#: src/presentation/markers/markerCatalog.tsx:284
+msgid "Sailing"
+msgstr "Парусный спорт"
+
+#. js-lingui-id: 77D4QL
+#: src/presentation/markers/markerCatalog.tsx:201
+msgid "School"
+msgstr "Школа"
+
+#. js-lingui-id: k5oy33
+#: src/presentation/markers/markerCatalog.tsx:357
+msgid "Seafood"
+msgstr "Морепродукты"
+
 #. js-lingui-id: hVMs0B
 #. placeholder {0}: markerIconCatalog.length + Number(allowFolder)
-#: src/presentation/markers/MarkerIconPicker.tsx:147
+#: src/presentation/markers/MarkerIconPicker.tsx:170
 msgid "Search {0} icons"
 msgstr "Поиск среди {0} значков"
 
 #. js-lingui-id: k8pi2I
-#: src/presentation/markers/MarkerIconPicker.tsx:146
+#: src/presentation/markers/MarkerIconPicker.tsx:176
 msgid "Search icons"
 msgstr "Поиск значков"
+
+#. js-lingui-id: a3LDKx
+#: src/presentation/markers/markerCatalog.tsx:439
+msgid "Security"
+msgstr "Охрана"
+
+#. js-lingui-id: Gd8EbX
+#: src/presentation/markers/markerCatalog.tsx:355
+msgid "Shelter"
+msgstr "Укрытие"
+
+#. js-lingui-id: yc-YFi
+#: src/presentation/markers/markerCatalog.tsx:442
+msgid "Shuttle"
+msgstr "Шаттл"
+
+#. js-lingui-id: AXIl-i
+#: src/presentation/markers/markerCatalog.tsx:289
+msgid "Skateboarding"
+msgstr "Скейтбординг"
+
+#. js-lingui-id: 7ypOno
+#: src/presentation/markers/markerCatalog.tsx:261
+msgid "Skiing"
+msgstr "Лыжи"
+
+#. js-lingui-id: JiA8JY
+#: src/presentation/markers/markerCatalog.tsx:207
+msgid "Snow"
+msgstr "Снег"
+
+#. js-lingui-id: j9CE_5
+#: src/presentation/markers/markerCatalog.tsx:296
+msgid "Snowboarding"
+msgstr "Сноубординг"
+
+#. js-lingui-id: xg6v7h
+#: src/presentation/markers/markerCatalog.tsx:460
+msgid "Snowmobile"
+msgstr "Снегоход"
+
+#. js-lingui-id: SWS1FV
+#: src/presentation/markers/markerCatalog.tsx:440
+msgid "SOS"
+msgstr "СОС"
+
+#. js-lingui-id: 7JFNej
+#: src/presentation/markers/markerCatalog.tsx:300
+msgid "Sports"
+msgstr "Спорт"
+
+#. js-lingui-id: og87nv
+#: src/presentation/markers/markerCatalog.tsx:212
+msgid "Spring"
+msgstr "Источник"
+
+#. js-lingui-id: mZhteu
+#: src/presentation/markers/markerCatalog.tsx:326
+msgid "Store"
+msgstr "Магазин"
+
+#. js-lingui-id: _n6s2H
+#: src/presentation/markers/markerCatalog.tsx:217
+msgid "Storm"
+msgstr "Шторм"
+
+#. js-lingui-id: ByhGWF
+#: src/presentation/markers/markerCatalog.tsx:215
+msgid "Sunny"
+msgstr "Солнечно"
+
+#. js-lingui-id: 9BjGPQ
+#: src/presentation/markers/markerCatalog.tsx:308
+msgid "Surfing"
+msgstr "Сёрфинг"
+
+#. js-lingui-id: uHafbT
+#: src/presentation/markers/markerCatalog.tsx:312
+msgid "Swimming"
+msgstr "Плавание"
+
+#. js-lingui-id: hWTYKo
+#: src/presentation/markers/markerCatalog.tsx:385
+msgid "Synagogue"
+msgstr "Синагога"
+
+#. js-lingui-id: F0Qs2u
+#: src/presentation/markers/markerCatalog.tsx:358
+msgid "Tapas"
+msgstr "Тапас"
+
+#. js-lingui-id: yUKXiQ
+#: src/presentation/markers/markerCatalog.tsx:222
+msgid "Telescope"
+msgstr "Телескоп"
+
+#. js-lingui-id: WGWl-P
+#: src/presentation/markers/markerCatalog.tsx:205
+msgid "Terrain"
+msgstr "Рельеф"
+
+#. js-lingui-id: A4UmDy
+#: src/presentation/markers/markerCatalog.tsx:403
+msgid "Theater"
+msgstr "Театр"
+
+#. js-lingui-id: wBnYxO
+#: src/presentation/markers/markerCatalog.tsx:404
+msgid "Tour"
+msgstr "Экскурсия"
+
+#. js-lingui-id: WeIu6W
+#: src/presentation/markers/markerCatalog.tsx:441
+msgid "Traffic"
+msgstr "Дорожное движение"
+
+#. js-lingui-id: -0cOZb
+#: src/presentation/markers/markerCatalog.tsx:464
+msgid "Train"
+msgstr "Поезд"
+
+#. js-lingui-id: 6bmd7e
+#: src/presentation/markers/markerCatalog.tsx:465
+msgid "Tram"
+msgstr "Трамвай"
+
+#. js-lingui-id: bv4cFj
+#: src/presentation/markers/MarkerIconPicker.tsx:53
+msgid "Transport"
+msgstr "Транспорт"
+
+#. js-lingui-id: F7Nf76
+#: src/presentation/markers/markerCatalog.tsx:218
+msgid "Tsunami"
+msgstr "Цунами"
+
+#. js-lingui-id: eDhax8
+#: src/presentation/markers/markerCatalog.tsx:244
+msgid "Valley"
+msgstr "Долина"
+
+#. js-lingui-id: 0o7JLj
+#: src/presentation/markers/markerCatalog.tsx:231
+msgid "Viewpoint"
+msgstr "Смотровая площадка"
+
+#. js-lingui-id: sAAoh3
+#: src/presentation/markers/markerCatalog.tsx:405
+msgid "Villa"
+msgstr "Вилла"
+
+#. js-lingui-id: N5uU0a
+#: src/presentation/markers/markerCatalog.tsx:213
+msgid "Volcano"
+msgstr "Вулкан"
+
+#. js-lingui-id: r6y-jM
+#: src/presentation/markers/markerCatalog.tsx:409
+msgid "Warning"
+msgstr "Предупреждение"
+
+#. js-lingui-id: Qj2zki
+#: src/presentation/markers/markerCatalog.tsx:206
+msgid "Water"
+msgstr "Вода"
+
+#. js-lingui-id: u-lTLZ
+#: src/presentation/markers/markerCatalog.tsx:238
+msgid "Waterfall"
+msgstr "Водопад"
+
+#. js-lingui-id: FItJTE
+#: src/presentation/markers/markerCatalog.tsx:214
+msgid "Waves"
+msgstr "Волны"
+
+#. js-lingui-id: UMOjWL
+#: src/presentation/markers/markerCatalog.tsx:256
+msgid "Wetland"
+msgstr "Болото"
+
+#. js-lingui-id: kp3xIR
+#: src/presentation/markers/markerCatalog.tsx:252
+msgid "Wildflowers"
+msgstr "Полевые цветы"

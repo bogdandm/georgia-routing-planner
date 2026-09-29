@@ -3149,7 +3149,7 @@ function SavedTrackRow({
           position: 'relative',
           display: 'grid',
           gridTemplateColumns:
-            folderId === null ? '4px minmax(0, 1fr) auto' : '48px minmax(0, 1fr) auto',
+            folderId === null ? '4px minmax(0, 1fr) auto' : '32px minmax(0, 1fr) auto',
           width: '100%',
           alignItems: 'center',
           borderBottom: 1,
@@ -3588,7 +3588,7 @@ function TrackFolderSection({
               minHeight: 34,
               display: 'flex',
               alignItems: 'center',
-              pl: 6.5,
+              pl: 4.5,
               pr: 1.5,
               borderBottom: 1,
               borderColor: 'divider',

@@ -38,7 +38,8 @@ export interface MapViewportSnapshot {
 
 export interface NearbyPoi {
   readonly name: string | null;
-  readonly category: string;
+  /** Provider category token; `null` when the source feature has no category. */
+  readonly category: string | null;
   readonly distanceMeters: number;
 }
 

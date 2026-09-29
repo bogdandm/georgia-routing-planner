@@ -301,7 +301,6 @@ export function OperationalStatus() {
   const elapsedLabel =
     elapsedSeconds === null ? null : t`${integerFormatter.format(elapsedSeconds)} s`;
 
-  /* eslint-disable -- MUI, CSS, and ARIA control tokens are not user-visible copy. */
   const handleErrorDetailsOpen = (event: MouseEvent<HTMLElement>) => {
     setErrorAnchor(event.currentTarget);
   };
@@ -430,5 +429,4 @@ export function OperationalStatus() {
       </Popover>
     </Box>
   );
-  /* eslint-enable */
 }

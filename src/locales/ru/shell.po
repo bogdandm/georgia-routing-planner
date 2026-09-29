@@ -70,7 +70,7 @@ msgid "2D share link"
 msgstr "Ссылка на 2D-карту"
 
 #. js-lingui-id: fSe0sp
-#: src/presentation/shell/ShareMapDialog.tsx:190
+#: src/presentation/shell/ShareMapDialog.tsx:188
 msgid "2D share link copied"
 msgstr "Ссылка на 2D-карту скопирована"
 
@@ -80,7 +80,7 @@ msgid "3D share link"
 msgstr "Ссылка на 3D-карту"
 
 #. js-lingui-id: La5uO7
-#: src/presentation/shell/ShareMapDialog.tsx:189
+#: src/presentation/shell/ShareMapDialog.tsx:187
 msgid "3D share link copied"
 msgstr "Ссылка на 3D-карту скопирована"
 
@@ -172,7 +172,7 @@ msgid "Click the map to choose the route start and destination."
 msgstr "Нажмите на карту, чтобы выбрать начало и конец маршрута."
 
 #. js-lingui-id: yz7wBu
-#: src/presentation/shell/ShareMapDialog.tsx:163
+#: src/presentation/shell/ShareMapDialog.tsx:161
 msgid "Close"
 msgstr "Закрыть"
 
@@ -187,12 +187,12 @@ msgid "Coordinates are outside valid map bounds."
 msgstr "Координаты выходят за допустимые границы карты."
 
 #. js-lingui-id: r8UHl8
-#: src/presentation/shell/ShareMapDialog.tsx:180
+#: src/presentation/shell/ShareMapDialog.tsx:178
 msgid "Copy 2D link"
 msgstr "Копировать ссылку на 2D-карту"
 
 #. js-lingui-id: AKBU-N
-#: src/presentation/shell/ShareMapDialog.tsx:171
+#: src/presentation/shell/ShareMapDialog.tsx:169
 msgid "Copy 3D link"
 msgstr "Копировать ссылку на 3D-карту"
 
@@ -202,7 +202,7 @@ msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
 msgstr "Создатель — <0>Bogdan Kalashnikov</0> (bogdandm)."
 
 #. js-lingui-id: 2SuOUC
-#: src/presentation/shell/OperationalStatus.tsx:426
+#: src/presentation/shell/OperationalStatus.tsx:425
 msgid "Current map error"
 msgstr "Текущая ошибка карты"
 
@@ -233,7 +233,7 @@ msgid "Done"
 msgstr "Готово"
 
 #. js-lingui-id: 85Oudu
-#: src/presentation/shell/WorkspaceErrorBoundary.tsx:74
+#: src/presentation/shell/WorkspaceErrorBoundary.tsx:71
 msgid "Download diagnostics"
 msgstr "Скачать диагностику"
 
@@ -861,7 +861,7 @@ msgid "Share this map view"
 msgstr "Поделиться этим видом карты"
 
 #. js-lingui-id: aa47vg
-#: src/presentation/shell/OperationalStatus.tsx:347
+#: src/presentation/shell/OperationalStatus.tsx:346
 msgid "Show current error details"
 msgstr "Показать сведения о текущей ошибке"
 
@@ -928,7 +928,7 @@ msgid "Terrain compute · compatibility mode"
 msgstr "Расчёт рельефа · режим совместимости"
 
 #. js-lingui-id: lIoxO5
-#: src/presentation/shell/OperationalStatus.tsx:410
+#: src/presentation/shell/OperationalStatus.tsx:409
 msgid "Terrain compute queue state"
 msgstr "Состояние очереди расчёта рельефа"
 
@@ -953,17 +953,17 @@ msgid "The 2D link always shares center and zoom. A selected satellite image can
 msgstr "Ссылка на 2D-карту всегда передаёт центр и масштаб. Выбранный спутниковый снимок можно добавить без локального сохранения сцены."
 
 #. js-lingui-id: WMkqRc
-#: src/presentation/shell/WorkspaceErrorBoundary.tsx:59
+#: src/presentation/shell/WorkspaceErrorBoundary.tsx:57
 msgid "The application encountered an error"
 msgstr "Приложение столкнулось с ошибкой"
 
 #. js-lingui-id: CNWmZe
-#: src/presentation/shell/WorkspaceErrorBoundary.tsx:63
+#: src/presentation/shell/WorkspaceErrorBoundary.tsx:60
 msgid "The failure was captured locally. Download a privacy-safe bundle to help investigate it."
 msgstr "Сбой зафиксирован локально. Скачайте пакет без конфиденциальных данных, чтобы помочь с расследованием."
 
 #. js-lingui-id: CHpm1i
-#: src/presentation/shell/ShareMapDialog.tsx:149
+#: src/presentation/shell/ShareMapDialog.tsx:147
 msgid "The link could not be copied. Select it and copy it manually."
 msgstr "Не удалось скопировать ссылку. Выделите её и скопируйте вручную."
 

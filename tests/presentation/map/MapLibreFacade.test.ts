@@ -1,6 +1,7 @@
 import type { GeoJSONFeature, Map as MapLibreMap } from 'maplibre-gl';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import type { MapViewportMovement } from '@/presentation/map/MapFacade';
@@ -208,6 +209,10 @@ class FakeNativeMap {
 }
 
 describe('MapLibreFacade', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
   it('owns lifecycle listeners, updates snapshots, and cleans up deterministically', async () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

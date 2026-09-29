@@ -52,13 +52,10 @@ export class WorkspaceErrorBoundary extends Component<
       >
         <Paper sx={{ maxWidth: 560, p: 4 }}>
           <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
-            {/* MUI display tokens are not user-visible copy. */}
-            {/* eslint-disable-next-line -- MUI display token, not user-visible copy. */}
             <ErrorOutlineIcon color="error" fontSize="large" />
             <Typography component="h1" variant="h5">
               <Trans>The application encountered an error</Trans>
             </Typography>
-            {/* eslint-disable-next-line -- MUI severity token, not user-visible copy. */}
             <Alert severity="error">
               <Trans>
                 The failure was captured locally. Download a privacy-safe bundle to help

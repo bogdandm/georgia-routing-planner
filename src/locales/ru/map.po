@@ -12,3 +12,265 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#. js-lingui-id: 3Mpfhk
+#: src/presentation/map/MapLibreFacade.ts:126
+msgid "{distance} km"
+msgstr "{distance} км"
+
+#. js-lingui-id: 9sSCIt
+#: src/presentation/map/MapLibreFacade.ts:119
+msgid "{distance} m"
+msgstr "{distance} м"
+
+#. js-lingui-id: KPwAwW
+#: src/presentation/map/MapLibrePointInspector.ts:79
+msgid "{elevation} m"
+msgstr "{elevation} м"
+
+#. js-lingui-id: rC5zgZ
+#: src/presentation/map/MapLibrePointInspector.ts:105
+msgid "{name} ({category}), {distance} m away"
+msgstr "{name} ({category}), в {distance} м"
+
+#. js-lingui-id: tzyloL
+#: src/presentation/map/MapLibrePointInspector.ts:103
+msgid "{name}, {distance} m away"
+msgstr "{name}, в {distance} м"
+
+#. js-lingui-id: 2h8w7c
+#: src/presentation/map/MapViewControls.tsx:158
+msgid "3D terrain"
+msgstr "3D-рельеф"
+
+#. js-lingui-id: eWVlWI
+#: src/presentation/map/MapViewControls.tsx:157
+msgid "3D terrain is unavailable while Sentinel Mosaic is active."
+msgstr "3D-рельеф недоступен, пока активна мозаика Sentinel."
+
+#. js-lingui-id: dEgA5A
+#: src/presentation/map/MapWorkspace.tsx:1412
+msgid "Cancel"
+msgstr "Отмена"
+
+#. js-lingui-id: WdJ-u8
+#: src/presentation/map/MapLibrePointInspector.ts:94
+msgid "Checking nearby map data…"
+msgstr "Проверка данных карты поблизости…"
+
+#. js-lingui-id: 2uEfCs
+#: src/presentation/map/MapViewControls.tsx:180
+#: src/presentation/map/MapViewControls.tsx:186
+msgid "Choose map layer preset"
+msgstr "Выбрать набор слоёв карты"
+
+#. js-lingui-id: dLNd3k
+#: src/presentation/map/MapWorkspace.tsx:1409
+msgid "Click the map to place the marker"
+msgstr "Нажмите на карту, чтобы поставить метку"
+
+#. js-lingui-id: jysdB3
+#: src/presentation/map/MapWorkspace.tsx:1422
+msgid "Clipboard access failed. Try again or use the Share dialog."
+msgstr "Не удалось получить доступ к буферу обмена. Повторите попытку или воспользуйтесь окном «Поделиться»."
+
+#. js-lingui-id: ucYcTY
+#: src/presentation/map/MapLibrePointInspector.ts:129
+msgid "Close map point details"
+msgstr "Закрыть сведения о точке карты"
+
+#. js-lingui-id: zN8IXs
+#: src/presentation/map/MapViewControls.tsx:264
+msgid "Clouds, precipitation, and wind"
+msgstr "Облака, осадки и ветер"
+
+#. js-lingui-id: EOv8gS
+#: src/presentation/map/MapLibrePointInspector.ts:136
+msgid "Coordinates"
+msgstr "Координаты"
+
+#. js-lingui-id: 1-81oq
+#: src/presentation/map/MapWorkspace.tsx:1153
+msgid "Coordinates copied"
+msgstr "Координаты скопированы"
+
+#. js-lingui-id: hAvoLY
+#: src/presentation/map/MapWorkspace.tsx:1378
+msgid "Copy coordinates"
+msgstr "Копировать координаты"
+
+#. js-lingui-id: y1eoq1
+#: src/presentation/map/MapLibrePointInspector.ts:162
+msgid "Copy link"
+msgstr "Копировать ссылку"
+
+#. js-lingui-id: 9qqDhd
+#: src/presentation/map/MapWorkspace.tsx:1390
+msgid "Copy link to this point"
+msgstr "Копировать ссылку на эту точку"
+
+#. js-lingui-id: xCBfsE
+#: src/presentation/map/MapLibrePointInspector.ts:170
+msgid "Create marker"
+msgstr "Создать метку"
+
+#. js-lingui-id: Shcont
+#: src/presentation/map/MapWorkspace.tsx:1384
+msgid "Create marker here"
+msgstr "Создать метку здесь"
+
+#. js-lingui-id: _j3RtS
+#: src/presentation/map/MapWorkspace.tsx:135
+msgid "Current weather: {temperature}, {precipitation} precipitation"
+msgstr "Текущая погода: {temperature}, осадки {precipitation}"
+
+#. js-lingui-id: XqgXQv
+#: src/presentation/map/MapLibrePointInspector.ts:84
+msgid "Elevation could not be loaded."
+msgstr "Не удалось загрузить высоту."
+
+#. js-lingui-id: iyHgF_
+#: src/presentation/map/ElevationGradeLegend.tsx:106
+msgid "Elevation grade legend"
+msgstr "Легенда уклона трека"
+
+#. js-lingui-id: IjJgG5
+#: src/presentation/map/MapLibrePointInspector.ts:82
+msgid "Elevation is unavailable here."
+msgstr "Высота в этой точке недоступна."
+
+#. js-lingui-id: D_aoaV
+#: src/presentation/map/MapViewControls.tsx:143
+msgid "Flat map"
+msgstr "Плоская карта"
+
+#. js-lingui-id: ddStAP
+#: src/presentation/map/ElevationGradeLegend.tsx:125
+#: src/presentation/map/ElevationGradeLegend.tsx:127
+msgid "Hide track grade legend"
+msgstr "Скрыть легенду уклона трека"
+
+#. js-lingui-id: VBKJhe
+#: src/presentation/map/MapViewControls.tsx:302
+msgid "Layers tab"
+msgstr "Вкладка «Слои»"
+
+#. js-lingui-id: o4EgvC
+#: src/presentation/map/MapLibrePointInspector.ts:76
+msgid "Loading elevation…"
+msgstr "Загрузка высоты…"
+
+#. js-lingui-id: 0bNvaO
+#: src/presentation/map/MapViewControls.tsx:123
+msgid "Map dimension"
+msgstr "Режим карты"
+
+#. js-lingui-id: 2TeMfD
+#: src/presentation/map/MapLibrePointInspector.ts:124
+msgid "Map point"
+msgstr "Точка карты"
+
+#. js-lingui-id: 6IvbmD
+#: src/presentation/map/MapWorkspace.tsx:1371
+msgid "Map point actions"
+msgstr "Действия с точкой карты"
+
+#. js-lingui-id: iDuQuY
+#: src/presentation/map/MapWorkspace.tsx:1160
+msgid "Map workspace"
+msgstr "Рабочая область карты"
+
+#. js-lingui-id: N-L5qF
+#: src/presentation/map/MapLibrePointInspector.ts:98
+msgid "Nearby map data could not be inspected."
+msgstr "Не удалось проверить данные карты поблизости."
+
+#. js-lingui-id: uEebYd
+#: src/presentation/map/MapLibrePointInspector.ts:146
+msgid "Nearby map feature"
+msgstr "Ближайший объект карты"
+
+#. js-lingui-id: T-1HHj
+#: src/presentation/map/MapLibrePointInspector.ts:96
+msgid "No named map feature found."
+msgstr "Именованный объект карты не найден."
+
+#. js-lingui-id: pOgx3m
+#: src/presentation/map/MapViewControls.tsx:244
+msgid "OSM overlay"
+msgstr "Наложение OSM"
+
+#. js-lingui-id: _HLYHh
+#: src/presentation/map/MapWorkspace.tsx:1155
+msgid "Point link copied"
+msgstr "Ссылка на точку скопирована"
+
+#. js-lingui-id: -dYCED
+#: src/presentation/map/MapWorkspace.tsx:1396
+msgid "Search satellite scenes here"
+msgstr "Искать спутниковые снимки здесь"
+
+#. js-lingui-id: 0OYApz
+#: src/presentation/map/MapViewControls.tsx:164
+msgid "Show 3D terrain map"
+msgstr "Показать карту с 3D-рельефом"
+
+#. js-lingui-id: 0EcC35
+#: src/presentation/map/MapViewControls.tsx:139
+msgid "Show flat 2D map"
+msgstr "Показать плоскую 2D-карту"
+
+#. js-lingui-id: M4RWWV
+#: src/presentation/map/MapLibrePointInspector.ts:141
+msgid "Terrain elevation"
+msgstr "Высота рельефа"
+
+#. js-lingui-id: 9xVYMD
+#: src/presentation/map/MapWorkspace.tsx:1145
+msgid "The current camera could not be saved. Map interaction is still available."
+msgstr "Не удалось сохранить текущий вид карты. Работа с картой по-прежнему доступна."
+
+#. js-lingui-id: IxTd0L
+#: src/presentation/map/MapWorkspace.tsx:1429
+msgid "The map layer could not be changed. Try again."
+msgstr "Не удалось сменить слой карты. Повторите попытку."
+
+#. js-lingui-id: U5Trc5
+#: src/presentation/map/MapWorkspace.tsx:1171
+msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
+msgstr "Конфигурация поставщика карты недействительна. Базовая карта не запущена. Проверьте конфигурацию развёртывания или откройте диагностику разработчика."
+
+#. js-lingui-id: FlHLo_
+#: src/presentation/map/MapWorkspace.tsx:1147
+msgid "The saved camera could not be restored. The Georgia overview is shown instead."
+msgstr "Не удалось восстановить сохранённый вид карты. Вместо него показан обзор Грузии."
+
+#. js-lingui-id: IDB1Ps
+#: src/presentation/map/MapWorkspace.tsx:1149
+msgid "The shared satellite image could not be restored. The shared map location is still available."
+msgstr "Не удалось восстановить общий спутниковый снимок. Общее местоположение на карте по-прежнему доступно."
+
+#. js-lingui-id: B8wKQB
+#: src/presentation/map/ElevationGradeLegend.tsx:123
+msgid "Track grade"
+msgstr "Уклон трека"
+
+#. js-lingui-id: QJAf8t
+#: src/presentation/map/ElevationGradeLegend.tsx:139
+msgid "Track grade color thresholds"
+msgstr "Пороги цветов уклона трека"
+
+#. js-lingui-id: aBvon1
+#: src/presentation/map/MapLibrePointInspector.ts:101
+msgid "Unnamed map feature"
+msgstr "Безымянный объект карты"
+
+#. js-lingui-id: mJZLtT
+#: src/presentation/map/MapViewControls.tsx:263
+msgid "Weather"
+msgstr "Погода"
+
+#. js-lingui-id: ElM6On
+#: src/presentation/map/MapWorkspace.tsx:1358
+msgid "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."
+msgstr "Вы офлайн. Уже отрисованные области могут остаться видимыми, но новые данные карты недоступны до восстановления соединения."

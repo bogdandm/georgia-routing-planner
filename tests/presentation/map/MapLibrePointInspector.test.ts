@@ -1,7 +1,8 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import {
   MapLibrePointInspector,
   renderPointInspectorContent,
@@ -95,6 +96,10 @@ class FakeNativeMap {
     }
   }
 }
+
+beforeEach(() => {
+  activateAppLocale('en');
+});
 
 describe('renderPointInspectorContent', () => {
   it('renders safe formatted values and accessible current-inspection actions', () => {
@@ -226,6 +231,31 @@ describe('MapLibrePointInspector', () => {
     nativeMap.dispatchMove();
     expect(popup).toHaveClass('maplibregl-popup-anchor-bottom');
 
+    inspector.destroy();
+  });
+
+  it('repaints an open inspection in the newly activated locale', () => {
+    const nativeMap = new FakeNativeMap();
+    const inspector = new MapLibrePointInspector({ onClose: () => undefined });
+    inspector.attach(nativeMap as unknown as MapLibreMap);
+    inspector.show({
+      status: 'open',
+      coordinate: { longitude: 44.801234, latitude: 41.712345 },
+      elevation: { status: 'available', meters: 1_234.4 },
+      nearbyPoi: {
+        status: 'found',
+        poi: { name: 'Lake Shovi', category: null, distanceMeters: 1_042.2 },
+      },
+    });
+    const content = nativeMap.getContainer();
+    expect(content.textContent).toContain('Lake Shovi, 1,042 m away');
+
+    activateAppLocale('ru');
+
+    expect(content.textContent).toContain('Точка карты');
+    expect(content.textContent).toContain('41.71235, 44.80123');
+    expect(content.textContent).toContain('1\u00a0234 м');
+    expect(content.textContent).toContain('Lake Shovi, в 1\u00a0042 м');
     inspector.destroy();
   });
 });

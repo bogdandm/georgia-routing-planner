@@ -19,6 +19,9 @@ export interface TrackFolderRepository {
     folderId: string | null,
   ): Promise<LocalTrackSummary>;
   ensureImportsFolder(): Promise<TrackFolder>;
+  /** Browser-local view state; never synchronized between devices. */
+  loadCollapsedTrackFolderIds(): Promise<readonly string[]>;
+  saveCollapsedTrackFolderIds(folderIds: readonly string[]): Promise<void>;
 }
 
 export class TrackFolderStorageError extends Error {

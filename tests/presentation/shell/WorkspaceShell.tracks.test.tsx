@@ -228,6 +228,32 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
+  it('remembers collapsed folders in this browser after a reload', async () => {
+    const imported = savedTrackSummary('local:imported', 'Imported trail');
+    await services.database.saveLocalTrack(imported, savedTrackContent(imported.id));
+    const user = userEvent.setup();
+    const firstRender = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(await screen.findByRole('button', { name: 'Collapse Imports' }));
+    await waitFor(async () => {
+      await expect(services.database.loadCollapsedTrackFolderIds()).resolves.toEqual([
+        'imports',
+      ]);
+    });
+
+    firstRender.unmount();
+    renderWorkspaceShell();
+
+    const list = await screen.findByRole('list', { name: 'Saved tracks' });
+    const imports = await within(list).findByRole('region', { name: 'Imports (1)' });
+    expect(
+      within(imports).getByRole('button', { name: 'Expand Imports' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      within(imports).queryByRole('button', { name: /^Imported trail/u }),
+    ).toBeNull();
+  });
+
   it('creates, edits, and confirms deletion of a track folder', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();

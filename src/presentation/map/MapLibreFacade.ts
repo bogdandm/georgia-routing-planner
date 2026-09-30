@@ -53,11 +53,6 @@ import {
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
 
-export interface MapPointInspectionActions {
-  onCopyLink(coordinate: MapCoordinate, camera: MapCamera): void;
-  onCreateMarker(coordinate: MapCoordinate, suggestedName?: string): void;
-}
-
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
   camera: defaultGeorgiaCamera,
@@ -274,38 +269,9 @@ export class MapLibreFacade implements MapFacade {
     private readonly snapshotStore?: MapDiagnosticsSnapshotStore,
     private readonly layerController?: MapLayerControllerLifecycle,
     private readonly elevationProvider?: ElevationProvider,
-    pointInspector?: PointInspectorPopup,
-    pointInspectionActions?: MapPointInspectionActions,
+    pointInspector: PointInspectorPopup = new MapLibrePointInspector(),
   ) {
-    if (pointInspector !== undefined) {
-      this.#pointInspector = pointInspector;
-    } else if (pointInspectionActions !== undefined) {
-      this.#pointInspector = new MapLibrePointInspector({
-        onClose: () => {
-          this.closePointInspection();
-        },
-        onCopyLink: (inspection) => {
-          pointInspectionActions.onCopyLink(inspection.coordinate, this.getCamera());
-        },
-        onCreateMarker: (inspection) => {
-          let suggestedName: string | undefined;
-          if (
-            inspection.nearbyPoi.status === 'found' &&
-            inspection.nearbyPoi.poi.name !== null
-          ) {
-            suggestedName = inspection.nearbyPoi.poi.name;
-          }
-          pointInspectionActions.onCreateMarker(inspection.coordinate, suggestedName);
-          this.closePointInspection();
-        },
-      });
-    } else {
-      this.#pointInspector = new MapLibrePointInspector({
-        onClose: () => {
-          this.closePointInspection();
-        },
-      });
-    }
+    this.#pointInspector = pointInspector;
     this.snapshotStore?.update(this.#snapshot);
   }
 
@@ -405,6 +371,10 @@ export class MapLibreFacade implements MapFacade {
 
   public getPointInspection(): MapPointInspection {
     return this.#pointInspection;
+  }
+
+  public getPointInspectionContent(): HTMLElement {
+    return this.#pointInspector.content;
   }
 
   public getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null {
@@ -1474,8 +1444,11 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionAbort = null;
     this.#pendingNearbyPoiRefresh = null;
     this.#pointInspector.close();
-    this.#pointInspection = { status: 'closed' };
     this.#map = null;
+    // React renders the popup content from this state, so it must observe the close.
+    if (this.#pointInspection.status !== 'closed') {
+      this.updatePointInspection({ status: 'closed' });
+    }
     this.logger.log({ level: 'debug', name: 'map.lifecycle.unmounted' });
   }
 }

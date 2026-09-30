@@ -31,6 +31,8 @@ export interface MapFacade {
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;
   getPointInspection(): MapPointInspection;
+  /** Popup-owned host element; React renders the open inspection's content into it. */
+  getPointInspectionContent(): HTMLElement;
   getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null;
   openPointInspection(
     coordinate: MapCoordinate,

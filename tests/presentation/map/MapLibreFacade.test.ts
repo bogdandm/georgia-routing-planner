@@ -1010,6 +1010,7 @@ describe('MapLibreFacade', () => {
       sampleMany: () => Promise.resolve([]),
     };
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn(),
@@ -1057,6 +1058,7 @@ describe('MapLibreFacade', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn(),
@@ -1108,6 +1110,7 @@ describe('MapLibreFacade', () => {
       } as unknown as GeoJSONFeature,
     ]);
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn(),
@@ -1194,6 +1197,7 @@ describe('MapLibreFacade', () => {
       sampleMany: () => Promise.resolve([]),
     };
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn().mockReturnValue(true),
@@ -1272,6 +1276,7 @@ describe('MapLibreFacade', () => {
       } as unknown as GeoJSONFeature,
     ]);
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn().mockReturnValue(true),
@@ -1325,6 +1330,7 @@ describe('MapLibreFacade', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn().mockReturnValue(false),
@@ -1350,6 +1356,39 @@ describe('MapLibreFacade', () => {
       status: 'open',
       coordinate: { longitude: 45.1, latitude: 42.2 },
     });
+  });
+
+  it('tells subscribers that detaching the map closed its inspection', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      content: document.createElement('div'),
+      attach: vi.fn(),
+      show: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+    const observedStatuses: string[] = [];
+    facade.subscribe(() => {
+      observedStatuses.push(facade.getPointInspection().status);
+    });
+
+    facade.detachMap();
+
+    expect(popup.close).toHaveBeenCalledOnce();
+    expect(observedStatuses).toEqual(['closed']);
   });
 
   it('treats an unrecoverable pre-load style error as fatal', () => {
@@ -1397,6 +1436,7 @@ describe('MapLibreFacade', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const popup = {
+      content: document.createElement('div'),
       attach: vi.fn(),
       show: vi.fn(),
       isVisible: vi.fn().mockReturnValue(true),

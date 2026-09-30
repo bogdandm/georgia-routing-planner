@@ -1,17 +1,11 @@
 import { useLingui } from '@lingui/react/macro';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
-import AddLocationAltOutlinedIcon from '@mui/icons-material/AddLocationAltOutlined';
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
-import SatelliteAltOutlinedIcon from '@mui/icons-material/SatelliteAltOutlined';
-import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import {
   Alert,
   Box,
   Button,
-  ListItemIcon,
-  Menu,
-  MenuItem,
   Paper,
+  Popover,
   Snackbar,
   Stack,
   Typography,
@@ -27,6 +21,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import Map, {
   GeolocateControl,
   NavigationControl,
@@ -83,7 +78,7 @@ import {
   parseWeatherMapUrlState,
   updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
-import { useUiStore } from '@/presentation/shell/uiStore';
+import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
@@ -91,6 +86,11 @@ import {
   MarkerWeatherSummaryButton,
   useOptionalMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
+import {
+  MapPointActionList,
+  MapPointInspectorContent,
+  type MapPointAction,
+} from '@/presentation/map/MapPointInspectorContent';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
 import { WeatherTimeControl } from '@/presentation/weather/WeatherTimeControl';
@@ -119,7 +119,7 @@ const terrainRetryDelaysMs = [1_000, 3_000] as const;
 
 type MapWorkspaceNotice =
   'camera-save-failed' | 'camera-restore-failed' | 'shared-scene-restore-failed';
-type CopyConfirmation = 'coordinates' | 'point-link';
+type CopyConfirmation = 'coordinates' | 'point-link' | 'weather-link';
 
 function WeatherForecastMapMarker({
   marker,
@@ -308,8 +308,7 @@ export function MapWorkspace({
   const [contextMenu, setContextMenu] = useState<{
     readonly mouseX: number;
     readonly mouseY: number;
-    readonly longitude: number;
-    readonly latitude: number;
+    readonly coordinate: MapCoordinate;
   } | null>(null);
   const [copyConfirmation, setCopyConfirmation] = useState<CopyConfirmation | null>(
     null,
@@ -317,6 +316,8 @@ export function MapWorkspace({
   const [copyError, setCopyError] = useState(false);
   const [layerChangeFailed, setLayerChangeFailed] = useState(false);
   const smartphoneViewport = useMediaQuery('(width < 900px)');
+  // Touch-first devices have no reliable right click, so the tap popup carries the actions.
+  const touchPointer = useMediaQuery('(pointer: coarse)');
   const navigationCommand = useStore(
     mapInteractionStore,
     (state) => state.navigationCommand,
@@ -421,26 +422,18 @@ export function MapWorkspace({
     },
     [],
   );
-  const copyPointLinkAtCoordinate = useCallback(
-    (coordinate: MapCoordinate, camera: MapCamera) => {
-      const url = createMapShareUrl(
-        window.location.href,
-        {
-          latitude: coordinate.latitude,
-          longitude: coordinate.longitude,
-          zoom: camera.zoom,
-        },
-        null,
-      );
-      void copyText(url, 'point-link');
+  const openWorkspaceTab = useCallback(
+    (tab: WorkspaceTab) => {
+      setActiveTab(tab);
+      setMobileWorkspaceOpen(true);
+      setNavigationCollapsed(false);
+      const hash = workspaceHashForTab(tab);
+      if (window.location.hash === hash) return;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.hash = hash;
+      window.history.pushState(window.history.state, '', nextUrl);
     },
-    [copyText],
-  );
-  const createMarkerAtCoordinate = useCallback(
-    (coordinate: MapCoordinate, suggestedName?: string) => {
-      requestMarkerCreationAt(coordinate, suggestedName);
-    },
-    [],
+    [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed],
   );
   const cameraPersistence = useMemo(
     () =>
@@ -477,11 +470,6 @@ export function MapWorkspace({
         mapDiagnostics,
         mapLayers ?? undefined,
         elevationProvider ?? undefined,
-        undefined,
-        {
-          onCopyLink: copyPointLinkAtCoordinate,
-          onCreateMarker: createMarkerAtCoordinate,
-        },
       ),
     [
       cameraPersistence,
@@ -491,8 +479,6 @@ export function MapWorkspace({
       elevationProvider,
       mapProviderConfiguration,
       suppliedFacade,
-      copyPointLinkAtCoordinate,
-      createMarkerAtCoordinate,
     ],
   );
   const subscribe = useCallback(
@@ -501,6 +487,12 @@ export function MapWorkspace({
   );
   const getSnapshot = useCallback(() => facade.getDiagnosticsSnapshot(), [facade]);
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const getPointInspection = useCallback(() => facade.getPointInspection(), [facade]);
+  const pointInspection = useSyncExternalStore(
+    subscribe,
+    getPointInspection,
+    getPointInspection,
+  );
   const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
   const terrainState: TerrainControlState =
     terrainCommandState ??
@@ -1009,9 +1001,18 @@ export function MapWorkspace({
     setContextMenu({
       mouseX: event.originalEvent.clientX,
       mouseY: event.originalEvent.clientY,
-      longitude: event.lngLat.lng,
-      latitude: event.lngLat.lat,
+      coordinate: { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
     });
+  };
+
+  /** Names a nearby feature for a weather point only when it is close enough to label it. */
+  const nearbyPlaceLabel = (coordinate: MapCoordinate): string | undefined => {
+    const nearestPoi = facade.getNearestPoi(coordinate);
+    return nearestPoi !== null &&
+      nearestPoi.name !== null &&
+      nearestPoi.distanceMeters <= 500
+      ? nearestPoi.name
+      : undefined;
   };
 
   const handleMapClick = (event: MapLayerMouseEvent) => {
@@ -1029,65 +1030,73 @@ export function MapWorkspace({
     }
     if (event.originalEvent.button !== 0 || !weatherOwnsMapClicks) return;
     event.originalEvent.preventDefault();
-    const nearestPoi = facade.getNearestPoi(coordinate);
-    const placeLabel =
-      nearestPoi !== null &&
-      nearestPoi.name !== null &&
-      nearestPoi.distanceMeters <= 500
-        ? nearestPoi.name
-        : undefined;
+    const placeLabel = nearbyPlaceLabel(coordinate);
     if (weatherMap.enabled) {
       requestWeatherForecast(coordinate, placeLabel);
-      setActiveTab('weather');
-      setMobileWorkspaceOpen(true);
-      setNavigationCollapsed(false);
-      if (window.location.hash !== workspaceHashForTab('weather')) {
-        const nextUrl = new URL(window.location.href);
-        nextUrl.hash = workspaceHashForTab('weather');
-        window.history.pushState(window.history.state, '', nextUrl);
-      }
+      openWorkspaceTab('weather');
       return;
     }
     completeWeatherPointSelection(coordinate, placeLabel);
     setMobileWorkspaceOpen(true);
   };
 
-  const copyCoordinates = () => {
-    if (contextMenu === null) return;
-    const value = `${contextMenu.latitude.toFixed(5)}, ${contextMenu.longitude.toFixed(5)}`;
-    closeContextMenu();
-    void copyText(value, 'coordinates');
-  };
-
-  const copyPointLink = () => {
-    if (contextMenu === null) return;
-    copyPointLinkAtCoordinate(contextMenu, snapshot.camera);
-    closeContextMenu();
-  };
-
-  const searchSatelliteAtPoint = () => {
-    if (contextMenu === null) return;
-    requestSatelliteSearch(contextMenu);
-    setActiveTab('satellite');
-    setMobileWorkspaceOpen(true);
-    setNavigationCollapsed(false);
-    const nextUrl = new URL(window.location.href);
-    nextUrl.hash = workspaceHashForTab('satellite');
-    window.history.pushState(window.history.state, '', nextUrl);
-    closeContextMenu();
-  };
-
-  const createMarkerAtPoint = () => {
-    if (contextMenu === null) return;
-    const coordinate = {
-      longitude: contextMenu.longitude,
-      latitude: contextMenu.latitude,
+  /** Runs one action from the context menu or the touch popup; links navigate natively. */
+  const runPointAction = (action: MapPointAction, coordinate: MapCoordinate) => {
+    const pointView = {
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      zoom: snapshot.camera.zoom,
     };
-    createMarkerAtCoordinate(
-      coordinate,
-      facade.getNearestPoi(coordinate)?.name ?? undefined,
-    );
-    closeContextMenu();
+    switch (action) {
+      case 'copy-coordinates':
+        void copyText(
+          `${coordinate.latitude.toFixed(5)}, ${coordinate.longitude.toFixed(5)}`,
+          'coordinates',
+        );
+        return;
+      case 'copy-point-link':
+        void copyText(
+          createMapShareUrl(window.location.href, pointView, null),
+          'point-link',
+        );
+        return;
+      case 'create-marker':
+        requestMarkerCreationAt(
+          coordinate,
+          facade.getNearestPoi(coordinate)?.name ?? undefined,
+        );
+        return;
+      case 'search-satellite':
+        requestSatelliteSearch(coordinate);
+        openWorkspaceTab('satellite');
+        return;
+      case 'show-weather':
+        requestWeatherForecast(coordinate, nearbyPlaceLabel(coordinate));
+        openWorkspaceTab('weather');
+        return;
+      case 'copy-weather-link': {
+        // The link enables the weather map on this point and keeps a visible map time.
+        const selectedTime =
+          weatherMap.enabled && weatherMap.selectedTimeIndex !== null
+            ? (weatherMap.validTimes[weatherMap.selectedTimeIndex] ?? null)
+            : null;
+        const url = new URL(
+          updateWeatherMapUrl(
+            createMapShareUrl(window.location.href, pointView, null),
+            {
+              coordinate,
+              validTime: selectedTime,
+            },
+          ),
+        );
+        url.hash = workspaceHashForTab('weather');
+        void copyText(url.toString(), 'weather-link');
+        return;
+      }
+      case 'open-meteoblue':
+      case 'open-windy':
+        return;
+    }
   };
   const handleLayerPresetChange = useCallback(
     (preset: MapLayerPreset): boolean => {
@@ -1097,12 +1106,7 @@ export function MapWorkspace({
         mapLayers.getAppliedScene() === null &&
         !mosaicImageryAvailable
       ) {
-        setActiveTab('satellite');
-        setMobileWorkspaceOpen(true);
-        setNavigationCollapsed(false);
-        const nextUrl = new URL(window.location.href);
-        nextUrl.hash = workspaceHashForTab('satellite');
-        window.history.pushState(window.history.state, '', nextUrl);
+        openWorkspaceTab('satellite');
         return true;
       }
       const result = mapLayers.setMapLayerPreset(preset);
@@ -1110,13 +1114,7 @@ export function MapWorkspace({
       setLayerChangeFailed(true);
       return false;
     },
-    [
-      mapLayers,
-      mosaicImageryAvailable,
-      setActiveTab,
-      setMobileWorkspaceOpen,
-      setNavigationCollapsed,
-    ],
+    [mapLayers, mosaicImageryAvailable, openWorkspaceTab],
   );
   const handleHybridOverlayChange = useCallback(
     (enabled: boolean) => {
@@ -1133,13 +1131,8 @@ export function MapWorkspace({
     [mapLayers],
   );
   const handleOpenLayersTab = useCallback(() => {
-    setActiveTab('layers');
-    setMobileWorkspaceOpen(true);
-    setNavigationCollapsed(false);
-    const nextUrl = new URL(window.location.href);
-    nextUrl.hash = workspaceHashForTab('layers');
-    window.history.pushState(window.history.state, '', nextUrl);
-  }, [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed]);
+    openWorkspaceTab('layers');
+  }, [openWorkspaceTab]);
 
   let cameraNoticeText: string | null = null;
   if (cameraNotice === 'camera-save-failed') {
@@ -1154,6 +1147,8 @@ export function MapWorkspace({
     copyConfirmationText = t`Coordinates copied`;
   } else if (copyConfirmation === 'point-link') {
     copyConfirmationText = t`Point link copied`;
+  } else if (copyConfirmation === 'weather-link') {
+    copyConfirmationText = t`Weather map link copied`;
   }
 
   return (
@@ -1359,7 +1354,7 @@ export function MapWorkspace({
           {t`You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns.`}
         </Alert>
       ) : null}
-      <Menu
+      <Popover
         open={contextMenu !== null}
         onClose={closeContextMenu}
         anchorReference="anchorPosition"
@@ -1368,35 +1363,45 @@ export function MapWorkspace({
             ? undefined
             : { top: contextMenu.mouseY, left: contextMenu.mouseX }
         }
-        slotProps={{
-          list: { 'aria-label': t`Map point actions`, autoFocusItem: false },
-        }}
       >
-        <MenuItem onClick={copyCoordinates}>
-          <ListItemIcon>
-            <ContentCopyOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          {t`Copy coordinates`}
-        </MenuItem>
-        <MenuItem onClick={createMarkerAtPoint}>
-          <ListItemIcon>
-            <AddLocationAltOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          {t`Create marker here`}
-        </MenuItem>
-        <MenuItem onClick={copyPointLink}>
-          <ListItemIcon>
-            <ShareOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          {t`Copy link to this point`}
-        </MenuItem>
-        <MenuItem onClick={searchSatelliteAtPoint}>
-          <ListItemIcon>
-            <SatelliteAltOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          {t`Search satellite scenes here`}
-        </MenuItem>
-      </Menu>
+        {contextMenu === null ? null : (
+          <MapPointActionList
+            coordinate={contextMenu.coordinate}
+            touch={false}
+            onSelect={(action) => {
+              closeContextMenu();
+              runPointAction(action, contextMenu.coordinate);
+            }}
+          />
+        )}
+      </Popover>
+      {pointInspection.status === 'open'
+        ? createPortal(
+            <MapPointInspectorContent
+              inspection={pointInspection}
+              onClose={() => {
+                facade.closePointInspection();
+              }}
+              actions={
+                touchPointer ? (
+                  <MapPointActionList
+                    coordinate={pointInspection.coordinate}
+                    touch
+                    onSelect={(action) => {
+                      runPointAction(action, pointInspection.coordinate);
+                      // Removing the popup synchronously would detach a clicked
+                      // external link before the browser follows it.
+                      if (action !== 'open-meteoblue' && action !== 'open-windy') {
+                        facade.closePointInspection();
+                      }
+                    }}
+                  />
+                ) : null
+              }
+            />,
+            facade.getPointInspectionContent(),
+          )
+        : null}
       <Snackbar
         open={copyConfirmationText !== null}
         autoHideDuration={2_500}

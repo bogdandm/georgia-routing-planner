@@ -1,12 +1,7 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { activateAppLocale } from '@/presentation/localization/appI18n';
-import {
-  MapLibrePointInspector,
-  renderPointInspectorContent,
-} from '@/presentation/map/MapLibrePointInspector';
+import { MapLibrePointInspector } from '@/presentation/map/MapLibrePointInspector';
 
 type MapListener = () => void;
 
@@ -97,95 +92,6 @@ class FakeNativeMap {
   }
 }
 
-beforeEach(() => {
-  activateAppLocale('en');
-});
-
-describe('renderPointInspectorContent', () => {
-  it('renders safe formatted values and accessible current-inspection actions', () => {
-    const container = document.createElement('div');
-    const onClose = vi.fn();
-    const onCopyLink = vi.fn();
-    const onCreateMarker = vi.fn();
-    const inspection = {
-      status: 'open' as const,
-      coordinate: { longitude: 44.801234, latitude: 41.712345 },
-      elevation: { status: 'available' as const, meters: 1_234.4 },
-      nearbyPoi: {
-        status: 'found' as const,
-        poi: {
-          name: '<script>fixture hut</script>',
-          category: 'alpine_hut',
-          distanceMeters: 42.2,
-        },
-      },
-    };
-    renderPointInspectorContent(container, inspection, {
-      onClose,
-      onCopyLink,
-      onCreateMarker,
-    });
-    expect(container.textContent).toContain('41.71235, 44.80123');
-    expect(container.textContent).toContain('1,234 m');
-    expect(container.textContent).toContain(
-      '<script>fixture hut</script> (alpine hut), 42 m away',
-    );
-    expect(container.textContent).not.toContain('—');
-    expect(container.querySelector('script')).toBeNull();
-    const links = [...container.querySelectorAll<HTMLAnchorElement>('a')];
-    expect(links.map((link) => link.textContent)).toEqual([
-      'Wikipedia',
-      'Google Search',
-    ]);
-    expect(links.map((link) => link.href)).toEqual([
-      'https://en.wikipedia.org/wiki/%3Cscript%3Efixture_hut%3C%2Fscript%3E',
-      'https://www.google.com/search?q=%3Cscript%3Efixture%20hut%3C%2Fscript%3E%20Georgia',
-    ]);
-    expect(links.every((link) => link.target === '_blank')).toBe(true);
-    expect(links.every((link) => link.rel === 'noopener noreferrer')).toBe(true);
-    const buttons = within(container).getAllByRole('button');
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      '×',
-      'Copy link',
-      'Create marker',
-    ]);
-    within(container).getByRole('button', { name: 'Close map point details' }).click();
-    within(container).getByRole('button', { name: 'Copy link' }).click();
-    within(container).getByRole('button', { name: 'Create marker' }).click();
-    expect(onClose).toHaveBeenCalledOnce();
-    expect(onCopyLink).toHaveBeenCalledWith(inspection);
-    expect(onCreateMarker).toHaveBeenCalledWith(inspection);
-  });
-
-  it('renders loading, missing, and provider-error states intentionally', () => {
-    const container = document.createElement('div');
-    const coordinate = { longitude: 44.8, latitude: 41.7 };
-    renderPointInspectorContent(
-      container,
-      {
-        status: 'open',
-        coordinate,
-        elevation: { status: 'loading' },
-        nearbyPoi: { status: 'loading' },
-      },
-      { onClose: () => undefined },
-    );
-    expect(container.textContent).toContain('Loading elevation…');
-    renderPointInspectorContent(
-      container,
-      {
-        status: 'open',
-        coordinate,
-        elevation: { status: 'error' },
-        nearbyPoi: { status: 'none' },
-      },
-      { onClose: () => undefined },
-    );
-    expect(container.textContent).toContain('Elevation could not be loaded.');
-    expect(container.textContent).toContain('No named map feature found.');
-  });
-});
-
 describe('MapLibrePointInspector', () => {
   it('places the reported 3D target popup below the point after first layout', () => {
     const scheduledFrames = new Map<number, FrameRequestCallback>();
@@ -206,7 +112,7 @@ describe('MapLibrePointInspector', () => {
     };
 
     const nativeMap = new FakeNativeMap();
-    const inspector = new MapLibrePointInspector({ onClose: () => undefined });
+    const inspector = new MapLibrePointInspector();
     inspector.attach(nativeMap as unknown as MapLibreMap);
     inspector.show({
       status: 'open',
@@ -231,31 +137,6 @@ describe('MapLibrePointInspector', () => {
     nativeMap.dispatchMove();
     expect(popup).toHaveClass('maplibregl-popup-anchor-bottom');
 
-    inspector.destroy();
-  });
-
-  it('repaints an open inspection in the newly activated locale', () => {
-    const nativeMap = new FakeNativeMap();
-    const inspector = new MapLibrePointInspector({ onClose: () => undefined });
-    inspector.attach(nativeMap as unknown as MapLibreMap);
-    inspector.show({
-      status: 'open',
-      coordinate: { longitude: 44.801234, latitude: 41.712345 },
-      elevation: { status: 'available', meters: 1_234.4 },
-      nearbyPoi: {
-        status: 'found',
-        poi: { name: 'Lake Shovi', category: null, distanceMeters: 1_042.2 },
-      },
-    });
-    const content = nativeMap.getContainer();
-    expect(content.textContent).toContain('Lake Shovi, 1,042 m away');
-
-    activateAppLocale('ru');
-
-    expect(content.textContent).toContain('Точка карты');
-    expect(content.textContent).toContain('41.71235, 44.80123');
-    expect(content.textContent).toContain('1\u00a0234 м');
-    expect(content.textContent).toContain('Lake Shovi, в 1\u00a0042 м');
     inspector.destroy();
   });
 });

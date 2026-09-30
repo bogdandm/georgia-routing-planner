@@ -56,6 +56,10 @@ import {
   WeatherPanel,
   type WeatherHeaderPoint,
 } from '@/presentation/weather/WeatherPanel';
+import {
+  meteoblueForecastUrl,
+  windyForecastUrl,
+} from '@/presentation/weather/weatherForecastLinks';
 
 interface WorkspaceSidebarProps {
   readonly activeTab: WorkspaceTab;
@@ -91,26 +95,6 @@ const markerWeatherDates = [
 /* eslint-disable -- Stable DOM and ARIA control tokens. */
 const weatherForecastLinksMenuId = 'weather-forecast-links-menu';
 const menuPopupType = 'menu' as const;
-/* eslint-enable */
-
-function coordinateWithHemisphere(
-  value: number,
-  positiveHemisphere: 'N' | 'E',
-  negativeHemisphere: 'S' | 'W',
-): string {
-  return `${Math.abs(value).toString()}${value >= 0 ? positiveHemisphere : negativeHemisphere}`;
-}
-
-/* eslint-disable -- Forecast URLs are locale-independent machine data. */
-function meteoblueForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string {
-  const latitude = coordinateWithHemisphere(coordinate.latitude, 'N', 'S');
-  const longitude = coordinateWithHemisphere(coordinate.longitude, 'E', 'W');
-  return `https://www.meteoblue.com/en/weather/week/${latitude}${longitude}`;
-}
-
-function windyForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string {
-  return `https://www.windy.com/${coordinate.latitude.toString()}/${coordinate.longitude.toString()}`;
-}
 /* eslint-enable */
 
 function WeatherLocationHeader({

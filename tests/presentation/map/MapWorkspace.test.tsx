@@ -220,9 +220,9 @@ const gradeProfile: ElevationProfile = {
   algorithmVersion: 3,
 };
 
-function mockViewportWidth(width: number): void {
+function mockMatchingMediaQueries(...matchingQueries: readonly string[]): void {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: query === '(width < 900px)' && width < 900,
+    matches: matchingQueries.includes(query),
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -244,7 +244,7 @@ describe('MapWorkspace', () => {
     tracksWorkspaceMock.activeProfile = null;
     tracksWorkspaceMock.active = null;
     tracksWorkspaceMock.addRoutePlanPoint.mockReset();
-    mockViewportWidth(900);
+    mockMatchingMediaQueries();
     useUiStore.setState({
       activeTab: 'satellite',
       mobileWorkspaceOpen: false,
@@ -1235,7 +1235,7 @@ describe('MapWorkspace', () => {
 
   it('hides the legend on smartphone viewports', async () => {
     tracksWorkspaceMock.activeProfile = gradeProfile;
-    mockViewportWidth(899);
+    mockMatchingMediaQueries('(width < 900px)');
     renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Mobile map</div>} />
@@ -1332,6 +1332,114 @@ describe('MapWorkspace', () => {
         'Clipboard access failed. Try again or use the Share dialog.',
       ),
     ).toBeVisible();
+  });
+
+  it('offers weather actions for the right-clicked point', async () => {
+    const facade = new FakeMapFacade();
+    facade.nearestPoi = { name: 'Mtatsminda', category: 'peak', distanceMeters: 24 };
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({
+      weatherMap: {
+        ...weatherMap,
+        enabled: true,
+        status: 'ready',
+        validTimes: ['2026-09-25T12:00Z'],
+        selectedTimeIndex: 0,
+      },
+    });
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    const nativeMap = await screen.findByTestId('native-map');
+
+    fireEvent.contextMenu(nativeMap);
+    expect(
+      screen.getByRole('menuitem', { name: 'Open meteoblue.com' }),
+    ).toHaveAttribute('href', 'https://www.meteoblue.com/en/weather/week/41.7N44.8E');
+    expect(screen.getByRole('menuitem', { name: 'Open windy.com' })).toHaveAttribute(
+      'href',
+      'https://www.windy.com/41.7/44.8',
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Copy weather map link' }));
+    await screen.findByText('Weather map link copied');
+    const copiedUrl = writeText.mock.calls[0]?.[0];
+    if (copiedUrl === undefined) throw new Error('Expected a copied weather URL.');
+    const url = new URL(copiedUrl);
+    expect(url.hash).toBe('#weather');
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      lat: '41.70000',
+      lon: '44.80000',
+      weather: '1',
+      weatherLat: '41.70000',
+      weatherLon: '44.80000',
+      weatherTime: '2026-09-25T12:00Z',
+    });
+
+    fireEvent.contextMenu(nativeMap);
+    await user.click(screen.getByRole('menuitem', { name: 'Show weather forecast' }));
+    expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({
+      coordinate: { longitude: 44.8, latitude: 41.7 },
+      placeLabel: 'Mtatsminda',
+    });
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'weather',
+      mobileWorkspaceOpen: true,
+    });
+    expect(window.location.hash).toBe('#weather');
+  });
+
+  it('puts point actions into the tap popup only for touch pointers', async () => {
+    const facade = new FakeMapFacade();
+    document.body.append(facade.pointInspectionContent);
+    const openInspection = () => {
+      act(() => {
+        facade.setPointInspection({
+          status: 'open',
+          coordinate: { longitude: 44.8, latitude: 41.7 },
+          elevation: { status: 'loading' },
+          nearbyPoi: { status: 'loading' },
+        });
+      });
+    };
+    const user = userEvent.setup();
+    const mouseView = renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByTestId('native-map');
+    openInspection();
+    const popup = within(facade.pointInspectionContent);
+    expect(popup.getByText('Map point')).toBeVisible();
+    expect(popup.queryByRole('menu')).toBeNull();
+    mouseView.unmount();
+
+    mockMatchingMediaQueries('(pointer: coarse)');
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByTestId('native-map');
+    openInspection();
+    const actions = await popup.findByRole('menu', { name: 'Map point actions' });
+    expect(
+      within(actions).getByRole('menuitem', { name: 'Open windy.com' }),
+    ).toHaveAttribute('href', 'https://www.windy.com/41.7/44.8');
+    await user.click(
+      within(actions).getByRole('menuitem', { name: 'Show weather forecast' }),
+    );
+
+    expect(useUiStore.getState().activeTab).toBe('weather');
+    expect(facade.pointInspection).toEqual({ status: 'closed' });
+    expect(facade.pointInspectionContent).toBeEmptyDOMElement();
+    facade.pointInspectionContent.remove();
   });
 
   it('forwards facade clicks only while route planning owns map interaction', async () => {

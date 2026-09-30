@@ -253,6 +253,15 @@ async function loadMapViewWithDeadline(
   }
 }
 
+/** Consumes a one-shot map command even when running it throws. */
+function runThenConsume(run: () => void, consume: () => void): void {
+  try {
+    run();
+  } finally {
+    consume();
+  }
+}
+
 /**
  * Coordinates React-visible map states while delegating all native MapLibre lifecycle
  * work to `MapFacade`. The map mounts only after camera restoration settles or expires.
@@ -619,24 +628,30 @@ export function MapWorkspace({
 
   useEffect(() => {
     if (navigationCommand === null) return;
-    try {
-      facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
-    } finally {
-      consumeMapNavigationCommand(navigationCommand.id);
-    }
+    runThenConsume(
+      () => {
+        facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
+      },
+      () => {
+        consumeMapNavigationCommand(navigationCommand.id);
+      },
+    );
   }, [facade, getNavigationPadding, navigationCommand]);
   useEffect(() => {
     if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
-    try {
-      const padding = fitBoundsCommand.padding ?? getNavigationPadding?.();
-      if (padding === undefined) {
-        facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
-      } else {
-        facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom, padding);
-      }
-    } finally {
-      consumeMapFitBoundsCommand(fitBoundsCommand.id);
-    }
+    runThenConsume(
+      () => {
+        const padding = fitBoundsCommand.padding ?? getNavigationPadding?.();
+        if (padding === undefined) {
+          facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
+        } else {
+          facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom, padding);
+        }
+      },
+      () => {
+        consumeMapFitBoundsCommand(fitBoundsCommand.id);
+      },
+    );
   }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
 
   useEffect(() => {

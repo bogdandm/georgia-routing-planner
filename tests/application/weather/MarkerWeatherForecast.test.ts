@@ -62,7 +62,7 @@ async function pointForecast() {
   return await new GetPointWeatherForecast(
     gateway,
     null,
-    { log: vi.fn(), getEvents: () => [] },
+    { log: vi.fn(), getEvents: () => [], subscribe: () => () => undefined },
     { generate: () => 'marker-weather' },
     { now: () => new Date(), monotonicNow: () => 0 },
   ).execute(

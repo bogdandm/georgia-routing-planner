@@ -6,6 +6,7 @@ import { TrackSyncWorkerServer } from './TrackSyncWorkerServer';
 
 const workerLogger: DiagnosticLogger = {
   getEvents: () => [],
+  subscribe: () => () => undefined,
   log: () => undefined,
 };
 

@@ -277,6 +277,16 @@ export function useMarkersWorkspace(): MarkersWorkspaceValue {
   return value;
 }
 
+function markerWeatherCacheKey(marker: SavedMarker, preferenceKey: string): string {
+  return [
+    marker.id,
+    marker.coordinate[0],
+    marker.coordinate[1],
+    marker.elevationMeters ?? 'unresolved',
+    preferenceKey,
+  ].join(':');
+}
+
 export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const {
     clock,
@@ -417,13 +427,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     }[] = [];
     const initialStates = new Map<string, MarkerWeatherForecastState>();
     for (const marker of markers) {
-      const cacheKey = [
-        marker.id,
-        marker.coordinate[0],
-        marker.coordinate[1],
-        marker.elevationMeters ?? 'unresolved',
-        preferenceKey,
-      ].join(':');
+      const cacheKey = markerWeatherCacheKey(marker, preferenceKey);
       const cached = weatherCache.current.get(cacheKey);
       if (cached === undefined) {
         initialStates.set(marker.id, { status: 'loading' });
@@ -436,7 +440,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     let nextIndex = 0;
     const elevatedMarkers = new Map<string, SavedMarker>();
     const loadNext = async (): Promise<void> => {
-      for (;;) {
+      while (nextIndex < pending.length) {
         const entry = pending[nextIndex];
         nextIndex += 1;
         if (entry === undefined) return;
@@ -444,11 +448,13 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
           longitude: entry.marker.coordinate[0],
           latitude: entry.marker.coordinate[1],
         };
+        const request =
+          entry.marker.elevationMeters === null
+            ? { coordinate }
+            : { coordinate, elevationMeters: entry.marker.elevationMeters };
         try {
           const forecast = await pointWeatherForecast.execute(
-            entry.marker.elevationMeters === null
-              ? { coordinate }
-              : { coordinate, elevationMeters: entry.marker.elevationMeters },
+            request,
             controller.signal,
           );
           controller.signal.throwIfAborted();
@@ -472,14 +478,10 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
                 entry.marker.id,
                 forecast.elevationMeters,
               );
-              const elevatedCacheKey = [
-                updated.id,
-                updated.coordinate[0],
-                updated.coordinate[1],
-                updated.elevationMeters ?? 'unresolved',
-                preferenceKey,
-              ].join(':');
-              weatherCache.current.set(elevatedCacheKey, readyState);
+              weatherCache.current.set(
+                markerWeatherCacheKey(updated, preferenceKey),
+                readyState,
+              );
               elevatedMarkers.set(updated.id, updated);
             } catch {
               logger.log({

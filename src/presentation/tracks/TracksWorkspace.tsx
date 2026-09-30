@@ -87,6 +87,7 @@ import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import {
   prepareImportedTrack,
   TrackElevationPreparationError,
+  type PreparedImportedTrack,
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -460,6 +461,14 @@ function bestCandidate(
       return byRank === 0 ? left.label.localeCompare(right.label, 'en') : byRank;
     })[0];
 }
+/** Returns DEM-calculated elevation, rejecting preparations that produced none. */
+function requireCalculatedElevation(prepared: PreparedImportedTrack) {
+  if (prepared.calculatedSegments === null || prepared.calculatedMetrics === null) {
+    throw new TrackElevationPreparationError('elevation-unavailable');
+  }
+  return { segments: prepared.calculatedSegments, metrics: prepared.calculatedMetrics };
+}
+
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const { t } = useLingui();
   const {
@@ -639,18 +648,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [database],
   );
   const reloadSummaries = useCallback(async () => {
+    // The collapsed-folder record loads once; later reloads reuse the settled promise.
+    const collapsedLoad =
+      collapsedFolderLoad.current ??
+      database.loadCollapsedTrackFolderIds().catch((): readonly string[] => {
+        // View state only: an unreadable record falls back to expanded folders.
+        logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+        return [];
+      });
+    collapsedFolderLoad.current = collapsedLoad;
     try {
-      collapsedFolderLoad.current ??= database
-        .loadCollapsedTrackFolderIds()
-        .catch((): readonly string[] => {
-          // View state only: an unreadable record falls back to expanded folders.
-          logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
-          return [];
-        });
       const [loaded, loadedFolders, collapsed] = await Promise.all([
         database.listLocalTracks(),
         database.listTrackFolders(),
-        collapsedFolderLoad.current,
+        collapsedLoad,
       ]);
       setSummaries(loaded);
       setFolders(loadedFolders);
@@ -1192,7 +1203,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : preview.sourceSegments;
       const multipleSegments = segments.length > 1;
       const lookedUpAt = clock.now().toISOString();
-      try {
+      const suggestName = async () => {
         if (multipleSegments) {
           const points = segments.flatMap((segment) => segment.points);
           const anchors = [0.25, 0.5, 0.75].map(
@@ -1251,7 +1262,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           );
           return toPoiCandidate(result, coordinate, lookedUpAt);
         };
-        let middlePoi: PoiCandidate | undefined;
+        let summitPoi: PoiCandidate | undefined;
         if (summit !== null) {
           try {
             const result = await searchPlaces.nearest(
@@ -1266,14 +1277,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 result.coordinate.longitude,
                 result.coordinate.latitude,
               ] as const;
-              middlePoi = toPoiCandidate(result, matchedCoordinate, lookedUpAt);
+              summitPoi = toPoiCandidate(result, matchedCoordinate, lookedUpAt);
             }
-          } catch (nearestError) {
-            if (controller.signal.aborted) throw nearestError;
+          } catch {
+            controller.signal.throwIfAborted();
             logger.log({ level: 'warn', name: 'local-track.nearby-poi.failed' });
           }
         }
-        middlePoi ??= await reverseCandidate(middlePoint.coordinate);
+        const middlePoi = summitPoi ?? (await reverseCandidate(middlePoint.coordinate));
         let startPoi: PoiCandidate | undefined;
         let endPoi: PoiCandidate | undefined;
         if (!loop) {
@@ -1315,7 +1326,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           if (generatedName !== null) updated.generatedName = generatedName;
           return updated;
         });
-      } catch {
+      };
+      await suggestName().catch(() => {
         if (controller.signal.aborted) return;
         logger.log({ level: 'warn', name: 'local-track.naming.failed' });
         setActive((current) =>
@@ -1325,7 +1337,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? { ...current, namingStatus: 'unavailable' }
             : current,
         );
-      }
+      });
     },
     [clock, logger, searchPlaces],
   );
@@ -1380,7 +1392,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       preparationAbort.current = controller;
       const importIsStale = (): boolean =>
         controller.signal.aborted || generation !== importGeneration.current;
-      try {
+      const importAll = async () => {
         const parsed = await parseTrackFile(file, sourceFormat);
         if (importIsStale()) return;
         const previewBase: PreviewTrackBase = {
@@ -1447,23 +1459,26 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           );
           setElevationProgress(null);
         }
-      } catch (importFailure) {
-        if (controller.signal.aborted || generation !== importGeneration.current)
-          return;
-        logger.log({ level: 'warn', name: 'local-track.import.failed' });
-        reportImportError(
-          importFailure instanceof Error
-            ? importFailure.message
-            : 'The track file could not be imported.',
-        );
-        setElevationProgress(null);
-      } finally {
-        if (generation === importGeneration.current) {
-          preparationAbort.current = null;
+      };
+      await importAll()
+        .catch((importFailure: unknown) => {
+          if (controller.signal.aborted || generation !== importGeneration.current)
+            return;
+          logger.log({ level: 'warn', name: 'local-track.import.failed' });
+          reportImportError(
+            importFailure instanceof Error
+              ? importFailure.message
+              : 'The track file could not be imported.',
+          );
           setElevationProgress(null);
-          setImportState('idle');
-        }
-      }
+        })
+        .finally(() => {
+          if (generation === importGeneration.current) {
+            preparationAbort.current = null;
+            setElevationProgress(null);
+            setImportState('idle');
+          }
+        });
     },
     [active, elevationProvider, generateName, idGenerator, logger],
   );
@@ -1752,19 +1767,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setElevationProgress(null);
     const planId = active.id;
     const previousStatus = active.status;
+    const segment = active.segment;
+    const metrics = active.metrics;
     setActive((current) =>
       current?.kind === 'route-plan' && current.id === planId
         ? { ...current, status: 'saving' }
         : current,
     );
     const generation = importGeneration.current;
-    try {
+    const saveRoute = async () => {
       const normalizedName = normalizeLocalTrackName(active.name);
       const savedAt = clock.now().toISOString();
       const content: LocalTrackContent = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: planId,
-        trackPoints: [active.segment.points],
+        trackPoints: [segment.points],
         markers: [],
       };
       const summary: LocalTrackSummary = {
@@ -1779,9 +1796,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         favorite: false,
         geometryKind: 'route',
         folderId: null,
-        pointCount: active.segment.points.length,
+        pointCount: segment.points.length,
         segmentCount: 1,
-        metrics: active.metrics,
+        metrics,
         metadata: {
           version: '1.1',
           name: normalizedName.name,
@@ -1805,23 +1822,26 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       );
       await reloadSummaries();
       setError(null);
-    } catch (saveError) {
-      if (generation !== importGeneration.current) return;
-      setActive((current) =>
-        current?.kind === 'route-plan' &&
-        current.id === planId &&
-        current.status === 'saving'
-          ? { ...current, status: previousStatus }
-          : current,
-      );
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'The route could not be saved.',
-      );
-    } finally {
-      routePlanSaveInProgress.current = false;
-    }
+    };
+    await saveRoute()
+      .catch((saveError: unknown) => {
+        if (generation !== importGeneration.current) return;
+        setActive((current) =>
+          current?.kind === 'route-plan' &&
+          current.id === planId &&
+          current.status === 'saving'
+            ? { ...current, status: previousStatus }
+            : current,
+        );
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : 'The route could not be saved.',
+        );
+      })
+      .finally(() => {
+        routePlanSaveInProgress.current = false;
+      });
   }, [
     active,
     clock,
@@ -1846,7 +1866,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const previewId = active.id;
     const generation = importGeneration.current;
     const previewNamingAbort = namingAbort.current;
-    try {
+    const savePreviewTrack = async () => {
       const savedTrackId = active.id.startsWith('shared:')
         ? `local:${idGenerator.generate()}`
         : active.id;
@@ -1925,16 +1945,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       }
       await reloadSummaries();
       setError(null);
-    } catch (saveError) {
-      if (generation !== importGeneration.current) return;
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : 'The track could not be saved.',
-      );
-    } finally {
-      previewSaveInProgress.current = false;
-    }
+    };
+    await savePreviewTrack()
+      .catch((saveError: unknown) => {
+        if (generation !== importGeneration.current) return;
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : 'The track could not be saved.',
+        );
+      })
+      .finally(() => {
+        previewSaveInProgress.current = false;
+      });
   }, [
     active,
     clock,
@@ -1969,7 +1992,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? active.id
         : active.summary.id;
     const generation = importGeneration.current;
-    try {
+    const recalculate = async () => {
       const sourceSegments =
         active.kind === 'preview' || active.kind === 'shared'
           ? active.parsed.segments
@@ -2028,23 +2051,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         active.summary.calculatedMetrics === undefined &&
         active.content.calculatedTrackPoints === undefined
       ) {
-        if (
-          prepared.calculatedSegments === null ||
-          prepared.calculatedMetrics === null
-        ) {
-          throw new TrackElevationPreparationError('elevation-unavailable');
-        }
+        const calculated = requireCalculatedElevation(prepared);
         const content: LocalTrackContent = {
           schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
           trackId: activeId,
-          trackPoints: prepared.calculatedSegments.map((segment) => segment.points),
+          trackPoints: calculated.segments.map((segment) => segment.points),
           markers: active.content.markers,
         };
         const summary: LocalTrackSummary = {
           ...active.summary,
           updatedAt: clock.now().toISOString(),
           contentHash: await trackContentHasher.hash(content),
-          metrics: prepared.calculatedMetrics,
+          metrics: calculated.metrics,
         };
         await database.saveLocalTrack(summary, content);
         void userData.trackSaved(activeId);
@@ -2071,21 +2089,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         );
         await reloadSummaries();
       }
-    } catch (recalculationError) {
-      if (!controller.signal.aborted) {
-        setError(
-          recalculationError instanceof Error
-            ? recalculationError.message
-            : 'Elevation could not be recalculated.',
-        );
-      }
-    } finally {
-      if (recalculationAbort.current === controller) {
-        recalculationAbort.current = null;
-        setRecalculationState('idle');
-        setElevationProgress(null);
-      }
-    }
+    };
+    await recalculate()
+      .catch((recalculationError: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(
+            recalculationError instanceof Error
+              ? recalculationError.message
+              : 'Elevation could not be recalculated.',
+          );
+        }
+      })
+      .finally(() => {
+        if (recalculationAbort.current === controller) {
+          recalculationAbort.current = null;
+          setRecalculationState('idle');
+          setElevationProgress(null);
+        }
+      });
   }, [
     active,
     clock,
@@ -2478,7 +2499,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const deleteSaved = useCallback(
     async (summary: LocalTrackSummary) => {
-      try {
+      const deleteTrack = async () => {
         if (active?.kind === 'saved' && active.summary.id === summary.id) {
           recalculationAbort.current?.abort();
           setRecalculationState('idle');
@@ -2507,9 +2528,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         await reloadSummaries();
         void userData.trackDeleted(summary.id);
         setError(null);
-      } catch {
+      };
+      await deleteTrack().catch(() => {
         setError('The track could not be deleted.');
-      }
+      });
     },
     [active, database, reloadSummaries, saveLatestOpenedTrackId, userData],
   );
@@ -3878,11 +3900,9 @@ export function TracksPanel({
   };
   const remove = async (summary: LocalTrackSummary) => {
     setDeletingId(summary.id);
-    try {
-      await deleteSaved(summary);
-    } finally {
+    await deleteSaved(summary).finally(() => {
       setDeletingId(null);
-    }
+    });
   };
 
   return (
@@ -4583,7 +4603,7 @@ export function TrackDetailsPane({
     }
     const { controller, generation } = beginShareOperation();
     setShareMenuState({ contentHash, state: { kind: 'loading' } });
-    try {
+    const loadStatus = async () => {
       const status = await service.status(contentHash, controller.signal);
       if (!shareOperationIsCurrent(controller, generation)) return;
       setShareMenuState({
@@ -4592,14 +4612,17 @@ export function TrackDetailsPane({
           ? { kind: 'enabled', token: status.token }
           : { kind: 'disabled' },
       });
-    } catch {
-      if (!shareOperationIsCurrent(controller, generation)) return;
-      setShareMenuState({ contentHash, state: { kind: 'error' } });
-    } finally {
-      if (shareOperationIsCurrent(controller, generation)) {
-        shareRequest.current = null;
-      }
-    }
+    };
+    await loadStatus()
+      .catch(() => {
+        if (!shareOperationIsCurrent(controller, generation)) return;
+        setShareMenuState({ contentHash, state: { kind: 'error' } });
+      })
+      .finally(() => {
+        if (shareOperationIsCurrent(controller, generation)) {
+          shareRequest.current = null;
+        }
+      });
   }, [
     beginShareOperation,
     shareContentHash,
@@ -4642,7 +4665,7 @@ export function TrackDetailsPane({
     const previousState = currentShareMenuState;
     const { controller, generation } = beginShareOperation();
     setShareMenuState({ contentHash, state: { kind: 'loading' } });
-    try {
+    const applyShareUpdate = async () => {
       if (previousState.kind === 'disabled') {
         const enabled = await service.enable(contentHash, controller.signal);
         if (!shareOperationIsCurrent(controller, generation)) return;
@@ -4657,18 +4680,21 @@ export function TrackDetailsPane({
       if (!shareOperationIsCurrent(controller, generation)) return;
       setShareMenuState({ contentHash, state: { kind: 'disabled' } });
       setShareNotice({ contentHash, message: 'Sharing disabled.' });
-    } catch (error) {
-      if (!shareOperationIsCurrent(controller, generation)) return;
-      setShareMenuState({ contentHash, state: previousState });
-      setShareNotice({
-        contentHash,
-        message: shareMutationErrorMessage(error),
+    };
+    await applyShareUpdate()
+      .catch((error: unknown) => {
+        if (!shareOperationIsCurrent(controller, generation)) return;
+        setShareMenuState({ contentHash, state: previousState });
+        setShareNotice({
+          contentHash,
+          message: shareMutationErrorMessage(error),
+        });
+      })
+      .finally(() => {
+        if (shareOperationIsCurrent(controller, generation)) {
+          shareRequest.current = null;
+        }
       });
-    } finally {
-      if (shareOperationIsCurrent(controller, generation)) {
-        shareRequest.current = null;
-      }
-    }
   }, [
     beginShareOperation,
     copyShareLink,

@@ -1149,6 +1149,16 @@ export class MapLibreLayerController {
   public setImportedTrackTracePoint(
     coordinate: readonly [number, number] | null,
   ): void {
+    const current = this.#importedTrackTraceCoordinate;
+    if (
+      coordinate === current ||
+      (coordinate !== null &&
+        current !== null &&
+        coordinate[0] === current[0] &&
+        coordinate[1] === current[1])
+    ) {
+      return;
+    }
     this.#importedTrackTraceCoordinate = coordinate;
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrackTrace();
@@ -3501,8 +3511,10 @@ export class MapLibreLayerController {
           'circle-stroke-width': 2,
         },
       });
+      // Hover moves the trace point every frame; only a new layer needs ordering, and
+      // styledata re-checks order through reconcileImportedTrack.
+      this.ensureImportedTrackLayerOrder(map);
     }
-    this.ensureImportedTrackLayerOrder(map);
   }
 
   private ensureImportedTrackLayerOrder(map: MapLibreMap): void {

@@ -1209,6 +1209,28 @@ describe('MapLibreLayerController', () => {
     );
   });
 
+  it('moves the elevation trace point without redundant pushes or layer moves', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    map.fire('styledata', {});
+    map.setDataSourceIds.splice(0);
+    map.moves.splice(0);
+
+    controller.setImportedTrackTracePoint([44.5, 42.5]);
+    controller.setImportedTrackTracePoint([44.5, 42.5]);
+    expect(map.setDataSourceIds).toEqual([mapSourceIds.importedTrackTrace]);
+    controller.setImportedTrackTracePoint([44.6, 42.6]);
+    expect(map.setDataSourceIds).toHaveLength(2);
+    expect(map.sources.get(mapSourceIds.importedTrackTrace)).toHaveProperty(
+      'data.features.0.geometry.coordinates',
+      [44.6, 42.6],
+    );
+    expect(map.moves).toEqual([]);
+  });
+
   it('persists and logs slider opacity only when the change is committed', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;

@@ -170,20 +170,21 @@ named as one joined journey:
   optional `via`/`from` part is dropped when the name would exceed 80 characters.
 
 Start and finish prefer a city, town, village, or hamlet within 1 km, then a ranked
-landmark within 2 km, then a settlement within 3 km; districts and municipalities never
-name a track. Landmarks rank passes, saddles, and peaks first, then lakes, glaciers, and
-waterfalls, then huts, viewpoints, historic sites, shelters, places of worship, and
-settlements, weighting each class by distance. Labels without an English or Latin name
-are romanized: Georgian as on road signs, without ejective apostrophes and with `ყ` as
-`k` (`ყელიდა` → `Kelida`), and Cyrillic by BGN/PCGN without diacritics. Mountain passes
-gain a `Pass` suffix and named peaks or volcanoes gain an `Mt.` prefix when the source
-name does not already include one. When source elevation is usable, Save retains the
-exact normalized source points as canonical content and keeps the browser-calculated
-Terrarium projection separately. When an imported track has no usable source elevation,
-Save promotes the complete calculated Terrarium projection to canonical points and
-primary metrics. Source filename/format metadata and versioned metrics remain local; the
-original file bytes are discarded after parsing. Unsaved previews activate the native
-leave-site guard.
+landmark, then a settlement within 3 km; districts and municipalities never name a
+track. Landmarks rank passes, saddles, and peaks within 1 km first, so a nearby summit
+the route did not cross cannot name it, then lakes, glaciers, and waterfalls, then huts,
+viewpoints, historic sites, shelters, places of worship, and settlements within 2 km,
+weighting each class by distance. Labels without an English or Latin name are romanized:
+Georgian as on road signs, without ejective apostrophes and with `ყ` as `k` (`ყელიდა` →
+`Kelida`), and Cyrillic by BGN/PCGN without diacritics or soft/hard-sign marks
+(`Верхние ночевки` → `Verkhniye nochevki`). Mountain passes gain a `Pass` suffix and
+named peaks or volcanoes gain an `Mt.` prefix when the source name does not already
+include one. When source elevation is usable, Save retains the exact normalized source
+points as canonical content and keeps the browser-calculated Terrarium projection
+separately. When an imported track has no usable source elevation, Save promotes the
+complete calculated Terrarium projection to canonical points and primary metrics. Source
+filename/format metadata and versioned metrics remain local; the original file bytes are
+discarded after parsing. Unsaved previews activate the native leave-site guard.
 
 **Plan route** opens a new unsaved-track detail pane and gives route planning ownership
 of map clicks. The first click sets the start waypoint; each later click adds an ordered

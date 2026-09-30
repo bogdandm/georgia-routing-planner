@@ -100,6 +100,19 @@ describe('classifyTrackNamingShape', () => {
     });
   });
 
+  it('measures retracing by distance rather than recorded point density', () => {
+    const outbound = line([44, 42], [44.12, 42], 200);
+    // The long retrace is recorded with two points; a short final detour with 200.
+    const sparseRetrace = line([44.12, 42.0002], [44.012, 42.0002], 2);
+    const denseDetour = [
+      ...line([44.012, 42.0002], [44.006, 42.006], 100),
+      ...line([44.006, 42.006], [44, 42.0002], 100),
+    ];
+    expect(
+      classifyTrackNamingShape([[...outbound, ...sparseRetrace, ...denseDetour]]).kind,
+    ).toBe('out-and-back');
+  });
+
   it('joins multiple segments into one journey', () => {
     const outbound = line([44, 42], [44.02, 42], 40);
     const inbound = line([44.02, 42.0002], [44, 42.0002], 40);

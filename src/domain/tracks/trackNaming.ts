@@ -34,7 +34,7 @@ const RETRACE_TOLERANCE_METERS = 60;
 /** Share of retraced return-leg samples that makes a closed track out-and-back. */
 const OUT_AND_BACK_RETRACED_SHARE = 0.7;
 const RETURN_SAMPLE_COUNT = 200;
-const MAXIMUM_OUTBOUND_VERTICES = 2_000;
+const OUTBOUND_SAMPLE_COUNT = 2_000;
 
 // Georgian romanization as written on road signs, maps, and English-language guides:
 // the national system (2002) without ejective apostrophes, and ყ as `k` rather than
@@ -169,13 +169,43 @@ function segmentDistanceMeters(
   return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
 }
 
-function evenlySpaced<T>(values: readonly T[], maximumCount: number): readonly T[] {
-  if (values.length <= maximumCount) return values;
-  const step = (values.length - 1) / (maximumCount - 1);
-  return Array.from(
-    { length: maximumCount },
-    (_, index) => values[Math.round(index * step)],
-  ).filter((value): value is T => value !== undefined);
+/**
+ * Resamples a polyline at equal path-length intervals so retrace shares measure distance
+ * rather than GPS recording density, and bounds the cost of dense recordings.
+ */
+function resampleByDistance(
+  points: readonly PlanarPoint[],
+  count: number,
+): readonly PlanarPoint[] {
+  const cumulative = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const accumulated = cumulative[index - 1] ?? 0;
+    cumulative.push(
+      previous === undefined || current === undefined
+        ? accumulated
+        : accumulated + Math.hypot(current.x - previous.x, current.y - previous.y),
+    );
+  }
+  const total = cumulative.at(-1) ?? 0;
+  const first = points[0];
+  if (first === undefined || total === 0) return first === undefined ? [] : [first];
+  const samples: PlanarPoint[] = [];
+  let segment = 1;
+  for (let sample = 0; sample < count; sample += 1) {
+    const target = (total * sample) / (count - 1);
+    while (segment < points.length - 1 && (cumulative[segment] ?? total) < target) {
+      segment += 1;
+    }
+    const a = points[segment - 1] ?? first;
+    const b = points[segment] ?? a;
+    const start = cumulative[segment - 1] ?? 0;
+    const length = (cumulative[segment] ?? start) - start;
+    const t = length === 0 ? 0 : (target - start) / length;
+    samples.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  }
+  return samples;
 }
 
 /**
@@ -201,12 +231,13 @@ export function classifyTrackNamingShape(
   const farthestCoordinate = path[turnaroundIndex] ?? start;
 
   const project = planarProjection(start);
-  const outbound = evenlySpaced(
-    path.slice(0, turnaroundIndex + 1),
-    MAXIMUM_OUTBOUND_VERTICES,
-  ).map(project);
-  const inbound = evenlySpaced(path.slice(turnaroundIndex), RETURN_SAMPLE_COUNT).map(
-    project,
+  const outbound = resampleByDistance(
+    path.slice(0, turnaroundIndex + 1).map(project),
+    OUTBOUND_SAMPLE_COUNT,
+  );
+  const inbound = resampleByDistance(
+    path.slice(turnaroundIndex).map(project),
+    RETURN_SAMPLE_COUNT,
   );
   let retraced = 0;
   for (const sample of inbound) {

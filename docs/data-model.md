@@ -169,7 +169,7 @@ null-revision pending upserts; an already absent pair only loses its stale state
 Deleting an unsent upsert removes its intent; deleting a synchronized track keeps only a
 minimal delete retry record. `sync.usage` is written only after a validated remote
 merge. The synchronization flow itself is in
-[runtime-flows.md](runtime-flows.md#explicit-cross-device-synchronization).
+[runtime-flows.md](./runtime-flows.md#explicit-cross-device-synchronization).
 
 ## Supabase backend
 
@@ -179,7 +179,8 @@ owner-only reads in the `track-geometries` bucket. All writes run through
 security-definer RPCs that only `service_role` may execute, invoked by the authenticated
 `track-sync` Edge Function. Per-user revision and count counters for folders and markers
 live in `private.user_folder_sync_state` and `private.user_marker_sync_state`, which no
-API role can read.
+API role can read. Mutation RPCs return one outcome: `applied`, `upload`, `existing`,
+`conflict` (with the current record), `missing`, `limit`, or `revision-exhausted`.
 
 ### Tracks
 

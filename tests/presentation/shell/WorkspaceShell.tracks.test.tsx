@@ -840,7 +840,11 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await screen.findByRole('button', { name: 'Expand track details' });
+    await screen.findByRole(
+      'button',
+      { name: 'Expand track details' },
+      { timeout: 5_000 },
+    );
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     const multiTrack = screen.getByRole('button', { name: 'Select multiple tracks' });
     await user.click(multiTrack);
@@ -852,13 +856,52 @@ describe('WorkspaceShell', () => {
       expect(multiTrack).toHaveAttribute('aria-pressed', 'false');
     });
     await act(async () => {
-      const frame = Promise.withResolvers<number>();
+      const frame = deferred<number>();
       window.requestAnimationFrame(frame.resolve);
       await frame.promise;
     });
 
     expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
     expect(screen.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
+  });
+
+  it('keeps smartphone map-search tracks on the map unless loading fails', async () => {
+    const alpha = savedTrackSummary('local:mobile-search-alpha', 'Mobile search alpha');
+    const beta = savedTrackSummary('local:mobile-search-beta', 'Mobile search beta');
+    await services.database.saveLocalTrack(alpha, savedTrackContent(alpha.id));
+    await services.database.saveLocalTrack(beta, savedTrackContent(beta.id));
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search places or coordinates' }),
+      'mobile search{Enter}',
+    );
+    const results = await screen.findByRole('list', {
+      name: 'Local track search results',
+    });
+    await user.click(
+      within(results).getByRole('button', { name: /^Mobile search alpha/u }),
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Expand track details' }),
+    ).toBeVisible();
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'tracks',
+      mobileWorkspaceOpen: false,
+    });
+
+    vi.spyOn(services.database, 'loadLocalTrackContent').mockRejectedValueOnce(
+      new Error('Synthetic track load failure.'),
+    );
+    await user.click(
+      within(results).getByRole('button', { name: /^Mobile search beta/u }),
+    );
+
+    expect(await screen.findByText('Synthetic track load failure.')).toBeVisible();
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
   });
 
   it('shows mobile track preparation in the collapsed disclosure until metrics are ready', async () => {

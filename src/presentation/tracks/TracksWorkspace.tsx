@@ -2288,6 +2288,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? loadError.message
             : 'The track could not be opened.',
         );
+        setMobileWorkspaceOpen(true);
         if (activeSavedTrackId !== null && latestOpenedTrackId.current === null) {
           try {
             await saveLatestOpenedTrackId(activeSavedTrackId);

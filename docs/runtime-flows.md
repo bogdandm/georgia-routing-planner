@@ -316,10 +316,11 @@ nearest the requested instant. The selected zero-based index becomes one shared
 `time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow sources.
 
 Before requesting the first weather tile, the controller submits the current MapLibre
-viewport to the package's `updateCurrentBounds()`. It repeats that update only on
-`moveend`; the package owns its built-in tile-boundary snapping. Every source requests
-`tile_size=256`, limiting per-tile raster and vector work without a continuously moving
-bounds stream.
+viewport to the package's `updateCurrentBounds()`. While the weather map is enabled it
+repeats that update on every MapLibre `dataloading` event, so tile requests issued
+during or after a camera move use the viewport current at request time; the package owns
+its built-in tile-boundary snapping. Every source requests `tile_size=256`, limiting
+per-tile raster and vector work.
 
 MapLibre reads each source directly from Open-Meteo's public OM files. The controller
 adds the thresholded neutral-gray cloud raster and precipitation raster followed by the

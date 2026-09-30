@@ -454,6 +454,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
     const viewportMovement = vi.fn<(event: MapViewportMovement) => void>();
     facade.subscribeViewportMovement(viewportMovement);
+    viewportMovement.mockClear();
 
     await facade.setTerrainMode('terrain');
 
@@ -461,6 +462,22 @@ describe('MapLibreFacade', () => {
     expect(
       viewportMovement.mock.calls.filter(([event]) => event.phase === 'settled'),
     ).toHaveLength(1);
+    facade.destroy();
+  });
+
+  it('replays the settled viewport to a subscriber that arrives after load', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const lateSubscriber = vi.fn<(event: MapViewportMovement) => void>();
+
+    facade.subscribeViewportMovement(lateSubscriber);
+
+    expect(lateSubscriber.mock.calls.map(([event]) => event.phase)).toEqual([
+      'settled',
+    ]);
     facade.destroy();
   });
 

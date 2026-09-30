@@ -369,6 +369,13 @@ export class MapLibreFacade implements MapFacade {
     listener: (event: MapViewportMovement) => void,
   ): () => void {
     this.#viewportMovementListeners.add(listener);
+    // A subscriber that arrives after the load settle (for example a remounted
+    // workspace attached to an already-loaded map) receives the current settled view.
+    const map = this.#map;
+    if (this.#initialViewportSettled && map !== null && !map.isMoving()) {
+      const viewport = this.getViewportSnapshot();
+      if (viewport !== null) listener({ phase: 'settled', viewport });
+    }
     return () => {
       this.#viewportMovementListeners.delete(listener);
     };

@@ -481,6 +481,24 @@ describe('MapLibreFacade', () => {
     facade.destroy();
   });
 
+  it('settles the initial viewport when the style is ready, before tiles finish loading', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    const viewportMovement = vi.fn<(event: MapViewportMovement) => void>();
+    facade.subscribeViewportMovement(viewportMovement);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    nativeMap.fire('style.load');
+    expect(viewportMovement.mock.calls.map(([event]) => event.phase)).toEqual([
+      'settled',
+    ]);
+
+    nativeMap.fire('load');
+    expect(viewportMovement).toHaveBeenCalledTimes(1);
+    facade.destroy();
+  });
+
   it('publishes ready when the map ref arrives after style load but before full load', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

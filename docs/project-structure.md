@@ -295,12 +295,14 @@ Raster readiness has no application deadline.
 
 The facade returns a serializable snapshot of current WGS84 bounds and center, or `null`
 before a native map exists. `MapWorkspace` publishes that value through
-`MapViewportSnapshotStore` when the workspace mounts and on every settled viewport (map
-load, `moveend`, and the end of a terrain transition), and publishes `null` on teardown.
-A movement subscriber that arrives after the load settle immediately receives the
-current settled viewport, so a remounted workspace does not leave movement state
-unavailable. Other facade notifications such as idle, style data, or point inspection
-never republish it, and the store keeps the previous object for a numerically equal
-viewport. Search controls read it without exposing MapLibre. Sentinel validation rejects
-non-finite, inverted, antimeridian-crossing, or center-mismatched snapshots; exact
-bounds never enter the default diagnostics bundle.
+`MapViewportSnapshotStore` when the workspace mounts and on every settled viewport
+(style ready, `moveend`, and the end of a terrain transition), and publishes `null` on
+teardown. The initial settle does not wait for MapLibre's full `load`, so Search
+controls are not blocked by slow initial tiles or a WebGL context loss. A movement
+subscriber that arrives after that settle immediately receives the current settled
+viewport, so a remounted workspace does not leave movement state unavailable. Other
+facade notifications such as idle, style data, or point inspection never republish it,
+and the store keeps the previous object for a numerically equal viewport. Search
+controls read it without exposing MapLibre. Sentinel validation rejects non-finite,
+inverted, antimeridian-crossing, or center-mismatched snapshots; exact bounds never
+enter the default diagnostics bundle.

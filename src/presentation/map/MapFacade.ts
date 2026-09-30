@@ -25,7 +25,7 @@ export type MapViewportMovement =
  */
 export interface MapFacade {
   subscribe(listener: () => void): () => void;
-  /** Replays the current settled viewport when the map has already emitted its load settle. */
+  /** Replays the current settled viewport when the map has already emitted its initial settle. */
   subscribeViewportMovement(listener: (event: MapViewportMovement) => void): () => void;
   subscribePlanningClicks(listener: (coordinate: MapCoordinate) => void): () => void;
   getCamera(): MapCamera;

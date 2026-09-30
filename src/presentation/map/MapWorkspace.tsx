@@ -606,8 +606,8 @@ export function MapWorkspace({
   ]);
 
   useEffect(() => {
-    // Viewport changes only when the camera settles; the facade emits one settle on
-    // load, after every moveend, and after terrain transitions. Generic facade
+    // Viewport changes only when the camera settles; the facade emits one settle when
+    // the style is ready, after every moveend, and after terrain transitions. Generic facade
     // notifications (idle, styledata, inspection) must not republish it.
     const publishMovement = (event: MapViewportMovement) => {
       if (event.phase === 'moving') {

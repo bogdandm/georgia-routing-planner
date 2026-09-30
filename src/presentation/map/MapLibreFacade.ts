@@ -369,8 +369,8 @@ export class MapLibreFacade implements MapFacade {
     listener: (event: MapViewportMovement) => void,
   ): () => void {
     this.#viewportMovementListeners.add(listener);
-    // A subscriber that arrives after the load settle (for example a remounted
-    // workspace attached to an already-loaded map) receives the current settled view.
+    // A subscriber that arrives after the initial settle (for example a remounted
+    // workspace attached to a ready map) receives the current settled view.
     const map = this.#map;
     if (this.#initialViewportSettled && map !== null && !map.isMoving()) {
       const viewport = this.getViewportSnapshot();
@@ -656,6 +656,12 @@ export class MapLibreFacade implements MapFacade {
     if (map === null) return;
     this.layerController?.attach(map);
     this.publishReadySnapshot(map);
+    // The camera is usable once the style is ready; waiting for the full `load` would
+    // keep viewport consumers unavailable until every initial tile arrives.
+    if (!this.#initialViewportSettled) {
+      this.#initialViewportSettled = true;
+      this.emitSettledViewport(map);
+    }
     const style = map.getStyle();
     this.logger.log({
       level: 'info',

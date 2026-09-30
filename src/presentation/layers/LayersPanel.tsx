@@ -164,7 +164,8 @@ export function LayersPanel() {
         appliedImagery.status === 'ready' ||
         appliedImagery.status === 'preview' ||
         appliedImagery.status === 'hidden' ||
-        (appliedImagery.status === 'failed' && appliedImagery.previousSceneKey !== null);
+        (appliedImagery.status === 'failed' &&
+          appliedImagery.previousSceneKey !== null);
       return {
         sceneAvailable,
         sentinelImageryAvailable: sceneAvailable || mosaicAvailable,
@@ -172,7 +173,8 @@ export function LayersPanel() {
           mosaicAvailable ||
           appliedImagery.status === 'ready' ||
           appliedImagery.status === 'preview' ||
-          ((appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
+          ((appliedImagery.status === 'loading' ||
+            appliedImagery.status === 'failed') &&
             appliedImagery.previousSceneKey !== null),
         weatherMapEnabled: weatherMap.enabled,
         weatherMapLoading: weatherMap.status === 'loading',
@@ -247,7 +249,8 @@ export function LayersPanel() {
     value: number | number[],
     change: 'live' | 'commit',
   ) => {
-    if (typeof value === 'number') mapLayers?.setImportedTrackOpacity(value / 100, change);
+    if (typeof value === 'number')
+      mapLayers?.setImportedTrackOpacity(value / 100, change);
   };
 
   const changeTerrainOverlayPreferences = (value: TerrainOverlayPreferences) => {
@@ -262,7 +265,10 @@ export function LayersPanel() {
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
-  const changeWeatherOpacity = (value: number | number[], change: 'live' | 'commit') => {
+  const changeWeatherOpacity = (
+    value: number | number[],
+    change: 'live' | 'commit',
+  ) => {
     if (typeof value === 'number') mapLayers?.setWeatherOpacity(value / 100, change);
   };
 

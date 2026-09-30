@@ -2412,7 +2412,11 @@ export class MapLibreLayerController {
         map.moveLayer(layerId, beforeId);
         layerOrder.splice(index, 1);
         const beforeIndex = layerOrder.indexOf(beforeId);
-        layerOrder.splice(beforeIndex < 0 ? layerOrder.length : beforeIndex, 0, layerId);
+        layerOrder.splice(
+          beforeIndex < 0 ? layerOrder.length : beforeIndex,
+          0,
+          layerId,
+        );
       }
       beforeId = layerId;
     }
@@ -3073,23 +3077,21 @@ export class MapLibreLayerController {
           const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
           return this.#savedMarkerImages.get(imageId)?.status === 'ready';
         })
-        .map(
-          (marker): Feature<Point, SavedMarkerFeatureProperties> => ({
-            type: 'Feature',
-            id: `${marker.kind}:${marker.id}`,
-            properties: {
-              id: marker.id,
-              name: marker.name,
-              iconKey: marker.iconKey,
-              colorKey: marker.colorKey,
-              kind: marker.kind,
-            },
-            geometry: {
-              type: 'Point',
-              coordinates: [...marker.coordinate],
-            },
-          }),
-        ),
+        .map((marker): Feature<Point, SavedMarkerFeatureProperties> => ({
+          type: 'Feature',
+          id: `${marker.kind}:${marker.id}`,
+          properties: {
+            id: marker.id,
+            name: marker.name,
+            iconKey: marker.iconKey,
+            colorKey: marker.colorKey,
+            kind: marker.kind,
+          },
+          geometry: {
+            type: 'Point',
+            coordinates: [...marker.coordinate],
+          },
+        })),
     }));
     if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
       map.addLayer({

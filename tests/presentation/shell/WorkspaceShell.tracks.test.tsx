@@ -1829,8 +1829,10 @@ describe('WorkspaceShell', () => {
     // Recharts coalesces moves per animation frame; let the repeat settle on its own.
     fireEvent.mouseMove(chartSurface, { clientX: 120, clientY: 90 });
     await act(() => {
-      const { promise, resolve } = deferred<void>();
-      setTimeout(resolve, 50);
+      const { promise, resolve } = deferred<undefined>();
+      setTimeout(() => {
+        resolve(undefined);
+      }, 50);
       return promise;
     });
     fireEvent.mouseMove(chartSurface, { clientX: 330, clientY: 80 });

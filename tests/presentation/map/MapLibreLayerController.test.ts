@@ -1231,7 +1231,7 @@ describe('MapLibreLayerController', () => {
     expect(map.moves).toEqual([]);
   });
 
-  it('persists and logs slider opacity only when the change is committed', async () => {
+  it('persists and logs slider opacity only when the change is committed', () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -2801,8 +2801,13 @@ describe('MapLibreLayerController', () => {
     map.removeLayer(`${sentinelMosaicIdPrefixes.layer}2`);
     map.fire('styledata', {});
     expect(
-      map.getLayersOrder().filter((id) => id.startsWith(sentinelMosaicIdPrefixes.layer)),
-    ).toEqual([`${sentinelMosaicIdPrefixes.layer}2`, `${sentinelMosaicIdPrefixes.layer}1`]);
+      map
+        .getLayersOrder()
+        .filter((id) => id.startsWith(sentinelMosaicIdPrefixes.layer)),
+    ).toEqual([
+      `${sentinelMosaicIdPrefixes.layer}2`,
+      `${sentinelMosaicIdPrefixes.layer}1`,
+    ]);
   });
 
   it('starts every Mosaic source before waiting for tile readiness', async () => {

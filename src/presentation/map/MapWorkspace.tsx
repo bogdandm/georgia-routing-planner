@@ -1066,6 +1066,7 @@ export function MapWorkspace({
       return;
     }
     completeWeatherPointSelection(coordinate, placeLabel);
+    setMobileWorkspaceOpen(true);
   };
 
   const copyCoordinates = () => {

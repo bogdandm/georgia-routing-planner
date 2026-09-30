@@ -158,9 +158,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const [sharePageUrl, setSharePageUrl] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
-  const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
-    string | null
-  >(null);
+  const [mobileTrackDetailsExpanded, setMobileTrackDetailsExpanded] = useState(false);
   const [multiTrackDetailsDismissed, setMultiTrackDetailsDismissed] = useState(false);
   const importPreparingRef = useRef(false);
   const previousMultiTrackMode = useRef(false);
@@ -180,19 +178,6 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
-  /* eslint-disable -- Track-detail keys are internal state identity. */
-  const activeTrackKey =
-    activeTrack === null
-      ? null
-      : activeTrack.kind === 'preview' || activeTrack.kind === 'shared'
-        ? `${activeTrack.kind}:${activeTrack.id}`
-        : activeTrack.kind === 'route-plan'
-          ? `route-plan:${activeTrack.id}`
-          : `saved:${activeTrack.summary.id}`;
-  const trackDetailsKey = multiTrackMode ? 'multi-track' : activeTrackKey;
-  /* eslint-enable */
-  const mobileTrackDetailsExpanded =
-    trackDetailsKey !== null && mobileTrackDetailsExpandedKey === trackDetailsKey;
   const activeTrackPreparing =
     !multiTrackMode &&
     (activeTrack?.kind === 'preview' || activeTrack?.kind === 'shared') &&
@@ -209,26 +194,6 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     }
     previousMultiTrackMode.current = multiTrackMode;
   }, [multiTrackMode, multiTrackSelections.length]);
-  useEffect(() => {
-    if (!smartphoneViewport || multiTrackMode) return;
-    const animationFrame = window.requestAnimationFrame(() => {
-      setMobileTrackDetailsExpandedKey(null);
-      if (activeTrackKey !== null) setMobileWorkspaceOpen(false);
-    });
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-    };
-  }, [activeTrackKey, multiTrackMode, setMobileWorkspaceOpen, smartphoneViewport]);
-
-  useEffect(() => {
-    if (!smartphoneViewport || activeTab === 'tracks') return;
-    const animationFrame = window.requestAnimationFrame(() => {
-      setMobileTrackDetailsExpandedKey(null);
-    });
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-    };
-  }, [activeTab, smartphoneViewport]);
 
   useEffect(() => {
     if (activeTab !== 'markers') cancelMarkerPlacement();
@@ -400,14 +365,30 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       if (!smartphoneViewport) setMultiTrackDetailsDismissed(false);
       return;
     }
-    if (!smartphoneViewport || activeTrackKey === null) return;
-    setMobileTrackDetailsExpandedKey(activeTrackKey);
+    if (!smartphoneViewport || activeTrack === null) return;
+    setMobileTrackDetailsExpanded(true);
     setMobileWorkspaceOpen(true);
   };
   const auxiliaryOverlay = smartphoneViewport || auxiliaryOverlayViewport;
   const trackDetailsExist = multiTrackMode
     ? multiTrackSelections.length > 0
     : activeTrack !== null;
+  // Smartphone track details stay expanded only while they can be shown. Actions
+  // that reveal the map close the workspace explicitly; this render-time reset
+  // (React's "adjust state while rendering" pattern, not an effect) then forgets
+  // the expansion so the next track, tab, or workspace opening starts collapsed.
+  // Saving a preview or route plan keeps an active track, so the pane stays open.
+  if (
+    mobileTrackDetailsExpanded &&
+    !(
+      smartphoneViewport &&
+      mobileWorkspaceOpen &&
+      activeTab === 'tracks' &&
+      trackDetailsExist
+    )
+  ) {
+    setMobileTrackDetailsExpanded(false);
+  }
   const activeTrackOpen = activeTab === 'tracks' && trackDetailsExist;
   const trackDetailsOpen =
     activeTrackOpen &&
@@ -419,10 +400,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const satelliteResultsOpen = activeTab === 'satellite' && satellitePaneOpen;
   const auxiliaryOpen = trackDetailsOpen || satelliteResultsOpen;
   const mobileTrackDisclosureOpen =
-    smartphoneViewport &&
-    trackDetailsExist &&
-    !mobileWorkspaceOpen &&
-    !mobileTrackDetailsExpanded;
+    smartphoneViewport && trackDetailsExist && !mobileWorkspaceOpen;
   const desktopNavigationCollapsed = !smartphoneViewport && navigationCollapsed;
   const collapsedTrackSummary =
     desktopNavigationCollapsed && activeTrackMetrics !== null ? (
@@ -534,9 +512,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   : t`Expand track details`
             }
             onClick={() => {
-              if (trackDetailsKey !== null) {
-                setMobileTrackDetailsExpandedKey(trackDetailsKey);
-              }
+              setMobileTrackDetailsExpanded(true);
               if (activeTab !== 'tracks') handleSectionChange('tracks');
               setMobileWorkspaceOpen(true);
             }}
@@ -812,11 +788,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   setMultiTrackDetailsDismissed(true);
                   return;
                 }
-                setMobileTrackDetailsExpandedKey(null);
                 setMobileWorkspaceOpen(false);
               }}
               onClosed={() => {
-                setMobileTrackDetailsExpandedKey(null);
                 setMobileWorkspaceOpen(false);
               }}
             />

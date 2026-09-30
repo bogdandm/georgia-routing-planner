@@ -1412,6 +1412,7 @@ describe('MapWorkspace', () => {
     fireEvent.click(nativeMap, { button: 0 });
     expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
     expect(facade.interactionModes.at(-1)).toBe('default');
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
     facade.nearestPoi = {
       name: 'Nearby weather POI',
       category: 'tourism',
@@ -1432,6 +1433,7 @@ describe('MapWorkspace', () => {
       placeLabel: 'Nearby weather POI',
     });
     expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
     expect(facade.pointInspectionRequests).toEqual([]);
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('default');

@@ -116,7 +116,13 @@ function windyForecastUrl(coordinate: WeatherHeaderPoint['coordinate']): string 
 }
 /* eslint-enable */
 
-function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }) {
+function WeatherLocationHeader({
+  point,
+  onShowMap,
+}: {
+  readonly point: WeatherHeaderPoint;
+  readonly onShowMap: (() => void) | undefined;
+}) {
   const { i18n, t } = useLingui();
   /* eslint-disable -- Intl option values are locale-independent formatting tokens. */
   const coordinateFormatter = useMemo(
@@ -143,6 +149,7 @@ function WeatherLocationHeader({ point }: { readonly point: WeatherHeaderPoint }
       aria-label={t`Center map on forecast location`}
       onClick={() => {
         requestMapNavigation(point.coordinate);
+        onShowMap?.();
       }}
       sx={{
         minWidth: 0,
@@ -235,8 +242,7 @@ export function WorkspaceSidebar({
   const sidebarTitle = i18n._(sidebarTitles[activeTab]);
   const camera = mapSnapshot?.camera ?? defaultGeorgiaCamera;
   const searchAreaCoordinates = `${camera.latitude.toFixed(4)}, ${camera.longitude.toFixed(4)}`;
-  const onSceneSelected = fullWidth ? onShowMap : undefined;
-  const onMarkerSelected = fullWidth ? onShowMap : undefined;
+  const showSmartphoneMap = fullWidth ? onShowMap : undefined;
   const {
     loadState,
     openWeatherSettings,
@@ -349,7 +355,10 @@ export function WorkspaceSidebar({
           </Typography>
         </Box>
         {activeTab === 'weather' && weatherHeaderPoint !== null ? (
-          <WeatherLocationHeader point={weatherHeaderPoint} />
+          <WeatherLocationHeader
+            point={weatherHeaderPoint}
+            onShowMap={showSmartphoneMap}
+          />
         ) : null}
         <Box sx={{ display: compactMarkersHeader ? 'none' : undefined, flex: 1 }} />
         {activeTab === 'weather' ? (
@@ -623,14 +632,14 @@ export function WorkspaceSidebar({
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
           {satelliteMode === 'mosaic' ? (
-            <SatelliteMosaicBrowser />
+            <SatelliteMosaicBrowser onShowMap={showSmartphoneMap} />
           ) : (
             <SatelliteBrowser
               active={activeTab === 'satellite'}
               auxiliaryOverlay={auxiliaryOverlay}
               fallbackCoordinates={searchAreaCoordinates}
               onPaneOpenChange={onSatellitePaneOpenChange}
-              {...(onSceneSelected === undefined ? {} : { onSceneSelected })}
+              onShowMap={showSmartphoneMap}
             />
           )}
         </Box>
@@ -647,7 +656,9 @@ export function WorkspaceSidebar({
         </Box>
         <Box sx={{ display: activeTab === 'markers' ? 'block' : 'none' }}>
           <MarkersPanel
-            {...(onMarkerSelected === undefined ? {} : { onMarkerSelected })}
+            {...(showSmartphoneMap === undefined
+              ? {}
+              : { onMarkerSelected: showSmartphoneMap })}
           />
         </Box>
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>

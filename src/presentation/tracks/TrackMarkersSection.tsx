@@ -24,6 +24,7 @@ import type {
 } from '@/application/ports/ElevationProvider';
 import { MAXIMUM_TRACK_MARKERS, type TrackMarker } from '@/domain/tracks/localTrack';
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
+import { useUiStore } from '@/presentation/shell/uiStore';
 import { formatTrackElevation } from '@/presentation/tracks/trackFormatters';
 
 function markerElevationKey(marker: TrackMarker): string {
@@ -52,6 +53,7 @@ export function TrackMarkersSection({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const detailsId = `track-markers-${useId().replaceAll(':', '')}`;
   const [markerElevations, setMarkerElevations] = useState<
     ReadonlyMap<string, ElevationSample>
@@ -294,6 +296,7 @@ export function TrackMarkersSection({
                             longitude: marker.coordinate[0],
                             latitude: marker.coordinate[1],
                           });
+                          setMobileWorkspaceOpen(false);
                         }}
                         sx={{ minWidth: 0, px: 1.5, py: 1.25 }}
                       >

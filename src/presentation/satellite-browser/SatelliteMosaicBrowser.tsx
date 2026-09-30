@@ -23,7 +23,12 @@ function formatDate(date: string): string {
   return dayFormatter.format(new Date(`${date}T00:00:00.000Z`));
 }
 
-export function SatelliteMosaicBrowser() {
+interface SatelliteMosaicBrowserProps {
+  /** Reveals the map on smartphones after the mosaic starts rendering. */
+  readonly onShowMap: (() => void) | undefined;
+}
+
+export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProps) {
   const { clock } = useRuntimeServices();
   const {
     activeDate,
@@ -86,7 +91,10 @@ export function SatelliteMosaicBrowser() {
             fullWidth
             variant="contained"
             disabled={showDisabledReason !== null}
-            onClick={showMosaic}
+            onClick={() => {
+              showMosaic();
+              onShowMap?.();
+            }}
           >
             Show mosaic
           </Button>

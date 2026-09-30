@@ -492,7 +492,6 @@ export function MapSearchPlaceholder() {
               key={summary.id}
               onClick={() => {
                 setActiveTab('tracks');
-                setMobileWorkspaceOpen(true);
                 void tracksWorkspace?.selectSaved(summary);
               }}
             >

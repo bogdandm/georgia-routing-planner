@@ -759,6 +759,108 @@ describe('WorkspaceShell', () => {
     expect(loadLocalTrackContent).not.toHaveBeenCalled();
   });
 
+  it('keeps the smartphone editor open after saving a preview from it', async () => {
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+    await user.upload(input, gpxFile());
+    await user.click(
+      await screen.findByRole('button', { name: 'Expand unsaved track details' }),
+    );
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    const save = within(details).getByRole('button', { name: 'Save' });
+    await waitFor(() => {
+      expect(save).toBeEnabled();
+    });
+
+    await user.click(save);
+
+    await waitFor(() => {
+      expect(
+        within(
+          screen.getByRole('complementary', { name: 'Track details' }),
+        ).queryByRole('button', { name: 'Save' }),
+      ).not.toBeInTheDocument();
+    });
+    await expect(services.database.listLocalTracks()).resolves.toHaveLength(1);
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
+    expect(screen.getByRole('complementary', { name: 'Track details' })).toBeVisible();
+  });
+
+  it('returns smartphone saved-track selection and track-marker placement to the map', async () => {
+    const first = savedTrackSummary('local:mobile-first', 'Mobile first trail');
+    const second = savedTrackSummary('local:mobile-second', 'Mobile second trail');
+    await services.database.saveLocalTrack(first, savedTrackContent(first.id));
+    await services.database.saveLocalTrack(second, savedTrackContent(second.id));
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(
+      await within(screen.getByRole('list', { name: 'Saved tracks' })).findByRole(
+        'button',
+        { name: /^Mobile second trail/u },
+      ),
+    );
+
+    const disclosure = await screen.findByRole('button', {
+      name: 'Expand track details',
+    });
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
+    expect(
+      screen.queryByRole('complementary', { name: 'Track details' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(disclosure);
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await user.click(within(details).getByRole('button', { name: 'Add track marker' }));
+
+    expect(mapInteractionStore.getState().markerPlacement?.target).toEqual({
+      kind: 'track-marker',
+      trackId: second.id,
+    });
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
+    expect(screen.getByRole('button', { name: 'Expand track details' })).toBeVisible();
+  });
+
+  it('keeps the smartphone track list open when leaving multi-track mode', async () => {
+    const summary = savedTrackSummary('local:mobile-multi', 'Mobile multi trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(899);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await screen.findByRole('button', { name: 'Expand track details' });
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    const multiTrack = screen.getByRole('button', { name: 'Select multiple tracks' });
+    await user.click(multiTrack);
+    await waitFor(() => {
+      expect(multiTrack).toHaveAttribute('aria-pressed', 'true');
+    });
+    await user.click(multiTrack);
+    await waitFor(() => {
+      expect(multiTrack).toHaveAttribute('aria-pressed', 'false');
+    });
+    await act(async () => {
+      const frame = Promise.withResolvers<number>();
+      window.requestAnimationFrame(frame.resolve);
+      await frame.promise;
+    });
+
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
+    expect(screen.getByRole('list', { name: 'Saved tracks' })).toBeVisible();
+  });
+
   it('shows mobile track preparation in the collapsed disclosure until metrics are ready', async () => {
     mockViewportWidth(899);
     const provider = services.elevationProvider;

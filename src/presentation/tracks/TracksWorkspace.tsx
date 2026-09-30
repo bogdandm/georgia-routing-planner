@@ -473,6 +473,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     searchPlaces,
   } = useRuntimeServices();
   const trackSort = useUiStore((state) => state.trackSort);
+  // Smartphone map reveal: provider actions whose result is on the map close the
+  // full-screen workspace themselves. The flag is ignored on wider viewports.
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const markerPlacement = useStore(
     mapInteractionStore,
     (state) => state.markerPlacement,
@@ -850,6 +853,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? 'This track link is invalid.'
             : 'Shared tracks are unavailable because cloud features are not configured.',
         );
+        setMobileWorkspaceOpen(true);
       }, 0);
       return () => {
         window.clearTimeout(timeout);
@@ -946,12 +950,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? 'This shared track is unavailable.'
             : 'Shared track could not be loaded. Try again.',
         );
+        setMobileWorkspaceOpen(true);
       },
     );
     return () => {
       controller.abort();
     };
-  }, [elevationProvider, logger, trackShares]);
+  }, [elevationProvider, logger, setMobileWorkspaceOpen, trackShares]);
 
   useEffect(
     () =>
@@ -1390,6 +1395,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           })),
         };
         setActive({ ...previewBase, preparationStatus: 'preparing' });
+        setMobileWorkspaceOpen(false);
         try {
           const prepared = await prepareImportedTrack(
             parsed.segments,
@@ -1458,7 +1464,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         }
       }
     },
-    [active, elevationProvider, generateName, idGenerator, logger],
+    [
+      active,
+      elevationProvider,
+      generateName,
+      idGenerator,
+      logger,
+      setMobileWorkspaceOpen,
+    ],
   );
 
   const startRoutePlan = useCallback(() => {
@@ -1488,7 +1501,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     importGeneration.current += 1;
     setActive(createRoutePlanDraft(`local:${idGenerator.generate()}`));
     setError(null);
-  }, [active, idGenerator, trailRouter]);
+    setMobileWorkspaceOpen(false);
+  }, [active, idGenerator, setMobileWorkspaceOpen, trailRouter]);
 
   const enrichRoutePlan = useCallback(
     (draft: RoutePlanDraft) => {
@@ -1698,7 +1712,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : undone
         : current,
     );
-  }, [active]);
+    setMobileWorkspaceOpen(false);
+  }, [active, setMobileWorkspaceOpen]);
 
   const clearRoutePlan = useCallback(() => {
     if (routePlanSaveInProgress.current) return;
@@ -1708,7 +1723,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setActive((current) =>
       current?.kind === 'route-plan' ? clearRoutePlanDraft(current) : current,
     );
-  }, []);
+    setMobileWorkspaceOpen(false);
+  }, [setMobileWorkspaceOpen]);
 
   const discardRoutePlan = useCallback(() => {
     if (routePlanSaveInProgress.current) return;
@@ -2264,6 +2280,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             : current,
         );
         setError(null);
+        setMobileWorkspaceOpen(false);
       } catch (loadError) {
         if (generation !== importGeneration.current) return;
         setError(
@@ -2280,7 +2297,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         }
       }
     },
-    [active, activeSavedTrackId, database, saveLatestOpenedTrackId],
+    [
+      active,
+      activeSavedTrackId,
+      database,
+      saveLatestOpenedTrackId,
+      setMobileWorkspaceOpen,
+    ],
   );
 
   const setActiveName = useCallback((name: string) => {
@@ -2362,7 +2385,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return;
     }
     requestMarkerPlacement({ kind: 'track-marker', trackId: editableTrackId });
-  }, [editableTrackId, editableTrackMarkers, multiTrackMode]);
+    setMobileWorkspaceOpen(false);
+  }, [editableTrackId, editableTrackMarkers, multiTrackMode, setMobileWorkspaceOpen]);
 
   const createTrackMarker = useCallback(
     async (name: NormalizedMarkerName) => {

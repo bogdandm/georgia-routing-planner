@@ -10,6 +10,7 @@ import {
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
+import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   importedTrackLayerIds,
@@ -41,6 +42,7 @@ class FakeLayerMap {
   readonly paint = new Map<string, unknown>();
   readonly paintProperties = new Map<string, unknown>();
   paintUpdateCount = 0;
+  readonly setDataSourceIds: string[] = [];
   readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
@@ -142,14 +144,8 @@ class FakeLayerMap {
     this.images.delete(id);
   }
 
-  public getStyle(): {
-    readonly sources: Record<string, unknown>;
-    readonly layers: { readonly id: string }[];
-  } {
-    return {
-      sources: Object.fromEntries(this.sources),
-      layers: [...this.layers.keys()].map((id) => ({ id })),
-    };
+  public getLayersOrder(): string[] {
+    return [...this.layers.keys()];
   }
 
   public removeLayer(id: string): void {
@@ -190,6 +186,7 @@ class FakeLayerMap {
       this.sources.set(id, {
         ...source,
         setData: (data: unknown) => {
+          this.setDataSourceIds.push(id);
           const current = this.sources.get(id);
           if (typeof current === 'object' && current !== null) {
             this.sources.set(id, { ...current, data });
@@ -726,6 +723,69 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
   });
 
+  it('publishes bursts of terrain queue updates at a bounded rate with the final state', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const configuration = services.mapProviderConfiguration;
+    expect(configuration.status).toBe('valid');
+    if (configuration.status !== 'valid') return;
+    const queueState = (activeCount: number): TerrainComputeQueueState => ({
+      executionMode: 'worker',
+      activeCount,
+      queuedContourCount: activeCount,
+      queueCapacity: 16,
+    });
+    let publishQueueState: (state: TerrainComputeQueueState) => void = () => undefined;
+    const controller = new MapLibreLayerController(
+      configuration.value.satellite.renderer,
+      configuration.value.terrain,
+      {
+        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
+        createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}',
+        setFilterEnabled: () => undefined,
+        setInteractionActive: () => undefined,
+        getStatus: () => 'worker',
+        getQueueState: () => queueState(0),
+        subscribeStatus: () => () => undefined,
+        subscribeQueueState: (listener) => {
+          publishQueueState = listener;
+          return () => undefined;
+        },
+        subscribeMetrics: () => () => undefined,
+        dispose: () => undefined,
+      },
+      {
+        registerScene: () => undefined,
+        createTileUrl: () => 'test-satellite-cog://tiles/{z}/{x}/{y}.webp',
+        dispose: () => undefined,
+      },
+      services.logger,
+      services.idGenerator,
+      services.sentinelQueryDiagnostics,
+      services.database,
+    );
+    const published: number[] = [];
+    const unsubscribe = mapLayerStore.subscribe((state, previous) => {
+      if (state.terrainComputeQueue !== previous.terrainComputeQueue) {
+        published.push(state.terrainComputeQueue.activeCount);
+      }
+    });
+
+    for (let activeCount = 1; activeCount <= 40; activeCount += 1) {
+      publishQueueState(queueState(activeCount));
+      vi.advanceTimersByTime(10);
+    }
+    publishQueueState(queueState(0));
+    vi.advanceTimersByTime(1_000);
+
+    expect(published[0]).toBe(1);
+    expect(published.length).toBeLessThanOrEqual(4);
+    expect(published.at(-1)).toBe(0);
+    expect(mapLayerStore.getState().terrainComputeQueue.activeCount).toBe(0);
+    unsubscribe();
+    controller.dispose();
+  });
+
   it('keeps Google and Sentinel imagery mutually exclusive and persists the active choice', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -1090,6 +1150,128 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.get('imported-track')).toHaveProperty(
       'data.geometry.coordinates',
       [],
+    );
+  });
+
+  it('pushes GeoJSON data only when it changed or the style recreated the source', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setImportedTrackGeometry([
+      [
+        [44, 42],
+        [44.1, 42.1],
+      ],
+    ]);
+    controller.setRoutePlanGeometry(
+      [
+        {
+          kind: 'routed',
+          coordinates: [
+            [44, 42],
+            [44.2, 42.2],
+          ],
+        },
+      ],
+      [[44, 42]],
+    );
+    map.setDataSourceIds.splice(0);
+
+    map.fire('styledata', {});
+    map.fire('styledata', {});
+    expect(map.setDataSourceIds).toEqual([]);
+
+    // A style reload replaces the native source object with one holding stale data.
+    const reloadedSource = map.sources.get(mapSourceIds.importedTrack);
+    map.sources.set(mapSourceIds.importedTrack, {
+      ...(reloadedSource as Record<string, unknown>),
+      data: { type: 'Feature', properties: {}, geometry: null },
+    });
+    map.fire('styledata', {});
+    expect(map.setDataSourceIds).toEqual([mapSourceIds.importedTrack]);
+    expect(map.sources.get(mapSourceIds.importedTrack)).toHaveProperty(
+      'data.geometry.coordinates',
+      [
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
+      ],
+    );
+
+    map.removeSource(mapSourceIds.routePlan);
+    map.fire('styledata', {});
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features.length',
+      2,
+    );
+  });
+
+  it('moves the elevation trace point without redundant pushes or layer moves', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    map.fire('styledata', {});
+    map.setDataSourceIds.splice(0);
+    map.moves.splice(0);
+
+    controller.setImportedTrackTracePoint([44.5, 42.5]);
+    controller.setImportedTrackTracePoint([44.5, 42.5]);
+    expect(map.setDataSourceIds).toEqual([mapSourceIds.importedTrackTrace]);
+    controller.setImportedTrackTracePoint([44.6, 42.6]);
+    expect(map.setDataSourceIds).toHaveLength(2);
+    expect(map.sources.get(mapSourceIds.importedTrackTrace)).toHaveProperty(
+      'data.features.0.geometry.coordinates',
+      [44.6, 42.6],
+    );
+    expect(map.moves).toEqual([]);
+  });
+
+  it('persists and logs slider opacity only when the change is committed', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const savePreferences = vi
+      .spyOn(services.database, 'saveMapLayerPreferences')
+      .mockResolvedValue(undefined);
+    const log = vi.spyOn(services.logger, 'log');
+
+    for (const opacity of [0.9, 0.7, 0.5]) {
+      expect(controller.setImportedTrackOpacity(opacity, 'live')).toEqual({
+        status: 'success',
+      });
+      controller.setOpenStreetMapOpacity(opacity, 'live');
+      controller.setWeatherOpacity(opacity, 'live');
+    }
+    expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
+      0.5,
+    );
+    expect(mapLayerStore.getState()).toMatchObject({
+      importedTrackOpacity: 0.5,
+      openStreetMapOpacity: 0.5,
+      weatherMap: { opacity: 0.5 },
+    });
+    expect(savePreferences).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'map.layer-group.opacity-changed' }),
+    );
+
+    controller.setImportedTrackOpacity(0.5, 'commit');
+    expect(savePreferences).toHaveBeenCalledTimes(1);
+    expect(savePreferences).toHaveBeenLastCalledWith(
+      expect.objectContaining({ importedTrackOpacity: 0.5 }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'map.layer-group.opacity-changed',
+        data: { category: 'imported-tracks', opacityPercent: 50 },
+      }),
     );
   });
   it('renders routed sections solid, direct sections dashed, and numbered waypoints', () => {
@@ -2474,11 +2656,19 @@ describe('MapLibreLayerController', () => {
       },
     ];
 
+    map.setDataSourceIds.splice(0);
     controller.setSavedMarkers(markers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
       expect(map.images.size).toBe(2);
     });
+    // One push for the marker change and one for the whole icon batch, not one per icon.
+    expect(map.setDataSourceIds).toEqual([
+      mapSourceIds.savedMarkers,
+      mapSourceIds.savedMarkers,
+    ]);
+    map.fire('styledata', {});
+    expect(map.setDataSourceIds).toHaveLength(2);
     controller.setTrackMarkers(trackMarkers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
@@ -2547,7 +2737,7 @@ describe('MapLibreLayerController', () => {
         'text-halo-blur': 0.5,
       },
     });
-    expect(map.getStyle().layers.at(-1)?.id).toBe(savedMarkerLayerIds.symbols);
+    expect(map.getLayersOrder().at(-1)).toBe(savedMarkerLayerIds.symbols);
 
     controller.setSavedMarkers([]);
     const trackOnlySource = map.sources.get(mapSourceIds.savedMarkers) as {
@@ -2597,6 +2787,23 @@ describe('MapLibreLayerController', () => {
       [...map.layers.keys()].filter((id) =>
         id.startsWith(sentinelMosaicIdPrefixes.layer),
       ),
+    ).toEqual([
+      `${sentinelMosaicIdPrefixes.layer}2`,
+      `${sentinelMosaicIdPrefixes.layer}1`,
+    ]);
+
+    map.fire('styledata', {});
+    map.moves.splice(0);
+    map.fire('styledata', {});
+    map.fire('styledata', {});
+    expect(map.moves).toEqual([]);
+
+    map.removeLayer(`${sentinelMosaicIdPrefixes.layer}2`);
+    map.fire('styledata', {});
+    expect(
+      map
+        .getLayersOrder()
+        .filter((id) => id.startsWith(sentinelMosaicIdPrefixes.layer)),
     ).toEqual([
       `${sentinelMosaicIdPrefixes.layer}2`,
       `${sentinelMosaicIdPrefixes.layer}1`,

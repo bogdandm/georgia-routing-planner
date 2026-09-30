@@ -34,7 +34,10 @@ contacting the provider. Camera failure is recoverable: the map uses
 `defaultGeorgiaCamera`. The facade publishes Ready on `style.load`, when MapLibre can
 safely accept satellite and terrain sources, rather than waiting for every visible
 basemap and relief tile. The later full `load` and `idle` events remain diagnostic
-signals. The facade registers native listeners exactly once and removes them during
+signals. `idle` fires after every repaint, so the facade stores its timestamp in the
+diagnostics snapshot without notifying React subscribers; export and the open developer
+drawer read it on demand. `styledata` republishes source and layer IDs only when either
+list changed. The facade registers native listeners exactly once and removes them during
 teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot
@@ -313,10 +316,11 @@ nearest the requested instant. The selected zero-based index becomes one shared
 `time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow sources.
 
 Before requesting the first weather tile, the controller submits the current MapLibre
-viewport to the package's `updateCurrentBounds()`. It repeats that update only on
-`moveend`; the package owns its built-in tile-boundary snapping. Every source requests
-`tile_size=256`, limiting per-tile raster and vector work without a continuously moving
-bounds stream.
+viewport to the package's `updateCurrentBounds()`. While the weather map is enabled it
+repeats that update on every MapLibre `dataloading` event, so tile requests issued
+during or after a camera move use the viewport current at request time; the package owns
+its built-in tile-boundary snapping. Every source requests `tile_size=256`, limiting
+per-tile raster and vector work.
 
 MapLibre reads each source directly from Open-Meteo's public OM files. The controller
 adds the thresholded neutral-gray cloud raster and precipitation raster followed by the
@@ -728,7 +732,9 @@ available during movement. The next settled viewport starts one refresh whose
 different calendar date instead performs the full clear path before another explicit
 **Show mosaic**, so no earlier-date layers or progress can survive. Sequence guards
 prevent cancelled source waits from publishing a stale loading snapshot after either
-clear or replacement.
+clear or replacement. The provider handles movement in a direct store subscription, so
+`movestart` and settlement do not re-render the map workspace or sidebar through the
+Mosaic context; terrain transitions also end with one settled viewport.
 
 Layers commands use logical IDs. The Natural features command expands to land-cover,
 glacier, and water-polygon layers; restricted-area, hiking, road, and place commands

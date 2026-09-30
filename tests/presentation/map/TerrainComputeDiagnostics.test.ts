@@ -16,7 +16,11 @@ afterEach(() => {
 describe('TerrainComputeDiagnostics', () => {
   it('emits bounded aggregates with the worst status and maximum queue depth', () => {
     const log = vi.fn<(input: DiagnosticInput) => void>();
-    const logger: DiagnosticLogger = { log, getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log,
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const diagnostics = new TerrainComputeDiagnostics(logger, 3, 5_000);
 
     diagnostics.record({
@@ -72,7 +76,7 @@ describe('TerrainComputeDiagnostics', () => {
     vi.useFakeTimers();
     const log = vi.fn<(input: DiagnosticInput) => void>();
     const diagnostics = new TerrainComputeDiagnostics(
-      { log, getEvents: () => [] },
+      { log, getEvents: () => [], subscribe: () => () => undefined },
       32,
       100,
     );
@@ -102,7 +106,11 @@ describe('TerrainComputeDiagnostics', () => {
 describe('ContourTimingDiagnostics', () => {
   it('emits fixed-size aggregate batches and retains a failure within the batch', () => {
     const log = vi.fn<(input: DiagnosticInput) => void>();
-    const logger: DiagnosticLogger = { log, getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log,
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const diagnostics = new ContourTimingDiagnostics(logger, 3, 5_000);
 
     diagnostics.record({ durationMs: 4, tileCount: 1, failed: false });
@@ -123,7 +131,7 @@ describe('ContourTimingDiagnostics', () => {
     vi.useFakeTimers();
     const log = vi.fn<(input: DiagnosticInput) => void>();
     const diagnostics = new ContourTimingDiagnostics(
-      { log, getEvents: () => [] },
+      { log, getEvents: () => [], subscribe: () => () => undefined },
       32,
       100,
     );
@@ -147,6 +155,7 @@ describe('ContourTimingDiagnostics', () => {
           throw new Error('diagnostics unavailable');
         },
         getEvents: () => [],
+        subscribe: () => () => undefined,
       },
       1,
     );

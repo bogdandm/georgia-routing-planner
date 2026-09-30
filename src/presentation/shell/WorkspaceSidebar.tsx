@@ -47,7 +47,10 @@ import {
 } from '@/presentation/markers/MarkersWorkspace';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
-import { useSatelliteMosaic } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
+import {
+  useSatelliteMode,
+  useSatelliteMosaic,
+} from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 import { TracksPanel, useTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
@@ -265,7 +268,8 @@ export function WorkspaceSidebar({
       ? t`Marker weather settings. Forecast disabled`
       : t`Marker weather settings. Forecast days: ${markerWeatherWeekdayLabel}`;
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
-  const { satelliteMode, toggleMosaicMode } = useSatelliteMosaic();
+  const satelliteMode = useSatelliteMode();
+  const { toggleMosaicMode } = useSatelliteMosaic();
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
     useState<WeatherHeaderPoint | null>(null);
   const [weatherForecastMenuAnchor, setWeatherForecastMenuAnchor] =

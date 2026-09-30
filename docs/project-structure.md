@@ -264,17 +264,21 @@ requests into vector contours; it does not expose caches, provider URLs, or the 
 map to React. The facade forwards camera movement state through the controller so the
 worker can prioritize DEM requests and defer new contour calculations until movement
 settles. It also publishes settled viewports through `MapViewportSnapshotStore`;
-`SatelliteMosaicProvider` cancels obsolete work while moving and refreshes a shown
-Mosaic after settlement. The controller forwards the worker's coordinate-free active and
-queued counts plus Mosaic render counts into the map-layer store for the operational
-status line.
+`SatelliteMosaicProvider` subscribes to movement directly rather than through React
+state, cancels obsolete work while moving, and refreshes a shown Mosaic after
+settlement, so movement never changes its context value. The controller forwards the
+worker's coordinate-free active and queued counts plus Mosaic render counts into the
+map-layer store for the operational status line.
 
 The controller validates persistent imagery mode/tuning and terrain-overlay preferences,
 atomically updates source tiles, and reconciles native order after style or satellite
 changes. Satellite and Layers consume its serializable Zustand snapshot, so relocated
 controls stay synchronized with restored preferences. Scene search results remain local
 React state in a mounted-but-hidden Satellite browser, while Mosaic workflow state lives
-in the provider mounted around both map and sidebar surfaces.
+in the provider mounted around both map and sidebar surfaces. The provider exposes the
+Scene/Mosaic mode through its own small context for map-wide consumers; only the Mosaic
+controls subscribe to movement phase and terrain mode to explain a disabled **Show
+mosaic** action.
 
 `SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
 module worker. Its bounded registry retains safe definitions for a complete 128-scene
@@ -290,7 +294,15 @@ pre-rendered 8-bit RGB values and does not apply the hosted renderer's stretch c
 Raster readiness has no application deadline.
 
 The facade returns a serializable snapshot of current WGS84 bounds and center, or `null`
-before a native map exists. `MapViewportSnapshotStore` publishes that value to search
-controls without exposing MapLibre. Sentinel validation rejects non-finite, inverted,
-antimeridian-crossing, or center-mismatched snapshots; exact bounds never enter the
-default diagnostics bundle.
+before a native map exists. `MapWorkspace` publishes that value through
+`MapViewportSnapshotStore` when the workspace mounts and on every settled viewport
+(style ready, `moveend`, and the end of a terrain transition), and publishes `null` on
+teardown. The initial settle does not wait for MapLibre's full `load`, so Search
+controls are not blocked by slow initial tiles or a WebGL context loss. A movement
+subscriber that arrives after that settle immediately receives the current settled
+viewport, so a remounted workspace does not leave movement state unavailable. Other
+facade notifications such as idle, style data, or point inspection never republish it,
+and the store keeps the previous object for a numerically equal viewport. Search
+controls read it without exposing MapLibre. Sentinel validation rejects non-finite,
+inverted, antimeridian-crossing, or center-mismatched snapshots; exact bounds never
+enter the default diagnostics bundle.

@@ -13,7 +13,11 @@ import {
   type DecodedTerrariumTile,
 } from '@/infrastructure/elevation/TerrariumDemFilter';
 
-const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+const logger: DiagnosticLogger = {
+  log: vi.fn(),
+  getEvents: () => [],
+  subscribe: () => () => undefined,
+};
 
 function terrain() {
   return parseMapProviderConfiguration(

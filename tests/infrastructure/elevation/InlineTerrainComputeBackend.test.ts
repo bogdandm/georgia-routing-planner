@@ -22,7 +22,11 @@ describe('InlineTerrainComputeBackend', () => {
       setFilterEnabled: vi.fn(),
       dispose: vi.fn(),
     };
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const backend = new InlineTerrainComputeBackend(
       toTerrainComputeConfiguration(terrain, 10_000),
       logger,

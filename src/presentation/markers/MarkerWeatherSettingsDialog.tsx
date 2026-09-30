@@ -56,9 +56,8 @@ export function MarkerWeatherSettingsDialog({
       onClose();
     } catch {
       setError('Weather settings could not be saved.');
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
   };
 
   const choosePeriod = (kind: MarkerWeatherPeriodSelection['kind'] | null) => {

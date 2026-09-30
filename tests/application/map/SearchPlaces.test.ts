@@ -8,7 +8,11 @@ const initialBounds = { west: 44.7, south: 41.6, east: 44.9, north: 41.8 } as co
 
 function createSearchPlaces(
   gateway: PlaceSearchGateway,
-  logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] },
+  logger: DiagnosticLogger = {
+    log: vi.fn(),
+    getEvents: () => [],
+    subscribe: () => () => undefined,
+  },
 ) {
   return new SearchPlaces(
     gateway,
@@ -140,11 +144,10 @@ describe('SearchPlaces', () => {
     const log = vi.fn();
 
     await expect(
-      createSearchPlaces({ search }, { log, getEvents: () => [] }).execute(
-        'Tbilisi',
-        initialBounds,
-        controller.signal,
-      ),
+      createSearchPlaces(
+        { search },
+        { log, getEvents: () => [], subscribe: () => () => undefined },
+      ).execute('Tbilisi', initialBounds, controller.signal),
     ).rejects.toBe(cancellation);
 
     expect(log).toHaveBeenCalledWith(
@@ -161,11 +164,10 @@ describe('SearchPlaces', () => {
     const log = vi.fn();
 
     await expect(
-      createSearchPlaces({ search }, { log, getEvents: () => [] }).execute(
-        'Tbilisi',
-        initialBounds,
-        new AbortController().signal,
-      ),
+      createSearchPlaces(
+        { search },
+        { log, getEvents: () => [], subscribe: () => () => undefined },
+      ).execute('Tbilisi', initialBounds, new AbortController().signal),
     ).rejects.toBe(cancellation);
 
     expect(log).toHaveBeenCalledWith(
@@ -179,11 +181,10 @@ describe('SearchPlaces', () => {
     const log = vi.fn();
 
     await expect(
-      createSearchPlaces({ search }, { log, getEvents: () => [] }).execute(
-        'private query',
-        initialBounds,
-        new AbortController().signal,
-      ),
+      createSearchPlaces(
+        { search },
+        { log, getEvents: () => [], subscribe: () => () => undefined },
+      ).execute('private query', initialBounds, new AbortController().signal),
     ).rejects.toBe(failure);
 
     expect(log).toHaveBeenCalledWith({

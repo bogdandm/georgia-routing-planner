@@ -335,6 +335,7 @@ describe('MarkersWorkspace', () => {
     await services.database.saveSavedMarker(
       marker('alpha', 'Alpha', '2026-07-20T00:00:00.000Z', [44.81, 41.7], 'blue'),
     );
+    useUiStore.setState({ activeTab: 'markers' });
     const user = userEvent.setup();
     renderMarkers((sort) => {
       useUiStore.getState().setMarkerSort(sort);
@@ -409,6 +410,7 @@ describe('MarkersWorkspace', () => {
         'telescope',
       ),
     );
+    useUiStore.setState({ activeTab: 'markers' });
     const user = userEvent.setup();
     renderMarkers();
 
@@ -442,6 +444,7 @@ describe('MarkersWorkspace', () => {
     await services.database.saveSavedMarker(
       marker('far', 'Far', '2026-07-20T00:00:00.000Z', [45.8, 41.7]),
     );
+    useUiStore.setState({ activeTab: 'markers' });
     const user = userEvent.setup();
     renderMarkers();
 
@@ -474,6 +477,34 @@ describe('MarkersWorkspace', () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
       );
     });
+  });
+
+  it('does not resend the saved-marker map layer on unrelated rail switches', async () => {
+    await services.database.saveSavedMarker(
+      marker('summit', 'Summit', '2026-07-20T00:00:00.000Z', [44.8271, 41.7151]),
+    );
+    useUiStore.setState({ activeTab: 'tracks' });
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) throw new Error('Expected test map layers.');
+    const setSavedMarkers = vi.spyOn(mapLayers, 'setSavedMarkers');
+    renderMarkers();
+
+    await screen.findByRole('list', { name: 'Saved markers' });
+    await waitFor(() => {
+      expect(setSavedMarkers).toHaveBeenLastCalledWith([
+        expect.objectContaining({ id: 'summit' }),
+      ]);
+    });
+    const publishedCount = setSavedMarkers.mock.calls.length;
+
+    act(() => {
+      useUiStore.getState().setActiveTab('satellite');
+    });
+    act(() => {
+      useUiStore.getState().setActiveTab('layers');
+    });
+
+    expect(setSavedMarkers).toHaveBeenCalledTimes(publishedCount);
   });
 
   it('renames, changes appearance, and confirms deletion through row actions', async () => {

@@ -15,7 +15,7 @@ msgstr ""
 
 #. js-lingui-id: QUiwqi
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3632
+#: src/presentation/tracks/TracksWorkspace.tsx:3680
 msgid "{0} tracks"
 msgstr "Треки в папке «{0}»"
 
@@ -31,7 +31,7 @@ msgstr "Выбрать значок папки"
 
 #. js-lingui-id: tTipyO
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3553
+#: src/presentation/tracks/TracksWorkspace.tsx:3601
 msgid "Collapse {0}"
 msgstr "Свернуть папку «{0}»"
 
@@ -42,8 +42,8 @@ msgstr "Подтвердить удаление"
 
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:107
-#: src/presentation/tracks/TracksWorkspace.tsx:3976
-#: src/presentation/tracks/TracksWorkspace.tsx:3979
+#: src/presentation/tracks/TracksWorkspace.tsx:4022
+#: src/presentation/tracks/TracksWorkspace.tsx:4025
 msgid "Create folder"
 msgstr "Создать папку"
 
@@ -53,15 +53,15 @@ msgid "Delete folder"
 msgstr "Удалить папку"
 
 #. js-lingui-id: AHjV65
-#: src/presentation/tracks/TracksWorkspace.tsx:3627
-#: src/presentation/tracks/TracksWorkspace.tsx:3713
+#: src/presentation/tracks/TracksWorkspace.tsx:3675
+#: src/presentation/tracks/TracksWorkspace.tsx:3761
 msgid "Drop tracks here"
 msgstr "Перетащите треки сюда"
 
 #. js-lingui-id: N6j2JH
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3600
-#: src/presentation/tracks/TracksWorkspace.tsx:3604
+#: src/presentation/tracks/TracksWorkspace.tsx:3648
+#: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Edit {0}"
 msgstr "Редактировать {0}"
 
@@ -77,7 +77,7 @@ msgstr "Введите название папки."
 
 #. js-lingui-id: WXp971
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3553
+#: src/presentation/tracks/TracksWorkspace.tsx:3601
 msgid "Expand {0}"
 msgstr "Развернуть папку «{0}»"
 
@@ -92,51 +92,51 @@ msgid "Folder names must be 200 characters or fewer."
 msgstr "Название папки должно быть не длиннее 200 символов."
 
 #. js-lingui-id: tWKSiS
-#: src/presentation/tracks/TracksWorkspace.tsx:3932
+#: src/presentation/tracks/TracksWorkspace.tsx:3978
 msgid "Item dropped."
 msgstr "Элемент перемещён."
 
 #. js-lingui-id: Z9u6zw
 #. placeholder {0}: summary.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3262
+#: src/presentation/tracks/TracksWorkspace.tsx:3310
 msgid "Move {0}"
 msgstr "Переместить {0}"
 
 #. js-lingui-id: VZdoAN
-#: src/presentation/tracks/TracksWorkspace.tsx:3935
+#: src/presentation/tracks/TracksWorkspace.tsx:3981
 msgid "Move cancelled."
 msgstr "Перемещение отменено."
 
 #. js-lingui-id: 9GH1hZ
-#: src/presentation/tracks/TracksWorkspace.tsx:3927
+#: src/presentation/tracks/TracksWorkspace.tsx:3973
 msgid "Over {name}."
 msgstr "Над {name}."
 
 #. js-lingui-id: NVQqOC
 #. placeholder {0}: (data.folder as TrackFolder).name
-#: src/presentation/tracks/TracksWorkspace.tsx:3908
+#: src/presentation/tracks/TracksWorkspace.tsx:3954
 msgid "Picked up folder {0}."
 msgstr "Выбрана папка {0}."
 
 #. js-lingui-id: Y0Hloc
-#: src/presentation/tracks/TracksWorkspace.tsx:3913
+#: src/presentation/tracks/TracksWorkspace.tsx:3959
 msgid "Picked up item."
 msgstr "Элемент выбран."
 
 #. js-lingui-id: cKK6tl
 #. placeholder {0}: (data.summary as LocalTrackSummary).name
-#: src/presentation/tracks/TracksWorkspace.tsx:3911
+#: src/presentation/tracks/TracksWorkspace.tsx:3957
 msgid "Picked up track {0}."
 msgstr "Выбран трек {0}."
 
 #. js-lingui-id: KQYkQd
-#: src/presentation/tracks/TracksWorkspace.tsx:3902
+#: src/presentation/tracks/TracksWorkspace.tsx:3948
 msgid "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 msgstr "Нажмите пробел, чтобы выбрать элемент. Используйте клавиши со стрелками для перемещения. Нажмите пробел, чтобы отпустить, или Escape, чтобы отменить."
 
 #. js-lingui-id: 2BPVq8
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3542
+#: src/presentation/tracks/TracksWorkspace.tsx:3590
 msgid "Reorder {0}"
 msgstr "Изменить порядок: {0}"
 
@@ -146,12 +146,12 @@ msgid "Save"
 msgstr "Сохранить"
 
 #. js-lingui-id: BBAHO5
-#: src/presentation/tracks/TracksWorkspace.tsx:4005
+#: src/presentation/tracks/TracksWorkspace.tsx:4051
 msgid "Saved tracks"
 msgstr "Сохранённые треки"
 
 #. js-lingui-id: xdliLJ
-#: src/presentation/tracks/TracksWorkspace.tsx:680
+#: src/presentation/tracks/TracksWorkspace.tsx:698
 msgid "Saved tracks and folders could not be loaded from this browser."
 msgstr "Не удалось загрузить сохранённые треки и папки из этого браузера."
 
@@ -171,22 +171,22 @@ msgid "The folder name contains unsupported characters."
 msgstr "Название папки содержит недопустимые символы."
 
 #. js-lingui-id: 4x2rxR
-#: src/presentation/tracks/TracksWorkspace.tsx:826
+#: src/presentation/tracks/TracksWorkspace.tsx:844
 msgid "The folder order could not be saved."
 msgstr "Не удалось сохранить порядок папок."
 
 #. js-lingui-id: aukFge
-#: src/presentation/tracks/TracksWorkspace.tsx:802
+#: src/presentation/tracks/TracksWorkspace.tsx:820
 msgid "The track could not be moved."
 msgstr "Не удалось переместить трек."
 
 #. js-lingui-id: u4NvoA
-#: src/presentation/tracks/TracksWorkspace.tsx:3925
+#: src/presentation/tracks/TracksWorkspace.tsx:3971
 msgid "Unfiled"
 msgstr "Без папки"
 
 #. js-lingui-id: bLnJmO
-#: src/presentation/tracks/TracksWorkspace.tsx:3685
-#: src/presentation/tracks/TracksWorkspace.tsx:3695
+#: src/presentation/tracks/TracksWorkspace.tsx:3733
+#: src/presentation/tracks/TracksWorkspace.tsx:3743
 msgid "Unfiled tracks"
 msgstr "Треки без папки"

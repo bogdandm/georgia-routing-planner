@@ -15,12 +15,35 @@ import {
   Paper,
   Stack,
   Typography,
+  type SxProps,
+  type Theme,
 } from '@mui/material';
 import { useEffect, useRef, type RefObject } from 'react';
 
 // Stable DOM identifier used by the dialog accessibility relationship.
 // eslint-disable-next-line -- Stable DOM identifier, not user-visible copy.
 const aboutPanelTitleId = 'about-panel-title';
+const aboutWideBreakpoint = 'sm' as const;
+// Module-level so React Compiler does not see computed breakpoint keys in the component.
+const aboutTitleSx: SxProps<Theme> = (theme) => ({
+  px: 2,
+  py: 1.5,
+  position: 'relative',
+  pr: 6,
+  [theme.breakpoints.up(aboutWideBreakpoint)]: { px: 6, py: 4, pr: 14 },
+});
+const aboutCloseButtonSx: SxProps<Theme> = (theme) => ({
+  position: 'absolute',
+  right: 12,
+  top: 12,
+  [theme.breakpoints.up(aboutWideBreakpoint)]: { right: 32, top: 32 },
+});
+const aboutContentSx: SxProps<Theme> = (theme) => ({
+  px: 2,
+  pt: 0,
+  pb: 1.5,
+  [theme.breakpoints.up(aboutWideBreakpoint)]: { px: 6, pb: 4 },
+});
 
 interface AboutDialogProps {
   readonly onClose: () => void;
@@ -277,40 +300,19 @@ export function AboutDialog({
         overflowY: 'auto',
       }}
     >
-      <DialogTitle
-        id={aboutPanelTitleId}
-        sx={(theme) => ({
-          px: 2,
-          py: 1.5,
-          position: 'relative',
-          pr: 6,
-          [theme.breakpoints.up('sm')]: { px: 6, py: 4, pr: 14 },
-        })}
-      >
+      <DialogTitle id={aboutPanelTitleId} sx={aboutTitleSx}>
         <Trans>About Trail Planner</Trans>
         <IconButton
           aria-label={t`Close site information`}
           onClick={handleClose}
           ref={closeButtonRef}
           size="small"
-          sx={(theme) => ({
-            position: 'absolute',
-            right: 12,
-            top: 12,
-            [theme.breakpoints.up('sm')]: { right: 32, top: 32 },
-          })}
+          sx={aboutCloseButtonSx}
         >
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </DialogTitle>
-      <DialogContent
-        sx={(theme) => ({
-          px: 2,
-          pt: 0,
-          pb: 1.5,
-          [theme.breakpoints.up('sm')]: { px: 6, pb: 4 },
-        })}
-      >
+      <DialogContent sx={aboutContentSx}>
         <Stack spacing={2}>
           <Stack spacing={0.5}>
             <Typography variant="body2">

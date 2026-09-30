@@ -69,6 +69,7 @@ const codec: TerrariumPngCodec = {
 const logger: DiagnosticLogger = {
   log: vi.fn(),
   getEvents: () => [],
+  subscribe: () => () => undefined,
 };
 
 function terrain() {
@@ -168,7 +169,7 @@ describe('FilteredTerrariumTileProvider', () => {
       const decode = vi.fn(() => decoding.promise);
       const provider = new FilteredTerrariumTileProvider(
         configuration(10),
-        { log, getEvents: () => [] },
+        { log, getEvents: () => [], subscribe: () => () => undefined },
         { decode, encode: () => Promise.resolve(new Blob(['filtered'])) },
         () => Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
       );
@@ -212,7 +213,7 @@ describe('FilteredTerrariumTileProvider', () => {
     });
     const provider = new FilteredTerrariumTileProvider(
       configuration(),
-      { log, getEvents: () => [] },
+      { log, getEvents: () => [], subscribe: () => () => undefined },
       codec,
       fetchImplementation,
     );
@@ -238,6 +239,7 @@ describe('FilteredTerrariumTileProvider', () => {
       const timeoutLogger: DiagnosticLogger = {
         log,
         getEvents: () => [],
+        subscribe: () => () => undefined,
       };
       const fetchImplementation = vi.fn(
         (_input: RequestInfo | URL, init?: RequestInit) =>
@@ -326,7 +328,11 @@ describe('FilteredTerrariumTileProvider', () => {
 
   it('batches mixed completion states without logging each tile transition', async () => {
     const log = vi.fn<(input: DiagnosticInput) => void>();
-    const aggregateLogger: DiagnosticLogger = { log, getEvents: () => [] };
+    const aggregateLogger: DiagnosticLogger = {
+      log,
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const fetchImplementation = vi.fn((_input: RequestInfo | URL) =>
       Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
     );
@@ -383,7 +389,11 @@ describe('FilteredTerrariumTileProvider', () => {
 
   it('coalesces complete same-key processing and reuses the exact cached response', async () => {
     const log = vi.fn<(input: DiagnosticInput) => void>();
-    const processingLogger: DiagnosticLogger = { log, getEvents: () => [] };
+    const processingLogger: DiagnosticLogger = {
+      log,
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const fetchImplementation = vi.fn((input: RequestInfo | URL) =>
       Promise.resolve(new Response(new Blob([requestUrl(input)]), { status: 200 })),
     );

@@ -24,6 +24,8 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 
 interface ShareMapDialogProps {
   readonly open: boolean;
+  /** Page URL captured when the dialog was opened; share links keep its query and hash. */
+  readonly pageUrl: string | null;
   readonly onClose: () => void;
 }
 
@@ -36,9 +38,9 @@ enum CopyState {
 
 const shareDialogMaxWidth = 'sm' as const;
 
-export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
+export function ShareMapDialog({ open, pageUrl, onClose }: ShareMapDialogProps) {
   const { t } = useLingui();
-  const { mapDiagnostics, mapLayers } = useRuntimeServices();
+  const { mapDiagnostics } = useRuntimeServices();
   const [copyState, setCopyState] = useState(CopyState.Idle);
   const [excludedSceneKey, setExcludedSceneKey] = useState<string | null>(null);
   const subscribe = useCallback(
@@ -47,21 +49,20 @@ export function ShareMapDialog({ open, onClose }: ShareMapDialogProps) {
   );
   const getSnapshot = useCallback(() => mapDiagnostics.getSnapshot(), [mapDiagnostics]);
   const mapSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const selectedScene = useStore(mapLayerStore, (state) => state.selectedScene);
+  const scene = useStore(mapLayerStore, (state) => state.selectedScene);
   const camera = mapSnapshot?.camera;
-  const scene = selectedScene ?? mapLayers?.getSelectedScene() ?? null;
   const selectedSceneKey = scene === null ? null : satelliteSceneKey(scene);
   const includeSatellite =
     selectedSceneKey !== null && selectedSceneKey !== excludedSceneKey;
   const sceneKey = includeSatellite ? selectedSceneKey : null;
   const share2dUrl =
-    camera === undefined
+    camera === undefined || pageUrl === null
       ? ''
-      : createMapShareUrl(window.location.href, camera, sceneKey);
+      : createMapShareUrl(pageUrl, camera, sceneKey);
   const share3dUrl =
-    camera === undefined || mapSnapshot?.terrainMode !== 'terrain'
+    camera === undefined || pageUrl === null || mapSnapshot?.terrainMode !== 'terrain'
       ? ''
-      : createMapShareUrl(window.location.href, camera, sceneKey, {
+      : createMapShareUrl(pageUrl, camera, sceneKey, {
           mode: '3d',
           bearing: camera.bearing,
           pitch: camera.pitch,

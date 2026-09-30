@@ -92,7 +92,11 @@ function forecastData(
 function createUseCase(
   gateway: WeatherForecastGateway,
   elevationProvider: ElevationProvider | null,
-  logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] },
+  logger: DiagnosticLogger = {
+    log: vi.fn(),
+    getEvents: () => [],
+    subscribe: () => () => undefined,
+  },
 ): GetPointWeatherForecast {
   let monotonic = 0;
   return new GetPointWeatherForecast(
@@ -371,7 +375,11 @@ describe('GetPointWeatherForecast', () => {
     const log = vi.fn((input: DiagnosticInput): void => {
       void input;
     });
-    const logger = { log, getEvents: () => [] } satisfies DiagnosticLogger;
+    const logger = {
+      log,
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    } satisfies DiagnosticLogger;
 
     await createUseCase(
       { fetch: vi.fn().mockResolvedValue(forecastData()) },

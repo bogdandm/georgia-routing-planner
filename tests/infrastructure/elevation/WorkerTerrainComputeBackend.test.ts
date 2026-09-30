@@ -103,7 +103,11 @@ describe('WorkerTerrainComputeBackend', () => {
       return clientEndpoint;
     });
     const inlineFactory = vi.fn(() => new FakeInlineBackend());
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
 
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
@@ -158,7 +162,11 @@ describe('WorkerTerrainComputeBackend', () => {
       return clientEndpoint;
     };
     const log = vi.fn<(input: DiagnosticInput) => void>();
-    const logger: DiagnosticLogger = { log, getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log,
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const inline = new FakeInlineBackend();
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
@@ -211,7 +219,11 @@ describe('WorkerTerrainComputeBackend', () => {
       },
     });
     const workerFactory = vi.fn(() => clientEndpoint);
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
       10_000,
@@ -254,7 +266,11 @@ describe('WorkerTerrainComputeBackend', () => {
         );
         return clientEndpoint;
       });
-      const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+      const logger: DiagnosticLogger = {
+        log: vi.fn(),
+        getEvents: () => [],
+        subscribe: () => () => undefined,
+      };
       const backend = new WorkerTerrainComputeBackend(
         terrain(),
         10_000,
@@ -299,7 +315,11 @@ describe('WorkerTerrainComputeBackend', () => {
       return clientEndpoint;
     });
     const inline = new FakeInlineBackend();
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
       10_000,
@@ -334,7 +354,11 @@ describe('WorkerTerrainComputeBackend', () => {
         }),
     });
     const workerFactory = vi.fn(() => clientEndpoint);
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
       10_000,
@@ -373,7 +397,11 @@ describe('WorkerTerrainComputeBackend', () => {
     });
     const workerFactory = vi.fn(() => clientEndpoint);
     const inlineFactory = vi.fn(() => new FakeInlineBackend());
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
       10_000,
@@ -427,7 +455,11 @@ describe('WorkerTerrainComputeBackend', () => {
         );
         return clientEndpoint;
       });
-      const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+      const logger: DiagnosticLogger = {
+        log: vi.fn(),
+        getEvents: () => [],
+        subscribe: () => () => undefined,
+      };
       const backend = new WorkerTerrainComputeBackend(
         terrain(),
         10_000,
@@ -454,7 +486,11 @@ describe('WorkerTerrainComputeBackend', () => {
     const server = new WorkerRpcServer(serverEndpoint, {
       initialize: () => ({ initialized: true }),
     });
-    const logger: DiagnosticLogger = { log: vi.fn(), getEvents: () => [] };
+    const logger: DiagnosticLogger = {
+      log: vi.fn(),
+      getEvents: () => [],
+      subscribe: () => () => undefined,
+    };
     const backend = new WorkerTerrainComputeBackend(
       terrain(),
       10_000,

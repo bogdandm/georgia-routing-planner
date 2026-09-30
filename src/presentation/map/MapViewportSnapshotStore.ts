@@ -14,6 +14,21 @@ const unavailableMovementSnapshot: MapViewportMovementSnapshot = {
 };
 const movingMovementSnapshot: MapViewportMovementSnapshot = { phase: 'moving' };
 
+function viewportsEqual(
+  left: MapViewportSnapshot | null,
+  right: MapViewportSnapshot | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  return (
+    left.bounds.west === right.bounds.west &&
+    left.bounds.south === right.bounds.south &&
+    left.bounds.east === right.bounds.east &&
+    left.bounds.north === right.bounds.north &&
+    left.center.longitude === right.center.longitude &&
+    left.center.latitude === right.center.latitude
+  );
+}
+
 /** Shares the current visible map area with React without exposing MapLibre. */
 export class MapViewportSnapshotStore {
   readonly #listeners = new Set<() => void>();
@@ -22,7 +37,9 @@ export class MapViewportSnapshotStore {
   #movementSnapshot: MapViewportMovementSnapshot = unavailableMovementSnapshot;
   #movementRevision = 0;
 
+  /** Keeps the previous object for a numerically equal viewport so React does not re-render. */
   public update(snapshot: MapViewportSnapshot | null): void {
+    if (viewportsEqual(this.#snapshot, snapshot)) return;
     this.#snapshot = snapshot;
     for (const listener of this.#listeners) listener();
   }

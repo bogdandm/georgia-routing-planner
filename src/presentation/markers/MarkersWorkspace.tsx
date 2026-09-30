@@ -277,6 +277,16 @@ export function useMarkersWorkspace(): MarkersWorkspaceValue {
   return value;
 }
 
+function markerWeatherCacheKey(marker: SavedMarker, preferenceKey: string): string {
+  return [
+    marker.id,
+    marker.coordinate[0],
+    marker.coordinate[1],
+    marker.elevationMeters ?? 'unresolved',
+    preferenceKey,
+  ].join(':');
+}
+
 export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const {
     clock,
@@ -298,18 +308,23 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     mapInteractionStore,
     (state) => state.markerCreationCommand,
   );
+  // The markers panel (distance labels and center-based sorts) is the only camera
+  // consumer and is hidden on other tabs, so camera moves elsewhere must not re-render.
   const subscribeViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
   );
-  const getViewportSnapshot = useCallback(
-    () => mapViewport.getViewportSnapshot(),
-    [mapViewport],
+  const getMapCenterSnapshot = useCallback(
+    () =>
+      activeTab === 'markers'
+        ? (mapViewport.getViewportSnapshot()?.center ?? null)
+        : null,
+    [activeTab, mapViewport],
   );
-  const viewport = useSyncExternalStore(
+  const mapCenter = useSyncExternalStore(
     subscribeViewport,
-    getViewportSnapshot,
-    getViewportSnapshot,
+    getMapCenterSnapshot,
+    getMapCenterSnapshot,
   );
   const [markers, setMarkers] = useState<readonly SavedMarker[]>([]);
   const [recentIconKeys, setRecentIconKeys] = useState<readonly MarkerIconKey[]>([]);
@@ -412,13 +427,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     }[] = [];
     const initialStates = new Map<string, MarkerWeatherForecastState>();
     for (const marker of markers) {
-      const cacheKey = [
-        marker.id,
-        marker.coordinate[0],
-        marker.coordinate[1],
-        marker.elevationMeters ?? 'unresolved',
-        preferenceKey,
-      ].join(':');
+      const cacheKey = markerWeatherCacheKey(marker, preferenceKey);
       const cached = weatherCache.current.get(cacheKey);
       if (cached === undefined) {
         initialStates.set(marker.id, { status: 'loading' });
@@ -431,7 +440,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     let nextIndex = 0;
     const elevatedMarkers = new Map<string, SavedMarker>();
     const loadNext = async (): Promise<void> => {
-      for (;;) {
+      while (nextIndex < pending.length) {
         const entry = pending[nextIndex];
         nextIndex += 1;
         if (entry === undefined) return;
@@ -439,11 +448,13 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
           longitude: entry.marker.coordinate[0],
           latitude: entry.marker.coordinate[1],
         };
+        const request =
+          entry.marker.elevationMeters === null
+            ? { coordinate }
+            : { coordinate, elevationMeters: entry.marker.elevationMeters };
         try {
           const forecast = await pointWeatherForecast.execute(
-            entry.marker.elevationMeters === null
-              ? { coordinate }
-              : { coordinate, elevationMeters: entry.marker.elevationMeters },
+            request,
             controller.signal,
           );
           controller.signal.throwIfAborted();
@@ -467,14 +478,10 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
                 entry.marker.id,
                 forecast.elevationMeters,
               );
-              const elevatedCacheKey = [
-                updated.id,
-                updated.coordinate[0],
-                updated.coordinate[1],
-                updated.elevationMeters ?? 'unresolved',
-                preferenceKey,
-              ].join(':');
-              weatherCache.current.set(elevatedCacheKey, readyState);
+              weatherCache.current.set(
+                markerWeatherCacheKey(updated, preferenceKey),
+                readyState,
+              );
               elevatedMarkers.set(updated.id, updated);
             } catch {
               logger.log({
@@ -557,23 +564,20 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     };
   }, [loadState, markerCreationCommand]);
 
+  // Weather cards replace forecast-ready pins only while the markers panel shows them;
+  // rail switches and forecasts must not resend the layer otherwise.
+  const weatherReplacingPins =
+    activeTab === 'markers' && weatherPreferences.showOnMap ? weatherByMarkerId : null;
   useEffect(() => {
     if (loadState !== 'ready') return;
     const layerMarkers =
-      activeTab === 'markers' && weatherPreferences.showOnMap
-        ? markers.filter(
-            (marker) => weatherByMarkerId.get(marker.id)?.status !== 'ready',
-          )
-        : markers;
+      weatherReplacingPins === null
+        ? markers
+        : markers.filter(
+            (marker) => weatherReplacingPins.get(marker.id)?.status !== 'ready',
+          );
     mapLayers?.setSavedMarkers(layerMarkers);
-  }, [
-    activeTab,
-    loadState,
-    mapLayers,
-    markers,
-    weatherByMarkerId,
-    weatherPreferences.showOnMap,
-  ]);
+  }, [loadState, mapLayers, markers, weatherReplacingPins]);
 
   useEffect(() => {
     return () => {
@@ -756,10 +760,11 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed, weatherByMarkerId],
   );
 
-  const mapCenter = viewport?.center ?? null;
+  const sortCenter =
+    markerSort === 'distance' || markerSort === 'icon' ? mapCenter : null;
   const sortedMarkers = useMemo(
-    () => sortMarkers(markers, markerSort, mapCenter),
-    [mapCenter, markerSort, markers],
+    () => sortMarkers(markers, markerSort, sortCenter),
+    [markerSort, markers, sortCenter],
   );
   const weatherPreviewMarker =
     weatherPreview === null

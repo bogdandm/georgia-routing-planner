@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -131,6 +131,26 @@ describe('DeveloperDrawer', () => {
         'Follow provider next links within the pagination limit.',
       ),
     ).toBeVisible();
+  });
+
+  it('lists diagnostic events logged while the Logs tab is open', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    render(
+      <RuntimeServicesProvider services={services}>
+        <DeveloperDrawer open onClose={vi.fn()} onTriggerFailure={vi.fn()} />
+      </RuntimeServicesProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /^Logs/u }));
+    const events = screen.getByRole('list', { name: 'Recent diagnostic events' });
+    expect(within(events).queryByText('drawer.test.logged')).not.toBeInTheDocument();
+
+    act(() => {
+      services.logger.log({ level: 'info', name: 'drawer.test.logged' });
+    });
+
+    expect(within(events).getByText('drawer.test.logged')).toBeVisible();
   });
 
   it('runs configured provider probes only after the explicit action', async () => {

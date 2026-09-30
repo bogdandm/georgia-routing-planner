@@ -47,9 +47,10 @@ padding must not create that indentation accidentally. Full-width spatial contro
 as the acquisition calendar are explicit exceptions when an inset would reduce clarity
 or usable width.
 
-Use checkboxes for independent boolean options throughout the application, including
-layer visibility, rendering options, corrective processing, and developer controls. Do
-not mix switches and checkboxes when they represent the same kind of choice.
+Use checkboxes for independent boolean options, including layer visibility, rendering
+options, corrective processing, and developer controls. Reserve switches for the single
+on/off state of a service or object, such as sync, public track sharing, or showing a
+marker's weather on the map. Do not mix both kinds in one group.
 
 ## Use consistent metric iconography
 
@@ -84,8 +85,8 @@ steps of the theme's 8 px unit when 4 px precision is necessary.
 
 ## Keep contextual panels stable
 
-- Satellite and Layers use the same responsive sidebar width: 420 px normally and 464 px
-  at the extra-large breakpoint.
+- Contextual sidebars share one responsive width: 420 px normally and 464 px at the
+  extra-large breakpoint (`WorkspaceSidebar.tsx`).
 - Switching feature tabs must not move the map because adjacent panels use arbitrary
   widths.
 - A different width requires a concrete workflow need and visual review against the
@@ -112,6 +113,8 @@ steps of the theme's 8 px unit when 4 px precision is necessary.
   controls.
 - Keep provider and capability wording concrete; avoid generic labels when the data
   source matters.
+- Write user-visible copy through Lingui macros so it reaches the `en` and `ru` catalogs
+  in `src/locales`, and format numbers and dates with the active `i18n.locale`.
 
 ## Review presentation changes
 

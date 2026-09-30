@@ -1,583 +1,291 @@
 # Data model and storage ownership
 
-## Scope and status
-
-This document defines the target MVP data contracts and their authoritative storage. It
-distinguishes the curated static GPX catalog, private browser-local data, optional
-user-owned Supabase track copies, and provider-owned online data. IndexedDB contracts
-become executable as their schema migrations land. The committed Supabase schema and
-function contract describe deployable infrastructure without asserting that production
-deployment has completed.
-
-Mermaid is the declarative schema language used here because it renders with the other
-repository documentation. TypeScript types and Zod schemas become the executable
-contracts when each feature is implemented.
+This document defines persisted records, their authoritative storage, and the privacy
+boundary between browser-local data, optional user-owned Supabase copies, and
+provider-owned online data. Executable contracts live in the Zod schemas of
+`src/infrastructure/persistence/AppDatabase.ts`, the domain types under `src/domain`,
+the SQL in `supabase/migrations`, and the Edge Function validators in
+`supabase/functions`.
 
 ## Ownership rules
 
-1. The GitHub repository and its GitHub Pages output are authoritative for the curated
-   catalog. The deployed application can read these assets but cannot edit them.
-2. IndexedDB is authoritative for retained local tracks, flat personal folders, saved
-   markers, and durable preferences. Synchronization is optional: local saves never
-   depend on the network. Track geometry and metadata, folder records and placement,
-   marker records, and their synchronization metadata cross the boundary only after the
+1. IndexedDB is authoritative for retained local tracks, flat personal folders, saved
+   markers, and durable preferences. Local saves never depend on the network. Tracks,
+   folders, markers, and their synchronization metadata leave the browser only after the
    user explicitly enables synchronization.
-3. Supabase Postgres and private Storage are authoritative for a signed-in user's remote
-   track revisions and geometry, folder records, marker records, and compressed-byte
-   usage.
-4. STAC, imagery, OSM, and DEM providers are authoritative for online source data.
-   Browser query/cache state is disposable and never becomes the source of truth.
-5. Zustand and component state hold transient interaction and request state only.
-   Provider adapters own only policy-required caches, such as Nominatim request pacing.
-6. Derived statistics always record their algorithm and source versions. A version
-   mismatch causes recalculation rather than silently mixing policies.
-7. Every persisted or external record is validated at its boundary. Database schema and
-   static catalog schema versions evolve independently.
-
-```mermaid
-flowchart LR
-  subgraph GitHub["GitHub repository and Pages"]
-    SourceGPX["Selected curated GPX sources"]
-    CatalogTool["Deterministic catalog build"]
-    StaticCatalog["Manifest, summaries, categories, previews"]
-    StaticGPX["Sanitized full GPX assets"]
-    AppBundle["Application, public configuration, build info"]
-    SourceGPX --> CatalogTool
-    CatalogTool --> StaticCatalog
-    CatalogTool --> StaticGPX
-  end
-
-  subgraph Browser["User browser"]
-    App["React application"]
-    QueryCache["Disposable query and in-memory indexes"]
-    IndexedDB["Dexie / IndexedDB"]
-    Session["Zustand and component state"]
-    LocalFile["User-selected GPX file"]
-    LocalFile --> App
-    App --> IndexedDB
-    App --> Session
-    App --> QueryCache
-  end
-
-  subgraph Online["Online data sources"]
-    STAC["Sentinel STAC metadata"]
-    Imagery["Sentinel true-color assets"]
-    OSM["OSM vector tiles, glyphs, sprites"]
-    DEM["Terrain / elevation tiles"]
-  end
-
-  StaticCatalog --> App
-  StaticGPX --> App
-  AppBundle --> App
-  STAC --> QueryCache
-  Imagery --> App
-  OSM --> App
-  DEM --> App
-```
+2. Supabase Postgres and private Storage are authoritative for a signed-in user's remote
+   track revisions and geometry, folder records, marker records, compressed-byte usage,
+   and public share capabilities.
+3. Sentinel STAC, imagery, vector-tile, DEM, place-search, and weather providers are
+   authoritative for online source data; see [map-providers.md](map-providers.md).
+   Browser query and cache state is disposable and never becomes the source of truth.
+4. Zustand and component state hold transient interaction and request state only.
+5. Derived values carry their algorithm version. A version mismatch causes recalculation
+   rather than silently mixing policies.
+6. Every persisted or external record is validated at its boundary. Invalid local rows
+   are skipped or removed with a `storage.*` diagnostic instead of breaking startup.
 
 ## Storage inventory
 
-| Data                                                                                                | Authority and location                                       | Client representation                                    | Retention/network rule                                                           |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Curated source GPX and curation inputs                                                              | GitHub repository, `data/`                                   | Node catalog-tool input                                  | Only maintainer-selected files enter Git; never written by the app               |
-| Curated catalog manifest, track summaries, categories, memberships, previews, and validation report | Generated GitHub Pages assets under `public/catalog/`        | Validated static queries and an in-memory viewport index | Versioned, read-only, fetched from the application origin                        |
-| Curated full GPX                                                                                    | Generated GitHub Pages assets under `public/tracks/`         | Parsed only for an opened/downloaded track               | Loaded on demand; never all fetched at startup                                   |
-| Local GPX before retention                                                                          | Browser memory from a file picker or drop                    | Validated import preview                                 | Discarded unless the user explicitly retains it                                  |
-| Retained local track summary and content                                                            | Browser IndexedDB `localTracks` and `localTrackContents`     | `LocalTrackSummary` and `LocalTrackContent`              | Saved and deleted atomically; summary owns nullable folder placement             |
-| Saved-track list thumbnails                                                                         | Browser IndexedDB `localTrackThumbnails`                     | `TrackThumbnail` (content hash + algorithm version)      | Derived and disposable; deleted with its track, recomputed when stale            |
-| Synchronized track metadata and revision                                                            | Supabase Postgres `track_records`                            | User-owned remote track record                           | Readable only by its owner; writes pass through the authenticated Edge Function  |
-| Synchronized compressed geometry                                                                    | Private Supabase Storage `track-geometries`                  | GZIP-compressed canonical GRPT bytes                     | Owner-readable; server writes and hard-deletes immutable per-upload objects      |
-| Synchronized geometry quota                                                                         | Supabase Postgres `user_track_usage`                         | Used, reserved, and next-revision counters               | 8 MiB compressed bytes per user; mutations serialize on this row                 |
-| Flat personal folders                                                                               | IndexedDB `trackFolders`; Supabase `track_folder_records`    | `TrackFolder` plus browser-local `FolderSyncState`       | Owner-only; ordered, revisioned, and limited to 1,000 remote records             |
-| Unsaved route plans                                                                                 | Browser memory                                               | Ordered waypoints, accepted leg geometry, and metrics    | Discarded on close or reload; Save converts the plan into an unfiled local track |
-| Saved markers                                                                                       | Browser IndexedDB                                            | Versioned marker records mapped to domain objects        | Private until explicit file export                                               |
-| Map camera and durable preferences                                                                  | Browser IndexedDB                                            | Validated settings records                               | Restore the last settled camera on next startup                                  |
-| Active selection, edit state, filters, sorting, layer instances                                     | Browser memory/Zustand/components                            | Serializable transient state plus map facade state       | Lost on reload unless a specific preference is deliberately persisted            |
-| Static catalog cache                                                                                | Optional browser IndexedDB cache                             | Catalog data plus catalog version                        | Disposable; GitHub Pages manifest remains authoritative                          |
-| Satellite search results and calendar summaries                                                     | Online STAC authority; component state in browser            | `SatelliteScene` and derived `SceneDaySummary`           | Cancellable and disposable; no bulk permanent mirror                             |
-| Sentinel true-color imagery                                                                         | Online imagery provider                                      | Map raster source/texture                                | Requested for selected scenes; provider/browser cache policy applies             |
-| OSM tiles, glyphs, and sprites                                                                      | Online configured map provider                               | MapLibre sources                                         | Provider-owned, attributed, and replaceable                                      |
-| Terrain/elevation tiles                                                                             | Online configured DEM provider                               | MapLibre terrain and elevation adapter input             | Provider-owned; derived samples may be stored with plans/tracks/markers          |
-| Diagnostics                                                                                         | Bounded browser memory and optional capped IndexedDB records | Typed diagnostic events and snapshots                    | Local-only; sanitized explicit export excludes geometry by default               |
-| Build information and public provider configuration                                                 | GitHub Pages application bundle                              | Validated bootstrap values                               | Public by definition; secrets are forbidden                                      |
+| Data                                    | Authority and location                              | Retention/network rule                                                      |
+| --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- |
+| Imported GPX/FIT/KML before retention   | Browser memory                                      | Discarded unless the user saves it; original file bytes are never kept      |
+| Retained local track summary and points | IndexedDB `localTracks` and `localTrackContents`    | Saved and deleted atomically; summary owns nullable folder placement        |
+| Saved-track list thumbnails             | IndexedDB `localTrackThumbnails`                    | Derived and disposable; deleted with the track, recomputed when stale       |
+| Flat personal folders                   | IndexedDB `trackFolders`; Supabase                  | Ordered and revisioned; at most 1,000 remote folders per user               |
+| Saved markers                           | IndexedDB `savedMarkers`; Supabase `marker_records` | Owner-only; at most 10,000 remote markers per user                          |
+| Synchronized track metadata             | Supabase Postgres `track_records`                   | Owner-readable; writes pass through the authenticated `track-sync` function |
+| Synchronized compressed geometry        | Private Supabase Storage bucket `track-geometries`  | Owner-readable; server writes and hard-deletes immutable per-upload objects |
+| Synchronized geometry quota             | Supabase Postgres `user_track_usage`                | 8 MiB compressed bytes per user; mutations serialize on this row            |
+| Public track share capabilities         | Supabase Postgres `track_shares`                    | Service-role only; resolved by the public `track-share` function            |
+| Unsaved route plans                     | Browser memory                                      | Discarded on close or reload; Save converts the plan into a local track     |
+| Opened shared track                     | Browser memory                                      | Transient `shared:<content-hash>` selection until the viewer saves it       |
+| Map camera and durable preferences      | IndexedDB `settings`                                | Validated per key; corrupt values are removed and defaults used             |
+| Selection, filters, visible tracks      | Browser memory/Zustand/components                   | Lost on reload unless a preference below persists it                        |
+| Satellite results and applied imagery   | Component state and map facade memory               | Cancellable and disposable; never written to IndexedDB                      |
+| Diagnostics                             | Bounded in-memory ring buffer (200 events)          | Local-only; leaves the browser only through explicit export                 |
 
-## Supabase track synchronization backend
+## IndexedDB schema
 
-The remote identifier is the lowercase SHA-256 of canonical, elevation-free geometry
-bytes. `track_records` uses `(user_id, content_hash)` as its primary key and stores JSON
-metadata, a server revision, `reserved | ready` state, one unique object path,
-compressed byte count, timestamps, and a temporary reservation expiry.
-`user_track_usage` stores non-negative used and reserved byte counters plus the next
-per-user revision. Neither table has a `deleted_at` column or another tombstone state.
+`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 10. Earlier
+versions exist only as upgrade steps.
 
-`track_folder_records` uses `(user_id, folder_id)` as its primary key. Its validated
-payload contains the stable folder ID, normalized name, one folder-or-marker icon key,
-non-negative position, and creation/update timestamps. A positive per-user revision
-serializes optimistic mutations. Content upserts keep an existing record's position;
-only the atomic reorder RPC changes it. Browser roles receive owner-only `SELECT`;
-folder upsert, reorder, and hard-delete operations run only through security-definer
-RPCs invoked by the authenticated Edge Function. The server provisions **Imports** for
-every account and caps each owner at 1,000 folders.
+| Store                  | Key        | Record                                                             |
+| ---------------------- | ---------- | ------------------------------------------------------------------ |
+| `settings`             | `key`      | `{ key, value, updatedAt }`; one record per preference or sync key |
+| `diagnostics`          | `++id`     | Declared but not written; diagnostics stay in memory               |
+| `localTracks`          | `id`       | `LocalTrackSummary`, schema version 6                              |
+| `localTrackContents`   | `trackId`  | `LocalTrackContent`, schema version 6                              |
+| `localTrackThumbnails` | `trackId`  | `TrackThumbnail`, algorithm version 1                              |
+| `trackFolders`         | `id`       | `TrackFolder`, schema version 1                                    |
+| `savedMarkers`         | `id`       | `SavedMarker`, schema version 2                                    |
+| `trackSyncStates`      | `trackId`  | Browser-local track synchronization queue                          |
+| `folderSyncStates`     | `folderId` | Browser-local folder synchronization queue                         |
+| `markerSyncStates`     | `markerId` | Browser-local marker synchronization queue                         |
 
-Only `authenticated` `SELECT` is granted on these tables, with RLS constrained by
-`auth.uid() = user_id`. Browser roles cannot write either table or Storage. The private
-`track-geometries` bucket permits owner-only reads, accepts `application/gzip`, and caps
-one object at 8 MiB. Server paths have the form
-`<user-id>/<content-hash>/<upload-id>.grpt.gz`; a fresh UUID for every reservation keeps
-late cleanup of an old upload from touching a later upload with the same content hash.
+Database creation provisions the **Imports** folder (`id = imports`) with a pending
+upsert.
 
-### Public track capabilities
+### Settings keys
 
-`track_shares` is a service-role-only capability registry. Its SHA-256 token digest is
-the primary key, while `(user_id, content_hash)` is unique and references the ready
-owner record with an `on delete cascade` composite foreign key. The row stores a public
-43-character nonce and no raw capability; the Edge Function reconstructs a stable token
-from the owner UUID, nonce, and a per-environment `TRACK_SHARE_TOKEN_SECRET` HMAC key.
+| Key                             | Value                                                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort |
+| `map.camera`                    | Schema version 3: last settled longitude, latitude, and zoom; bearing and pitch are session-only                        |
+| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options            |
+| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                            |
+| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                    |
+| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                          |
+| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                       |
+| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                |
+| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                            |
+| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                             |
+| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                           |
+| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                       |
 
-The table has RLS enabled and no `PUBLIC`, `anon`, or `authenticated` table or RPC
-privileges. A share can be enabled or read only while its ready record has string
-`name`/`updatedAt`, a `gpx`/`fit`/`kml` source format, and a `track`/`route` geometry
-kind; resolution treats metadata invalidated later as absent. Resolution returns only
-the current content hash, byte count, and public
-name/source-format/geometry-kind/updated-at projection. It does not alter
-`user_track_usage`, private `track_records` access, or the private geometry bucket.
+## Local tracks
 
-The service-role-only RPCs reserve and finalize uploads, release failed reservations,
-apply metadata, and hard-delete one track. Every mutation locks the user's usage row.
-The combined `used_bytes + reserved_bytes + incoming` value may not exceed `8_388_608`.
-Under that lock, an expired reservation is finalized when its exact object is visible in
-Storage; otherwise its bytes are released and its row is removed. A ready duplicate
-receives no new path or quota charge. A nonzero upload revision must match the ready
-record before its metadata is atomically applied with a newly allocated revision.
+Code: `src/domain/tracks/localTrack.ts`, `trackFolder.ts`, `trackThumbnail.ts`.
 
-Successful deletion first removes the row and decrements its counter in one database
-transaction, then the Edge Function idempotently removes the old object. There is no
-server tombstone. Before later synchronization mutations and status reads, the function
-lists user-owned objects, re-reads every current reserved and ready path, and removes
-only objects still absent from that authoritative set.
+`LocalTrackSummary` is the listable record: normalized name, `savedAt`/`updatedAt`,
+optional `contentHash`, source filename and format (`gpx | fit | kml`), favorite flag,
+`geometryKind` (`track | route`), nullable `folderId`, point and segment counts,
+`metrics`, optional DEM-derived `calculatedMetrics`, the bounded GPX metadata
+projection, up to 50 validation warnings, and optional generated-name fields
+(`generatedName`, `middleAnchorKind`, start/middle/end/fallback POI candidates).
 
-### Canonical GRPT version 1 geometry
+`LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
+segments of at least two points, each with coordinate and optional source elevation and
+timestamp), optional DEM-derived `calculatedTrackPoints`, and up to 32 track-owned
+`markers` (`id`, `name`, `coordinate`) taken from GPX waypoints. Rows from older schema
+versions are migrated on read.
 
-Canonical coordinates are rounded to $10^{-6}$ degrees. The byte stream starts with
-ASCII `GRPT`, version byte `1`, and a flags byte whose low bit denotes timestamp fields.
-It then contains an unsigned-varint segment count. Each segment stores an
-unsigned-varint point count followed by longitude and latitude integer deltas encoded as
-ZigZag unsigned varints; delta state restarts at each segment. When timestamps are
-enabled, each point also stores `0` for a missing timestamp or the ZigZag timestamp
-delta plus one, with timestamp delta state also restarting per segment. Elevation and
-derived elevation metrics are absent. No trailing bytes are valid.
+`TrackMetrics` holds distance (algorithm version 1), start/end coordinates,
+antimeridian-aware bounds, center, optional recorded start/end and elapsed seconds, and
+optional ascent/descent/min/max elevation with `elevationSource` (`gpx | dem-assisted`)
+and a matching `elevationAlgorithmVersion`. `calculatedMetrics` must be DEM-assisted
+version 4. Recorded duration is absent unless every rendered point has an ordered valid
+timestamp.
 
-The canonical bytes are hashed with SHA-256 and then compressed with GZIP. The shared
-reference vector at `tests/fixtures/track-sync/geometry-v1.json` fixes the input,
-canonical bytes, compressed bytes, and digest used by both server validation and the
-browser codec.
+`contentHash` is the lowercase SHA-256 of canonical GRPT v2 bytes of `trackPoints`
+(`src/infrastructure/runtime/WebCryptoTrackContentHasher.ts`). It is absent only on rows
+migrated from local schema v2 or earlier. Calculated points and metrics are
+browser-local derivations and never affect the hash.
 
-## Shared value types and conventions
+`TrackThumbnail` stores the source `contentHash` (null for unhashed rows), algorithm
+version, a loop flag, and simplified per-segment vertices whose longitudes are unwrapped
+across the antimeridian. A hash or version mismatch makes it stale.
 
-| Type            | Contract                                                                       |
-| --------------- | ------------------------------------------------------------------------------ |
-| `TrackId`       | Namespaced stable string: `curated:<stable-id>` or `local:<uuid>`              |
-| Other IDs       | UUID or another injected stable ID; never derived from a private local path    |
-| `GeoCoordinate` | WGS84 longitude and latitude in GeoJSON order: `[longitude, latitude]`         |
-| `GeoBounds`     | West, south, east, and north decimal degrees; validated and antimeridian-aware |
-| Distance        | Integer or finite decimal meters; UI unit conversion is presentation-only      |
-| Elevation       | Finite meters above the configured DEM datum, with provider/policy provenance  |
-| Duration        | Non-negative elapsed seconds; absent when usable GPX timestamps do not exist   |
-| Timestamps      | ISO 8601 UTC instants. Calendar grouping declares its display timezone         |
-| Colors          | Validated theme/color token or normalized CSS hex value, never arbitrary CSS   |
-| Versions        | Positive schema or algorithm version carried with the record it governs        |
+### Folders and placement
 
-## Track and catalog model
+`TrackFolder` has a stable ID, normalized XML-safe name (1-200 characters), icon key
+(`folder` or any marker icon), non-negative `position`, and `createdAt`/`updatedAt`.
+Folders are flat, names need not be unique, and order is by position then ID.
 
-The application presents a combined catalog, but curated and local records retain
-different authorities. `TrackSummary` is lightweight enough to load for every track.
-Full GPX and full-resolution geometry are separate, on-demand content.
+Placement is `LocalTrackSummary.folderId`; `null` or an unknown folder ID means
+**Unfiled**. Saved imports go to **Imports**, which is recreated when missing and cannot
+be deleted. Saved route plans stay unfiled. Migrating pre-folder rows assigns tracks to
+**Imports** and routes to **Unfiled** without queuing synchronized tracks for upload.
+Deleting a folder moves its tracks to **Unfiled**, marks their sync state for a metadata
+update, and queues the folder deletion in one transaction; remaining positions are
+unchanged. A local reorder rewrites positions and records `sync.folder-order-version`
+instead of per-folder sync state.
 
-```mermaid
-classDiagram
-  class CuratedCatalogManifest {
-    +schemaVersion
-    +catalogVersion
-    +generatedFromCommit
-    +trackCount
-    +categoryCount
-    +distanceAlgorithmVersion
-    +elevationAlgorithmVersion
-  }
-  class TrackSummary {
-    +TrackId id
-    +TrackSourceKind sourceKind
-    +string name
-    +Instant addedAt
-    +Instant recordedStartAt optional
-    +Instant recordedEndAt optional
-    +seconds elapsedDuration optional
-    +GeoBounds bounds
-    +GeoCoordinate center
-    +meters distance
-    +number segmentCount
-    +number pointCount
-    +RouteShape routeShape
-    +string[] tags
-  }
-  class TrackMetrics {
-    +meters ascent optional
-    +meters descent optional
-    +meters minimumElevation optional
-    +meters maximumElevation optional
-    +string elevationSource optional
-    +number distanceAlgorithmVersion
-    +number elevationAlgorithmVersion optional
-  }
-  class CuratedTrackRecord {
-    +string previewAssetUrl
-    +string gpxAssetUrl
-    +string provenanceId optional
-  }
-  class LocalTrackRecord {
-    +Instant importedAt
-    +string contentId
-    +ValidationWarning[] warnings
-  }
-  class LocalTrackContentRecord {
-    +string contentId
-    +TrackPoint[] sourcePoints
-  }
-  class CuratedCategory {
-    +string id
-    +string parentId optional
-    +string name
-    +string sortRank
-  }
-  class CuratedCategoryMembership {
-    +string categoryId
-    +TrackId trackId
-    +string sortRank
-  }
-  class TrackFolder {
-    +string id
-    +string name
-    +string iconKey
-    +int position
-    +Instant createdAt
-    +Instant updatedAt
-  }
-  class TrackPlacement {
-    +TrackId trackId
-    +string folderId optional
-  }
+## Plans and saved markers
 
-  CuratedCatalogManifest "1" o-- "many" CuratedTrackRecord
-  CuratedTrackRecord *-- TrackSummary
-  LocalTrackRecord *-- TrackSummary
-  TrackSummary *-- TrackMetrics
-  LocalTrackRecord "1" --> "1" LocalTrackContentRecord
-  CuratedCategory "1" --> "many" CuratedCategoryMembership
-  CuratedTrackRecord "1" --> "many" CuratedCategoryMembership
-  TrackFolder "1" --> "many" TrackPlacement
-  TrackSummary "1" --> "1" TrackPlacement
-```
+An unsaved route plan is a transient Tracks-owned aggregate of ordered waypoints,
+accepted routed or direct leg geometry, metrics, and optional elevation samples. It has
+no IndexedDB record. Save converts it into `LocalTrackSummary` and `LocalTrackContent`
+with `geometryKind = route`, after which it follows the normal local-track contracts.
 
-### Track attributes and invariants
+`SavedMarker` (`src/domain/markers/savedMarker.ts`) has `id`, normalized XML-safe
+`name`, `normalizedName`, `[longitude, latitude]` coordinate, nullable
+`elevationMeters`, `iconKey`, `colorKey`, and `createdAt`/`updatedAt`. Version 1 rows
+upgrade with a null elevation. Planning waypoints are coordinate snapshots, so later
+marker edits do not change accepted route geometry.
 
-| Record                    | Required attributes and rules                                                                                                                                            |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CuratedCatalogManifest`  | Static/catalog schema versions, content version, source commit, generated counts, calculation-policy versions, and asset references/checksums where useful               |
-| `TrackSummary`            | ID, source kind, normalized non-empty name, added time, bounds, center, distance, point/segment counts, metrics, route shape, and tags; optional recorded times/duration |
-| `TrackMetrics`            | Distance and optional ascent/descent/min/max elevation; every derived field is tied to its algorithm and elevation source version                                        |
-| `CuratedTrackRecord`      | Summary plus relative same-origin preview and GPX asset URLs and optional approved provenance; URLs never expose source paths                                            |
-| `LocalTrackRecord`        | Name, source identity/format, favorite state, import time, content reference, and bounded validation warnings; `addedAt` equals the completed retention/import time      |
-| `LocalTrackContentRecord` | One validated normalized source-point projection keyed by its track ID; original file bytes are not retained; fetched separately from summaries                          |
-| `CuratedCategory`         | Read-only hierarchical category from GitHub. A track may appear in multiple curated categories through memberships                                                       |
-| `TrackFolder`             | Flat personal folder with no children. Names need not be unique; order is by position, then ID. **Imports** is provisioned and cannot be deleted                         |
-| `TrackPlacement`          | The nullable `folderId` on each saved track summary; `null` or an unknown folder ID means **Unfiled**. Tracks inside a folder follow the selected track sort             |
+## Browser synchronization state
 
-`recordedStartAt` and `recordedEndAt` come from valid GPX point timestamps.
-`elapsedDuration` is their difference when the ordering is valid. Moving time is not an
-MVP field because it requires a separate speed/stoppage policy. Curated curation may
-omit sensitive timestamps while retaining a non-identifying duration. For curated
-tracks, `addedAt` comes from reviewed curation metadata rather than the build clock; for
-local tracks, it is the completed retention/import time.
+Each sync-state store is a preparation queue keyed by the domain record ID.
 
-The executable local-track schema keeps listable summaries separate from normalized
-track points. Both rows share the opaque local track ID. A newly saved summary records
-its local modification time and the lowercase SHA-256 of elevation-free canonical GRPT
-geometry; migrated rows may temporarily lack that hash. The content row owns exactly one
-normalized source-point projection and may retain local derived elevation, which is not
-part of the canonical identity. Original file bytes are discarded after parsing.
+| Store              | Fields                                                                                                                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trackSyncStates`  | `contentHash`, `lineageHash`, `geometryVersion` (1 or 2), nullable `remoteRevision`, `pendingKind` (`upsert \| metadata \| delete \| null`) |
+| `folderSyncStates` | Nullable `remoteRevision`, `pendingKind` (`upsert \| delete \| null`), monotonic `localVersion`                                             |
+| `markerSyncStates` | Nullable `remoteRevision`, `pendingKind` (`upsert \| delete \| null`), monotonic `localVersion`                                             |
 
-`trackFolders` stores a flat ordered list. Folder placement remains in
-`LocalTrackSummary.folderId`; it is nullable rather than a separate join record. The
-stable `imports` record is provisioned with the database and recreated when an import is
-saved without it. Saving a route leaves it unfiled; upgrading a pre-folder database
-assigns imported tracks to `imports` and leaves saved routes unfiled without queuing
-synchronized tracks for upload. Folder deletion updates every affected summary and
-folder in one IndexedDB transaction and leaves remaining positions unchanged. A local
-reorder rewrites positions and records a pending order version in settings instead of
-per-folder synchronization state. The `track-folders.collapsed` settings record holds
-the IDs of folders shown collapsed in this browser; it is outside the `sync.*` keys, is
-never uploaded, drops deleted folders on the next save, and resets to expanded when
-unreadable.
+A clean folder or marker state requires a remote revision. Every save, rename, placement
+change, or deletion updates the domain rows and sync state in one IndexedDB transaction.
 
-`trackSyncStates` is a browser-local preparation queue keyed by the local track ID. It
-stores the content hash, a possible remote revision, and a pending `upsert`, `metadata`,
-or `delete` intent. `folderSyncStates` is keyed by folder ID and stores its remote
-revision, pending `upsert | delete` intent, and monotonic local version. A track save,
-placement change, folder mutation, or deletion updates the affected domain rows and sync
-state in one IndexedDB transaction. `sync.enabled` is a validated setting with default
-`false`; it alone permits startup or lifecycle synchronization.
+When `sync.user-id` is missing, malformed, or changed, preparation keeps every valid
+local track, folder, and marker, collapses duplicate track content by the canonical
+rule, drops stale sync states and delete records, writes pending upserts with null
+revisions, stores the new owner, and resets `sync.usage` in one transaction.
 
-`sync.user-id` stores the bounded opaque account identifier that owns local preparation
-state; it is coordination metadata, never an authorization credential. On a missing,
-malformed, or changed owner, preparation retains every valid local summary/content pair
-and folder, collapses duplicate track content through the normal canonical rule, removes
-stale sync states and tombstones, and writes pending upserts with null revisions. That
-transaction also stores the new owner and resets `sync.usage`.
+When a same-account remote deletion needs a decision, one transaction removes the
+selected summary, content, thumbnail, and state rows and clears
+`local-tracks.latest-opened` when it names a removed track. Unselected pairs receive
+null-revision pending upserts; an already absent pair only loses its stale state.
+Deleting an unsent upsert removes its intent; deleting a synchronized track keeps only a
+minimal delete retry record. `sync.usage` is written only after a validated remote
+merge. The synchronization flow itself is in
+[runtime-flows.md](./runtime-flows.md#explicit-cross-device-synchronization).
 
-When a same-account remote deletion needs a decision, one IndexedDB transaction removes
-the selected summary/content/state rows and clears `local-tracks.latest-opened` only
-when it names a selected track. Still-present unselected pairs receive null-revision
-pending upserts; an already absent pair only loses its stale state and is never
-resurrected. Deleting an unsent upsert removes its local intent; deleting a previously
-synchronized track retains only a minimal delete retry record, never local geometry or
-metadata. The worker stores the authoritative used/reserved/limit quota only after
-validated remote merge. Canonical geometry excludes elevations and derived elevation
-metrics; tracks downloaded without an elevation profile recalculate those browser-local
-values immediately without changing their hash, timestamp, or pending state.
+## Supabase backend
 
-Catalog search first intersects `GeoBounds` with the current viewport. Simplified
-preview geometry can remove bounding-box false positives. An OSM-style tile index is not
-part of the initial model for approximately 1,200 tracks; it may be added as a derived
-static index without changing track identity if measurement justifies it.
+Browser roles receive only owner-scoped `SELECT` (`auth.uid() = user_id`) on
+`track_records`, `user_track_usage`, `track_folder_records`, and `marker_records`, and
+owner-only reads in the `track-geometries` bucket. All writes run through
+security-definer RPCs that only `service_role` may execute, invoked by the authenticated
+`track-sync` Edge Function. Per-user revision and count counters for folders and markers
+live in `private.user_folder_sync_state` and `private.user_marker_sync_state`, which no
+API role can read. Mutation RPCs return one outcome: `applied`, `upload`, `existing`,
+`conflict` (with the current record), `missing`, `limit`, or `revision-exhausted`.
 
-## GPX parsing boundary
+### Tracks
 
-The same parser contract supports the Node catalog tool and browser imports, although
-their file adapters differ. Untrusted XML never enters domain/application objects
-without validation and resource limits.
+`track_records` is keyed by `(user_id, content_hash)` and stores JSON `metadata`, a
+per-user `revision`, `reserved | ready` state, a unique `object_path`, compressed byte
+count, timestamps, and a 10-minute reservation expiry for reserved rows. There is no
+tombstone column. `user_track_usage` holds non-negative used and reserved bytes plus the
+next per-user revision.
 
-| Result                 | Attributes                                                                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GpxParseSuccess`      | Parsed tracks/routes/waypoints, normalized geometry, extracted name/times/elevation, point and segment counts, bounds, and bounded warnings |
-| `GpxParseFailure`      | Stable error code, safe message, issue count, and bounded location/context that contains no raw file path or XML dump                       |
-| `GpxValidationWarning` | Stable code, severity, affected segment/point index where safe, and remediation text                                                        |
+Uploaded metadata is the local summary without POI coordinates and without elevation
+metrics, plus `lineageHash`, `geometryVersion`, track-owned `markers`, nullable
+`folderId`, and distance/elapsed-time metrics. The function caps it at 64 KiB and
+rejects a `lineageHash` or `geometryVersion` that does not match the uploaded geometry.
 
-Input limits cover XML size, nesting/entity behavior, coordinate ranges, segment and
-point counts, non-finite values, and cancellation. Parsing never mutates a curated
-source file or uploads a local file. The executable parser prefers renderable track
-segments over companion route geometry, preserves independent segment boundaries, and
-uses routes only when no renderable track segment exists.
+The RPCs reserve, finalize, and release uploads, apply metadata, and hard-delete one
+track. Every mutation locks the user's usage row, and
+`used_bytes + reserved_bytes + incoming` may not exceed `8_388_608`. Under that lock an
+expired reservation is finalized when its exact object exists in Storage; otherwise its
+bytes are released and its row removed. A ready duplicate receives no new path or quota
+charge. A nonzero base revision must match the ready record before metadata is applied
+with a new revision.
 
-Local import metrics are calculated once from normalized geometry. Distance uses
-geodesic consecutive-point pairs within each segment; elevation gain and loss use only
-adjacent pairs that both contain GPX elevation. Bounds retain an explicit antimeridian
-crossing flag. Recorded duration is absent unless all rendered points have ordered,
-valid timestamps. Each calculation stores its policy version so later policy changes
-cannot silently reinterpret retained results.
+Objects use `<user-id>/<content-hash>/<upload-id>.grpt.gz`, accept only
+`application/gzip`, and are capped at 8 MiB. A fresh UUID per reservation keeps late
+cleanup of an old upload from touching a later upload with the same hash. Deletion
+removes the row and decrements usage in one transaction, then idempotently removes the
+object. Before later mutations and status reads, the function removes user-owned objects
+absent from every current reserved and ready path.
 
-## Plans, waypoints, and saved markers
+### Folders and markers
 
-An unsaved route plan is a transient Tracks-owned aggregate. It keeps ordered waypoints,
-accepted routed or direct leg geometry, calculated metrics, and optional elevation
-samples together in browser memory so each accepted edit is internally consistent. It
-does not have an IndexedDB record or a separately persisted draft lifecycle.
+`track_folder_records` and `marker_records` are keyed by `(user_id, folder_id)` and
+`(user_id, marker_id)`. Each stores the validated JSON payload of the local record
+(folder payloads up to 4 KiB, marker payloads validated at 4 KiB by the function), a
+positive per-user revision, and `updated_at`. Upsert and delete take a base revision and
+return `conflict` with the current record on mismatch. Folder content upserts keep an
+existing position; only `reorder_track_folders` changes positions, applying one complete
+order atomically. A trigger on `auth.users` provisions every account's **Imports**
+folder.
 
-Save is available only after the plan contains usable geometry. It atomically converts
-the draft into the existing `LocalTrackSummary` and `LocalTrackContent` records with
-`geometryKind = route`; after that conversion, the result follows the same persistence,
-rename, export, and deletion contracts as any other retained local track. Closing the
-draft or reloading the application discards it.
+### Public track shares
 
-A saved marker has its own persistent identity. Planning waypoints are coordinate
-snapshots rather than live links, so later marker edits do not change accepted route
-geometry.
+`track_shares` is keyed by the SHA-256 digest of the share token and stores
+`(user_id, content_hash)` (unique, with an `on delete cascade` foreign key to the ready
+`track_records` row), a public 43-character nonce, and `created_at`. No raw token is
+stored: the `track-share` function derives it with HMAC from the owner ID, nonce, and
+the per-environment `TRACK_SHARE_TOKEN_SECRET`. The table has RLS enabled and no
+`PUBLIC`, `anon`, or `authenticated` table or RPC privileges.
 
-```mermaid
-classDiagram
-  class SavedMarkerRecord {
-    +string id
-    +number schemaVersion
-    +string name
-    +string iconKey
-    +string color
-    +GeoCoordinate coordinate
-    +meters elevation optional
-    +string elevationSource optional
-    +number elevationAlgorithmVersion optional
-    +number preferredZoom
-    +Instant createdAt
-    +Instant updatedAt
-  }
-```
+A share can be enabled, read, or resolved only while its ready record has string `name`
+and `updatedAt`, a `gpx | fit | kml` source format, and a `track | route` geometry kind.
+Resolution returns only the content hash, byte count, object path, and that public
+name/format/kind/updated-at projection; it never changes usage or private access.
 
-## Map state and extensible layers
+## Canonical GRPT geometry
 
-Native MapLibre maps, sources, layers, event listeners, and workers are runtime objects
-owned by the map facade. They are never persisted. Only validated serializable camera
-and preference data crosses the storage boundary.
+Code: `src/domain/tracks/trackSyncGeometry.ts` and
+`supabase/functions/track-sync/internal/geometry.ts`; reference vectors in
+`tests/fixtures/track-sync/geometry-v1.json` and `geometry-v2.json`.
 
-| Record                        | Storage                                               | Attributes                                                                                                                       |
-| ----------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `MapCameraRecord`             | IndexedDB setting                                     | Longitude, latitude, zoom, bearing, pitch, schema version, and update time                                                       |
-| `MapLayerDefinition`          | Application code/public configuration on GitHub Pages | Stable ID, layer kind, ordered band, adapter/source key, supported opacity/visibility controls, zoom limits, and attribution key |
-| `MapLayerPreference`          | IndexedDB when persistence is useful                  | Layer ID, visibility, optional opacity, and update time                                                                          |
-| `ActiveMapSelection`          | Session/Zustand                                       | Selected track/plan/marker/scene IDs and current interaction mode                                                                |
-| `AppliedSatelliteMosaic`      | Session/Zustand plus map facade memory                | Empty/loading/ready/failed state, committed date, safe scene keys, rendered coverage, acquisition range, and render progress     |
-| Native map/source/layer state | Map facade memory                                     | Reconstructed from definitions, configuration, selections, and preferences                                                       |
+Coordinates are rounded to $10^{-6}$ degrees. The stream is ASCII `GRPT`, a version
+byte, a flags byte (bit 0: timestamps; bit 1: elevations, version 2 only), and an
+unsigned-varint segment count. Each segment has an unsigned-varint point count followed
+by ZigZag-varint longitude and latitude deltas that restart per segment. With
+timestamps, each point adds `0` for a missing timestamp or the ZigZag millisecond delta
+plus one. With elevations, each point adds `0x00` for none or `0x01` and a big-endian
+Float64. Limits are 512 segments and 100,000 points; trailing bytes are invalid.
 
-Layer definitions occupy stable bands in this order:
+New content uses version 2, which preserves source elevations. `contentHash` is the
+SHA-256 of the canonical bytes. `lineageHash` is the SHA-256 of the elevation-free
+version 1 projection, so versions of the same geometry share a lineage; the remote head
+of a lineage is the highest geometry version, then the highest revision. Legacy remote
+records without lineage fields are version 1 with `lineageHash = content_hash`. Stored
+objects are GZIP-compressed canonical bytes.
 
-```mermaid
-flowchart TB
-  Interaction["Interaction and highlight overlays"]
-  Markers["Saved markers and planning waypoints"]
-  Plans["Route plans"]
-  Tracks["Track previews and selected GPX"]
-  OSMOverlay["OSM water, boundaries, hiking data, POIs, labels"]
-  Satellite["Selected Sentinel true-color imagery"]
-  Background["Background / non-imagery fallback"]
+## Import parsing boundary
 
-  Interaction --> Markers --> Plans --> Tracks --> OSMOverlay --> Satellite --> Background
-```
+GPX, FIT, and KML files parse to one `ParsedGpx` shape (`src/domain/tracks/gpx.ts`,
+`fit.ts`, `kml.ts`, `trackImport.ts`): geometry kind, segments, up to 32 named
+waypoints, point count, bounded metadata projection, and up to 50 warnings. Failures use
+a stable `GpxParseError` code. GPX limits cover a 10 MiB file, XML depth, 128
+tracks/routes, 512 segments, 100,000 points, and text length; parsing is cancellable.
+Renderable track segments win over companion routes, and segment boundaries are kept.
 
-The diagram is top-to-bottom visual priority. Terrain DEM is a capability/source used
-for elevation and MapLibre terrain, not an ordinary visual overlay. The application
-supports basic pitch and terrain but does not model richer 3D entities.
+## Transient map and satellite state
 
-## Satellite, OSM, and elevation provider data
+MapLibre objects, satellite search results, selected scenes, Mosaic selections, and
+applied imagery are runtime state and never enter IndexedDB. A shared map URL carries
+only the camera, optional 3D orientation, one scene key, and weather point/time
+(`src/presentation/map/mapShareUrl.ts`). Mosaic state and scene lists do not enter URLs
+or diagnostic exports.
 
-```mermaid
-classDiagram
-  class SatelliteSearchQuery {
-    +SearchTarget target
-    +LocalDate startDate
-    +LocalDate endDate
-    +percent maximumCloudCover
-    +ProductLevel productLevel
-  }
-  class ViewportTarget {
-    +GeoBounds bounds
-  }
-  class MarkerAreaTarget {
-    +string markerId
-    +GeoCoordinate center
-    +meters radius
-  }
-  class SatelliteScene {
-    +string providerId
-    +string itemId
-    +string collectionId
-    +ProductLevel productLevel
-    +Instant acquiredAt
-    +GeoJSON footprint
-    +GeoBounds bounds
-    +percent cloudCover optional
-    +string platform optional
-    +string tileId optional
-    +SceneAsset[] assets
-    +string attributionKey
-  }
-  class SatelliteSceneCoverage {
-    +percent viewportCoverage
-    +InterestPointRelation relation
-    +kilometers distanceToSceneEdge
-    +boolean edgeWarning
-  }
-  class SceneDaySummary {
-    +LocalDate date
-    +number sceneCount
-    +percent minimumCloudCover optional
-    +percent maximumCloudCover optional
-    +string[] sceneIds
-  }
-  class SatelliteMosaicSelection {
-    +LocalDate selectedUpperBound
-    +SatelliteScene[] coverageContributors
-    +percent unionCoverage
-    +LocalDate oldestAcquisition optional
-    +boolean archiveExhausted
-  }
-  class AppliedSatelliteMosaic {
-    +MosaicStatus status
-    +LocalDate selectedDate
-    +SceneKey[] readyScenes
-    +percent renderedUnionCoverage
-    +RenderProgress optional
-  }
+## Diagnostics
 
-  SatelliteSearchQuery *-- ViewportTarget
-  SatelliteSearchQuery *-- MarkerAreaTarget
-  SatelliteSearchQuery "1" --> "many" SatelliteScene
-  SatelliteScene "1" --> "1" SatelliteSceneCoverage
-  SatelliteScene "many" --> "one" SceneDaySummary
-  SatelliteScene "many" --> "one" SatelliteMosaicSelection
-  SatelliteMosaicSelection "1" --> "one" AppliedSatelliteMosaic
-```
-
-`SearchTarget` is exactly one viewport or marker-area variant. The implemented viewport
-snapshot contains immutable WGS84 bounds and center. Product level is one exclusive
-`L1C` or `L2A` value; a response containing the other level is rejected. Date endpoints
-are inclusive UTC dates. A marker search uses an explicit radius; a point alone has no
-meaningful intersection area. Calendar summaries and viewport coverage are derived from
-returned scenes and are not persisted as authoritative data.
-
-Scene identity is collection plus item ID. Search results are deduplicated on that key,
-ordered by acquisition instant then item ID, and grouped by UTC date. Coverage is the
-geodesic area intersection divided by submitted viewport area. The interest point is
-classified as inside, boundary, or outside and carries its geodesic distance to the
-nearest footprint ring. A visual asset is explicitly a renderable COG, unsupported JP2,
-or unavailable; unsupported L1C imagery is never replaced with an L2A scene.
-
-| Provider data             | Validated application attributes                                                                                                                       | Persistence                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| STAC item                 | Provider/item/collection IDs, L1C/L2A level, acquisition instant, footprint, bounds, cloud cover, platform/tile IDs, approved asset links, attribution | Component state only                                              |
-| Sentinel true-color asset | Scene ID, asset role/type, raster access URL/template, projection/resolution metadata needed by the adapter                                            | Runtime map source; provider/browser cache only                   |
-| OSM vector source         | Provider/source ID, TileJSON/tile template, source-layer mapping, zoom range, glyph/sprite endpoints, attribution                                      | Public validated configuration plus runtime map source            |
-| DEM source                | Provider/source ID, tile template, encoding, tile size, zoom range, attribution                                                                        | Public validated configuration plus runtime map/elevation adapter |
-| Elevation sample          | Coordinate/distance-along-line, elevation meters or missing status, provider ID, and algorithm version                                                 | Derived profile cache or embedded metrics provenance              |
-
-An individual-scene date shortcut and Mosaic upper-bound date are separate contracts.
-Single-scene mode chooses one explicit footprint and preserves its shareable selection.
-Mosaic mode queries the exact settled viewport in descending monthly chunks, accepts
-only newest-to-oldest L2A footprints that add measurable clipped union coverage, and
-bounds the transient selection at 128 scenes. Exact west/south/east/north extrema define
-duplicate geometric coverage; nullable provider tile IDs do not.
-
-`SatelliteMosaicSelection.coverageContributors` is the bounded catalog decision.
-`AppliedSatelliteMosaic.readyScenes` contains only sources that actually reached map
-readiness, so its union coverage can be lower and is recalculated against each committed
-viewport. Both forms are transient. Changing the selected upper-bound date or leaving
-Mosaic removes the applied snapshot and native resources; neither Mosaic state nor scene
-keys enter IndexedDB, URLs, or diagnostics exports.
-
-## Settings, caches, and diagnostics
-
-| Record                  | Attributes and constraints                                                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `UiPreferences`         | Schema version, developer-mode flag, and deliberately persisted presentation preferences; no authoritative feature data                          |
-| `MapCameraRecord`       | Last settled validated camera and update time; corrupt values are removed and the Georgia default is used                                        |
-| `CatalogCacheRecord`    | Catalog version, fetched time, and validated summaries/categories; fully disposable when versions differ                                         |
-| `DiagnosticEvent`       | Schema version, timestamp/monotonic time, level, stable event name, subsystem, operation ID, allowlisted structured fields, and normalized error |
-| `DiagnosticBufferState` | Capacity/retention bounds and optional recording-session boundary; diagnostic failure never blocks the primary operation                         |
-| `BuildInfo`             | Application version, source commit, build time, and public configuration summary from the deployed bundle                                        |
-
-Diagnostics do not become an alternate database for domain data. Raw GPX, complete
-geometry, filenames, paths, free-form imported metadata, secrets, headers, and bodies
-are excluded from default export. Geometry requires a separate explicit opt-in.
+`BoundedDiagnosticLogger` redacts each event and keeps the latest 200 in memory. Events
+never become an alternate store for domain data: raw files, complete geometry,
+filenames, paths, secrets, headers, and bodies are excluded from export. Logging
+failures never block the primary operation.
 
 ## Deletion and consistency rules
 
-- Deleting a local track removes its content and synchronization state atomically. It
-  does not affect folders or saved markers.
-- Removing a personal folder moves every placed track to **Unfiled** and records the
-  folder deletion and track metadata changes in the same transaction. Folders never have
-  children, and **Imports** cannot be removed.
-- Catalog-version replacement invalidates only derived/cache records, never user
-  folders, placements, markers, or local tracks.
-- If a curated track disappears in a catalog update, its personal placement becomes an
-  identifiable orphan that the UI can remove; it must not be rebound to another track by
-  name.
-- Updating a calculation policy marks affected cached metrics stale and recalculates
-  them from authoritative geometry.
-- All imports, searches, provider reads, long calculations, and file exports accept or
-  propagate cancellation where the platform supports it.
+- Deleting a local track removes its content, thumbnail, and sync state atomically,
+  keeping only a delete retry record for synchronized tracks. Folders and saved markers
+  are unaffected.
+- Deleting a folder moves its tracks to **Unfiled**; **Imports** cannot be deleted.
+- Deleting a remote track cascades to its public share.
+- Changing a calculation policy version recalculates derived metrics or thumbnails from
+  authoritative geometry.

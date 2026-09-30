@@ -1,22 +1,23 @@
 # Project documentation
 
-This directory explains how the application works, the reviewed system concept, current
-capability boundaries, and durable technical contracts.
+This directory explains how the application works, its current capability boundaries,
+and its durable technical contracts.
 
-| Document                                                                           | Purpose                                                                                    | Update when                                                          |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| [Project structure](./project-structure.md)                                        | Module boundaries, dependency direction, composition, and state ownership                  | Files move, a layer is added, or ownership changes                   |
-| [Data model](./data-model.md)                                                      | Implemented records, storage authority, privacy, and consistency rules                     | A persisted contract, source, cache, or ownership changes            |
-| [Features and workspace UX](./features.md)                                         | Reviewed system concept, implemented behavior, capability boundaries, and failure handling | User-visible behavior, layout, navigation, or a failure mode changes |
-| [UI design guidelines](./ui-design.md)                                             | Placement, hierarchy, spacing, disclosure, copy, and visual-review defaults                | A reusable presentation convention or panel pattern changes          |
-| [Runtime flows](./runtime-flows.md)                                                | Startup, camera, terrain, provider errors, health checks, and export sequences             | Cross-module control flow or lifecycle ordering changes              |
-| [Map providers](./map-providers.md)                                                | Provider choice, schema, attribution, evidence, and operating limits                       | An endpoint, policy, attribution, or provider changes                |
-| [Provider configuration example](./map-provider-configuration.example.json)        | Valid public configuration accepted by the production Zod boundary                         | The configuration schema or defaults change                          |
-| [Geocoding configuration example](./geocoding-provider-configuration.example.json) | Valid public place-search configuration accepted by its Zod boundary                       | The geocoding configuration schema or defaults change                |
+| Document                                                                           | Purpose                                                                                  | Update when                                                          |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Project structure](./project-structure.md)                                        | Module boundaries, dependency direction, composition, and state ownership                | Files move, a layer is added, or ownership changes                   |
+| [Data model](./data-model.md)                                                      | Implemented records, storage authority, privacy, and consistency rules                   | A persisted contract, source, cache, or ownership changes            |
+| [Features and workspace UX](./features.md)                                         | Implemented behavior, workspace layout, capability boundaries, and failure handling      | User-visible behavior, layout, navigation, or a failure mode changes |
+| [UI design guidelines](./ui-design.md)                                             | Placement, hierarchy, spacing, disclosure, copy, and visual-review defaults              | A reusable presentation convention or panel pattern changes          |
+| [Runtime flows](./runtime-flows.md)                                                | Startup, camera, terrain, imagery, weather, sync, sharing, diagnostics, and localization | Cross-module control flow or lifecycle ordering changes              |
+| [Map providers](./map-providers.md)                                                | Provider choice, schema, attribution, evidence, and operating limits                     | An endpoint, policy, attribution, or provider changes                |
+| [Provider configuration example](./map-provider-configuration.example.json)        | Valid public configuration accepted by the production Zod boundary                       | The configuration schema or defaults change                          |
+| [Geocoding configuration example](./geocoding-provider-configuration.example.json) | Valid public place-search configuration accepted by its Zod boundary                     | The geocoding configuration schema or defaults change                |
 
 Repository-level references:
 
-- [README](../README.md): project overview, setup, commands, and operator quick start.
+- [README](../README.md): user-facing overview, limitations, developer setup, and
+  commands.
 - [AGENTS](../AGENTS.md): mandatory engineering and documentation rules.
 
 ## Maintenance rule

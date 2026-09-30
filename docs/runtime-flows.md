@@ -731,7 +731,9 @@ available during movement. The next settled viewport starts one refresh whose
 different calendar date instead performs the full clear path before another explicit
 **Show mosaic**, so no earlier-date layers or progress can survive. Sequence guards
 prevent cancelled source waits from publishing a stale loading snapshot after either
-clear or replacement.
+clear or replacement. The provider handles movement in a direct store subscription, so
+`movestart` and settlement do not re-render the map workspace or sidebar through the
+Mosaic context; terrain transitions also end with one settled viewport.
 
 Layers commands use logical IDs. The Natural features command expands to land-cover,
 glacier, and water-polygon layers; restricted-area, hiking, road, and place commands

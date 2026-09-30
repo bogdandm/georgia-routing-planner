@@ -140,9 +140,7 @@ function isSatelliteSourceId(sourceId: string): boolean {
 }
 
 function idsEqual(left: readonly string[], right: readonly string[]): boolean {
-  return (
-    left.length === right.length && left.every((id, index) => id === right[index])
-  );
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {

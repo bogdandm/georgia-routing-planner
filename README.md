@@ -2,9 +2,13 @@
 
 [Open Trail Planner](https://trail-planner.bogdandm.com/)
 
-Trail Planner is a local-first web application for planning hiking trips by exploring
-maps, inspecting terrain and satellite imagery, planning routes, and working with
-personal tracks.
+Trail Planner is a free browser app for planning hikes. Use it to explore terrain and
+satellite imagery, draw or import a route, check the elevation profile, and see the
+weather forecast. Nothing needs to be installed, and no account is required. Your tracks
+and markers stay in your browser unless you turn on sync.
+
+The map opens over Georgia (the country) and includes Georgian national orthophotos. The
+map, routing, and weather also work in other regions.
 
 _This project was built 100% with LLMs._
 
@@ -12,117 +16,73 @@ _This project was built 100% with LLMs._
 
 ![Sentinel-2 imagery search and true-color scene over 3D terrain](./docs/assets/sentinel-2-imagery.png)
 
-## Features
+## What you can do
 
-- Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
-- Search for places or coordinates and inspect recent Sentinel-2 satellite imagery.
-- Select a map point for a location-local ECMWF IFS forecast delivered by Open-Meteo.
-- Import GPX tracks with their root waypoints, plus FIT and KML tracks, directly in the
+- **Explore the map.** Use a hiking map in 2D or 3D with relief shading and elevation
+  contours. You can switch to Google, Bing, Esri, or Georgian NAPR aerial imagery, or
+  find a recent Sentinel-2 satellite scene and filter by cloud cover.
+- **Find places.** Search by name or coordinates. Right-click the map, or tap it on a
+  phone, to see a point's elevation and nearby features. From there you can copy
+  coordinates or a link, create a marker, search for satellite scenes, or open that
+  point's weather forecast.
+- **Work with tracks.** Import GPX, FIT, or KML files. You get distance, time, speed,
+  ascent and descent, an interactive elevation profile, a list of climbs, and
+  grade-colored route segments. You can view several tracks at once and download them as
+  GPX or KML.
+- **Plan routes.** Click waypoints on the map. Each segment either follows roads and
+  trails or runs in a straight line. Routing and elevation calculations run in your
   browser.
-- Plan multi-point routes over available roads and trails or add direct line segments.
-- Review distance, duration, speed, ascent, descent, elevation profile, and route
-  grades.
-- Save, search, favorite, rename, reopen, delete, and download personal tracks.
-- Save named map markers with custom icons and colors, then sort, edit, navigate to, or
-  delete them.
-- Choose which tracks, imagery, terrain, contours, and map details are visible.
-- Optionally sign in and explicitly enable synchronization across devices.
-- Share one ready synchronized track with a capability link; recipients need no account
-  and can explicitly save an independent browser-local copy.
+- **Organize your library.** Name, search, sort, and favorite saved tracks, and sort
+  them into folders. Each track shows a small shape preview, with loops colored
+  differently.
+- **Save places.** Add named markers with icons and colors. Markers can show the weather
+  forecast for the days you choose, such as the coming weekend.
+- **Check the weather.** Get a seven-day forecast for any point from the ECMWF model via
+  Open-Meteo. A weather map shows clouds, precipitation, and wind over time. You can
+  also open the same point on meteoblue or Windy.
+- **Choose a language.** The app is available in English and Russian.
 
-## Tracks
+## Your data
 
-Drop a GPX, FIT, or KML file into the Tracks workspace or choose it from disk. Trail
-Planner validates the file, displays the route on the map, and opens a detailed preview
-before anything is saved.
+- Tracks, markers, folders, and settings are saved in your browser and work without an
+  account.
+- Sync is optional and off by default. Sign in and turn on **Sync across devices** to
+  keep tracks, folders, and markers the same on every device.
+- A synced track can be shared with a link. People who open it do not need an account
+  and can save their own copy.
+- Trail Planner never uploads diagnostics or usage data automatically.
 
-Choose **Plan route** to open an unsaved route. Each map click adds the next waypoint.
-The persistent **Next segment** control chooses whether the next leg follows available
-road and trail topology or remains a direct line. Routing and elevation calculation run
-in the browser; saving stores the result as an existing local track.
+## Limitations
 
-Saved tracks remain available after reopening the application. They can be searched,
-favorited, renamed, deleted, or downloaded as GPX or KML. Flat collapsible folders keep
-saved tracks organized, including empty folders; tracks without a folder stay directly
-below the folder rows. Folders and tracks move with pointer, touch, or keyboard
-controls. GPX waypoints stay attached to their track as name-only markers and are
-included in GPX downloads.
+- An internet connection is required. Maps cannot be downloaded for offline use.
+- Maps, terrain, search, imagery, and weather come from free public services and may
+  sometimes be slow or unavailable.
+- The weather is a model forecast, not a measurement from a weather station.
+- The app is designed for current desktop Google Chrome. Phones get a dedicated layout,
+  but other browsers are not officially supported.
 
-When usable elevation is available, the track view adds:
+## For developers
 
-- Distance, recorded duration, average speed, ascent, and descent.
-- An interactive elevation profile linked to the highlighted map position.
-- A climbs-and-descents breakdown.
-- Grade colors along non-flat parts of the route.
+Trail Planner is a static TypeScript app built with React, Vite, Material UI, and
+MapLibre GL JS, and is deployed to GitHub Pages. Local data lives in IndexedDB. Optional
+accounts, sync, and track sharing use Supabase.
 
-## Markers
+### Local development
 
-Place a marker from the Markers workspace or the map context menu. When a nearby point
-of interest is available, Trail Planner suggests its name before saving. Choose from 130
-Pinhead map icons grouped by category and ten colors; the picker keeps the 21 most
-recently used icons in a three-row section. Saved markers render on the map and remain
-available after reopening the application.
+Requirements: Node.js `24.14.0` and pnpm `11.9.0`.
 
-Root GPX waypoints are imported as track-owned markers. The active editable track lists
-them below elevation analysis, renders them as compact blue pins, and supports adding,
-renaming, navigating to, and deleting them without adding them to the global marker
-library. They persist and synchronize with the track.
+```shell
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-The marker library sorts by creation time, name, color, icon, or distance from the
-current map area. Icon groups follow catalog order and sort internally by distance from
-the map center. Marker search, grouping, Satellite targeting, and copying global markers
-into a manually created GPX route are not currently available.
+The default map, terrain, search, imagery, and weather providers need no credentials.
+Accounts and sync need `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. Without
+them, everything else still works.
 
-## Maps and satellite imagery
-
-The map combines hiking-focused OpenStreetMap data with relief, elevation contours, and
-optional 3D terrain. Place and coordinate search moves directly to an area of interest,
-while layer controls adjust map detail, terrain overlays, satellite imagery, and active
-track visibility.
-
-Layers offers an optional, browser-persisted Google satellite basemap alongside applied
-Sentinel-2 scenes; the two raster products are mutually exclusive and either can be off.
-The Satellite workspace searches recent Sentinel-2 scenes around the selected point.
-Results show acquisition time, cloud cover, and scene coverage before true-color imagery
-is applied to the map. The selected imagery remains aligned with terrain in both 2D and
-3D.
-
-## Weather
-
-Weather provides a one-shot point-selection action while its map is off. While the
-weather map is enabled, each primary map click replaces the sidebar forecast point
-instead of opening ordinary point inspection or adding a hidden route waypoint. It also
-hides relief shading and elevation isolines until weather is switched off, then restores
-whichever overlays were previously enabled. The sidebar shows that coordinate's next
-three hours, next 24 hourly forecast slots, and seven local calendar-day summaries. Each
-daily summary keeps daylight and the following physical night separate, with
-temperature, wind, gust, precipitation, and condition values.
-
-Weather times follow the selected location's time zone. The values are deterministic
-ECMWF IFS model forecasts delivered by Open-Meteo, not measured weather-station
-observations. Enabled weather-map URLs retain the selected point and forecast frame for
-reload and sharing; forecast responses are not persisted.
-
-## Local-first data
-
-Saved imported and planned tracks, saved markers, and map preferences use browser
-storage and remain available without an account.
-
-Cross-device synchronization is optional and disabled by default. It starts only after
-the user signs in and explicitly enables **Sync across devices**. Local track operations
-remain available when synchronization is disabled or temporarily unavailable. Trail
-Planner does not upload diagnostics or usage telemetry automatically.
-
-Public track links require public Supabase configuration in the deployed build. Owners
-must sign in and synchronize a track before sharing it; recipients do not need an
-account. The `track-share` Edge Function requires a dedicated `TRACK_SHARE_TOKEN_SECRET`
-in every environment before owner status and enable requests can reconstruct stable
-links. Its value is exactly 32 random bytes encoded as unpadded base64url (43
-characters); never print, commit, reuse between environments, or put it in `VITE_*`
-configuration.
-
-Generate and set it through the Edge Function secret store, replacing `<project-ref>`
-with the target project:
+The `track-share` Edge Function requires a separate `TRACK_SHARE_TOKEN_SECRET` in each
+environment. It must be exactly 32 random bytes, encoded as unpadded base64url. Never
+commit or print it, and never reuse it or put it in `VITE_*` variables:
 
 ```shell
 secret="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=')" && \
@@ -130,70 +90,25 @@ secret="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '\n=')" && \
   unset secret
 ```
 
-## Limitations
+### Commands
 
-- No offline map-region downloads.
-- Routing, map, terrain, geocoding, and imagery features depend on public providers.
-- Current desktop Google Chrome is the primary supported browser.
+| Command                 | Purpose                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `pnpm dev`              | Start the development server.                        |
+| `pnpm test`             | Run unit and component tests.                        |
+| `pnpm test:integration` | Run adapter and persistence tests.                   |
+| `pnpm e2e`              | Run Chromium and accessibility checks.               |
+| `pnpm build`            | Type-check and create the production build.          |
+| `pnpm check`            | Run the complete non-browser verification.           |
+| `pnpm i18n:extract`     | Update translation catalogs from source messages.    |
+| `pnpm i18n:check`       | Reject stale, malformed, or incomplete translations. |
 
-## Developer overview
-
-Trail Planner is a static TypeScript application built with React, Vite, Material UI,
-and MapLibre GL JS. IndexedDB stores local tracks, saved markers, and preferences, while
-Supabase supports optional accounts and track synchronization. The production build is
-deployed to GitHub Pages, and the core map, saved-marker, and local-track workflows do
-not require an always-running application server.
-
-### Local development
-
-Prerequisites:
-
-- Node.js `24.14.0`.
-- pnpm `11.9.0`.
-- Current stable desktop Google Chrome.
-
-Install dependencies and start the development server:
-
-```shell
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-Open the local URL printed by Vite. The development and preview servers send
-`Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp` so browser workers can use cross-origin
-isolation without command-line flags. The default map, terrain, geocoding, satellite,
-and weather providers do not require credentials.
-
-Account and synchronization features require:
-
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-
-Without these variables, account and synchronization features remain unavailable while
-local track functionality continues to work.
-
-### Development commands
-
-| Command                 | Purpose                                                     |
-| ----------------------- | ----------------------------------------------------------- |
-| `pnpm dev`              | Start the local development server.                         |
-| `pnpm test`             | Run unit and component tests.                               |
-| `pnpm test:integration` | Run adapter and persistence tests.                          |
-| `pnpm e2e`              | Run browser and accessibility checks.                       |
-| `pnpm build`            | Create the production build.                                |
-| `pnpm check`            | Run the complete non-browser verification.                  |
-| `pnpm i18n:extract`     | Update feature-split PO catalogs from source messages.      |
-| `pnpm i18n:compile`     | Strictly compile catalogs into temporary validation output. |
-| `pnpm i18n:check`       | Reject stale, malformed, incomplete, or drifting catalogs.  |
-
-The complete command list is maintained in [`package.json`](./package.json).
+The full list is in [`package.json`](./package.json).
 
 ### Documentation
 
-- [Project documentation index](./docs/README.md)
+- [Documentation index](./docs/README.md)
 - [Features and workspace UX](./docs/features.md)
-- [UI design guidelines](./docs/ui-design.md)
 - [Architecture and project structure](./docs/project-structure.md)
 - [Map providers and attribution](./docs/map-providers.md)
-- [Agent workflow and engineering conventions](./AGENTS.md)
+- [Agent workflow and engineering rules](./AGENTS.md)

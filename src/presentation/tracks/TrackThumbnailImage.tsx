@@ -65,6 +65,8 @@ export function TrackThumbnailImage({
         alignSelf: 'stretch',
         aspectRatio: '1 / 1',
         bgcolor: 'background.default',
+        border: 1,
+        borderColor: 'divider',
         borderRadius: 1,
       }}
     >

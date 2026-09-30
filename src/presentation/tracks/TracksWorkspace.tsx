@@ -2535,7 +2535,26 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     return sortTracks(matchingSummaries, trackSort, mapCenter);
   }, [mapCenter, query, summaries, trackSort]);
 
-  const activeProfile = useMemo(() => elevationProfileForActiveTrack(active), [active]);
+  // Keyed on the geometry owner: renames replace `active` per keystroke but keep
+  // `content`, so the median-filtered profile and map highlight stay untouched.
+  const savedTrackContent = active?.kind === 'saved' ? active.content : null;
+  const savedTrackProfile = useMemo(
+    () =>
+      savedTrackContent === null
+        ? null
+        : elevationProfileForSavedTrack(savedTrackContent),
+    [savedTrackContent],
+  );
+  const activeProfile =
+    active === null
+      ? null
+      : active.kind === 'saved'
+        ? savedTrackProfile
+        : active.kind === 'route-plan'
+          ? active.profile
+          : active.preparationStatus === 'ready'
+            ? (active.sourceProfile ?? active.calculatedProfile)
+            : null;
   const activeStatsMetrics = useMemo<TrackStatsMetrics | null>(() => {
     if (active === null) return null;
     if (active.kind === 'route-plan') return active.metrics;
@@ -4142,19 +4161,6 @@ function elevationProfileForSavedTrack(
       ? null
       : elevationProfileInputSegments(content.calculatedTrackPoints);
   return calculatedInputs === null ? null : calculateElevationProfile(calculatedInputs);
-}
-
-function elevationProfileForActiveTrack(
-  active: ActiveTrack | null,
-): ElevationProfile | null {
-  if (active === null) return null;
-  if (active.kind === 'route-plan') return active.profile;
-  if (active.kind === 'preview' || active.kind === 'shared') {
-    return active.preparationStatus === 'ready'
-      ? (active.sourceProfile ?? active.calculatedProfile)
-      : null;
-  }
-  return elevationProfileForSavedTrack(active.content);
 }
 
 interface InteractiveElevationProfileProps {

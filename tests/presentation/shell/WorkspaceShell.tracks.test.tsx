@@ -1849,6 +1849,33 @@ describe('WorkspaceShell', () => {
     expect(setTracePoint).toHaveBeenCalledTimes(3);
   });
 
+  it('keeps the saved-track grade highlight while its name is edited', async () => {
+    const summary = savedTrackSummary('local:renamed', 'Renamed trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await waitFor(() => {
+      expect(setImportedTrackHighlight.mock.lastCall?.[0]?.length).toBeGreaterThan(0);
+    });
+    const highlightCallCount = setImportedTrackHighlight.mock.calls.length;
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    await user.type(nameInput, ' draft');
+
+    expect(nameInput).toHaveValue('Renamed trail draft');
+    expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
+  });
+
   it('reloads synchronized source elevation without replacing it from DEM', async () => {
     const base = savedTrackSummary('local:synchronized', 'Synchronized trail');
     const summary: LocalTrackSummary = {

@@ -42,6 +42,7 @@ class FakeLayerMap {
   readonly paint = new Map<string, unknown>();
   readonly paintProperties = new Map<string, unknown>();
   paintUpdateCount = 0;
+  readonly setDataSourceIds: string[] = [];
   readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
@@ -147,16 +148,6 @@ class FakeLayerMap {
     return [...this.layers.keys()];
   }
 
-  public getStyle(): {
-    readonly sources: Record<string, unknown>;
-    readonly layers: { readonly id: string }[];
-  } {
-    return {
-      sources: Object.fromEntries(this.sources),
-      layers: [...this.layers.keys()].map((id) => ({ id })),
-    };
-  }
-
   public removeLayer(id: string): void {
     this.layers.delete(id);
   }
@@ -195,6 +186,7 @@ class FakeLayerMap {
       this.sources.set(id, {
         ...source,
         setData: (data: unknown) => {
+          this.setDataSourceIds.push(id);
           const current = this.sources.get(id);
           if (typeof current === 'object' && current !== null) {
             this.sources.set(id, { ...current, data });
@@ -1158,6 +1150,106 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.get('imported-track')).toHaveProperty(
       'data.geometry.coordinates',
       [],
+    );
+  });
+
+  it('pushes GeoJSON data only when it changed or the style recreated the source', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setImportedTrackGeometry([
+      [
+        [44, 42],
+        [44.1, 42.1],
+      ],
+    ]);
+    controller.setRoutePlanGeometry(
+      [
+        {
+          kind: 'routed',
+          coordinates: [
+            [44, 42],
+            [44.2, 42.2],
+          ],
+        },
+      ],
+      [[44, 42]],
+    );
+    map.setDataSourceIds.splice(0);
+
+    map.fire('styledata', {});
+    map.fire('styledata', {});
+    expect(map.setDataSourceIds).toEqual([]);
+
+    // A style reload replaces the native source object with one holding stale data.
+    const reloadedSource = map.sources.get(mapSourceIds.importedTrack);
+    map.sources.set(mapSourceIds.importedTrack, {
+      ...(reloadedSource as Record<string, unknown>),
+      data: { type: 'Feature', properties: {}, geometry: null },
+    });
+    map.fire('styledata', {});
+    expect(map.setDataSourceIds).toEqual([mapSourceIds.importedTrack]);
+    expect(map.sources.get(mapSourceIds.importedTrack)).toHaveProperty(
+      'data.geometry.coordinates',
+      [
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
+      ],
+    );
+
+    map.removeSource(mapSourceIds.routePlan);
+    map.fire('styledata', {});
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features.length',
+      2,
+    );
+  });
+
+  it('persists and logs slider opacity only when the change is committed', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const savePreferences = vi
+      .spyOn(services.database, 'saveMapLayerPreferences')
+      .mockResolvedValue(undefined);
+    const log = vi.spyOn(services.logger, 'log');
+
+    for (const opacity of [0.9, 0.7, 0.5]) {
+      expect(controller.setImportedTrackOpacity(opacity, 'live')).toEqual({
+        status: 'success',
+      });
+      controller.setOpenStreetMapOpacity(opacity, 'live');
+      controller.setWeatherOpacity(opacity, 'live');
+    }
+    expect(map.paintProperties.get(`${importedTrackLayerIds.line}.line-opacity`)).toBe(
+      0.5,
+    );
+    expect(mapLayerStore.getState()).toMatchObject({
+      importedTrackOpacity: 0.5,
+      openStreetMapOpacity: 0.5,
+      weatherMap: { opacity: 0.5 },
+    });
+    expect(savePreferences).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'map.layer-group.opacity-changed' }),
+    );
+
+    controller.setImportedTrackOpacity(0.5, 'commit');
+    expect(savePreferences).toHaveBeenCalledTimes(1);
+    expect(savePreferences).toHaveBeenLastCalledWith(
+      expect.objectContaining({ importedTrackOpacity: 0.5 }),
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'map.layer-group.opacity-changed',
+        data: { category: 'imported-tracks', opacityPercent: 50 },
+      }),
     );
   });
   it('renders routed sections solid, direct sections dashed, and numbered waypoints', () => {
@@ -2542,11 +2634,19 @@ describe('MapLibreLayerController', () => {
       },
     ];
 
+    map.setDataSourceIds.splice(0);
     controller.setSavedMarkers(markers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
       expect(map.images.size).toBe(2);
     });
+    // One push for the marker change and one for the whole icon batch, not one per icon.
+    expect(map.setDataSourceIds).toEqual([
+      mapSourceIds.savedMarkers,
+      mapSourceIds.savedMarkers,
+    ]);
+    map.fire('styledata', {});
+    expect(map.setDataSourceIds).toHaveLength(2);
     controller.setTrackMarkers(trackMarkers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
@@ -2615,7 +2715,7 @@ describe('MapLibreLayerController', () => {
         'text-halo-blur': 0.5,
       },
     });
-    expect(map.getStyle().layers.at(-1)?.id).toBe(savedMarkerLayerIds.symbols);
+    expect(map.getLayersOrder().at(-1)).toBe(savedMarkerLayerIds.symbols);
 
     controller.setSavedMarkers([]);
     const trackOnlySource = map.sources.get(mapSourceIds.savedMarkers) as {

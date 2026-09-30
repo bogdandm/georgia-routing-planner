@@ -233,12 +233,21 @@ export function LayersPanel() {
     mapLayers?.setLayerVisibility(layerId, visible);
   };
 
-  const changeOpenStreetMapOpacity = (_event: Event, value: number | number[]) => {
-    if (typeof value === 'number') mapLayers?.setOpenStreetMapOpacity(value / 100);
+  // Drags only repaint; the released value is persisted and logged once on commit.
+  const changeOpenStreetMapOpacity = (
+    value: number | number[],
+    change: 'live' | 'commit',
+  ) => {
+    if (typeof value === 'number') {
+      mapLayers?.setOpenStreetMapOpacity(value / 100, change);
+    }
   };
 
-  const changeImportedTrackOpacity = (_event: Event, value: number | number[]) => {
-    if (typeof value === 'number') mapLayers?.setImportedTrackOpacity(value / 100);
+  const changeImportedTrackOpacity = (
+    value: number | number[],
+    change: 'live' | 'commit',
+  ) => {
+    if (typeof value === 'number') mapLayers?.setImportedTrackOpacity(value / 100, change);
   };
 
   const changeTerrainOverlayPreferences = (value: TerrainOverlayPreferences) => {
@@ -253,8 +262,8 @@ export function LayersPanel() {
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
-  const changeWeatherOpacity = (_event: Event, value: number | number[]) => {
-    if (typeof value === 'number') mapLayers?.setWeatherOpacity(value / 100);
+  const changeWeatherOpacity = (value: number | number[], change: 'live' | 'commit') => {
+    if (typeof value === 'number') mapLayers?.setWeatherOpacity(value / 100, change);
   };
 
   return (
@@ -323,7 +332,12 @@ export function LayersPanel() {
                 value={Math.round(state.weatherMapOpacity * 100)}
                 valueLabelDisplay="auto"
                 valueLabelFormat={(value) => `${String(value)}%`}
-                onChange={changeWeatherOpacity}
+                onChange={(_event, value) => {
+                  changeWeatherOpacity(value, 'live');
+                }}
+                onChangeCommitted={(_event, value) => {
+                  changeWeatherOpacity(value, 'commit');
+                }}
                 sx={{ flex: 1, mx: 0.5 }}
               />
               <Typography
@@ -405,7 +419,12 @@ export function LayersPanel() {
                     value={Math.round(state.openStreetMapOpacity * 100)}
                     valueLabelDisplay="auto"
                     valueLabelFormat={(value) => `${String(value)}%`}
-                    onChange={changeOpenStreetMapOpacity}
+                    onChange={(_event, value) => {
+                      changeOpenStreetMapOpacity(value, 'live');
+                    }}
+                    onChangeCommitted={(_event, value) => {
+                      changeOpenStreetMapOpacity(value, 'commit');
+                    }}
                     sx={{ flex: 1, mx: 0.5 }}
                   />
                   <Typography
@@ -435,7 +454,12 @@ export function LayersPanel() {
                     value={Math.round(state.importedTrackOpacity * 100)}
                     valueLabelDisplay="auto"
                     valueLabelFormat={(value) => `${String(value)}%`}
-                    onChange={changeImportedTrackOpacity}
+                    onChange={(_event, value) => {
+                      changeImportedTrackOpacity(value, 'live');
+                    }}
+                    onChangeCommitted={(_event, value) => {
+                      changeImportedTrackOpacity(value, 'commit');
+                    }}
                     sx={{ flex: 1, mx: 0.5 }}
                   />
                   <Typography

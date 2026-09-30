@@ -10,6 +10,7 @@ import {
 import type {
   Feature,
   FeatureCollection,
+  GeoJSON,
   LineString,
   MultiLineString,
   Point,
@@ -204,6 +205,9 @@ type MapLayerVisibilityResult =
   | { readonly status: 'success' }
   | { readonly status: 'failed'; readonly message: string };
 
+/** Slider drags apply `live` paint only; the released value is persisted as `commit`. */
+type OpacityChange = 'live' | 'commit';
+
 type SatelliteImageryCommandResult =
   | { readonly status: 'success' }
   | { readonly status: 'cancelled' }
@@ -383,6 +387,10 @@ interface RasterRecoveryRequest {
 interface SavedMarkerImageState {
   readonly status: 'pending' | 'ready' | 'failed';
   readonly generation: number;
+}
+
+interface MissingSavedMarkerImage extends Pick<SavedMarker, 'iconKey' | 'colorKey'> {
+  readonly imageId: string;
 }
 
 interface RenderedMarker {
@@ -580,6 +588,9 @@ export class MapLibreLayerController {
   #savedMarkerGeneration = 0;
   readonly #savedMarkerImages = new Map<string, SavedMarkerImageState>();
   readonly #savedMarkerImageIds = new Set<string>();
+  // GeoJSON source objects that already hold the controller's current data. Setters drop
+  // their entry; a source recreated by a style reload no longer matches and is refilled.
+  readonly #currentGeoJsonSources = new Map<string, Source>();
   readonly #openStreetMapOpacityLayerAnchors = new Map<string, unknown>();
   readonly #rasterRecoveries = new Map<string, RasterRecoveryTracker>();
   readonly #directFallbackUrls = new Map<string, string>();
@@ -716,6 +727,7 @@ export class MapLibreLayerController {
     this.#savedMarkerGeneration += 1;
     this.#savedMarkerImages.clear();
     this.#savedMarkerImageIds.clear();
+    this.#currentGeoJsonSources.clear();
     this.#satelliteBasemapSources.clear();
     this.#readySatelliteBasemapSourceIds.clear();
     this.#readyWeatherMapSourceIds.clear();
@@ -865,7 +877,10 @@ export class MapLibreLayerController {
     return { status: 'success' };
   }
 
-  public setWeatherOpacity(opacity: number): MapLayerVisibilityResult {
+  public setWeatherOpacity(
+    opacity: number,
+    change: OpacityChange = 'commit',
+  ): MapLayerVisibilityResult {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
       return this.weatherMapCommandFailure(
         'Choose an opacity between 0 and 100 percent.',
@@ -876,7 +891,7 @@ export class MapLibreLayerController {
       weatherMap: { ...weatherMap, opacity, message: null },
     });
     this.applyWeatherMapOpacity();
-    this.persistStableState();
+    if (change === 'commit') this.persistStableState();
     return { status: 'success' };
   }
 
@@ -1029,13 +1044,17 @@ export class MapLibreLayerController {
     return terrainResult;
   }
 
-  public setOpenStreetMapOpacity(opacity: number): MapLayerVisibilityResult {
+  public setOpenStreetMapOpacity(
+    opacity: number,
+    change: OpacityChange = 'commit',
+  ): MapLayerVisibilityResult {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
       return this.visibilityFailure('Choose an opacity between 0 and 100 percent.');
     }
     if (this.#map === null) return this.visibilityFailure('The map is not ready yet.');
     mapLayerStore.setState({ openStreetMapOpacity: opacity, errorMessage: null });
     this.applyOpenStreetMapOpacity(true);
+    if (change === 'live') return { status: 'success' };
     this.persistStableState();
     this.logger.log({
       level: 'info',
@@ -1045,13 +1064,17 @@ export class MapLibreLayerController {
     return { status: 'success' };
   }
 
-  public setImportedTrackOpacity(opacity: number): MapLayerVisibilityResult {
+  public setImportedTrackOpacity(
+    opacity: number,
+    change: OpacityChange = 'commit',
+  ): MapLayerVisibilityResult {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
       return this.visibilityFailure('Choose an opacity between 0 and 100 percent.');
     }
     if (this.#map === null) return this.visibilityFailure('The map is not ready yet.');
     mapLayerStore.setState({ importedTrackOpacity: opacity, errorMessage: null });
     this.applyImportedTrackPaint();
+    if (change === 'live') return { status: 'success' };
     this.persistStableState();
     this.logger.log({
       level: 'info',
@@ -1086,6 +1109,7 @@ export class MapLibreLayerController {
         segment.map(([longitude, latitude]) => [longitude, latitude]),
       ),
     };
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
     return this.reconcileImportedTrack();
   }
 
@@ -1093,6 +1117,9 @@ export class MapLibreLayerController {
     this.#importedTrackGeometry = { type: 'MultiLineString', coordinates: [] };
     this.#importedTrackHighlightSegments = [];
     this.#importedTrackTraceCoordinate = null;
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackHighlight);
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
@@ -1115,6 +1142,7 @@ export class MapLibreLayerController {
               },
             ],
       ) ?? [];
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackHighlight);
     this.reconcileImportedTrackHighlight();
   }
 
@@ -1122,6 +1150,7 @@ export class MapLibreLayerController {
     coordinate: readonly [number, number] | null,
   ): void {
     this.#importedTrackTraceCoordinate = coordinate;
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrackTrace();
   }
   public setRoutePlanGeometry(
@@ -1156,6 +1185,7 @@ export class MapLibreLayerController {
       longitude,
       latitude,
     ]);
+    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
     return this.reconcileRoutePlan();
   }
 
@@ -1169,11 +1199,13 @@ export class MapLibreLayerController {
       cursor: [...cursor] as readonly [number, number],
       distanceLabel,
     };
+    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
     return this.reconcileRoutePlan();
   }
 
   public clearRoutePlanPreview(): void {
     this.#routePlanPreview = null;
+    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
     this.reconcileRoutePlan();
   }
 
@@ -1181,6 +1213,7 @@ export class MapLibreLayerController {
     this.#routePlanSections = [];
     this.#routePlanWaypoints = [];
     this.#routePlanPreview = null;
+    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
     this.reconcileRoutePlan();
   }
 
@@ -1193,6 +1226,7 @@ export class MapLibreLayerController {
       .sort((left, right) => left.id.localeCompare(right.id, 'en'));
     this.#savedMarkerGeneration += 1;
     this.#savedMarkerImages.clear();
+    this.#currentGeoJsonSources.delete(mapSourceIds.savedMarkers);
     this.reconcileSavedMarkers();
   }
 
@@ -1205,6 +1239,7 @@ export class MapLibreLayerController {
       .sort((left, right) => left.id.localeCompare(right.id, 'en'));
     this.#savedMarkerGeneration += 1;
     this.#savedMarkerImages.clear();
+    this.#currentGeoJsonSources.delete(mapSourceIds.savedMarkers);
     this.reconcileSavedMarkers();
   }
 
@@ -2647,7 +2682,7 @@ export class MapLibreLayerController {
           : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
             ? mapInsertionPoints.terrainOverlaysBeforeLayerId
             : terrainOverlayLayerIds.contourMinor;
-      const layerIds = map.getStyle().layers.map((layer) => layer.id);
+      const layerIds = map.getLayersOrder();
       const reliefIndex = layerIds.indexOf(terrainOverlayLayerIds.reliefShade);
       const beforeIndex = layerIds.indexOf(beforeId);
       const activeRasterIndex =
@@ -2659,13 +2694,22 @@ export class MapLibreLayerController {
           ? reliefIndex >= 0 && reliefIndex < beforeIndex
           : reliefIndex === beforeIndex - 1;
       if (!orderIsCorrect) map.moveLayer(terrainOverlayLayerIds.reliefShade, beforeId);
-      mapLayerStore.setState({
-        terrainOverlays: {
-          initialized: true,
-          preferences: { ...this.#terrainOverlayPreferences },
-          message: null,
-        },
-      });
+      // Preferences are replaced, never mutated, so reference equality detects changes and
+      // styledata does not publish an identical snapshot to every store subscriber.
+      const published = mapLayerStore.getState().terrainOverlays;
+      if (
+        !published.initialized ||
+        published.message !== null ||
+        published.preferences !== this.#terrainOverlayPreferences
+      ) {
+        mapLayerStore.setState({
+          terrainOverlays: {
+            initialized: true,
+            preferences: this.#terrainOverlayPreferences,
+            message: null,
+          },
+        });
+      }
       if (!orderIsCorrect) {
         this.logger.log({
           level: 'info',
@@ -2786,7 +2830,7 @@ export class MapLibreLayerController {
   private ensureContourOrder(map: MapLibreMap): void {
     const activeRasterLayerId = this.currentVisibleRasterLayerId();
     if (activeRasterLayerId === null) return;
-    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const layerIds = map.getLayersOrder();
     const rasterIndex = layerIds.indexOf(activeRasterLayerId);
     const minorIndex = layerIds.indexOf(terrainOverlayLayerIds.contourMinor);
     const indexIndex = layerIds.indexOf(terrainOverlayLayerIds.contourIndex);
@@ -2993,67 +3037,50 @@ export class MapLibreLayerController {
       this.#savedMarkerImages.delete(imageId);
     }
 
+    const missingImages: MissingSavedMarkerImage[] = [];
     for (const [imageId, combination] of combinations) {
       if (map.hasImage(imageId)) {
         this.#savedMarkerImageIds.add(imageId);
+        if (this.#savedMarkerImages.get(imageId)?.status !== 'ready') {
+          this.#currentGeoJsonSources.delete(mapSourceIds.savedMarkers);
+        }
         this.#savedMarkerImages.set(imageId, { status: 'ready', generation });
         continue;
       }
       const imageState = this.#savedMarkerImages.get(imageId);
       if (imageState?.generation === generation) continue;
       this.#savedMarkerImages.set(imageId, { status: 'pending', generation });
-      void createMarkerIconImage(combination.iconKey, combination.colorKey)
-        .then((image) => {
-          if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
-          if (!map.hasImage(imageId)) map.addImage(imageId, image);
-          this.#savedMarkerImageIds.add(imageId);
-          this.#savedMarkerImages.set(imageId, { status: 'ready', generation });
-          this.reconcileSavedMarkers();
-        })
-        .catch(() => {
-          if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
-          this.#savedMarkerImages.set(imageId, { status: 'failed', generation });
-          this.logger.log({
-            level: 'warn',
-            name: 'map.saved-marker-icon.failed',
-            data: {
-              iconKey: combination.iconKey,
-              colorKey: combination.colorKey,
-            },
-          });
-          this.reconcileSavedMarkers();
-        });
+      missingImages.push({ imageId, ...combination });
+    }
+    if (missingImages.length > 0) {
+      void this.loadSavedMarkerImages(map, generation, missingImages);
     }
 
-    const features: Feature<Point, SavedMarkerFeatureProperties>[] = markers
-      .filter((marker) => {
-        const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
-        return this.#savedMarkerImages.get(imageId)?.status === 'ready';
-      })
-      .map((marker) => ({
-        type: 'Feature',
-        id: `${marker.kind}:${marker.id}`,
-        properties: {
-          id: marker.id,
-          name: marker.name,
-          iconKey: marker.iconKey,
-          colorKey: marker.colorKey,
-          kind: marker.kind,
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [...marker.coordinate],
-        },
-      }));
-    const data: FeatureCollection<Point, SavedMarkerFeatureProperties> = {
+    this.syncGeoJsonSource(map, mapSourceIds.savedMarkers, () => ({
       type: 'FeatureCollection',
-      features,
-    };
-    if (source === undefined) {
-      map.addSource(mapSourceIds.savedMarkers, { type: 'geojson', data });
-    } else {
-      void source.setData(data);
-    }
+      features: markers
+        .filter((marker) => {
+          const imageId = savedMarkerImageId(marker.iconKey, marker.colorKey);
+          return this.#savedMarkerImages.get(imageId)?.status === 'ready';
+        })
+        .map(
+          (marker): Feature<Point, SavedMarkerFeatureProperties> => ({
+            type: 'Feature',
+            id: `${marker.kind}:${marker.id}`,
+            properties: {
+              id: marker.id,
+              name: marker.name,
+              iconKey: marker.iconKey,
+              colorKey: marker.colorKey,
+              kind: marker.kind,
+            },
+            geometry: {
+              type: 'Point',
+              coordinates: [...marker.coordinate],
+            },
+          }),
+        ),
+    }));
     if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
       map.addLayer({
         id: savedMarkerLayerIds.symbols,
@@ -3095,10 +3122,70 @@ export class MapLibreLayerController {
 
   private ensureSavedMarkerLayerOrder(map: MapLibreMap): void {
     if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) return;
-    const layerIds = map.getStyle().layers.map((layer) => layer.id);
-    if (layerIds.at(-1) !== savedMarkerLayerIds.symbols) {
+    if (map.getLayersOrder().at(-1) !== savedMarkerLayerIds.symbols) {
       map.moveLayer(savedMarkerLayerIds.symbols);
     }
+  }
+
+  /** Loads missing icons as one batch so they cost one data push instead of one each. */
+  private async loadSavedMarkerImages(
+    map: MapLibreMap,
+    generation: number,
+    images: readonly MissingSavedMarkerImage[],
+  ): Promise<void> {
+    const loaded = await Promise.all(
+      images.map(async (missing) => {
+        try {
+          return {
+            missing,
+            image: await createMarkerIconImage(missing.iconKey, missing.colorKey),
+          };
+        } catch {
+          return { missing, image: null };
+        }
+      }),
+    );
+    if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
+    for (const { missing, image } of loaded) {
+      if (image === null) {
+        this.#savedMarkerImages.set(missing.imageId, { status: 'failed', generation });
+        this.logger.log({
+          level: 'warn',
+          name: 'map.saved-marker-icon.failed',
+          data: { iconKey: missing.iconKey, colorKey: missing.colorKey },
+        });
+        continue;
+      }
+      if (!map.hasImage(missing.imageId)) map.addImage(missing.imageId, image);
+      this.#savedMarkerImageIds.add(missing.imageId);
+      this.#savedMarkerImages.set(missing.imageId, { status: 'ready', generation });
+    }
+    this.#currentGeoJsonSources.delete(mapSourceIds.savedMarkers);
+    this.reconcileSavedMarkers();
+  }
+
+  /**
+   * Adds the source or pushes data only when the controller data changed since the last
+   * push or the style recreated the source. Returns false for a non-GeoJSON source.
+   */
+  private syncGeoJsonSource(
+    map: MapLibreMap,
+    sourceId: string,
+    createData: () => GeoJSON,
+  ): boolean {
+    const source = map.getSource(sourceId);
+    if (source === undefined) {
+      map.addSource(sourceId, { type: 'geojson', data: createData() });
+    } else if (!isGeoJsonSource(source)) {
+      return false;
+    } else if (this.#currentGeoJsonSources.get(sourceId) === source) {
+      return true;
+    } else {
+      void source.setData(createData());
+    }
+    const current = map.getSource(sourceId);
+    if (current !== undefined) this.#currentGeoJsonSources.set(sourceId, current);
+    return true;
   }
 
   private reconcileRoutePlan(): MapLayerVisibilityResult {
@@ -3111,10 +3198,10 @@ export class MapLibreLayerController {
         ? undefined
         : mapInsertionPoints.importedTracksBeforeLayerId;
     try {
-      const routeData: FeatureCollection<
+      const createRouteData = (): FeatureCollection<
         LineString | Point,
         RoutePlanFeatureProperties
-      > = {
+      > => ({
         type: 'FeatureCollection',
         features: [
           ...this.#routePlanSections.map(
@@ -3161,15 +3248,9 @@ export class MapLibreLayerController {
                 },
               ]),
         ],
-      };
-      const routeSource = map.getSource(mapSourceIds.routePlan);
-      if (routeSource === undefined) {
-        map.addSource(mapSourceIds.routePlan, { type: 'geojson', data: routeData });
-      } else {
-        if (!isGeoJsonSource(routeSource)) {
-          throw new Error('The planned route source cannot update its data.');
-        }
-        void routeSource.setData(routeData);
+      });
+      if (!this.syncGeoJsonSource(map, mapSourceIds.routePlan, createRouteData)) {
+        throw new Error('The planned route source cannot update its data.');
       }
       if (map.getLayer(routePlanLayerIds.routed) === undefined) {
         map.addLayer(
@@ -3284,19 +3365,17 @@ export class MapLibreLayerController {
       return { status: 'success' };
     }
     try {
-      const feature: Feature<MultiLineString> = {
-        type: 'Feature',
-        properties: {},
-        geometry: this.#importedTrackGeometry,
-      };
-      const source = map.getSource(mapSourceIds.importedTrack);
-      if (source === undefined) {
-        map.addSource(mapSourceIds.importedTrack, { type: 'geojson', data: feature });
-      } else {
-        if (!isGeoJsonSource(source)) {
-          throw new Error('The imported track source cannot update its data.');
-        }
-        void source.setData(feature);
+      const sourceIsGeoJson = this.syncGeoJsonSource(
+        map,
+        mapSourceIds.importedTrack,
+        (): Feature<MultiLineString> => ({
+          type: 'Feature',
+          properties: {},
+          geometry: this.#importedTrackGeometry,
+        }),
+      );
+      if (!sourceIsGeoJson) {
+        throw new Error('The imported track source cannot update its data.');
       }
       const { visibility, importedTrackOpacity } = mapLayerStore.getState();
       const layout = {
@@ -3339,28 +3418,24 @@ export class MapLibreLayerController {
   private reconcileImportedTrackHighlight(): void {
     const map = this.#map;
     if (map?.getLayer(mapLayerIds.background) === undefined) return;
-    const features: Feature<LineString, { readonly color: string }>[] =
-      this.#importedTrackHighlightSegments.map((segment) => ({
-        type: 'Feature',
-        properties: { color: segment.color },
-        geometry: {
-          type: 'LineString',
-          coordinates: segment.coordinates.map(([longitude, latitude]) => [
-            longitude,
-            latitude,
-          ]),
-        },
-      }));
-    const data: FeatureCollection<LineString, { readonly color: string }> = {
-      type: 'FeatureCollection',
-      features,
-    };
-    const source = map.getSource(mapSourceIds.importedTrackHighlight);
-    if (source === undefined) {
-      map.addSource(mapSourceIds.importedTrackHighlight, { type: 'geojson', data });
-    } else if (isGeoJsonSource(source)) {
-      void source.setData(data);
-    }
+    this.syncGeoJsonSource(
+      map,
+      mapSourceIds.importedTrackHighlight,
+      (): FeatureCollection<LineString, { readonly color: string }> => ({
+        type: 'FeatureCollection',
+        features: this.#importedTrackHighlightSegments.map((segment) => ({
+          type: 'Feature',
+          properties: { color: segment.color },
+          geometry: {
+            type: 'LineString',
+            coordinates: segment.coordinates.map(([longitude, latitude]) => [
+              longitude,
+              latitude,
+            ]),
+          },
+        })),
+      }),
+    );
     if (map.getLayer(importedTrackLayerIds.highlight) === undefined) {
       map.addLayer({
         id: importedTrackLayerIds.highlight,
@@ -3389,29 +3464,26 @@ export class MapLibreLayerController {
   private reconcileImportedTrackTrace(): void {
     const map = this.#map;
     if (map?.getLayer(mapLayerIds.background) === undefined) return;
-    const features: Feature<Point>[] =
-      this.#importedTrackTraceCoordinate === null
-        ? []
-        : [
-            {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'Point',
-                coordinates: [...this.#importedTrackTraceCoordinate],
-              },
-            },
-          ];
-    const data: FeatureCollection<Point> = {
-      type: 'FeatureCollection',
-      features,
-    };
-    const source = map.getSource(mapSourceIds.importedTrackTrace);
-    if (source === undefined) {
-      map.addSource(mapSourceIds.importedTrackTrace, { type: 'geojson', data });
-    } else if (isGeoJsonSource(source)) {
-      void source.setData(data);
-    }
+    this.syncGeoJsonSource(
+      map,
+      mapSourceIds.importedTrackTrace,
+      (): FeatureCollection<Point> => ({
+        type: 'FeatureCollection',
+        features:
+          this.#importedTrackTraceCoordinate === null
+            ? []
+            : [
+                {
+                  type: 'Feature',
+                  properties: {},
+                  geometry: {
+                    type: 'Point',
+                    coordinates: [...this.#importedTrackTraceCoordinate],
+                  },
+                },
+              ],
+      }),
+    );
     if (map.getLayer(importedTrackLayerIds.trace) === undefined) {
       map.addLayer({
         id: importedTrackLayerIds.trace,
@@ -3439,7 +3511,7 @@ export class MapLibreLayerController {
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
-    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const layerIds = map.getLayersOrder();
     const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
     const trackOrderIsCorrect =
       labelIndex >= orderedTrackLayerIds.length &&
@@ -4108,7 +4180,7 @@ export class MapLibreLayerController {
   }
 
   private ensureWeatherMapLayerOrder(map: MapLibreMap): void {
-    const layerIds = map.getStyle().layers.map((layer) => layer.id);
+    const layerIds = map.getLayersOrder();
     const beforeIndex = layerIds.indexOf(mapInsertionPoints.weatherBeforeLayerId);
     const orderIsCorrect =
       beforeIndex >= orderedWeatherMapLayerIds.length &&

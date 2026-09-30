@@ -5,16 +5,18 @@ import { createTrackThumbnail } from '@/domain/tracks/trackThumbnail';
 
 describe('createTrackThumbnail', () => {
   it('keeps only the corner of a long L-shaped segment', () => {
-    const east = Array.from(
-      { length: 501 },
-      (_, index): TrackCoordinate => [44 + index * 0.00002, 42],
-    );
-    const north = Array.from(
-      { length: 500 },
-      (_, index): TrackCoordinate => [44.01, 42 + (index + 1) * 0.00002],
-    );
+    const east = Array.from({ length: 501 }, (_, index): TrackCoordinate => [
+      44 + index * 0.00002,
+      42,
+    ]);
+    const north = Array.from({ length: 500 }, (_, index): TrackCoordinate => [
+      44.01,
+      42 + (index + 1) * 0.00002,
+    ]);
 
-    const thumbnail = createTrackThumbnail('local:l-shape', null, [[...east, ...north]]);
+    const thumbnail = createTrackThumbnail('local:l-shape', null, [
+      [...east, ...north],
+    ]);
 
     expect(thumbnail.segments).toEqual([[east[0], east[500], north[499]]]);
     expect(thumbnail.loop).toBe(false);

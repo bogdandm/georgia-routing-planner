@@ -1257,7 +1257,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 TrackPoint,
                 'coordinate'
               >);
-        const loop = isLoop(segments, preview.sourceMetrics.distanceMeters);
+        const loop = isLoop([segment.points.map((point) => point.coordinate)]);
         const reverseCandidate = async (
           coordinate: readonly [number, number],
         ): Promise<PoiCandidate | undefined> => {

@@ -538,18 +538,30 @@ export function findDominantSummit(
   };
 }
 
-export function isLoop(
-  segments: readonly TrackSegment[],
-  distanceMeters: number,
-): boolean {
-  if (segments.length !== 1) return false;
-  const first = segments[0]?.points[0];
-  const points = segments[0]?.points;
-  const last = points?.[points.length - 1];
-  if (first === undefined || last === undefined) return false;
+/** Walking distance back to the start; also covers recordings started late or stopped early. */
+const LOOP_START_FINISH_GAP_METERS = 1_000;
+
+/**
+ * Loop = start and finish at most 1 km apart, and at most half the track length apart.
+ * The half-length cap keeps short straight walks one-way, since their gap equals their length.
+ */
+export function isLoop(segments: readonly (readonly TrackCoordinate[])[]): boolean {
+  const path = segments.flat();
+  const start = path[0];
+  const end = path.at(-1);
+  if (start === undefined || end === undefined || path.length < 2) return false;
+  let total = 0;
+  for (let index = 1; index < path.length; index += 1) {
+    const previous = path[index - 1];
+    const current = path[index];
+    if (previous !== undefined && current !== undefined) {
+      total += geodesicDistanceMeters(previous, current);
+    }
+  }
+  if (total === 0) return false;
   return (
-    geodesicDistanceMeters(first.coordinate, last.coordinate) <=
-    Math.max(100, distanceMeters * 0.01)
+    geodesicDistanceMeters(start, end) <=
+    Math.min(LOOP_START_FINISH_GAP_METERS, total / 2)
   );
 }
 

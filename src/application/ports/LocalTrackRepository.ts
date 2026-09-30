@@ -4,6 +4,7 @@ import type {
   TrackMarker,
 } from '@/domain/tracks/localTrack';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import type { TrackThumbnail } from '@/domain/tracks/trackThumbnail';
 
 export interface LocalTrackRepository {
   saveLocalTrack(summary: LocalTrackSummary, content: LocalTrackContent): Promise<void>;
@@ -14,6 +15,10 @@ export interface LocalTrackRepository {
     options?: { readonly expectedContentHash?: string },
   ): Promise<LocalTrackSummary>;
   listLocalTracks(): Promise<readonly LocalTrackSummary[]>;
+  /** Valid stored thumbnails; invalid or outdated-algorithm records are omitted. */
+  listLocalTrackThumbnails(): Promise<readonly TrackThumbnail[]>;
+  /** Recomputes and stores one track's thumbnail; removes it and returns null when the track or its content is gone. */
+  refreshLocalTrackThumbnail(trackId: string): Promise<TrackThumbnail | null>;
   loadLocalTrackContent(trackId: string): Promise<LocalTrackContent>;
   updateLocalTrackMarkers(
     trackId: string,

@@ -228,6 +228,42 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
+  it('draws loop and one-way thumbnails in saved-track rows', async () => {
+    await services.database.saveLocalTrack(
+      savedTrackSummary('local:loop', 'Loop trail'),
+      {
+        ...savedTrackContent('local:loop'),
+        trackPoints: [
+          [
+            { coordinate: [44, 42] },
+            { coordinate: [44.01, 42] },
+            { coordinate: [44.01, 42.01] },
+            { coordinate: [44, 42.01] },
+            { coordinate: [44, 42.0005] },
+          ],
+        ],
+      },
+    );
+    await services.database.saveLocalTrack(
+      savedTrackSummary('local:line', 'Line trail'),
+      savedTrackContent('local:line'),
+    );
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    const loop = await screen.findByRole('button', { name: /^Loop trail/u });
+    const line = await screen.findByRole('button', { name: /^Line trail/u });
+    await waitFor(() => {
+      expect(loop.querySelector('svg[data-track-shape="loop"]')).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(line.querySelector('svg[data-track-shape="one-way"]')).not.toBeNull();
+    });
+    await expect(services.database.listLocalTrackThumbnails()).resolves.toHaveLength(2);
+  });
+
   it('remembers collapsed folders in this browser after a reload', async () => {
     const imported = savedTrackSummary('local:imported', 'Imported trail');
     await services.database.saveLocalTrack(imported, savedTrackContent(imported.id));

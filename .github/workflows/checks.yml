@@ -190,7 +190,8 @@ jobs:
   e2e:
     needs: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Chromium installation alone has taken up to four minutes on slow runners.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:

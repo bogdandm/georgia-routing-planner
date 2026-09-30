@@ -983,6 +983,41 @@ describe('local track persistence', () => {
     await expect(database.loadLatestOpenedTrackId()).resolves.toBeNull();
   });
 
+  it('computes, lists, refreshes, and deletes track thumbnails', async () => {
+    const id = 'local:thumbnail';
+    await database.saveLocalTrack(summary(id, 'Thumbnail'), content(id));
+
+    const thumbnail = await database.refreshLocalTrackThumbnail(id);
+    expect(thumbnail).toEqual({
+      trackId: id,
+      contentHash: 'a'.repeat(64),
+      algorithmVersion: 1,
+      loop: false,
+      segments: [
+        [
+          [44, 42],
+          [44.01, 42.01],
+        ],
+      ],
+    });
+    await expect(database.listLocalTrackThumbnails()).resolves.toEqual([thumbnail]);
+
+    await database.saveLocalTrack(
+      { ...summary(id, 'Thumbnail'), contentHash: 'b'.repeat(64) },
+      content(id),
+    );
+    await expect(database.refreshLocalTrackThumbnail(id)).resolves.toMatchObject({
+      contentHash: 'b'.repeat(64),
+    });
+    await expect(database.listLocalTrackThumbnails()).resolves.toHaveLength(1);
+
+    await database.deleteLocalTrack(id);
+    await expect(database.listLocalTrackThumbnails()).resolves.toEqual([]);
+    await expect(
+      database.refreshLocalTrackThumbnail('local:missing'),
+    ).resolves.toBeNull();
+  });
+
   it('sorts favorites first, then newest first with a stable ID tie-breaker', async () => {
     await database.saveLocalTrack(
       { ...summary('local:3', 'Older'), savedAt: '2026-07-20T10:00:00.000Z' },

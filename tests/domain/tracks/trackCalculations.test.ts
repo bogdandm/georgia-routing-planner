@@ -340,9 +340,68 @@ describe('track calculations', () => {
   it('uses cumulative distance for representative points and loop detection', () => {
     const points = [point(0, 0), point(0.001, 0), point(0.01, 0), point(0, 0)];
     expect(pointNearestFraction(points, 0.5).coordinate).toEqual([0.01, 0]);
+    expect(isLoop([points.map((item) => item.coordinate)])).toBe(true);
+  });
+
+  it('classifies a track as a loop when it ends within 1 km of its start', () => {
+    type Coordinate = readonly [number, number];
+    const loop = (...segments: readonly (readonly Coordinate[])[]) => isLoop(segments);
+    const largeSquare: readonly Coordinate[] = [
+      [44, 42],
+      [44.03, 42],
+      [44.03, 42.03],
+      [44, 42.03],
+    ];
+    const lateStartLoop: readonly Coordinate[] = [
+      [44, 42],
+      [44.02, 42],
+      [44.02, 42.02],
+      [43.99, 42.02],
+      [43.99, 42],
+    ];
+
     expect(
-      isLoop([{ points }], calculateTrackMetrics([{ points }]).distanceMeters),
+      loop([
+        [44, 42],
+        [44.01, 42],
+        [44.01, 42.01],
+        [44, 42.01],
+        [44, 42.0005],
+      ]),
     ).toBe(true);
+    expect(loop([...largeSquare, [44, 42.0072]])).toBe(true);
+    expect(loop([...largeSquare, [44, 42.0108]])).toBe(false);
+    expect(loop([...lateStartLoop, [44.008, 42]])).toBe(true);
+    expect(loop([...lateStartLoop, [44.015, 42]])).toBe(false);
+    expect(
+      loop([
+        [44, 42],
+        [44.02, 42],
+        [44.02, 42.02],
+        [44.008, 42.02],
+        [44.008, 42],
+      ]),
+    ).toBe(true);
+    expect(
+      loop([
+        [44, 42],
+        [44.00968, 42],
+      ]),
+    ).toBe(false);
+    expect(
+      loop(
+        [
+          [44, 42],
+          [44.01, 42],
+        ],
+        [
+          [44.01, 42.01],
+          [44, 42.0005],
+        ],
+      ),
+    ).toBe(true);
+    expect(loop([[44, 42]])).toBe(false);
+    expect(loop()).toBe(false);
   });
 
   it('generates deterministic English names without implying continuity for multiple segments', () => {

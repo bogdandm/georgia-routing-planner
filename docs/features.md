@@ -216,28 +216,32 @@ That action replaces the saved title with a bounded name editor; the preview ret
 body **Track name** field and English-name application flow. Each saved-track row keeps
 favorite and icon-only delete controls in the DOM, revealing inactive controls on
 pointer hover or keyboard focus; active favorites remain visible. Row selection and
-hover color cover the entire row, including its action column. Deletion uses two-stage
-inline confirmation: the row delete icon becomes a destructive confirmation icon, while
-**Delete track** in the detail action menu replaces that menu trigger with **Confirm
-delete**. Pointer exit, Escape, and click-away cancel either confirmation without
-mutation. Users can favorite a track from its list row or detail header. Saved-track GPX
-downloads use the one-click **Download GPX** detail-header action; KML remains in the
-detail header's compact action menu. Favorites sort before other tracks, with the
-selected track sort applied independently inside every folder. Users create, rename,
-re-icon, delete, collapse, expand, and explicitly reorder flat folders from compact
-controls above and within the track list. The icon picker offers the folder glyph plus
-the complete marker catalog. Empty folders remain visible as drop targets. Tracks
-without a folder render directly below the folder rows without another framed section.
-Deleting a folder moves its tracks there. Tracks and folders move with pointer, delayed
-touch, or keyboard drag controls; keyboard drops restore focus to the moved control.
-Nesting is unavailable. New file imports enter the single provisioned **Imports**
-folder, saved route plans remain unfiled, and migration assigns older imported tracks to
-**Imports** while leaving older saved routes unfiled. **Imports** can be renamed,
-re-iconed, and reordered but not deleted, because it is the destination for every new
-import. Folder identity, ordering, icon, and track placement synchronize with the
-existing opt-in account data flow; the last synchronized folder reorder wins as a whole.
-Which folders are collapsed is remembered in the current browser and restored after a
-reload, but it is view state and never synchronizes to other devices.
+hover color cover the entire row, including its action column. Each row shows a
+simplified track-shape thumbnail left of the name: orange for loops and blue for one-way
+tracks. A loop ends within 1 km of its start and within half its length. Thumbnails are
+computed in the browser and stored locally; missing or outdated ones are computed at
+startup and after list changes. Deletion uses two-stage inline confirmation: the row
+delete icon becomes a destructive confirmation icon, while **Delete track** in the
+detail action menu replaces that menu trigger with **Confirm delete**. Pointer exit,
+Escape, and click-away cancel either confirmation without mutation. Users can favorite a
+track from its list row or detail header. Saved-track GPX downloads use the one-click
+**Download GPX** detail-header action; KML remains in the detail header's compact action
+menu. Favorites sort before other tracks, with the selected track sort applied
+independently inside every folder. Users create, rename, re-icon, delete, collapse,
+expand, and explicitly reorder flat folders from compact controls above and within the
+track list. The icon picker offers the folder glyph plus the complete marker catalog.
+Empty folders remain visible as drop targets. Tracks without a folder render directly
+below the folder rows without another framed section. Deleting a folder moves its tracks
+there. Tracks and folders move with pointer, delayed touch, or keyboard drag controls;
+keyboard drops restore focus to the moved control. Nesting is unavailable. New file
+imports enter the single provisioned **Imports** folder, saved route plans remain
+unfiled, and migration assigns older imported tracks to **Imports** while leaving older
+saved routes unfiled. **Imports** can be renamed, re-iconed, and reordered but not
+deleted, because it is the destination for every new import. Folder identity, ordering,
+icon, and track placement synchronize with the existing opt-in account data flow; the
+last synchronized folder reorder wins as a whole. Which folders are collapsed is
+remembered in the current browser and restored after a reload, but it is view state and
+never synchronizes to other devices.
 
 The latest opened saved track reopens after restart when its content is still valid.
 Catalog, tags, filters, batch import, and manual GPX authoring remain unavailable. A

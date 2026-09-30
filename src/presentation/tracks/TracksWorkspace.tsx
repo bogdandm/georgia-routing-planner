@@ -129,6 +129,7 @@ import {
   type PoiCandidate,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
+import type { TrackThumbnail } from '@/domain/tracks/trackThumbnail';
 import {
   parseTrackFile,
   trackSourceFormat,
@@ -198,6 +199,7 @@ import {
 } from '@/presentation/map/mapInteractionStore';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
+import { TrackThumbnailImage } from '@/presentation/tracks/TrackThumbnailImage';
 import { useUiStore } from '@/presentation/shell/uiStore';
 
 const EMPTY_TRACK_MARKERS: readonly TrackMarker[] = [];
@@ -286,6 +288,8 @@ interface TracksWorkspaceValue {
   readonly error: string | null;
   readonly filteredSummaries: readonly LocalTrackSummary[];
   readonly folders: readonly TrackFolder[];
+  /** Stored list thumbnails by track ID; tracks without one render an empty slot. */
+  readonly thumbnails: ReadonlyMap<string, TrackThumbnail>;
   /** Folders shown collapsed; remembered in this browser only. */
   readonly collapsedFolderIds: ReadonlySet<string>;
   readonly toggleFolderCollapsed: (folderId: string) => void;
@@ -515,6 +519,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     getSortCenterSnapshot,
   );
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
+  const [thumbnails, setThumbnails] = useState<ReadonlyMap<string, TrackThumbnail>>(
+    () => new Map(),
+  );
   const [folders, setFolders] = useState<readonly TrackFolder[]>([]);
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -611,6 +618,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   // user has already toggled a folder.
   const collapsedFolderLoad = useRef<Promise<readonly string[]> | null>(null);
   const collapsedFoldersSettled = useRef(false);
+  // Thumbnails compute sequentially off the list's critical path; a newer summary list
+  // supersedes the one being processed, and unmount stops the loop.
+  const thumbnailRefresh = useRef<{
+    running: boolean;
+    disposed: boolean;
+    pending: readonly LocalTrackSummary[] | null;
+  }>({ running: false, disposed: false, pending: null });
   const readyMultiTrackSelections = useMemo(
     () =>
       multiTrackSelections.filter(
@@ -650,6 +664,65 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     },
     [database],
   );
+  const refreshTrackThumbnails = useCallback(
+    async (loaded: readonly LocalTrackSummary[]) => {
+      const queue = thumbnailRefresh.current;
+      // Unmount and newer reloads mutate the queue across awaits; the getters re-read
+      // it where TypeScript would otherwise keep an earlier narrowing.
+      const disposed = (): boolean => queue.disposed;
+      const superseded = (): boolean => queue.pending !== null;
+      queue.pending = loaded;
+      if (queue.running) return;
+      queue.running = true;
+      try {
+        while (queue.pending !== null && !disposed()) {
+          const current = queue.pending;
+          queue.pending = null;
+          let stored: Map<string, TrackThumbnail>;
+          try {
+            stored = new Map(
+              (await database.listLocalTrackThumbnails()).map((thumbnail) => [
+                thumbnail.trackId,
+                thumbnail,
+              ]),
+            );
+          } catch {
+            logger.log({
+              level: 'warn',
+              name: 'storage.local-track-thumbnails.load-failed',
+            });
+            continue;
+          }
+          if (disposed()) return;
+          setThumbnails(stored);
+          for (const summary of current) {
+            if (disposed() || superseded()) break;
+            if (stored.get(summary.id)?.contentHash === (summary.contentHash ?? null)) {
+              continue;
+            }
+            try {
+              const thumbnail = await database.refreshLocalTrackThumbnail(summary.id);
+              if (disposed()) return;
+              setThumbnails((existing) => {
+                const next = new Map(existing);
+                if (thumbnail === null) next.delete(summary.id);
+                else next.set(summary.id, thumbnail);
+                return next;
+              });
+            } catch {
+              logger.log({
+                level: 'warn',
+                name: 'storage.local-track-thumbnails.refresh-failed',
+              });
+            }
+          }
+        }
+      } finally {
+        queue.running = false;
+      }
+    },
+    [database, logger],
+  );
   const reloadSummaries = useCallback(async () => {
     // The collapsed-folder record loads once; later reloads reuse the settled promise.
     const collapsedLoad =
@@ -667,6 +740,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         collapsedLoad,
       ]);
       setSummaries(loaded);
+      void refreshTrackThumbnails(loaded);
       setFolders(loadedFolders);
       if (!collapsedFoldersSettled.current) {
         collapsedFoldersSettled.current = true;
@@ -697,7 +771,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     } catch {
       setError(t`Saved tracks and folders could not be loaded from this browser.`);
     }
-  }, [database, logger, t]);
+  }, [database, logger, refreshTrackThumbnails, t]);
 
   const toggleFolderCollapsed = useCallback(
     (folderId: string) => {
@@ -848,6 +922,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [database, folders, reloadSummaries, t, userData],
   );
   useEffect(() => {
+    const thumbnailQueue = thumbnailRefresh.current;
+    thumbnailQueue.disposed = false;
     const timeout = window.setTimeout(() => {
       void reloadSummaries();
     }, 0);
@@ -859,6 +935,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       routePlanRequestAbort.current?.abort();
       routePlanElevationAbort.current?.abort();
       shareResolutionAbort.current?.abort();
+      thumbnailQueue.disposed = true;
     };
   }, [reloadSummaries]);
   useEffect(() => {
@@ -2710,6 +2787,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       toggleMultiTrackMode,
       toggleMultiTrackSelection,
       toggleFavorite,
+      thumbnails,
     }),
     [
       active,
@@ -2753,6 +2831,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setActiveName,
       setQuery,
       undoLastRoutePlanPoint,
+      thumbnails,
       summaries,
       updateFolder,
       toggleFavorite,
@@ -3208,6 +3287,7 @@ interface SavedTrackHover {
 
 interface SavedTrackRowProps {
   readonly summary: LocalTrackSummary;
+  readonly thumbnail: TrackThumbnail | undefined;
   readonly folderId: string | null;
   readonly selected: boolean;
   readonly multiTrackMode: boolean;
@@ -3220,6 +3300,7 @@ interface SavedTrackRowProps {
 
 function SavedTrackRow({
   summary,
+  thumbnail,
   folderId,
   selected,
   multiTrackMode,
@@ -3320,39 +3401,44 @@ function SavedTrackRow({
           aria-pressed={multiTrackMode ? selected : undefined}
           onClick={onSelect}
           sx={{
-            display: 'block',
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr)',
+            columnGap: 1.5,
             minWidth: 0,
             py: 1.25,
             pl: folderId === null ? 0 : `${String(TRACK_FOLDER_INDENT_PX)}px`,
             pr: 0.5,
           }}
         >
-          <Typography variant="subtitle2">{summary.name}</Typography>
-          <Stack
-            direction="row"
-            spacing={1.5}
-            sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
-          >
-            {elapsedSeconds === undefined ? null : (
+          <TrackThumbnailImage thumbnail={thumbnail} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle2">{summary.name}</Typography>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}
+            >
+              {elapsedSeconds === undefined ? null : (
+                <TrackStat
+                  icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
+                  label="Recorded time"
+                  value={formatTrackDuration(elapsedSeconds)}
+                />
+              )}
               <TrackStat
-                icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
-                label="Recorded time"
-                value={formatTrackDuration(elapsedSeconds)}
+                icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
+                label="Distance"
+                value={formatTrackDistance(summary.metrics.distanceMeters)}
               />
-            )}
-            <TrackStat
-              icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
-              label="Distance"
-              value={formatTrackDistance(summary.metrics.distanceMeters)}
-            />
-            {ascentMeters === undefined ? null : (
-              <TrackStat
-                icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
-                label="Elevation gain"
-                value={formatTrackElevation(ascentMeters)}
-              />
-            )}
-          </Stack>
+              {ascentMeters === undefined ? null : (
+                <TrackStat
+                  icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
+                  label="Elevation gain"
+                  value={formatTrackElevation(ascentMeters)}
+                />
+              )}
+            </Stack>
+          </Box>
         </ListItemButton>
         <Stack
           key={`saved-track-actions:${summary.id}:${String(hover.epoch)}`}
@@ -3432,6 +3518,7 @@ function SavedTrackRow({
 interface SavedTrackListProps {
   readonly ariaLabel: string;
   readonly summaries: readonly LocalTrackSummary[];
+  readonly thumbnails: ReadonlyMap<string, TrackThumbnail>;
   readonly folderId: string | null;
   readonly deletingId: string | null;
   readonly active: ActiveTrack | null;
@@ -3446,6 +3533,7 @@ interface SavedTrackListProps {
 function SavedTrackList({
   ariaLabel,
   summaries,
+  thumbnails,
   folderId,
   deletingId,
   active,
@@ -3468,6 +3556,7 @@ function SavedTrackList({
           <SavedTrackRow
             key={summary.id}
             summary={summary}
+            thumbnail={thumbnails.get(summary.id)}
             folderId={folderId}
             selected={selected}
             multiTrackMode={multiTrackMode}
@@ -3490,6 +3579,7 @@ function SavedTrackList({
 interface TrackFolderSectionProps {
   readonly folder: TrackFolder;
   readonly summaries: readonly LocalTrackSummary[];
+  readonly thumbnails: ReadonlyMap<string, TrackThumbnail>;
   readonly collapsed: boolean;
   readonly deletingId: string | null;
   readonly active: ActiveTrack | null;
@@ -3506,6 +3596,7 @@ interface TrackFolderSectionProps {
 function TrackFolderSection({
   folder,
   summaries,
+  thumbnails,
   collapsed,
   deletingId,
   active,
@@ -3679,6 +3770,7 @@ function TrackFolderSection({
           <SavedTrackList
             ariaLabel={t`${folder.name} tracks`}
             summaries={summaries}
+            thumbnails={thumbnails}
             folderId={folder.id}
             deletingId={deletingId}
             active={active}
@@ -3697,6 +3789,7 @@ function TrackFolderSection({
 
 interface UnfiledTrackDropZoneProps {
   readonly summaries: readonly LocalTrackSummary[];
+  readonly thumbnails: ReadonlyMap<string, TrackThumbnail>;
   readonly trackDragActive: boolean;
   readonly deletingId: string | null;
   readonly active: ActiveTrack | null;
@@ -3710,6 +3803,7 @@ interface UnfiledTrackDropZoneProps {
 
 function UnfiledTrackDropZone({
   summaries,
+  thumbnails,
   trackDragActive,
   deletingId,
   active,
@@ -3742,6 +3836,7 @@ function UnfiledTrackDropZone({
         <SavedTrackList
           ariaLabel={t`Unfiled tracks`}
           summaries={summaries}
+          thumbnails={thumbnails}
           folderId={null}
           deletingId={deletingId}
           active={active}
@@ -3786,6 +3881,7 @@ export function TracksPanel({
     selectSaved,
     setQuery,
     summaries,
+    thumbnails,
     toggleFavorite,
     toggleFolderCollapsed,
     toggleMultiTrackSelection,
@@ -4065,6 +4161,7 @@ export function TracksPanel({
                     key={folder.id}
                     folder={folder}
                     summaries={folderSummaries}
+                    thumbnails={thumbnails}
                     collapsed={collapsedFolderIds.has(folder.id)}
                     deletingId={deletingId}
                     active={active}
@@ -4081,6 +4178,7 @@ export function TracksPanel({
               </SortableContext>
               <UnfiledTrackDropZone
                 summaries={unfiled}
+                thumbnails={thumbnails}
                 trackDragActive={activeDrag?.type === 'track'}
                 deletingId={deletingId}
                 active={active}

@@ -56,6 +56,7 @@ import {
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   MAXIMUM_TRACK_MARKERS,
+  localTrackSegments,
   normalizeLocalTrackName,
   trackSorts,
   type LocalTrackContent,
@@ -72,6 +73,11 @@ import {
   type TrackFolder,
 } from '@/domain/tracks/trackFolder';
 import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
+import {
+  TRACK_THUMBNAIL_ALGORITHM_VERSION,
+  createTrackThumbnail,
+  type TrackThumbnail,
+} from '@/domain/tracks/trackThumbnail';
 
 interface SettingRecord {
   readonly key: string;
@@ -1023,6 +1029,14 @@ const localTrackContentSchema: z.ZodType<LocalTrackContent> = z.preprocess(
   z.union([currentLocalTrackContentSchema, legacyLocalTrackContentSchema]),
 );
 
+const trackThumbnailSchema: z.ZodType<TrackThumbnail> = z.object({
+  trackId: z.string().min(1).max(200),
+  contentHash: z.string().nullable(),
+  algorithmVersion: z.literal(TRACK_THUMBNAIL_ALGORITHM_VERSION),
+  loop: z.boolean(),
+  segments: z.array(z.array(coordinateSchema)),
+});
+
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
   return result.success ? result.data : null;
@@ -1190,6 +1204,7 @@ export class AppDatabase
   public readonly markerSyncStates!: EntityTable<MarkerSyncState, 'markerId'>;
   public readonly trackFolders!: EntityTable<TrackFolder, 'id'>;
   public readonly folderSyncStates!: EntityTable<FolderSyncState, 'folderId'>;
+  public readonly localTrackThumbnails!: EntityTable<TrackThumbnail, 'trackId'>;
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
     this.version(1).stores({
@@ -1349,6 +1364,18 @@ export class AppDatabase
           localVersion: 1,
         } satisfies FolderSyncState);
       });
+    this.version(10).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      trackFolders: 'id,normalizedName,position',
+      folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      localTrackThumbnails: 'trackId',
+    });
     this.on('populate', async (transaction) => {
       const folder = createDefaultImportsFolder(new Date().toISOString());
       await transaction.table('trackFolders').put(folder);
@@ -1495,6 +1522,43 @@ export class AppDatabase
       const bySavedAt = right.savedAt.localeCompare(left.savedAt, 'en');
       return bySavedAt === 0 ? left.id.localeCompare(right.id, 'en') : bySavedAt;
     });
+  }
+
+  public async listLocalTrackThumbnails(): Promise<readonly TrackThumbnail[]> {
+    const thumbnails: TrackThumbnail[] = [];
+    for (const record of await this.localTrackThumbnails.toArray()) {
+      const parsed = trackThumbnailSchema.safeParse(record);
+      if (parsed.success) thumbnails.push(parsed.data);
+    }
+    return thumbnails;
+  }
+
+  public async refreshLocalTrackThumbnail(
+    trackId: string,
+  ): Promise<TrackThumbnail | null> {
+    return this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      this.localTrackThumbnails,
+      async () => {
+        const summary = parseLocalTrackSummary(await this.localTracks.get(trackId));
+        const content = parseLocalTrackContent(
+          await this.localTrackContents.get(trackId),
+        );
+        if (summary === null || content === null) {
+          await this.localTrackThumbnails.delete(trackId);
+          return null;
+        }
+        const thumbnail = createTrackThumbnail(
+          summary.id,
+          summary.contentHash ?? null,
+          localTrackSegments(content),
+        );
+        await this.localTrackThumbnails.put(thumbnail);
+        return thumbnail;
+      },
+    );
   }
 
   public async listTrackFolders(): Promise<readonly TrackFolder[]> {
@@ -2233,9 +2297,11 @@ export class AppDatabase
       this.localTracks,
       this.localTrackContents,
       this.trackSyncStates,
+      this.localTrackThumbnails,
       async () => {
         const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
         await this.localTrackContents.delete(trackId);
+        await this.localTrackThumbnails.delete(trackId);
         await this.localTracks.delete(trackId);
         if (state !== null) {
           await this.trackSyncStates.put({
@@ -2350,6 +2416,7 @@ export class AppDatabase
         this.localTracks,
         this.localTrackContents,
         this.trackSyncStates,
+        this.localTrackThumbnails,
         this.savedMarkers,
         this.markerSyncStates,
         this.trackFolders,
@@ -2576,6 +2643,7 @@ export class AppDatabase
         for (const trackId of deleteTrackIds) {
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
+          await this.localTrackThumbnails.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
         if (!sameAccount) await this.trackSyncStates.clear();
@@ -2779,6 +2847,7 @@ export class AppDatabase
       this.localTracks,
       this.localTrackContents,
       this.trackSyncStates,
+      this.localTrackThumbnails,
       async () => {
         if (batch.expectedUserId !== undefined) {
           const owner = await this.settings.get('sync.user-id');
@@ -2844,6 +2913,7 @@ export class AppDatabase
         for (const trackId of deletedTrackIds) {
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
+          await this.localTrackThumbnails.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
         batch.signal?.throwIfAborted();
@@ -3217,6 +3287,7 @@ export class AppDatabase
         this.localTracks,
         this.localTrackContents,
         this.trackSyncStates,
+        this.localTrackThumbnails,
         this.savedMarkers,
         this.markerSyncStates,
       ],
@@ -3299,6 +3370,7 @@ export class AppDatabase
         for (const trackId of decision.tracks.deleteIds) {
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
+          await this.localTrackThumbnails.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
         for (const markerId of decision.markers.deleteIds) {

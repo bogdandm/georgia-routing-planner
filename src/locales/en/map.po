@@ -39,12 +39,12 @@ msgid "{name}, {distance} m away"
 msgstr "{name}, {distance} m away"
 
 #. js-lingui-id: 2h8w7c
-#: src/presentation/map/MapViewControls.tsx:158
+#: src/presentation/map/MapViewControls.tsx:160
 msgid "3D terrain"
 msgstr "3D terrain"
 
 #. js-lingui-id: eWVlWI
-#: src/presentation/map/MapViewControls.tsx:157
+#: src/presentation/map/MapViewControls.tsx:159
 msgid "3D terrain is unavailable while Sentinel Mosaic is active."
 msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
 
@@ -59,8 +59,8 @@ msgid "Checking nearby map data…"
 msgstr "Checking nearby map data…"
 
 #. js-lingui-id: 2uEfCs
-#: src/presentation/map/MapViewControls.tsx:180
-#: src/presentation/map/MapViewControls.tsx:186
+#: src/presentation/map/MapViewControls.tsx:182
+#: src/presentation/map/MapViewControls.tsx:188
 msgid "Choose map layer preset"
 msgstr "Choose map layer preset"
 
@@ -80,7 +80,7 @@ msgid "Close map point details"
 msgstr "Close map point details"
 
 #. js-lingui-id: zN8IXs
-#: src/presentation/map/MapViewControls.tsx:264
+#: src/presentation/map/MapViewControls.tsx:266
 msgid "Clouds, precipitation, and wind"
 msgstr "Clouds, precipitation, and wind"
 
@@ -146,7 +146,7 @@ msgid "Hide track grade legend"
 msgstr "Hide track grade legend"
 
 #. js-lingui-id: VBKJhe
-#: src/presentation/map/MapViewControls.tsx:302
+#: src/presentation/map/MapViewControls.tsx:304
 msgid "Layers tab"
 msgstr "Layers tab"
 
@@ -201,7 +201,7 @@ msgid "Open windy.com"
 msgstr "Open windy.com"
 
 #. js-lingui-id: pOgx3m
-#: src/presentation/map/MapViewControls.tsx:244
+#: src/presentation/map/MapViewControls.tsx:246
 msgid "OSM overlay"
 msgstr "OSM overlay"
 
@@ -216,7 +216,7 @@ msgid "Search satellite scenes here"
 msgstr "Search satellite scenes here"
 
 #. js-lingui-id: 0OYApz
-#: src/presentation/map/MapViewControls.tsx:164
+#: src/presentation/map/MapViewControls.tsx:166
 msgid "Show 3D terrain map"
 msgstr "Show 3D terrain map"
 
@@ -276,7 +276,7 @@ msgid "Unnamed map feature"
 msgstr "Unnamed map feature"
 
 #. js-lingui-id: mJZLtT
-#: src/presentation/map/MapViewControls.tsx:263
+#: src/presentation/map/MapViewControls.tsx:265
 msgid "Weather"
 msgstr "Weather"
 

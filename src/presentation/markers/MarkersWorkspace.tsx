@@ -562,23 +562,20 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     };
   }, [loadState, markerCreationCommand]);
 
+  // Weather cards replace forecast-ready pins only while the markers panel shows them;
+  // rail switches and forecasts must not resend the layer otherwise.
+  const weatherReplacingPins =
+    activeTab === 'markers' && weatherPreferences.showOnMap ? weatherByMarkerId : null;
   useEffect(() => {
     if (loadState !== 'ready') return;
     const layerMarkers =
-      activeTab === 'markers' && weatherPreferences.showOnMap
-        ? markers.filter(
-            (marker) => weatherByMarkerId.get(marker.id)?.status !== 'ready',
-          )
-        : markers;
+      weatherReplacingPins === null
+        ? markers
+        : markers.filter(
+            (marker) => weatherReplacingPins.get(marker.id)?.status !== 'ready',
+          );
     mapLayers?.setSavedMarkers(layerMarkers);
-  }, [
-    activeTab,
-    loadState,
-    mapLayers,
-    markers,
-    weatherByMarkerId,
-    weatherPreferences.showOnMap,
-  ]);
+  }, [loadState, mapLayers, markers, weatherReplacingPins]);
 
   useEffect(() => {
     return () => {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import babel from '@rolldown/plugin-babel';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { lingui, linguiTransformerBabelPreset } from '@lingui/vite-plugin';
 import { defineConfig, loadEnv } from 'vite';
 
@@ -44,7 +44,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
-    plugins: [react(), lingui(), babel({ presets: [linguiTransformerBabelPreset()] })],
+    // Lingui macros expand in the first Babel pass so React Compiler analyzes the
+    // expanded components in the second pass.
+    plugins: [
+      react(),
+      lingui(),
+      babel({ presets: [linguiTransformerBabelPreset()] }),
+      babel({ presets: [reactCompilerPreset()] }),
+    ],
     server: { headers: crossOriginIsolationHeaders },
     preview: { headers: crossOriginIsolationHeaders },
     resolve: {

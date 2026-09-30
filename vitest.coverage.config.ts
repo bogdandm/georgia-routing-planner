@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url';
 
 import babel from '@rolldown/plugin-babel';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { lingui, linguiTransformerBabelPreset } from '@lingui/vite-plugin';
 import { defineConfig } from 'vitest/config';
 
@@ -26,7 +26,12 @@ const coverageThresholds = {
 
 /** Coverage combines normal and infrastructure tests while their focused commands stay separate. */
 export default defineConfig({
-  plugins: [react(), lingui(), babel({ presets: [linguiTransformerBabelPreset()] })],
+  plugins: [
+    react(),
+    lingui(),
+    babel({ presets: [linguiTransformerBabelPreset()] }),
+    babel({ presets: [reactCompilerPreset()] }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

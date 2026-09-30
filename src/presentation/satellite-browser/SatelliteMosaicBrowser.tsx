@@ -36,7 +36,7 @@ export function SatelliteMosaicBrowser() {
   } = useSatelliteMosaic();
   const showDisabledReason = useSatelliteMosaicShowDisabledReason();
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
-  const today = clock.now();
+  const [today] = useState(() => clock.now());
   const todayDate = today.toISOString().slice(0, 10);
   const latestMonth = todayDate.slice(0, 7);
   const [calendarMonth, setCalendarMonth] = useState(latestMonth);

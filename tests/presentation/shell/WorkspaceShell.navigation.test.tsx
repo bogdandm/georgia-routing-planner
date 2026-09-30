@@ -141,6 +141,32 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('2D share link copied')).toBeVisible();
   });
 
+  it('builds share links from the page URL current when the dialog opens', async () => {
+    const user = userEvent.setup();
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      camera: { longitude: 44.8, latitude: 41.7, zoom: 12, bearing: 0, pitch: 0 },
+    });
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', { name: '2D share link' }).value,
+    ).not.toContain('probe=first');
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Share this map view' }),
+      ).not.toBeInTheDocument();
+    });
+
+    window.history.replaceState(null, '', '/?probe=first');
+    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    expect(
+      screen.getByRole<HTMLTextAreaElement>('textbox', { name: '2D share link' }).value,
+    ).toContain('probe=first');
+  });
+
   it('opens public site information from the rail action below Settings', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();

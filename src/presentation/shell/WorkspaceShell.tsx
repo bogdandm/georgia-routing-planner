@@ -155,6 +155,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     return { top, right: mapCameraMargin, bottom: top, left };
   }, [contextualSidebarWidth, navigationCollapsed, smartphoneViewport]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [sharePageUrl, setSharePageUrl] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
   const [mobileTrackDetailsExpandedKey, setMobileTrackDetailsExpandedKey] = useState<
@@ -698,6 +699,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               setSettingsOpen(true);
             }}
             onShare={() => {
+              setSharePageUrl(window.location.href);
               setShareOpen(true);
             }}
             onToggleNavigation={() => {
@@ -920,6 +922,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       />
       <ShareMapDialog
         open={shareOpen}
+        pageUrl={sharePageUrl}
         onClose={() => {
           setShareOpen(false);
         }}

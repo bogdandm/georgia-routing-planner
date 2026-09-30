@@ -917,9 +917,7 @@ export function SatelliteBrowser({
     searchViewport === null
       ? fallbackCoordinates
       : `${searchViewport.center.latitude.toFixed(4)}, ${searchViewport.center.longitude.toFixed(4)}`;
-  const restoredScene = useMemo(() => {
-    return selectedMapScene ?? mapLayers?.getSelectedScene() ?? null;
-  }, [mapLayers, selectedMapScene]);
+  const restoredScene = selectedMapScene;
   const restoredResult = useMemo(
     () =>
       restoredScene === null

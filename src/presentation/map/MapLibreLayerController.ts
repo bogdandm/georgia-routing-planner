@@ -3159,7 +3159,15 @@ export class MapLibreLayerController {
     );
     if (this.#map !== map || this.#savedMarkerGeneration !== generation) return;
     for (const { missing, image } of loaded) {
-      if (image === null) {
+      let added = image !== null;
+      if (image !== null && !map.hasImage(missing.imageId)) {
+        try {
+          map.addImage(missing.imageId, image);
+        } catch {
+          added = false;
+        }
+      }
+      if (!added) {
         this.#savedMarkerImages.set(missing.imageId, { status: 'failed', generation });
         this.logger.log({
           level: 'warn',
@@ -3168,7 +3176,6 @@ export class MapLibreLayerController {
         });
         continue;
       }
-      if (!map.hasImage(missing.imageId)) map.addImage(missing.imageId, image);
       this.#savedMarkerImageIds.add(missing.imageId);
       this.#savedMarkerImages.set(missing.imageId, { status: 'ready', generation });
     }

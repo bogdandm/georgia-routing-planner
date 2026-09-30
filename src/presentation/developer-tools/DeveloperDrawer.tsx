@@ -112,6 +112,19 @@ export function DeveloperDrawer({
     };
   }, [open, sentinelQueryDiagnostics, sentinelQuerySnapshot.status]);
 
+  // The facade stores idle timestamps without notifying subscribers; re-render only
+  // while open and only when the stored value changed so the shown time stays current.
+  const [, setObservedIdleAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const intervalId = window.setInterval(() => {
+      setObservedIdleAt(mapDiagnostics.getSnapshot()?.lastIdleAt ?? null);
+    }, 1_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [mapDiagnostics, open]);
+
   const handleTabChange = (_event: SyntheticEvent, value: DeveloperTab) => {
     setActiveTab(value);
   };

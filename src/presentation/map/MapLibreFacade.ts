@@ -138,6 +138,13 @@ function isSatelliteSourceId(sourceId: string): boolean {
     sourceId.startsWith(sentinelMosaicIdPrefixes.source)
   );
 }
+
+function idsEqual(left: readonly string[], right: readonly string[]): boolean {
+  return (
+    left.length === right.length && left.every((id, index) => id === right[index])
+  );
+}
+
 function isCanceledMapRequest(event: MapLibreErrorEvent): boolean {
   const error = event.error;
   const errorName =
@@ -570,6 +577,8 @@ export class MapLibreFacade implements MapFacade {
     const promise = this.transitionTerrain(mode).finally(() => {
       this.#terrainCameraAdjustmentActive = false;
       this.#terrainTransition = null;
+      // Intermediate terrain moveends are suppressed, so publish the final view once.
+      if (this.#map !== null) this.emitSettledViewport(this.#map);
     });
     this.#terrainTransition = { mode, promise };
     return promise;
@@ -681,16 +690,24 @@ export class MapLibreFacade implements MapFacade {
       this.#styleSnapshotQueued = false;
       if (this.#map !== map) return;
       const style = map.getStyle();
-      this.updateSnapshot({
-        sourceIds: Object.keys(style.sources),
-        layerIds: style.layers.map((layer) => layer.id),
-      });
+      const sourceIds = Object.keys(style.sources);
+      const layerIds = style.layers.map((layer) => layer.id);
+      if (
+        idsEqual(sourceIds, this.#snapshot.sourceIds) &&
+        idsEqual(layerIds, this.#snapshot.layerIds)
+      ) {
+        return;
+      }
+      this.updateSnapshot({ sourceIds, layerIds });
     });
   };
 
   private readonly handleIdle = (): void => {
     this.refreshPendingNearbyPoi();
-    this.updateSnapshot({ lastIdleAt: new Date().toISOString() });
+    // Idle fires after every repaint and only diagnostics export/drawer read it, so the
+    // timestamp is stored without notifying React subscribers.
+    this.#snapshot = { ...this.#snapshot, lastIdleAt: new Date().toISOString() };
+    this.snapshotStore?.replaceSilently(this.#snapshot);
     if (!this.#firstIdleRecorded) {
       this.#firstIdleRecorded = true;
       this.logger.log({

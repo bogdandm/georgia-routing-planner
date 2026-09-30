@@ -390,6 +390,80 @@ describe('MapLibreFacade', () => {
     facade.destroy();
   });
 
+  it('records idle time for diagnostics without notifying React subscribers', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      services.mapDiagnostics,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const facadeSubscriber = vi.fn();
+    const storeSubscriber = vi.fn();
+    facade.subscribe(facadeSubscriber);
+    services.mapDiagnostics.subscribe(storeSubscriber);
+
+    nativeMap.fire('idle');
+
+    expect(facadeSubscriber).not.toHaveBeenCalled();
+    expect(storeSubscriber).not.toHaveBeenCalled();
+    const lastIdleAt = services.mapDiagnostics.getSnapshot()?.lastIdleAt;
+    expect(lastIdleAt).toEqual(expect.any(String));
+    expect(facade.getDiagnosticsSnapshot().lastIdleAt).toBe(lastIdleAt);
+    expect(services.diagnostics.createBundle().map?.lastIdleAt).toBe(lastIdleAt);
+    facade.destroy();
+  });
+
+  it('notifies styledata only when style source or layer ids change', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const subscriber = vi.fn();
+    facade.subscribe(subscriber);
+
+    nativeMap.fire('styledata');
+    await Promise.resolve();
+    expect(subscriber).not.toHaveBeenCalled();
+
+    nativeMap.addSource('late-style-source', { type: 'geojson' });
+    nativeMap.fire('styledata');
+    await Promise.resolve();
+    expect(subscriber).toHaveBeenCalledOnce();
+    expect(facade.getDiagnosticsSnapshot().sourceIds).toEqual(['late-style-source']);
+    facade.destroy();
+  });
+
+  it('publishes one settled viewport after a terrain transition', async () => {
+    const services = createTestServices();
+    const provider = services.mapProviderConfiguration;
+    expect(provider.status).toBe('valid');
+    if (provider.status !== 'valid') return;
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger, undefined, {
+      terrain: provider.value.terrain,
+      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
+      requestTimeoutMs: 100,
+      equivalentErrorWindowMs: 1_000,
+    });
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('load');
+    const viewportMovement = vi.fn<(event: MapViewportMovement) => void>();
+    facade.subscribeViewportMovement(viewportMovement);
+
+    await facade.setTerrainMode('terrain');
+
+    expect(viewportMovement.mock.calls.at(-1)?.[0]).toMatchObject({ phase: 'settled' });
+    expect(
+      viewportMovement.mock.calls.filter(([event]) => event.phase === 'settled'),
+    ).toHaveLength(1);
+    facade.destroy();
+  });
+
   it('publishes ready when the map ref arrives after style load but before full load', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

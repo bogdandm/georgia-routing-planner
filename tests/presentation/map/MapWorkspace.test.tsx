@@ -813,6 +813,39 @@ describe('MapWorkspace', () => {
     expect(facade.destroyed).toBe(true);
   });
 
+  it('publishes the viewport on availability and settle only, then clears it on unmount', () => {
+    const facade = new FakeMapFacade();
+    const services = createTestServices();
+    const { unmount } = renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Viewport map canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    const initialViewport = services.mapViewport.getViewportSnapshot();
+    expect(initialViewport).toEqual(facade.viewportSnapshot);
+    const viewportListener = vi.fn();
+    services.mapViewport.subscribe(viewportListener);
+
+    act(() => {
+      facade.viewportSnapshot = {
+        bounds: { west: 44, south: 42, east: 45, north: 43 },
+        center: { longitude: 44.5, latitude: 42.5 },
+      };
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    expect(viewportListener).not.toHaveBeenCalled();
+    expect(services.mapViewport.getViewportSnapshot()).toBe(initialViewport);
+
+    act(() => {
+      facade.emitViewportSettled();
+    });
+    expect(viewportListener).toHaveBeenCalledOnce();
+    expect(services.mapViewport.getViewportSnapshot()).toEqual(facade.viewportSnapshot);
+
+    unmount();
+    expect(services.mapViewport.getViewportSnapshot()).toBeNull();
+  });
+
   it('fails safely before mounting MapLibre when provider configuration is invalid', () => {
     const facade = new FakeMapFacade();
     const services = {

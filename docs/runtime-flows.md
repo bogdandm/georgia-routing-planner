@@ -34,7 +34,10 @@ contacting the provider. Camera failure is recoverable: the map uses
 `defaultGeorgiaCamera`. The facade publishes Ready on `style.load`, when MapLibre can
 safely accept satellite and terrain sources, rather than waiting for every visible
 basemap and relief tile. The later full `load` and `idle` events remain diagnostic
-signals. The facade registers native listeners exactly once and removes them during
+signals. `idle` fires after every repaint, so the facade stores its timestamp in the
+diagnostics snapshot without notifying React subscribers; export and the open developer
+drawer read it on demand. `styledata` republishes source and layer IDs only when either
+list changed. The facade registers native listeners exactly once and removes them during
 teardown.
 
 The Satellite contextual sidebar subscribes to the existing serializable map snapshot

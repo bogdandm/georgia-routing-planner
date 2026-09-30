@@ -106,6 +106,7 @@ export class TerrainComputeWorkerServer {
         this.#rpc.publishEvent(terrainWorkerEventNames.diagnostic, input);
       },
       getEvents: () => [],
+      subscribe: () => () => undefined,
     };
     this.#rpc = new WorkerRpcServer(
       endpoint,

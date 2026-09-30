@@ -6,7 +6,10 @@ import { sentinelArchiveStartDate } from '@/application/satellite/SearchSatellit
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
-import { useSatelliteMosaic } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
+import {
+  useSatelliteMosaic,
+  useSatelliteMosaicShowDisabledReason,
+} from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { SatelliteRenderModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 
 const dayFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -33,12 +36,12 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
     requestActive,
     setDraftDate,
     setRenderModePending,
-    showDisabledReason,
     showMosaic,
     shown,
   } = useSatelliteMosaic();
+  const showDisabledReason = useSatelliteMosaicShowDisabledReason();
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
-  const today = clock.now();
+  const [today] = useState(() => clock.now());
   const todayDate = today.toISOString().slice(0, 10);
   const latestMonth = todayDate.slice(0, 7);
   const [calendarMonth, setCalendarMonth] = useState(latestMonth);

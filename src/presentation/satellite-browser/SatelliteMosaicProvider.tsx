@@ -13,16 +13,17 @@ import {
 import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
+import type { MapViewportMovementSnapshot } from '@/presentation/map/MapViewportSnapshotStore';
+import type { TerrainMode } from '@/presentation/map/mapTypes';
 
 export type SatelliteMode = 'scene' | 'mosaic';
 
 interface SatelliteMosaicContextValue {
-  readonly satelliteMode: SatelliteMode;
   readonly draftDate: string | null;
   readonly activeDate: string | null;
   readonly shown: boolean;
   readonly requestActive: boolean;
-  readonly showDisabledReason: string | null;
+  readonly renderModePending: boolean;
   readonly toggleMosaicMode: () => void;
   readonly setDraftDate: (date: string) => void;
   readonly setRenderModePending: (pending: boolean) => void;
@@ -30,6 +31,9 @@ interface SatelliteMosaicContextValue {
 }
 
 const SatelliteMosaicContext = createContext<SatelliteMosaicContextValue | null>(null);
+// Map-wide consumers only need the mode; a separate context keeps Mosaic workflow
+// changes from re-rendering them.
+const SatelliteModeContext = createContext<SatelliteMode>('scene');
 
 const unexpectedSearchMessage = 'Sentinel imagery could not be loaded. Try again.';
 
@@ -51,17 +55,6 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     workflow.current = { satelliteMode, activeDate, shown };
   }, [activeDate, satelliteMode, shown]);
-
-  const movementSnapshot = useSyncExternalStore(
-    useCallback((listener) => mapViewport.subscribeMovement(listener), [mapViewport]),
-    useCallback(() => mapViewport.getMovementSnapshot(), [mapViewport]),
-    useCallback(() => mapViewport.getMovementSnapshot(), [mapViewport]),
-  );
-  const diagnosticsSnapshot = useSyncExternalStore(
-    useCallback((listener) => mapDiagnostics.subscribe(listener), [mapDiagnostics]),
-    useCallback(() => mapDiagnostics.getSnapshot(), [mapDiagnostics]),
-    useCallback(() => mapDiagnostics.getSnapshot(), [mapDiagnostics]),
-  );
 
   const cancelRequest = useCallback(() => {
     currentRequest.current?.controller.abort();
@@ -118,33 +111,40 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
     [cancelRequest, mapLayers, searchSatelliteMosaic],
   );
 
+  // Movement is read from the store inside a direct subscription; subscribing through
+  // React state would re-render every context consumer on each movestart/moveend.
   const lastMovement = useRef<string | null>(null);
   useEffect(() => {
-    const movementKey =
-      movementSnapshot.phase === 'settled'
-        ? `settled-${String(movementSnapshot.revision)}`
-        : movementSnapshot.phase;
-    if (lastMovement.current === movementKey) return;
-    lastMovement.current = movementKey;
+    const handleMovement = () => {
+      const movement = mapViewport.getMovementSnapshot();
+      const movementKey =
+        movement.phase === 'settled'
+          ? `settled-${String(movement.revision)}`
+          : movement.phase;
+      if (lastMovement.current === movementKey) return;
+      lastMovement.current = movementKey;
 
-    if (movementSnapshot.phase !== 'settled') {
-      if (movementSnapshot.phase === 'moving') {
-        currentRequest.current?.controller.abort();
+      if (movement.phase !== 'settled') {
+        if (movement.phase === 'moving') {
+          currentRequest.current?.controller.abort();
+        }
+        return;
       }
-      return;
-    }
 
-    const current = workflow.current;
-    if (
-      current.satelliteMode === 'mosaic' &&
-      current.shown &&
-      current.activeDate !== null
-    ) {
-      runMosaic(current.activeDate, movementSnapshot.viewport);
-      return;
-    }
-    mapLayers?.pruneMosaic(movementSnapshot.viewport);
-  }, [cancelRequest, mapLayers, movementSnapshot, runMosaic]);
+      const current = workflow.current;
+      if (
+        current.satelliteMode === 'mosaic' &&
+        current.shown &&
+        current.activeDate !== null
+      ) {
+        runMosaic(current.activeDate, movement.viewport);
+        return;
+      }
+      mapLayers?.pruneMosaic(movement.viewport);
+    };
+    handleMovement();
+    return mapViewport.subscribeMovement(handleMovement);
+  }, [mapLayers, mapViewport, runMosaic]);
 
   useEffect(
     () => () => {
@@ -182,26 +182,31 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
   );
 
   const showMosaic = useCallback(() => {
+    const movement = mapViewport.getMovementSnapshot();
     if (
       satelliteMode !== 'mosaic' ||
       draftDate === null ||
-      movementSnapshot.phase !== 'settled' ||
-      mapLayers === null ||
-      searchSatelliteMosaic === null ||
-      diagnosticsSnapshot?.terrainMode !== 'flat' ||
-      requestActive ||
-      renderModePending
+      movement.phase !== 'settled' ||
+      resolveShowDisabledReason({
+        draftDate,
+        movementPhase: movement.phase,
+        mapLayersAvailable: mapLayers !== null,
+        searchAvailable: searchSatelliteMosaic !== null,
+        terrainMode: mapDiagnostics.getSnapshot()?.terrainMode ?? null,
+        requestActive,
+        renderModePending,
+      }) !== null
     ) {
       return;
     }
     setActiveDate(draftDate);
     setShown(true);
-    runMosaic(draftDate, movementSnapshot.viewport);
+    runMosaic(draftDate, movement.viewport);
   }, [
-    diagnosticsSnapshot,
     draftDate,
+    mapDiagnostics,
     mapLayers,
-    movementSnapshot,
+    mapViewport,
     renderModePending,
     requestActive,
     runMosaic,
@@ -209,30 +214,13 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
     searchSatelliteMosaic,
   ]);
 
-  let showDisabledReason: string | null = null;
-  if (draftDate === null) {
-    showDisabledReason = 'Choose the last date to include in the Mosaic.';
-  } else if (movementSnapshot.phase === 'moving') {
-    showDisabledReason = 'Wait for the map to stop moving.';
-  } else if (movementSnapshot.phase === 'unavailable' || mapLayers === null) {
-    showDisabledReason = 'Wait for the map to become available.';
-  } else if (searchSatelliteMosaic === null) {
-    showDisabledReason = 'Sentinel Mosaic search is unavailable.';
-  } else if (diagnosticsSnapshot?.terrainMode !== 'flat') {
-    showDisabledReason = 'Wait for the map to enter 2D mode.';
-  } else if (requestActive) {
-    showDisabledReason = 'A Mosaic request is already in progress.';
-  } else if (renderModePending) {
-    showDisabledReason = 'Wait for the satellite renderer change to finish.';
-  }
   const value = useMemo<SatelliteMosaicContextValue>(
     () => ({
-      satelliteMode,
       draftDate,
       activeDate,
       shown,
       requestActive,
-      showDisabledReason,
+      renderModePending,
       toggleMosaicMode,
       setDraftDate,
       setRenderModePending,
@@ -241,10 +229,9 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
     [
       activeDate,
       draftDate,
+      renderModePending,
       requestActive,
-      satelliteMode,
       setDraftDate,
-      showDisabledReason,
       showMosaic,
       shown,
       toggleMosaicMode,
@@ -252,16 +239,79 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
   );
 
   return (
-    <SatelliteMosaicContext.Provider value={value}>
-      {children}
-    </SatelliteMosaicContext.Provider>
+    <SatelliteModeContext.Provider value={satelliteMode}>
+      <SatelliteMosaicContext.Provider value={value}>
+        {children}
+      </SatelliteMosaicContext.Provider>
+    </SatelliteModeContext.Provider>
   );
+}
+
+function resolveShowDisabledReason(state: {
+  readonly draftDate: string | null;
+  readonly movementPhase: MapViewportMovementSnapshot['phase'];
+  readonly mapLayersAvailable: boolean;
+  readonly searchAvailable: boolean;
+  readonly terrainMode: TerrainMode | null;
+  readonly requestActive: boolean;
+  readonly renderModePending: boolean;
+}): string | null {
+  if (state.draftDate === null) return 'Choose the last date to include in the Mosaic.';
+  if (state.movementPhase === 'moving') return 'Wait for the map to stop moving.';
+  if (state.movementPhase === 'unavailable' || !state.mapLayersAvailable) {
+    return 'Wait for the map to become available.';
+  }
+  if (!state.searchAvailable) return 'Sentinel Mosaic search is unavailable.';
+  if (state.terrainMode !== 'flat') return 'Wait for the map to enter 2D mode.';
+  if (state.requestActive) return 'A Mosaic request is already in progress.';
+  if (state.renderModePending) {
+    return 'Wait for the satellite renderer change to finish.';
+  }
+  return null;
 }
 
 // Fast Refresh owns the provider; consumers remain colocated with its context contract.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useSatelliteMode(): SatelliteMode {
-  return useContext(SatelliteMosaicContext)?.satelliteMode ?? 'scene';
+  return useContext(SatelliteModeContext);
+}
+
+/**
+ * Subscribes only the rendering control to primitive movement and terrain values so
+ * map movement does not change the shared Mosaic context.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useSatelliteMosaicShowDisabledReason(): string | null {
+  const { mapDiagnostics, mapLayers, mapViewport, searchSatelliteMosaic } =
+    useRuntimeServices();
+  const { draftDate, renderModePending, requestActive } = useSatelliteMosaic();
+  const readMovementPhase = useCallback(
+    () => mapViewport.getMovementSnapshot().phase,
+    [mapViewport],
+  );
+  const movementPhase = useSyncExternalStore(
+    useCallback((listener) => mapViewport.subscribeMovement(listener), [mapViewport]),
+    readMovementPhase,
+    readMovementPhase,
+  );
+  const readTerrainMode = useCallback(
+    () => mapDiagnostics.getSnapshot()?.terrainMode ?? null,
+    [mapDiagnostics],
+  );
+  const terrainMode = useSyncExternalStore(
+    useCallback((listener) => mapDiagnostics.subscribe(listener), [mapDiagnostics]),
+    readTerrainMode,
+    readTerrainMode,
+  );
+  return resolveShowDisabledReason({
+    draftDate,
+    movementPhase,
+    mapLayersAvailable: mapLayers !== null,
+    searchAvailable: searchSatelliteMosaic !== null,
+    terrainMode,
+    requestActive,
+    renderModePending,
+  });
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

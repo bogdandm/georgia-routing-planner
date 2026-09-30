@@ -13,6 +13,14 @@ export class MapDiagnosticsSnapshotStore {
     for (const listener of this.#listeners) listener();
   }
 
+  /**
+   * Stores a snapshot whose only change is not React-visible (the idle timestamp).
+   * Export and health reads see it; subscribers pick it up on their next render.
+   */
+  public replaceSilently(snapshot: MapDiagnosticsSnapshot): void {
+    this.#snapshot = snapshot;
+  }
+
   public getSnapshot(): MapDiagnosticsSnapshot | null {
     return this.#snapshot;
   }

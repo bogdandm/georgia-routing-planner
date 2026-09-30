@@ -256,6 +256,15 @@ async function loadMapViewWithDeadline(
   }
 }
 
+/** Consumes a one-shot map command even when running it throws. */
+function runThenConsume(run: () => void, consume: () => void): void {
+  try {
+    run();
+  } finally {
+    consume();
+  }
+}
+
 /**
  * Coordinates React-visible map states while delegating all native MapLibre lifecycle
  * work to `MapFacade`. The map mounts only after camera restoration settles or expires.
@@ -601,18 +610,20 @@ export function MapWorkspace({
   ]);
 
   useEffect(() => {
-    const publishViewport = () => {
-      mapViewport.update(facade.getViewportSnapshot());
-    };
+    // Viewport changes only when the camera settles; the facade emits one settle when
+    // the style is ready, after every moveend, and after terrain transitions. Generic facade
+    // notifications (idle, styledata, inspection) must not republish it.
     const publishMovement = (event: MapViewportMovement) => {
-      if (event.phase === 'moving') mapViewport.markMoving();
-      else mapViewport.settle(event.viewport);
+      if (event.phase === 'moving') {
+        mapViewport.markMoving();
+        return;
+      }
+      mapViewport.update(event.viewport);
+      mapViewport.settle(event.viewport);
     };
-    publishViewport();
-    const unsubscribe = facade.subscribe(publishViewport);
+    mapViewport.update(facade.getViewportSnapshot());
     const unsubscribeMovement = facade.subscribeViewportMovement(publishMovement);
     return () => {
-      unsubscribe();
       unsubscribeMovement();
       mapViewport.update(null);
       mapViewport.clearMovement();
@@ -621,24 +632,30 @@ export function MapWorkspace({
 
   useEffect(() => {
     if (navigationCommand === null) return;
-    try {
-      facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
-    } finally {
-      consumeMapNavigationCommand(navigationCommand.id);
-    }
+    runThenConsume(
+      () => {
+        facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
+      },
+      () => {
+        consumeMapNavigationCommand(navigationCommand.id);
+      },
+    );
   }, [facade, getNavigationPadding, navigationCommand]);
   useEffect(() => {
     if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
-    try {
-      const padding = fitBoundsCommand.padding ?? getNavigationPadding?.();
-      if (padding === undefined) {
-        facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
-      } else {
-        facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom, padding);
-      }
-    } finally {
-      consumeMapFitBoundsCommand(fitBoundsCommand.id);
-    }
+    runThenConsume(
+      () => {
+        const padding = fitBoundsCommand.padding ?? getNavigationPadding?.();
+        if (padding === undefined) {
+          facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
+        } else {
+          facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom, padding);
+        }
+      },
+      () => {
+        consumeMapFitBoundsCommand(fitBoundsCommand.id);
+      },
+    );
   }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
 
   useEffect(() => {

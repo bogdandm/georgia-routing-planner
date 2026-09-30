@@ -155,6 +155,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     return { top, right: mapCameraMargin, bottom: top, left };
   }, [contextualSidebarWidth, navigationCollapsed, smartphoneViewport]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [sharePageUrl, setSharePageUrl] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
   const [mobileTrackDetailsExpanded, setMobileTrackDetailsExpanded] = useState(false);
@@ -456,136 +457,138 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         <MenuOutlinedIcon />
       </IconButton>
 
-      <Paper
-        elevation={4}
-        sx={{
-          position: 'absolute',
-          zIndex: 5,
-          right: 12,
-          bottom: 'max(12px, env(safe-area-inset-bottom))',
-          left: 12,
-          display: mobileTrackDisclosureOpen ? 'block' : 'none',
-          height: !multiTrackDetailsExist && activeTrack?.kind === 'preview' ? 120 : 56,
-          bgcolor: 'background.paper',
-          overflow: 'hidden',
-        }}
-      >
-        {!multiTrackDetailsExist && activeTrack?.kind === 'preview' ? (
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{ height: 64, px: 1.5, py: 1.5, alignItems: 'center' }}
-          >
-            <TextField
-              fullWidth
-              size="small"
-              label={t`Track name`}
-              value={activeTrack.name}
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-              onChange={(event) => {
-                setActiveName(event.target.value);
-              }}
-              sx={{ minWidth: 0, flex: 1 }}
-            />
-            <Button
-              variant="contained"
-              disabled={
-                activeTrack.preparationStatus !== 'ready' ||
-                recalculationState === 'recalculating' ||
-                activeTrack.name.trim().length === 0
-              }
-              onClick={() => void savePreview()}
-              sx={{ flexShrink: 0 }}
-            >
-              <Trans>Save</Trans>
-            </Button>
-          </Stack>
-        ) : null}
-        <ButtonBase
-          aria-label={
-            multiTrackDetailsExist
-              ? t`Expand multiple track details`
-              : activeTrack?.kind === 'preview'
-                ? t`Expand unsaved track details`
-                : t`Expand track details`
-          }
-          onClick={() => {
-            setMobileTrackDetailsExpanded(true);
-            if (activeTab !== 'tracks') handleSectionChange('tracks');
-            setMobileWorkspaceOpen(true);
-          }}
+      {mobileTrackDisclosureOpen ? (
+        <Paper
+          elevation={4}
           sx={{
-            position: 'relative',
-            width: '100%',
-            height: 56,
-            minHeight: 56,
+            position: 'absolute',
+            zIndex: 5,
+            right: 12,
+            bottom: 'max(12px, env(safe-area-inset-bottom))',
+            left: 12,
+            height:
+              !multiTrackDetailsExist && activeTrack?.kind === 'preview' ? 120 : 56,
+            bgcolor: 'background.paper',
             overflow: 'hidden',
-            borderRadius: 'inherit',
           }}
         >
-          {activeTrackPreparing ? (
+          {!multiTrackDetailsExist && activeTrack?.kind === 'preview' ? (
             <Stack
-              role="status"
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'center' }}
+              sx={{ height: 64, px: 1.5, py: 1.5, alignItems: 'center' }}
             >
-              <CircularProgress size={18} />
-              <Typography variant="body2">
-                <Trans>Preparing terrain and elevation…</Trans>
-              </Typography>
-            </Stack>
-          ) : smartphoneViewport &&
-            activeTrack?.kind === 'route-plan' &&
-            (activeTrack.status === 'calculating' ||
-              activeTrack.status === 'elevation-enriching' ||
-              activeTrack.status === 'saving') ? (
-            <Box sx={{ width: '100%', px: 2 }}>
-              <RoutePlanStatus
-                draft={activeTrack}
-                elevationProgress={elevationProgress}
+              <TextField
+                fullWidth
+                size="small"
+                label={t`Track name`}
+                value={activeTrack.name}
+                slotProps={{ htmlInput: { maxLength: 200 } }}
+                onChange={(event) => {
+                  setActiveName(event.target.value);
+                }}
+                sx={{ minWidth: 0, flex: 1 }}
               />
-            </Box>
-          ) : smartphoneViewport &&
-            activeTrack?.kind === 'route-plan' &&
-            (activeTrack.waypoints.length < 2 || activeTrack.metrics === null) ? (
-            <Stack
-              direction="row"
-              sx={{
-                width: '100%',
-                height: '100%',
-                alignItems: 'center',
-                textAlign: 'left',
-              }}
-            >
-              <Box
-                aria-hidden
+              <Button
+                variant="contained"
+                disabled={
+                  activeTrack.preparationStatus !== 'ready' ||
+                  recalculationState === 'recalculating' ||
+                  activeTrack.name.trim().length === 0
+                }
+                onClick={() => void savePreview()}
+                sx={{ flexShrink: 0 }}
+              >
+                <Trans>Save</Trans>
+              </Button>
+            </Stack>
+          ) : null}
+          <ButtonBase
+            aria-label={
+              multiTrackDetailsExist
+                ? t`Expand multiple track details`
+                : activeTrack?.kind === 'preview'
+                  ? t`Expand unsaved track details`
+                  : t`Expand track details`
+            }
+            onClick={() => {
+              setMobileTrackDetailsExpanded(true);
+              if (activeTab !== 'tracks') handleSectionChange('tracks');
+              setMobileWorkspaceOpen(true);
+            }}
+            sx={{
+              position: 'relative',
+              width: '100%',
+              height: 56,
+              minHeight: 56,
+              overflow: 'hidden',
+              borderRadius: 'inherit',
+            }}
+          >
+            {activeTrackPreparing ? (
+              <Stack
+                role="status"
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center' }}
+              >
+                <CircularProgress size={18} />
+                <Typography variant="body2">
+                  <Trans>Preparing terrain and elevation…</Trans>
+                </Typography>
+              </Stack>
+            ) : activeTrack?.kind === 'route-plan' &&
+              (activeTrack.status === 'calculating' ||
+                activeTrack.status === 'elevation-enriching' ||
+                activeTrack.status === 'saving') ? (
+              <Box sx={{ width: '100%', px: 2 }}>
+                <RoutePlanStatus
+                  draft={activeTrack}
+                  elevationProgress={elevationProgress}
+                />
+              </Box>
+            ) : activeTrack?.kind === 'route-plan' &&
+              (activeTrack.waypoints.length < 2 || activeTrack.metrics === null) ? (
+              <Stack
+                direction="row"
                 sx={{
-                  width: 30,
-                  height: 30,
-                  ml: 0.5,
-                  mr: 1,
-                  flexShrink: 0,
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: 'action.active',
+                  width: '100%',
+                  height: '100%',
+                  alignItems: 'center',
+                  textAlign: 'left',
                 }}
               >
-                <KeyboardArrowUpIcon sx={{ fontSize: 20 }} />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                <Trans>Click the map to choose the route start and destination.</Trans>
-              </Typography>
-            </Stack>
-          ) : activeTrackMetrics !== null ? (
-            <CompactTrackSummary
-              showExpandIndicator
-              metrics={activeTrackMetrics}
-              profile={summaryProfile}
-            />
-          ) : null}
-        </ButtonBase>
-      </Paper>
+                <Box
+                  aria-hidden
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    ml: 0.5,
+                    mr: 1,
+                    flexShrink: 0,
+                    display: 'grid',
+                    placeItems: 'center',
+                    color: 'action.active',
+                  }}
+                >
+                  <KeyboardArrowUpIcon sx={{ fontSize: 20 }} />
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  <Trans>
+                    Click the map to choose the route start and destination.
+                  </Trans>
+                </Typography>
+              </Stack>
+            ) : activeTrackMetrics !== null ? (
+              <CompactTrackSummary
+                showExpandIndicator
+                metrics={activeTrackMetrics}
+                profile={summaryProfile}
+              />
+            ) : null}
+          </ButtonBase>
+        </Paper>
+      ) : null}
 
       <Box
         ref={navigationRef}
@@ -672,6 +675,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               setSettingsOpen(true);
             }}
             onShare={() => {
+              setSharePageUrl(window.location.href);
               setShareOpen(true);
             }}
             onToggleNavigation={() => {
@@ -892,6 +896,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       />
       <ShareMapDialog
         open={shareOpen}
+        pageUrl={sharePageUrl}
         onClose={() => {
           setShareOpen(false);
         }}

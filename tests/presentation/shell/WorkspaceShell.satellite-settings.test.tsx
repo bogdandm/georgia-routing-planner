@@ -238,7 +238,8 @@ describe('WorkspaceShell', () => {
       },
     );
 
-    expect(setOpacity).toHaveBeenLastCalledWith(0.6);
+    expect(setOpacity).toHaveBeenCalledWith(0.6, 'live');
+    expect(setOpacity).toHaveBeenLastCalledWith(0.6, 'commit');
   });
 
   it('sends satellite checkbox changes and reflects mutually exclusive state', async () => {
@@ -338,7 +339,7 @@ describe('WorkspaceShell', () => {
     });
 
     expect(setVisibility).toHaveBeenLastCalledWith('imported-tracks', false);
-    expect(setOpacity).toHaveBeenLastCalledWith(0.35);
+    expect(setOpacity).toHaveBeenLastCalledWith(0.35, 'commit');
   });
 
   it('searches the captured viewport and renders grouped Sentinel scenes', async () => {

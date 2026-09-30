@@ -20,5 +20,8 @@ export interface DiagnosticEvent extends DiagnosticInput {
  */
 export interface DiagnosticLogger {
   log(input: DiagnosticInput): void;
+  /** Returns an immutable snapshot that keeps its identity until the next logged event. */
   getEvents(): readonly DiagnosticEvent[];
+  /** Notifies `listener` after each logged event; returns the unsubscribe function. */
+  subscribe(listener: () => void): () => void;
 }

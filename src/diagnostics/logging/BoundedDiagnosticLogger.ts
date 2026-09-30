@@ -12,7 +12,8 @@ import { redactDiagnosticInput } from '@/diagnostics/redaction/redactDiagnosticD
  * deliberately best-effort so diagnostics cannot turn a recoverable failure into one.
  */
 export class BoundedDiagnosticLogger implements DiagnosticLogger {
-  readonly #events: DiagnosticEvent[] = [];
+  #events: readonly DiagnosticEvent[] = [];
+  readonly #listeners = new Set<() => void>();
 
   public constructor(
     private readonly clock: Clock,
@@ -34,21 +35,28 @@ export class BoundedDiagnosticLogger implements DiagnosticLogger {
         timestamp: this.clock.now().toISOString(),
       };
 
-      this.#events.push(event);
-      if (this.#events.length > this.capacity) {
-        this.#events.splice(0, this.#events.length - this.capacity);
-      }
+      const events = [...this.#events, event];
+      this.#events =
+        events.length > this.capacity ? events.slice(-this.capacity) : events;
 
       if (this.consoleEnabled) {
         this.writeToConsole(event);
       }
+      for (const listener of this.#listeners) listener();
     } catch {
       // Diagnostics must never make the primary application fail.
     }
   }
 
   public getEvents(): readonly DiagnosticEvent[] {
-    return [...this.#events];
+    return this.#events;
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
   }
 
   private writeToConsole(event: DiagnosticEvent): void {

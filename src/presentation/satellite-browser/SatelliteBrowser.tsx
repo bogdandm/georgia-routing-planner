@@ -894,21 +894,19 @@ export function SatelliteBrowser({
 
   useEffect(() => {
     let cancelled = false;
-    const loadMaximumCloudCover = async () => {
-      try {
-        const value = await database.loadMaximumCloudCoverPercent();
+    void database
+      .loadMaximumCloudCoverPercent()
+      .then((value) => {
         if (!cancelled && !cloudCoverChangedByUser.current) {
           setMaxCloudCoverPercent(value);
         }
-      } catch {
+      })
+      .catch(() => {
         logger.log({
           level: 'warn',
           name: 'storage.satellite-preferences.load-failed',
         });
-      }
-    };
-
-    void loadMaximumCloudCover();
+      });
     return () => {
       cancelled = true;
     };
@@ -918,9 +916,7 @@ export function SatelliteBrowser({
     searchViewport === null
       ? fallbackCoordinates
       : `${searchViewport.center.latitude.toFixed(4)}, ${searchViewport.center.longitude.toFixed(4)}`;
-  const restoredScene = useMemo(() => {
-    return selectedMapScene ?? mapLayers?.getSelectedScene() ?? null;
-  }, [mapLayers, selectedMapScene]);
+  const restoredScene = selectedMapScene;
   const restoredResult = useMemo(
     () =>
       restoredScene === null
@@ -1012,7 +1008,7 @@ export function SatelliteBrowser({
     setLoadingMore(true);
     setLoadMoreError(null);
     beginSatelliteRequest({ code: 'loading-month', month: range.month });
-    try {
+    const loadMonth = async () => {
       const monthResult = await searchSatelliteScenes.execute(
         {
           viewport: criteria.viewport,
@@ -1046,21 +1042,24 @@ export function SatelliteBrowser({
         code: 'images-available',
         count: mergedResult.sceneCount,
       });
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      const message =
-        error instanceof SatelliteSearchError
-          ? error.message
-          : `${monthFormatter.format(new Date(`${range.month}-01T00:00:00.000Z`))} imagery could not be loaded. Try again.`;
-      setLoadMoreError(message);
-      failSatelliteRequest();
-    } finally {
-      if (request.current === controller) {
-        request.current = null;
-        setLoadingMonth(null);
-        setLoadingMore(false);
-      }
-    }
+    };
+    await loadMonth()
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const message =
+          error instanceof SatelliteSearchError
+            ? error.message
+            : `${monthFormatter.format(new Date(`${range.month}-01T00:00:00.000Z`))} imagery could not be loaded. Try again.`;
+        setLoadMoreError(message);
+        failSatelliteRequest();
+      })
+      .finally(() => {
+        if (request.current === controller) {
+          request.current = null;
+          setLoadingMonth(null);
+          setLoadingMore(false);
+        }
+      });
   };
 
   const runSearch = async () => {
@@ -1103,7 +1102,7 @@ export function SatelliteBrowser({
     setResultsOpen(true);
     setSearchState({ status: 'loading' });
     beginSatelliteRequest({ code: 'searching-catalog' });
-    try {
+    const searchCatalog = async () => {
       const result = await searchSatelliteScenes.execute(
         {
           viewport: searchViewport,
@@ -1122,23 +1121,26 @@ export function SatelliteBrowser({
           count: result.sceneCount,
         });
       }
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      const message =
-        error instanceof SatelliteSearchError
-          ? error.message
-          : 'The imagery search could not be completed.';
-      setSearchState({
-        status: 'error',
-        message,
+    };
+    await searchCatalog()
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const message =
+          error instanceof SatelliteSearchError
+            ? error.message
+            : 'The imagery search could not be completed.';
+        setSearchState({
+          status: 'error',
+          message,
+        });
+        failSatelliteRequest();
+      })
+      .finally(() => {
+        if (request.current === controller) {
+          request.current = null;
+          setLoadingMonth(null);
+        }
       });
-      failSatelliteRequest();
-    } finally {
-      if (request.current === controller) {
-        request.current = null;
-        setLoadingMonth(null);
-      }
-    }
   };
 
   const loadMoreImages = async () => {

@@ -1940,6 +1940,89 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('publishes a hovered elevation sample to the map trace only when it changes', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setTracePoint = vi.spyOn(mapLayers, 'setImportedTrackTracePoint');
+    const { container } = renderWorkspaceShell();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 0, 420, 264),
+    );
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, flatGpxFile());
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    const chartSurface = (
+      await within(details).findByRole('img', { name: /^Elevation profile from /u })
+    ).querySelector('svg');
+    if (chartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+    setTracePoint.mockClear();
+
+    fireEvent.mouseEnter(chartSurface, { clientX: 120, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 120, clientY: 80 });
+    await waitFor(() => {
+      expect(setTracePoint).toHaveBeenCalledTimes(1);
+    });
+    // Recharts coalesces moves per animation frame; let the repeat settle on its own.
+    fireEvent.mouseMove(chartSurface, { clientX: 120, clientY: 90 });
+    await act(() => {
+      const { promise, resolve } = deferred<undefined>();
+      setTimeout(() => {
+        resolve(undefined);
+      }, 50);
+      return promise;
+    });
+    fireEvent.mouseMove(chartSurface, { clientX: 330, clientY: 80 });
+    await waitFor(() => {
+      expect(setTracePoint.mock.calls.length).toBeGreaterThan(1);
+    });
+    expect(setTracePoint).toHaveBeenCalledTimes(2);
+    const first = setTracePoint.mock.calls[0]?.[0];
+    const second = setTracePoint.mock.calls[1]?.[0];
+    expect(first).toEqual(expect.any(Array));
+    expect(second).toEqual(expect.any(Array));
+    expect(second).not.toEqual(first);
+
+    fireEvent.mouseLeave(chartSurface);
+    expect(setTracePoint).toHaveBeenLastCalledWith(null);
+    expect(setTracePoint).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the saved-track grade highlight while its name is edited', async () => {
+    const summary = savedTrackSummary('local:renamed', 'Renamed trail');
+    await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+    await services.database.saveLatestOpenedTrackId(summary.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await waitFor(() => {
+      expect(setImportedTrackHighlight.mock.lastCall?.[0]?.length).toBeGreaterThan(0);
+    });
+    const highlightCallCount = setImportedTrackHighlight.mock.calls.length;
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    await user.type(nameInput, ' draft');
+
+    expect(nameInput).toHaveValue('Renamed trail draft');
+    expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
+  });
+
   it('reloads synchronized source elevation without replacing it from DEM', async () => {
     const base = savedTrackSummary('local:synchronized', 'Synchronized trail');
     const summary: LocalTrackSummary = {

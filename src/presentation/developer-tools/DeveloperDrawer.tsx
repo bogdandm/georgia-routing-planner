@@ -91,7 +91,13 @@ export function DeveloperDrawer({
     readSentinelQuerySnapshot,
     readSentinelQuerySnapshot,
   );
-  const events = logger.getEvents().slice(-50).reverse();
+  const subscribeToEvents = useCallback(
+    (listener: () => void) => logger.subscribe(listener),
+    [logger],
+  );
+  const readEvents = useCallback(() => logger.getEvents(), [logger]);
+  const allEvents = useSyncExternalStore(subscribeToEvents, readEvents, readEvents);
+  const events = allEvents.slice(-50).reverse();
 
   useEffect(
     () => () => {
@@ -112,18 +118,34 @@ export function DeveloperDrawer({
     };
   }, [open, sentinelQueryDiagnostics, sentinelQuerySnapshot.status]);
 
+  // The facade stores idle timestamps without notifying subscribers; re-render only
+  // while open and only when the stored value changed so the shown time stays current.
+  const [, setObservedIdleAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const intervalId = window.setInterval(() => {
+      setObservedIdleAt(mapDiagnostics.getSnapshot()?.lastIdleAt ?? null);
+    }, 1_000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [mapDiagnostics, open]);
+
   const handleTabChange = (_event: SyntheticEvent, value: DeveloperTab) => {
     setActiveTab(value);
   };
 
   const runHealthChecks = async () => {
     setRunning(true);
-    try {
-      setHealthChecks(await diagnostics.runHealthChecks());
-      setActiveTab('health');
-    } finally {
-      setRunning(false);
-    }
+    await diagnostics
+      .runHealthChecks()
+      .then((checks) => {
+        setHealthChecks(checks);
+        setActiveTab('health');
+      })
+      .finally(() => {
+        setRunning(false);
+      });
   };
 
   const handleDownload = () => {
@@ -136,20 +158,18 @@ export function DeveloperDrawer({
     const controller = new AbortController();
     providerAbort.current = controller;
     setProviderRunning(true);
-    try {
-      setHealthChecks(
-        await diagnostics.runProviderHealthChecks(
-          mapProviderConfiguration.value,
-          controller.signal,
-        ),
-      );
-      setActiveTab('health');
-    } finally {
-      if (providerAbort.current === controller) {
-        providerAbort.current = null;
-        setProviderRunning(false);
-      }
-    }
+    await diagnostics
+      .runProviderHealthChecks(mapProviderConfiguration.value, controller.signal)
+      .then((checks) => {
+        setHealthChecks(checks);
+        setActiveTab('health');
+      })
+      .finally(() => {
+        if (providerAbort.current === controller) {
+          providerAbort.current = null;
+          setProviderRunning(false);
+        }
+      });
   };
 
   const handleClose = () => {

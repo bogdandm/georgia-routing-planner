@@ -37,3 +37,25 @@ describe('MapViewportSnapshotStore movement state', () => {
     expect(store.getMovementSnapshot()).toBe(unavailable);
   });
 });
+
+describe('MapViewportSnapshotStore viewport', () => {
+  it('does not republish a numerically equal viewport', () => {
+    const store = new MapViewportSnapshotStore();
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    store.update(viewport);
+    store.update({
+      bounds: { ...viewport.bounds },
+      center: { ...viewport.center },
+    });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(store.getViewportSnapshot()).toBe(viewport);
+
+    store.update({ ...viewport, center: { longitude: 44.6, latitude: 42.5 } });
+    store.update(null);
+    store.update(null);
+    expect(listener).toHaveBeenCalledTimes(3);
+    expect(store.getViewportSnapshot()).toBeNull();
+  });
+});

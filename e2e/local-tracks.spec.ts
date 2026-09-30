@@ -500,9 +500,10 @@ test('uses a map-first smartphone track disclosure without crashing', async ({
   const savedDisclosure = page.getByRole('button', {
     name: 'Expand track details',
   });
-  await expect(savedDisclosure).toBeVisible();
-  await savedDisclosure.click();
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Save', exact: true })).toHaveCount(
+    0,
+  );
   const savedTrackName = await details.getByRole('heading', { level: 2 }).textContent();
   expect(savedTrackName).not.toBeNull();
   await page.getByRole('button', { name: 'Close track' }).click();

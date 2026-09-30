@@ -38,13 +38,23 @@ the editor. An unsaved preview uses a taller disclosure with editable **Track na
 **Save** controls above its decorative profile and metrics. When the active track has a
 usable elevation profile, its grade-colored graph is drawn decoratively behind these
 compact stats without chart interaction. Expanding the disclosure reveals the full
-editor; collapsing preserves the active track, while closing clears it. Selecting
-Sentinel imagery closes the smartphone workspace so the map immediately shows the
-applied scene; reopening the workspace restores the existing imagery results. From
-Weather, the header's **Select forecast point** action closes the workspace and gives
-the next primary map click to Weather; **Open workspace** returns to the same loading or
-completed forecast. This transient presentation state is not stored as a navigation
-preference or URL entry.
+editor; collapsing preserves the active track, while closing clears it. Saving a
+preview, shared copy, or route plan from the expanded editor keeps the editor open for
+the saved track.
+
+Smartphone taps follow one rule: an action whose result is on the map closes the
+workspace, and a map action whose result is in a panel opens it. Opening a saved track
+from the list or map search, starting a route plan, importing a file, panning to a track
+or saved marker, arming saved or track marker placement, route-plan **Undo** and
+**Clear**, **Center map on forecast location**, applying Sentinel imagery, **Fit
+footprint**, and **Show mosaic** all return to the map; reopening the workspace restores
+the existing Tracks list or imagery results. Settings controls such as layer toggles,
+rendering options, and the weather-map switch keep the workspace open. Elevation-chart
+taps keep the expanded editor open and only move the camera behind it. From Weather,
+**Select forecast point** closes the workspace and gives the next primary map click to
+Weather, which then reopens the workspace on the loading forecast. A shared-track link
+keeps the map first; an invalid or unavailable link opens Tracks to show its error. This
+transient presentation state is not stored as a navigation preference or URL entry.
 
 ## Desktop workspace
 
@@ -426,7 +436,8 @@ instead of the ordinary point-inspection workflow; the mode then ends. After a p
 selected, the adjacent overflow menu links directly to its Meteoblue and Windy forecasts
 in new browser tabs. Marker placement and one-shot Weather point selection are mutually
 exclusive, and a route draft hidden behind Weather does not capture clicks. On
-smartphones, activating the selection action also reveals the map.
+smartphones, activating the selection action reveals the map and the selected point
+reopens the workspace on its forecast.
 
 The header's **Show weather map** action enables one combined ECMWF IFS 0.25° map
 feature. It temporarily disables relief shading and elevation isolines, restoring each

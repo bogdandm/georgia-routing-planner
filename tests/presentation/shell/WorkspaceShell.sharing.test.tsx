@@ -857,4 +857,14 @@ describe('WorkspaceShell', () => {
       await screen.findByRole('heading', { level: 2, name: 'Recipient trail' }),
     ).toBeVisible();
   });
+
+  it('opens the smartphone workspace to show an invalid shared-track link', async () => {
+    window.history.replaceState(null, '', '/#tracks/share/1.invalid');
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(899);
+    renderWorkspaceShell();
+
+    expect(await screen.findByText('This track link is invalid.')).toBeVisible();
+    expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
+  });
 });

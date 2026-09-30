@@ -22,6 +22,24 @@ describe('createTrackThumbnail', () => {
     expect(thumbnail.loop).toBe(false);
   });
 
+  it('keeps an antimeridian-crossing track continuous', () => {
+    const thumbnail = createTrackThumbnail('local:dateline', null, [
+      [
+        [179.5, 0],
+        [-179.5, 0],
+        [-179.5, 1],
+      ],
+    ]);
+
+    expect(thumbnail.segments).toEqual([
+      [
+        [179.5, 0],
+        [180.5, 0],
+        [180.5, 1],
+      ],
+    ]);
+  });
+
   it('keeps segments separate, drops empty ones, and preserves single points', () => {
     const thumbnail = createTrackThumbnail('local:segments', null, [
       [

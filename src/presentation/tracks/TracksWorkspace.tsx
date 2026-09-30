@@ -740,7 +740,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         collapsedLoad,
       ]);
       setSummaries(loaded);
-      void refreshTrackThumbnails(loaded);
       setFolders(loadedFolders);
       if (!collapsedFoldersSettled.current) {
         collapsedFoldersSettled.current = true;
@@ -748,26 +747,30 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       }
       if (!restorationAttempted.current) {
         restorationAttempted.current = true;
-        if (sharedIntent.current.kind !== 'none') return;
-        const latestTrackId = await database.loadLatestOpenedTrackId();
-        const latestSummary = loaded.find((summary) => summary.id === latestTrackId);
-        if (latestSummary !== undefined) {
-          try {
-            const content = await database.loadLocalTrackContent(latestSummary.id);
-            initiallyRestoredTrackId.current = latestSummary.id;
-            setActive({
-              kind: 'saved',
-              summary: latestSummary,
-              content,
-              draftName: latestSummary.name,
-            });
-          } catch {
+        if (sharedIntent.current.kind === 'none') {
+          const latestTrackId = await database.loadLatestOpenedTrackId();
+          const latestSummary = loaded.find((summary) => summary.id === latestTrackId);
+          if (latestSummary !== undefined) {
+            try {
+              const content = await database.loadLocalTrackContent(latestSummary.id);
+              initiallyRestoredTrackId.current = latestSummary.id;
+              setActive({
+                kind: 'saved',
+                summary: latestSummary,
+                content,
+                draftName: latestSummary.name,
+              });
+            } catch {
+              await database.saveLatestOpenedTrackId(null);
+            }
+          } else if (latestTrackId !== null) {
             await database.saveLatestOpenedTrackId(null);
           }
-        } else if (latestTrackId !== null) {
-          await database.saveLatestOpenedTrackId(null);
         }
       }
+      // Started after restoration: thumbnail writes share IndexedDB stores with the
+      // restoring reads and would otherwise delay reopening the last track.
+      void refreshTrackThumbnails(loaded);
     } catch {
       setError(t`Saved tracks and folders could not be loaded from this browser.`);
     }

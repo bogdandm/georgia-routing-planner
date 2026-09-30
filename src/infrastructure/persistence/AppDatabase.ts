@@ -1034,7 +1034,8 @@ const trackThumbnailSchema: z.ZodType<TrackThumbnail> = z.object({
   contentHash: z.string().nullable(),
   algorithmVersion: z.literal(TRACK_THUMBNAIL_ALGORITHM_VERSION),
   loop: z.boolean(),
-  segments: z.array(z.array(coordinateSchema)),
+  // Longitudes are unwrapped across the antimeridian, so only latitude is bounded.
+  segments: z.array(z.array(z.tuple([z.number(), z.number().min(-90).max(90)]))),
 });
 
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {

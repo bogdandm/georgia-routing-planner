@@ -13,7 +13,11 @@ export interface TrackThumbnail {
   readonly contentHash: string | null;
   readonly algorithmVersion: typeof TRACK_THUMBNAIL_ALGORITHM_VERSION;
   readonly loop: boolean;
-  /** Simplified `[longitude, latitude]` vertices per source segment; empty segments dropped. */
+  /**
+   * Simplified `[longitude, latitude]` vertices per source segment; empty segments dropped.
+   * Longitudes are unwrapped along the track so a ±180° crossing stays continuous, and may
+   * therefore leave [-180, 180].
+   */
   readonly segments: readonly (readonly TrackCoordinate[])[];
 }
 
@@ -24,17 +28,29 @@ export function createTrackThumbnail(
   contentHash: string | null,
   segments: readonly (readonly TrackCoordinate[])[],
 ): TrackThumbnail {
+  const unwrapped: TrackCoordinate[][] = [];
+  let previousLongitude: number | undefined;
   let west = Infinity;
   let east = -Infinity;
   let south = Infinity;
   let north = -Infinity;
   for (const segment of segments) {
-    for (const [longitude, latitude] of segment) {
+    if (segment.length === 0) continue;
+    const continuous: TrackCoordinate[] = [];
+    for (const [sourceLongitude, latitude] of segment) {
+      const longitude =
+        previousLongitude === undefined
+          ? sourceLongitude
+          : sourceLongitude +
+            360 * Math.round((previousLongitude - sourceLongitude) / 360);
+      previousLongitude = longitude;
+      continuous.push([longitude, latitude]);
       west = Math.min(west, longitude);
       east = Math.max(east, longitude);
       south = Math.min(south, latitude);
       north = Math.max(north, latitude);
     }
+    unwrapped.push(continuous);
   }
   const centerLongitude = (west + east) / 2;
   const centerLatitude = (south + north) / 2;
@@ -55,9 +71,9 @@ export function createTrackThumbnail(
     contentHash,
     algorithmVersion: TRACK_THUMBNAIL_ALGORITHM_VERSION,
     loop: isLoop(segments),
-    segments: segments
-      .filter((segment) => segment.length > 0)
-      .map((segment) => simplifySegment(segment, segment.map(project), tolerance)),
+    segments: unwrapped.map((segment) =>
+      simplifySegment(segment, segment.map(project), tolerance),
+    ),
   };
 }
 

@@ -139,4 +139,29 @@ describe('MapLibrePointInspector', () => {
 
     inspector.destroy();
   });
+
+  it('keeps only the point marker while the popup is disabled for the touch sheet', () => {
+    const nativeMap = new FakeNativeMap();
+    const container = nativeMap.getContainer();
+    const inspector = new MapLibrePointInspector();
+    inspector.attach(nativeMap as unknown as MapLibreMap);
+    inspector.setPopupEnabled(false);
+    inspector.show({
+      status: 'open',
+      coordinate: { longitude: 44.51866, latitude: 42.69657 },
+      elevation: { status: 'loading' },
+      nearbyPoi: { status: 'loading' },
+    });
+
+    expect(container.querySelector('.map-point-inspector__anchor')).not.toBeNull();
+    expect(container.querySelector('.maplibregl-popup')).toBeNull();
+    expect(inspector.isVisible()).toBe(true);
+
+    inspector.setPopupEnabled(true);
+    expect(container.querySelector('.maplibregl-popup')).not.toBeNull();
+
+    inspector.close();
+    expect(inspector.isVisible()).toBe(false);
+    inspector.destroy();
+  });
 });

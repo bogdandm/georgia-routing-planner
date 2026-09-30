@@ -761,9 +761,11 @@ imagery starts empty unless an explicit share URL requests a scene.
   in a new tab. The weather-map link enables the weather map on that forecast point,
   opens the Weather tab, and keeps the selected weather-map time while the weather map
   is visible. With a mouse the point popup shows only details. On touch-first devices
-  (coarse primary pointer), where a right click is unavailable, the same actions appear
-  as a two-column grid inside the tap popup; a command closes the popup, while the
-  external forecast links leave it open.
+  (coarse primary pointer), where a right click is unavailable, a map tap marks the
+  point and a full-width bottom sheet slides up instead of the anchored popup. The sheet
+  shows the same details followed by the same action list, stacks above the track
+  summary, and grows to its content. Choosing any action, the close button, or the next
+  map tap slides it back down; reduced-motion preferences skip the slide.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.

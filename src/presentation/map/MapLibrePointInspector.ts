@@ -11,6 +11,11 @@ export interface PointInspectorPopup {
   readonly content: HTMLElement;
   attach(map: MapLibreMap): void;
   show(inspection: OpenMapPointInspection): void;
+  /**
+   * Disabling keeps only the point marker; the caller then shows the inspection
+   * elsewhere (the touch bottom sheet), which counts as visible while it is open.
+   */
+  setPopupEnabled(enabled: boolean): void;
   isVisible(): boolean;
   close(): void;
   destroy(): void;
@@ -25,6 +30,7 @@ export class MapLibrePointInspector implements PointInspectorPopup {
   #map: MapLibreMap | null = null;
   #placementFrame: number | null = null;
   #placementWindow: Window | null = null;
+  #popupEnabled = true;
 
   public constructor() {
     /* eslint-disable lingui/no-unlocalized-strings -- DOM attribute names and ARIA tokens. */
@@ -93,15 +99,39 @@ export class MapLibrePointInspector implements PointInspectorPopup {
     ];
     this.#marker.setLngLat(lngLat);
     if (this.#marker.getElement().parentElement === null) this.#marker.addTo(map);
+    if (!this.#popupEnabled) return;
+    this.#openPopup(map, lngLat);
+  }
+
+  #openPopup(map: MapLibreMap, lngLat: [number, number]): void {
     this.#popup.setLngLat(lngLat);
     if (!this.#popup.isOpen()) this.#popup.addTo(map);
     // Content renders after this call; re-anchor once the browser has laid it out.
     this.#schedulePlacementUpdate(map);
   }
 
+  public setPopupEnabled(enabled: boolean): void {
+    if (this.#popupEnabled === enabled) return;
+    this.#popupEnabled = enabled;
+    if (!enabled) {
+      this.#cancelPlacementUpdate();
+      // Detaching also stops a tap on the marker from toggling the hidden popup.
+      this.#marker.setPopup(null);
+      return;
+    }
+    this.#marker.setPopup(this.#popup);
+    const map = this.#map;
+    if (map !== null && this.#marker.getElement().parentElement !== null) {
+      const { lng, lat } = this.#marker.getLngLat();
+      this.#openPopup(map, [lng, lat]);
+    }
+  }
+
   public isVisible(): boolean {
     const map = this.#map;
-    if (map === null || !this.#popup.isOpen()) return false;
+    if (map === null) return false;
+    if (!this.#popupEnabled) return this.#marker.getElement().parentElement !== null;
+    if (!this.#popup.isOpen()) return false;
     const element = this.#popup.getElement();
     if (!element.isConnected) return false;
     const popupRect = element.getBoundingClientRect();

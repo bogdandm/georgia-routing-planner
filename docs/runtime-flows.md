@@ -47,7 +47,7 @@ available.
 `MarkersWorkspaceProvider` loads validated global saved markers from the IndexedDB
 repository and sends the ready collection to `MapLibreLayerController`. **New marker**
 changes the map interaction mode until the next map click; the point-action menu (or the
-touch point popup) supplies a point directly. Both paths query the facade's nearest
+touch point sheet) supplies a point directly. Both paths query the facade's nearest
 inspected POI for an initial name and queue one creation command until marker loading is
 ready. Confirmation writes the marker, then the controller reconciles GeoJSON features
 and generated MUI icon images. `TracksWorkspaceProvider` independently sends markers
@@ -833,10 +833,15 @@ The native popup exposes an empty host element through
 state and renders `MapPointInspectorContent` into that host with a React portal, so the
 popup follows the app theme and locale without imperative DOM updates. MapLibre inserts
 the popup before React fills it, so the content component moves focus to its close
-button once per opened popup and the adapter re-anchors after the next layout frame.
-`MapPointActionList` is the single definition of point actions: the mouse context menu
-renders it in a popover and touch-first devices render it inside the popup, while
-`MapWorkspace.runPointAction` executes both.
+button once per opened popup and the adapter re-anchors after the next layout frame. On
+a coarse primary pointer `MapWorkspace` calls
+`MapFacade.setPointInspectionPopupEnabled(false)`: the adapter keeps only the point
+marker, detaches the popup so a marker tap cannot toggle it, and reports the inspection
+as visible while it is open, so the next map tap still closes it. The same content then
+renders in a bottom sheet owned by `MapWorkspace`. `MapPointActionList` is the single
+definition of point actions: the mouse context menu renders it in a popover and the
+touch sheet renders it below the details, while `MapWorkspace.runPointAction` executes
+both.
 
 ## Local track retention
 

@@ -377,6 +377,10 @@ export class MapLibreFacade implements MapFacade {
     return this.#pointInspector.content;
   }
 
+  public setPointInspectionPopupEnabled(enabled: boolean): void {
+    this.#pointInspector.setPopupEnabled(enabled);
+  }
+
   public getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null {
     const map = this.#map;
     if (map === null) return null;

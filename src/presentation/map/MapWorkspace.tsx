@@ -6,6 +6,7 @@ import {
   Button,
   Paper,
   Popover,
+  Slide,
   Snackbar,
   Stack,
   Typography,
@@ -55,6 +56,7 @@ import {
   type MapCoordinate,
   type MapFitPadding,
   type MapLayerPreset,
+  type MapPointInspection,
 } from '@/presentation/map/mapTypes';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import {
@@ -120,6 +122,7 @@ const terrainRetryDelaysMs = [1_000, 3_000] as const;
 type MapWorkspaceNotice =
   'camera-save-failed' | 'camera-restore-failed' | 'shared-scene-restore-failed';
 type CopyConfirmation = 'coordinates' | 'point-link' | 'weather-link';
+type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 
 function WeatherForecastMapMarker({
   marker,
@@ -493,6 +496,15 @@ export function MapWorkspace({
     getPointInspection,
     getPointInspection,
   );
+  // The touch sheet keeps rendering the last open inspection while it slides out.
+  const [sheetInspection, setSheetInspection] = useState<OpenMapPointInspection | null>(
+    null,
+  );
+  const sheetOpen = touchPointer && pointInspection.status === 'open';
+  if (sheetOpen && pointInspection !== sheetInspection) {
+    setSheetInspection(pointInspection);
+  }
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
   const terrainState: TerrainControlState =
     terrainCommandState ??
@@ -647,6 +659,10 @@ export function MapWorkspace({
     });
     consumeMapPointInspectionCommand(pointInspectionCommand.id);
   }, [facade, pointInspectionCommand, snapshot.lifecycle]);
+
+  useEffect(() => {
+    facade.setPointInspectionPopupEnabled(!touchPointer);
+  }, [facade, touchPointer]);
 
   useEffect(() => {
     const mode: MapInteractionMode =
@@ -1375,33 +1391,72 @@ export function MapWorkspace({
           />
         )}
       </Popover>
-      {pointInspection.status === 'open'
+      {pointInspection.status === 'open' && !touchPointer
         ? createPortal(
             <MapPointInspectorContent
               inspection={pointInspection}
+              actions={null}
               onClose={() => {
                 facade.closePointInspection();
               }}
-              actions={
-                touchPointer ? (
-                  <MapPointActionList
-                    coordinate={pointInspection.coordinate}
-                    touch
-                    onSelect={(action) => {
-                      runPointAction(action, pointInspection.coordinate);
-                      // Removing the popup synchronously would detach a clicked
-                      // external link before the browser follows it.
-                      if (action !== 'open-meteoblue' && action !== 'open-windy') {
-                        facade.closePointInspection();
-                      }
-                    }}
-                  />
-                ) : null
-              }
             />,
             facade.getPointInspectionContent(),
           )
         : null}
+      <Slide
+        direction="up"
+        in={sheetOpen}
+        mountOnEnter
+        unmountOnExit
+        timeout={reducedMotion ? 0 : { enter: 225, exit: 195 }}
+        onExited={() => {
+          setSheetInspection(null);
+        }}
+      >
+        <Paper
+          role="dialog"
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
+          aria-labelledby="map-point-inspector-title"
+          elevation={8}
+          sx={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            // Above the shell's mobile track summary (z-index 5) that shares the bottom edge.
+            zIndex: 6,
+            // The sheet grows to its content; it scrolls only when taller than the map.
+            maxHeight: '100%',
+            overflowY: 'auto',
+            px: 2,
+            pt: 1.5,
+            // With the last row's 10 px padding this mirrors the 12 px top inset.
+            pb: 'max(4px, env(safe-area-inset-bottom))',
+            borderRadius: '12px 12px 0 0',
+          }}
+        >
+          {sheetInspection === null ? null : (
+            <MapPointInspectorContent
+              inspection={sheetInspection}
+              onClose={() => {
+                facade.closePointInspection();
+              }}
+              actions={
+                <MapPointActionList
+                  coordinate={sheetInspection.coordinate}
+                  touch
+                  onSelect={(action) => {
+                    runPointAction(action, sheetInspection.coordinate);
+                    // Unmounting waits for the Slide exit (a timer even at 0 ms), so a
+                    // clicked external link stays connected while the browser follows it.
+                    facade.closePointInspection();
+                  }}
+                />
+              }
+            />
+          )}
+        </Paper>
+      </Slide>
       <Snackbar
         open={copyConfirmationText !== null}
         autoHideDuration={2_500}

@@ -1394,7 +1394,7 @@ describe('MapWorkspace', () => {
     expect(window.location.hash).toBe('#weather');
   });
 
-  it('puts point actions into the tap popup only for touch pointers', async () => {
+  it('shows mouse inspections in the popup and touch inspections in an action sheet', async () => {
     const facade = new FakeMapFacade();
     document.body.append(facade.pointInspectionContent);
     const openInspection = () => {
@@ -1416,9 +1416,13 @@ describe('MapWorkspace', () => {
     await screen.findByTestId('native-map');
     openInspection();
     const popup = within(facade.pointInspectionContent);
+    expect(facade.pointInspectionPopupEnabled).toBe(true);
     expect(popup.getByText('Map point')).toBeVisible();
     expect(popup.queryByRole('menu')).toBeNull();
     mouseView.unmount();
+    act(() => {
+      facade.closePointInspection();
+    });
 
     mockMatchingMediaQueries('(pointer: coarse)');
     renderWithI18n(
@@ -1427,8 +1431,13 @@ describe('MapWorkspace', () => {
       </RuntimeServicesProvider>,
     );
     await screen.findByTestId('native-map');
+    await waitFor(() => {
+      expect(facade.pointInspectionPopupEnabled).toBe(false);
+    });
     openInspection();
-    const actions = await popup.findByRole('menu', { name: 'Map point actions' });
+    const sheet = await screen.findByRole('dialog', { name: 'Map point' });
+    expect(facade.pointInspectionContent).toBeEmptyDOMElement();
+    const actions = within(sheet).getByRole('menu', { name: 'Map point actions' });
     expect(
       within(actions).getByRole('menuitem', { name: 'Open windy.com' }),
     ).toHaveAttribute('href', 'https://www.windy.com/41.7/44.8');
@@ -1438,7 +1447,9 @@ describe('MapWorkspace', () => {
 
     expect(useUiStore.getState().activeTab).toBe('weather');
     expect(facade.pointInspection).toEqual({ status: 'closed' });
-    expect(facade.pointInspectionContent).toBeEmptyDOMElement();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Map point' })).toBeNull();
+    });
     facade.pointInspectionContent.remove();
   });
 

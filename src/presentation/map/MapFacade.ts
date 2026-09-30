@@ -33,6 +33,8 @@ export interface MapFacade {
   getPointInspection(): MapPointInspection;
   /** Popup-owned host element; React renders the open inspection's content into it. */
   getPointInspectionContent(): HTMLElement;
+  /** Touch layouts disable the anchored popup and show the inspection in a sheet. */
+  setPointInspectionPopupEnabled(enabled: boolean): void;
   getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null;
   openPointInspection(
     coordinate: MapCoordinate,

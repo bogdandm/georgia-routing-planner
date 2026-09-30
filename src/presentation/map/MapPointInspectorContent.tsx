@@ -94,11 +94,9 @@ function nearbyFeatureText(
 function LabelValue({
   label,
   value,
-  children,
 }: {
   readonly label: string;
   readonly value: string;
-  readonly children?: ReactNode;
 }) {
   return (
     <div>
@@ -108,7 +106,6 @@ function LabelValue({
       <Typography variant="body2" component="div" sx={{ overflowWrap: 'anywhere' }}>
         {value}
       </Typography>
-      {children}
     </div>
   );
 }
@@ -122,8 +119,8 @@ interface MapPointActionEntry {
 
 /**
  * Renders every map-point action as one menu list. The mouse variant is a standalone
- * context menu that takes focus; the touch variant is a two-column grid with larger hit
- * areas inside the tap popup, whose close button owns focus.
+ * context menu that takes focus; the touch variant has taller rows inside the point
+ * bottom sheet, whose close button owns focus.
  */
 export function MapPointActionList({
   coordinate,
@@ -181,8 +178,8 @@ export function MapPointActionList({
       href: windyForecastUrl(coordinate),
     },
   ];
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS keyword.
-  const itemSx = touch ? { minHeight: 44, whiteSpace: 'normal' } : undefined;
+  // Dense rows keep the tap popup short; 40 px still leaves a comfortable touch target.
+  const itemSx = touch ? { minHeight: 40 } : undefined;
   const renderItem = ({ action, icon, label, href }: MapPointActionEntry) => {
     const select = () => {
       onSelect(action);
@@ -213,30 +210,24 @@ export function MapPointActionList({
       </MenuItem>
     );
   };
+  // The touch list bleeds into the sheet padding so row highlights span the sheet while
+  // icons and dividers stay on the same left edge as the point details above.
   return (
     <MenuList
       aria-label={t`Map point actions`}
       autoFocus={!touch}
-      dense={!touch}
-      sx={
-        touch
-          ? {
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              py: 0,
-              mx: -1,
-            }
-          : undefined
-      }
+      dense
+      sx={touch ? { py: 0, mx: -2 } : undefined}
     >
       {pointActions.map(renderItem)}
-      <Divider sx={{ gridColumn: '1 / -1' }} />
+      {/* `&&` outranks MenuItem's `+ .MuiDivider-root` 8 px margin rule. */}
+      <Divider sx={touch ? { mx: 2, '&&': { my: 0.25 } } : undefined} />
       {weatherActions.map(renderItem)}
     </MenuList>
   );
 }
 
-/** React content for the facade-owned MapLibre point-inspection popup. */
+/** Point-inspection details for the mouse popup or the touch bottom sheet. */
 export function MapPointInspectorContent({
   inspection,
   actions,
@@ -253,14 +244,33 @@ export function MapPointInspectorContent({
   });
   const nearbyName =
     inspection.nearbyPoi.status === 'found' ? inspection.nearbyPoi.poi.name : null;
+  /* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */
+  const featureLinks: readonly { readonly label: string; readonly href: string }[] =
+    nearbyName === null
+      ? []
+      : [
+          {
+            label: 'Wikipedia',
+            href: `https://en.wikipedia.org/wiki/${encodeURIComponent(nearbyName.replaceAll(' ', '_'))}`,
+          },
+          {
+            label: 'Google Search',
+            href: `https://www.google.com/search?q=${encodeURIComponent(`${nearbyName} Georgia`)}`,
+          },
+        ];
+  /* eslint-enable lingui/no-unlocalized-strings */
 
-  // The popup opens before React fills it, so focus moves here once per opened popup.
+  // The native popup opens before React fills it, so focus moves here once per opening.
   useEffect(() => {
     closeButton.current?.focus({ preventScroll: true });
   }, []);
 
+  // Vertical rhythm: 12 px between the header and detail groups. A divider has 12 px of
+  // visual space on both sides: the stack gap above it, and 2 px plus the 10 px row
+  // padding of a 40 px action row below it.
   return (
-    <Stack spacing={1} sx={{ minWidth: 220 }}>
+    // Flex gap keeps child margins intact; Stack's margin spacing would reset them.
+    <Stack spacing={1.5} useFlexGap sx={{ minWidth: 220 }}>
       <Box
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
@@ -277,7 +287,8 @@ export function MapPointInspectorContent({
           size="small"
           aria-label={t`Close map point details`}
           onClick={onClose}
-          sx={{ mr: -0.5 }}
+          // Negative block margin keeps the 30 px button from adding space under the title.
+          sx={{ mr: -0.5, my: -0.5 }}
         >
           <CloseOutlinedIcon fontSize="small" />
         </IconButton>
@@ -293,35 +304,31 @@ export function MapPointInspectorContent({
       <LabelValue
         label={t`Nearby map feature`}
         value={nearbyFeatureText(inspection, measurementFormatter, i18n)}
-      >
-        {nearbyName === null ? null : (
-          <Stack direction="row" useFlexGap spacing={1.5} sx={{ flexWrap: 'wrap' }}>
-            {/* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */}
+      />
+      {featureLinks.length === 0 ? null : (
+        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          {featureLinks.map(({ label, href }) => (
             <Link
+              key={label}
               variant="body2"
-              href={`https://en.wikipedia.org/wiki/${encodeURIComponent(nearbyName.replaceAll(' ', '_'))}`}
+              // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI prop token.
+              underline="hover"
+              href={href}
               target="_blank"
               rel="noopener noreferrer"
+              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
             >
-              Wikipedia
+              {label}
+              <OpenInNewOutlinedIcon sx={{ fontSize: 14 }} />
             </Link>
-            <Link
-              variant="body2"
-              href={`https://www.google.com/search?q=${encodeURIComponent(`${nearbyName} Georgia`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Google Search
-            </Link>
-            {/* eslint-enable lingui/no-unlocalized-strings */}
-          </Stack>
-        )}
-      </LabelValue>
+          ))}
+        </Stack>
+      )}
       {actions === null ? null : (
-        <>
-          <Divider />
+        <div>
+          <Divider sx={{ mb: 0.25 }} />
           {actions}
-        </>
+        </div>
       )}
     </Stack>
   );

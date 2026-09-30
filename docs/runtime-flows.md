@@ -49,17 +49,17 @@ available.
 
 `MarkersWorkspaceProvider` loads validated global saved markers from the IndexedDB
 repository and sends the ready collection to `MapLibreLayerController`. **New marker**
-changes the map interaction mode until the next map click; the context-menu action
-supplies a point directly. Both paths query the facade's nearest inspected POI for an
-initial name and queue one creation command until marker loading is ready. Confirmation
-writes the marker, then the controller reconciles GeoJSON features and generated MUI
-icon images. `TracksWorkspaceProvider` independently sends markers from only the active
-editable preview or saved track to the same source and symbol layer. The controller
-combines both owners without letting either clear the other and selects the smaller
-track-marker icon and label values from feature properties. Row navigation changes the
-shared map camera without remounting the map. Global rename, appearance changes,
-deletion, and persisted sort remain owned by the global marker workspace; synchronized
-global marker records stay separate from track metadata.
+changes the map interaction mode until the next map click; the point-action menu (or the
+touch point sheet) supplies a point directly. Both paths query the facade's nearest
+inspected POI for an initial name and queue one creation command until marker loading is
+ready. Confirmation writes the marker, then the controller reconciles GeoJSON features
+and generated MUI icon images. `TracksWorkspaceProvider` independently sends markers
+from only the active editable preview or saved track to the same source and symbol
+layer. The controller combines both owners without letting either clear the other and
+selects the smaller track-marker icon and label values from feature properties. Row
+navigation changes the shared map camera without remounting the map. Global rename,
+appearance changes, deletion, and persisted sort remain owned by the global marker
+workspace; synchronized global marker records stay separate from track metadata.
 
 Changing sections changes floating contextual content, not the full-viewport map owner
 or its dimensions. Collapsing navigation keeps only the Trail Planner logo above the
@@ -833,6 +833,21 @@ replaced by the same click. Sequence checks prevent a late provider result from
 reopening a closed popup. Explicit popup close uses the same cancellation path.
 Diagnostics record only lifecycle, duration, outcome, and result count, never the
 clicked coordinate or arbitrary POI metadata.
+
+The native popup exposes an empty host element through
+`MapFacade.getPointInspectionContent()`. `MapWorkspace` subscribes to the inspection
+state and renders `MapPointInspectorContent` into that host with a React portal, so the
+popup follows the app theme and locale without imperative DOM updates. MapLibre inserts
+the popup before React fills it, so the content component moves focus to its close
+button once per opened popup and the adapter re-anchors after the next layout frame. On
+a coarse primary pointer `MapWorkspace` calls
+`MapFacade.setPointInspectionPopupEnabled(false)`: the adapter keeps only the point
+marker, detaches the popup so a marker tap cannot toggle it, and reports the inspection
+as visible while it is open, so the next map tap still closes it. The same content then
+renders in a bottom sheet owned by `MapWorkspace`. `MapPointActionList` is the single
+definition of point actions: the mouse context menu renders it in a popover and the
+touch sheet renders it below the details, while `MapWorkspace.runPointAction` executes
+both.
 
 ## Local track retention
 

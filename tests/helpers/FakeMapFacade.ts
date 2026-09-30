@@ -39,6 +39,8 @@ export class FakeMapFacade implements MapFacade {
     readonly padding: MapFitPadding | undefined;
   }[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
+  public readonly pointInspectionContent = document.createElement('div');
+  public pointInspectionPopupEnabled = true;
   public pointInspectionRequests: MapCoordinate[] = [];
   public pointInspectionOptions: (
     { readonly refreshNearbyPoiOnIdle?: boolean } | undefined
@@ -114,6 +116,14 @@ export class FakeMapFacade implements MapFacade {
 
   public getPointInspection(): MapPointInspection {
     return this.pointInspection;
+  }
+
+  public getPointInspectionContent(): HTMLElement {
+    return this.pointInspectionContent;
+  }
+
+  public setPointInspectionPopupEnabled(enabled: boolean): void {
+    this.pointInspectionPopupEnabled = enabled;
   }
 
   public getNearestPoi(_coordinate: MapCoordinate): NearbyPoi | null {

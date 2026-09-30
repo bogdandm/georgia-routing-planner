@@ -135,6 +135,7 @@ export default tseslint.config(
       'src/presentation/map/MapViewControls.tsx',
       'src/presentation/map/ElevationGradeLegend.tsx',
       'src/presentation/map/MapLibrePointInspector.ts',
+      'src/presentation/map/MapPointInspectorContent.tsx',
     ],
     plugins: { lingui },
     rules: {

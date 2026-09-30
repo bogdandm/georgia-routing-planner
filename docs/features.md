@@ -751,11 +751,21 @@ imagery starts empty unless an explicit share URL requests a scene.
   fixed distance cutoff; the geodesic distance remains visible so the user can judge
   relevance. Supported feature sources include places, peaks, and points of interest.
   Named results include direct English Wikipedia article and Google Search links that
-  open in a new tab. Its bottom actions copy the existing flat 2D point-link schema or
-  open the existing marker editor to create a marker. For native map clicks, while any
-  part of that popup intersects the map viewport, the next map click only closes it; a
-  subsequent click opens a new inspection. If camera movement puts the popup entirely
-  outside the viewport, the next native click immediately replaces it.
+  open in a new tab. For native map clicks, while any part of that popup intersects the
+  map viewport, the next map click only closes it; a subsequent click opens a new
+  inspection. If camera movement puts the popup entirely outside the viewport, the next
+  native click immediately replaces it.
+- Right-clicking the map opens the point-action menu: copy coordinates, copy the flat 2D
+  point link, create a marker, search satellite scenes, show the Weather forecast for
+  the point, copy a weather-map link, and open the point's Meteoblue or Windy forecast
+  in a new tab. The weather-map link enables the weather map on that forecast point,
+  opens the Weather tab, and keeps the selected weather-map time while the weather map
+  is visible. With a mouse the point popup shows only details. On touch-first devices
+  (coarse primary pointer), where a right click is unavailable, a map tap marks the
+  point and a full-width bottom sheet slides up instead of the anchored popup. The sheet
+  shows the same details followed by the same action list, stacks above the track
+  summary, and grows to its content. Choosing any action, the close button, or the next
+  map tap slides it back down; reduced-motion preferences skip the slide.
 - Attribution remains visible in every feature section and terrain mode.
 - Selection legends, elevation charts, and imagery footprints appear only when their
   corresponding geometry exists.

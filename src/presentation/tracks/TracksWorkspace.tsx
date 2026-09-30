@@ -349,6 +349,20 @@ function sortTracks(
   sort: TrackSort,
   mapCenter: MapCoordinate | null,
 ): readonly LocalTrackSummary[] {
+  const distanceByTrack = new Map<LocalTrackSummary, number>();
+  if (sort === 'distance' && mapCenter !== null) {
+    for (const summary of summaries) {
+      distanceByTrack.set(
+        summary,
+        geodesicDistanceKm(
+          mapCenter.latitude,
+          mapCenter.longitude,
+          summary.metrics.center[1],
+          summary.metrics.center[0],
+        ),
+      );
+    }
+  }
   return [...summaries].sort((left, right) => {
     const byFavorite = Number(right.favorite) - Number(left.favorite);
     if (byFavorite !== 0) return byFavorite;
@@ -370,19 +384,8 @@ function sortTracks(
       return byNewest === 0 ? left.id.localeCompare(right.id, 'en') : byNewest;
     }
 
-    const leftDistance = geodesicDistanceKm(
-      mapCenter.latitude,
-      mapCenter.longitude,
-      left.metrics.center[1],
-      left.metrics.center[0],
-    );
-    const rightDistance = geodesicDistanceKm(
-      mapCenter.latitude,
-      mapCenter.longitude,
-      right.metrics.center[1],
-      right.metrics.center[0],
-    );
-    const byDistance = leftDistance - rightDistance;
+    const byDistance =
+      (distanceByTrack.get(left) ?? 0) - (distanceByTrack.get(right) ?? 0);
     if (byDistance !== 0) return byDistance;
     return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
   });
@@ -481,20 +484,23 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     mapInteractionStore,
     (state) => state.markerCreationCommand,
   );
+  // Only the distance sort reads the camera; other sorts must not re-render on moves.
   const subscribeViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
   );
-  const getViewportSnapshot = useCallback(
-    () => mapViewport.getViewportSnapshot(),
-    [mapViewport],
+  const getSortCenterSnapshot = useCallback(
+    () =>
+      trackSort === 'distance'
+        ? (mapViewport.getViewportSnapshot()?.center ?? null)
+        : null,
+    [mapViewport, trackSort],
   );
-  const viewport = useSyncExternalStore(
+  const mapCenter = useSyncExternalStore(
     subscribeViewport,
-    getViewportSnapshot,
-    getViewportSnapshot,
+    getSortCenterSnapshot,
+    getSortCenterSnapshot,
   );
-  const mapCenter = viewport?.center ?? null;
   const [summaries, setSummaries] = useState<readonly LocalTrackSummary[]>([]);
   const [folders, setFolders] = useState<readonly TrackFolder[]>([]);
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(

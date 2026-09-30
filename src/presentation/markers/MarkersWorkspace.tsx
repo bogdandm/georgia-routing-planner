@@ -298,18 +298,23 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     mapInteractionStore,
     (state) => state.markerCreationCommand,
   );
+  // The markers panel (distance labels and center-based sorts) is the only camera
+  // consumer and is hidden on other tabs, so camera moves elsewhere must not re-render.
   const subscribeViewport = useCallback(
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
   );
-  const getViewportSnapshot = useCallback(
-    () => mapViewport.getViewportSnapshot(),
-    [mapViewport],
+  const getMapCenterSnapshot = useCallback(
+    () =>
+      activeTab === 'markers'
+        ? (mapViewport.getViewportSnapshot()?.center ?? null)
+        : null,
+    [activeTab, mapViewport],
   );
-  const viewport = useSyncExternalStore(
+  const mapCenter = useSyncExternalStore(
     subscribeViewport,
-    getViewportSnapshot,
-    getViewportSnapshot,
+    getMapCenterSnapshot,
+    getMapCenterSnapshot,
   );
   const [markers, setMarkers] = useState<readonly SavedMarker[]>([]);
   const [recentIconKeys, setRecentIconKeys] = useState<readonly MarkerIconKey[]>([]);
@@ -756,10 +761,11 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     [setActiveTab, setMobileWorkspaceOpen, setNavigationCollapsed, weatherByMarkerId],
   );
 
-  const mapCenter = viewport?.center ?? null;
+  const sortCenter =
+    markerSort === 'distance' || markerSort === 'icon' ? mapCenter : null;
   const sortedMarkers = useMemo(
-    () => sortMarkers(markers, markerSort, mapCenter),
-    [mapCenter, markerSort, markers],
+    () => sortMarkers(markers, markerSort, sortCenter),
+    [markerSort, markers, sortCenter],
   );
   const weatherPreviewMarker =
     weatherPreview === null

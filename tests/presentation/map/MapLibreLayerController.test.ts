@@ -10,6 +10,7 @@ import {
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
+import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
   importedTrackLayerIds,
@@ -728,6 +729,69 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
+  });
+
+  it('publishes bursts of terrain queue updates at a bounded rate with the final state', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const configuration = services.mapProviderConfiguration;
+    expect(configuration.status).toBe('valid');
+    if (configuration.status !== 'valid') return;
+    const queueState = (activeCount: number): TerrainComputeQueueState => ({
+      executionMode: 'worker',
+      activeCount,
+      queuedContourCount: activeCount,
+      queueCapacity: 16,
+    });
+    let publishQueueState: (state: TerrainComputeQueueState) => void = () => undefined;
+    const controller = new MapLibreLayerController(
+      configuration.value.satellite.renderer,
+      configuration.value.terrain,
+      {
+        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
+        createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}',
+        setFilterEnabled: () => undefined,
+        setInteractionActive: () => undefined,
+        getStatus: () => 'worker',
+        getQueueState: () => queueState(0),
+        subscribeStatus: () => () => undefined,
+        subscribeQueueState: (listener) => {
+          publishQueueState = listener;
+          return () => undefined;
+        },
+        subscribeMetrics: () => () => undefined,
+        dispose: () => undefined,
+      },
+      {
+        registerScene: () => undefined,
+        createTileUrl: () => 'test-satellite-cog://tiles/{z}/{x}/{y}.webp',
+        dispose: () => undefined,
+      },
+      services.logger,
+      services.idGenerator,
+      services.sentinelQueryDiagnostics,
+      services.database,
+    );
+    const published: number[] = [];
+    const unsubscribe = mapLayerStore.subscribe((state, previous) => {
+      if (state.terrainComputeQueue !== previous.terrainComputeQueue) {
+        published.push(state.terrainComputeQueue.activeCount);
+      }
+    });
+
+    for (let activeCount = 1; activeCount <= 40; activeCount += 1) {
+      publishQueueState(queueState(activeCount));
+      vi.advanceTimersByTime(10);
+    }
+    publishQueueState(queueState(0));
+    vi.advanceTimersByTime(1_000);
+
+    expect(published[0]).toBe(1);
+    expect(published.length).toBeLessThanOrEqual(4);
+    expect(published.at(-1)).toBe(0);
+    expect(mapLayerStore.getState().terrainComputeQueue.activeCount).toBe(0);
+    unsubscribe();
+    controller.dispose();
   });
 
   it('keeps Google and Sentinel imagery mutually exclusive and persists the active choice', async () => {

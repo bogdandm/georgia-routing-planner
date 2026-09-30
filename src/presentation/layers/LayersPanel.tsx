@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
@@ -151,7 +152,41 @@ const importedTrackControls = [
 
 export function LayersPanel() {
   const { mapLayers, mapProviderConfiguration } = useRuntimeServices();
-  const state = useStore(mapLayerStore);
+  // Terrain queue and imagery/weather progress change per tile; the panel only renders
+  // these derived fields, so it must not re-render (even hidden) on every tile update.
+  const state = useStore(
+    mapLayerStore,
+    useShallow((layerState) => {
+      const { appliedImagery, appliedMosaic, weatherMap } = layerState;
+      const mosaicAvailable =
+        appliedMosaic.status !== 'empty' && appliedMosaic.sceneKeys.length > 0;
+      const sceneAvailable =
+        appliedImagery.status === 'ready' ||
+        appliedImagery.status === 'preview' ||
+        appliedImagery.status === 'hidden' ||
+        (appliedImagery.status === 'failed' && appliedImagery.previousSceneKey !== null);
+      return {
+        sceneAvailable,
+        sentinelImageryAvailable: sceneAvailable || mosaicAvailable,
+        satelliteImageryVisible:
+          mosaicAvailable ||
+          appliedImagery.status === 'ready' ||
+          appliedImagery.status === 'preview' ||
+          ((appliedImagery.status === 'loading' || appliedImagery.status === 'failed') &&
+            appliedImagery.previousSceneKey !== null),
+        weatherMapEnabled: weatherMap.enabled,
+        weatherMapLoading: weatherMap.status === 'loading',
+        weatherMapOpacity: weatherMap.opacity,
+        weatherMapMessage: weatherMap.message,
+        terrainComputeStatus: layerState.terrainComputeStatus,
+        terrainOverlays: layerState.terrainOverlays,
+        visibility: layerState.visibility,
+        openStreetMapOpacity: layerState.openStreetMapOpacity,
+        importedTrackOpacity: layerState.importedTrackOpacity,
+        errorMessage: layerState.errorMessage,
+      };
+    }),
+  );
   const setActiveTab = useUiStore((uiState) => uiState.setActiveTab);
   const [terrainOverlayCommandError, setTerrainOverlayCommandError] = useState<
     string | null
@@ -193,23 +228,6 @@ export function LayersPanel() {
       controls: openStreetMapControls,
     },
   ] as const;
-  const sceneAvailable =
-    state.appliedImagery.status === 'ready' ||
-    state.appliedImagery.status === 'preview' ||
-    state.appliedImagery.status === 'hidden' ||
-    (state.appliedImagery.status === 'failed' &&
-      state.appliedImagery.previousSceneKey !== null);
-  const mosaicAvailable =
-    state.appliedMosaic.status !== 'empty' && state.appliedMosaic.sceneKeys.length > 0;
-  const sentinelImageryAvailable = sceneAvailable || mosaicAvailable;
-  const satelliteImageryVisible =
-    (state.appliedMosaic.status !== 'empty' &&
-      state.appliedMosaic.sceneKeys.length > 0) ||
-    state.appliedImagery.status === 'ready' ||
-    state.appliedImagery.status === 'preview' ||
-    ((state.appliedImagery.status === 'loading' ||
-      state.appliedImagery.status === 'failed') &&
-      state.appliedImagery.previousSceneKey !== null);
 
   const changeVisibility = (layerId: LogicalMapLayerId, visible: boolean) => {
     mapLayers?.setLayerVisibility(layerId, visible);
@@ -260,12 +278,12 @@ export function LayersPanel() {
             <FormControlLabel
               sx={{ m: 0 }}
               slotProps={{ typography: { variant: 'body2' } }}
-              disabled={mapLayers === null || state.weatherMap.status === 'loading'}
+              disabled={mapLayers === null || state.weatherMapLoading}
               control={
                 <Checkbox
                   size="small"
                   sx={{ p: 0, mr: 1 }}
-                  checked={state.weatherMap.enabled}
+                  checked={state.weatherMapEnabled}
                   onChange={(event) => {
                     if (event.target.checked) {
                       openWeatherTab();
@@ -276,7 +294,7 @@ export function LayersPanel() {
                 />
               }
               label={
-                state.weatherMap.enabled ? 'Weather map visible' : 'Open Weather tab'
+                state.weatherMapEnabled ? 'Weather map visible' : 'Open Weather tab'
               }
             />
             <Typography
@@ -284,7 +302,7 @@ export function LayersPanel() {
               color="text.secondary"
               sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
             >
-              {state.weatherMap.enabled
+              {state.weatherMapEnabled
                 ? 'All weather fields use the same metadata-selected forecast frame.'
                 : 'Enable the combined weather layer from the Weather tab.'}
             </Typography>
@@ -298,11 +316,11 @@ export function LayersPanel() {
               </Typography>
               <Slider
                 aria-labelledby="weather-opacity-label"
-                disabled={mapLayers === null || !state.weatherMap.enabled}
+                disabled={mapLayers === null || !state.weatherMapEnabled}
                 min={0}
                 max={100}
                 step={5}
-                value={Math.round(state.weatherMap.opacity * 100)}
+                value={Math.round(state.weatherMapOpacity * 100)}
                 valueLabelDisplay="auto"
                 valueLabelFormat={(value) => `${String(value)}%`}
                 onChange={changeWeatherOpacity}
@@ -313,12 +331,12 @@ export function LayersPanel() {
                 color="text.secondary"
                 sx={{ minWidth: 34, textAlign: 'right' }}
               >
-                {Math.round(state.weatherMap.opacity * 100)}%
+                {Math.round(state.weatherMapOpacity * 100)}%
               </Typography>
             </Stack>
-            {state.weatherMap.message === null ? null : (
+            {state.weatherMapMessage === null ? null : (
               <Alert severity="warning" role="status" sx={{ mt: 1 }}>
-                {state.weatherMap.message}
+                {state.weatherMapMessage}
               </Alert>
             )}
           </Box>
@@ -379,7 +397,7 @@ export function LayersPanel() {
                         !state.visibility['bing-satellite'] &&
                         !state.visibility['esri-satellite'] &&
                         !state.visibility['napr-orthophoto'] &&
-                        !satelliteImageryVisible)
+                        !state.satelliteImageryVisible)
                     }
                     min={0}
                     max={100}
@@ -433,11 +451,11 @@ export function LayersPanel() {
                 {group.controls.map((control) => {
                   const requiredImageryAvailable =
                     control.id === 'satellite-imagery'
-                      ? sentinelImageryAvailable
-                      : sceneAvailable;
+                      ? state.sentinelImageryAvailable
+                      : state.sceneAvailable;
                   const disabled =
                     mapLayers === null ||
-                    (group.id === 'terrain' && state.weatherMap.enabled) ||
+                    (group.id === 'terrain' && state.weatherMapEnabled) ||
                     (control.requiresScene && !requiredImageryAvailable);
                   return (
                     <Box key={control.id}>
@@ -472,7 +490,7 @@ export function LayersPanel() {
                         color="text.secondary"
                         sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
                       >
-                        {group.id === 'terrain' && state.weatherMap.enabled
+                        {group.id === 'terrain' && state.weatherMapEnabled
                           ? 'Weather temporarily hides terrain and restores this setting when disabled.'
                           : control.requiresScene && !requiredImageryAvailable
                             ? control.id === 'satellite-imagery'
@@ -496,7 +514,7 @@ export function LayersPanel() {
                           <Slider
                             aria-labelledby="contour-distance-label"
                             aria-valuetext={`${String(state.terrainOverlays.preferences.contourIntervalMeters)} metres`}
-                            disabled={mapLayers === null || state.weatherMap.enabled}
+                            disabled={mapLayers === null || state.weatherMapEnabled}
                             min={0}
                             max={supportedContourIntervals.length - 1}
                             step={1}
@@ -547,7 +565,7 @@ export function LayersPanel() {
                         checked={
                           state.terrainOverlays.preferences.filterInvalidDemPixels
                         }
-                        disabled={mapLayers === null || state.weatherMap.enabled}
+                        disabled={mapLayers === null || state.weatherMapEnabled}
                         onChange={(event) => {
                           changeTerrainOverlayPreferences({
                             ...state.terrainOverlays.preferences,

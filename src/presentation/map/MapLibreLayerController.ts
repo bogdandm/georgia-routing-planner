@@ -38,6 +38,7 @@ import type { SentinelQueryDiagnostics } from '@/application/ports/SentinelQuery
 import { SentinelQueryOperation } from '@/application/satellite/SentinelQueryOperation';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { OpenMeteoSpatialMetadata } from '@/infrastructure/weather/loadOpenMeteoSpatialMetadata';
+import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import {
   calculateSatelliteMosaicCoveragePercent,
@@ -197,6 +198,7 @@ const rasterRecoveryBaseDelayMs = 1_000;
 const rasterSourceStabilityMs = 2_000;
 type RasterSourceReadiness = 'stable' | 'loaded';
 const canceledDirectSourceErrorWindowMs = 5_000;
+const terrainQueuePublishIntervalMs = 250;
 
 type MapLayerVisibilityResult =
   | { readonly status: 'success' }
@@ -555,6 +557,8 @@ export class MapLibreLayerController {
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
+  #terrainQueuePublishTimer: ReturnType<typeof setTimeout> | null = null;
+  #pendingTerrainQueue: TerrainComputeQueueState | null = null;
   #appliedOpenStreetMapOpacity: number | null = null;
   #importedTrackGeometry: MultiLineString = {
     type: 'MultiLineString',
@@ -611,10 +615,32 @@ export class MapLibreLayerController {
     this.#releaseTerrainComputeStatus = contourTiles.subscribeStatus((status) => {
       mapLayerStore.setState({ terrainComputeStatus: status });
     });
+    // Queue state is UI-only and changes per DEM/contour tile; publishing it at most once
+    // per interval keeps store subscribers from re-rendering on every tile during a drag.
     this.#releaseTerrainComputeQueue = contourTiles.subscribeQueueState((state) => {
+      if (this.#terrainQueuePublishTimer !== null) {
+        this.#pendingTerrainQueue = state;
+        return;
+      }
       mapLayerStore.setState({ terrainComputeQueue: state });
+      this.#terrainQueuePublishTimer = setTimeout(
+        this.publishPendingTerrainQueue,
+        terrainQueuePublishIntervalMs,
+      );
     });
   }
+
+  private readonly publishPendingTerrainQueue = (): void => {
+    this.#terrainQueuePublishTimer = null;
+    const state = this.#pendingTerrainQueue;
+    if (state === null) return;
+    this.#pendingTerrainQueue = null;
+    mapLayerStore.setState({ terrainComputeQueue: state });
+    this.#terrainQueuePublishTimer = setTimeout(
+      this.publishPendingTerrainQueue,
+      terrainQueuePublishIntervalMs,
+    );
+  };
 
   public attach(map: MapLibreMap): void {
     if (this.#map === map) {
@@ -708,6 +734,11 @@ export class MapLibreLayerController {
     if (map !== null) this.detach(map);
     this.#releaseTerrainComputeStatus();
     this.#releaseTerrainComputeQueue();
+    if (this.#terrainQueuePublishTimer !== null) {
+      clearTimeout(this.#terrainQueuePublishTimer);
+      this.#terrainQueuePublishTimer = null;
+    }
+    this.#pendingTerrainQueue = null;
     this.contourTiles.dispose();
     this.satelliteCogTiles.dispose();
     if (this.#weatherProtocolRegistered) {

@@ -144,6 +144,7 @@ import {
   medianFilterElevationSamples,
   type ElevationProfile,
   type ElevationProfileInputPoint,
+  type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import { SelectableIconGlyph } from '@/presentation/markers/MarkerIconPicker';
 import { TrackFolderEditorDialog } from '@/presentation/tracks/TrackFolderEditorDialog';
@@ -4188,7 +4189,10 @@ function InteractiveElevationProfile({
     },
     [mapLayers],
   );
+  // Recharts reports the active sample on every mousemove; publish only real changes.
+  const tracedPoint = useRef<ElevationProfilePoint | null>(null);
   useEffect(() => {
+    tracedPoint.current = null;
     mapLayers?.setImportedTrackTracePoint(null);
   }, [mapLayers, profile]);
   const hoveredSegmentIndex =
@@ -4232,6 +4236,8 @@ function InteractiveElevationProfile({
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
           onActivePointChange={(point) => {
+            if (point === tracedPoint.current) return;
+            tracedPoint.current = point;
             mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
           }}
           onSegmentHoverChange={onSegmentHoverChange}

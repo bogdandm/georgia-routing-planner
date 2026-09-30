@@ -14,7 +14,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { useId, type ReactElement } from 'react';
+import { useCallback, useId, useMemo, type ReactElement } from 'react';
 import {
   Area,
   AreaChart,
@@ -419,13 +419,24 @@ export function ElevationProfileChart({
   onPointClick,
 }: ElevationProfileChartProps): ReactElement {
   const theme = useTheme();
-  const sampledPoints = sampleElevationProfilePoints(profile);
+  const sampledPoints = useMemo(() => sampleElevationProfilePoints(profile), [profile]);
   const gradientId = `elevation-grade-${useId().replaceAll(':', '')}`;
-  const axisText = {
-    fill: theme.palette.text.secondary,
-    fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.caption.fontSize,
-  };
+  const axisText = useMemo(
+    () => ({
+      fill: theme.palette.text.secondary,
+      fontFamily: theme.typography.fontFamily,
+      fontSize: theme.typography.caption.fontSize,
+    }),
+    [
+      theme.palette.text.secondary,
+      theme.typography.fontFamily,
+      theme.typography.caption.fontSize,
+    ],
+  );
+  const tooltipContent = useCallback(
+    (props: TooltipContentProps) => <ElevationTooltip {...props} profile={profile} />,
+    [profile],
+  );
 
   function publishActivePoint(
     mouseHandlerData: MouseHandlerDataParam,
@@ -528,7 +539,7 @@ export function ElevationProfileChart({
           />
           <Tooltip
             cursor={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
-            content={(props) => <ElevationTooltip {...props} profile={profile} />}
+            content={tooltipContent}
           />
           {profile.segments.slice(1).map((segment) => (
             <ReferenceLine
@@ -554,7 +565,7 @@ export function CompactElevationProfile({
 }: {
   readonly profile: ElevationProfile;
 }): ReactElement {
-  const sampledPoints = sampleElevationProfilePoints(profile);
+  const sampledPoints = useMemo(() => sampleElevationProfilePoints(profile), [profile]);
   const gradientId = `compact-elevation-grade-${useId().replaceAll(':', '')}`;
 
   return (

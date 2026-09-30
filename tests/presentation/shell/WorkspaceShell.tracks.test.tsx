@@ -1795,6 +1795,60 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('publishes a hovered elevation sample to the map trace only when it changes', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setTracePoint = vi.spyOn(mapLayers, 'setImportedTrackTracePoint');
+    const { container } = renderWorkspaceShell();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 0, 420, 264),
+    );
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+
+    await user.upload(input, flatGpxFile());
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    const chartSurface = (
+      await within(details).findByRole('img', { name: /^Elevation profile from /u })
+    ).querySelector('svg');
+    if (chartSurface === null) {
+      throw new Error('Expected the elevation chart surface to render.');
+    }
+    setTracePoint.mockClear();
+
+    fireEvent.mouseEnter(chartSurface, { clientX: 120, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 120, clientY: 80 });
+    await waitFor(() => {
+      expect(setTracePoint).toHaveBeenCalledTimes(1);
+    });
+    // Recharts coalesces moves per animation frame; let the repeat settle on its own.
+    fireEvent.mouseMove(chartSurface, { clientX: 120, clientY: 90 });
+    await act(() => {
+      const { promise, resolve } = deferred<void>();
+      setTimeout(resolve, 50);
+      return promise;
+    });
+    fireEvent.mouseMove(chartSurface, { clientX: 330, clientY: 80 });
+    await waitFor(() => {
+      expect(setTracePoint.mock.calls.length).toBeGreaterThan(1);
+    });
+    expect(setTracePoint).toHaveBeenCalledTimes(2);
+    const first = setTracePoint.mock.calls[0]?.[0];
+    const second = setTracePoint.mock.calls[1]?.[0];
+    expect(first).toEqual(expect.any(Array));
+    expect(second).toEqual(expect.any(Array));
+    expect(second).not.toEqual(first);
+
+    fireEvent.mouseLeave(chartSurface);
+    expect(setTracePoint).toHaveBeenLastCalledWith(null);
+    expect(setTracePoint).toHaveBeenCalledTimes(3);
+  });
+
   it('reloads synchronized source elevation without replacing it from DEM', async () => {
     const base = savedTrackSummary('local:synchronized', 'Synchronized trail');
     const summary: LocalTrackSummary = {

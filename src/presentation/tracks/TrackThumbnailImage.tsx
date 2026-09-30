@@ -6,7 +6,8 @@ import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 import { appColors } from '@/presentation/theme/appColors';
 
 const VIEWBOX_SIZE = 100;
-const PADDING = 8;
+/** Keeps the line and its casing clear of the backdrop's rounded corners. */
+const PADDING = 14;
 
 /** SVG path in a 100×100 box; aspect ratio preserved and centred on both axes. */
 function thumbnailPath(thumbnail: TrackThumbnail): string {
@@ -59,7 +60,13 @@ export function TrackThumbnailImage({
   return (
     <Box
       aria-hidden
-      sx={{ position: 'relative', alignSelf: 'stretch', aspectRatio: '1 / 1' }}
+      sx={{
+        position: 'relative',
+        alignSelf: 'stretch',
+        aspectRatio: '1 / 1',
+        bgcolor: 'background.default',
+        borderRadius: 1,
+      }}
     >
       {thumbnail === undefined || path === '' ? null : (
         <svg

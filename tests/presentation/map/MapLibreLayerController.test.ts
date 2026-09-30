@@ -142,6 +142,10 @@ class FakeLayerMap {
     this.images.delete(id);
   }
 
+  public getLayersOrder(): string[] {
+    return [...this.layers.keys()];
+  }
+
   public getStyle(): {
     readonly sources: Record<string, unknown>;
     readonly layers: { readonly id: string }[];
@@ -2601,6 +2605,18 @@ describe('MapLibreLayerController', () => {
       `${sentinelMosaicIdPrefixes.layer}2`,
       `${sentinelMosaicIdPrefixes.layer}1`,
     ]);
+
+    map.fire('styledata', {});
+    map.moves.splice(0);
+    map.fire('styledata', {});
+    map.fire('styledata', {});
+    expect(map.moves).toEqual([]);
+
+    map.removeLayer(`${sentinelMosaicIdPrefixes.layer}2`);
+    map.fire('styledata', {});
+    expect(
+      map.getLayersOrder().filter((id) => id.startsWith(sentinelMosaicIdPrefixes.layer)),
+    ).toEqual([`${sentinelMosaicIdPrefixes.layer}2`, `${sentinelMosaicIdPrefixes.layer}1`]);
   });
 
   it('starts every Mosaic source before waiting for tile readiness', async () => {

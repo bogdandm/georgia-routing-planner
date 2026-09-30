@@ -2324,10 +2324,21 @@ export class MapLibreLayerController {
       }
       return left.sceneKey.localeCompare(right.sceneKey, 'en');
     });
-    for (const entry of newestFirst.toReversed()) {
-      if (map.getLayer(entry.slot.layerId) !== undefined) {
-        map.moveLayer(entry.slot.layerId, mapInsertionPoints.satelliteBeforeLayerId);
+    // MapLibre marks the style changed on every moveLayer, which emits another
+    // styledata event; only out-of-place layers may move or the map re-renders forever.
+    const layerOrder = map.getLayersOrder();
+    let beforeId: string = mapInsertionPoints.satelliteBeforeLayerId;
+    for (const entry of newestFirst) {
+      const layerId = entry.slot.layerId;
+      const index = layerOrder.indexOf(layerId);
+      if (index < 0) continue;
+      if (layerOrder[index + 1] !== beforeId) {
+        map.moveLayer(layerId, beforeId);
+        layerOrder.splice(index, 1);
+        const beforeIndex = layerOrder.indexOf(beforeId);
+        layerOrder.splice(beforeIndex < 0 ? layerOrder.length : beforeIndex, 0, layerId);
       }
+      beforeId = layerId;
     }
   }
 
@@ -2335,10 +2346,12 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null || this.#mosaicEntries.size === 0) return;
     let firstFailure: string | null = null;
+    let restored = false;
     for (const [boundsKey, entry] of this.#mosaicEntries) {
       const hasSource = map.getSource(entry.slot.sourceId) !== undefined;
       const hasLayer = map.getLayer(entry.slot.layerId) !== undefined;
       if (hasSource && hasLayer) continue;
+      restored = true;
       try {
         this.removeSlot(map, entry.slot);
         this.addMosaicNativeSource(map, entry);
@@ -2349,7 +2362,7 @@ export class MapLibreLayerController {
           'A Sentinel mosaic image could not be restored after the map style changed.';
       }
     }
-    this.orderMosaicLayers(map);
+    if (restored) this.orderMosaicLayers(map);
     if (
       firstFailure !== null &&
       this.#mosaicSelectedDate !== null &&

@@ -247,6 +247,26 @@ requested work. Otherwise, do not reserve, probe, substitute, auto-fallback, sto
 otherwise interact with its port or process. This does not change the E2E policy; it
 remains governed by [`e2e/AGENTS.md`](e2e/AGENTS.md).
 
+### Live browser rendering in WSL2
+
+Headless Chromium in WSL2 has no GPU. It either has no WebGL2 (MapLibre then fails with
+`WebGL2 is required`) or falls back to software WebGL (SwiftShader or llvmpipe), which
+makes frame timings and profiles meaningless. When authorized live verification or
+profiling needs real map rendering, launch the worktree's Playwright Chromium as a
+headed X11 window on the WSLg GPU and attach browser automation to it over CDP:
+
+```bash
+GALLIUM_DRIVER=d3d12 "$(node --input-type=module -e "const p = await import('@playwright/test'); console.log(p.chromium.executablePath())")" \
+  --user-data-dir=/tmp/trail-planner-gpu-chrome --remote-debugging-port=9338 \
+  --ozone-platform=x11 --use-gl=angle --use-angle=gl --ignore-gpu-blocklist \
+  --no-first-run --window-size=1600,1000 about:blank
+```
+
+Attach through `http://127.0.0.1:9338`. Before measuring anything, confirm that the
+`WEBGL_debug_renderer_info` unmasked renderer of a WebGL2 context reports
+`ANGLE (Microsoft Corporation, D3D12 (<GPU>), ...)`. Stop the browser when the
+verification ends.
+
 ### CI failure authorization
 
 When the maintainer points to a red or failing current pull request, asks the agent to

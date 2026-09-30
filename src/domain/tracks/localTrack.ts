@@ -4,7 +4,11 @@ import type {
   TrackCoordinate,
   TrackPoint,
 } from '@/domain/tracks/gpx';
-import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
+import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import type {
+  PoiCandidate,
+  TrackNameLandmarkAnchor,
+} from '@/domain/tracks/trackNaming';
 
 export const LOCAL_TRACK_SCHEMA_VERSION = 6;
 export const MAXIMUM_TRACK_MARKERS = 32;
@@ -34,11 +38,11 @@ export interface LocalTrackSummary {
   readonly metadata: GpxMetadataProjection;
   readonly warnings: readonly GpxValidationWarning[];
   readonly generatedName?: string;
-  readonly middleAnchorKind?: 'distance-midpoint' | 'dominant-summit';
+  readonly middleAnchorKind?: TrackNameLandmarkAnchor;
   readonly startPoi?: PoiCandidate;
+  /** Named landmark at the dominant summit or closed-track turnaround. */
   readonly middlePoi?: PoiCandidate;
   readonly endPoi?: PoiCandidate;
-  readonly fallbackPoi?: PoiCandidate;
 }
 export interface TrackMarker {
   readonly id: string;

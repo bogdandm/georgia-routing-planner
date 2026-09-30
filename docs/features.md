@@ -157,17 +157,33 @@ seconds; persistent track/storage errors remain in the panel. The stored source 
 remains visible after rename, and structured validation warnings show their parser code,
 explanation, and available point/segment context. An optional English place candidate
 appears separately and requires an explicit apply action between the editable track-name
-field and the adjacent read-only **English place name** field. For a track with a
-dominant interior summit, that candidate uses the nearest named OSM feature across
-supported POI, natural, and place categories rather than a hard-coded feature type.
-Mountain passes gain a `Pass` suffix and named peaks or volcanoes gain an `Mt.` prefix
-when the source name does not already include one. When source elevation is usable, Save
-retains the exact normalized source points as canonical content and keeps the
-browser-calculated Terrarium projection separately. When an imported track has no usable
-source elevation, Save promotes the complete calculated Terrarium projection to
-canonical points and primary metrics. Source filename/format metadata and versioned
-metrics remain local; the original file bytes are discarded after parsing. Unsaved
-previews activate the native leave-site guard.
+field and the adjacent read-only **English place name** field. Multiple segments are
+named as one joined journey:
+
+- One-way tracks use `Start → Finish`, adding `via Landmark` when a dominant interior
+  summit has a named landmark, for example `Juta → Roshka via Chaukhi Pass`.
+- Closed tracks that retrace most of their way back use `Landmark from Start`; other
+  closed tracks use `Landmark loop from Start`. Their landmark comes from the dominant
+  summit or, without one, the point farthest from the start.
+- Missing parts are omitted, a landmark repeating an endpoint is dropped, and a one-way
+  track finishing in its starting settlement reads as `Landmark from Start`. The
+  optional `via`/`from` part is dropped when the name would exceed 80 characters.
+
+Start and finish prefer a city, town, village, or hamlet within 1 km, then a ranked
+landmark within 2 km, then a settlement within 3 km; districts and municipalities never
+name a track. Landmarks rank passes, saddles, and peaks first, then lakes, glaciers, and
+waterfalls, then huts, viewpoints, historic sites, shelters, places of worship, and
+settlements, weighting each class by distance. Labels without an English or Latin name
+are romanized: Georgian as on road signs, without ejective apostrophes and with `ყ` as
+`k` (`ყელიდა` → `Kelida`), and Cyrillic by BGN/PCGN without diacritics. Mountain passes
+gain a `Pass` suffix and named peaks or volcanoes gain an `Mt.` prefix when the source
+name does not already include one. When source elevation is usable, Save retains the
+exact normalized source points as canonical content and keeps the browser-calculated
+Terrarium projection separately. When an imported track has no usable source elevation,
+Save promotes the complete calculated Terrarium projection to canonical points and
+primary metrics. Source filename/format metadata and versioned metrics remain local; the
+original file bytes are discarded after parsing. Unsaved previews activate the native
+leave-site guard.
 
 **Plan route** opens a new unsaved-track detail pane and gives route planning ownership
 of map clicks. The first click sets the start waypoint; each later click adds an ordered

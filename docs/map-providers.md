@@ -210,23 +210,29 @@ configured maximum, validates JSON with Zod, and exposes typed timeout, rate-lim
 invalid-response, provider, and network failures. Queries and result metadata are not
 written to diagnostics. UI attribution links to the OpenStreetMap copyright page.
 
-An explicitly imported local track may also request locality-level reverse lookups for
-representative coordinates. If elevation coverage identifies a dominant interior summit,
-the application submits one bounded Overpass query around that coordinate. The query
+An explicitly imported local track may also request reverse lookups for its start,
+finish, and landmark anchors. The reverse request asks for `addressdetails` and returns
+only the largest enclosing `city`, `town`, `village`, `hamlet`, or `isolated_dwelling`
+address component, located by the matched object's coordinate. A town quarter therefore
+resolves to its town, while a match that is only a district, municipality, or road names
+nothing. Landmark lookups submit one bounded Overpass query around the anchor. The query
 requests up to 50 named nodes, ways, or relations within two kilometres whose tags
-belong to broad POI, tourism, natural, mountain-pass, historic, man-made, place,
-leisure, shop, or waterway families. Provider coordinates are validated, out-of-radius
-relation centres are discarded, and the nearest result wins by geodesic distance with
-stable OSM identity as a tie-break. This avoids both map-viewport dependence and English
-keyword searches such as `pass`; it permits a saddle, peak, hut, lake, settlement, or
-another supported named feature to identify the summit area. An empty or failed nearby
-lookup falls back to reverse geocoding.
+belong to mountain-pass, natural, tourism, historic, place, waterway, or amenity
+families. Shops, leisure, and man-made objects are not requested so they cannot consume
+the result quota; amenities other than shelters and places of worship are returned but
+never ranked. A second tag-specific filter was avoided because it doubled the spatial
+scan on the shared endpoint. Provider coordinates are validated and out-of-radius
+relation centres are discarded. The application then ranks the results by category class
+and distance, so no English keyword search such as `pass` is needed. The landmark is
+requested before the endpoints, whose Overpass fallbacks are the most likely to be
+rate-limited. A failed landmark lookup falls back to the nearest settlement; a failed
+settlement lookup leaves the track without a suggested name.
 
 The configured Nominatim and Overpass requests share pacing, bounded cache, timeout,
 cancellation, validation, and safe failure mapping. The editable source name remains
 authoritative; a returned short English candidate changes it only after the user chooses
-`Apply generated name`. A lookup failure never blocks preview or save, and coordinates
-or returned labels are not added to diagnostics.
+`Apply place name`. A lookup failure never blocks preview or save, and coordinates or
+returned labels are not added to diagnostics.
 
 A direct request to the configured Overpass endpoint on 2026-07-22 UTC returned HTTP
 200, `Access-Control-Allow-Origin: *`, and the expected validated tags for the Kelida

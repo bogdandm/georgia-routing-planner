@@ -39,6 +39,7 @@ const reverseResultSchema = z
     type: z.string().trim().min(1).max(100),
     osm_type: z.enum(['node', 'way', 'relation']),
     boundingbox: z.tuple([z.string(), z.string(), z.string(), z.string()]),
+    address: z.record(z.string(), z.string().max(2_000)).optional(),
   })
   .loose();
 
@@ -97,17 +98,28 @@ const waterTypes = new Set([
   'waterfall',
   'water',
 ]);
+/**
+ * Largest settlement first, so a town quarter resolves to its town and a hamlet inside
+ * a village resolves to the village; districts and municipalities are never used.
+ */
+const settlementAddressKeys = [
+  'city',
+  'town',
+  'village',
+  'hamlet',
+  'isolated_dwelling',
+] as const;
+// Shops, leisure, and man-made objects never name a track but would consume the bounded
+// result quota. Amenities stay in the single key filter because a second tag-specific
+// set would double the spatial scan on the shared public endpoint.
 const nearbyTagKeys = [
   'mountain_pass',
   'natural',
-  'amenity',
   'tourism',
   'historic',
-  'man_made',
   'place',
-  'leisure',
-  'shop',
   'waterway',
+  'amenity',
 ] as const;
 const nearbyRadiusMeters = 2_000;
 
@@ -177,7 +189,7 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
     private readonly now: () => number = Date.now,
   ) {}
 
-  public async reverse(
+  public async reverseSettlement(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null> {
@@ -199,7 +211,7 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
             lat: coordinate.latitude.toFixed(6),
             lon: coordinate.longitude.toFixed(6),
             format: 'jsonv2',
-            addressdetails: '0',
+            addressdetails: '1',
             zoom: '14',
           },
           signal,
@@ -207,7 +219,22 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
         })
         .json<unknown>();
       const candidate = reverseResultSchema.parse(raw);
-      const result = this.toPlaceSearchResult(candidate);
+      const place = this.toPlaceSearchResult(candidate);
+      // The returned object (quarter, hamlet, or village) locates the settlement;
+      // a match without one is an administrative area or road and names nothing.
+      let result: PlaceSearchResult | null = null;
+      for (const key of settlementAddressKeys) {
+        const name = candidate.address?.[key]?.trim();
+        if (place !== null && name !== undefined && name.length > 0) {
+          result = {
+            ...place,
+            label: name,
+            category: `place:${key}`,
+            kind: 'settlement',
+          };
+          break;
+        }
+      }
       const results = result === null ? [] : [result];
       this.remember(cacheKey, results);
       return result;

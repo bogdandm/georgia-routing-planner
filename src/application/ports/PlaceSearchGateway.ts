@@ -42,7 +42,8 @@ export interface PlaceSearchGateway {
     bounds: PlaceSearchBounds,
     signal: AbortSignal,
   ): Promise<readonly PlaceSearchResult[]>;
-  reverse?(
+  /** Settlement (city, town, village, or hamlet) containing or nearest the point. */
+  reverseSettlement?(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null>;

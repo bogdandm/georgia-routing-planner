@@ -7,10 +7,7 @@ import { parseGpx, type TrackPoint, type TrackSegment } from '@/domain/tracks/gp
 import {
   calculateTrackMetrics,
   findDominantSummit,
-  formatGeneratedPoiLabel,
-  generateEnglishTrackName,
   isLoop,
-  pointNearestFraction,
 } from '@/domain/tracks/trackCalculations';
 
 function point(
@@ -32,20 +29,6 @@ function point(
 const equatorialLongitudePerMeter = 180 / Math.PI / 6_371_008.8;
 
 describe('track calculations', () => {
-  it('qualifies pass and mountain names without duplicating existing wording', () => {
-    expect(formatGeneratedPoiLabel('Kelida', 'mountain_pass:yes')).toBe('Kelida Pass');
-    expect(formatGeneratedPoiLabel('Atsunta Pass', 'mountain_pass:yes')).toBe(
-      'Atsunta Pass',
-    );
-    expect(formatGeneratedPoiLabel('Chutkharo', 'natural:peak')).toBe('Mt. Chutkharo');
-    expect(formatGeneratedPoiLabel('Mount Kazbek', 'natural:peak')).toBe(
-      'Mount Kazbek',
-    );
-    expect(formatGeneratedPoiLabel('Koruldi Lakes', 'natural:water')).toBe(
-      'Koruldi Lakes',
-    );
-  });
-
   it('finds the supplied Shkedi-Likheti summit beside Kelida', async () => {
     const fixture = join(
       process.cwd(),
@@ -290,12 +273,9 @@ describe('track calculations', () => {
     expect(constant.elapsedSeconds).toBeUndefined();
   });
 
-  it('rejects missing geometry for metrics and representative points', () => {
+  it('rejects missing geometry for metrics', () => {
     expect(() => calculateTrackMetrics([])).toThrow(
       'Track metrics require at least one non-empty segment.',
-    );
-    expect(() => pointNearestFraction([], 0.5)).toThrow(
-      'Representative point requires geometry.',
     );
   });
 
@@ -337,9 +317,8 @@ describe('track calculations', () => {
     ).toBeNull();
   });
 
-  it('uses cumulative distance for representative points and loop detection', () => {
+  it('uses cumulative distance for loop detection', () => {
     const points = [point(0, 0), point(0.001, 0), point(0.01, 0), point(0, 0)];
-    expect(pointNearestFraction(points, 0.5).coordinate).toEqual([0.01, 0]);
     expect(isLoop([points.map((item) => item.coordinate)])).toBe(true);
   });
 
@@ -402,49 +381,5 @@ describe('track calculations', () => {
     ).toBe(true);
     expect(loop([[44, 42]])).toBe(false);
     expect(loop()).toBe(false);
-  });
-
-  it('generates deterministic English names without implying continuity for multiple segments', () => {
-    const candidate = (label: string) => ({
-      label,
-      kind: 'place',
-      matchedCoordinate: [0, 0] as const,
-      lookedUpAt: '2026-01-01T00:00:00.000Z',
-    });
-    expect(
-      generateEnglishTrackName({
-        loop: false,
-        multipleSegments: false,
-        startPoi: candidate('Mestia'),
-        middlePoi: candidate('Koruldi Lakes'),
-        endPoi: candidate('Ushguli'),
-      }),
-    ).toBe('Koruldi Lakes: Mestia → Ushguli');
-    expect(
-      generateEnglishTrackName({
-        loop: false,
-        multipleSegments: true,
-        fallbackPoi: candidate('Svaneti'),
-      }),
-    ).toBe('Svaneti');
-    expect(
-      generateEnglishTrackName({
-        loop: false,
-        multipleSegments: false,
-        startPoi: candidate('Mestia'),
-        middlePoi: candidate('mestia'),
-        endPoi: candidate('Ushguli'),
-      }),
-    ).toBe('Mestia → Ushguli');
-    expect(
-      generateEnglishTrackName({
-        loop: true,
-        multipleSegments: false,
-        middlePoi: candidate('  Koruldi Lakes  '),
-      }),
-    ).toBe('Koruldi Lakes');
-    expect(
-      generateEnglishTrackName({ loop: false, multipleSegments: false }),
-    ).toBeNull();
   });
 });

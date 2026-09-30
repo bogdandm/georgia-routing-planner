@@ -864,13 +864,15 @@ current tab and collapse state unchanged. Another import, selecting a saved trac
 closing the preview first requires an explicit discard decision. File-selection and
 parse errors appear inside the import zone and dismiss after five seconds; storage and
 selected-track failures use the persistent panel error. A valid preview starts a
-cancellable optional English-name lookup without blocking editing or save. Start and end
-anchors use locality-level reverse geocoding. A dominant interior summit requests
-bounded named OSM features from the configured nearby endpoint and selects the closest
-returned coordinate independent of feature category; reverse geocoding remains the
-fallback when that request is empty or unavailable. Switching rail sections retains the
-preview. `beforeunload` is registered only while that preview remains unsaved and is
-removed after save or confirmed discard.
+cancellable optional English-name lookup without blocking editing or save.
+`application/tracks/suggestTrackName.ts` joins all segments, classifies the track as
+one-way, loop, or out-and-back, and resolves the start, the finish of one-way tracks,
+and one landmark at the dominant summit or closed-track turnaround. Endpoints use a
+nearby settlement, then a ranked nearby landmark; the landmark uses a ranked nearby
+feature, then a settlement. `domain/tracks/trackNaming.ts` romanizes labels and composes
+the name. Settlement failures make the name unavailable; landmark failures are logged
+and skipped. Switching rail sections retains the preview. `beforeunload` is registered
+only while that preview remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display name, source

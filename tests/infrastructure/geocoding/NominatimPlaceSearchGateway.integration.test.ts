@@ -63,7 +63,7 @@ describe('NominatimPlaceSearchGateway', () => {
     expect(requestedUrl.searchParams.get('layer')).toBe('address,natural,manmade');
   });
 
-  it('performs a cached English reverse lookup for a representative point', async () => {
+  it('resolves a reverse lookup to its enclosing town, not the matched quarter', async () => {
     const services = createTestServices();
     const request = vi.fn<(url: URL, language: string | null) => void>();
     mswServer.use(
@@ -73,13 +73,19 @@ describe('NominatimPlaceSearchGateway', () => {
           request(new URL(input.url), input.headers.get('Accept-Language'));
           return HttpResponse.json({
             place_id: 84,
-            lat: '43.0411',
-            lon: '42.7192',
-            display_name: 'Koruldi Lakes, Mestia Municipality, Georgia',
-            category: 'natural',
-            type: 'lake',
-            osm_type: 'way',
+            lat: '43.0442',
+            lon: '42.7263',
+            display_name: 'Lanchvali, Mestia, Mestia Municipality, Georgia',
+            category: 'place',
+            type: 'quarter',
+            osm_type: 'node',
             boundingbox: ['43.03', '43.05', '42.70', '42.73'],
+            address: {
+              quarter: 'Lanchvali',
+              town: 'Mestia',
+              county: 'Mestia Municipality',
+              country: 'Georgia',
+            },
           });
         },
       ),
@@ -92,16 +98,20 @@ describe('NominatimPlaceSearchGateway', () => {
     );
 
     await expect(
-      gateway.reverse(
-        { longitude: 42.7192, latitude: 43.0411 },
+      gateway.reverseSettlement(
+        { longitude: 42.7299, latitude: 43.0453 },
         new AbortController().signal,
       ),
-    ).resolves.toMatchObject({
-      label: 'Koruldi Lakes, Mestia Municipality, Georgia',
-      kind: 'water',
+    ).resolves.toEqual({
+      id: '84',
+      label: 'Mestia',
+      coordinate: { latitude: 43.0442, longitude: 42.7263 },
+      category: 'place:town',
+      kind: 'settlement',
+      bounds: null,
     });
-    await gateway.reverse(
-      { longitude: 42.7192, latitude: 43.0411 },
+    await gateway.reverseSettlement(
+      { longitude: 42.7299, latitude: 43.0453 },
       new AbortController().signal,
     );
 
@@ -110,8 +120,40 @@ describe('NominatimPlaceSearchGateway', () => {
     const requestedUrl = request.mock.calls[0]?.[0];
     expect(requestedUrl).toBeInstanceOf(URL);
     if (!(requestedUrl instanceof URL)) return;
-    expect(requestedUrl.searchParams.get('lat')).toBe('43.041100');
-    expect(requestedUrl.searchParams.get('lon')).toBe('42.719200');
+    expect(requestedUrl.searchParams.get('lat')).toBe('43.045300');
+    expect(requestedUrl.searchParams.get('lon')).toBe('42.729900');
+    expect(requestedUrl.searchParams.get('addressdetails')).toBe('1');
+  });
+
+  it('returns no settlement when the reverse match is only an administrative area', async () => {
+    const services = createTestServices();
+    mswServer.use(
+      http.get(defaultGeocodingProviderConfiguration.reverseUrl, () =>
+        HttpResponse.json({
+          place_id: 85,
+          lat: '42.9',
+          lon: '42.6',
+          display_name: 'Mestia Municipality, Georgia',
+          category: 'boundary',
+          type: 'administrative',
+          osm_type: 'relation',
+          boundingbox: ['42.7', '43.2', '42.1', '43.0'],
+          address: { county: 'Mestia Municipality', country: 'Georgia' },
+        }),
+      ),
+    );
+    const gateway = new NominatimPlaceSearchGateway(
+      services.httpClient,
+      defaultGeocodingProviderConfiguration,
+      services.idGenerator,
+    );
+
+    await expect(
+      gateway.reverseSettlement(
+        { longitude: 42.743, latitude: 43.0935 },
+        new AbortController().signal,
+      ),
+    ).resolves.toBeNull();
   });
 
   it('loads and validates nearby named OSM features across POI categories', async () => {
@@ -185,7 +227,10 @@ describe('NominatimPlaceSearchGateway', () => {
 
     const query = submittedQuery.mock.calls[0]?.[0];
     expect(query).toContain('around:2000,42.711630,43.163426');
-    expect(query).toContain('mountain_pass|natural|amenity|tourism');
+    expect(query).toContain(
+      'mountain_pass|natural|tourism|historic|place|waterway|amenity',
+    );
+    expect(query).not.toContain('shop');
   });
 
   it('rejects malformed provider data with a safe error', async () => {

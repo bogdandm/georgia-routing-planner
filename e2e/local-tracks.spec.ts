@@ -733,7 +733,7 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   await expect(trackName).toHaveValue('Mon 13 Jul 2026');
   await expect(page.getByText('Saved', { exact: true })).toHaveCount(0);
   await expect(applyPlaceName).toHaveText('↑ Apply place name ↑');
-  await expect(englishPlaceName).toHaveValue('Kazbegi Municipality');
+  await expect(englishPlaceName).toHaveValue('Stepantsminda');
   const trackNameBox = await trackName.boundingBox();
   const applyPlaceNameBox = await applyPlaceName.boundingBox();
   const englishPlaceNameBox = await englishPlaceName.boundingBox();

@@ -72,7 +72,8 @@ import {
   trackFolderUpdatedAt,
   type TrackFolder,
 } from '@/domain/tracks/trackFolder';
-import type { PoiCandidate, TrackMetrics } from '@/domain/tracks/trackCalculations';
+import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import type { PoiCandidate } from '@/domain/tracks/trackNaming';
 import {
   TRACK_THUMBNAIL_ALGORITHM_VERSION,
   createTrackThumbnail,
@@ -875,7 +876,11 @@ const currentLocalTrackSummarySchema = z
     metadata: metadataSchema,
     warnings: z.array(warningSchema).max(50),
     generatedName: z.string().trim().min(1).max(200).optional(),
-    middleAnchorKind: z.enum(['distance-midpoint', 'dominant-summit']).optional(),
+    // `distance-midpoint` and `fallbackPoi` came from the retired naming algorithm;
+    // saved or synced summaries still carry them, so they are accepted and dropped.
+    middleAnchorKind: z
+      .enum(['distance-midpoint', 'dominant-summit', 'farthest-point'])
+      .optional(),
     startPoi: poiCandidateSchema.optional(),
     middlePoi: poiCandidateSchema.optional(),
     endPoi: poiCandidateSchema.optional(),
@@ -905,13 +910,15 @@ const currentLocalTrackSummarySchema = z
       result.calculatedMetrics = value.calculatedMetrics;
     }
     if (value.generatedName !== undefined) result.generatedName = value.generatedName;
-    if (value.middleAnchorKind !== undefined) {
+    if (
+      value.middleAnchorKind !== undefined &&
+      value.middleAnchorKind !== 'distance-midpoint'
+    ) {
       result.middleAnchorKind = value.middleAnchorKind;
     }
     if (value.startPoi !== undefined) result.startPoi = value.startPoi;
     if (value.middlePoi !== undefined) result.middlePoi = value.middlePoi;
     if (value.endPoi !== undefined) result.endPoi = value.endPoi;
-    if (value.fallbackPoi !== undefined) result.fallbackPoi = value.fallbackPoi;
     if (value.contentHash !== undefined) result.contentHash = value.contentHash;
     return result;
   });

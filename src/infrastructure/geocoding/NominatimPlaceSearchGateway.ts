@@ -39,6 +39,7 @@ const reverseResultSchema = z
     type: z.string().trim().min(1).max(100),
     osm_type: z.enum(['node', 'way', 'relation']),
     boundingbox: z.tuple([z.string(), z.string(), z.string(), z.string()]),
+    address: z.record(z.string(), z.string().max(2_000)).optional(),
   })
   .loose();
 
@@ -58,6 +59,8 @@ const nearbyResultSchema = z
           .loose(),
       )
       .max(50),
+    /** Overpass reports query timeouts and memory exhaustion here with HTTP 200. */
+    remark: z.string().max(2_000).optional(),
   })
   .loose();
 
@@ -97,22 +100,48 @@ const waterTypes = new Set([
   'waterfall',
   'water',
 ]);
-const nearbyTagKeys = [
-  'mountain_pass',
-  'natural',
-  'amenity',
-  'tourism',
-  'historic',
-  'man_made',
-  'place',
-  'leisure',
-  'shop',
-  'waterway',
+/**
+ * Largest settlement first, so a town quarter resolves to its town and a hamlet inside
+ * a village resolves to the village; districts and municipalities are never used.
+ */
+const settlementAddressKeys = [
+  'city',
+  'town',
+  'village',
+  'hamlet',
+  'isolated_dwelling',
 ] as const;
+/**
+ * Named landmark tags requested from Overpass, in category-precedence order; `null`
+ * accepts every value. They are exactly the categories track naming ranks, so cafés,
+ * shops, and streams cannot consume the 50-result quota.
+ */
+const nearbyLandmarkTags: readonly (readonly [string, readonly string[] | null])[] = [
+  ['mountain_pass', ['yes']],
+  ['natural', ['peak', 'volcano', 'saddle', 'water', 'glacier', 'cave_entrance']],
+  ['waterway', ['waterfall']],
+  ['tourism', ['alpine_hut', 'wilderness_hut', 'viewpoint', 'camp_site', 'attraction']],
+  ['historic', null],
+  ['amenity', ['shelter', 'place_of_worship']],
+  ['place', ['city', 'town', 'village', 'hamlet', 'isolated_dwelling', 'locality']],
+];
 const nearbyRadiusMeters = 2_000;
+/** Waits before retrying an overloaded Overpass response (HTTP 504 or runtime error). */
+const nearbyRetryDelaysMs = [2_000, 5_000] as const;
 
+// One spatial scan collects named objects; the tag filters then run on that in-memory
+// set. Measured against the public endpoint, this finished in 1–7 s where a key-regex
+// filter took up to 20 s and a union of per-tag `around` scans timed out. The small
+// declared `maxsize` lets the busy dispatcher admit the query sooner.
 function nearbyQuery(latitude: number, longitude: number): string {
-  return `[out:json][timeout:10];nwr(around:${String(nearbyRadiusMeters)},${latitude.toFixed(6)},${longitude.toFixed(6)})["name"][~"^(${nearbyTagKeys.join('|')})$"~"."];out center 50;`;
+  const filters = nearbyLandmarkTags
+    .map(([key, values]) =>
+      values === null
+        ? `nwr.named["${key}"];`
+        : `nwr.named["${key}"~"^(${values.join('|')})$"];`,
+    )
+    .join('');
+  return `[out:json][timeout:10][maxsize:33554432];nwr(around:${String(nearbyRadiusMeters)},${latitude.toFixed(6)},${longitude.toFixed(6)})["name"]->.named;(${filters});out center qt 50;`;
 }
 
 function nearbyName(tags: Readonly<Record<string, string>>): string | null {
@@ -126,9 +155,15 @@ function nearbyName(tags: Readonly<Record<string, string>>): string | null {
 function nearbyCategory(
   tags: Readonly<Record<string, string>>,
 ): { readonly category: string; readonly type: string } | null {
-  for (const category of nearbyTagKeys) {
+  for (const [category, values] of nearbyLandmarkTags) {
     const type = tags[category]?.trim();
-    if (type !== undefined && type.length > 0) return { category, type };
+    if (
+      type !== undefined &&
+      type.length > 0 &&
+      (values === null || values.includes(type))
+    ) {
+      return { category, type };
+    }
   }
   return null;
 }
@@ -177,7 +212,7 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
     private readonly now: () => number = Date.now,
   ) {}
 
-  public async reverse(
+  public async reverseSettlement(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null> {
@@ -199,7 +234,7 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
             lat: coordinate.latitude.toFixed(6),
             lon: coordinate.longitude.toFixed(6),
             format: 'jsonv2',
-            addressdetails: '0',
+            addressdetails: '1',
             zoom: '14',
           },
           signal,
@@ -207,7 +242,22 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
         })
         .json<unknown>();
       const candidate = reverseResultSchema.parse(raw);
-      const result = this.toPlaceSearchResult(candidate);
+      const place = this.toPlaceSearchResult(candidate);
+      // The returned object (quarter, hamlet, or village) locates the settlement;
+      // a match without one is an administrative area or road and names nothing.
+      let result: PlaceSearchResult | null = null;
+      for (const key of settlementAddressKeys) {
+        const name = candidate.address?.[key]?.trim();
+        if (place !== null && name !== undefined && name.length > 0) {
+          result = {
+            ...place,
+            label: name,
+            category: `place:${key}`,
+            kind: 'settlement',
+          };
+          break;
+        }
+      }
       const results = result === null ? [] : [result];
       this.remember(cacheKey, results);
       return result;
@@ -270,38 +320,57 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
     const cached = this.#cache.get(cacheKey);
     if (cached !== undefined && cached.expiresAt > this.now()) return cached.results;
 
-    await this.waitForRequestSlot(signal);
-    try {
-      const raw = await this.httpClient
-        .post(nearbyUrl, {
-          context: { operationId: this.idGenerator.generate() },
-          body: new URLSearchParams({
-            data: nearbyQuery(coordinate.latitude, coordinate.longitude),
-          }),
-          signal,
-          timeout: this.configuration.requestTimeoutMs,
-        })
-        .json<unknown>();
-      const parsed = nearbyResultSchema.parse(raw);
-      const results = parsed.elements
-        .flatMap<PlaceSearchResult>((element) => {
-          const result = this.toNearbyPlaceSearchResult(element);
-          return result === null ? [] : [result];
-        })
-        .filter(
-          (result) =>
-            geodesicDistanceKm(
-              coordinate.latitude,
-              coordinate.longitude,
-              result.coordinate.latitude,
-              result.coordinate.longitude,
-            ) <=
-            nearbyRadiusMeters / 1_000,
-        );
-      this.remember(cacheKey, results);
-      return results;
-    } catch (error) {
-      return this.translateFailure(error, signal);
+    for (let attempt = 0; ; attempt += 1) {
+      await this.waitForRequestSlot(signal);
+      try {
+        const raw = await this.httpClient
+          .post(nearbyUrl, {
+            context: { operationId: this.idGenerator.generate() },
+            body: new URLSearchParams({
+              data: nearbyQuery(coordinate.latitude, coordinate.longitude),
+            }),
+            signal,
+            timeout: this.configuration.requestTimeoutMs,
+          })
+          .json<unknown>();
+        const parsed = nearbyResultSchema.parse(raw);
+        if (parsed.remark?.startsWith('runtime error') === true) {
+          throw new PlaceSearchFailure(
+            'provider',
+            'The nearby-place provider could not finish the query. Try again.',
+          );
+        }
+        const results = parsed.elements
+          .flatMap<PlaceSearchResult>((element) => {
+            const result = this.toNearbyPlaceSearchResult(element);
+            return result === null ? [] : [result];
+          })
+          .filter(
+            (result) =>
+              geodesicDistanceKm(
+                coordinate.latitude,
+                coordinate.longitude,
+                result.coordinate.latitude,
+                result.coordinate.longitude,
+              ) <=
+              nearbyRadiusMeters / 1_000,
+          );
+        this.remember(cacheKey, results);
+        return results;
+      } catch (error) {
+        // An overloaded Overpass instance answers 504 or a runtime-error remark; both
+        // usually clear within seconds. A 429 means this client used its slots and is
+        // reported instead of retried.
+        const overloaded =
+          (error instanceof HTTPError && error.response.status === 504) ||
+          (error instanceof PlaceSearchFailure && error.code === 'provider');
+        const delay = nearbyRetryDelaysMs[attempt];
+        if (overloaded && delay !== undefined && !signal.aborted) {
+          await waitFor(delay, signal);
+          continue;
+        }
+        return this.translateFailure(error, signal);
+      }
     }
   }
 
@@ -413,6 +482,13 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
         'Place search is temporarily rate limited. Wait and try again.',
       );
     }
+    if (error instanceof HTTPError && error.response.status >= 500) {
+      throw new PlaceSearchFailure(
+        'provider',
+        'The place provider is temporarily unavailable. Try again.',
+      );
+    }
+    if (error instanceof PlaceSearchFailure) throw error;
     if (error instanceof z.ZodError) {
       throw new PlaceSearchFailure(
         'invalid-response',

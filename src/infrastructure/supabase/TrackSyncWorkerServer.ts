@@ -838,7 +838,6 @@ function remoteMetadata(
     startPoi: _startPoi,
     middlePoi: _middlePoi,
     endPoi: _endPoi,
-    fallbackPoi: _fallbackPoi,
     ...metadata
   } = summary;
   const result: Record<string, unknown> = {
@@ -857,7 +856,6 @@ function remoteMetadata(
     ['startPoi', summary.startPoi],
     ['middlePoi', summary.middlePoi],
     ['endPoi', summary.endPoi],
-    ['fallbackPoi', summary.fallbackPoi],
   ] as const;
   for (const [key, poi] of poiFields) {
     if (poi !== undefined) result[key] = { label: poi.label, kind: poi.kind };

@@ -85,7 +85,6 @@ import {
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
-import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
 import {
   prepareImportedTrack,
   TrackElevationPreparationError,
@@ -93,6 +92,10 @@ import {
   type TrackElevationPreparationErrorCode,
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
+import {
+  suggestTrackName,
+  type TrackNameLookupFailure,
+} from '@/application/tracks/suggestTrackName';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   normalizeMarkerName,
@@ -129,14 +132,12 @@ import {
 } from '@/domain/tracks/trackFolder';
 import {
   calculateTrackMetrics,
-  findDominantSummit,
-  formatGeneratedPoiLabel,
-  generateEnglishTrackName,
-  isLoop,
-  pointNearestFraction,
-  type PoiCandidate,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
+import type {
+  PoiCandidate,
+  TrackNameLandmarkAnchor,
+} from '@/domain/tracks/trackNaming';
 import type { TrackThumbnail } from '@/domain/tracks/trackThumbnail';
 import {
   parseTrackFile,
@@ -241,11 +242,11 @@ interface PreparedPreviewTrack extends PreviewTrackBase {
   readonly calculatedMetrics: TrackMetrics | null;
   readonly namingStatus: 'loading' | 'ready' | 'unavailable';
   readonly generatedName?: string;
-  readonly middleAnchorKind?: 'distance-midpoint' | 'dominant-summit';
+  readonly middleAnchorKind?: TrackNameLandmarkAnchor;
   readonly startPoi?: PoiCandidate;
   readonly middlePoi?: PoiCandidate;
   readonly endPoi?: PoiCandidate;
-  readonly fallbackPoi?: PoiCandidate;
+  readonly lookupFailures?: readonly TrackNameLookupFailure[];
 }
 
 interface SharedTrackSelection extends Omit<PreparedPreviewTrack, 'kind'> {
@@ -347,15 +348,6 @@ interface TracksWorkspaceValue {
   readonly toggleFavorite: (summary: LocalTrackSummary) => Promise<void>;
 }
 
-interface GeneratedNameInput {
-  loop: boolean;
-  multipleSegments: boolean;
-  startPoi?: PoiCandidate;
-  middlePoi?: PoiCandidate;
-  endPoi?: PoiCandidate;
-  fallbackPoi?: PoiCandidate;
-}
-
 const TracksWorkspaceContext = createContext<TracksWorkspaceValue | null>(null);
 
 function sortTracks(
@@ -412,9 +404,6 @@ interface ImportErrorNotice {
   readonly occurrence: number;
 }
 
-type PreparedPreviewTrackBuilder = {
-  -readonly [Key in keyof PreparedPreviewTrack]: PreparedPreviewTrack[Key];
-};
 type LocalTrackSummaryBuilder = {
   -readonly [Key in keyof LocalTrackSummary]: LocalTrackSummary[Key];
 };
@@ -441,41 +430,40 @@ function initialTrackName(file: File, parsed: ParsedGpx, fallbackName: string): 
   return filenameStem.length > 0 ? filenameStem : fallbackName;
 }
 
-function toPoiCandidate(
-  result: PlaceSearchResult | null,
-  coordinate: readonly [number, number],
-  lookedUpAt: string,
-): PoiCandidate | undefined {
-  if (result === null) return undefined;
-  const shortLabel = result.label.split(',')[0]?.trim();
-  if (shortLabel === undefined || shortLabel.length === 0) return undefined;
-  const label = formatGeneratedPoiLabel(shortLabel, result.category);
-  return {
-    label,
-    kind: result.kind,
-    matchedCoordinate: coordinate,
-    lookedUpAt,
-  };
+const lookupFailureMessages: Readonly<
+  Record<
+    TrackNameLookupFailure['lookup'],
+    Readonly<Record<TrackNameLookupFailure['reason'], MessageDescriptor>>
+  >
+> = {
+  landmark: {
+    'rate-limited': msg`Nearby landmark lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again.`,
+    timeout: msg`Nearby landmark lookup timed out.`,
+    provider: msg`Nearby landmark lookup failed because the provider is overloaded.`,
+    network: msg`Nearby landmark lookup could not reach the provider.`,
+    'invalid-response': msg`Nearby landmark lookup received an unsupported provider response.`,
+    unknown: msg`Nearby landmark lookup failed.`,
+  },
+  settlement: {
+    'rate-limited': msg`Settlement lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again.`,
+    timeout: msg`Settlement lookup timed out.`,
+    provider: msg`Settlement lookup failed because the provider is overloaded.`,
+    network: msg`Settlement lookup could not reach the provider.`,
+    'invalid-response': msg`Settlement lookup received an unsupported provider response.`,
+    unknown: msg`Settlement lookup failed.`,
+  },
+};
+
+/** Explains why a generated name is missing or may be incomplete. */
+function lookupFailureText(
+  i18n: I18n,
+  failures: readonly TrackNameLookupFailure[],
+): string {
+  return failures
+    .map(({ lookup, reason }) => i18n._(lookupFailureMessages[lookup][reason]))
+    .join(' ');
 }
 
-function candidateRank(candidate: PoiCandidate): number {
-  if (candidate.kind === 'mountain') return 4;
-  if (candidate.kind === 'settlement' || candidate.kind === 'water') return 3;
-  if (candidate.kind === 'other') return 2;
-  return 1;
-}
-
-function bestCandidate(
-  candidates: readonly (PoiCandidate | undefined)[],
-): PoiCandidate | undefined {
-  return candidates
-    .filter((candidate): candidate is PoiCandidate => candidate !== undefined)
-    .sort((left, right) => {
-      const byRank = candidateRank(right) - candidateRank(left);
-      // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
-      return byRank === 0 ? left.label.localeCompare(right.label, 'en') : byRank;
-    })[0];
-}
 /** Returns DEM-calculated elevation, rejecting preparations that produced none. */
 function requireCalculatedElevation(prepared: PreparedImportedTrack) {
   if (prepared.calculatedSegments === null || prepared.calculatedMetrics === null) {
@@ -1337,133 +1325,22 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         preview.sourceProfile === null
           ? (preview.calculatedSegments ?? preview.sourceSegments)
           : preview.sourceSegments;
-      const multipleSegments = segments.length > 1;
-      const lookedUpAt = clock.now().toISOString();
-      const suggestName = async () => {
-        if (multipleSegments) {
-          const points = segments.flatMap((segment) => segment.points);
-          const anchors = [0.25, 0.5, 0.75].map(
-            (fraction) => pointNearestFraction(points, fraction).coordinate,
-          );
-          const candidates: (PoiCandidate | undefined)[] = [];
-          for (const coordinate of anchors) {
-            const result = await searchPlaces.reverse(
-              { longitude: coordinate[0], latitude: coordinate[1] },
-              controller.signal,
-            );
-            candidates.push(toPoiCandidate(result, coordinate, lookedUpAt));
-          }
-          const fallbackPoi = bestCandidate(candidates);
-          const generatedNameInput: GeneratedNameInput = {
-            loop: false,
-            multipleSegments: true,
-          };
-          if (fallbackPoi !== undefined) generatedNameInput.fallbackPoi = fallbackPoi;
-          const generatedName = generateEnglishTrackName(generatedNameInput);
-          setActive((current) => {
-            if (
-              current?.kind !== 'preview' ||
-              current.preparationStatus !== 'ready' ||
-              current.id !== preview.id
-            )
-              return current;
-            const updated: PreparedPreviewTrackBuilder = {
-              ...current,
-              namingStatus: 'ready',
-            };
-            if (fallbackPoi !== undefined) updated.fallbackPoi = fallbackPoi;
-            if (generatedName !== null) updated.generatedName = generatedName;
-            return updated;
-          });
-          return;
-        }
-
-        const segment = segments[0];
-        if (segment === undefined) return;
-        const summit = findDominantSummit(segment.points);
-        const middlePoint =
-          summit === null
-            ? pointNearestFraction(segment.points, 0.5)
-            : ({ coordinate: summit.coordinate } satisfies Pick<
-                TrackPoint,
-                'coordinate'
-              >);
-        const loop = isLoop([segment.points.map((point) => point.coordinate)]);
-        const reverseCandidate = async (
-          coordinate: readonly [number, number],
-        ): Promise<PoiCandidate | undefined> => {
-          const result = await searchPlaces.reverse(
-            { longitude: coordinate[0], latitude: coordinate[1] },
-            controller.signal,
-          );
-          return toPoiCandidate(result, coordinate, lookedUpAt);
-        };
-        let summitPoi: PoiCandidate | undefined;
-        if (summit !== null) {
-          try {
-            const result = await searchPlaces.nearest(
-              {
-                longitude: summit.coordinate[0],
-                latitude: summit.coordinate[1],
-              },
-              controller.signal,
-            );
-            if (result !== null) {
-              const matchedCoordinate = [
-                result.coordinate.longitude,
-                result.coordinate.latitude,
-              ] as const;
-              summitPoi = toPoiCandidate(result, matchedCoordinate, lookedUpAt);
-            }
-          } catch {
-            controller.signal.throwIfAborted();
-            logger.log({ level: 'warn', name: 'local-track.nearby-poi.failed' });
-          }
-        }
-        const middlePoi = summitPoi ?? (await reverseCandidate(middlePoint.coordinate));
-        let startPoi: PoiCandidate | undefined;
-        let endPoi: PoiCandidate | undefined;
-        if (!loop) {
-          const firstPoint = segment.points[0];
-          const lastPoint = segment.points[segment.points.length - 1];
-          if (firstPoint !== undefined) {
-            startPoi = await reverseCandidate(firstPoint.coordinate);
-          }
-          if (lastPoint !== undefined) {
-            endPoi = await reverseCandidate(lastPoint.coordinate);
-          }
-        }
-        const fallbackPoi = loop ? middlePoi : undefined;
-        const generatedNameInput: GeneratedNameInput = {
-          loop,
-          multipleSegments: false,
-        };
-        if (startPoi !== undefined) generatedNameInput.startPoi = startPoi;
-        if (middlePoi !== undefined) generatedNameInput.middlePoi = middlePoi;
-        if (endPoi !== undefined) generatedNameInput.endPoi = endPoi;
-        if (fallbackPoi !== undefined) generatedNameInput.fallbackPoi = fallbackPoi;
-        const generatedName = generateEnglishTrackName(generatedNameInput);
-        setActive((current) => {
-          if (
-            current?.kind !== 'preview' ||
-            current.preparationStatus !== 'ready' ||
-            current.id !== preview.id
-          )
-            return current;
-          const updated: PreparedPreviewTrackBuilder = {
-            ...current,
-            namingStatus: 'ready',
-            middleAnchorKind: summit === null ? 'distance-midpoint' : 'dominant-summit',
-          };
-          if (startPoi !== undefined) updated.startPoi = startPoi;
-          if (middlePoi !== undefined) updated.middlePoi = middlePoi;
-          if (endPoi !== undefined) updated.endPoi = endPoi;
-          if (fallbackPoi !== undefined) updated.fallbackPoi = fallbackPoi;
-          if (generatedName !== null) updated.generatedName = generatedName;
-          return updated;
+      try {
+        const suggestion = await suggestTrackName({
+          segments,
+          places: searchPlaces,
+          logger,
+          lookedUpAt: clock.now().toISOString(),
+          signal: controller.signal,
         });
-      };
-      await suggestName().catch(() => {
+        setActive((current) =>
+          current?.kind === 'preview' &&
+          current.preparationStatus === 'ready' &&
+          current.id === preview.id
+            ? { ...current, ...suggestion, namingStatus: 'ready' }
+            : current,
+        );
+      } catch {
         if (controller.signal.aborted) return;
         logger.log({ level: 'warn', name: 'local-track.naming.failed' });
         setActive((current) =>
@@ -1473,7 +1350,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? { ...current, namingStatus: 'unavailable' }
             : current,
         );
-      });
+      }
     },
     [clock, logger, searchPlaces],
   );
@@ -2078,7 +1955,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.startPoi !== undefined) summary.startPoi = active.startPoi;
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
-      if (active.fallbackPoi !== undefined) summary.fallbackPoi = active.fallbackPoi;
       await database.ensureImportsFolder();
       await database.saveLocalTrack(summary, content);
       void userData.trackSaved(summary.id);
@@ -5590,9 +5466,16 @@ export function TrackDetailsPane({
                   </Typography>
                 </Stack>
               ) : active.generatedName === undefined ? (
-                <Typography variant="body2" color="text.secondary">
-                  <Trans>No generated name is available. Saving is unaffected.</Trans>
-                </Typography>
+                active.lookupFailures === undefined ? (
+                  <Typography variant="body2" color="text.secondary">
+                    <Trans>No generated name is available. Saving is unaffected.</Trans>
+                  </Typography>
+                ) : (
+                  <Alert severity="warning">
+                    <Trans>No generated name is available. Saving is unaffected.</Trans>{' '}
+                    {lookupFailureText(i18n, active.lookupFailures)}
+                  </Alert>
+                )
               ) : (
                 <Stack spacing={2}>
                   <Button
@@ -5610,6 +5493,12 @@ export function TrackDetailsPane({
                     value={active.generatedName}
                     slotProps={{ input: { readOnly: true } }}
                   />
+                  {active.lookupFailures === undefined ? null : (
+                    <Alert severity="warning">
+                      <Trans>The name may be incomplete.</Trans>{' '}
+                      {lookupFailureText(i18n, active.lookupFailures)}
+                    </Alert>
+                  )}
                 </Stack>
               )}
             </Stack>

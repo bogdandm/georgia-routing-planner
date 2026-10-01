@@ -22,7 +22,7 @@ export interface PlaceSearchBounds {
   readonly north: number;
 }
 
-type PlaceSearchFailureCode =
+export type PlaceSearchFailureCode =
   'network' | 'timeout' | 'rate-limited' | 'invalid-response' | 'provider';
 
 export class PlaceSearchFailure extends Error {
@@ -42,7 +42,8 @@ export interface PlaceSearchGateway {
     bounds: PlaceSearchBounds,
     signal: AbortSignal,
   ): Promise<readonly PlaceSearchResult[]>;
-  reverse?(
+  /** Settlement (city, town, village, or hamlet) containing or nearest the point. */
+  reverseSettlement?(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null>;

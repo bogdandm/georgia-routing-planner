@@ -8,7 +8,6 @@ import type {
 } from '@/application/ports/PlaceSearchGateway';
 import {
   expandPlaceSearchBounds,
-  geodesicDistanceKm,
   largerPlaceSearchSideKm,
   limitPlaceSearchBounds,
 } from '@/application/map/expandPlaceSearchBounds';
@@ -54,36 +53,20 @@ export class SearchPlaces {
     private readonly clock: Clock,
   ) {}
 
-  public async reverse(
+  public async reverseSettlement(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null> {
-    if (this.gateway.reverse === undefined) return null;
-    return this.gateway.reverse(coordinate, signal);
+    if (this.gateway.reverseSettlement === undefined) return null;
+    return this.gateway.reverseSettlement(coordinate, signal);
   }
 
-  public async nearest(
+  public async nearby(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
-  ): Promise<PlaceSearchResult | null> {
-    if (this.gateway.nearby === undefined) return null;
-    const results = await this.gateway.nearby(coordinate, signal);
-    const ranked = results
-      .map((result) => ({
-        result,
-        distanceKm: geodesicDistanceKm(
-          coordinate.latitude,
-          coordinate.longitude,
-          result.coordinate.latitude,
-          result.coordinate.longitude,
-        ),
-      }))
-      .sort(
-        (left, right) =>
-          left.distanceKm - right.distanceKm ||
-          left.result.id.localeCompare(right.result.id, 'en'),
-      );
-    return ranked[0]?.result ?? null;
+  ): Promise<readonly PlaceSearchResult[]> {
+    if (this.gateway.nearby === undefined) return [];
+    return this.gateway.nearby(coordinate, signal);
   }
 
   public async execute(

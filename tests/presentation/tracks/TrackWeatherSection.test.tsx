@@ -77,6 +77,21 @@ function renderSection(
   return { onPreferencesChange };
 }
 
+function expandedSection(metrics: TrackStatsMetrics) {
+  return (
+    <RuntimeServicesProvider services={services}>
+      <ThemeProvider theme={createAppTheme()}>
+        <TrackWeatherSection
+          profile={ridge}
+          metrics={metrics}
+          preferences={{ expanded: true, weekday: 6 }}
+          onPreferencesChange={vi.fn()}
+        />
+      </ThemeProvider>
+    </RuntimeServicesProvider>
+  );
+}
+
 beforeEach(() => {
   activateAppLocale('en');
   services = createTestServices();
@@ -154,6 +169,17 @@ describe('TrackWeatherSection', () => {
     expect(
       screen.queryByRole('list', { name: 'Forecast along the route' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('requests forecasts again when new track metrics abort the pending ones', async () => {
+    const { rerender } = renderWithI18n(expandedSection(dayHike));
+    // Same values in a new object: the effect reruns before the first requests settle.
+    rerender(expandedSection({ ...dayHike }));
+
+    const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
+    expect(
+      await within(highest).findByRole('article', { name: 'Day forecast' }),
+    ).toBeVisible();
   });
 
   it('reports a forecast that cannot be loaded at its location', async () => {

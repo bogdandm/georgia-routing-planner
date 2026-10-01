@@ -181,7 +181,7 @@ msgid "Additional valid waypoints were omitted."
 msgstr "Остальные корректные путевые точки не включены."
 
 #. js-lingui-id: Gbx5p_
-#: src/presentation/tracks/TrackWeatherSection.tsx:378
+#: src/presentation/tracks/TrackWeatherSection.tsx:386
 msgid "Along the route"
 msgstr "По маршруту"
 
@@ -191,12 +191,12 @@ msgid "Apply place name"
 msgstr "Применить название места"
 
 #. js-lingui-id: -zt5fR
-#: src/presentation/tracks/TrackWeatherSection.tsx:253
+#: src/presentation/tracks/TrackWeatherSection.tsx:261
 msgid "At {distance}"
 msgstr "На {distance}"
 
 #. js-lingui-id: 7grH_u
-#: src/presentation/tracks/TrackWeatherSection.tsx:298
+#: src/presentation/tracks/TrackWeatherSection.tsx:306
 msgid "Available for day hikes shorter than {maximumDistance} and 10 hours."
 msgstr "Доступно для однодневных походов короче {maximumDistance} и 10 часов."
 
@@ -227,7 +227,7 @@ msgid "Building route graph… {graphProgress}"
 msgstr "Построение графа маршрутов… {graphProgress}"
 
 #. js-lingui-id: 67TcRf
-#: src/presentation/tracks/TrackWeatherSection.tsx:368
+#: src/presentation/tracks/TrackWeatherSection.tsx:376
 msgid "By elevation"
 msgstr "По высоте"
 
@@ -348,7 +348,7 @@ msgid "Create folder"
 msgstr "Создать папку"
 
 #. js-lingui-id: H7OUPr
-#: src/presentation/tracks/TrackWeatherSection.tsx:223
+#: src/presentation/tracks/TrackWeatherSection.tsx:231
 msgid "Day"
 msgstr "День"
 
@@ -577,7 +577,7 @@ msgid "Files with DTD or entity declarations are not supported."
 msgstr "Файлы с объявлениями DTD или сущностей не поддерживаются."
 
 #. js-lingui-id: JmZ_-d
-#: src/presentation/tracks/TrackWeatherSection.tsx:252
+#: src/presentation/tracks/TrackWeatherSection.tsx:260
 msgid "Finish"
 msgstr "Финиш"
 
@@ -597,22 +597,22 @@ msgid "Folder names must be 200 characters or fewer."
 msgstr "Название папки должно быть не длиннее 200 символов."
 
 #. js-lingui-id: 2JKkIm
-#: src/presentation/tracks/TrackWeatherSection.tsx:384
+#: src/presentation/tracks/TrackWeatherSection.tsx:392
 msgid "Forecast along the route"
 msgstr "Прогноз по маршруту"
 
 #. js-lingui-id: AFitTJ
-#: src/presentation/tracks/TrackWeatherSection.tsx:370
+#: src/presentation/tracks/TrackWeatherSection.tsx:378
 msgid "Forecast by elevation"
 msgstr "Прогноз по высоте"
 
 #. js-lingui-id: qpYeDl
-#: src/presentation/tracks/TrackWeatherSection.tsx:341
+#: src/presentation/tracks/TrackWeatherSection.tsx:349
 msgid "Forecast date"
 msgstr "Дата прогноза"
 
 #. js-lingui-id: _WH_9-
-#: src/presentation/tracks/TrackWeatherSection.tsx:371
+#: src/presentation/tracks/TrackWeatherSection.tsx:379
 msgid "Highest"
 msgstr "Высшая точка"
 
@@ -687,7 +687,7 @@ msgid "Looking up representative places…"
 msgstr "Поиск характерных мест…"
 
 #. js-lingui-id: 05qZg8
-#: src/presentation/tracks/TrackWeatherSection.tsx:373
+#: src/presentation/tracks/TrackWeatherSection.tsx:381
 msgid "Lowest"
 msgstr "Низшая точка"
 
@@ -712,7 +712,7 @@ msgid "Markers ({markerCount})"
 msgstr "Метки ({markerCount})"
 
 #. js-lingui-id: jbPrMa
-#: src/presentation/tracks/TrackWeatherSection.tsx:372
+#: src/presentation/tracks/TrackWeatherSection.tsx:380
 msgid "Median"
 msgstr "Медиана"
 
@@ -790,7 +790,7 @@ msgid "Next segment"
 msgstr "Следующий участок"
 
 #. js-lingui-id: jnd7HN
-#: src/presentation/tracks/TrackWeatherSection.tsx:230
+#: src/presentation/tracks/TrackWeatherSection.tsx:238
 msgid "Night"
 msgstr "Ночь"
 
@@ -806,8 +806,8 @@ msgid "No elevation profile is available for this track."
 msgstr "Для этого трека нет профиля высот."
 
 #. js-lingui-id: wm5OI3
-#: src/presentation/tracks/TrackWeatherSection.tsx:217
-#: src/presentation/tracks/TrackWeatherSection.tsx:275
+#: src/presentation/tracks/TrackWeatherSection.tsx:225
+#: src/presentation/tracks/TrackWeatherSection.tsx:283
 msgid "No forecast for this date."
 msgstr "Нет прогноза на эту дату."
 
@@ -1118,17 +1118,17 @@ msgid "Sort: {currentSortLabel}"
 msgstr "Сортировка: {currentSortLabel}"
 
 #. js-lingui-id: tXkhj_
-#: src/presentation/tracks/TrackWeatherSection.tsx:250
+#: src/presentation/tracks/TrackWeatherSection.tsx:258
 msgid "Start"
 msgstr "Старт"
 
 #. js-lingui-id: phlNWx
-#: src/presentation/tracks/TrackWeatherSection.tsx:301
+#: src/presentation/tracks/TrackWeatherSection.tsx:309
 msgid "Starting at {startTime} at the estimated pace, about {duration} in total."
 msgstr "Старт в {startTime} в расчётном темпе, всего около {duration}."
 
 #. js-lingui-id: Cj8J4o
-#: src/presentation/tracks/TrackWeatherSection.tsx:300
+#: src/presentation/tracks/TrackWeatherSection.tsx:308
 msgid "Starting at {startTime} at the recorded pace, {duration} in total."
 msgstr "Старт в {startTime} в записанном темпе, всего {duration}."
 
@@ -1183,8 +1183,8 @@ msgid "The folder order could not be saved."
 msgstr "Не удалось сохранить порядок папок."
 
 #. js-lingui-id: Z_3eUd
-#: src/presentation/tracks/TrackWeatherSection.tsx:213
-#: src/presentation/tracks/TrackWeatherSection.tsx:271
+#: src/presentation/tracks/TrackWeatherSection.tsx:221
+#: src/presentation/tracks/TrackWeatherSection.tsx:279
 msgid "The forecast could not be loaded."
 msgstr "Не удалось загрузить прогноз."
 
@@ -1340,7 +1340,7 @@ msgid "Unfiled tracks"
 msgstr "Треки без папки"
 
 #. js-lingui-id: xxls-e
-#: src/presentation/tracks/TrackWeatherSection.tsx:306
-#: src/presentation/tracks/TrackWeatherSection.tsx:321
+#: src/presentation/tracks/TrackWeatherSection.tsx:314
+#: src/presentation/tracks/TrackWeatherSection.tsx:329
 msgid "Weather forecast"
 msgstr "Прогноз погоды"

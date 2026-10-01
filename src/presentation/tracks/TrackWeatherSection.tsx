@@ -136,13 +136,17 @@ export function TrackWeatherSection({
   useEffect(() => {
     if (!expanded) return undefined;
     const controller = new AbortController();
+    const requested = requestedKeys.current;
+    const inFlight = new Set<string>();
     const settle = (key: string, state: ForecastState) => {
+      inFlight.delete(key);
       setForecasts((existing) => new Map(existing).set(key, state));
     };
     for (const location of locations) {
       const key = locationKey(location);
-      if (requestedKeys.current.has(key)) continue;
-      requestedKeys.current.add(key);
+      if (requested.has(key)) continue;
+      requested.add(key);
+      inFlight.add(key);
       const [longitude, latitude] = location.coordinate;
       pointWeatherForecast
         .execute(
@@ -154,16 +158,20 @@ export function TrackWeatherSection({
         )
         .then(
           (forecast) => {
-            settle(key, { status: 'ready', forecast });
+            if (!controller.signal.aborted) settle(key, { status: 'ready', forecast });
           },
           () => {
-            requestedKeys.current.delete(key);
-            if (!controller.signal.aborted) settle(key, { status: 'error' });
+            if (controller.signal.aborted) return;
+            requested.delete(key);
+            settle(key, { status: 'error' });
           },
         );
     }
     return () => {
       controller.abort();
+      // Released synchronously so the next run, which starts before the aborted
+      // promises settle, requests these locations again.
+      for (const key of inFlight) requested.delete(key);
     };
   }, [expanded, locations, pointWeatherForecast]);
 

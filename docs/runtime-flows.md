@@ -378,7 +378,10 @@ cursor preview; the facade draws that preview into the overlay of the active mod
 `PlanningPreview` with the last point, the first point, and the distance measured so
 far. On each ruler mouse move the facade samples the first point and the cursor through
 `ElevationProvider.sampleMany`, aborting the previous sample; the last elevation
-difference stays in the label until the new sample resolves.
+difference stays in the label until the new sample resolves. On coarse-pointer devices
+`MapWorkspace` calls `setCursorPreviewEnabled(false)`: the facade ignores the
+compatibility mouse events taps emit and, whenever the preview or mode changes, draws
+the ruler label at the last point and samples the first and last points.
 
 ## Point inspection and point actions
 

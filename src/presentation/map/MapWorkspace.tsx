@@ -719,6 +719,7 @@ export function MapWorkspace({
 
   useEffect(() => {
     facade.setPointInspectionPopupEnabled(!touchPointer);
+    facade.setCursorPreviewEnabled(!touchPointer);
   }, [facade, touchPointer]);
 
   useEffect(() => {

@@ -51,6 +51,11 @@ export interface MapFacade {
   getPointInspectionContent(): HTMLElement;
   /** Touch layouts disable the anchored popup and show the inspection in a sheet. */
   setPointInspectionPopupEnabled(enabled: boolean): void;
+  /**
+   * Touch layouts disable the cursor-following planning preview; the ruler then labels
+   * its total at the last point.
+   */
+  setCursorPreviewEnabled(enabled: boolean): void;
   getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null;
   openPointInspection(
     coordinate: MapCoordinate,

@@ -161,13 +161,13 @@ the result behaves like any saved track. Unsaved plans activate the leave-site g
 
 #### Library and folders
 
-Rows show a simplified shape thumbnail (orange for a loop, blue for one-way), the name,
-recorded duration, distance, and elevation gain. A loop ends within 1 km of its start
-and within half its length; thumbnails are computed and cached in the browser. Favorite
-and delete controls appear on hover or focus on desktop and stay visible on smartphones;
-active favorites always show. Deletion is two-stage inline confirmation from the row or
-from **Delete track** in the detail action menu; pointer exit, Escape, or click-away
-cancels it.
+Rows show a fixed-size simplified shape thumbnail (orange for a loop, blue for one-way),
+the name, recorded duration, distance, and elevation gain. A loop ends within 1 km of
+its start and within half its length; thumbnails are computed and cached in the browser.
+Favorite and delete controls appear on hover or focus on desktop and stay visible on
+smartphones; active favorites always show. Deletion is two-stage inline confirmation
+from the row or from **Delete track** in the detail action menu; pointer exit, Escape,
+or click-away cancels it.
 
 Sorting offers Newest, Oldest, Name, and Distance from map center, persisted locally.
 Favorites sort first, and the sort applies inside every folder. Users create, rename,
@@ -436,8 +436,10 @@ observations.
   weather pick keep precedence. There is no separate panel: a dashed line follows the
   cursor from the last point, and a large label below the cursor shows the total
   distance through the cursor and the terrain elevation difference between the first
-  point and the cursor. Route planning uses the same cursor label with the distance of
-  the pending segment only.
+  point and the cursor. On coarse-pointer devices, which have no cursor, the label sits
+  on the last tapped point once there are two points and shows the measured total and
+  the elevation difference from the first point. Route planning uses the same cursor
+  label with the distance of the pending segment only.
 - **Point actions:** right-click opens copy coordinates, copy a 2D point link, create a
   marker, search satellite scenes here, show the weather forecast, copy a weather-map
   link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap instead

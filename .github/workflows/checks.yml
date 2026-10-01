@@ -34,7 +34,9 @@ jobs:
         run: |
           docs_only=false
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            changed_paths="$(git diff --name-only --diff-filter=ACDMRT "$PR_BASE_SHA...$GITHUB_SHA")"
+            # --no-renames lists a moved file's source path too, so moving code into
+            # docs/ still counts as an executable change.
+            changed_paths="$(git diff --name-only --no-renames "$PR_BASE_SHA...$GITHUB_SHA")"
             if [[ -n "$changed_paths" ]]; then
               docs_only=true
               while IFS= read -r changed_path; do

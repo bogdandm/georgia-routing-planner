@@ -49,7 +49,11 @@ function thumbnailPath(thumbnail: TrackThumbnail): string {
     .join(' ');
 }
 
-/** Decorative track-shape square that stretches to its grid row's height. */
+/**
+ * Decorative fixed-size track-shape square. A size derived from the row height would
+ * feed back into the row: on narrow screens a wrapping name grows the row, the square
+ * widens, the name column narrows, and the name wraps further.
+ */
 export function TrackThumbnailImage({
   thumbnail,
 }: {
@@ -64,8 +68,10 @@ export function TrackThumbnailImage({
       aria-hidden
       sx={{
         position: 'relative',
-        alignSelf: 'stretch',
-        aspectRatio: '1 / 1',
+        flexShrink: 0,
+        alignSelf: 'center',
+        width: 48,
+        height: 48,
         bgcolor: 'background.default',
         border: 1,
         borderColor: 'divider',

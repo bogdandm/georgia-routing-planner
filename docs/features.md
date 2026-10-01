@@ -161,13 +161,13 @@ the result behaves like any saved track. Unsaved plans activate the leave-site g
 
 #### Library and folders
 
-Rows show a simplified shape thumbnail (orange for a loop, blue for one-way), the name,
-recorded duration, distance, and elevation gain. A loop ends within 1 km of its start
-and within half its length; thumbnails are computed and cached in the browser. Favorite
-and delete controls appear on hover or focus on desktop and stay visible on smartphones;
-active favorites always show. Deletion is two-stage inline confirmation from the row or
-from **Delete track** in the detail action menu; pointer exit, Escape, or click-away
-cancels it.
+Rows show a fixed-size simplified shape thumbnail (orange for a loop, blue for one-way),
+the name, recorded duration, distance, and elevation gain. A loop ends within 1 km of
+its start and within half its length; thumbnails are computed and cached in the browser.
+Favorite and delete controls appear on hover or focus on desktop and stay visible on
+smartphones; active favorites always show. Deletion is two-stage inline confirmation
+from the row or from **Delete track** in the detail action menu; pointer exit, Escape,
+or click-away cancels it.
 
 Sorting offers Newest, Oldest, Name, and Distance from map center, persisted locally.
 Favorites sort first, and the sort applies inside every folder. Users create, rename,

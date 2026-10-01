@@ -23,6 +23,16 @@ export type MapViewportMovement =
   | { readonly phase: 'moving' }
   | { readonly phase: 'settled'; readonly viewport: MapViewportSnapshot };
 
+/** Cursor preview that starts at the last accepted route-plan or ruler point. */
+export interface PlanningPreview {
+  readonly anchor: MapCoordinate;
+  /** Ruler only: its first point and the straight-line distance measured up to `anchor`. */
+  readonly measurement?: {
+    readonly origin: MapCoordinate;
+    readonly distanceMeters: number;
+  };
+}
+
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
  * object. Consumers observe serializable snapshots and never receive the native map.
@@ -65,8 +75,7 @@ export interface MapFacade {
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
   setDebugOptions(options: MapDebugOptions): void;
   setInteractionMode(mode: MapInteractionMode): void;
-  /** Last accepted route-plan or ruler point; the cursor preview line starts there. */
-  setPlanningPreviewAnchor(coordinate: MapCoordinate | null): void;
+  setPlanningPreview(preview: PlanningPreview | null): void;
 
   /** Cancels pending transitions and removes every native listener owned by the facade. */
   destroy(): void;

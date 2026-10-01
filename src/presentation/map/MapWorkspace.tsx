@@ -40,9 +40,9 @@ import type {
   MapFacade,
   MapInteractionMode,
   MapViewportMovement,
+  PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
-import { MapMeasurementPanel } from '@/presentation/map/MapMeasurementPanel';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
   MapViewControls,
@@ -61,6 +61,7 @@ import {
 } from '@/presentation/map/mapTypes';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import {
   cancelMarkerPlacement,
   cancelWeatherPointSelection,
@@ -406,13 +407,42 @@ export function MapWorkspace({
   const weatherOwnsMapClicks =
     weatherPointSelectionActive || (weatherMap.enabled && !measurementActive);
   const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
-  const planningPreviewAnchor = measurementActive
-    ? (measurementPoints.at(-1) ?? null)
-    : tracksWorkspace?.active?.kind === 'route-plan' && routePlanningActive
+  const routePlanPreviewAnchor =
+    tracksWorkspace?.active?.kind === 'route-plan' && routePlanningActive
       ? (tracksWorkspace.active.queuedWaypoints.at(-1) ??
         tracksWorkspace.active.waypoints.at(-1) ??
         null)
       : null;
+  const planningPreview = useMemo((): PlanningPreview | null => {
+    if (measurementPoints === null) {
+      return routePlanPreviewAnchor === null
+        ? null
+        : {
+            anchor: {
+              longitude: routePlanPreviewAnchor[0],
+              latitude: routePlanPreviewAnchor[1],
+            },
+          };
+    }
+    const [origin] = measurementPoints;
+    const anchor = measurementPoints.at(-1);
+    if (origin === undefined || anchor === undefined) return null;
+    let distanceMeters = 0;
+    for (let index = 1; index < measurementPoints.length; index += 1) {
+      const start = measurementPoints[index - 1];
+      const end = measurementPoints[index];
+      if (start !== undefined && end !== undefined) {
+        distanceMeters += geodesicDistanceMeters(start, end);
+      }
+    }
+    return {
+      anchor: { longitude: anchor[0], latitude: anchor[1] },
+      measurement: {
+        origin: { longitude: origin[0], latitude: origin[1] },
+        distanceMeters,
+      },
+    };
+  }, [measurementPoints, routePlanPreviewAnchor]);
   const fitBoundsCommand = useStore(
     mapInteractionStore,
     (state) => state.fitBoundsCommand,
@@ -763,18 +793,11 @@ export function MapWorkspace({
   }, [mapLayers, measurementPoints]);
 
   useEffect(() => {
-    facade.setPlanningPreviewAnchor(
-      planningPreviewAnchor === null
-        ? null
-        : {
-            longitude: planningPreviewAnchor[0],
-            latitude: planningPreviewAnchor[1],
-          },
-    );
+    facade.setPlanningPreview(planningPreview);
     return () => {
-      facade.setPlanningPreviewAnchor(null);
+      facade.setPlanningPreview(null);
     };
-  }, [facade, planningPreviewAnchor]);
+  }, [facade, planningPreview]);
 
   useEffect(() => {
     return () => {
@@ -1418,21 +1441,6 @@ export function MapWorkspace({
           weatherMapEnabled={weatherMap.enabled}
           measurementActive={measurementActive}
           onMeasurementActiveChange={handleMeasurementActiveChange}
-        />
-      ) : null}
-      {measurementPoints !== null && mapProviderConfiguration.status === 'valid' ? (
-        <MapMeasurementPanel
-          points={measurementPoints}
-          elevationProvider={elevationProvider}
-          onUndo={() => {
-            setMeasurementPoints((current) => current?.slice(0, -1) ?? null);
-          }}
-          onClear={() => {
-            setMeasurementPoints([]);
-          }}
-          onClose={() => {
-            setMeasurementPoints(null);
-          }}
         />
       ) : null}
       <ElevationGradeLegend

@@ -1546,15 +1546,14 @@ describe('MapWorkspace', () => {
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('measurement');
     });
-    const ruler = screen.getByRole('region', { name: 'Ruler' });
-    expect(within(ruler).getByText('Click the map to add points.')).toBeVisible();
+    expect(screen.queryByRole('region')).toBeNull();
 
     act(() => {
       facade.emitPlanningClick({ longitude: 44, latitude: 42 });
       facade.emitPlanningClick({ longitude: 44, latitude: 42.01 });
+      facade.emitPlanningClick({ longitude: 44, latitude: 42.02 });
     });
     expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
-    expect(within(ruler).getByText('1.1 km')).toBeVisible();
     expect(setPlannedLineGeometry).toHaveBeenLastCalledWith(
       'measurement',
       [
@@ -1563,32 +1562,30 @@ describe('MapWorkspace', () => {
           coordinates: [
             [44, 42],
             [44, 42.01],
+            [44, 42.02],
           ],
         },
       ],
       [
         [44, 42],
         [44, 42.01],
+        [44, 42.02],
       ],
     );
-    expect(facade.planningPreviewAnchors.at(-1)).toEqual({
-      longitude: 44,
-      latitude: 42.01,
-    });
+    // The cursor readout continues from the last point with the distance measured so far.
+    const preview = facade.planningPreviews.at(-1);
+    expect(preview?.anchor).toEqual({ longitude: 44, latitude: 42.02 });
+    expect(preview?.measurement?.origin).toEqual({ longitude: 44, latitude: 42 });
+    expect(preview?.measurement?.distanceMeters).toBeCloseTo(2_223.9, 0);
 
-    await user.click(within(ruler).getByRole('button', { name: 'Undo last point' }));
-    expect(within(ruler).getByText('Click the map to add points.')).toBeVisible();
-
-    await user.click(within(ruler).getByRole('button', { name: 'Close ruler' }));
-    expect(screen.queryByRole('region', { name: 'Ruler' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Measure distance' }));
     expect(clearPlannedLineGeometry).toHaveBeenLastCalledWith('measurement');
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
     });
     // The open route plan's last waypoint anchors the cursor preview again.
-    expect(facade.planningPreviewAnchors.at(-1)).toEqual({
-      longitude: 44.5,
-      latitude: 42.5,
+    expect(facade.planningPreviews.at(-1)).toEqual({
+      anchor: { longitude: 44.5, latitude: 42.5 },
     });
   });
 

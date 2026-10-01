@@ -1,3 +1,4 @@
+import { msg } from '@lingui/core/macro';
 import type {
   ErrorEvent as MapLibreErrorEvent,
   Map as MapLibreMap,
@@ -15,6 +16,7 @@ import type {
   MapFacade,
   MapInteractionMode,
   MapViewportMovement,
+  PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import {
   mapLayerIds,
@@ -54,7 +56,10 @@ import {
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
-import { formatDistanceWithMeters } from '@/presentation/tracks/trackFormatters';
+import {
+  formatDistanceWithMeters,
+  formatElevationChange,
+} from '@/presentation/tracks/trackFormatters';
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -253,9 +258,13 @@ export class MapLibreFacade implements MapFacade {
   readonly #pointInspector: PointInspectorPopup;
   readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
-  #planningPreviewAnchor: MapCoordinate | null = null;
+  #planningPreview: PlanningPreview | null = null;
   /** Overlay holding the drawn cursor preview, so a mode change clears the right one. */
   #planningPreviewOverlay: PlannedLineOverlay | null = null;
+  #planningPreviewCursor: MapCoordinate | null = null;
+  /** Ruler only: terrain change from the first point to the cursor, when sampled. */
+  #cursorElevationChangeMeters: number | null = null;
+  #cursorElevationAbort: AbortController | null = null;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -569,14 +578,19 @@ export class MapLibreFacade implements MapFacade {
     this.applyInteractionCursor();
   }
 
-  public setPlanningPreviewAnchor(coordinate: MapCoordinate | null): void {
+  public setPlanningPreview(preview: PlanningPreview | null): void {
+    const current = this.#planningPreview;
     if (
-      this.#planningPreviewAnchor?.longitude === coordinate?.longitude &&
-      this.#planningPreviewAnchor?.latitude === coordinate?.latitude
+      current?.anchor.longitude === preview?.anchor.longitude &&
+      current?.anchor.latitude === preview?.anchor.latitude &&
+      current?.measurement?.origin.longitude ===
+        preview?.measurement?.origin.longitude &&
+      current?.measurement?.origin.latitude === preview?.measurement?.origin.latitude &&
+      current?.measurement?.distanceMeters === preview?.measurement?.distanceMeters
     ) {
       return;
     }
-    this.#planningPreviewAnchor = coordinate;
+    this.#planningPreview = preview;
     this.clearPlanningPreview();
   }
 
@@ -595,6 +609,7 @@ export class MapLibreFacade implements MapFacade {
     this.#listeners.clear();
     this.#viewportMovementListeners.clear();
     this.#planningClickListeners.clear();
+    this.#cursorElevationAbort?.abort();
   }
 
   private readonly handleLoad = (): void => {
@@ -724,25 +739,39 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
     const overlay = this.planningOverlay();
-    if (
-      overlay === null ||
-      this.#planningPreviewAnchor === null ||
-      this.#map === null
-    ) {
+    const measurement = this.#planningPreview?.measurement;
+    if (overlay === null || this.#planningPreview === null || this.#map === null) {
       return;
     }
     const cursor = this.#map.unproject(event.point);
     const cursorCoordinate = { longitude: cursor.lng, latitude: cursor.lat };
     this.#planningPreviewOverlay = overlay;
-    this.layerController?.setPlannedLinePreview(
-      overlay,
-      [this.#planningPreviewAnchor.longitude, this.#planningPreviewAnchor.latitude],
-      [cursorCoordinate.longitude, cursorCoordinate.latitude],
-      formatDistanceWithMeters(
-        geodesicDistanceMeters(this.#planningPreviewAnchor, cursorCoordinate),
-        appI18n,
-      ),
-    );
+    this.#planningPreviewCursor = cursorCoordinate;
+    this.drawPlanningPreview();
+    if (overlay !== 'measurement' || measurement === undefined) return;
+
+    // The previous change stays visible until the new cursor sample resolves; cached
+    // DEM tiles make that near-immediate, and a moving cursor aborts stale samples.
+    this.#cursorElevationAbort?.abort();
+    const elevationProvider = this.elevationProvider;
+    if (elevationProvider === undefined) return;
+    const controller = new AbortController();
+    this.#cursorElevationAbort = controller;
+    void elevationProvider
+      .sampleMany([measurement.origin, cursorCoordinate], controller.signal)
+      .then(([origin, target]) => {
+        if (controller.signal.aborted) return;
+        this.#cursorElevationChangeMeters =
+          origin?.status === 'available' && target?.status === 'available'
+            ? target.meters - origin.meters
+            : null;
+        this.drawPlanningPreview();
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        this.#cursorElevationChangeMeters = null;
+        this.drawPlanningPreview();
+      });
   };
 
   private readonly handleCanvasMouseLeave = (): void => {
@@ -1441,7 +1470,45 @@ export class MapLibreFacade implements MapFacade {
     return null;
   }
 
+  /**
+   * Route planning labels the cursor segment; the ruler labels the total distance through
+   * the cursor and, once sampled, the elevation change from its first point.
+   */
+  private drawPlanningPreview(): void {
+    const preview = this.#planningPreview;
+    const overlay = this.#planningPreviewOverlay;
+    const cursor = this.#planningPreviewCursor;
+    if (preview === null || overlay === null || cursor === null) return;
+    const segmentMeters = geodesicDistanceMeters(preview.anchor, cursor);
+    const lines = [
+      formatDistanceWithMeters(
+        (preview.measurement?.distanceMeters ?? 0) + segmentMeters,
+        appI18n,
+      ),
+    ];
+    if (
+      preview.measurement !== undefined &&
+      this.#cursorElevationChangeMeters !== null
+    ) {
+      const elevationChange = formatElevationChange(
+        this.#cursorElevationChangeMeters,
+        appI18n,
+      );
+      lines.push(appI18n._(msg`Elevation ${elevationChange}`));
+    }
+    this.layerController?.setPlannedLinePreview(
+      overlay,
+      [preview.anchor.longitude, preview.anchor.latitude],
+      [cursor.longitude, cursor.latitude],
+      lines.join('\n'),
+    );
+  }
+
   private clearPlanningPreview(): void {
+    this.#cursorElevationAbort?.abort();
+    this.#cursorElevationAbort = null;
+    this.#cursorElevationChangeMeters = null;
+    this.#planningPreviewCursor = null;
     if (this.#planningPreviewOverlay === null) return;
     this.layerController?.clearPlannedLinePreview(this.#planningPreviewOverlay);
     this.#planningPreviewOverlay = null;

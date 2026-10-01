@@ -71,8 +71,6 @@ export const mapVisualPalette = {
     gpxTrackCasing: 'rgba(255, 255, 255, 0.78)',
     gpxTrackHighlight: appColors.brand.amber,
     satelliteFootprint: '#FF8C1A',
-    /** Map ruler line and points; distinct from tracks, roads, and footprints. */
-    measurement: appColors.marker.purple,
   },
 } as const;
 

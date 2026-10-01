@@ -115,20 +115,12 @@ interface PlannedLineState {
 }
 
 /**
- * Click-built lines share one rendering: route planning and the map ruler each own an
- * independent source so both can be visible at once without overwriting each other.
+ * Click-built lines share one blue rendering: route planning and the map ruler each own
+ * an independent source so both can be visible at once without overwriting each other.
  */
 const plannedLineStyles = {
-  'route-plan': {
-    sourceId: mapSourceIds.routePlan,
-    layerIds: routePlanLayerIds,
-    color: mapVisualPalette.userGeometry.gpxTrack,
-  },
-  measurement: {
-    sourceId: mapSourceIds.measurement,
-    layerIds: measurementLayerIds,
-    color: mapVisualPalette.userGeometry.measurement,
-  },
+  'route-plan': { sourceId: mapSourceIds.routePlan, layerIds: routePlanLayerIds },
+  measurement: { sourceId: mapSourceIds.measurement, layerIds: measurementLayerIds },
 } as const;
 
 export type PlannedLineOverlay = keyof typeof plannedLineStyles;
@@ -3258,7 +3250,8 @@ export class MapLibreLayerController {
     if (map?.getLayer(mapLayerIds.background) === undefined) {
       return { status: 'success' };
     }
-    const { sourceId, layerIds, color } = plannedLineStyles[overlay];
+    const { sourceId, layerIds } = plannedLineStyles[overlay];
+    const color = mapVisualPalette.userGeometry.gpxTrack;
     const { sections, waypoints, preview } = this.#plannedLines[overlay];
     const beforeLayerId =
       map.getLayer(mapInsertionPoints.importedTracksBeforeLayerId) === undefined
@@ -3375,16 +3368,19 @@ export class MapLibreLayerController {
           filter: ['==', ['get', 'kind'], 'preview-label'],
           layout: {
             'text-field': ['get', 'distanceLabel'],
-            'text-size': 12,
-            'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
-            'text-radial-offset': 0.75,
-            'text-justify': 'auto',
+            'text-font': ['Noto Sans Regular'],
+            'text-size': 15,
+            'text-line-height': 1.3,
+            // Always below the cursor, clear of the crosshair, so the pointer never covers it.
+            'text-anchor': 'top',
+            'text-offset': [0, 1.6],
             'text-allow-overlap': true,
+            'text-ignore-placement': true,
           },
           paint: {
             'text-color': color,
             'text-halo-color': '#FFFFFF',
-            'text-halo-width': 1,
+            'text-halo-width': 2,
           },
         });
       }

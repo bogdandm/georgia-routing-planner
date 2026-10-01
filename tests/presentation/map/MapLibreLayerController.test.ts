@@ -1396,8 +1396,8 @@ describe('MapLibreLayerController', () => {
       filter: ['==', ['get', 'kind'], 'preview-label'],
       layout: {
         'text-field': ['get', 'distanceLabel'],
-        'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
-        'text-radial-offset': 0.75,
+        'text-anchor': 'top',
+        'text-offset': [0, 1.6],
       },
     });
     controller.setPlannedLineGeometry(
@@ -1488,11 +1488,11 @@ describe('MapLibreLayerController', () => {
     );
     expect(map.layers.get(measurementLayerIds.direct)).toMatchObject({
       source: mapSourceIds.measurement,
-      paint: { 'line-color': '#8E44AD' },
+      paint: { 'line-color': '#168BFF' },
     });
     expect(map.layers.get(measurementLayerIds.waypoints)).toMatchObject({
       source: mapSourceIds.measurement,
-      paint: { 'circle-color': '#8E44AD' },
+      paint: { 'circle-color': '#168BFF' },
     });
 
     controller.clearPlannedLineGeometry('measurement');

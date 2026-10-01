@@ -1,6 +1,7 @@
 import type { GeoJSONFeature, Map as MapLibreMap } from 'maplibre-gl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -1587,7 +1588,7 @@ describe('MapLibreFacade', () => {
     facade.detachMap();
     expect(nativeMap.getCanvas().style.cursor).toBe('');
   });
-  it('publishes primary planning clicks and previews into the overlay of the active mode', () => {
+  it('publishes primary planning clicks and labels the cursor for the active mode', async () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const listener = vi.fn();
@@ -1599,17 +1600,24 @@ describe('MapLibreFacade', () => {
       setPlannedLinePreview,
       clearPlannedLinePreview,
     } as unknown as MapLibreLayerController;
+    const sampleMany = vi.fn<ElevationProvider['sampleMany']>(() =>
+      Promise.resolve([
+        { status: 'available', meters: 1_000 },
+        { status: 'available', meters: 1_985.4 },
+      ]),
+    );
     const facade = new MapLibreFacade(
       services.logger,
       undefined,
       undefined,
       undefined,
       layerController,
+      { sample: vi.fn(), sampleMany },
     );
     facade.attach(nativeMap as unknown as MapLibreMap);
     const unsubscribe = facade.subscribePlanningClicks(listener);
 
-    facade.setPlanningPreviewAnchor({ longitude: 44.64, latitude: 42.66 });
+    facade.setPlanningPreview({ anchor: { longitude: 44.64, latitude: 42.66 } });
     facade.setInteractionMode('route-planning');
     nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
     expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
@@ -1618,7 +1626,8 @@ describe('MapLibreFacade', () => {
       [44.65, 42.67],
       '1.4 km',
     );
-    facade.setPlanningPreviewAnchor({ longitude: 44.66, latitude: 42.68 });
+    expect(sampleMany).not.toHaveBeenCalled();
+    facade.setPlanningPreview({ anchor: { longitude: 44.66, latitude: 42.68 } });
     expect(clearPlannedLinePreview).toHaveBeenLastCalledWith('route-plan');
 
     nativeMap.fire('click', {
@@ -1632,15 +1641,39 @@ describe('MapLibreFacade', () => {
     });
     expect(listener).toHaveBeenCalledWith({ longitude: 44.64, latitude: 42.66 });
 
+    facade.setPlanningPreview({
+      anchor: { longitude: 44.66, latitude: 42.68 },
+      measurement: {
+        origin: { longitude: 44.6, latitude: 42.6 },
+        distanceMeters: 3_600,
+      },
+    });
     facade.setInteractionMode('measurement');
     expect(nativeMap.getCanvas().style.cursor).toBe('crosshair');
     nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
+    // The ruler totals the measured distance plus the cursor segment, then adds the
+    // terrain change from its first point once the cursor sample resolves.
     expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
       'measurement',
       [44.66, 42.68],
       [44.65, 42.67],
-      '1.4 km',
+      '5.0 km',
     );
+    expect(sampleMany).toHaveBeenCalledWith(
+      [
+        { longitude: 44.6, latitude: 42.6 },
+        { longitude: 44.65, latitude: 42.67 },
+      ],
+      expect.any(AbortSignal),
+    );
+    await vi.waitFor(() => {
+      expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
+        'measurement',
+        [44.66, 42.68],
+        [44.65, 42.67],
+        '5.0 km\nElevation +985 m',
+      );
+    });
     nativeMap.fire('click', {
       lngLat: { lng: 44.7, lat: 42.7 },
       originalEvent: { button: 0 },
@@ -1650,7 +1683,7 @@ describe('MapLibreFacade', () => {
     facade.setInteractionMode('default');
     expect(clearPlannedLinePreview).toHaveBeenLastCalledWith('measurement');
     nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
-    expect(setPlannedLinePreview).toHaveBeenCalledTimes(2);
+    expect(setPlannedLinePreview).toHaveBeenCalledTimes(3);
     expect(clearPlannedLinePreview).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
